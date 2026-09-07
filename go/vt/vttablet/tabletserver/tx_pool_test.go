@@ -1078,22 +1078,22 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	held.Release(tx.ConnRelease)
 }
 
-// TestTxKillerTimeoutInterval pins the killer's tick derivation: the shortest
-// enabled timeout it enforces, including the temp-table idle timeout —
-// explicit or auto-published — so disabling both transaction timeouts does
-// not leave temp-table reservations without a reaper.
+// TestTxKillerTimeoutInterval pins the killer's initial tick derivation: the
+// shortest enabled timeout it enforces, including an explicit temp-table idle
+// timeout, so disabling both transaction timeouts does not leave temp-table
+// reservations without a reaper. Auto mode starts without the temp-table
+// term; TestTxPoolSetMysqlWaitTimeoutRetimesKiller covers the publish.
 func TestTxKillerTimeoutInterval(t *testing.T) {
 	cases := []struct {
-		name            string
-		oltp, olap      time.Duration
-		tempIdle        time.Duration
-		autoWaitTimeout time.Duration
-		want            time.Duration
+		name       string
+		oltp, olap time.Duration
+		tempIdle   time.Duration
+		want       time.Duration
 	}{
 		{name: "tx timeouts only", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: 0, want: 3 * time.Second},
 		{name: "explicit temp idle with tx timeouts disabled", tempIdle: 100 * time.Second, want: 10 * time.Second},
-		{name: "auto temp idle with tx timeouts disabled", tempIdle: -1, autoWaitTimeout: 28800 * time.Second, want: 2880 * time.Second},
-		{name: "auto unknown keeps timer dormant", tempIdle: -1, want: 0},
+		{name: "auto mode starts dormant with tx timeouts disabled", tempIdle: -1, want: 0},
+		{name: "auto mode starts from the tx timeouts", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: -1, want: 3 * time.Second},
 		{name: "everything disabled", tempIdle: 0, want: 0},
 		{name: "shorter temp idle tightens the tick", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: 10 * time.Second, want: time.Second},
 	}
@@ -1103,7 +1103,7 @@ func TestTxKillerTimeoutInterval(t *testing.T) {
 			cfg.Oltp.TxTimeout = tc.oltp
 			cfg.Olap.TxTimeout = tc.olap
 			cfg.TempTableIdleTimeout = tc.tempIdle
-			assert.Equal(t, tc.want, txKillerTimeoutInterval(cfg, tc.autoWaitTimeout))
+			assert.Equal(t, tc.want, txKillerTimeoutInterval(cfg))
 		})
 	}
 }
@@ -1127,6 +1127,28 @@ func TestTxPoolSetMysqlWaitTimeoutRetimesKiller(t *testing.T) {
 
 	txPool.SetMysqlWaitTimeout(60 * time.Second)
 	require.Equal(t, 6*time.Second, txPool.ticks.Interval(), "a lowered wait_timeout must tighten the tick")
+}
+
+// TestTxPoolSetMysqlWaitTimeoutDoesNotReadTxTimeouts pins that the auto-mode
+// publisher, which runs on a background goroutine, never reads the
+// transaction timeouts off the config. The endtoend short-timeout tests
+// rewrite those at runtime, and the race detector flags the pair: this test
+// fails under -race when the publisher reads them.
+func TestTxPoolSetMysqlWaitTimeoutDoesNotReadTxTimeouts(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TempTableIdleTimeout = -1
+	txPool, _ := newTxPoolWithEnv(env)
+
+	published := make(chan struct{})
+	go func() {
+		defer close(published)
+		txPool.SetMysqlWaitTimeout(600 * time.Second)
+	}()
+	env.Config().SetTxTimeoutForWorkload(10*time.Millisecond, querypb.ExecuteOptions_OLTP)
+	env.Config().SetTxTimeoutForWorkload(10*time.Millisecond, querypb.ExecuteOptions_OLAP)
+	<-published
+
+	require.Equal(t, 3*time.Second, txPool.ticks.Interval(), "the tick derived from the 30s OLTP timeout must not loosen to the 60s wait_timeout tick")
 }
 
 // TestTxPoolBeginWaitsOutKeepAlive verifies that starting a transaction on a
