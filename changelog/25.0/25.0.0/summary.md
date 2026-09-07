@@ -56,7 +56,7 @@
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
-        - [lz4 backups: amd64 restore fix and `--compression-level` mapping](#backup-lz4-v4)
+        - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -612,11 +612,11 @@ The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`)
 
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
 
-#### <a id="backup-lz4-v4"/>lz4 backups: amd64 restore fix and `--compression-level` mapping</a>
+#### <a id="backup-lz4-v4"/>lz4 engine: library upgrade and `--compression-level` mapping</a>
 
-Restoring a backup taken with `--compression-engine-name=lz4` could fail spuriously on amd64 with `lz4: invalid source or destination buffer too short`, depending on the host CPU, because of a decoder bug in the `pierrec/lz4` v2 library. The library has been upgraded to `pierrec/lz4/v4`, which fixes the decoder. The frame format is unchanged: backups written by older Vitess versions were valid all along and remain restorable, and backups written by this version are restorable by older versions.
+The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `pierrec/lz4` v2. The frame format is unchanged, so backups written by older Vitess versions remain restorable and backups written by this version are restorable by older versions.
 
-The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, keep the fast compression profile. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` also select `Level9`, and negative values, which previously requested an unlimited search, select `Level9` as well. Other compression engines are not affected.
+The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
