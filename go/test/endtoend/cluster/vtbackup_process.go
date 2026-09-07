@@ -54,7 +54,7 @@ type VtbackupProcess struct {
 	exit chan error
 }
 
-// Setup starts vtbackup process with required arguements
+// Setup starts vtbackup process with required arguments
 func (vtbackup *VtbackupProcess) Setup() (err error) {
 	flags := map[string]string{
 		"--topo-implementation":        vtbackup.TopoImplementation,
