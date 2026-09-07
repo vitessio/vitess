@@ -5196,8 +5196,10 @@ explain_format_opt:
   }
 | FORMAT '=' sql_id
   {
-    // The format names are matched by text rather than as keywords, as MySQL does:
-    // they stay plain identifiers everywhere else in the language.
+    // The format names are matched by text rather than as keywords. MySQL accepts
+    // them as ordinary identifiers everywhere else, and rejects an unknown name
+    // rather than the syntax; keeping them out of the keyword table means the
+    // formatter does not backtick columns or values spelled tree or traditional.
     switch $3.Lowered() {
     case "json":
       $$ = JSONType
