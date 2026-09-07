@@ -67,6 +67,10 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 	}, {
 		settings:    []string{"set sql_mode = BOGUS"},
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+	}, {
+		// a qualified name is never a mode name; MySQL rejects it as the wrong type
+		settings:    []string{"set sql_mode = t.TRADITIONAL"},
+		expectedErr: "Incorrect argument type to variable 'sql_mode'",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
@@ -153,9 +157,16 @@ func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
 	}, {
 		sql: "set @@sql_safe_updates = if(1 = 1, 0, 1), @@sql_mode = STRICT_TRANS_TABLES",
 	}, {
-		// a qualified name is not a mode name; it is left for MySQL to judge
-		sql:          "set @@sql_mode = t.sql_mode",
-		verifySQLMod: true,
+		// a qualified name is never a mode name: MySQL rejects it as the wrong argument
+		// type, whatever the qualifier, and so does the plan
+		sql:         "set @@sql_mode = t.TRADITIONAL",
+		expectedErr: "Incorrect argument type to variable 'sql_mode'",
+	}, {
+		sql:         "set sql_mode = a.b.c",
+		expectedErr: "Incorrect argument type to variable 'sql_mode'",
+	}, {
+		sql:         "set @@sql_safe_updates = 1, @@sql_mode = t.TRADITIONAL",
+		expectedErr: "Incorrect argument type to variable 'sql_mode'",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.sql, func(t *testing.T) {
