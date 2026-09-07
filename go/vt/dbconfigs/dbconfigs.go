@@ -25,11 +25,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -185,9 +187,36 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if params.ConnectTimeoutMs != 0 {
+		// the connect timeout covers the session setup below as well as the dial
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
+		defer cancel()
+	}
 	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
+	}
+	// This is the choke point every Vitess-created MySQL connection goes through, so
+	// the session setup runs here: MySQL lexes each statement under the session
+	// sql_mode, and Vitess-formatted SQL must always be lexed under the default
+	// rules it was serialized with. Strip the lexer modes from the session's
+	// current value, preserving its runtime modes — including any the server's own
+	// connection initialization applied (see sqlmode.NeutralizeSessionQuery).
+	//
+	// The setup stays bounded by the context like the dial and handshake are: a
+	// backend that stalls after the handshake must not hang the caller. Closing the
+	// connection when the context ends fails the pending exchange right away.
+	stop := context.AfterFunc(ctx, conn.Close)
+	_, err = conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false)
+	if !stop() {
+		// the context ended and the connection is closed, whatever the query
+		// returned; report the context error like mysql.Connect does for the dial
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		conn.Close()
+		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")
 	}
 	return conn, nil
 }

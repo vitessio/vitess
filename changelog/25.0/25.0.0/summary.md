@@ -13,29 +13,38 @@
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
+        - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
+        - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [Malformed compressed transaction payloads are rejected before allocating](#vreplication-transaction-payload-length-bounds)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
+        - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
+        - [Temp-table idle timeout gives gRPC API sessions MySQL-equivalent temp-table lifetime](#vttablet-temp-table-idle-timeout)
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
+        - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
     - **[VTTablet](#minor-changes-vttablet)**
+        - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
+        - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
@@ -130,6 +139,18 @@ func (bh *MyBackupHandle) Wait() {}
 
 See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
+#### <a id="vtorc-cells-no-recovery"/>VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`</a>
+
+The `--cells-to-watch` flag has been removed. It restricted vtorc's tablet discovery to a fixed set of cells, which created a serious failure mode for any keyspace that spanned cells: if the primary lived in a cell *not* in `--cells-to-watch`, vtorc filtered the primary out of discovery, concluded the keyspace had no primary, and triggered an `EmergencyReparentShard` against a replica in a watched cell. The other cell's vtorc then saw its primary demoted and ran its own ERS — the two vtorcs ping-ponged ERS operations until the keyspace was destroyed. The flag only "worked" under true cell isolation (each cell hosting an independent primary), a configuration with no practical purpose.
+
+The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions only*; vtorc's discovery still spans all cells, so it always sees the real topology. When a problem is detected, vtorc skips the actionable recovery if the *analyzed* (failed) tablet is in a listed cell, recording a `CellNoRecovery` reason under the existing `SkippedRecoveries` stat. For `ClusterHasNoPrimary` (no primary exists in the shard), recovery is suppressed only when every cell that has tablets in the shard appears in the deny-list; a partial deny-list lets the initial PlannedReparentShard (PRS) proceed. Detection still happens for tablets in listed cells (so operators retain visibility), and non-actionable recoveries (pure detection paths) are unaffected. The cells passed to `--cells-no-recovery` are validated against the topology's known cells at startup; an unknown cell name causes vtorc to exit. For per-tablet recoveries, the filter gates on the analyzed tablet's cell: it does not, on its own, prevent a replica in a no-recovery cell from being chosen as a promotion candidate during an `EmergencyReparentShard` triggered by a failure in another cell (use `--prevent-cross-cell-failover` for that).
+
+**Schema change:** this PR changes `recovery_detection.detection_id` from a plain `INTEGER PRIMARY KEY` to `INTEGER PRIMARY KEY AUTOINCREMENT`, adds a `UNIQUE (alias, analysis)` index, and changes the detection write to an upsert (`INSERT … ON CONFLICT(alias, analysis) DO UPDATE SET detection_timestamp = now()`). VTOrc drops and recreates its SQLite database on startup, so no migration is needed. The behavioral effect is that repeated detections of the same ongoing failure on the same tablet upsert a single row, refreshing `detection_timestamp` on each poll, rather than accumulating one row per poll cycle; the `detection_id` is stable for the duration of that incident. When a recovery successfully promotes a new primary (ERS/PRS), the triggering `recovery_detection` row is deleted, creating a clean incident boundary: the next recurrence of the same failure inserts a fresh row with a new `detection_id`. Failed recovery attempts and non-primary-promotion recoveries (`fixReplica`, `fixPrimary`, etc.) leave the row intact so retries within the same incident share the same `detection_id`; those rows are cleaned up by expiry-based history pruning. Suppressed recoveries (e.g. cell gate, quorum gate) follow the same expiry path. This change applies to all vtorc deployments, not only those using `--cells-no-recovery`.
+
+**Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
+
+See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -175,6 +196,14 @@ The `--keep-data` flag help text has been updated to note this default explicitl
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
+#### <a id="vreplication-vdiff-no-samples"/>`vdiff show --no-samples` strips the per-table row-sample report</a>
+
+`vtctldclient vdiff ... show` now accepts a `--no-samples` flag. When set, the per-table diff report has its row-sample arrays (`MismatchedRowsSample`, `ExtraRowsSourceSample`, `ExtraRowsTargetSample`) stripped on the tablet, while the scalar counters and all other summary fields are preserved. This avoids exceeding gRPC message limits when `vdiff show` aggregates large blob/JSON row samples across every target shard. It is exposed as `no_samples` on the `VDiffShowRequest` (vtctld) and `VDiffReportOptions` (tablet) protobuf messages, and is opt-in and backward compatible.
+
+`vdiff create --wait` also uses `no_samples` for its internal progress polls. Text output is unchanged; with `--format json`, the per-interval progress output no longer includes the row samples (they remain available via `vdiff show --verbose` once the diff completes).
+
+See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
+
 #### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
 
 `vtctldclient Materialize cancel` now preserves the materialized target tables and their data. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
@@ -184,6 +213,13 @@ Previously `Materialize cancel` exposed no `--keep-data` flag and always omitted
 This is a client-side fix. The server and the generic `vtctldclient Workflow delete` command are unchanged, so operators must upgrade `vtctldclient` to pick it up; an older client canceling a Materialize workflow against a newer server still drops the target tables.
 
 See [#20711](https://github.com/vitessio/vitess/issues/20711) for details.
+
+#### <a id="onlineddl-vrepl-auto-resume"/>Online DDL migrations are no longer failed by recoverable vreplication errors</a>
+
+Online DDL now creates its vreplication streams with a per-workflow configuration override that pins `--vreplication-max-time-to-retry-on-error` to 0 (retry forever). A recoverable error therefore keeps the stream retrying instead of exhausting the retry window and failing the migration, regardless of the tablet-wide flag value. Genuinely unrecoverable errors (e.g. a duplicate-key error on the shadow table) still fail the migration immediately, and the existing 180-minute stale-migration policy remains the overall limit on a migration that makes no progress. A stream created before this change (an in-flight migration across a rolling upgrade) that stops on a retries-exhausted error is repaired on the fly: the executor restarts it with the retry-forever override installed, preserving the migration's copy progress.
+As part of this change, vreplication terminal errors are now classified in their error message as either unrecoverable (retrying cannot fix them) or retries-exhausted (the retry window expired on an otherwise recoverable error), making it clear to operators why a stream stopped.
+
+See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
 #### <a id="vreplication-transaction-payload-length-bounds"/>Malformed compressed transaction payloads are rejected before allocating</a>
 
@@ -239,6 +275,38 @@ This affects all three streaming code paths in `go/mysql`: `COM_QUERY` (text pro
 
 **Impact**: Application error-handling and retry logic that branched on `2013 / Lost connection` will now see the real error code — for example, `errno 1317 / context canceled` after a `KILL QUERY` against a streaming session, or planner errors such as `specifying two different database in the query is not supported`.
 
+#### <a id="vtgate-temp-table-heartbeat"/>Temporary-table connections are kept alive with a heartbeat</a>
+
+A session that creates an explicit `CREATE TEMPORARY TABLE` pins a reserved connection on the tablet. Previously that connection was reclaimed by the tablet's idle timeout (`--queryserver-config-transaction-timeout`, default 30s), silently dropping the temporary table out from under an idle session. VTGate now sends a low-frequency background keepalive on those reserved connections, controlled by the new `--temp-table-heartbeat-time` flag (default 10s). The keepalive refreshes only the tablet's own reserved-connection timers — nothing is sent to mysqld, so mysqld's `wait_timeout` keeps counting real session traffic and reclaims idle connections exactly as MySQL would: a session idle past `wait_timeout` loses its connection, and with it its temporary tables, just like on a direct MySQL connection. All of a tablet's reserved connections are refreshed with batched touch RPCs — each touch refreshes up to 1024 reservations, so a tablet holding more is refreshed in a few concurrent touches. Batching amortizes the RPC overhead to one touch per 1024 reservations per tablet; VTGate's registry and the tablet-side timer work still scale with the number of reservations and participating tablets. The keepalive also detects a connection that mysqld has already closed (again without sending anything) and releases it, so dead connections do not linger in the tablet's pools. Keepalives run concurrently with client commands: a keepalive that finds the reserved connection busy counts it as alive, and a client command that collides with a keepalive's brief tablet-side timer refresh waits it out (a matter of microseconds, with no query executed). Keepalives stop for reserved connections that no longer exist, and for one whose tablet has changed type (for example `REPLICA` to `RDONLY`) so the session can no longer reach it: the tablet validates the keepalive's target just as it would a query, and vtgate drops a registration the tablet rejects as a wrong tablet, so the orphaned reservation is reclaimed at the tablet's idle timeout rather than kept open. **Upgrade tablets before vtgate.** The keepalive always carries reserved id 0 (the ids to refresh travel in a separate list), so a tablet that predates this feature runs the fallback query on a throwaway pooled connection rather than a reserved one — it can never kill a reserved connection or its temporary tables. Such a tablet's reserved connections are simply not kept alive until it is upgraded, falling back to the tablet timeout as before this feature. Reserved connections on shards with an open transaction are not kept alive: the tablet intentionally does not reset its transaction timer for in-transaction activity, so transactions — with or without temporary tables — remain subject to the transaction timeout as always. Within the same session, reserved connections on other shards keep their keepalives, and a shard's keepalives resume once its transaction commits.
+
+`--temp-table-heartbeat-time` **must be set far enough below the tablets' effective reserved-connection timeout for the workload** — `--queryserver-config-transaction-timeout`, or `--queryserver-config-olap-transaction-timeout` for OLAP sessions — **to leave room for one keepalive round-trip**, or the connection can still be reclaimed between heartbeats. The tablet refreshes a connection's timer only when a keepalive reaches it, so the worst-case gap is the interval plus one round-trip (bounded by the per-tablet beat budget, which can reach three-quarters of the interval at short intervals); as a rule of thumb keep the interval under half of that timeout. A session whose own shorter transaction timeout (`SET @@transaction_timeout`) is at or below that worst-case gap is not protected by the keepalive — its temporary tables are then subject to that shorter timeout, by design. Note the scope: the tablet applies the session value to a reserved connection when the connection is reserved, and again whenever a transaction begins on it; setting a shorter timeout after the connection was reserved does not shorten the existing reservation's timer until a transaction next begins on that connection. If VTGate is lost (crash or restart), the heartbeats stop and the tablet reclaims the connection at its normal timeout, so nothing leaks.
+
+The keepalive applies to connections using the MySQL protocol. Sessions used via the VTGate gRPC API travel with each request and live client-side between calls, so VTGate cannot observe whether the client is still alive between calls and they do not receive keepalives. Their temporary tables are instead covered by the tablet-side temp-table idle timeout described in the next section.
+
+Relatedly, `CREATE TEMPORARY TABLE` issued with an explicit tablet-type or shard target (e.g. `USE \`ks:-80\``) now runs on a reserved connection and registers keepalives like any other temporary-table create. Previously it passed through to an ordinary pooled connection, where the temporary table could outlive the query and leak into whichever session used that connection next. Because a temporary table lives on one reserved connection, temporary-table DDL (`CREATE`/`DROP`) now requires its destination to resolve to exactly one shard. A multi-shard destination is rejected — whether from an explicit keyrange target spanning several shards or from an untargeted statement on a sharded keyspace, which resolves to all shards; both previously fanned the statement out to arbitrary pooled connections on every shard.
+
+A tablet that is not serving (not serving state, unhealthy replication, stalled demotion, shutting down) rejects keepalives just as it rejects queries, so its reserved connections age out at the tablet's timeout exactly as they did before this feature.
+
+`COM_RESET_CONNECTION` now resets vtgate's session the way MySQL resets its own: it releases the reserved connections and rebuilds the session as a fresh default — system and user variables, `LAST_INSERT_ID`, autocommit, and the temp-table and reserved-connection state all return to their just-connected values, and only the default database is preserved. Previously the recorded `SET` values survived a reset and were silently re-applied on the next query; applications behind connection poolers that reset connections between checkouts (Connector/J, ProxySQL) will now observe MySQL-standard behavior.
+
+See [#20320](https://github.com/vitessio/vitess/issues/20320) for details.
+
+#### <a id="vttablet-temp-table-idle-timeout"/>Temp-table idle timeout gives gRPC API sessions MySQL-equivalent temp-table lifetime</a>
+
+The heartbeat described above covers MySQL-protocol sessions, whose keepalives are anchored to the client's wire connection to VTGate. Sessions used via the VTGate gRPC API have no such anchor — the session travels with each request — so their temporary tables were still reclaimed at the tablet's reserved-connection timeout (`--queryserver-config-transaction-timeout`, default 30s) when the session idled.
+
+VTTablet now applies a separate idle timeout to reserved connections that hold temporary tables and are **not** covered by the VTGate keepalive, controlled by the new `--queryserver-config-temp-table-idle-timeout` flag:
+
+- `-1` (default, "auto"): the tablet mirrors its own mysqld's `@@global.wait_timeout`, read via the dba pool when the query service opens and refreshed on the periodic schema reload, so a runtime `SET GLOBAL wait_timeout` converges without a restart. Out of the box, a gRPC API session's temporary tables live exactly as long as they would on a direct mysqld connection — mysqld reclaims any connection idle past `wait_timeout` regardless, so `wait_timeout` is the ceiling it already enforces.
+- `0`: disabled — temp-table reserved connections are reclaimed at the transaction timeout, exactly as before this feature. This is the kill switch.
+- `> 0`: an explicit idle timeout. Keep it **at or below mysqld's `wait_timeout`** (mysqld reclaims first otherwise, making extra headroom meaningless) and **at or above the transaction timeout** (the flag replaces the transaction timeout for these connections, so a smaller value reclaims them *sooner* than before; the tablet logs a startup warning in that case).
+
+Every query on the connection refreshes the idle clock, just as every query resets mysqld's `wait_timeout` clock. Activity on the *session* counts too — queries no matter where they route, statement prepares, and any other client protocol command, including the ones VTGate answers locally (`COM_PING`, `COM_SET_OPTION`, prepared-statement bookkeeping), each of which restarts the idle `wait_timeout` wait on a direct MySQL connection: VTGate fans session activity out to the session's idle temp-table reserved connections by running a trivial statement on each (rate-limited to once per `--temp-table-heartbeat-time` per connection, fire-and-forget), resetting both the tablet's idle timer and mysqld's `wait_timeout` clock. An active session therefore keeps its temporary tables even when its queries route to other shards, exactly as on a direct MySQL connection — where session activity and connection activity are the same thing — while a truly idle session still ages out at `wait_timeout` as MySQL intends. Connections with an open transaction always keep the transaction timeout — bounded transaction lifetime is intended semantics — and connections kept alive by the VTGate heartbeat keep the short timer, so they are still reclaimed quickly when their heartbeats stop.
+
+**This default is a behavior change on tablet upgrade**: an abandoned gRPC temp-table session (e.g. a crashed client) now lingers up to `wait_timeout` (8 hours by mysqld default) instead of the transaction timeout — the same window mysqld itself grants a vanished client. These connections occupy the stateful pool capped by `--queryserver-config-transaction-cap` (default **20**), so a burst of abandoned temp-table sessions could pin most of that pool for the full window. Size the cap and the flag together for your workload, or set the flag to `0` to restore the previous behavior.
+
+Two new metrics make the feature observable: the `TempTableUnmanagedConnections` gauge counts connections currently holding temporary tables without keepalive coverage, and the `TempTableIdleTimeoutKills` counter counts connections the tablet reclaimed because this idle timeout elapsed.
+
 #### <a id="vtgate-grpc-static-auth-sha256"/>SHA256-hashed passwords in the static gRPC auth plugin</a>
 
 The static gRPC authentication plugin (`--grpc-auth-static-password-file`) now accepts SHA256-hashed passwords in addition to plaintext ones. Each entry in the credentials file gains an optional `CachingSha2Password` field holding the hex-encoded `SHA256(SHA256(password))`, with an optional leading `*`. This is the same format the MySQL protocol's static auth server uses for its own `CachingSha2Password` field, so a single stored credential can authenticate a user on both the MySQL and gRPC endpoints, and existing `caching_sha2_password`-style hashes can be copied over verbatim.
@@ -293,6 +361,36 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
+#### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
+
+VTGate already rejected `SET sql_mode = ...` statements that enable a mode the Vitess parser does not support (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT`). The check compared mode names textually and could be bypassed. VTGate now implements MySQL 8.x's `sql_mode` assignment semantics, verified against MySQL 8.0.46. It validates every assignment against them:
+
+- Setting an unsupported mode is rejected even when the underlying MySQL already runs with that mode, that is, when the `SET` would not change the value. Such statements previously succeeded, even though VTGate does not parse queries under these modes. The combination mode `ANSI` is rejected as well, because it enables `ANSI_QUOTES`, `PIPES_AS_CONCAT`, and `REAL_AS_FLOAT`.
+- `IGNORE_SPACE` and `HIGH_NOT_PRECEDENCE` are now also rejected. They are the two remaining modes that change how SQL text is interpreted. The Vitess parser does not honor them, so queries would be parsed differently at the VTGate than the session's `sql_mode` promises.
+- Unknown mode names and invalid numeric values fail with MySQL's own errors: `ER_WRONG_VALUE_FOR_VAR` (1231), and `ER_UNSUPPORTED_SQL_MODE` (3899) for the bits of modes removed in MySQL 8.0.
+- Numeric values decode against MySQL's `sql_mode` bitmask. For example, `SET sql_mode = 1048576` reports that `NO_BACKSLASH_ESCAPES` is unsupported. Valid numeric values are accepted.
+- Constant values are validated at planning time, with no shard round trip. This includes constant expressions such as `CONCAT` over literals, and it applies also when `--enable-system-settings` is disabled. Non-constant expressions are validated at execution time, once their value is known.
+
+**Impact**: Clients that issue `SET sql_mode` with an unsupported mode now receive an error, also when the `SET` is a no-op that matches the backend's existing `sql_mode`. Clients that set mode names the backend MySQL would itself reject receive an error as well. Such sessions were already unreliable, because VTGate parses queries without honoring these modes.
+
+#### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
+
+A new `VEXPLAIN MYSQLPLAN <query>` statement runs MySQL's `EXPLAIN FORMAT=JSON` against the shards a `SELECT` would target, **without executing the query itself**. It resolves each `Route`'s target shards from its vindex at resolution time and issues `EXPLAIN` against every resolved shard, attaching the per-shard MySQL plan to the VTGate plan tree keyed by shard, so per-shard plan and cost differences are visible.
+
+Unlike `VEXPLAIN ALL`, which executes the query to discover the shard-level queries before explaining them, `VEXPLAIN MYSQLPLAN` never runs the wrapped query.
+
+This no-execution guarantee is specifically about the wrapped query. The `EXPLAIN FORMAT=JSON` statement itself is still executed by MySQL on each shard, and — exactly like a plain `EXPLAIN` — MySQL may evaluate parts of it as a side effect: [`EXPLAIN` can execute a stored function](https://dev.mysql.com/doc/refman/8.4/en/derived-tables.html) reached through a view or derived table that MySQL [materializes during optimization](https://dev.mysql.com/doc/refman/8.4/en/derived-table-optimization.html), and such a function can modify data. `VEXPLAIN MYSQLPLAN` rejects the query shapes it can detect that carry this risk (derived tables, subqueries, CTEs, sequence and advisory-lock functions, and views known to the schema tracker), but with view tracking disabled (`--enable-views=false`) it cannot tell an untracked view from a base table, so `EXPLAIN` against such a view can still trigger these side effects. This matches what issuing `EXPLAIN` directly does — except that a plain `EXPLAIN` lands on a single arbitrary shard whereas `VEXPLAIN MYSQLPLAN` runs it against every resolved shard, and `VEXPLAIN ALL` is more exposed still, since it executes the wrapped query before explaining it.
+
+Only `SELECT` statements whose target shards can be resolved from a vindex without reading cluster data are supported. DML (`INSERT`/`UPDATE`/`DELETE`), and any query whose shard set depends on data — cross-shard joins, subqueries, recursive CTEs, and lookup vindexes — are rejected with an error suggesting `VEXPLAIN ALL` instead. Derived tables, views, and common table expressions are likewise unsupported: `EXPLAIN FORMAT=JSON` can materialize a derived table during optimization (running any stored function inside it once per shard), which would break the promise never to run the wrapped query.
+
+For queries eligible for deferred plan optimization (where equal bind variable values let the plan collapse to a single shard at execution time), `VEXPLAIN MYSQLPLAN` explains the general (baseline) plan rather than the value-specific optimized one, so it reports the full shard footprint the query can target regardless of the bind variable values supplied.
+
+For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrently across that `Route`'s shards, reusing the same scatter fan-out a real query would use; plans with multiple `Route` nodes (for example, a `UNION`) explain each `Route` in turn. If the `EXPLAIN` against any targeted shard fails (for example, an unreachable shard), the whole `VEXPLAIN MYSQLPLAN` command fails with that error rather than returning a partial result — matching the default all-or-nothing behavior of a scatter query.
+
+Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
+
+Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
@@ -325,6 +423,22 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
+#### <a id="vttablet-reject-unsupported-sql-modes"/>VTTablet rejects unsupported `sql_mode` values</a>
+
+VTTablet now applies the same `sql_mode` validation as VTGate (see [the VTGate section](#vtgate-sql-mode-rejection)) at its own entry points and returns the identical errors. The entry points are connection settings (the settings pool and reserved connections) and session-scope `SET sql_mode` statements. This check concerns clients that bypass VTGate's validation: older VTGates in a mixed-version cluster, and clients that talk to the query service directly. `SET_VAR` optimizer hints are not judged: a hint applies to the hinted statement's execution only and cannot change how that statement's own text is lexed, so VTTablet forwards it verbatim and MySQL warns about and ignores an invalid hint value, exactly as it does for a client that sends the hint to it directly.
+
+Constant values are judged before execution. Connection settings must parse as SET statements that carry constant `sql_mode` values. Settings are applied with no verification afterwards, so a value that cannot be judged upfront, such as a `CONCAT` expression, is rejected. This holds on both the settings-pool and reserved-connection paths.
+
+A non-constant expression in a `SET` statement executed on a dedicated connection is verified after execution instead. The applied `@@sql_mode` is read back. The assignment is undone by restoring the previous mode when that value fails validation, does not decode as MySQL 8.x modes, or cannot be read back at all, so the failed `SET` does not apply, just as in MySQL. The connection is closed if the restore itself fails. Such a `SET` must assign `sql_mode` alone: MySQL applies none of a failed `SET`'s assignments, and a multi-assignment `SET` whose `sql_mode` can only be judged afterwards would already have applied its other assignments by then, so it is rejected upfront.
+
+The `ApplySchema` `--session-variable` option validates `sql_mode` values the same way. Validation runs when the DDL strategy is parsed, and again on the tablet applying the variables.
+
+The server's own configuration is covered as well. MySQL lexes every statement under the session `sql_mode` in effect *before* the statement; a `SET_VAR` hint cannot influence the parsing of its own statement. Vitess-formatted SQL should therefore always be lexed under the same rules it was serialized with, regardless of how the backend happens to be configured. Every MySQL connection Vitess creates now strips the lexer modes from the session `sql_mode` it inherits from the server's global value. This happens at the single connector choke point all components dial through: query serving, schema tracking and apply, heartbeats, replication management, Online DDL, vreplication and VDiff, VStream snapshots, and init scripts alike. All runtime modes (strict modes, zero-date handling, and so on) are preserved. The settings-pool reset restores this neutralized value rather than `default`, for the same reason.
+
+Two consequences are deliberate. Connections that serve `ExecuteFetchAsDba`-style admin RPCs also start neutralized: operator-supplied statements run with the server's lexer modes stripped, and a multi-statement batch can still set the session `sql_mode` explicitly. Connections to *external* MySQL servers (vreplication sources, point-in-time recovery) are neutralized too, because Vitess sends them the same Vitess-formatted SQL. Statements that an operator's `sql_mode`-sensitive tooling sends outside Vitess are unaffected: the neutralization is session-scoped and never touches the global value.
+
+**Impact**: During a rolling upgrade, VTTablets are typically upgraded before VTGates. A session that set a now-rejected `sql_mode`, such as `ANSI`, through a not-yet-upgraded VTGate will start receiving errors from upgraded VTTablets. Such sessions were already unreliable, because VTGate parses queries without honoring these modes. Queries now always run with the server's lexer modes stripped from the session, so Vitess-formatted SQL parses consistently regardless of the backend's global configuration.
+
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 
 A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VTTablet. When enabled alongside a non-zero `--consolidator-query-waiter-cap`, queries that would join a consolidated result but exceed the **global** consolidator waiter cap are rejected with a `RESOURCE_EXHAUSTED` error instead of silently falling back to independent MySQL execution.
@@ -332,6 +446,12 @@ A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VT
 **Important:** The cap is enforced against the consolidator's global `totalWaiterCount` across all queries, not a per-query waiter count. This means a duplicate for query B can be rejected because query A has already consumed most of the global waiter budget. This provides backpressure when the consolidator as a whole is saturated, rather than when any single query has too many waiters.
 
 See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
+
+#### <a id="vttablet-reserved-conn-kill-query"/>Query timeouts no longer kill reserved connections outside transactions</a>
+
+Previously, when a query executing on a reserved connection (one holding temporary tables or session settings) exceeded its timeout, the tablet killed the entire MySQL connection, destroying the session state along with it. Now, when the reserved connection is not inside a transaction and the statement is a read or DML, only the query is killed (`KILL QUERY`): the client receives a query-interrupted error, and the connection — with its temporary tables and settings — survives. This applies to both regular and streaming (OLAP) execution. This matches how timeouts already behaved for regular (non-reserved) queries and mirrors MySQL's own statement-timeout semantics. Statements whose interruption could leave session state the session never recorded — `SET`, lock functions such as `GET_LOCK`, DDL, and admin statements — still kill the whole connection, as does any timeout inside a transaction, because a partially-executed transaction cannot be safely continued. If a `KILL QUERY` does not actually unblock the statement (for example a thread wedged in storage I/O), the tablet escalates to killing the connection after one kill timeout (5s) rather than leaving the connection stuck in use; this escalation applies to timeouts on pooled connections as well, where previously only the query was killed — so a statement whose rollback outlasts the kill timeout now also costs its pooled connection. Stored-procedure calls (`CALL`) outside a transaction are also an exception: because a procedure can start a transaction that Vitess does not track, any `CALL` error — including a timeout — closes the reserved connection, so its temporary tables and settings do not survive in that case. Inside a Vitess-tracked transaction a failed buffered `CALL` returns the error and leaves the connection and transaction usable, matching MySQL; on the streaming path any `CALL` error still closes the connection, whose interrupted result stream cannot be safely reused. The mutating advisory-lock functions (`release_lock`, `release_all_locks`) are now classified like `get_lock` on the tablet for timeout handling: on a reserved connection, a timeout kills the connection rather than keeping it with lock state the session never recorded. Unlike `get_lock`, they do not require a reserved connection — when the session holds no locks they continue to execute on a pooled connection, where releasing is a safe no-op. The classification now also looks at the whole statement rather than only the select list, and covers DML as well as SELECT: a `get_lock` in a predicate (e.g. `select id from t where get_lock('x', 0) = 1`, or the same predicate in an `UPDATE`/`DELETE`/`INSERT ... SELECT`) previously planned as an ordinary statement and acquired the lock on an arbitrary pooled connection, leaking it to that connection's next borrower; such statements now require a reserved connection and are rejected without one, and DML containing any mutating lock function likewise kills the connection on a timeout rather than keeping it.
+
+See [#20429](https://github.com/vitessio/vitess/pull/20429) for details.
 
 #### <a id="vttablet-stream-query-timeout"/>Query timeout for state-changing statements on the streaming path</a>
 
@@ -399,6 +519,12 @@ Because mysql-shell performs a logical restore, its backups are not tied to the 
 `ApplySchema` now accepts repeatable `--session-variable name=value` DDL
 strategy options. The assignments use MySQL `SESSION` scope and are applied in
 the order supplied.
+
+A `sql_mode` assignment gets the same MySQL-faithful validation as a `SET sql_mode`
+statement on a VTGate session (see [the VTGate section](#vtgate-sql-mode-rejection)).
+This includes the rejection of modes that change how SQL text is interpreted, because
+the statements executed under these variables are Vitess-formatted SQL. Validation runs
+when the DDL strategy is parsed, and again on the tablet applying the variables.
 
 For the `direct` strategy, the variables apply to the dedicated DBA connection
 that executes the requested schema statements. For Online DDL, they apply to

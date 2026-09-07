@@ -1,0 +1,5 @@
+# A short wait_timeout so TestTempTable can prove, inside one test run, that
+# a ping-only client keeps its temp-table reserved connection alive past
+# mysqld's idle deadline. Every mysqld connection in this package inherits it,
+# so no test here may leave a connection idle for 30s and expect it to live.
+wait_timeout=30

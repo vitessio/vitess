@@ -166,7 +166,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
 		DisableForeignKeyChecks: true,
 		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
 			{Name: "innodb_strict_mode", Value: "off"},
-			{Name: "sql_mode", Value: "ANSI"},
+			{Name: "sql_mode", Value: "NO_ZERO_DATE"},
 		},
 	})
 	require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
 		if q == "set @@session.innodb_strict_mode=x'6f6666'" {
 			firstVariableIdx = i
 		}
-		if q == "set @@session.sql_mode=x'414e5349'" {
+		if q == "set @@session.sql_mode=x'4e4f5f5a45524f5f44415445'" {
 			secondVariableIdx = i
 		}
 		if q == "set sql_log_bin = off" {
@@ -222,7 +222,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	db.AddRejectedQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", errors.New("cannot set session variable"))
 	daemon := mysqlctl.NewFakeMysqlDaemon(db)
 
 	tm := &TabletManager{
@@ -238,7 +238,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T
 		Sql:    []byte("create table t (id int primary key)"),
 		DbName: "testdb",
 		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
-			{Name: "sql_mode", Value: "ANSI"},
+			{Name: "sql_mode", Value: "NO_ZERO_DATE"},
 		},
 	})
 	require.ErrorContains(t, err, "cannot set session variable")

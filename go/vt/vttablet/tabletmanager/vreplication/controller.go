@@ -50,8 +50,22 @@ const (
 	// can see and act upon if needed.
 	tabletPickerRetries = 5
 
-	// Prepended to the message to indicate that it is a terminal error.
+	// TerminalErrorIndicator prefixes the message of a stream that stopped
+	// retrying and went into the Error state. The Online DDL executor matches
+	// it as a message prefix, including in _vt.vreplication_log.
 	TerminalErrorIndicator = "terminal error"
+	// UnrecoverableErrorIndicator marks a terminal error that retrying
+	// cannot fix (e.g. bad data or schema mismatch; see
+	// isUnrecoverableError): the stream cannot be resumed.
+	UnrecoverableErrorIndicator = TerminalErrorIndicator + ": unrecoverable"
+	// RetriesExhaustedIndicator marks a recoverable-class error whose retry
+	// window (--vreplication-max-time-to-retry-on-error) expired; the stream
+	// is resumable by setting it back to Running. It deliberately does not
+	// extend TerminalErrorIndicator: the message is operator-visible, and a
+	// resumable condition must not be labeled a terminal error. Older
+	// executors still see the park: their history scan selects any
+	// state='Error' row regardless of message.
+	RetriesExhaustedIndicator = "retries exhausted"
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -344,10 +358,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// non-recoverable BUT it has persisted beyond the retry limit
 		// (maxTimeToRetryError). In addition, we cannot restart a workflow
 		// started with AtomicCopy which has _any_ error during copy phase.
-		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) && vr.state == binlogdatapb.VReplicationWorkflowState_Copying) ||
-			isUnrecoverableError(err) ||
-			!ct.lastWorkflowError.ShouldRetry() {
-			err = vterrors.Wrapf(err, TerminalErrorIndicator)
+		unrecoverable := (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) && vr.state == binlogdatapb.VReplicationWorkflowState_Copying) ||
+			isUnrecoverableError(err)
+		if unrecoverable || !ct.lastWorkflowError.ShouldRetry() {
+			err = terminalVReplicationError(err, unrecoverable, ct.WorkflowConfig.MaxTimeToRetryError)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
 				log.Error(fmt.Sprintf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err))
 				return err // yes, err and not errSetState.
@@ -359,6 +373,18 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 	return errors.New("missing source")
+}
+
+// terminalVReplicationError wraps err as a terminal error, saying why: it is
+// unrecoverable, or its retry window expired — in which case the message
+// names the flag bounding the window and its effective value, so operators
+// (and the Online DDL executor) can tell the stream is resumable.
+func terminalVReplicationError(err error, unrecoverable bool, maxTimeToRetry time.Duration) error {
+	if unrecoverable {
+		return vterrors.Wrap(err, UnrecoverableErrorIndicator)
+	}
+	return vterrors.Wrapf(err, "%s: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (%v)",
+		RetriesExhaustedIndicator, maxTimeToRetry)
 }
 
 func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {

@@ -79,6 +79,11 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+	RecoverySkipCellNoRecovery
+	// RecoverySkipCellNoRecoveryUnvalidated is used when --cells-no-recovery was set but
+	// could not be validated against the topology at startup (topology unreachable). Recovery
+	// is held until a subsequent refresh cycle completes validation.
+	RecoverySkipCellNoRecoveryUnvalidated
 )
 
 // String represents a RecoverySkip as a string.
@@ -94,6 +99,10 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+	case RecoverySkipCellNoRecovery:
+		return "CellNoRecovery"
+	case RecoverySkipCellNoRecoveryUnvalidated:
+		return "CellNoRecoveryUnvalidated"
 	default:
 		return "None"
 	}
@@ -278,7 +287,20 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 		topologyRecovery.SuccessorAlias = successorInstance.InstanceAlias
 		topologyRecovery.IsSuccessful = true
 	}
-	return writeResolveRecovery(topologyRecovery)
+	if err := writeResolveRecovery(topologyRecovery); err != nil {
+		return err
+	}
+	// Establish the incident boundary on a successful recovery: delete the detection row
+	// so any future recurrence creates a fresh detection_id. Failed attempts intentionally
+	// leave the row intact so retries within the same incident share the same detection_id.
+	//
+	// IsSuccessful is true only when a new primary is promoted (successorInstance != nil).
+	// Recoveries that don't elect a new primary (fixReplica, fixPrimary, etc.) always pass
+	// nil and never set IsSuccessful, so those detection rows expire naturally.
+	if topologyRecovery.IsSuccessful {
+		deleteResolvedDetection(topologyRecovery.AnalysisEntry.RecoveryId)
+	}
+	return nil
 }
 
 // recoverPrimaryHasPrimary resets the replication on the primary instance
@@ -375,6 +397,13 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(ev.NewPrimary.Alias)
+		if promotedReplica == nil {
+			// Cache miss: ERS succeeded but the new primary is not yet in the instance cache.
+			// The event alias is authoritative for success; the cache lookup is only needed for
+			// optional audit detail. Synthesize a minimal instance so resolveRecovery marks the
+			// recovery successful and establishes the incident boundary via deleteResolvedDetection.
+			promotedReplica = &inst.Instance{InstanceAlias: ev.NewPrimary.Alias}
+		}
 	}
 	postErsCompletion(topologyRecovery, analysisEntry, recoveryName, promotedReplica)
 	return true, topologyRecovery, err
@@ -872,6 +901,20 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	}
 }
 
+// allCellsDenied returns true when every cell in shardCells appears in cellsNoRecovery.
+func allCellsDenied(shardCells, cellsNoRecovery []string) bool {
+	denied := make(map[string]bool, len(cellsNoRecovery))
+	for _, c := range cellsNoRecovery {
+		denied[c] = true
+	}
+	for _, c := range shardCells {
+		if !denied[c] {
+			return false
+		}
+	}
+	return true
+}
+
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not.
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
 	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
@@ -935,6 +978,46 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		return err
 	}
 
+	// Check for recovery being suppressed by --cells-no-recovery. The detection
+	// record has already been inserted above, so the suppressed incident remains
+	// visible in recovery_detection even though no action is taken.
+	// Global-disable is checked first so it takes precedence when both conditions
+	// apply, keeping SkippedRecoveries accurate.
+	if len(cellsNoRecovery) > 0 {
+		if !cellsNoRecoveryValidated.Load() {
+			// Startup validation was skipped because the topology was unreachable.
+			// Block recovery until a subsequent refresh cycle validates the deny-list;
+			// running with an unvalidated list could leave a misconfigured cell unprotected.
+			if util.ClearToLog("executeCheckAndRecoverFunction: cells-no-recovery-unvalidated", analyzedInstanceAliasString) {
+				logger.Warn("--cells-no-recovery not yet validated against topology; holding recovery until validation succeeds")
+			}
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecoveryUnvalidated.String()), 1)
+			return nil
+		}
+		// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
+		// ClusterHasNoPrimary is handled separately below (post-lock, topo read) because it
+		// is shard-wide and AnalyzedCell is non-deterministic for that analysis.
+		if isActionableRecovery && analysisEntry.Analysis != inst.ClusterHasNoPrimary {
+			if analysisEntry.AnalyzedCell == "" {
+				// The failed tablet's cell is unknown (e.g. PrimaryTabletDeleted after
+				// DeleteTablets --allow-primary nils the shard's primary alias). Fail
+				// closed: we cannot determine whether the cell is denied.
+				if util.ClearToLog("executeCheckAndRecoverFunction: unknown-cell", analyzedInstanceAliasString) {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (failed tablet's cell is unknown; --cells-no-recovery fail-closed)",
+						analyzedInstanceAliasString))
+				}
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+			if slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
+					analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+		}
+	}
+
 	// Prioritise primary recovery.
 	// If we are performing some other action, first ensure that it is not because of primary issues.
 	// This step is only meant to improve the time taken to detect and fix shard-wide recoveries, it does not impact correctness.
@@ -979,6 +1062,42 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
+			if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
+				// Check the cell gate before the expensive forceRefreshAllTabletsInShard.
+				// Recovery polls every second and this skip never registers an active
+				// recovery, so a persistent no-primary shard would repeatedly contend
+				// for the shard lock and force MySQL discovery on every tablet before
+				// doing nothing. Reading from topo is authoritative regardless of
+				// whether the force refresh has run.
+				var shardTablets []*topo.TabletInfo
+				shardTablets, err = getShardTabletsByCell(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
+				if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard tablets for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
+					return err
+				}
+				seen := make(map[string]bool)
+				var shardCells []string
+				for _, ti := range shardTablets {
+					if cell := ti.Alias.Cell; !seen[cell] {
+						seen[cell] = true
+						shardCells = append(shardCells, cell)
+					}
+				}
+				// Fail closed: if the partial (or full) result shows every
+				// reachable cell is denied, or no tablets were returned at all,
+				// suppress PRS. If any non-denied cell is present we
+				// conclusively know recovery is allowed and proceed.
+				if len(shardCells) == 0 {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (no shard tablets reachable; --cells-no-recovery fail-closed)", analyzedInstanceAliasString))
+					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+					return nil
+				}
+				if allCellsDenied(shardCells, cellsNoRecovery) {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all reachable shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
+					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+					return nil
+				}
+			}
 			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
 			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
@@ -1009,16 +1128,43 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				DiscoverInstance(primaryTablet.Alias, true)
 			}
 		}
-		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
+		alreadyFixed, refreshedEntry, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
 			logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while trying to find if the problem is already fixed: %v",
 				analysisEntry.AnalyzedInstanceAlias, err))
 			return err
 		}
 		if alreadyFixed {
+			// The detection row inserted above is an orphan: a concurrent successful recovery
+			// already deleted the previous detection row (incident boundary), and this poll
+			// re-inserted a new row before blocking on the shard lock. Remove the orphan so a
+			// real recurrence gets a fresh detection_id instead of reusing this stale ID.
+			// This is safe whether alreadyFixed is true due to genuine resolution or due to
+			// GetDetectionAnalysis suppressing this analysis for a shard-wide ordered action:
+			// in either case no recovery will proceed from this poll, and the row is spurious.
+			deleteResolvedDetection(analysisEntry.RecoveryId)
 			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
+		}
+		// Re-evaluate the cells-no-recovery gate against the post-refresh analysis. For PrimaryTabletDeleted,
+		// AnalyzedCell comes from vitess_shard.primary_alias.Cell and can shift between the pre-lock snapshot
+		// and the refreshed snapshot (refreshAllInformation runs RefreshAllKeyspacesAndShards and refreshAllTablets
+		// concurrently, so the shard record and tablet records may not form a consistent snapshot). Without this
+		// re-check, checkIfAlreadyFixed matches on AnalyzedInstanceAlias (the surviving replica, stable) and
+		// proceeds to ERS even if the refreshed AnalyzedCell is now a denied cell.
+		// ClusterHasNoPrimary is excluded because it has its own shard-level cell gate above (getShardTabletsByCell)
+		// and its AnalyzedCell is typically empty.
+		// refreshedEntry is always non-nil here: the alreadyFixed==true early-return above means we only
+		// reach this point when checkIfAlreadyFixed found a matching entry and returned it. The nil check
+		// is kept as a defensive guard against future refactors that might add a (false, nil, nil) path.
+		if refreshedEntry != nil && len(cellsNoRecovery) > 0 && refreshedEntry.Analysis != inst.ClusterHasNoPrimary {
+			refreshedCell := refreshedEntry.AnalyzedCell
+			if refreshedCell == "" || slices.Contains(cellsNoRecovery, refreshedCell) {
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (refreshed AnalyzedCell %q is denied or unknown; --cells-no-recovery fail-closed after lock)", analyzedInstanceAliasString, refreshedCell))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
 		}
 	}
 
@@ -1080,7 +1226,7 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	discoveryFunc(primaryTabletAlias, true)
 
 	// checking if the original analysis is valid even after the primary refresh.
-	alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
+	alreadyFixed, _, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
 		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
@@ -1100,29 +1246,32 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not.
+// It returns (alreadyFixed, matchedEntry, error). When the problem still exists matchedEntry is the refreshed analysis entry
+// that triggered the same recovery; callers can use it to re-evaluate policies (e.g. the cells-no-recovery cell gate)
+// against the post-refresh state.
 //
 // Note: GetDetectionAnalysis may suppress non-primary analyses when a shard-wide
 // action is detected. Problems that declare a dependency on the shard-wide action
 // (via BeforeAnalyses/AfterAnalyses) survive suppression and will still be found
 // here. Non-dependent problems are intentionally suppressed — the shard-wide
 // action takes priority and they will be re-detected on a future poll.
-func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, *inst.DetectionAnalysis, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	for _, entry := range analysisEntries {
 		// If there is a analysis which has the same recovery required, then we should proceed with the recovery
 		tabletAliasesEqual := topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias)
 		if tabletAliasesEqual && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
-			return false, nil
+			return false, entry, nil
 		}
 	}
 
 	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
-	return true, nil
+	return true, nil, nil
 }
 
 // recoverShardAnalyses executes recoveries for a shard's analyses. Analyses
@@ -1268,6 +1417,11 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(ev.NewPrimary.Alias)
+		if promotedReplica == nil {
+			// Cache miss: PRS succeeded but the new primary is not yet in the instance cache.
+			// Synthesize a minimal instance so resolveRecovery marks the recovery successful.
+			promotedReplica = &inst.Instance{InstanceAlias: ev.NewPrimary.Alias}
+		}
 	}
 	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
 	return true, topologyRecovery, err

@@ -198,7 +198,7 @@ func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainS
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType:
 		return convertVExplainQueriesResultToString(rows)
-	case sqlparser.AllVExplainType, sqlparser.TraceVExplainType, sqlparser.PlanVExplainType, sqlparser.KeysVExplainType:
+	case sqlparser.AllVExplainType, sqlparser.TraceVExplainType, sqlparser.PlanVExplainType, sqlparser.KeysVExplainType, sqlparser.MySQLVExplainType:
 		return convertVExplainResultToString(rows)
 	default:
 		return nil, nil
