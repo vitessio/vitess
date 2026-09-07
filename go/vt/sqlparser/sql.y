@@ -5200,17 +5200,22 @@ explain_format_opt:
     // them as ordinary identifiers everywhere else, and rejects an unknown name
     // rather than the syntax; keeping them out of the keyword table means the
     // formatter does not backtick columns or values spelled tree or traditional.
-    switch $3.Lowered() {
-    case "json":
-      $$ = JSONType
-    case "tree":
-      $$ = TreeType
-    case "traditional":
-      $$ = TraditionalType
-    default:
+    typ, ok := ExplainTypeFromName($3.String())
+    if !ok {
       yylex.Error("Unknown EXPLAIN format name: '" + $3.String() + "'")
       return 1
     }
+    $$ = typ
+  }
+| FORMAT '=' STRING
+  {
+    // MySQL also accepts the format name as a quoted string
+    typ, ok := ExplainTypeFromName($3)
+    if !ok {
+      yylex.Error("Unknown EXPLAIN format name: '" + $3 + "'")
+      return 1
+    }
+    $$ = typ
   }
 | ANALYZE
   {

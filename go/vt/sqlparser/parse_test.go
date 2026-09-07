@@ -2798,6 +2798,13 @@ var validSQL = []struct {
 	input:  "set sql_mode = TRADITIONAL",
 	output: "set sql_mode = TRADITIONAL",
 }, {
+	// MySQL also accepts the format name as a quoted string
+	input:  "explain format = 'json' select * from t",
+	output: "explain format = json select * from t",
+}, {
+	input:  "explain format = 'Tree' select * from t",
+	output: "explain format = tree select * from t",
+}, {
 	input: "vexplain queries select * from t",
 }, {
 	input: "vexplain all select * from t",
@@ -6531,6 +6538,9 @@ var invalidSQL = []struct {
 	input:  "explain format = bogus select * from t",
 	// MySQL's own error text (1791)
 	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
+}, {
+	input:  "explain format = 'bogus' select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 25 near 'bogus'",
 }, {
 	input:  "alter vitess_migration cleanup context ''",
 	output: "migration context cannot be empty at position 42",
