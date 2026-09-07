@@ -3143,6 +3143,28 @@
     }
   },
   {
+    "comment": "a correlated subquery in a branch does not stop the predicate being held back above the UNION",
+    "query": "select * from (select (select col from user u2 where u2.id = user.id) as c, uuid() as d from user union all select 'z', uuid() from user) sub where d <> d",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select (select col from user u2 where u2.id = user.id) as c, uuid() as d from user union all select 'z', uuid() from user) sub where d <> d",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c, d from (select (select col from `user` as u2 where 1 != 1) as c, uuid() as d from `user` where 1 != 1 union all select 'z', uuid() from `user` where 1 != 1) as sub where 1 != 1",
+        "Query": "select c, d from (select (select col from `user` as u2 where u2.id = `user`.id) as c, uuid() as d from `user` union all select 'z', uuid() from `user`) as sub where d != d"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "only the half that substitutes a volatile projection stays above the UNION; the vindex predicate is still pushed into both branches",
     "query": "select * from (select uuid() as c, id as d from user union all select uuid(), id from user) sub where c <> c and d = 5",
     "plan": {
