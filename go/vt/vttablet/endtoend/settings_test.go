@@ -114,6 +114,49 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 	}
 }
 
+// A plain request that finds no clean connection and no spare capacity is handed a
+// connection with settings applied, after the pool has reset them. The reset must
+// succeed on MySQL: when it fails, the pool silently replaces the connection, so the
+// client observes a new connection id instead of the reused one.
+func TestSettingsResetReusesConnection(t *testing.T) {
+	resetTxConnPool(t)
+
+	connectionIDQuery := "select connection_id(), @@sql_safe_updates"
+	setting := "set @@sql_safe_updates = 1"
+
+	// hold every connection but one, so the plain request below cannot be served
+	// from the clean stack or by opening a new connection
+	txPoolSize := framework.Server.Config().TxPool.Size
+	holders := make([]*framework.QueryClient, 0, txPoolSize-1)
+	for range txPoolSize - 1 {
+		holder := framework.NewClient()
+		_, err := holder.BeginExecute("select 1", nil, nil)
+		require.NoError(t, err)
+		holders = append(holders, holder)
+	}
+	t.Cleanup(func() {
+		for _, holder := range holders {
+			assert.NoError(t, holder.Release())
+		}
+	})
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	withSetting, err := client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+	require.Equal(t, "1", withSetting.Rows[0][1].ToString())
+
+	plain, err := client.BeginExecute(connectionIDQuery, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+
+	// the same connection is reused, with its settings reset
+	assert.Equal(t, withSetting.Rows[0][0].ToString(), plain.Rows[0][0].ToString(), "expected the settings connection to be reused")
+	assert.Equal(t, "0", plain.Rows[0][1].ToString(), "expected sql_safe_updates to be reset")
+}
+
 // resetTxConnPool resets the settings pool by fetching all the connections from the pool with no settings.
 // this will make sure that the settings pool connections if any will be taken and settings are reset.
 func resetTxConnPool(t *testing.T) {
