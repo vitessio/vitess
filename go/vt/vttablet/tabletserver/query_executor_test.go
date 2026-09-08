@@ -1115,6 +1115,82 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
+// TestQueryExecutorTableAclPassthroughDenied covers statements whose table set
+// the planner cannot determine (DO, CALL, REPAIR, OPTIMIZE). They are forwarded
+// to MySQL as opaque text and can still read or modify tables — a table-reading
+// subquery inside DO, a stored procedure body — but BuildPermissions derives no
+// permissions for them, so before this fix the ACL loop had nothing to check and
+// let any authenticated caller run them under strict table ACL, bypassing the
+// table ACL entirely (GHSA-w6mx-2f8x-pqf4). Under strict ACL these must now be
+// denied for a non-exempt caller; with strict ACL off they must still run, and a
+// dry run must not enforce.
+func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	// The opaque statements never reach the backend under strict ACL (they are
+	// denied first), but the non-strict and dry-run cases execute them, so the
+	// fake backend must answer both passthrough shapes.
+	db.AddQueryPattern("(?is)do .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)call .*", &sqltypes.Result{})
+
+	// A subquery-reading DO and a stored-procedure CALL: the two statement
+	// shapes from the advisory, one per tablet plan type that skips the ACL.
+	cases := []struct {
+		name   string
+		query  string
+		planID planbuilder.PlanType
+	}{
+		{"do with table subquery", "do (select email from test_table where pk = 3 limit 1)", planbuilder.PlanOtherAdmin},
+		{"call stored procedure", "call test_proc()", planbuilder.PlanCallProc},
+	}
+
+	// test_table is readable only by "superuser"; the caller "u2" is in no group.
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}},
+	}
+	require.NoError(t, tableacl.InitFromProto(config))
+	callerID := &querypb.VTGateCallerID{Username: "u2"}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Strict table ACL: the caller has no grants, and the statement's
+			// table set is unknown, so it must be denied.
+			tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+			qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+			require.Equal(t, tc.planID, qre.plan.PlanID)
+			_, err := qre.Execute()
+			require.Error(t, err, "an authenticated caller with no grants must not run an opaque statement under strict table ACL")
+			assert.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
+			tsv.StopService()
+
+			// Strict table ACL with dry run on: the denial is only recorded,
+			// not enforced, so the statement runs.
+			tsv = newTestTabletServer(ctx, enableStrictTableACL, db)
+			tsv.qe.enableTableACLDryRun = true
+			qre = newTestQueryExecutor(ctx, tsv, tc.query, 0)
+			_, err = qre.Execute()
+			require.NoError(t, err, "a dry run must not enforce the ACL")
+			tsv.StopService()
+
+			// Strict table ACL off: the statement runs as before.
+			tsv = newTestTabletServer(ctx, noFlags, db)
+			qre = newTestQueryExecutor(ctx, tsv, tc.query, 0)
+			_, err = qre.Execute()
+			require.NoError(t, err, "with strict table ACL off the statement must still run")
+			tsv.StopService()
+		})
+	}
+}
+
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
