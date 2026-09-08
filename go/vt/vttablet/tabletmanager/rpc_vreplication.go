@@ -686,15 +686,7 @@ func getOptionSetString(config map[string]string) string {
 		clause += ")"
 	}
 	if len(keys) > 0 {
-<<<<<<< HEAD
-		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
-||||||| parent of 461f000b81 ( vreplication: Fix --config-overrides silently erasing existing config keys (#21017))
-		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
-		var clauseSb688 strings.Builder
-=======
 		clause = fmt.Sprintf("json_set(json_insert(%s, '$.config', json_object()), ", clause)
-		var clauseSb688 strings.Builder
->>>>>>> 461f000b81 ( vreplication: Fix --config-overrides silently erasing existing config keys (#21017))
 		for i, k := range keys {
 			if i > 0 {
 				clause += ", "
