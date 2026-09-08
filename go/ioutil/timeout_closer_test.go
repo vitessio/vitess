@@ -27,6 +27,7 @@ import (
 
 type hangCloser struct {
 	hang bool
+	err  error
 }
 
 func (c hangCloser) Close() error {
@@ -34,7 +35,7 @@ func (c hangCloser) Close() error {
 		ch := make(chan bool)
 		ch <- true // hang forever
 	}
-	return nil
+	return c.err
 }
 
 func TestTimeoutCloser(t *testing.T) {
@@ -49,5 +50,27 @@ func TestTimeoutCloser(t *testing.T) {
 		err := closer.Close()
 		require.Error(t, err)
 		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.ErrorIs(t, err, ErrCloseAbandoned)
+	}
+}
+
+// TestTimeoutCloserAbandoned pins what ErrCloseAbandoned means: it marks a
+// Close that the TimeoutCloser stopped waiting for, whether because of its
+// own timeout or because the context was canceled, and never a Close that
+// returned on its own, even one that failed with a context error.
+func TestTimeoutCloserAbandoned(t *testing.T) {
+	{
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		closer := NewTimeoutCloser(ctx, &hangCloser{hang: true}, time.Minute)
+		err := closer.Close()
+		require.ErrorIs(t, err, ErrCloseAbandoned)
+		require.ErrorIs(t, err, context.Canceled)
+	}
+	{
+		closer := NewTimeoutCloser(t.Context(), &hangCloser{err: context.DeadlineExceeded}, time.Minute)
+		err := closer.Close()
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.NotErrorIs(t, err, ErrCloseAbandoned, "a Close that returned is not abandoned")
 	}
 }
