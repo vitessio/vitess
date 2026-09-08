@@ -686,7 +686,7 @@ func getOptionSetString(config map[string]string) string {
 		clause += ")"
 	}
 	if len(keys) > 0 {
-		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		clause = fmt.Sprintf("json_set(json_insert(%s, '$.config', json_object()), ", clause)
 		for i, k := range keys {
 			if i > 0 {
 				clause += ", "
