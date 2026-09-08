@@ -1117,12 +1117,22 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				closeCompressorAt := time.Now()
 				// A compressor is closed once, without closeWithRetry: a failed
 				// close leaves the compressed stream broken, and closing again
-				// cannot repair it. The builtin compressors answer every later
-				// Close with the same error, and an external compressor's
-				// process has already exited. The file is retried as a whole
-				// by the caller instead.
+				// cannot repair it. Nor is a second Close safe for every
+				// implementation: the lz4 writer blocks forever on it in
+				// concurrent mode, and an external compressor's process has
+				// already exited. The file is retried as a whole by the caller
+				// instead.
 				if cerr := closer.Close(); cerr != nil {
-					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
+					if errors.Is(cerr, ioutil.ErrCloseAbandoned) {
+						// The compressor's Close is still running and may still
+						// be flushing into this attempt's buffer and destination
+						// while they are closed below. The retry would write the
+						// same destination name, so nothing under it can be
+						// trusted any more: fail the backup instead.
+						cerr = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close compressor %v within %v: %v", label, closeTimeout, cerr)
+					} else {
+						cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
+					}
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
 					return
@@ -1614,7 +1624,12 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 			// A decompressor is closed once, without closeWithRetry: its Close
 			// reports the state of the stream it has read, and closing again
 			// cannot change that. The file is retried as a whole by the caller
-			// instead.
+			// instead. That holds for an abandoned Close too
+			// (ioutil.ErrCloseAbandoned): a decompressor never writes the
+			// destination, the source it may still be reading is this
+			// attempt's own and is closed by the caller, the retry opens a
+			// fresh one, and an external process is killed with the caller's
+			// context. Nothing the retry uses is shared with the stale Close.
 			cerr = closer.Close()
 			if cerr != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)

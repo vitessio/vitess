@@ -61,12 +61,13 @@ const (
 	RestoreState = "restore_in_progress"
 	// BackupTimestampFormat is the format in which we save BackupTime and FinishedTime
 	BackupTimestampFormat = "2006-01-02.150405"
-
-	// closeTimeout is the timeout for closing backup files after writing.
-	// The value is a bit arbitrary. How long does it make sense to wait for a Close()? With a cloud-based implementation,
-	// network might be an issue. _Seconds_ are probably too short. The whereabouts of a minute us a reasonable value.
-	closeTimeout = 1 * time.Minute
 )
+
+// closeTimeout is the timeout for closing backup files after writing.
+// The value is a bit arbitrary. How long does it make sense to wait for a Close()? With a cloud-based implementation,
+// network might be an issue. _Seconds_ are probably too short. The whereabouts of a minute us a reasonable value.
+// It is a variable so that tests can shorten it.
+var closeTimeout = 1 * time.Minute
 
 const (
 	// replicationStartDeadline is the deadline for starting replication

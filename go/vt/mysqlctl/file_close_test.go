@@ -33,9 +33,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // mockCloser is a mock implementation of io.Closer that can be configured
@@ -779,6 +781,97 @@ func TestRestoreFileChunkDecompressorCloseNotRetried(t *testing.T) {
 	require.ErrorContains(t, err, "failed to close decompressor")
 	require.ErrorContains(t, err, "exit status 1")
 	assert.NotContains(t, err.Error(), "giving up")
+	assert.NotContains(t, err.Error(), "hash mismatch")
+}
+
+// TestBackupFileCompressorCloseAbandonedIsFatal backs up a file through an
+// external compressor whose Close never returns: `sleep` neither exits nor
+// closes its stderr, so the compressor's Close blocks waiting for it and the
+// TimeoutCloser gives up. The abandoned Close may still be writing into this
+// attempt's buffer and destination, so the error must carry
+// FAILED_PRECONDITION to stop the caller from retrying the file, and not a
+// context code, which the dispatch would retry.
+func TestBackupFileCompressorCloseAbandonedIsFatal(t *testing.T) {
+	if _, err := validateExternalCmd("sleep"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(path.Join(tmpDir, "source.txt"), []byte("test content"), 0o644))
+
+	oldCmd := ExternalCompressorCmd
+	oldTimeout := closeTimeout
+	t.Cleanup(func() {
+		ExternalCompressorCmd = oldCmd
+		closeTimeout = oldTimeout
+	})
+	ExternalCompressorCmd = "sleep 1000"
+	closeTimeout = 100 * time.Millisecond
+
+	bh := newMockBackupHandle()
+	bh.addFileReturn = newMockReadWriteCloser(0, nil)
+	params := BackupParams{
+		Cnf:         &Mycnf{DataDir: tmpDir},
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "source.txt",
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.backupFile(t.Context(), params, bh, fe, "0", -1)
+
+	require.ErrorContains(t, err, "failed to close compressor")
+	require.ErrorContains(t, err, ioutil.ErrCloseAbandoned.Error())
+	assert.True(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "an abandoned compressor close must be fatal, got: %v", err)
+}
+
+// TestRestoreFileDecompressorCloseAbandonedRetries restores a file through
+// an external decompressor whose Close never returns: the shell closes its
+// stdout so the copy finishes, then replaces itself with a `sleep` that
+// keeps stderr open, so the decompressor's Close blocks and the
+// TimeoutCloser gives up. Unlike the compressor, a stale decompressor shares
+// nothing with the retry, so the error must come back without
+// FAILED_PRECONDITION and the caller's per-file retry gets its turn.
+func TestRestoreFileDecompressorCloseAbandonedRetries(t *testing.T) {
+	if _, err := validateExternalCmd("sh"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+
+	oldCmd := ExternalDecompressorCmd
+	oldTimeout := closeTimeout
+	t.Cleanup(func() {
+		ExternalDecompressorCmd = oldCmd
+		closeTimeout = oldTimeout
+	})
+	ExternalDecompressorCmd = "sh -c 'exec 1>&-; exec sleep 1000'"
+	closeTimeout = 100 * time.Millisecond
+
+	bh := newMockBackupHandle()
+	bh.readFileReturn = newMockReadOnlyCloser(0, nil)
+	params := RestoreParams{
+		Cnf:    &Mycnf{DataDir: tmpDir},
+		Logger: logutil.NewMemoryLogger(),
+		Stats:  backupstats.NoStats(),
+	}
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "restored.txt",
+		Hash: "not the hash",
+	}
+	bm := builtinBackupManifest{
+		CompressionEngine: ExternalCompressor,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.restoreFile(t.Context(), params, bh, fe, bm, "0")
+
+	require.ErrorContains(t, err, "failed to close decompressor")
+	require.ErrorContains(t, err, ioutil.ErrCloseAbandoned.Error())
+	assert.False(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "an abandoned decompressor close must stay retryable, got: %v", err)
 	assert.NotContains(t, err.Error(), "hash mismatch")
 }
 
