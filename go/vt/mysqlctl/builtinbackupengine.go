@@ -33,6 +33,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -1602,19 +1603,25 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 	decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
 	wrappedReader := ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
-	cleanup := func() error {
-		params.Logger.Infof("closing decompressor for %s", name)
-		closeAt := time.Now()
-		// A decompressor is closed once, without closeWithRetry: its Close
-		// reports the state of the stream it has read, and closing again
-		// cannot change that. The file is retried as a whole by the caller
-		// instead.
-		cerr := closer.Close()
-		if cerr != nil {
-			cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
-			params.Logger.Error(cerr)
-		}
-		params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeAt))
+	// The cleanup closes the decompressor the first time it is called and
+	// is a no-op afterwards, so the caller can close before checking the
+	// restored hash and still defer it for the error paths.
+	var closeOnce sync.Once
+	cleanup := func() (cerr error) {
+		closeOnce.Do(func() {
+			params.Logger.Infof("closing decompressor for %s", name)
+			closeAt := time.Now()
+			// A decompressor is closed once, without closeWithRetry: its Close
+			// reports the state of the stream it has read, and closing again
+			// cannot change that. The file is retried as a whole by the caller
+			// instead.
+			cerr = closer.Close()
+			if cerr != nil {
+				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
+				params.Logger.Error(cerr)
+			}
+			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeAt))
+		})
 		return cerr
 	}
 	return wrappedReader, cleanup, nil
@@ -1677,8 +1684,8 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	timedDest := ioutil.NewMeteredWriter(dest, writeStats.TimedIncrementBytes)
 	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
 
+	var decompressCleanup func() error
 	if !bm.SkipCompress {
-		var decompressCleanup func() error
 		reader, decompressCleanup, err = createDecompressor(ctx, bm, reader, params, name)
 		if err != nil {
 			return err
@@ -1692,6 +1699,16 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	if _, err := io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
+	}
+
+	// The decompressor is closed before the hash is checked. An external
+	// decompressor is fed by a goroutine that is still reading the source,
+	// and so still writing the hash, until the process has been waited for;
+	// and a decompressor that failed makes the hash irrelevant anyway.
+	if decompressCleanup != nil {
+		if cerr := decompressCleanup(); cerr != nil {
+			return cerr
+		}
 	}
 
 	hash := br.HashString()
@@ -1775,8 +1792,8 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	}()
 	var reader io.Reader = br
 
+	var decompressCleanup func() error
 	if !bm.SkipCompress {
-		var decompressCleanup func() error
 		reader, decompressCleanup, err = createDecompressor(ctx, bm, reader, params, chunk.StorageName)
 		if err != nil {
 			return err
@@ -1799,6 +1816,14 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 
 	if err := bufferedDest.Flush(); err != nil {
 		return vterrors.Wrapf(err, "failed to flush chunk %v", chunk.StorageName)
+	}
+
+	// The decompressor is closed before the hash is checked, for the same
+	// reasons as in restoreFile.
+	if decompressCleanup != nil {
+		if cerr := decompressCleanup(); cerr != nil {
+			return cerr
+		}
 	}
 
 	// Hash check first: a truncated read fails with INTERNAL (retryable).

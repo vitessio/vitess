@@ -688,7 +688,11 @@ func TestBackupFileCompressorCloseNotRetried(t *testing.T) {
 // external decompressor whose process exits with a failure, so that the
 // decompressor's Close fails. As with the compressor, a second Close cannot
 // change the outcome, so the close must run once and surface its own error
-// instead of going through closeWithRetry.
+// instead of going through closeWithRetry. The close also has to happen
+// before the restored file's hash is compared: the process can exit without
+// draining its input, so until it has been waited for, the source reader's
+// hash is still being written by the goroutine feeding the process and is
+// not the file's hash.
 func TestRestoreFileDecompressorCloseNotRetried(t *testing.T) {
 	if _, err := validateExternalCmd("false"); err != nil {
 		t.Skip("Command not available in this host:", err)
@@ -712,26 +716,70 @@ func TestRestoreFileDecompressorCloseNotRetried(t *testing.T) {
 		Logger: logutil.NewMemoryLogger(),
 		Stats:  backupstats.NoStats(),
 	}
-	// The hash covers the bytes read from the source, whether or not the
-	// external process consumed them.
-	bp := newBackupReader("test", 0, bytes.NewReader([]byte("test data")))
-	_, err := io.ReadAll(bp)
-	require.NoError(t, err)
+	// The expected hash is deliberately wrong: the decompressor's failure
+	// must be reported before the hash is compared, so the mismatch never
+	// shows up.
 	fe := &FileEntry{
 		Base: backupData,
 		Name: "restored.txt",
-		Hash: bp.HashString(),
+		Hash: "not the hash",
 	}
 	bm := builtinBackupManifest{
 		CompressionEngine: ExternalCompressor,
 	}
 
 	be := &BuiltinBackupEngine{}
-	err = be.restoreFile(t.Context(), params, bh, fe, bm, "0")
+	err := be.restoreFile(t.Context(), params, bh, fe, bm, "0")
 
 	require.ErrorContains(t, err, "failed to close decompressor")
 	require.ErrorContains(t, err, "exit status 1")
 	assert.NotContains(t, err.Error(), "giving up")
+	assert.NotContains(t, err.Error(), "hash mismatch")
+}
+
+// TestRestoreFileChunkDecompressorCloseNotRetried is the chunked-file
+// counterpart of TestRestoreFileDecompressorCloseNotRetried: a chunk's
+// decompressor is closed once, before the chunk's hash is compared, and its
+// own error comes back.
+func TestRestoreFileChunkDecompressorCloseNotRetried(t *testing.T) {
+	if _, err := validateExternalCmd("false"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+	destPath := path.Join(tmpDir, "restored.txt")
+	require.NoError(t, os.WriteFile(destPath, nil, 0o644))
+
+	oldCmd := ExternalDecompressorCmd
+	oldMaxRetries := maxFileCloseRetries
+	t.Cleanup(func() {
+		ExternalDecompressorCmd = oldCmd
+		maxFileCloseRetries = oldMaxRetries
+	})
+	ExternalDecompressorCmd = "false"
+	maxFileCloseRetries = 0
+
+	bh := newMockBackupHandle()
+	bh.readFileReturn = newMockReadOnlyCloser(0, nil)
+	params := RestoreParams{
+		Cnf:    &Mycnf{DataDir: tmpDir},
+		Logger: logutil.NewMemoryLogger(),
+		Stats:  backupstats.NoStats(),
+	}
+	chunk := &FileChunk{
+		StorageName: "0-0",
+		Hash:        "not the hash",
+	}
+	bm := builtinBackupManifest{
+		CompressionEngine: ExternalCompressor,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.restoreFileChunk(t.Context(), params, bh, chunk, bm, destPath)
+
+	require.ErrorContains(t, err, "failed to close decompressor")
+	require.ErrorContains(t, err, "exit status 1")
+	assert.NotContains(t, err.Error(), "giving up")
+	assert.NotContains(t, err.Error(), "hash mismatch")
 }
 
 // Helper function to create a test replication position.
