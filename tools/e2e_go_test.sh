@@ -23,6 +23,17 @@ if [[ -n "$JUNIT_OUTPUT" ]]; then
 	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
 fi
 
+# Record every attempt's output. When TestMain fails and the rerun then runs
+# zero tests, the console format drops the failed attempt's output entirely;
+# assert_tests_ran.sh prints it from this file (gotestsum passes the path to
+# the post-run command as GOTESTSUM_JSONFILE).
+if [[ -n "$JUNIT_OUTPUT" ]]; then
+	JSON_OUTPUT="${JUNIT_OUTPUT%.xml}.json"
+else
+	JSON_OUTPUT="$(mktemp)"
+fi
+GOTESTSUM_ARGS+=("--jsonfile" "$JSON_OUTPUT")
+
 # The test packages must come before "$@" on the go test command line: "$@"
 # can contain test-binary flags such as --topo-flavor or -keep-data, which
 # go test only forwards to the test binary when they appear after the package
