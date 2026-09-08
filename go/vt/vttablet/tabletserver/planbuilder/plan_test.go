@@ -387,3 +387,15 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 func locateFile(name string) string {
 	return "testdata/" + name
 }
+
+// Every setting is reset with the DEFAULT keyword. MySQL accepts `SET var = DEFAULT`
+// for any system variable and rejects the string 'default' for most of them, so the
+// reset must use the keyword for the pool to be able to reuse the connection rather
+// than replace it.
+func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser)
+	require.NoError(t, err)
+	require.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
+}

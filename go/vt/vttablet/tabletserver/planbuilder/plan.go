@@ -350,35 +350,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-<<<<<<< HEAD
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: lDefault})
-||||||| parent of fd0f8f251a (vttablet: reset connection settings with the DEFAULT keyword (#21026))
-			resetExpr := sqlparser.Expr(lDefault)
-			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
-				// `default` would re-inherit the server's global sql_mode including its
-				// lexer modes, undoing the neutralization every Vitess-created
-				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
-				// the neutralized global instead
-				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
-				if err != nil {
-					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
-				}
-			}
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
-=======
-			resetExpr := sqlparser.Expr(defaultValue)
-			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
-				// `default` would re-inherit the server's global sql_mode including its
-				// lexer modes, undoing the neutralization every Vitess-created
-				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
-				// the neutralized global instead
-				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
-				if err != nil {
-					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
-				}
-			}
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
->>>>>>> fd0f8f251a (vttablet: reset connection settings with the DEFAULT keyword (#21026))
+			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: defaultValue})
 		}
 	}
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
