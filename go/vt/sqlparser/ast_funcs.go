@@ -3209,6 +3209,11 @@ func (node *ValuesStatement) SetComments(comments Comments) {}
 
 func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }
 
+// NewFuncExpr builds a generic function call. For a built-in that MySQL parses
+// through a keyword rule (now, count, user, ... see IsKeywordFunctionName) the
+// result is a stored-function call by that name, quoted when serialized;
+// construct the dedicated node (CurTimeFuncExpr, UserFuncExpr, ...) for the
+// built-in instead.
 func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
 	return &FuncExpr{
 		Name:  NewIdentifierCI(name),
