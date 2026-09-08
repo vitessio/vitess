@@ -54,9 +54,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.CompleteSchemaMigrationResponse
 		Error    error
 	}
-	CreateKeyspaceShouldErr bool
-	CreateShardShouldErr    bool
-	DeleteKeyspaceShouldErr bool
+	CreateKeyspaceShouldErr      bool
+	ConcludeTransactionShouldErr bool
+	CreateShardShouldErr         bool
+	DeleteKeyspaceShouldErr      bool
 	// Keyed by _sorted_ <ks/shard> list string joined by commas.
 	DeleteShardsResults map[string]error
 	// Keyed by _sorted_ TabletAlias list string joined by commas.
@@ -167,7 +168,9 @@ type VtctldClient struct {
 		Response *vtctldatapb.ValidateVersionKeyspaceResponse
 		Error    error
 	}
-	WorkflowUpdateResults map[string]struct {
+	LastVDiffCreateRequest       *vtctldatapb.VDiffCreateRequest
+	LastMaterializeCreateRequest *vtctldatapb.MaterializeCreateRequest
+	WorkflowUpdateResults        map[string]struct {
 		Response *vtctldatapb.WorkflowUpdateResponse
 		Error    error
 	}
@@ -238,6 +241,15 @@ func (fake *VtctldClient) CompleteSchemaMigration(ctx context.Context, req *vtct
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ConcludeTransaction is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ConcludeTransaction(ctx context.Context, req *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	if fake.ConcludeTransactionShouldErr {
+		return nil, fmt.Errorf("%w: ConcludeTransaction error", assert.AnError)
+	}
+
+	return &vtctldatapb.ConcludeTransactionResponse{}, nil
 }
 
 // CreateKeyspace is part of the vtctldclient.VtctldClient interface.
@@ -805,6 +817,21 @@ func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtct
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// MaterializeCreate is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) MaterializeCreate(ctx context.Context, req *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
+	fake.LastMaterializeCreateRequest = req
+	return &vtctldatapb.MaterializeCreateResponse{}, nil
+}
+
+// VDiffCreate is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffCreateResponse, error) {
+	fake.LastVDiffCreateRequest = req
+	if req == nil {
+		return &vtctldatapb.VDiffCreateResponse{}, nil
+	}
+	return &vtctldatapb.VDiffCreateResponse{UUID: req.Uuid}, nil
 }
 
 // WorkflowUpdate is part of the vtctldclient.VtctldClient interface.

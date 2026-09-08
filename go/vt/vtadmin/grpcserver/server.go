@@ -195,6 +195,12 @@ var listenFunc = net.Listen
 // On shutdown, it may begin a lame duck period (see Options) before beginning
 // a graceful shutdown of the gRPC server and closing listeners.
 func (s *Server) ListenAndServe() error {
+	return s.ListenAndServeContext(context.Background())
+}
+
+// ListenAndServeContext is like ListenAndServe, but also begins graceful
+// shutdown when ctx is canceled.
+func (s *Server) ListenAndServeContext(ctx context.Context) error {
 	lis, err := listenFunc("tcp", s.opts.Addr)
 	if err != nil {
 		return err
@@ -262,7 +268,12 @@ func (s *Server) ListenAndServe() error {
 	s.setServing(true)
 	log.Info(fmt.Sprintf("server %s listening on %s", s.name, s.opts.Addr))
 
-	reason := <-shutdown
+	var reason error
+	select {
+	case reason = <-shutdown:
+	case <-ctx.Done():
+		reason = context.Cause(ctx)
+	}
 	log.Warn(fmt.Sprintf("graceful shutdown triggered by: %v", reason))
 
 	if s.opts.LameDuckDuration > 0 {

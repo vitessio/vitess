@@ -266,6 +266,12 @@ func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
 }
 
+// ListenAndServeContext is like ListenAndServe, but also begins graceful
+// shutdown when ctx is canceled.
+func (api *API) ListenAndServeContext(ctx context.Context) error {
+	return api.serv.ListenAndServeContext(ctx)
+}
+
 // ServeHTTP serves all routes matching path "/api" (see above)
 // It first processes cookies, and acts accordingly
 // Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set
@@ -367,7 +373,8 @@ func (api *API) Handler() http.Handler {
 	router := mux.NewRouter().PathPrefix("/api").Subrouter()
 
 	router.Use(handlers.CORS(
-		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"}),
+	))
 
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 
@@ -581,8 +588,10 @@ func (api *API) ConcludeTransaction(ctx context.Context, req *vtadminpb.Conclude
 	span, ctx := trace.NewSpan(ctx, "API.ConcludeTransaction")
 	defer span.Finish()
 
-	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
-		return nil, nil
+	// Concluding a transaction is a destructive, write-like operation, so it
+	// requires PutAction rather than a read-only action.
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.PutAction) {
+		return nil, fmt.Errorf("%w: cannot conclude transaction in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -1708,8 +1717,10 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 	span, ctx := trace.NewSpan(ctx, "API.VDiffCreate")
 	defer span.Finish()
 
-	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
-		return nil, nil
+	// Creating a VDiff launches a job and changes cluster state, so it
+	// requires a write action rather than read permission.
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.PutAction) {
+		return nil, fmt.Errorf("%w: cannot create VDiff in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -1719,20 +1730,40 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 
 	cluster.AnnotateSpan(c, span)
 
-	// Set the default options
-	req.Request.Uuid = uuid.New().String()
-	req.Request.TabletTypes = vdiffcmd.TabletTypesDefault
-	req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
-	req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
-	req.Request.Limit = math.MaxInt64
-	req.Request.MaxReportSampleRows = 10
-	req.Request.MaxExtraRowsToCompare = 1000
-	req.Request.WaitUpdateInterval = protoutil.DurationToProto(time.Duration(1 * time.Minute))
+	// Set defaults. Explicitly submitted values are preserved; defaults are
+	// applied only for omitted options.
+	if req.Request.Uuid == "" {
+		req.Request.Uuid = uuid.New().String()
+	}
+	if len(req.Request.TabletTypes) == 0 {
+		req.Request.TabletTypes = vdiffcmd.TabletTypesDefault
+	}
+	if req.Request.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_ANY {
+		req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+	if d, ok, err := protoutil.DurationFromProto(req.Request.FilteredReplicationWaitTime); err != nil || !ok || d <= 0 {
+		req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
+	}
+	if req.Request.Limit == 0 {
+		req.Request.Limit = math.MaxInt64
+	}
+	if req.Request.MaxReportSampleRows == 0 {
+		req.Request.MaxReportSampleRows = 10
+	}
+	if req.Request.MaxExtraRowsToCompare == 0 {
+		req.Request.MaxExtraRowsToCompare = 1000
+	}
+	if req.Request.WaitUpdateInterval == nil {
+		req.Request.WaitUpdateInterval = protoutil.DurationToProto(time.Duration(1 * time.Minute))
+	}
+	if req.Request.RowDiffColumnTruncateAt == 0 {
+		req.Request.RowDiffColumnTruncateAt = 128
+	}
+	if req.Request.AutoStart == nil {
+		defaultAutoStart := true
+		req.Request.AutoStart = &defaultAutoStart
+	}
 	req.Request.AutoRetry = true
-	req.Request.RowDiffColumnTruncateAt = 128
-
-	defaultAutoStart := true
-	req.Request.AutoStart = &defaultAutoStart
 
 	return c.Vtctld.VDiffCreate(ctx, req.Request)
 }
@@ -2038,17 +2069,19 @@ func (api *API) MaterializeCreate(ctx context.Context, req *vtadminpb.Materializ
 		return nil, err
 	}
 
-	// Parser with default options. New() itself initializes with default MySQL version.
-	parser, err := sqlparser.New(sqlparser.Options{
-		TruncateUILen:  512,
-		TruncateErrLen: 0,
-	})
-	if err != nil {
-		return nil, err
-	}
-	req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(req.TableSettings, parser)
-	if err != nil {
-		return nil, err
+	tableSettings := strings.TrimSpace(req.TableSettings)
+	if tableSettings != "" || len(req.Request.GetSettings().GetReferenceTables()) == 0 {
+		parser, err := sqlparser.New(sqlparser.Options{
+			TruncateUILen:  512,
+			TruncateErrLen: 0,
+		})
+		if err != nil {
+			return nil, err
+		}
+		req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(tableSettings, parser)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.Vtctld.MaterializeCreate(ctx, req.Request)
@@ -2294,12 +2327,20 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
 	defer span.Finish()
 
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaResource, rbac.ReloadAction) {
+		return nil, fmt.Errorf("%w: cannot reload schema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
 	}
 
+	// Keyspace and shard identity are required by vtctld; forward them
+	// explicitly so the reload targets the requested shard.
 	res, err := c.Vtctld.ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       req.Keyspace,
+		Shard:          req.Shard,
 		WaitPosition:   req.WaitPosition,
 		IncludePrimary: req.IncludePrimary,
 		Concurrency:    req.Concurrency,

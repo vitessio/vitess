@@ -1,0 +1,155 @@
+{{ define "shard.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+{{ $statuses := $d.Positions.GetPositionInfo.GetReplicationStatuses }}
+<div class="toolbar">
+  <h1>{{ $d.Keyspace }}/{{ $d.Shard }}</h1>
+  <div class="toolbar-links">
+    <a href="/keyspace/{{ pathEscape $d.ClusterID }}/{{ pathEscape $d.Keyspace }}">Back to keyspace</a>
+    <a href="/keyspaces">All keyspaces</a>
+  </div>
+</div>
+
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ $d.ClusterID }}</dd>
+    <dt>Keyspace</dt><dd><a href="/keyspace/{{ pathEscape $d.ClusterID }}/{{ pathEscape $d.Keyspace }}">{{ $d.Keyspace }}</a></dd>
+    <dt>Shard</dt><dd>{{ $d.Shard }}</dd>
+    <dt>Tablets</dt><dd>{{ len $d.Tablets }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h2>Tablets</h2>
+  <table>
+    <thead>
+      <tr><th>Alias</th><th>Type</th><th>State</th><th>Hostname</th><th>Replication lag</th><th>Replication status</th></tr>
+    </thead>
+    <tbody>
+      {{ range $d.Tablets }}
+      {{ $alias := tabletAlias .GetTablet.GetAlias }}
+      <tr>
+        <td><a href="/tablet/{{ pathEscape $d.ClusterID }}/{{ pathEscape $alias }}">{{ $alias }}</a></td>
+        <td>{{ .GetTablet.GetType }}</td>
+        <td>{{ .GetState }}</td>
+        <td>{{ if .GetTablet.GetHostname }}<a href="{{ externalURL .GetTablet.GetHostname }}" target="_blank" rel="noopener noreferrer">{{ .GetTablet.GetHostname }}</a>{{ end }}</td>
+        {{ with index $statuses $alias }}
+        <td>{{ .GetReplicationLagSeconds }}s</td>
+        <td><details><summary>Details</summary><pre>{{ protoJSON . }}</pre></details></td>
+        {{ else }}
+        <td class="muted">&mdash;</td>
+        <td class="muted">&mdash;</td>
+        {{ end }}
+      </tr>
+      {{ else }}
+      <tr><td colspan="6">No tablets found in this shard.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+
+{{ if not .ReadOnly }}
+<div class="card danger-zone">
+  <h2>Shard actions</h2>
+  <div class="actions-grid">
+    <details>
+      <summary>Reload schema</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "reload-schema" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label class="checkbox-label">
+          <input type="checkbox" name="include_primary">
+          Include primary
+        </label>
+        <p class="muted">Reloads the schema on all tablets in this shard. Best-effort; failures on individual tablets are logged by vtctld.</p>
+        <button type="submit" class="button">Reload schema</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Validate shard</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "validate" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label class="checkbox-label">
+          <input type="checkbox" name="ping_tablets">
+          Ping tablets
+        </label>
+        <p class="muted">Checks that all nodes reachable from this shard are consistent.</p>
+        <button type="submit" class="button">Validate</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Validate version</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "validate-version" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <p class="muted">Validates that the version on the primary matches all replicas.</p>
+        <button type="submit" class="button">Validate version</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Planned failover</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "planned-failover" }}" class="form-grid" data-confirm="Run planned failover on shard {{ $d.Keyspace }}/{{ $d.Shard }}?">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          New primary (optional)
+          <input type="text" name="new_primary" placeholder="zone1-0000000100" autocomplete="off">
+        </label>
+        <label>
+          Wait replicas timeout (seconds)
+          <input type="number" name="wait_replicas_timeout" min="0" step="1">
+        </label>
+        <p class="muted">Gracefully reparents this shard to the given tablet, or to the most up-to-date candidate when left empty. Brief write downtime is expected.</p>
+        <button type="submit" class="button secondary">Planned failover</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Emergency failover</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "emergency-failover" }}" class="form-grid" data-confirm="Run EMERGENCY failover on shard {{ $d.Keyspace }}/{{ $d.Shard }}? The current primary is assumed lost.">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          New primary (optional)
+          <input type="text" name="new_primary" placeholder="zone1-0000000100" autocomplete="off">
+        </label>
+        <label>
+          Wait replicas timeout (seconds)
+          <input type="number" name="wait_replicas_timeout" min="0" step="1">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="prevent_cross_cell_promotion">
+          Prevent cross-cell promotion
+        </label>
+        <p class="muted">Assumes the current primary is dead and not responding. Use only when planned failover is not possible.</p>
+        <button type="submit" class="button danger">Emergency failover</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Acknowledge external promotion</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "externally-promote" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          Promoted tablet alias
+          <input type="text" name="alias" placeholder="zone1-0000000100" required autocomplete="off">
+        </label>
+        <p class="muted">Updates the topo after an external tool (e.g. orchestrator) promoted a tablet. This does not itself reparent anything.</p>
+        <button type="submit" class="button">Acknowledge</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Delete shard</summary>
+      <form method="POST" action="{{ shardActionPath $d.ClusterID $d.Keyspace $d.Shard "delete" }}" class="form-grid" data-confirm="Permanently delete shard {{ $d.Keyspace }}/{{ $d.Shard }}? This cannot be undone.">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <p class="muted">Deletes this shard from the topo. Fails if the shard still has tablets; deleting a serving shard requires force elsewhere. This cannot be undone.</p>
+        <button type="submit" class="button danger">Delete shard</button>
+      </form>
+    </details>
+  </div>
+</div>
+{{ end }}
+{{ end }}
