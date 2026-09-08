@@ -1136,6 +1136,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	// fake backend must answer both passthrough shapes.
 	db.AddQueryPattern("(?is)do .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)call .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)load data .*", &sqltypes.Result{})
 
 	// A subquery-reading DO and a stored-procedure CALL: the two statement
 	// shapes from the advisory, one per tablet plan type that skips the ACL.
@@ -1146,6 +1147,10 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	}{
 		{"do with table subquery", "do (select email from test_table where pk = 3 limit 1)", planbuilder.PlanOtherAdmin},
 		{"call stored procedure", "call test_proc()", planbuilder.PlanCallProc},
+		// LOAD DATA is the same gap on the write side: the parser discards
+		// everything after LOAD DATA, and the stock init_db.sql grants vt_app
+		// the FILE privilege, so a server-side INFILE into a denied table runs.
+		{"load data into table", "load data infile '/var/lib/mysql-files/x.csv' into table test_table", planbuilder.PlanLoad},
 	}
 
 	// test_table is readable only by "superuser"; the caller "u2" is in no group.
