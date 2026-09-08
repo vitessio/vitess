@@ -47,7 +47,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/philhofer/fwd v1.2.0 // indirect
-	github.com/pierrec/lz4 v2.6.1+incompatible
+	github.com/pierrec/lz4/v4 v4.1.27
 	github.com/pires/go-proxyproto v0.8.1
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
