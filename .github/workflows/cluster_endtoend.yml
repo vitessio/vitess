@@ -194,11 +194,13 @@ jobs:
       - name: Get dependencies
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 10
+        env:
+          ARCH: ${{ matrix.arch }}
         run: |
           # Install mysql-shell for non-XtraBackup shards. Oracle's apt repo
           # has no arm64 packages, and the one shard that needs mysql-shell
           # is excluded from the arm64 matrix.
-          if [[ "${{ contains(matrix.needs, 'xtrabackup') }}" != "true" && "${{ matrix.arch }}" != "arm64" ]]; then
+          if [[ "${{ contains(matrix.needs, 'xtrabackup') }}" != "true" && "$ARCH" != "arm64" ]]; then
             sudo apt-get -qq install -y mysql-shell
           fi
 
