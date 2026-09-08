@@ -1,4 +1,6 @@
 ## v24.0
+* **[24.0.4](24.0.4)**
+
 * **[24.0.3](24.0.3)**
 	* [Changelog](24.0.3/changelog.md)
 	* [Release Notes](24.0.3/release_notes.md)

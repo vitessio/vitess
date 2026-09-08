@@ -42,18 +42,10 @@ require (
 	github.com/opentracing-contrib/go-grpc v0.1.3
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-<<<<<<< HEAD
 	github.com/philhofer/fwd v1.2.0 // indirect
-	github.com/pierrec/lz4 v2.6.1+incompatible
+	github.com/pierrec/lz4/v4 v4.1.27
 	github.com/pires/go-proxyproto v0.11.0
 	github.com/pkg/errors v0.9.1 // indirect
-||||||| parent of d078e701a8 (mysqlctl: upgrade pierrec/lz4 to v4 to fix broken amd64 block decoding (#20778))
-	github.com/pierrec/lz4 v2.6.1+incompatible
-	github.com/pires/go-proxyproto v0.15.0
-=======
-	github.com/pierrec/lz4/v4 v4.1.27
-	github.com/pires/go-proxyproto v0.15.0
->>>>>>> d078e701a8 (mysqlctl: upgrade pierrec/lz4 to v4 to fix broken amd64 block decoding (#20778))
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
 	github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25
 	github.com/prometheus/client_golang v1.23.2
