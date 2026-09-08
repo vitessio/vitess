@@ -411,7 +411,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 	}
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
-	lDefault := sqlparser.NewStrLiteral("default")
+	defaultValue := &sqlparser.Default{}
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
@@ -432,7 +432,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-			resetExpr := sqlparser.Expr(lDefault)
+			resetExpr := sqlparser.Expr(defaultValue)
 			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
 				// `default` would re-inherit the server's global sql_mode including its
 				// lexer modes, undoing the neutralization every Vitess-created

@@ -81,7 +81,19 @@ func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, query, "sql_mode = 'STRICT_TRANS_TABLES'")
 	assert.Contains(t, resetQuery, "sql_mode = replace(replace(replace(replace(replace(replace(replace(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')")
-	assert.Contains(t, resetQuery, "sql_safe_updates = 'default'")
+	assert.Contains(t, resetQuery, "sql_safe_updates = default")
+}
+
+// Every setting other than sql_mode is reset with the DEFAULT keyword. MySQL accepts
+// `SET var = DEFAULT` for any system variable and rejects the string 'default' for
+// most of them, so the reset must use the keyword for the pool to be able to reuse the
+// connection rather than replace it.
+func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser)
+	require.NoError(t, err)
+	assert.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
 }
 
 func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
