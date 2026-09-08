@@ -51,8 +51,20 @@ jobs:
             "tabletmanager_disk_health_monitor"
           ]'
 
-          # Build matrix
-          matrix=$(jq -c -s --argjson exclude "$EXCLUDE_SHARDS" '
+          # Shards additionally excluded on arm64, because a dependency has no
+          # arm64 packages yet:
+          #   - Percona Server / XtraBackup: backup_pitr_xtrabackup, xb_backup, xb_recovery
+          #   - mysql-shell (Oracle apt repo only): backup_pitr_mysqlshell
+          ARM64_EXCLUDE_SHARDS='[
+            "backup_pitr_xtrabackup",
+            "xb_backup",
+            "xb_recovery",
+            "backup_pitr_mysqlshell"
+          ]'
+
+          # Build matrix: every shard on amd64, and every shard not excluded
+          # above on arm64.
+          matrix=$(jq -c -s --argjson exclude "$EXCLUDE_SHARDS" --argjson arm64_exclude "$ARM64_EXCLUDE_SHARDS" '
             map(.Tests) | add | to_entries
             | group_by(.value.Shard)
             | map(select(.[0].value.Shard as $s | ($s != null) and ($exclude | index($s) | not)))
@@ -61,6 +73,7 @@ jobs:
                 needs: ([.[].value.Needs // []] | add | unique // []),
                 buildTag: ([.[].value.BuildTag // null] | map(select(. != null)) | first // "")
               })
+            | map(. + {arch: "amd64"}) + map(select(.shard as $s | $arm64_exclude | index($s) | not) | . + {arch: "arm64"})
           ' test/config.json test/config_partial_keyspace.json)
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
@@ -73,8 +86,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
-    name: Run endtoend tests on Cluster (${{ matrix.shard }})
-    runs-on: ${{ contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    name: Run endtoend tests on Cluster (${{ matrix.shard }}${{ matrix.arch == 'arm64' && ', arm64' || '' }})
+    runs-on: ${{ matrix.arch == 'arm64' && (contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-arm64' || 'ubuntu-24.04-arm') || (contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -139,6 +152,14 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
+      - name: Avoid the Oracle Cloud apt mirror
+        if: steps.changes.outputs.end_to_end == 'true' && matrix.arch == 'arm64'
+        run: |
+          # The Oracle Cloud regional apt mirror (e.g. us-sanjose-1-ad-1.clouds.ports.ubuntu.com)
+          # is extremely slow; point apt at the default Ubuntu ports archive instead.
+          sudo grep -rl '\.clouds\.ports\.ubuntu\.com' /etc/apt --include='*.list' --include='*.sources' \
+            | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
+
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
@@ -174,8 +195,10 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 10
         run: |
-          # Install mysql-shell for non-XtraBackup shards
-          if [[ "${{ contains(matrix.needs, 'xtrabackup') }}" != "true" ]]; then
+          # Install mysql-shell for non-XtraBackup shards. Oracle's apt repo
+          # has no arm64 packages, and the one shard that needs mysql-shell
+          # is excluded from the arm64 matrix.
+          if [[ "${{ contains(matrix.needs, 'xtrabackup') }}" != "true" && "${{ matrix.arch }}" != "arm64" ]]; then
             sudo apt-get -qq install -y mysql-shell
           fi
 

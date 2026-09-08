@@ -3,26 +3,46 @@ description: 'Set up Minio for use in GitHub Actions workflows'
 runs:
   using: "composite"
   steps:
+    - name: Pick the minio package for this architecture
+      id: minio-package
+      shell: bash -e {0}
+      run: |
+        ARCH="$(dpkg --print-architecture)"
+        case "$ARCH" in
+          # checksum - source: https://dl.min.io/community/server/minio/release/linux-amd64/minio_20250907161309.0.0_amd64.deb.sha256sum
+          amd64) SHA256="eeda08f699f6592d1b868ac8bda864ae2cacdb5ee1b888663366e8c8ff566249" ;;
+          # checksum - source: https://dl.min.io/community/server/minio/release/linux-arm64/minio_20250907161309.0.0_arm64.deb.sha256sum
+          arm64) SHA256="f9466ed832ac4926c8870b3b8378d77861a87b41529fecae7789b9bc54acd78b" ;;
+          *) echo "Unsupported architecture for minio: $ARCH"; exit 1 ;;
+        esac
+        echo "package=minio_20250907161309.0.0_${ARCH}.deb" >> "$GITHUB_OUTPUT"
+        echo "url=https://dl.min.io/community/server/minio/release/linux-${ARCH}/minio_20250907161309.0.0_${ARCH}.deb" >> "$GITHUB_OUTPUT"
+        echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
     - name: Cache minio package
       id: cache-minio
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: minio_20250907161309.0.0_amd64.deb
-        key: minio_20250907161309.0.0_amd64.deb
+        path: ${{ steps.minio-package.outputs.package }}
+        key: ${{ steps.minio-package.outputs.package }}
 
     - name: Get Minio (on cache miss)
       if: steps.cache-minio.outputs.cache-hit != 'true'
       shell: bash -e {0}
+      env:
+        PACKAGE: ${{ steps.minio-package.outputs.package }}
+        URL: ${{ steps.minio-package.outputs.url }}
+        SHA256: ${{ steps.minio-package.outputs.sha256 }}
       run: |
-        curl -sLo minio_20250907161309.0.0_amd64.deb.tmp https://dl.min.io/community/server/minio/release/linux-amd64/minio_20250907161309.0.0_amd64.deb
-
-        # checksum - source: https://dl.min.io/community/server/minio/release/linux-amd64/minio_20250907161309.0.0_amd64.deb.sha256sum
-        sha256sum minio_20250907161309.0.0_amd64.deb.tmp | grep -q ^eeda08f699f6592d1b868ac8bda864ae2cacdb5ee1b888663366e8c8ff566249
-        [[ "$?" -eq 0 ]] && mv minio_20250907161309.0.0_amd64.deb.tmp minio_20250907161309.0.0_amd64.deb
+        curl -sLo "${PACKAGE}.tmp" "$URL"
+        echo "${SHA256}  ${PACKAGE}.tmp" | sha256sum --check
+        mv "${PACKAGE}.tmp" "$PACKAGE"
 
     - name: Install Minio package
       shell: bash -e {0}
+      env:
+        PACKAGE: ${{ steps.minio-package.outputs.package }}
       run: |
-        sudo dpkg -i minio_20250907161309.0.0_amd64.deb
+        sudo dpkg -i "$PACKAGE"
         sudo systemctl disable minio
         sudo systemctl stop minio
