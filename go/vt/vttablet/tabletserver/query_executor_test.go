@@ -1167,14 +1167,33 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			// The denial has no table to name, so it is recorded under an
+			// "undetermined" table label (and no group) rather than a blank.
+			statsKey := strings.Join([]string{"undetermined", "", tc.planID.String(), "u2"}, ".")
+
 			// Strict table ACL: the caller has no grants, and the statement's
 			// table set is unknown, so it must be denied.
 			tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
 			qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
 			require.Equal(t, tc.planID, qre.plan.PlanID)
+			deniedBefore := tsv.stats.TableaclDenied.Counts()[statsKey]
 			_, err := qre.Execute()
 			require.Error(t, err, "an authenticated caller with no grants must not run an opaque statement under strict table ACL")
 			assert.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
+			assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[statsKey], "the denial must be counted under the undetermined-table key")
+			tsv.StopService()
+
+			// Strict table ACL with an exempt caller: the escape hatch the
+			// gate relies on is applied before it, so the statement runs.
+			tsv = newTestTabletServer(ctx, enableStrictTableACL, db)
+			f, err := tableacl.GetCurrentACLFactory()
+			require.NoError(t, err)
+			tsv.qe.exemptACL, err = f.New([]string{"exempt-acl"})
+			require.NoError(t, err)
+			exemptCtx := callerid.NewContext(context.Background(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
+			qre = newTestQueryExecutor(exemptCtx, tsv, tc.query, 0)
+			_, err = qre.Execute()
+			require.NoError(t, err, "an exempt caller must still be able to run the statement under strict table ACL")
 			tsv.StopService()
 
 			// Strict table ACL with dry run on: the denial is only recorded,
@@ -1182,8 +1201,10 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 			tsv = newTestTabletServer(ctx, enableStrictTableACL, db)
 			tsv.qe.enableTableACLDryRun = true
 			qre = newTestQueryExecutor(ctx, tsv, tc.query, 0)
+			pseudoBefore := tsv.stats.TableaclPseudoDenied.Counts()[statsKey]
 			_, err = qre.Execute()
 			require.NoError(t, err, "a dry run must not enforce the ACL")
+			assert.Equal(t, pseudoBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[statsKey], "a dry run must count the denial under the undetermined-table key")
 			tsv.StopService()
 
 			// Strict table ACL off: the statement runs as before.
