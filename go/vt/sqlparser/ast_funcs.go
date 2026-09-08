@@ -2105,6 +2105,20 @@ func (ty GTIDType) ToString() string {
 	}
 }
 
+// ExplainTypeFromName returns the EXPLAIN format named by an identifier or string
+// value, matched case-insensitively, and whether the name is one of the known formats.
+func ExplainTypeFromName(name string) (ExplainType, bool) {
+	switch strings.ToLower(name) {
+	case JSONStr:
+		return JSONType, true
+	case TreeStr:
+		return TreeType, true
+	case TraditionalStr:
+		return TraditionalType, true
+	}
+	return EmptyType, false
+}
+
 // ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {

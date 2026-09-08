@@ -1337,7 +1337,7 @@ var validSQL = []struct {
 	input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
 }, {
 	input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
-	output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
+	output: "insert into `user`(`format`, tree, `vitess`) values ('Chuck', 42, 'Barry')",
 }, {
 	input: "insert into customer() values ()",
 }, {
@@ -2789,6 +2789,21 @@ var validSQL = []struct {
 	input: "explain select * from t",
 }, {
 	input: "explain format = traditional select * from t",
+}, {
+	// the EXPLAIN format names are matched by text, not as keywords: they stay plain
+	// identifiers everywhere else, as they are in MySQL
+	input:  "select tree, traditional from t",
+	output: "select tree, traditional from t",
+}, {
+	input:  "set sql_mode = TRADITIONAL",
+	output: "set sql_mode = TRADITIONAL",
+}, {
+	// MySQL also accepts the format name as a quoted string
+	input:  "explain format = 'json' select * from t",
+	output: "explain format = json select * from t",
+}, {
+	input:  "explain format = 'Tree' select * from t",
+	output: "explain format = tree select * from t",
 }, {
 	input: "vexplain queries select * from t",
 }, {
@@ -6519,6 +6534,13 @@ var invalidSQL = []struct {
 }, {
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",
+}, {
+	// MySQL's own error text (1791)
+	input:  "explain format = bogus select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
+}, {
+	input:  "explain format = 'bogus' select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 25 near 'bogus'",
 }, {
 	input:  "alter vitess_migration cleanup context ''",
 	output: "migration context cannot be empty at position 42",

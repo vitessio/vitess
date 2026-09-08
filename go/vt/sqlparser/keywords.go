@@ -751,8 +751,6 @@ var keywords = []keyword{
 	{"trailing", TRAILING},
 	{"transaction", TRANSACTION},
 	{"transactions", TRANSACTIONS},
-	{"tree", TREE},
-	{"traditional", TRADITIONAL},
 	{"trigger", TRIGGER},
 	{"triggers", TRIGGERS},
 	{"true", TRUE},
