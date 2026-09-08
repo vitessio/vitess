@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,9 +47,8 @@ func TestTimeoutCloser(t *testing.T) {
 	{
 		closer := NewTimeoutCloser(ctx, &hangCloser{hang: true}, time.Second)
 		err := closer.Close()
-		require.Error(t, err)
-		assert.ErrorIs(t, err, context.DeadlineExceeded)
-		assert.ErrorIs(t, err, ErrCloseAbandoned)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorIs(t, err, ErrCloseAbandoned)
 	}
 }
 
