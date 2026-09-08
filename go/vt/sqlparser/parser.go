@@ -222,60 +222,233 @@ var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQ
 // ErrMultipleStatements is a sentinel error returned when we parsed multiple statements when we were expecting one.
 var ErrMultipleStatements = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "Expected a single statement")
 
-// SplitStatement returns the first sql statement up to either a ';' or EOF
-// and the remainder from the given buffer
-func (p *Parser) SplitStatement(blob string) (string, string, error) {
-	tokenizer := p.NewStringTokenizer(blob)
-	tkn := 0
+// ParseNext parses the first statement of sql the way MySQL's multi-statement
+// dispatcher does: the grammar consumes one complete statement and stops at
+// the top-level ';' that follows it, so a ';' inside a compound statement
+// (a CREATE PROCEDURE body, say) never ends the statement. stmt is nil for an
+// empty statement (nothing, or whitespace only; comments alone give a
+// *CommentOnly). text is the statement's own text without the ';', leading
+// whitespace and comments included. rest is everything after the ';', or
+// empty when the input ended with the statement.
+//
+// A DDL statement that is only partially parsed is accepted the way Parse
+// accepts it, marked as not fully parsed and cut at the next top-level ';'.
+func (p *Parser) ParseNext(sql string) (stmt Statement, text string, rest string, err error) {
+	stmt, text, rest, err = p.parseNext(sql)
+	if err != nil {
+		return nil, "", "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+	}
+	return stmt, text, rest, nil
+}
+
+// parseNext is ParseNext, except that on a syntax error text and rest are
+// still returned, cut at the next top-level ';' the tokenizer can find (or
+// the end of the input), and err is the tokenizer's own error, without the
+// stack trace and formatting of a vterrors error most callers discard.
+// SplitStatementToPieces relies on the cut to pass statements the grammar
+// does not know on to MySQL unchanged.
+func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string, err error) {
+	tokenizer := p.NewStringTokenizer(sql)
+	tokenizer.stopAfterFirstStatement = true
+	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
+		if tokenizer.partialDDL != nil && !tokenizer.resyncLexError {
+			switch x := tokenizer.partialDDL.(type) {
+			case DBDDLStatement:
+				x.SetFullyParsed(false)
+			case DDLStatement:
+				x.SetFullyParsed(false)
+			}
+			stmt = tokenizer.partialDDL
+		} else {
+			err = tokenizer.LastError
+			tokenizer.resync()
+		}
+	} else {
+		stmt = tokenizer.ParseTrees[0]
+	}
+	if tokenizer.stmtEnd < 0 {
+		return stmt, sql, "", err
+	}
+	if err == nil && tokenizer.stmtEndInComment {
+		err = errStatementEndsInsideExecutableComment
+	}
+	return stmt, sql[:tokenizer.stmtEnd], sql[tokenizer.stmtEnd+1:], err
+}
+
+// errStatementEndsInsideExecutableComment is parseNext's error for a
+// statement whose ';' fell inside an executable comment that applies, which
+// MySQL does not allow in a batch. The text is still cut at that ';'.
+var errStatementEndsInsideExecutableComment = errors.New("statement ends inside an executable comment")
+
+// ForEachStatement hands the statements of sql to fn one at a time, the way
+// MySQL's multi-statement dispatcher does: a statement is parsed only when its
+// turn comes, after fn has returned for every statement before it, so an
+// error from fn ends the batch before anything after it is even parsed. text
+// is the statement's own text without its ';', whitespace and comments
+// around it included; rest is everything after the ';', empty for the last
+// statement. A single statement (at most with a trailing ';') is handed over
+// as is, without being parsed.
+//
+// The parse here only finds the statement's end: a statement the grammar
+// rejects is handed to fn as well, cut at the next top-level ';', for fn's
+// own parse to report (the way it would have reported it for that statement
+// alone). As MySQL does before parsing a COM_QUERY, trailing ';' and
+// whitespace are dropped from the whole text first, so "select 1;;" is one
+// statement. An empty statement followed by more input is a syntax error, as
+// in MySQL, and comments alone are as empty; comments alone that end the
+// batch are a statement of their own. A statement whose ';' falls inside an
+// executable comment that applies is a syntax error at that ';', and nothing
+// runs. An input with no statement at all is ErrEmpty.
+func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) error {
+	if strings.Trim(sql, blankChars) == "" {
+		return ErrEmpty
+	}
+	// fast path: a single statement needs no split.
+	if end, ok := p.singleStatementEnd(sql); ok {
+		if strings.Trim(sql[:end], blankChars) == "" {
+			return ErrEmpty
+		}
+		return fn(sql[:end], "")
+	}
+
+	sql = strings.TrimRight(sql, blankChars+";")
+	if strings.Trim(sql, blankChars) == "" {
+		return ErrEmpty
+	}
+	offset := 0 // start of the current statement in sql
 	for {
-		tkn, _ = tokenizer.Scan()
-		if tkn == 0 || tkn == ';' || tkn == eofChar {
-			break
+		stmt, text, rest, err := p.parseNext(sql[offset:])
+		if errors.Is(err, errStatementEndsInsideExecutableComment) {
+			// A statement of a batch whose ';' falls inside an executable
+			// comment that applies is a syntax error at that ';' in MySQL, and
+			// nothing runs.
+			return NewParseErrorNear(sql, offset+len(text)+1)
 		}
-	}
-	if tokenizer.LastError != nil {
-		return "", "", tokenizer.LastError
-	}
-	if tkn == ';' {
-		return blob[:tokenizer.Pos-1], blob[tokenizer.Pos:], nil
-	}
-	return blob, "", nil
-}
-
-var validCreatePrefixes = [][]int{
-	// These are the tokens (in order) for valid "create procedure" forms.
-	{CREATE, PROCEDURE},
-	{CREATE, DEFINER, '=', CURRENT_USER, PROCEDURE},
-	{CREATE, DEFINER, '=', CURRENT_USER, '(', ')', PROCEDURE},
-	{CREATE, DEFINER, '=', STRING, PROCEDURE},
-	{CREATE, DEFINER, '=', STRING, AT_ID, PROCEDURE},
-	{CREATE, DEFINER, '=', ID, PROCEDURE},
-	{CREATE, DEFINER, '=', ID, AT_ID, PROCEDURE},
-}
-
-// matchesCreateProcedurePrefix checks if the given token sequence
-// is a create procedure statement or not.
-func matchesCreateProcedurePrefix(tokens []int) bool {
-	// Check each candidate sequence.
-	for _, pattern := range validCreatePrefixes {
-		if len(tokens) >= len(pattern) {
-			match := true
-			for i, tok := range pattern {
-				if tokens[i] != tok {
-					match = false
-					break
-				}
-			}
-			if match {
-				return true
+		if err == nil {
+			// An empty statement followed by more input is a syntax error at
+			// its ';', as in MySQL, where comments alone are as empty. Comments
+			// alone that end the batch are a statement of their own.
+			_, comments := stmt.(*CommentOnly)
+			if stmt == nil || (comments && rest != "") {
+				return NewParseErrorNear(sql, offset+len(text))
 			}
 		}
+		if err := fn(text, rest); err != nil {
+			return err
+		}
+		if rest == "" {
+			return nil
+		}
+		offset = len(sql) - len(rest)
 	}
-	return false
+}
+
+// SingleStatement returns the one statement sql holds, read the way MySQL's
+// prepare reads a text. Trailing ';' and blanks are dropped first, as MySQL
+// drops them before reading. At most a terminating ';' then ends the
+// statement, and only blanks and comments may follow it, lexed on from the
+// ';': a ';' inside an executable comment that applies ends the statement,
+// and the comment's close after it is a comment, so the whole text is the
+// statement then. Anything else after the ';' is the syntax error MySQL
+// reports there, and so is a ';' with no statement before it. A text with
+// no statement at all is ErrEmpty. A lexical error in the statement's own
+// text is left to the grammar: the text is returned as is.
+func (p *Parser) SingleStatement(sql string) (string, error) {
+	sql = strings.TrimRight(sql, blankChars+";")
+	tokenizer := p.NewStringTokenizer(sql)
+	end := -1 // offset of the terminating ';'
+	endInComment := false
+	empty := true // no token before the terminator
+	for {
+		typ, _ := tokenizer.Scan()
+		switch {
+		case typ == COMMENT:
+			continue
+		case typ == 0:
+			if empty {
+				return "", ErrEmpty
+			}
+			if end < 0 || endInComment {
+				return sql, nil
+			}
+			return sql[:end], nil
+		case end >= 0 || (typ == ';' && empty):
+			return "", NewParseErrorNear(sql, tokenizer.currStart)
+		case typ == ';':
+			end = tokenizer.Pos - 1
+			endInComment = tokenizer.semicolonInComment
+		case typ == LEX_ERROR:
+			return sql, nil
+		default:
+			empty = false
+		}
+	}
+}
+
+// NewParseErrorNear returns MySQL's ER_PARSE_ERROR (1064) for the input that
+// starts at offset in sql.
+func NewParseErrorNear(sql string, offset int) error {
+	const maxNear = 80 // MySQL formats the message with %-.80s
+	near := strings.TrimLeft(sql[offset:], blankChars)
+	line := 1 + strings.Count(sql[:len(sql)-len(near)], "\n")
+	if len(near) > maxNear {
+		near = near[:maxNear]
+	}
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.ParseError, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '%s' at line %d", near, line)
+}
+
+// singleStatement reports, without the grammar, whether sql is a single
+// statement: no ';' token at all, or one that only blanks follow — the
+// lexer's blanks, so that a character it does not read as blank is handed
+// to the grammar rather than dropped. end is where the statement's text
+// ends (len(sql), or the offset of that ';').
+// A ';' inside a string, a quoted identifier or a comment is not a token,
+// for MySQL's lexer no more than for ours, so such a statement is handed
+// over as is instead of being parsed just to find its end. A lexical error
+// leaves the question to the grammar.
+func (p *Parser) singleStatementEnd(sql string) (end int, ok bool) {
+	if strings.IndexByte(sql, ';') == -1 {
+		return len(sql), true
+	}
+	tokenizer := Tokenizer{buf: sql, parser: p, stmtEnd: -1}
+	for {
+		switch typ, _ := tokenizer.Scan(); typ {
+		case ';':
+			if tokenizer.semicolonInComment {
+				// not a batch's to end a statement with: the loop reports it
+				return 0, false
+			}
+			end = tokenizer.Pos - 1
+			return end, strings.Trim(sql[tokenizer.Pos:], blankChars) == ""
+		case 0:
+			return len(sql), true
+		case LEX_ERROR:
+			return 0, false
+		}
+	}
+}
+
+// SplitStatement returns the first sql statement up to either a ';' or EOF
+// and the remainder from the given buffer. The boundary is the one ParseNext
+// finds; a statement the grammar rejects is cut at the next top-level ';'.
+// A single statement is not parsed.
+func (p *Parser) SplitStatement(blob string) (string, string, error) {
+	if end, ok := p.singleStatementEnd(blob); ok {
+		if end == len(blob) {
+			return blob, "", nil
+		}
+		return blob[:end], blob[end+1:], nil
+	}
+	_, sql, rem, _ := p.parseNext(blob)
+	return sql, rem, nil
 }
 
 // SplitStatementToPieces splits raw sql statement that may have multi sql pieces to sql pieces
-// returns the sql pieces blob contains; or error if sql cannot be parsed.
+// returns the sql pieces blob contains. Statement boundaries come from
+// ParseNext; a piece the grammar rejects is cut at the next top-level ';'
+// instead of failing, so that callers can pass statements Vitess does not
+// parse (CHANGE REPLICATION SOURCE TO, CREATE FUNCTION, ...) on to MySQL.
+// Empty and comment-only pieces are dropped.
 func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error) {
 	// fast path: the vast majority of SQL statements do not have semicolons in them
 	if blob == "" {
@@ -289,73 +462,37 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 	}
 
 	pieces = make([]string, 0, 16)
-	tokenizer := p.NewStringTokenizer(blob)
-
-	tkn := 0
-	var stmt string
-	stmtBegin := 0
-	emptyStatement := true
-	var startTokens []int // holds the first tokens of the current statement
-
-loop:
-	for {
-		tkn, _ = tokenizer.Scan()
-		switch tkn {
-		case ';':
-			// Potential end of the statement.
-			stmt = blob[stmtBegin : tokenizer.Pos-1]
-			// If it's a create procedure statement and is incomplete, skip appending.
-			if matchesCreateProcedurePrefix(startTokens) && p.IsStatementIncomplete(stmt) {
-				continue
-			}
-			if !emptyStatement {
-				pieces = append(pieces, stmt)
-				// We can now reset the variables for the next statement.
-				// It starts off as an empty statement.
-				emptyStatement = true
-				startTokens = startTokens[:0] // clear token slice
-			}
-			stmtBegin = tokenizer.Pos
-		case 0, eofChar:
-			blobTail := tokenizer.Pos - 1
-			if stmtBegin < blobTail {
-				stmt = blob[stmtBegin : blobTail+1]
-				if !emptyStatement {
-					pieces = append(pieces, stmt)
-				}
-			}
-			break loop
-		case COMMENT:
-			// Skip comments entirely without altering the token list.
-			continue
-		default:
-			// If we're at the very start of a statement, or we haven't filled out enough tokens
-			// for our valid prefix match (assuming our longest valid sequence is 10 tokens),
-			// accumulate the token.
-			if len(startTokens) < 10 {
-				startTokens = append(startTokens, tkn)
-			}
-			emptyStatement = false
+	for blob != "" {
+		stmt, text, rest, err := p.parseNext(blob)
+		if err != nil || !isEmptyStatement(stmt) {
+			pieces = append(pieces, text)
 		}
+		blob = rest
 	}
-
-	err = tokenizer.LastError
-	return
+	return pieces, nil
 }
 
-// IsStatementIncomplete returns true if the statement is incomplete.
-func (p *Parser) IsStatementIncomplete(stmt string) bool {
-	tkn := p.NewStringTokenizer(stmt)
-	yyParsePooled(tkn)
-	if tkn.LastError != nil {
-		var pe PositionedErr
-		isPe := errors.As(tkn.LastError, &pe)
-		if isPe && pe.Pos == len(stmt)+1 {
-			// The error is at the end of the statement, which means it is incomplete.
-			return true
-		}
+// isEmptyStatement is true for the statements ParseNext returns when there
+// is nothing to execute: nothing at all, or comments only.
+func isEmptyStatement(stmt Statement) bool {
+	if stmt == nil {
+		return true
 	}
-	return false
+	_, isCommentOnly := stmt.(*CommentOnly)
+	return isCommentOnly
+}
+
+// IsStatementIncomplete returns true if the statement is incomplete: it does
+// not parse, and the syntax error is at its very end.
+//
+// Deprecated: statement boundaries come from ParseNext now, and nothing in
+// Vitess calls this anymore. It is kept for downstream users of this package
+// and will be removed in a later release.
+func (p *Parser) IsStatementIncomplete(stmt string) bool {
+	tokenizer := p.NewStringTokenizer(stmt)
+	yyParsePooled(tokenizer)
+	var pe PositionedErr
+	return errors.As(tokenizer.LastError, &pe) && pe.Pos == len(stmt)+1
 }
 
 func (p *Parser) IsMySQL80AndAbove() bool {

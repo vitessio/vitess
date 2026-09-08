@@ -3219,3 +3219,10 @@ func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
 func NewExprs(exprs ...Expr) *Exprs {
 	return &Exprs{Exprs: exprs}
 }
+
+// isExecutableComment reports whether comment is an executable comment,
+// /*! ... */, which the tokenizer only hands out as a comment when it
+// contributed no tokens: it did not apply, or held nothing.
+func isExecutableComment(comment string) bool {
+	return strings.HasPrefix(comment, "/*!")
+}

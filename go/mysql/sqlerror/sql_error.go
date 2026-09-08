@@ -293,6 +293,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.QueryInterrupted:                    {num: ERQueryInterrupted, state: SSQueryInterrupted},
 	vterrors.SPDoesNotExist:                      {num: ERSPDoesNotExist, state: SSClientError},
 	vterrors.SyntaxError:                         {num: ERSyntaxError, state: SSClientError},
+	vterrors.ParseError:                          {num: ERParseError, state: SSClientError},
 	vterrors.UnsupportedPS:                       {num: ERUnsupportedPS, state: SSUnknownSQLState},
 	vterrors.UnknownSystemVariable:               {num: ERUnknownSystemVariable, state: SSUnknownSQLState},
 	vterrors.UnknownTable:                        {num: ERUnknownTable, state: SSUnknownTable},

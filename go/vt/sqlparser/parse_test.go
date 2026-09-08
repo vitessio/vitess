@@ -4245,9 +4245,6 @@ func TestInvalid(t *testing.T) {
 			input: "select a, b from (select * from tbl) sort by a",
 			err:   "syntax error",
 		}, {
-			input: "/*!*/",
-			err:   "Query was empty",
-		}, {
 			input: "values row(1) into outfile s3 'out_file_name'",
 			err:   "VALUES does not support INTO at position 46",
 		}, {
@@ -6731,6 +6728,11 @@ func TestSkipToEnd(t *testing.T) {
 	}, {
 		// Test that we don't step at ';' inside strings.
 		input:  "create table a bb 'a;'; select * from t",
+		output: "extra characters encountered after end of DDL: 'select'",
+	}, {
+		// The ';' the parser chokes on ends the DDL; the statement after it
+		// is the same extra input, not skipped over.
+		input:  "create table t1; select 1",
 		output: "extra characters encountered after end of DDL: 'select'",
 	}}
 	parser := NewTestParser()

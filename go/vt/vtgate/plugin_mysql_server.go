@@ -1235,60 +1235,55 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 }
 
 func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
-	if err != nil {
-		return session, err
-	}
-	if len(queries) == 0 {
-		return session, sqlparser.ErrEmpty
-	}
-	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
-	for idx, query := range queries {
+	// midStream is set when a statement failed after some of its packets were
+	// already sent; such an error cannot be delivered as a result anymore.
+	midStream := false
+	// errIdx is the index of the statement an error would be reported for:
+	// the running one, or the next one once a statement completed.
+	errIdx := 0
+	err := vh.vtg.forEachStatement(ctx, mysqlCtx, sql, func(queryCtx context.Context, idx int, query string, more bool) error {
+		errIdx = idx
 		firstPacket := true
-		more := idx < len(queries)-1
 		var deferredResult *sqltypes.Result
-		func() {
-			queryCtx := ctx
-			if queryIngressBytes != nil {
-				queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[idx])
+		var err error
+		session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
+			if firstPacket && len(result.Fields) == 0 {
+				deferredResult = result
+				firstPacket = false
+				return nil
 			}
-			var cancel context.CancelFunc
-			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
-				defer cancel()
-			}
-			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
-				if firstPacket && len(result.Fields) == 0 {
-					deferredResult = result
-					firstPacket = false
-					return nil
-				}
-				if firstPacket {
-					applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
-				}
-				defer func() {
-					firstPacket = false
-				}()
-				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
-			})
-		}()
-		if err != nil {
 			if firstPacket {
 				applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
-				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 			}
-			return session, err
+			defer func() {
+				firstPacket = false
+			}()
+			return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
+		})
+		if err != nil {
+			midStream = !firstPacket
+			return err
 		}
 		if deferredResult != nil {
 			previousStatusFlags := c.StatusFlags
 			fillInTxStatusFlags(c, session)
 			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
 			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
-				return session, err
+				midStream = true
+				return err
 			}
 		}
+		errIdx = idx + 1
+		return nil
+	})
+	if err == nil || midStream {
+		return session, err
 	}
-	return session, nil
+	// The error came before a single packet of its statement was sent, so it
+	// is about the statement itself (or the batch: a syntax error in the next
+	// statement, an empty statement). It is the last result of the batch.
+	applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, errIdx)
+	return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 }
 
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {

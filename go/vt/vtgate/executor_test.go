@@ -3291,22 +3291,137 @@ func TestFinalizeLogStatsUsesContextIngressBytes(t *testing.T) {
 
 // TestQueryIngressBytesForStatementsUsesContext verifies that VTGate splits
 // request-level ingress across multi-statement SQL before logging each query.
-func TestQueryIngressBytesForStatementsUsesContext(t *testing.T) {
-	ctx := vtgateservice.ContextWithIngressBytes(context.Background(), 27)
+func TestForEachStatementIngressBytesFromContext(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+	ctx := vtgateservice.ContextWithIngressBytes(t.Context(), 27)
 
-	ingressBytes := queryIngressBytesForStatements(ctx, nil, []string{"select 1", "select 222222"})
-
-	assert.Equal(t, []uint64{10, 17}, ingressBytes)
+	assert.Equal(t, []uint64{10, 17}, statementIngressBytes(t, vtg, ctx, nil, "select 1;select 222222"))
 }
 
-// TestQueryIngressBytesForStatementsUsesMySQLConnection verifies that
+// TestForEachStatementIngressBytesFromMySQLConnection verifies that
 // multi-statement ingress from MySQL connections is split across statements.
-func TestQueryIngressBytesForStatementsUsesMySQLConnection(t *testing.T) {
+func TestForEachStatementIngressBytesFromMySQLConnection(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	vtg := newVTGate(executor, nil, nil, nil, nil)
 	mysqlCtx := &fakeMysqlConnection{ingressBytes: 27}
 
-	ingressBytes := queryIngressBytesForStatements(context.Background(), mysqlCtx, []string{"select 1", "select 222222"})
+	assert.Equal(t, []uint64{10, 17}, statementIngressBytes(t, vtg, t.Context(), mysqlCtx, "select 1;select 222222"))
+}
 
-	assert.Equal(t, []uint64{10, 17}, ingressBytes)
+// statementIngressBytes collects the ingress bytes forEachStatement attaches
+// to each statement's context.
+func statementIngressBytes(t *testing.T, vtg *VTGate, ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, sql string) []uint64 {
+	var ingressBytes []uint64
+	err := vtg.forEachStatement(ctx, mysqlCtx, sql, func(ctx context.Context, _ int, _ string, _ bool) error {
+		bytes, ok := vtgateservice.IngressBytesFromContext(ctx)
+		require.True(t, ok)
+		ingressBytes = append(ingressBytes, bytes)
+		return nil
+	})
+	require.NoError(t, err)
+	return ingressBytes
+}
+
+// TestVTGateExecuteMultiStopsAtFirstError verifies that ExecuteMulti runs a
+// batch the way MySQL does: one statement is parsed and executed at a time,
+// and the first error ends the batch before the statements after it are even
+// parsed.
+func TestVTGateExecuteMultiStopsAtFirstError(t *testing.T) {
+	const query = "select id from user where id = 1"
+	newSession := func() *vtgatepb.Session {
+		return &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor"}
+	}
+
+	t.Run("syntax error", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), query+"; bogus; "+query)
+
+		require.ErrorContains(t, err, "syntax error at position 6 near 'bogus'")
+		assert.Len(t, results, 1)
+		assert.EqualValues(t, 1, sbc1.ExecCount.Load())
+	})
+
+	t.Run("execution error", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+
+		// The third statement does not parse; the batch never gets there.
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), query+"; "+query+"; bogus")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "syntax error")
+		assert.Empty(t, results)
+		assert.EqualValues(t, 1, sbc1.ExecCount.Load())
+	})
+
+	t.Run("empty statement", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), query+";; "+query)
+
+		require.ErrorContains(t, err, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; "+query+"' at line 1")
+		var sqlErr *sqlerror.SQLError
+		require.ErrorAs(t, sqlerror.NewSQLErrorFromError(err), &sqlErr)
+		assert.Equal(t, sqlerror.ERParseError, sqlErr.Num)
+		assert.Len(t, results, 1)
+		assert.EqualValues(t, 1, sbc1.ExecCount.Load())
+	})
+
+	t.Run("comment tail", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), query+"; -- done")
+
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		assert.Empty(t, results[1].Fields)
+		assert.Empty(t, results[1].Rows)
+		assert.EqualValues(t, 1, sbc1.ExecCount.Load())
+	})
+
+	t.Run("empty query", func(t *testing.T) {
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), " ")
+
+		require.ErrorIs(t, err, sqlparser.ErrEmpty)
+		assert.Empty(t, results)
+	})
+}
+
+// TestVTGateStreamExecuteMultiStopsAtFirstError verifies the streaming batch
+// path: an error is delivered as the last result of the batch and nothing
+// after it is parsed.
+func TestVTGateStreamExecuteMultiStopsAtFirstError(t *testing.T) {
+	const query = "select id from user where id = 1"
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+	session := &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor"}
+	var moreFlags []bool
+	var errs []error
+
+	_, err := vtg.StreamExecuteMulti(ctx, nil, session, query+"; "+query+";; bogus", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if qr.QueryError != nil {
+			errs = append(errs, qr.QueryError)
+		}
+		if firstPacket {
+			moreFlags = append(moreFlags, more)
+		}
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, true, false}, moreFlags)
+	require.Len(t, errs, 1)
+	require.ErrorContains(t, errs[0], "near '; bogus' at line 1")
+	assert.EqualValues(t, 2, sbc1.ExecCount.Load())
 }
 
 // TestQueryIngressBytesForBatchUsesContext verifies that ExecuteBatch splits
