@@ -19,6 +19,7 @@ package clone
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -126,6 +127,26 @@ func vtbackupWithClone(t *testing.T) error {
 	require.NoError(t, err)
 	defer os.Remove(mysqlSocket.Name())
 
+	// Boot the recipient mysqld with super-read-only enabled, mirroring the
+	// stock mycnf templates used in production. The init_db file restores the
+	// boot value at the end of initialization, so the recipient is read-only
+	// when the clone starts.
+	sroCnf := path.Join(t.TempDir(), "super_read_only.cnf")
+	require.NoError(t, os.WriteFile(sroCnf, []byte("super-read-only = 1\n"), 0o666))
+	extraMyCnf := sroCnf
+	if existing := os.Getenv("EXTRA_MY_CNF"); existing != "" {
+		// Append last so super-read-only wins over any earlier settings.
+		extraMyCnf = existing + ":" + sroCnf
+	}
+	t.Setenv("EXTRA_MY_CNF", extraMyCnf)
+
+	// Build a recipient-specific init DB file that also creates an extra user
+	// database, reproducing the production failure mode: a recipient initialized
+	// with --init-db-sql-file containing CREATE DATABASE boots super-read-only,
+	// and CLONE INSTANCE cannot drop the database (errno 1290). Without the
+	// fix to disable super_read_only before cloning, this test fails.
+	vtbackupInitDB := buildVtbackupInitDBFile(t, newInitDBFile)
+
 	extraArgs := []string{
 		"--allow-first-backup",
 		"--db-credentials-file", dbCredentialFile,
@@ -142,7 +163,30 @@ func vtbackupWithClone(t *testing.T) error {
 	}
 
 	log.Info(fmt.Sprintf("Starting vtbackup with clone args: %v", extraArgs))
-	return localCluster.StartVtbackup(newInitDBFile, false, keyspaceName, shardName, cell, extraArgs...)
+	return localCluster.StartVtbackup(vtbackupInitDB, false, keyspaceName, shardName, cell, extraArgs...)
+}
+
+// buildVtbackupInitDBFile creates a copy of the base init DB file that also
+// creates an extra user database, mirroring an operator-supplied
+// --init-db-sql-file with a CREATE DATABASE statement. The database is
+// created while super_read_only is OFF (during init), then super_read_only is
+// restored to the boot value, so CLONE INSTANCE must drop it under
+// super_read_only.
+func buildVtbackupInitDBFile(t *testing.T, baseFile string) string {
+	content, err := os.ReadFile(baseFile)
+	require.NoError(t, err)
+
+	const restoreStmt = "SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'ON')"
+	idx := strings.LastIndex(string(content), restoreStmt)
+	require.NotEqual(t, -1, idx, "could not find super_read_only restore in init DB file")
+
+	updated := string(content[:idx]) +
+		"CREATE DATABASE IF NOT EXISTS extra_clone_test;\n" +
+		string(content[idx:])
+
+	vtbackupInitDB := path.Join(t.TempDir(), "init_db_vtbackup.sql")
+	require.NoError(t, os.WriteFile(vtbackupInitDB, []byte(updated), 0o666))
+	return vtbackupInitDB
 }
 
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {

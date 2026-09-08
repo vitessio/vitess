@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -324,22 +325,40 @@ func ContinuousDiscovery() {
 // refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
 func refreshAllInformation(ctx context.Context) error {
 	// Create an errgroup
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	// Refresh all keyspace information.
 	eg.Go(func() error {
-		return RefreshAllKeyspacesAndShards(ctx)
+		return RefreshAllKeyspacesAndShards(egCtx)
 	})
 
 	// Refresh all tablets.
 	eg.Go(func() error {
-		return refreshAllTablets(ctx)
+		return refreshAllTablets(egCtx)
 	})
 
 	// Wait for both the refreshes to complete
 	err := eg.Wait()
 	if err == nil {
 		process.FirstDiscoveryCycleComplete.Store(true)
+	}
+	// Retry --cells-no-recovery validation if startup validation was skipped because
+	// the topology was unreachable. The retry runs regardless of whether the refresh
+	// succeeded: the topo may be reachable for cell listing even when keyspace/tablet
+	// refresh had partial errors. Recovery remains blocked until validation succeeds.
+	if !cellsNoRecoveryValidated.Load() {
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer retryCancel()
+		if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
+			log.Error(fmt.Sprintf("--cells-no-recovery validation failed, shutting down: %v", retryErr))
+			// Run graceful shutdown directly (releases shard locks, closes topo)
+			// then exit nonzero so restart-on-failure policies detect the fatal
+			// configuration error. We call closeVTOrc ourselves instead of
+			// signalling ExitChan because servenv.Run consumes that signal and
+			// exits with status 0.
+			closeVTOrc()
+			os.Exit(1)
+		}
 	}
 	return err
 }

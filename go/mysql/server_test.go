@@ -81,6 +81,7 @@ type testHandler struct {
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
+	activity int
 }
 
 func (th *testHandler) LastConn() *Conn {
@@ -117,6 +118,18 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.lastConn = c
+}
+
+func (th *testHandler) ConnActivity(c *Conn) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.activity++
+}
+
+func (th *testHandler) Activity() int {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.activity
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -1566,6 +1579,19 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.NoError(t, err)
+	// A ping is connection activity: the observing handler must be notified
+	// so it can propagate the liveness signal (vtgate refreshes temp-table
+	// reserved connections on it).
+	require.Equal(t, 1, th.Activity(), "the handler must observe a served ping")
+
+	// A locally answered non-ping command is activity too: COM_SET_OPTION
+	// never reaches the handler's own methods, but MySQL counts it against
+	// the idle wait like any other command.
+	conn.sequence = 0
+	require.NoError(t, conn.writeComSetOption(0))
+	_, err = conn.ReadPacket()
+	require.NoError(t, err)
+	require.Equal(t, 2, th.Activity(), "the handler must observe a locally answered COM_SET_OPTION")
 
 	l.Shutdown()
 
@@ -1575,6 +1601,11 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+	// The observer fires at command dispatch, before the command is handled
+	// and whatever its outcome — a ping refused because the listener is
+	// shutting down still notifies (the connection is going away with the
+	// server, so a spurious refresh is harmless).
+	require.Equal(t, 3, th.Activity(), "activity fires at dispatch, even for a shutdown-refused ping")
 	sqlErr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "Wrong error type: %T", err)
 

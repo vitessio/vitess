@@ -563,6 +563,16 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
+	// sqlReadCopyStateProgress reads the copy phase's row count and newest
+	// checkpoint id: every committed copy batch inserts a row and GC removes
+	// only older ones, so max(id) advances only with durable progress.
+	sqlReadCopyStateProgress = `SELECT
+			count(*) as cnt,
+			max(id) as maxid
+		FROM
+			_vt.copy_state
+		WHERE vrepl_id=%a
+		`
 	sqlSwapTables              = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
 	sqlRenameTable             = "RENAME TABLE `%a` TO `%a`"
 	sqlLockTwoTablesWrite      = "LOCK TABLES `%a` WRITE, `%a` WRITE"

@@ -53,6 +53,9 @@ func TestJournalOneToOne(t *testing.T) {
 	}
 
 	_, firstID := startVReplication(t, bls, "")
+	// The stream carries configuration overrides, which the replacement
+	// stream must inherit: it is the same workflow.
+	execStatements(t, []string{fmt.Sprintf(`update _vt.vreplication set options='{"config": {"vreplication-retry-delay": "5s"}}' where id=%d`, firstID)})
 
 	journal := &binlogdatapb.Journal{
 		Id:            1,
@@ -73,7 +76,7 @@ func TestJournalOneToOne(t *testing.T) {
 
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:"other_keyspace" shard:"0.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
+		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:"other_keyspace" shard:"0.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'.*'\{"config": \{"vreplication-retry-delay": "5s"\}\}'`,
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
