@@ -115,6 +115,10 @@ type (
 		// that a peer presents, whose number the peer controls,
 		// spend a connection's signature checks on that.
 		configuredBindings map[string]crlBinding
+		// revokedSerials indexes the serial numbers each CRL
+		// revokes, so that a handshake looks a certificate up
+		// rather than scanning a CRL that may hold many entries.
+		revokedSerials map[*x509.RevocationList]map[string]struct{}
 	}
 
 	// crlCheck is the state of one connection's revocation check.
@@ -156,17 +160,14 @@ type (
 	}
 )
 
-func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
+// isRevoked reports whether crl, which has to be one of the checker's,
+// lists cert, warning when the CRL is past its due date.
+func (c *crlChecker) isRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
 		warnExpiredCRL(crl)
 	}
-
-	for _, revoked := range crl.RevokedCertificateEntries {
-		if cert.SerialNumber.Cmp(revoked.SerialNumber) == 0 {
-			return true
-		}
-	}
-	return false
+	_, revoked := c.revokedSerials[crl][cert.SerialNumber.String()]
+	return revoked
 }
 
 // newCRLChecker loads the CRLs in crl and, when ca is set, the CA
@@ -176,22 +177,36 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 	if err != nil {
 		return nil, err
 	}
-	checker := &crlChecker{
-		crls:               crls,
-		crlIssuers:         map[string]struct{}{},
-		crlIssuerName:      map[*x509.RevocationList]string{},
-		configuredBindings: map[string]crlBinding{},
-	}
+	var issuers []*x509.Certificate
 	if ca != "" {
-		checker.issuers, err = loadx509Certificates(ca)
+		issuers, err = loadx509Certificates(ca)
 		if err != nil {
 			return nil, err
 		}
+	}
+	return newCRLCheckerFrom(crls, issuers)
+}
+
+// newCRLCheckerFrom builds the checker of the given CRLs and configured
+// issuers, indexing the CRLs and binding them to the issuers once.
+func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate) (*crlChecker, error) {
+	checker := &crlChecker{
+		crls:               crls,
+		issuers:            issuers,
+		crlIssuers:         map[string]struct{}{},
+		crlIssuerName:      map[*x509.RevocationList]string{},
+		configuredBindings: map[string]crlBinding{},
+		revokedSerials:     map[*x509.RevocationList]map[string]struct{}{},
 	}
 	for _, crl := range crls {
 		name := nameKey(crl.RawIssuer)
 		checker.crlIssuers[name] = struct{}{}
 		checker.crlIssuerName[crl] = name
+		serials := make(map[string]struct{}, len(crl.RevokedCertificateEntries))
+		for _, revoked := range crl.RevokedCertificateEntries {
+			serials[revoked.SerialNumber.String()] = struct{}{}
+		}
+		checker.revokedSerials[crl] = serials
 	}
 	unbounded := func() error { return nil }
 	for _, issuer := range checker.issuers {
@@ -386,7 +401,7 @@ func (ck *crlCheck) run() error {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: a CRL signed by the key of its issuer %s is configured, but none of the certificates found for that issuer may sign CRLs", cert.Subject.CommonName, cert.Issuer.CommonName)
 			}
 			for _, crl := range lookup.crls {
-				if certIsRevoked(cert, crl) {
+				if ck.checker.isRevoked(cert, crl) {
 					return fmt.Errorf("Certificate revoked: CommonName=%s", cert.Subject.CommonName)
 				}
 			}

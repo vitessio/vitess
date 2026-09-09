@@ -944,8 +944,10 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		crls = append(crls, loaded...)
 	}
 
+	checker, err := newCRLCheckerFrom(crls, nil)
+	require.NoError(t, err)
 	for _, crl := range crls {
-		require.False(t, certIsRevoked(cert, crl))
+		require.False(t, checker.isRevoked(cert, crl))
 	}
 	for _, crl := range crls {
 		warned, found := expiredCRLWarnings.Load(expiredCRLKey(crl))
@@ -967,7 +969,9 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 			require.NoError(t, err)
 			crl, err := x509.ParseRevocationList(der)
 			require.NoError(t, err)
-			require.False(t, certIsRevoked(cert, crl))
+			checker, err := newCRLCheckerFrom([]*x509.RevocationList{crl}, nil)
+			require.NoError(t, err)
+			require.False(t, checker.isRevoked(cert, crl))
 			_, found := expiredCRLWarnings.Load(expiredCRLKey(crl))
 			require.True(t, found, "CRL number %d was not warned about", number)
 			keys = append(keys, expiredCRLKey(crl))
@@ -981,10 +985,12 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		log.Warn = func(string, ...slog.Attr) { warnings.Add(1) }
 		t.Cleanup(func() { log.Warn = warn })
 		crl := loadOneCRL(t, crlWithIssuerName(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", big.NewInt(7), "Expired At Once CA", asn1.TagPrintableString, expired))
+		checker, err := newCRLCheckerFrom([]*x509.RevocationList{crl}, nil)
+		require.NoError(t, err)
 
 		var handshakes sync.WaitGroup
 		for range 50 {
-			handshakes.Go(func() { certIsRevoked(cert, crl) })
+			handshakes.Go(func() { checker.isRevoked(cert, crl) })
 		}
 		handshakes.Wait()
 		require.EqualValues(t, 1, warnings.Load())
