@@ -2842,7 +2842,8 @@ type (
 
 	// FuncExpr represents a generic function call: a native function such as
 	// abs() or concat(), a user-defined or stored function, or a qualified
-	// call. Built-ins that MySQL parses through a keyword rule have nodes of
+	// call. The built-ins whose names MySQL lexes as keywords only before '('
+	// (now, count, sum, ...), and the user-information functions, have nodes of
 	// their own (CurTimeFuncExpr, UserFuncExpr, the aggregates, TrimFuncExpr,
 	// ...); a FuncExpr carrying one of those names is MySQL's stored-function
 	// path and serializes with the name quoted (see IsKeywordFunctionName), so

@@ -874,14 +874,16 @@ func isFuncCallKeyword(id int) bool {
 	}
 }
 
-// IsKeywordFunctionName reports whether name is a built-in function that this
-// grammar, like MySQL's, parses through a keyword rule into a node of its own:
-// the whitespace-sensitive names, and the user-information functions USER and
-// CURRENT_USER. A generic FuncExpr by such a name therefore never stands for
-// the built-in: it came quoted, qualified, or (for the whitespace-sensitive
-// ones) with whitespace before the parenthesis — MySQL's stored-function path —
-// and serializes quoted to stay one, since printed bare the name would re-lex
-// as the built-in.
+// IsKeywordFunctionName reports whether name is one of the built-in functions
+// whose keyword form this grammar parses into a node of its own: the
+// whitespace-sensitive names in mysqlFuncCallKeywords, and the user-information
+// functions USER and CURRENT_USER. A generic FuncExpr by such a name therefore
+// never stands for the built-in: it came quoted, qualified, or (for the
+// whitespace-sensitive ones) with whitespace before the parenthesis — MySQL's
+// stored-function path — and serializes quoted to stay one, since printed bare
+// the name would re-lex as the built-in. Other keyword-rule built-ins whose
+// keyword form is itself a FuncExpr (left, right, if, database, ...) are not
+// covered: a quoted call by one of those prints bare.
 func IsKeywordFunctionName(name string) bool {
 	id, ok := keywordLookupTable.LookupString(name)
 	return ok && (isFuncCallKeyword(id) || id == USER || id == CURRENT_USER)
