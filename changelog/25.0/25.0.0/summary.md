@@ -642,3 +642,4 @@ Two more configurations that used to connect with the CRL silently ignored are n
 
 - A CA certificate that is not allowed to sign CRLs, that is, without the `cRLSign` key usage, while its key signed a configured CRL: connections under that CA are rejected. Reissue the CA certificate with `cRLSign`, or sign the CRL with a certificate that has it.
 - A `*-crl` file that holds no CRL: the TLS configuration fails to build. Point the flag at a file with at least one `X509 CRL` block, or drop the flag.
+- A CRL file holding more than about 100 CRLs from one issuer that is not in the CA file: the revocation check spends at most 100 signature checks per connection on the certificates and CRLs of the issuers it only knows from the peer's chain, and rejects the connection past that. Add that issuer to the CA file, whose CRLs are validated once when the configuration is built and cost nothing per connection.

@@ -109,6 +109,12 @@ type (
 		// has a CRL that the check must be able to bind.
 		crlIssuers    map[string]struct{}
 		crlIssuerName map[*x509.RevocationList]string
+		// configuredBindings holds, by DER encoding, what each
+		// configured issuer makes of the CRLs, worked out once
+		// here rather than on every connection: only the issuers
+		// that a peer presents, whose number the peer controls,
+		// spend a connection's signature checks on that.
+		configuredBindings map[string]crlBinding
 	}
 
 	// crlCheck is the state of one connection's revocation check.
@@ -171,9 +177,10 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 		return nil, err
 	}
 	checker := &crlChecker{
-		crls:          crls,
-		crlIssuers:    map[string]struct{}{},
-		crlIssuerName: map[*x509.RevocationList]string{},
+		crls:               crls,
+		crlIssuers:         map[string]struct{}{},
+		crlIssuerName:      map[*x509.RevocationList]string{},
+		configuredBindings: map[string]crlBinding{},
 	}
 	if ca != "" {
 		checker.issuers, err = loadx509Certificates(ca)
@@ -186,7 +193,49 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 		checker.crlIssuers[name] = struct{}{}
 		checker.crlIssuerName[crl] = name
 	}
+	unbounded := func() error { return nil }
+	for _, issuer := range checker.issuers {
+		binding, err := checker.bindCRLs(issuer, nameKey(issuer.RawSubject), unbounded)
+		if err != nil {
+			return nil, err
+		}
+		checker.configuredBindings[string(issuer.Raw)] = binding
+	}
 	return checker, nil
+}
+
+// bindCRLs works out what issuer makes of the CRLs that carry its
+// name, the only ones it can have signed, calling spend before each
+// signature verification. A CRL that another key signed, as happens
+// when two CAs share a subject, is simply not the issuer's. A CRL that
+// the issuer's own key signed while the certificate is not allowed to
+// sign CRLs is reported as orphaned.
+func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend func() error) (crlBinding, error) {
+	var binding crlBinding
+	for _, crl := range c.crls {
+		if c.crlIssuerName[crl] != issuerName {
+			continue
+		}
+		if err := spend(); err != nil {
+			return crlBinding{}, err
+		}
+		err := crl.CheckSignatureFrom(issuer)
+		if err == nil {
+			binding.crls = append(binding.crls, crl)
+			continue
+		}
+		// CheckSignatureFrom returns the violation as is, unwrapped.
+		if _, violation := err.(x509.ConstraintViolationError); !violation {
+			continue
+		}
+		if err := spend(); err != nil {
+			return crlBinding{}, err
+		}
+		if issuer.CheckSignature(crl.SignatureAlgorithm, crl.RawTBSRevocationList, crl.Signature) == nil {
+			binding.orphaned = true
+		}
+	}
+	return binding, nil
 }
 
 // hasCRLFrom reports whether a CRL carries the given issuer name, as
@@ -427,40 +476,19 @@ func (ck *crlCheck) issuedBy(cert, issuer *x509.Certificate) (bool, error) {
 }
 
 // crlsSignedBy returns what issuer makes of the CRLs that carry its
-// name, the only ones it can have signed, verifying their signature
-// once per issuer for the connection within the bounded signature
-// checks. A CRL that another key signed, as happens when two CAs
-// share a subject, is simply not the issuer's. A CRL that the
-// issuer's own key signed while the certificate is not allowed to
-// sign CRLs is reported as orphaned.
+// name: worked out once for a configured issuer when the checker was
+// built, and once per connection for an issuer the peer presented,
+// within the bounded signature checks.
 func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) (crlBinding, error) {
+	if binding, configured := ck.checker.configuredBindings[string(issuer.Raw)]; configured {
+		return binding, nil
+	}
 	if binding, done := ck.crlsByIssuer[string(issuer.Raw)]; done {
 		return binding, nil
 	}
-	var binding crlBinding
-	issuerName := ck.nameOf(issuer.RawSubject)
-	for _, crl := range ck.checker.crls {
-		if ck.checker.crlIssuerName[crl] != issuerName {
-			continue
-		}
-		if err := ck.spendSignatureCheck(); err != nil {
-			return crlBinding{}, err
-		}
-		err := crl.CheckSignatureFrom(issuer)
-		if err == nil {
-			binding.crls = append(binding.crls, crl)
-			continue
-		}
-		// CheckSignatureFrom returns the violation as is, unwrapped.
-		if _, violation := err.(x509.ConstraintViolationError); !violation {
-			continue
-		}
-		if err := ck.spendSignatureCheck(); err != nil {
-			return crlBinding{}, err
-		}
-		if issuer.CheckSignature(crl.SignatureAlgorithm, crl.RawTBSRevocationList, crl.Signature) == nil {
-			binding.orphaned = true
-		}
+	binding, err := ck.checker.bindCRLs(issuer, ck.nameOf(issuer.RawSubject), ck.spendSignatureCheck)
+	if err != nil {
+		return crlBinding{}, err
 	}
 	ck.crlsByIssuer[string(issuer.Raw)] = binding
 	return binding, nil

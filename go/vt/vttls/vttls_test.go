@@ -756,18 +756,30 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 		require.Positive(t, alone.signatureChecks)
 	})
 
-	t.Run("the CRL signature checks count against the signature checks", func(t *testing.T) {
-		// A CRL file holding as many CRLs from the leaf's issuer as
-		// the budget allows cannot all be verified once the issuer
-		// itself has been found.
-		crl, err := os.ReadFile(certs.ServerCRL)
-		require.NoError(t, err)
-		manyCRLs := path.Join(t.TempDir(), "many-crl.pem")
-		require.NoError(t, os.WriteFile(manyCRLs, bytes.Repeat(crl, maxSignatureChecks), 0o600))
+	// manyCRLs holds as many CRLs from the leaf's issuer as the
+	// budget allows.
+	crl, err := os.ReadFile(certs.ServerCRL)
+	require.NoError(t, err)
+	manyCRLs := path.Join(t.TempDir(), "many-crl.pem")
+	require.NoError(t, os.WriteFile(manyCRLs, bytes.Repeat(crl, maxSignatureChecks), 0o600))
+
+	t.Run("the CRLs of a configured issuer cost no signature checks per connection", func(t *testing.T) {
+		// They are validated once, when the checker is built, so
+		// the connection only spends the check that finds the
+		// leaf's issuer.
 		checker, err := newCRLChecker(manyCRLs, certs.ServerCA)
 		require.NoError(t, err)
 
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, certs.ServerCert)}})
+		check := checker.newCheck([]*x509.Certificate{loadOneCert(t, certs.ServerCert)}, nil)
+		require.NoError(t, check.run())
+		require.Equal(t, 1, check.signatureChecks)
+	})
+
+	t.Run("the CRLs of an issuer that is only presented count against the signature checks", func(t *testing.T) {
+		checker, err := newCRLChecker(manyCRLs, "")
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, certs.ServerCert), loadOneCert(t, certs.ServerCA)}})
 		require.ErrorContains(t, err, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxSignatureChecks))
 	})
 }
