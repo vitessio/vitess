@@ -998,24 +998,6 @@ func TestNewCRLCheckerIndirectCRL(t *testing.T) {
 	require.ErrorContains(t, err, "indirect CRLs are not supported")
 }
 
-// TestNewCRLCheckerUndecodableName checks that a CRL whose issuer name
-// holds a T.61 string with characters beyond ASCII is refused, since
-// such a name cannot be compared with its other encodings, while one
-// within ASCII is accepted.
-func TestNewCRLCheckerUndecodableName(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	intermediate := loadOneCert(t, certs.ServerCA)
-	intermediateKey := strings.TrimSuffix(certs.ServerCA, "-cert.pem") + "-key.pem"
-
-	ascii := crlWithIssuerName(t, certs.ServerCA, intermediateKey, big.NewInt(1), intermediate.Subject.CommonName, asn1.TagT61String, time.Now().Add(time.Hour))
-	_, err := newCRLChecker(ascii, certs.ServerCA)
-	require.NoError(t, err)
-
-	beyondASCII := crlWithIssuerName(t, certs.ServerCA, intermediateKey, big.NewInt(1), "Jos\u00e9", asn1.TagT61String, time.Now().Add(time.Hour))
-	_, err = newCRLChecker(beyondASCII, certs.ServerCA)
-	require.ErrorContains(t, err, "T.61 string with characters beyond ASCII")
-}
-
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
@@ -1193,6 +1175,7 @@ func TestNameKey(t *testing.T) {
 		{"UniversalString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, 28, utf32BigEndian("Jos\u00e9"))))},
 		{"BMPString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagBMPString, utf16BigEndian("Jos\u00e9"))))},
 		{"T61String and UTF8String, within ASCII", name(rdn(utf8Attribute(commonName, "Example CA"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Example CA"))))},
+		{"T61String read as Latin-1 and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte{'J', 'o', 's', 0xe9})))},
 	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {
