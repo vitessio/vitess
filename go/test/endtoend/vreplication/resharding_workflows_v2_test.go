@@ -1030,8 +1030,10 @@ func injectTerminalOnlineDDLStream(t *testing.T, tablet *cluster.VttabletProcess
 	require.NoError(t, err, "failed to insert fake VReplication stream: %v", err)
 
 	insertMigration := fmt.Sprintf(
-		"insert into %s.schema_migrations (migration_uuid, keyspace, shard, mysql_schema, mysql_table, migration_statement, strategy, options, migration_status, log_path, artifacts, message) "+
-			"values ('%s', '%s', '-80', '%s', 'fake_table', 'ALTER TABLE fake_table ADD COLUMN c1 INT', 'online', '', 'complete', '', '', '')",
+		"insert into %s.schema_migrations (migration_uuid, keyspace, shard, mysql_schema, mysql_table, migration_statement, strategy, options, migration_status, log_path, artifacts, message, "+
+			"removed_unique_key_names, dropped_no_default_column_names, expanded_column_names, revertible_notes, special_plan, component_throttled, reason_throttled, stage, removed_foreign_key_names) "+
+			"values ('%s', '%s', '-80', '%s', 'fake_table', 'ALTER TABLE fake_table ADD COLUMN c1 INT', 'online', '', 'complete', '', '', '', "+
+			"'', '', '', '', '', '', '', '', '')",
 		sidecarDBIdentifier, fakeUUID, defaultTargetKs, dbName)
 	_, err = tablet.QueryTablet(insertMigration, "", false)
 	require.NoError(t, err, "failed to insert fake schema_migrations row: %v", err)
