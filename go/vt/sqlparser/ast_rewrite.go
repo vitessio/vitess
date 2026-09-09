@@ -85,6 +85,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfBitXor(parent, node, replacer)
 	case BoolVal:
 		return a.rewriteBoolVal(parent, node, replacer)
+	case *BuiltinFuncExpr:
+		return a.rewriteRefOfBuiltinFuncExpr(parent, node, replacer)
 	case *CallProc:
 		return a.rewriteRefOfCallProc(parent, node, replacer)
 	case *CaseExpr:
@@ -2036,6 +2038,65 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 		parent.(*BitXor).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfBuiltinFuncExpr(parent SQLNode, node *BuiltinFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBuiltinFuncExprName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*BuiltinFuncExpr).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfBuiltinFuncExprExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*BuiltinFuncExpr).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -15216,6 +15277,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *Avg:
 		return a.rewriteRefOfAvg(parent, node, replacer)
+	case *BuiltinFuncExpr:
+		return a.rewriteRefOfBuiltinFuncExpr(parent, node, replacer)
 	case *CharExpr:
 		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *ConvertExpr:
@@ -15544,6 +15607,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfBitXor(parent, node, replacer)
 	case BoolVal:
 		return a.rewriteBoolVal(parent, node, replacer)
+	case *BuiltinFuncExpr:
+		return a.rewriteRefOfBuiltinFuncExpr(parent, node, replacer)
 	case *CaseExpr:
 		return a.rewriteRefOfCaseExpr(parent, node, replacer)
 	case *CastExpr:

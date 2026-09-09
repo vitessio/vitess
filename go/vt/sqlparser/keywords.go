@@ -197,6 +197,9 @@ var keywords = []keyword{
 	{"copy", COPY},
 	{"count", COUNT},
 	{"cume_dist", CUME_DIST},
+	{"get_format", GET_FORMAT},
+	{"row_count", ROW_COUNT},
+	{"st_collect", ST_COLLECT},
 	{"substr", SUBSTRING},
 	{"subpartition", SUBPARTITION},
 	{"subpartitions", SUBPARTITIONS},
@@ -570,7 +573,7 @@ var keywords = []keyword{
 	{"rename", RENAME},
 	{"reorganize", REORGANIZE},
 	{"repair", REPAIR},
-	{"repeat", UNUSED},
+	{"repeat", REPEAT},
 	{"replica", REPLICA},
 	{"replicas", REPLICAS},
 	{"repeatable", REPEATABLE},
@@ -844,53 +847,113 @@ var (
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
 
-// mysqlFuncCallKeywords lists the built-in function names that MySQL's lexer
-// treats as keywords only when the name is immediately followed by '(' with no
-// whitespace in between; in any other position the name is an ordinary
-// identifier, and "name (" with whitespace is a call of a stored function by
-// that name. It is the list from "Function Name Parsing and Resolution" in the
-// MySQL reference manual, plus JSON_ARRAYAGG and JSON_OBJECTAGG, which MySQL 8.0
-// treats the same way although the page does not list them. (ST_COLLECT is a
-// third such name; it is not a keyword of this grammar.) sql_mode=IGNORE_SPACE
-// relaxes the no-whitespace requirement and is not supported here.
-var mysqlFuncCallKeywords = map[string]struct{}{
-	"adddate": {}, "bit_and": {}, "bit_or": {}, "bit_xor": {}, "cast": {}, "count": {},
-	"curdate": {}, "curtime": {}, "date_add": {}, "date_sub": {}, "extract": {},
-	"group_concat": {}, "json_arrayagg": {}, "json_objectagg": {}, "max": {}, "mid": {},
-	"min": {}, "now": {}, "position": {}, "session_user": {}, "std": {}, "stddev": {},
-	"stddev_pop": {}, "stddev_samp": {}, "subdate": {}, "substr": {}, "substring": {},
-	"sum": {}, "sysdate": {}, "system_user": {}, "trim": {}, "variance": {}, "var_pop": {},
-	"var_samp": {},
+// mysqlKeywordFunctions lists the built-in functions that MySQL parses through
+// a grammar rule of their own instead of the generic function-call rule. The
+// name is a keyword, so a call by an identifier of the same spelling — quoted,
+// qualified, or (for the whitespace-sensitive names) separated from '(' by
+// whitespace — is a call of a stored function by that name. The value says
+// whether MySQL's lexer treats the name as the keyword only when '(' follows it
+// directly: the list from "Function Name Parsing and Resolution" in the
+// reference manual, plus JSON_ARRAYAGG, JSON_OBJECTAGG and ST_COLLECT, which
+// MySQL 8.0 treats the same way although the page does not list them.
+// (sql_mode=IGNORE_SPACE relaxes the whitespace rule and is not supported.)
+//
+// Every name here is a keyword of this grammar with a rule that produces a node
+// other than FuncExpr, so that a generic FuncExpr by one of these names only
+// ever stands for the stored-function call and serializes quoted (see
+// FuncExpr.Format); TestKeywordFunctions checks both. Names that MySQL also
+// resolves natively by identifier (REVERSE) are not listed: their quoted call is
+// still the built-in there.
+var mysqlKeywordFunctions = map[string]bool{
+	// keyword only directly before '('
+	"adddate": true, "bit_and": true, "bit_or": true, "bit_xor": true, "cast": true, "count": true,
+	"curdate": true, "curtime": true, "date_add": true, "date_sub": true, "extract": true,
+	"group_concat": true, "json_arrayagg": true, "json_objectagg": true, "max": true, "mid": true,
+	"min": true, "now": true, "position": true, "session_user": true, "st_collect": true, "std": true,
+	"stddev": true, "stddev_pop": true, "stddev_samp": true, "subdate": true, "substr": true,
+	"substring": true, "sum": true, "sysdate": true, "system_user": true, "trim": true,
+	"variance": true, "var_pop": true, "var_samp": true,
+	// keyword in every position
+	"ascii": false, "avg": false, "char": false, "charset": false, "coalesce": false, "collation": false,
+	"convert": false, "cume_dist": false, "current_date": false, "current_time": false,
+	"current_timestamp": false, "current_user": false, "database": false, "date": false, "day": false,
+	"default": false, "dense_rank": false, "first_value": false, "format": false,
+	"geometrycollection": false, "get_format": false, "hour": false, "if": false, "insert": false,
+	"interval": false, "json_value": false, "lag": false, "last_value": false, "lead": false,
+	"left": false, "linestring": false, "localtime": false, "localtimestamp": false,
+	"microsecond": false, "minute": false, "mod": false, "month": false, "multilinestring": false,
+	"multipoint": false, "multipolygon": false, "nth_value": false, "ntile": false,
+	"percent_rank": false, "point": false, "polygon": false, "quarter": false, "rank": false,
+	"repeat": false, "replace": false, "right": false, "row_count": false, "row_number": false,
+	"schema": false, "second": false, "time": false, "timestamp": false, "timestampadd": false,
+	"timestampdiff": false, "truncate": false, "user": false, "utc_date": false, "utc_time": false,
+	"utc_timestamp": false, "values": false, "week": false, "weight_string": false, "year": false,
+}
+
+// tokenSet is a set of token ids with constant-time membership, for the lexer.
+type tokenSet struct {
+	lo  int
+	has []bool
+}
+
+func (ts tokenSet) contains(id int) bool {
+	i := id - ts.lo
+	return i >= 0 && i < len(ts.has) && ts.has[i]
+}
+
+func newTokenSet(ids []int) tokenSet {
+	lo, hi := ids[0], ids[0]
+	for _, id := range ids {
+		lo, hi = min(lo, id), max(hi, id)
+	}
+	ts := tokenSet{lo: lo, has: make([]bool, hi-lo+1)}
+	for _, id := range ids {
+		ts.has[id-lo] = true
+	}
+	return ts
+}
+
+// keywordFunctionTokens holds the tokens of every mysqlKeywordFunctions name;
+// funcCallKeywordTokens those of the whitespace-sensitive ones.
+var keywordFunctionTokens, funcCallKeywordTokens = buildKeywordFunctionTokens()
+
+func buildKeywordFunctionTokens() (all, funcCall tokenSet) {
+	ids := make(map[string]int, len(keywords))
+	for _, kw := range keywords {
+		ids[kw.name] = kw.id
+	}
+	allIDs := make([]int, 0, len(mysqlKeywordFunctions))
+	funcCallIDs := make([]int, 0, len(mysqlKeywordFunctions))
+	for name, whitespaceSensitive := range mysqlKeywordFunctions {
+		id, ok := ids[name]
+		if !ok {
+			panic(fmt.Sprintf("sqlparser: %s is in mysqlKeywordFunctions but is not a keyword", name))
+		}
+		allIDs = append(allIDs, id)
+		if whitespaceSensitive {
+			funcCallIDs = append(funcCallIDs, id)
+		}
+	}
+	return newTokenSet(allIDs), newTokenSet(funcCallIDs)
 }
 
 // isFuncCallKeyword reports whether the token is the keyword of one of the
-// mysqlFuncCallKeywords names: the lexer only produces it when '(' follows the
-// name directly, and returns an identifier otherwise.
+// whitespace-sensitive mysqlKeywordFunctions names: the lexer only produces it
+// when '(' follows the name directly, and returns an identifier otherwise.
 func isFuncCallKeyword(id int) bool {
-	switch id {
-	case ADDDATE, BIT_AND, BIT_OR, BIT_XOR, CAST, COUNT, CURDATE, CURTIME, DATE_ADD, DATE_SUB,
-		EXTRACT, GROUP_CONCAT, JSON_ARRAYAGG, JSON_OBJECTAGG, MAX, MID, MIN, NOW, POSITION,
-		SESSION_USER, STD, STDDEV, STDDEV_POP, STDDEV_SAMP, SUBDATE, SUBSTRING, SUM, SYSDATE,
-		SYSTEM_USER, TRIM, VARIANCE, VAR_POP, VAR_SAMP:
-		return true
-	default:
-		return false
-	}
+	return funcCallKeywordTokens.contains(id)
 }
 
-// IsKeywordFunctionName reports whether name is one of the built-in functions
-// whose keyword form this grammar parses into a node of its own: the
-// whitespace-sensitive names in mysqlFuncCallKeywords, and the user-information
-// functions USER and CURRENT_USER. A generic FuncExpr by such a name therefore
-// never stands for the built-in: it came quoted, qualified, or (for the
+// IsKeywordFunctionName reports whether name is a built-in function that MySQL,
+// and this grammar, parse through a keyword rule into a node of its own (see
+// mysqlKeywordFunctions). A generic FuncExpr by such a name therefore never
+// stands for the built-in: it came quoted, qualified, or (for the
 // whitespace-sensitive ones) with whitespace before the parenthesis — MySQL's
 // stored-function path — and serializes quoted to stay one, since printed bare
-// the name would re-lex as the built-in. Other keyword-rule built-ins whose
-// keyword form is itself a FuncExpr (left, right, if, database, ...) are not
-// covered: a quoted call by one of those prints bare.
+// the name would re-lex as the built-in.
 func IsKeywordFunctionName(name string) bool {
 	id, ok := keywordLookupTable.LookupString(name)
-	return ok && (isFuncCallKeyword(id) || id == USER || id == CURRENT_USER)
+	return ok && keywordFunctionTokens.contains(id)
 }
 
 type caseInsensitiveTable struct {

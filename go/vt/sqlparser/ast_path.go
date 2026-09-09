@@ -75,6 +75,8 @@ const (
 	RefOfBitOrOverClause
 	RefOfBitXorArg
 	RefOfBitXorOverClause
+	RefOfBuiltinFuncExprName
+	RefOfBuiltinFuncExprExprsOffset
 	RefOfCallProcName
 	RefOfCallProcParamsOffset
 	RefOfCaseExprExpr
@@ -718,6 +720,10 @@ func (s ASTStep) DebugString() string {
 		return "(*BitXor).Arg"
 	case RefOfBitXorOverClause:
 		return "(*BitXor).OverClause"
+	case RefOfBuiltinFuncExprName:
+		return "(*BuiltinFuncExpr).Name"
+	case RefOfBuiltinFuncExprExprsOffset:
+		return "(*BuiltinFuncExpr).ExprsOffset"
 	case RefOfCallProcName:
 		return "(*CallProc).Name"
 	case RefOfCallProcParamsOffset:
@@ -1901,6 +1907,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*BitXor).Arg
 		case RefOfBitXorOverClause:
 			node = node.(*BitXor).OverClause
+		case RefOfBuiltinFuncExprName:
+			node = node.(*BuiltinFuncExpr).Name
+		case RefOfBuiltinFuncExprExprsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*BuiltinFuncExpr).Exprs[idx]
 		case RefOfCallProcName:
 			node = node.(*CallProc).Name
 		case RefOfCallProcParamsOffset:

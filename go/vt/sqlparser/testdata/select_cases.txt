@@ -530,7 +530,7 @@ INPUT
 select str_to_date( 1, IF(1=1,NULL,NULL) );
 END
 OUTPUT
-select str_to_date(1, if(1 = 1, null, null)) from dual
+select str_to_date(1, IF(1 = 1, null, null)) from dual
 END
 INPUT
 select substring('hello', 1, 4294967296);
@@ -12056,7 +12056,7 @@ INPUT
 select IF(0,"ERROR","this"),IF(1,"is","ERROR"),IF(NULL,"ERROR","a"),IF(1,2,3)|0,IF(1,2.0,3.0)+0;
 END
 OUTPUT
-select if(0, 'ERROR', 'this'), if(1, 'is', 'ERROR'), if(null, 'ERROR', 'a'), if(1, 2, 3) | 0, if(1, 2.0, 3.0) + 0 from dual
+select IF(0, 'ERROR', 'this'), IF(1, 'is', 'ERROR'), IF(null, 'ERROR', 'a'), IF(1, 2, 3) | 0, IF(1, 2.0, 3.0) + 0 from dual
 END
 INPUT
 select * from t1 where a=if(b>10,_ucs2 0x0061,_ucs2 0x0062);

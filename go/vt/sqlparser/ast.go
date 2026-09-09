@@ -2963,6 +2963,17 @@ type (
 		Name IdentifierCI
 	}
 
+	// BuiltinFuncExpr is the keyword form of a built-in function with regular
+	// argument syntax that MySQL parses through a grammar rule of its own (left,
+	// if, coalesce, database, week, ...; see mysqlKeywordFunctions), as opposed
+	// to a FuncExpr, which is a call by an identifier. It prints bare, since the
+	// bare name re-lexes as the keyword; the same name arriving quoted is a
+	// FuncExpr and prints quoted.
+	BuiltinFuncExpr struct {
+		Name  IdentifierCI
+		Exprs []Expr
+	}
+
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
 	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
 	JSONPrettyExpr struct {
@@ -3683,6 +3694,7 @@ func (*ExtractFuncExpr) IsExpr()                    {}
 func (*WeightStringFuncExpr) IsExpr()               {}
 func (*CurTimeFuncExpr) IsExpr()                    {}
 func (*UserFuncExpr) IsExpr()                       {}
+func (*BuiltinFuncExpr) IsExpr()                    {}
 func (*CaseExpr) IsExpr()                           {}
 func (*ValuesFuncExpr) IsExpr()                     {}
 func (*CastExpr) IsExpr()                           {}
@@ -3782,6 +3794,7 @@ func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
 func (*UserFuncExpr) iCallable()                       {}
+func (*BuiltinFuncExpr) iCallable()                    {}
 func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
 func (*TrimFuncExpr) iCallable()                       {}

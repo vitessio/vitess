@@ -1869,6 +1869,11 @@ func (node *UserFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *BuiltinFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%#s(%n)", node.Name.String(), node.Exprs)
+}
+
+// Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v collate %#s", node.Expr, node.Collation)
 }

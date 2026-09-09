@@ -404,7 +404,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Functions
 %token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE SESSION_USER SYSTEM_USER
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE SESSION_USER SYSTEM_USER ROW_COUNT GET_FORMAT ST_COLLECT REPEAT
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
@@ -6718,11 +6718,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 | RIGHT openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
   {
@@ -6769,7 +6769,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1)}
   }
 | now
   {
@@ -6779,7 +6779,7 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1)}
   }
 | CURDATE func_paren_opt
   {
@@ -7884,23 +7884,115 @@ func_datetime_precision:
 function_call_conflict:
   IF openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 | DATABASE openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 | SCHEMA openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 | MOD openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 | REPLACE openb expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| ASCII openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| CHARSET openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| COALESCE openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| COLLATION openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| DATE openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| DAY openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| FORMAT openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| GEOMETRYCOLLECTION openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| GET_FORMAT openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| HOUR openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| MICROSECOND openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| MINUTE openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| MONTH openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| QUARTER openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| REPEAT openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| ROW_COUNT openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| SECOND openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| ST_COLLECT openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| TIME openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| TIMESTAMP openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| TRUNCATE openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| WEEK openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
+  }
+| YEAR openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI($1), Exprs: $3}
   }
 
 match_option:
@@ -9153,7 +9245,7 @@ non_reserved_keyword:
 | ANY %prec ANY_SOME
 | ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
-| ASCII
+| ASCII %prec FUNCTION_CALL_NON_KEYWORD
 | AUTO_INCREMENT
 | AUTOEXTEND_SIZE
 | AVG %prec FUNCTION_CALL_NON_KEYWORD
@@ -9177,14 +9269,14 @@ non_reserved_keyword:
 | CATALOG_NAME
 | CHANNEL
 | CHAR %prec FUNCTION_CALL_NON_KEYWORD
-| CHARSET
+| CHARSET %prec FUNCTION_CALL_NON_KEYWORD
 | CHECKSUM
 | CLASS_ORIGIN
 | CLEANUP
 | CLONE
-| COALESCE
+| COALESCE %prec FUNCTION_CALL_NON_KEYWORD
 | CODE
-| COLLATION
+| COLLATION %prec FUNCTION_CALL_NON_KEYWORD
 | COLUMN_NAME
 | COLUMN_FORMAT
 | COLUMNS
@@ -9258,7 +9350,7 @@ non_reserved_keyword:
 | FLUSH
 | FOLLOWING
 | FORCE_CUTOVER
-| FORMAT
+| FORMAT %prec FUNCTION_CALL_NON_KEYWORD
 | FORMAT_BYTES %prec FUNCTION_CALL_NON_KEYWORD
 | FORMAT_PICO_TIME %prec FUNCTION_CALL_NON_KEYWORD
 | FOUND
@@ -9267,7 +9359,8 @@ non_reserved_keyword:
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
-| GEOMETRYCOLLECTION
+| GEOMETRYCOLLECTION %prec FUNCTION_CALL_NON_KEYWORD
+| GET_FORMAT %prec FUNCTION_CALL_NON_KEYWORD
 | GET_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | GET_MASTER_PUBLIC_KEY
 | GET_SOURCE_PUBLIC_KEY
@@ -9446,6 +9539,7 @@ non_reserved_keyword:
 | REMOVE
 | REORGANIZE
 | REPAIR
+| REPEAT %prec FUNCTION_CALL_NON_KEYWORD
 | REPLICA
 | REPLICAS
 | REPEATABLE
@@ -9461,6 +9555,7 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROLLUP
+| ROW_COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | ROW_FORMAT
 | RTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | S3
@@ -9517,6 +9612,7 @@ non_reserved_keyword:
 | ST_AsGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Centroid %prec FUNCTION_CALL_NON_KEYWORD
+| ST_COLLECT %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
 | ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
@@ -9591,7 +9687,7 @@ non_reserved_keyword:
 | TRIGGER
 | TRIGGERS
 | TRIM %prec FUNCTION_CALL_NON_KEYWORD
-| TRUNCATE
+| TRUNCATE %prec FUNCTION_CALL_NON_KEYWORD
 | UNBOUNDED
 | UNCOMMITTED
 | UNDEFINED
@@ -9640,24 +9736,24 @@ non_reserved_keyword:
 | WEEK %prec FUNCTION_CALL_NON_KEYWORD
 | WITHOUT
 | WORK
-| YEAR
+| YEAR %prec FUNCTION_CALL_NON_KEYWORD
 | ZEROFILL
-| DAY
+| DAY %prec FUNCTION_CALL_NON_KEYWORD
 | DAY_HOUR
 | DAY_MICROSECOND
 | DAY_MINUTE
 | DAY_SECOND
-| HOUR
+| HOUR %prec FUNCTION_CALL_NON_KEYWORD
 | HOUR_MICROSECOND
 | HOUR_MINUTE
 | HOUR_SECOND
-| MICROSECOND
-| MINUTE
+| MICROSECOND %prec FUNCTION_CALL_NON_KEYWORD
+| MINUTE %prec FUNCTION_CALL_NON_KEYWORD
 | MINUTE_MICROSECOND
 | MINUTE_SECOND
-| MONTH
-| QUARTER
-| SECOND
+| MONTH %prec FUNCTION_CALL_NON_KEYWORD
+| QUARTER %prec FUNCTION_CALL_NON_KEYWORD
+| SECOND %prec FUNCTION_CALL_NON_KEYWORD
 | SECOND_MICROSECOND
 | YEAR_MONTH
 | WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD

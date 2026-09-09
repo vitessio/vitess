@@ -4301,6 +4301,19 @@ var validSQL = []struct {
 }, {
 	input:  "select json_arrayagg, json_objectagg from t",
 	output: "select `json_arrayagg`, `json_objectagg` from t",
+}, {
+	// a quoted call of any built-in that MySQL parses as a keyword is a
+	// stored-function call and stays quoted
+	input:  "select `avg`(a), `char`(65), `left`(a, 1), `if`(a, 1, 2), `coalesce`(a, 1), `database`(), `week`(a), `date`(a), `row_number`() from t",
+	output: "select `avg`(a), `char`(65), `left`(a, 1), `if`(a, 1, 2), `coalesce`(a, 1), `database`(), `week`(a), `date`(a), `row_number`() from t",
+}, {
+	// the keyword form of the regular-syntax built-ins keeps its spelling
+	input:  "select LEFT(a, 1), If(a, 1, 2), COALESCE(a, 1), Database(), week(a), Year(a), row_count(), repeat(a, 2), st_collect(g) from t",
+	output: "select LEFT(a, 1), If(a, 1, 2), COALESCE(a, 1), Database(), week(a), Year(a), row_count(), repeat(a, 2), st_collect(g) from t",
+}, {
+	// the new keywords stay usable as identifiers
+	input:  "select row_count, get_format, st_collect, repeat from t",
+	output: "select `row_count`, `get_format`, `st_collect`, `repeat` from t",
 }}
 
 func TestValid(t *testing.T) {
@@ -4775,9 +4788,9 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select A(B, C) from b",
 	}, {
-		// IF is an exception. It's always lower-cased.
+		// the keyword form of a built-in keeps its spelling, like a generic call
 		input:  "select IF(B, C) from b",
-		output: "select if(B, C) from b",
+		output: "select IF(B, C) from b",
 	}, {
 		input: "select * from b use index (A)",
 	}, {
@@ -7402,17 +7415,67 @@ func TestNationalStringRequiresSingleQuote(t *testing.T) {
 	}
 }
 
-// Every name on MySQL's list is a keyword of this grammar that gets the
-// function-call lexing, and no other keyword does.
-func TestFuncCallKeywordList(t *testing.T) {
-	for name := range mysqlFuncCallKeywords {
-		id, ok := keywordLookupTable.LookupString(name)
-		require.True(t, ok, name)
-		assert.True(t, isFuncCallKeyword(id), name)
+// Every function that MySQL parses through a keyword rule (mysqlKeywordFunctions)
+// is a keyword of this grammar whose keyword form parses into a node of its own,
+// so that a call by an identifier of the same spelling is a generic FuncExpr and
+// prints quoted; the whitespace-sensitive ones get the function-call lexing.
+func TestKeywordFunctions(t *testing.T) {
+	// arguments that satisfy each name's built-in syntax; "" means no arguments
+	args := map[string]string{
+		"cast": "a as char", "date_add": "a, interval 1 day", "date_sub": "a, interval 1 day", "adddate": "a, 1", "subdate": "a, 1",
+		"extract": "year from a", "position": "'a' in a", "trim": "a", "substring": "a, 1", "substr": "a, 1", "mid": "a, 1, 1",
+		"group_concat": "a", "json_objectagg": "a, b", "char": "65", "insert": "a, 1, 1, 'x'", "interval": "1, 2, 3",
+		"json_value": "a, '$.a'", "get_format": "date, 'usa'", "timestampadd": "day, 1, a", "timestampdiff": "day, a, b",
+		"convert": "a, char", "if": "a, 1, 2", "coalesce": "a, 1", "format": "a, 1", "mod": "a, 2", "repeat": "a, 2",
+		"replace": "a, 'x', 'y'", "truncate": "a, 0", "left": "a, 1", "right": "a, 1", "linestring": "point(1, 1), point(2, 2)",
+		"polygon": "linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0))", "multilinestring": "linestring(point(1, 1), point(2, 2))",
+		"multipolygon": "polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))", "point": "1, 1", "multipoint": "point(1, 1)",
+		"geometrycollection": "point(1, 1)", "nth_value": "a, 2", "ntile": "2", "lag": "a", "lead": "a", "first_value": "a", "last_value": "a",
+	}
+	noArgs := map[string]bool{
+		"now": true, "curdate": true, "curtime": true, "sysdate": true, "user": true, "current_user": true, "session_user": true, "system_user": true,
+		"database": true, "schema": true, "row_count": true, "current_date": true, "utc_date": true, "current_time": true, "current_timestamp": true,
+		"localtime": true, "localtimestamp": true, "utc_time": true, "utc_timestamp": true,
+		"cume_dist": true, "dense_rank": true, "percent_rank": true, "rank": true, "row_number": true,
+	}
+	window := map[string]bool{
+		"cume_dist": true, "dense_rank": true, "percent_rank": true, "rank": true, "row_number": true,
+		"nth_value": true, "ntile": true, "lag": true, "lead": true, "first_value": true, "last_value": true,
+	}
+	parser := NewTestParser()
+	for name, whitespaceSensitive := range mysqlKeywordFunctions {
+		t.Run(name, func(t *testing.T) {
+			id, ok := keywordLookupTable.LookupString(name)
+			require.True(t, ok, "not a keyword")
+			assert.Equal(t, whitespaceSensitive, isFuncCallKeyword(id), "whitespace-sensitive lexing")
+			assert.True(t, IsKeywordFunctionName(name))
+
+			arg, ok := args[name]
+			if !ok && !noArgs[name] {
+				arg = "a"
+			}
+			over := ""
+			if window[name] {
+				over = " over ()"
+			}
+			stmt, err := parser.Parse(fmt.Sprintf("select %s(%s)%s from t", name, arg, over))
+			require.NoError(t, err)
+			expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+			assert.NotEqual(t, "*sqlparser.FuncExpr", fmt.Sprintf("%T", expr), "keyword form must not be a generic call")
+
+			// quoted, the name is an identifier and the call takes the generic
+			// argument syntax whatever the built-in's is
+			quoted := fmt.Sprintf("select `%s`(a) from t", name)
+			stmt, err = parser.Parse(quoted)
+			require.NoError(t, err, "quoted call must be a generic call")
+			_, isGeneric := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr.(*FuncExpr)
+			assert.True(t, isGeneric, "quoted call must be a generic call")
+			assert.Equal(t, quoted, String(stmt), "quoted call must stay quoted")
+		})
 	}
 	for _, kw := range keywords {
 		if kw.id != UNUSED && isFuncCallKeyword(kw.id) {
-			_, listed := mysqlFuncCallKeywords[kw.name]
+			_, listed := mysqlKeywordFunctions[kw.name]
 			assert.True(t, listed, kw.name)
 		}
 	}

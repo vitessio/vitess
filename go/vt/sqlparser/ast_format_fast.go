@@ -2435,6 +2435,14 @@ func (node *UserFuncExpr) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *BuiltinFuncExpr) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.String())
+	buf.WriteByte('(')
+	buf.formatExprs(node.Exprs)
+	buf.WriteByte(')')
+}
+
+// FormatFast formats the node.
 func (node *CollateExpr) FormatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(" collate ")

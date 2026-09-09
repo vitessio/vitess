@@ -328,7 +328,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
-	funcExpr := sqlparser.NewFuncExpr("if", sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil),
+	funcExpr := sqlparser.NewBuiltinFuncExpr("if", sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil),
 		sqlparser.NewColName("col"),
 		&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")})
 	ins := newInsert(

@@ -573,7 +573,7 @@ outer:
 
 func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
 	// `coalesce(e,1)` will return `e` if `e` is not `NULL`, otherwise it will return `1`
-	return sqlparser.NewFuncExpr("coalesce", e, sqlparser.NewIntLiteral("1"))
+	return sqlparser.NewBuiltinFuncExpr("coalesce", e, sqlparser.NewIntLiteral("1"))
 }
 
 func initColReUse(size int) []int {

@@ -85,6 +85,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfBitXor(in)
 	case BoolVal:
 		return in
+	case *BuiltinFuncExpr:
+		return CloneRefOfBuiltinFuncExpr(in)
 	case *CallProc:
 		return CloneRefOfCallProc(in)
 	case *CaseExpr:
@@ -943,6 +945,17 @@ func CloneRefOfBitXor(n *BitXor) *BitXor {
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
+// CloneRefOfBuiltinFuncExpr creates a deep clone of the input.
+func CloneRefOfBuiltinFuncExpr(n *BuiltinFuncExpr) *BuiltinFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -3958,6 +3971,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
+	case *BuiltinFuncExpr:
+		return CloneRefOfBuiltinFuncExpr(in)
 	case *CharExpr:
 		return CloneRefOfCharExpr(in)
 	case *ConvertExpr:
@@ -4272,6 +4287,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfBitXor(in)
 	case BoolVal:
 		return in
+	case *BuiltinFuncExpr:
+		return CloneRefOfBuiltinFuncExpr(in)
 	case *CaseExpr:
 		return CloneRefOfCaseExpr(in)
 	case *CastExpr:

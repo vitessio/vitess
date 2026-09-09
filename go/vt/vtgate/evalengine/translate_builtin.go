@@ -53,8 +53,14 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	if fn.Qualifier.NotEmpty() || sqlparser.IsKeywordFunctionName(fn.Name.String()) {
 		return nil, translateExprNotSupported(fn)
 	}
+	return ast.translateFuncCall(fn, fn.Name, fn.Exprs)
+}
+
+// translateFuncCall translates a call of the built-in function name with the
+// given arguments; fn is the node the call came from, for error messages.
+func (ast *astCompiler) translateFuncCall(fn sqlparser.Expr, name sqlparser.IdentifierCI, exprs []sqlparser.Expr) (IR, error) {
 	var args TupleExpr
-	for _, expr := range fn.Exprs {
+	for _, expr := range exprs {
 		convertedExpr, err := ast.translateExpr(expr)
 		if err != nil {
 			return nil, err
@@ -62,7 +68,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		args = append(args, convertedExpr)
 	}
 
-	method := fn.Name.Lowered()
+	method := name.Lowered()
 	call := CallExpr{Arguments: args, Method: method}
 
 	switch method {
@@ -792,6 +798,9 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			Arguments: args,
 			Method:    "JSON_KEYS",
 		}, nil
+
+	case *sqlparser.BuiltinFuncExpr:
+		return ast.translateFuncCall(call, call.Name, call.Exprs)
 
 	case *sqlparser.UserFuncExpr:
 		return &builtinUser{CallExpr{Method: call.Name.String()}}, nil
