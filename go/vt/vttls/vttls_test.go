@@ -234,6 +234,82 @@ func TestClientConfigCRL(t *testing.T) {
 		res := handshake(t, serverPresenting(chain...), clientConfig)
 		require.ErrorContains(t, res.clientErr, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxSignatureChecks))
 	})
+
+	// A forged issuer carries the real intermediate's subject and
+	// public key, so it verifies the certificates the intermediate
+	// issued, but it lacks the CRL signing key usage, so it
+	// validates none of the intermediate's CRLs.
+	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
+	revokedKeyPair, err := tls.LoadX509KeyPair(certs.RevokedServerCert, certs.RevokedServerKey)
+	require.NoError(t, err)
+	forged := forgedIssuer(t, intermediate)
+	revokedServerPresenting := func(chain ...*x509.Certificate) *tls.Config {
+		serverConfig := serverPresenting(chain...)
+		serverConfig.Certificates[0].PrivateKey = revokedKeyPair.PrivateKey
+		return serverConfig
+	}
+
+	t.Run("a forged issuer that validates no CRL fails the check when it is the only one", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, revokedServerPresenting(revokedLeaf, forged), clientConfig)
+		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName+": none of the certificates found for its issuer "+intermediate.Subject.CommonName+" validates the CRL configured for that issuer")
+	})
+
+	t.Run("a forged issuer presented ahead of the configured one does not hide the CRL", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", certs.ServerCA, certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, revokedServerPresenting(revokedLeaf, forged), clientConfig)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+
+	t.Run("a forged issuer presented ahead of the real one does not hide the CRL", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, revokedServerPresenting(revokedLeaf, forged, intermediate), clientConfig)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+}
+
+// forgedIssuer returns a CA certificate that carries issuer's subject
+// and public key but not the CRL signing key usage, signed by a key
+// of the forger's own.
+func forgedIssuer(t *testing.T, issuer *x509.Certificate) *x509.Certificate {
+	t.Helper()
+	forgerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	forger := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "forger"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	forgerDER, err := x509.CreateCertificate(rand.Reader, forger, forger, &forgerKey.PublicKey, forgerKey)
+	require.NoError(t, err)
+	forgerCert, err := x509.ParseCertificate(forgerDER)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "forged"},
+		RawSubject:            issuer.RawSubject,
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, forgerCert, issuer.PublicKey, forgerKey)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return cert
 }
 
 // loadOneCert returns the single certificate in the PEM file.
