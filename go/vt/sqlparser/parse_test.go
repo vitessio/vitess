@@ -4268,6 +4268,11 @@ var validSQL = []struct {
 	input:  "select t.now from t",
 	output: "select t.`now` from t",
 }, {
+	// the keyword form keeps the spelling it was written with, as the
+	// column name MySQL derives from it does
+	input:  "select USER(), CURRENT_USER(), SESSION_USER(), SYSTEM_USER(), Current_User from t",
+	output: "select USER(), CURRENT_USER(), SESSION_USER(), SYSTEM_USER(), Current_User() from t",
+}, {
 	// session_user and system_user are keywords only before '(' in an
 	// expression; in identifier positions they name tables, indexes and
 	// procedures, as in MySQL

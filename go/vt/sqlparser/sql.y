@@ -6758,7 +6758,7 @@ function_call_keyword:
   }
 | CURRENT_USER func_paren_opt
   {
-    $$ = &UserFuncExpr{Name: NewIdentifierCI("current_user")}
+    $$ = &UserFuncExpr{Name: NewIdentifierCI($1)}
   }
 
 /*
@@ -6787,15 +6787,15 @@ UTC_DATE func_paren_opt
   }
 | USER openb closeb
   {
-    $$ = &UserFuncExpr{Name: NewIdentifierCI("user")}
+    $$ = &UserFuncExpr{Name: NewIdentifierCI($1)}
   }
 | SESSION_USER openb closeb
   {
-    $$ = &UserFuncExpr{Name: NewIdentifierCI("session_user")}
+    $$ = &UserFuncExpr{Name: NewIdentifierCI($1)}
   }
 | SYSTEM_USER openb closeb
   {
-    $$ = &UserFuncExpr{Name: NewIdentifierCI("system_user")}
+    $$ = &UserFuncExpr{Name: NewIdentifierCI($1)}
   }
 | UTC_TIME func_datetime_precision
   {
