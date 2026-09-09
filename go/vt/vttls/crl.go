@@ -73,6 +73,10 @@ type (
 		// that a peer presents, whose number the peer controls,
 		// spend a connection's signature checks on that.
 		configuredBindings map[string]crlBinding
+		// configuredBySubject indexes the configured issuers by
+		// subject, as rendered by nameKey, once here rather than on
+		// every connection, since a CA file can hold many.
+		configuredBySubject map[string][]*x509.Certificate
 		// revokedSerials indexes the serial numbers each CRL
 		// revokes, so that a handshake looks a certificate up
 		// rather than scanning a CRL that may hold many entries.
@@ -93,9 +97,10 @@ type (
 		// issuer need not be available.
 		chains   [][]*x509.Certificate
 		verified bool
-		// bySubject indexes the certificates that may be an
-		// issuer by subject, as rendered by nameKey, the configured
-		// ones first, then the ones from the chains being checked.
+		// bySubject indexes the certificates of the connection that
+		// may be an issuer by subject, as rendered by nameKey: the
+		// ones from the chains being checked, then the presented
+		// ones. The configured issuers are indexed by the checker.
 		bySubject map[string][]*x509.Certificate
 		indexed   map[string]struct{}
 		// names memoizes nameKey by DER encoded name.
@@ -329,13 +334,14 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 // issuers, indexing the CRLs and binding them to the issuers once.
 func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate) (*crlChecker, error) {
 	checker := &crlChecker{
-		crls:               crls,
-		issuers:            issuers,
-		crlIssuers:         map[string]struct{}{},
-		crlIssuerName:      map[*x509.RevocationList]string{},
-		configuredBindings: map[string]crlBinding{},
-		revokedSerials:     map[*x509.RevocationList]map[string]struct{}{},
-		warningKeys:        map[*x509.RevocationList]string{},
+		crls:                crls,
+		issuers:             issuers,
+		crlIssuers:          map[string]struct{}{},
+		crlIssuerName:       map[*x509.RevocationList]string{},
+		configuredBindings:  map[string]crlBinding{},
+		configuredBySubject: map[string][]*x509.Certificate{},
+		revokedSerials:      map[*x509.RevocationList]map[string]struct{}{},
+		warningKeys:         map[*x509.RevocationList]string{},
 	}
 	for _, issuer := range issuers {
 		if err := checkNameDecodable(issuer.RawSubject); err != nil {
@@ -358,11 +364,16 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 	}
 	unbounded := func() error { return nil }
 	for _, issuer := range checker.issuers {
-		binding, err := checker.bindCRLs(issuer, nameKey(issuer.RawSubject), unbounded)
+		if _, done := checker.configuredBindings[string(issuer.Raw)]; done {
+			continue
+		}
+		subject := nameKey(issuer.RawSubject)
+		binding, err := checker.bindCRLs(issuer, subject, unbounded)
 		if err != nil {
 			return nil, err
 		}
 		checker.configuredBindings[string(issuer.Raw)] = binding
+		checker.configuredBySubject[subject] = append(checker.configuredBySubject[subject], issuer)
 	}
 	return checker, nil
 }
@@ -503,9 +514,6 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		check.chains = [][]*x509.Certificate{presented}
 		check.verified = false
 	}
-	for _, issuer := range c.issuers {
-		check.index(issuer)
-	}
 	for _, chain := range check.chains {
 		for _, cert := range chain {
 			check.index(cert)
@@ -573,10 +581,14 @@ func (ck *crlCheck) run() error {
 }
 
 // index records cert as a possible issuer of the certificates that
-// carry its subject as their issuer, once per distinct certificate,
-// keeping the order in which it was indexed: the configured issuers
-// come first, then the certificates of the chains being checked.
+// carry its subject as their issuer, once per distinct certificate
+// and leaving out the configured issuers, which the checker indexed,
+// keeping the order in which it was indexed: the certificates of the
+// chains being checked come first, then the presented ones.
 func (ck *crlCheck) index(cert *x509.Certificate) {
+	if _, configured := ck.checker.configuredBindings[string(cert.Raw)]; configured {
+		return
+	}
 	if _, done := ck.indexed[string(cert.Raw)]; done {
 		return
 	}
@@ -616,7 +628,7 @@ func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 		// a certificate whose issuer has no CRL.
 		return lookup, nil
 	}
-	for _, candidate := range ck.bySubject[issuerName] {
+	for _, candidate := range slices.Concat(ck.checker.configuredBySubject[issuerName], ck.bySubject[issuerName]) {
 		issued, err := ck.issuedBy(cert, candidate)
 		if err != nil {
 			return crlLookup{}, err
