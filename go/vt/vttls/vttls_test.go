@@ -1143,6 +1143,55 @@ func TestCRLCheckerWrapperCannotOverrideConfiguredIssuer(t *testing.T) {
 	})
 }
 
+// TestNewCRLCheckerCriticalExtensions checks that a CRL is refused
+// when it, or one of its entries, carries a critical extension whose
+// meaning the checker does not handle, as RFC 5280 requires, while a
+// non-critical one it does not know is ignored.
+func TestNewCRLCheckerCriticalExtensions(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	unknown := asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 99999, 1}
+	flag, err := asn1.Marshal(true)
+	require.NoError(t, err)
+	attributeCertsOnly, err := asn1.Marshal(struct {
+		OnlyContainsAttributeCerts bool `asn1:"tag:5,optional"`
+	}{OnlyContainsAttributeCerts: true})
+	require.NoError(t, err)
+	crlWith := func(extensions []pkix.Extension, entryExtensions []pkix.Extension) string {
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:                    big.NewInt(1),
+			ThisUpdate:                time.Now().Add(-time.Hour),
+			NextUpdate:                time.Now().Add(time.Hour),
+			ExtraExtensions:           extensions,
+			RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: big.NewInt(42), RevocationTime: time.Now().Add(-time.Hour), ExtraExtensions: entryExtensions}},
+		}, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		return crlFile(t, der)
+	}
+
+	for _, tc := range []struct {
+		name string
+		file string
+		want string
+	}{
+		{"an unknown critical extension", crlWith([]pkix.Extension{{Id: unknown, Critical: true, Value: flag}}, nil), "critical extension 1.3.6.1.4.1.99999.1"},
+		{"an unknown critical entry extension", crlWith(nil, []pkix.Extension{{Id: unknown, Critical: true, Value: flag}}), "critical extension 1.3.6.1.4.1.99999.1"},
+		{"a scope limited to attribute certificates", crlWith([]pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: attributeCertsOnly}}, nil), "attribute certificates"},
+	} {
+		t.Run(tc.name+" is refused", func(t *testing.T) {
+			_, err := newCRLChecker(tc.file, certs.ServerCA)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+
+	t.Run("an unknown non-critical extension is ignored", func(t *testing.T) {
+		_, err := newCRLChecker(crlWith([]pkix.Extension{{Id: unknown, Value: flag}}, []pkix.Extension{{Id: unknown, Value: flag}}), certs.ServerCA)
+		require.NoError(t, err)
+	})
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {

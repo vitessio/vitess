@@ -216,10 +216,15 @@ var (
 	oidIssuingDistributionPoint = asn1.ObjectIdentifier{2, 5, 29, 28}
 )
 
-// unsupportedCRL reports why crl cannot be evaluated on its own, as
-// the checker evaluates every CRL: a delta CRL's entries only make
-// sense together with the base CRL they amend, and an indirect CRL's
-// entries may belong to other issuers than the CRL's.
+// unsupportedCRL reports why crl cannot be evaluated the way the
+// checker evaluates every CRL, on its own and against the public key
+// certificates its issuer signed: a delta CRL's entries only make
+// sense together with the base CRL they amend, an indirect CRL's
+// entries may belong to other issuers than the CRL's, a CRL scoped to
+// attribute certificates covers no certificate the checker sees, and
+// any other critical extension, of the CRL or of an entry, carries a
+// meaning the checker does not handle, which RFC 5280 says must not
+// be ignored.
 func unsupportedCRL(crl *x509.RevocationList) error {
 	for _, extension := range crl.Extensions {
 		switch {
@@ -232,6 +237,18 @@ func unsupportedCRL(crl *x509.RevocationList) error {
 			}
 			if scope.IndirectCRL {
 				return fmt.Errorf("indirect CRLs are not supported: the CRL from issuer %s is one", crl.Issuer.CommonName)
+			}
+			if scope.OnlyContainsAttributeCerts {
+				return fmt.Errorf("the CRL from issuer %s covers attribute certificates only", crl.Issuer.CommonName)
+			}
+		case extension.Critical:
+			return fmt.Errorf("the CRL from issuer %s carries the critical extension %s, which is not supported", crl.Issuer.CommonName, extension.Id)
+		}
+	}
+	for _, entry := range crl.RevokedCertificateEntries {
+		for _, extension := range entry.Extensions {
+			if extension.Critical {
+				return fmt.Errorf("the entry for serial number %s of the CRL from issuer %s carries the critical extension %s, which is not supported", entry.SerialNumber, crl.Issuer.CommonName, extension.Id)
 			}
 		}
 	}
