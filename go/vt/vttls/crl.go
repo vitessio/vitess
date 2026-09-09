@@ -17,6 +17,7 @@ limitations under the License.
 package vttls
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -24,6 +25,7 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -244,15 +246,29 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend
 			continue
 		}
 		// CheckSignatureFrom returns the violation as is, unwrapped.
-		if _, violation := err.(x509.ConstraintViolationError); !violation {
+		if _, violation := err.(x509.ConstraintViolationError); violation {
+			if err := spend(); err != nil {
+				return crlBinding{}, err
+			}
+			if issuer.CheckSignature(crl.SignatureAlgorithm, crl.RawTBSRevocationList, crl.Signature) == nil {
+				binding.orphaned = true
+			}
 			continue
 		}
-		if err := spend(); err != nil {
-			return crlBinding{}, err
+		// A CRL signed with an algorithm that Go refuses to verify
+		// cannot pass for the CRL of another CA under the same name:
+		// it may well be this issuer's, and it is then a CRL the
+		// operator relies on that cannot be applied.
+		if _, insecure := err.(x509.InsecureAlgorithmError); insecure || errors.Is(err, x509.ErrUnsupportedAlgorithm) {
+			return crlBinding{}, fmt.Errorf("the CRL from issuer %s cannot be validated: %w", crl.Issuer.CommonName, err)
 		}
-		if issuer.CheckSignature(crl.SignatureAlgorithm, crl.RawTBSRevocationList, crl.Signature) == nil {
-			binding.orphaned = true
+		// Nor can a CRL that names this very certificate as its
+		// authority: its signature ought to verify, and one that does
+		// not is a CRL that has gone bad, not another CA's.
+		if len(crl.AuthorityKeyId) > 0 && bytes.Equal(crl.AuthorityKeyId, issuer.SubjectKeyId) {
+			return crlBinding{}, fmt.Errorf("the CRL from issuer %s names the certificate found for that issuer as its authority, but its signature does not verify: %w", crl.Issuer.CommonName, err)
 		}
+		// Signed by another key under the same name: not this issuer's.
 	}
 	return binding, nil
 }

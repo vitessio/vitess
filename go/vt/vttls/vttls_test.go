@@ -35,6 +35,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -901,6 +902,75 @@ func TestNewCRLCheckerDeltaCRL(t *testing.T) {
 
 	_, err = newCRLChecker(file, certs.ServerCA)
 	require.ErrorContains(t, err, "delta CRLs are not supported")
+}
+
+// crlFile writes a DER encoded CRL to a PEM file and returns its path.
+func crlFile(t *testing.T, der []byte) string {
+	t.Helper()
+	file := path.Join(t.TempDir(), "crl.pem")
+	require.NoError(t, os.WriteFile(file, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der}), 0o600))
+	return file
+}
+
+// TestCRLCheckerCRLThatCannotBeValidated checks that a CRL from the
+// issuer that cannot be validated fails closed rather than passing for
+// the CRL of another CA under the same name: one signed with an
+// algorithm that Go cannot verify, and one that names the issuer's
+// certificate as its authority while its signature does not verify.
+func TestCRLCheckerCRLThatCannotBeValidated(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	leaf := loadOneCert(t, certs.ServerCert)
+	template := &x509.RevocationList{Number: big.NewInt(1), ThisUpdate: time.Now().Add(-time.Hour), NextUpdate: time.Now().Add(time.Hour)}
+
+	validDER, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
+	require.NoError(t, err)
+	valid, err := x509.ParseRevocationList(validDER)
+	require.NoError(t, err)
+
+	// The signature algorithm is rewritten, inside and outside the
+	// signed part, to an identifier that Go does not know.
+	unknownAlgorithm := slices.Clone(valid.RawSignatureAlgorithm)
+	unknownAlgorithm[len(unknownAlgorithm)-1] = 0x09
+	unsupportedDER := bytes.ReplaceAll(validDER, valid.RawSignatureAlgorithm, unknownAlgorithm)
+	require.Equal(t, 2, bytes.Count(validDER, valid.RawSignatureAlgorithm))
+	unsupported, err := x509.ParseRevocationList(unsupportedDER)
+	require.NoError(t, err)
+	require.Equal(t, x509.UnknownSignatureAlgorithm, unsupported.SignatureAlgorithm)
+
+	corruptDER := slices.Clone(validDER)
+	corruptDER[len(corruptDER)-1] ^= 0xff
+	corrupt, err := x509.ParseRevocationList(corruptDER)
+	require.NoError(t, err)
+	require.Equal(t, ca.SubjectKeyId, corrupt.AuthorityKeyId)
+
+	for _, tc := range []struct {
+		name string
+		der  []byte
+		want string
+	}{
+		{"unsupported signature algorithm", unsupportedDER, "cannot be validated"},
+		{"corrupt signature", corruptDER, "its signature does not verify"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := crlFile(t, tc.der)
+
+			t.Run("with the issuer configured, the checker is refused", func(t *testing.T) {
+				_, err := newCRLChecker(file, certs.ServerCA)
+				require.ErrorContains(t, err, tc.want)
+			})
+
+			t.Run("with the issuer presented, the connection is rejected", func(t *testing.T) {
+				checker, err := newCRLChecker(file, "")
+				require.NoError(t, err)
+
+				err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, ca}})
+				require.ErrorContains(t, err, tc.want)
+			})
+		})
+	}
 }
 
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
