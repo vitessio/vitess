@@ -974,8 +974,9 @@ func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateC
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
-		// it apart from a per-table one in the TableACL* counters.
-		statsKey := qre.generateACLStatsKey("undetermined", &tableacl.ACLResult{}, callerID)
+		// it apart from a per-table one in the TableACL* counters. The label
+		// carries hyphens so that no unquoted table name can share the series.
+		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
 		qre.recordACLStats(statsKey, aclState)
 	}()
 

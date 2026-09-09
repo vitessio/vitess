@@ -1167,9 +1167,10 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// The denial has no table to name, so it is recorded under an
-			// "undetermined" table label (and no group) rather than a blank.
-			statsKey := strings.Join([]string{"undetermined", "", tc.planID.String(), "u2"}, ".")
+			// The denial has no table to name, so it is recorded under a table
+			// label no unquoted table name can share (and no group), rather
+			// than a blank.
+			statsKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u2"}, ".")
 
 			// Strict table ACL: the caller has no grants, and the statement's
 			// table set is unknown, so it must be denied.
