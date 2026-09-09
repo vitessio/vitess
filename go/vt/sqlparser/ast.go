@@ -2842,12 +2842,11 @@ type (
 
 	// FuncExpr represents a generic function call: a native function such as
 	// abs() or concat(), a user-defined or stored function, or a qualified
-	// call. The built-ins whose names MySQL lexes as keywords only before '('
-	// (now, count, sum, ...), and the user-information functions, have nodes of
-	// their own (CurTimeFuncExpr, UserFuncExpr, the aggregates, TrimFuncExpr,
-	// ...); a FuncExpr carrying one of those names is MySQL's stored-function
-	// path and serializes with the name quoted (see IsKeywordFunctionName), so
-	// construct the dedicated node for the built-in.
+	// call. The built-ins that MySQL parses through a keyword rule have nodes of
+	// their own (BuiltinFuncExpr, CurTimeFuncExpr, the aggregates, TrimFuncExpr,
+	// ...; see mysqlKeywordFunctions); a FuncExpr carrying one of those names is
+	// MySQL's stored-function path and serializes with the name quoted (see
+	// IsKeywordFunctionName), so construct the dedicated node for the built-in.
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
@@ -2952,15 +2951,6 @@ type (
 	CurTimeFuncExpr struct {
 		Name IdentifierCI
 		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
-	}
-
-	// UserFuncExpr represents the user-information functions USER(),
-	// CURRENT_USER(), SESSION_USER() and SYSTEM_USER(). Their keyword form has a
-	// node of its own so that it is never a generic call: a generic call by one of
-	// these names (quoted, or with whitespace before the parenthesis for the two
-	// whitespace-sensitive ones) is MySQL's stored-function path and prints quoted.
-	UserFuncExpr struct {
-		Name IdentifierCI
 	}
 
 	// BuiltinFuncExpr is the keyword form of a built-in function with regular
@@ -3693,7 +3683,6 @@ func (*TimestampDiffExpr) IsExpr()                  {}
 func (*ExtractFuncExpr) IsExpr()                    {}
 func (*WeightStringFuncExpr) IsExpr()               {}
 func (*CurTimeFuncExpr) IsExpr()                    {}
-func (*UserFuncExpr) IsExpr()                       {}
 func (*BuiltinFuncExpr) IsExpr()                    {}
 func (*CaseExpr) IsExpr()                           {}
 func (*ValuesFuncExpr) IsExpr()                     {}
@@ -3793,7 +3782,6 @@ func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
-func (*UserFuncExpr) iCallable()                       {}
 func (*BuiltinFuncExpr) iCallable()                    {}
 func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}

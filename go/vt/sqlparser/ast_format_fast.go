@@ -2429,12 +2429,6 @@ func (node *CurTimeFuncExpr) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node *UserFuncExpr) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Name.String())
-	buf.WriteString("()")
-}
-
-// FormatFast formats the node.
 func (node *BuiltinFuncExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name.String())
 	buf.WriteByte('(')

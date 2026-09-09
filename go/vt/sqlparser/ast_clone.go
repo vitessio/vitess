@@ -579,8 +579,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUpdateXMLExpr(in)
 	case *Use:
 		return CloneRefOfUse(in)
-	case *UserFuncExpr:
-		return CloneRefOfUserFuncExpr(in)
 	case *VExplainStmt:
 		return CloneRefOfVExplainStmt(in)
 	case *VStream:
@@ -3610,16 +3608,6 @@ func CloneRefOfUse(n *Use) *Use {
 	return &out
 }
 
-// CloneRefOfUserFuncExpr creates a deep clone of the input.
-func CloneRefOfUserFuncExpr(n *UserFuncExpr) *UserFuncExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Name = CloneIdentifierCI(n.Name)
-	return &out
-}
-
 // CloneRefOfVExplainStmt creates a deep clone of the input.
 func CloneRefOfVExplainStmt(n *VExplainStmt) *VExplainStmt {
 	if n == nil {
@@ -4119,8 +4107,6 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfTrimFuncExpr(in)
 	case *UpdateXMLExpr:
 		return CloneRefOfUpdateXMLExpr(in)
-	case *UserFuncExpr:
-		return CloneRefOfUserFuncExpr(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
 	case *WeightStringFuncExpr:
@@ -4483,8 +4469,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfUnaryExpr(in)
 	case *UpdateXMLExpr:
 		return CloneRefOfUpdateXMLExpr(in)
-	case *UserFuncExpr:
-		return CloneRefOfUserFuncExpr(in)
 	case ValTuple:
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:

@@ -23515,7 +23515,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6760
 		{
-			yyLOCAL = &UserFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1296:
@@ -23555,7 +23555,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6789
 		{
-			yyLOCAL = &UserFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1301:
@@ -23563,7 +23563,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6793
 		{
-			yyLOCAL = &UserFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1302:
@@ -23571,7 +23571,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6797
 		{
-			yyLOCAL = &UserFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1303:

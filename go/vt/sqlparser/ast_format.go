@@ -1864,11 +1864,6 @@ func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *UserFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%#s()", node.Name.String())
-}
-
-// Format formats the node.
 func (node *BuiltinFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%#s(%n)", node.Name.String(), node.Exprs)
 }

@@ -578,8 +578,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
-	case *UserFuncExpr:
-		return VisitRefOfUserFuncExpr(in, f)
 	case *VExplainStmt:
 		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
@@ -4938,19 +4936,6 @@ func VisitRefOfUse(in *Use, f Visit) error {
 	return nil
 }
 
-func VisitRefOfUserFuncExpr(in *UserFuncExpr, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitIdentifierCI(in.Name, f); err != nil {
-		return err
-	}
-	return nil
-}
-
 func VisitRefOfVExplainStmt(in *VExplainStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -5565,8 +5550,6 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UpdateXMLExpr:
 		return VisitRefOfUpdateXMLExpr(in, f)
-	case *UserFuncExpr:
-		return VisitRefOfUserFuncExpr(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
 	case *WeightStringFuncExpr:
@@ -5936,8 +5919,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfUnaryExpr(in, f)
 	case *UpdateXMLExpr:
 		return VisitRefOfUpdateXMLExpr(in, f)
-	case *UserFuncExpr:
-		return VisitRefOfUserFuncExpr(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:

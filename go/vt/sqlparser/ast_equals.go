@@ -1694,12 +1694,6 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfUse(a, b)
-	case *UserFuncExpr:
-		b, ok := inB.(*UserFuncExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfUserFuncExpr(a, b)
 	case *VExplainStmt:
 		b, ok := inB.(*VExplainStmt)
 		if !ok {
@@ -5291,17 +5285,6 @@ func (cmp *Comparator) RefOfUse(a, b *Use) bool {
 	return cmp.IdentifierCS(a.DBName, b.DBName)
 }
 
-// RefOfUserFuncExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfUserFuncExpr(a, b *UserFuncExpr) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return cmp.IdentifierCI(a.Name, b.Name)
-}
-
 // RefOfVExplainStmt does deep equals between the two objects.
 func (cmp *Comparator) RefOfVExplainStmt(a, b *VExplainStmt) bool {
 	if a == b {
@@ -6313,12 +6296,6 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfUpdateXMLExpr(a, b)
-	case *UserFuncExpr:
-		b, ok := inB.(*UserFuncExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfUserFuncExpr(a, b)
 	case *ValuesFuncExpr:
 		b, ok := inB.(*ValuesFuncExpr)
 		if !ok {
@@ -7258,12 +7235,6 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfUpdateXMLExpr(a, b)
-	case *UserFuncExpr:
-		b, ok := inB.(*UserFuncExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfUserFuncExpr(a, b)
 	case ValTuple:
 		b, ok := inB.(ValTuple)
 		if !ok {

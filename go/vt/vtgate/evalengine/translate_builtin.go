@@ -618,6 +618,11 @@ func (ast *astCompiler) translateFuncCall(fn sqlparser.Expr, name sqlparser.Iden
 		default:
 			return nil, argError(method)
 		}
+	case "user", "current_user", "session_user", "system_user":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUser{CallExpr: call}, nil
 	case "database", "schema":
 		if len(args) != 0 {
 			return nil, argError(method)
@@ -801,9 +806,6 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 
 	case *sqlparser.BuiltinFuncExpr:
 		return ast.translateFuncCall(call, call.Name, call.Exprs)
-
-	case *sqlparser.UserFuncExpr:
-		return &builtinUser{CallExpr{Method: call.Name.String()}}, nil
 
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {

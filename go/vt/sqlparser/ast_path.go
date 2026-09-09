@@ -513,7 +513,6 @@ const (
 	RefOfUpdateXMLExprXPathExpr
 	RefOfUpdateXMLExprNewXML
 	RefOfUseDBName
-	RefOfUserFuncExprName
 	RefOfVExplainStmtStatement
 	RefOfVExplainStmtComments
 	RefOfVStreamComments
@@ -1596,8 +1595,6 @@ func (s ASTStep) DebugString() string {
 		return "(*UpdateXMLExpr).NewXML"
 	case RefOfUseDBName:
 		return "(*Use).DBName"
-	case RefOfUserFuncExprName:
-		return "(*UserFuncExpr).Name"
 	case RefOfVExplainStmtStatement:
 		return "(*VExplainStmt).Statement"
 	case RefOfVExplainStmtComments:
@@ -2893,8 +2890,6 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*UpdateXMLExpr).NewXML
 		case RefOfUseDBName:
 			node = node.(*Use).DBName
-		case RefOfUserFuncExprName:
-			node = node.(*UserFuncExpr).Name
 		case RefOfVExplainStmtStatement:
 			node = node.(*VExplainStmt).Statement
 		case RefOfVExplainStmtComments:
