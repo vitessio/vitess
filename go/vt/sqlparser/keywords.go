@@ -849,15 +849,18 @@ var keywordLookupTable *caseInsensitiveTable
 // whitespace in between; in any other position the name is an ordinary
 // identifier, and "name (" with whitespace is a call of a stored function by
 // that name. It is the list from "Function Name Parsing and Resolution" in the
-// MySQL reference manual. (sql_mode=IGNORE_SPACE relaxes the no-whitespace
-// requirement and is not supported here.)
+// MySQL reference manual, plus JSON_ARRAYAGG and JSON_OBJECTAGG, which MySQL 8.0
+// treats the same way although the page does not list them. (ST_COLLECT is a
+// third such name; it is not a keyword of this grammar.) sql_mode=IGNORE_SPACE
+// relaxes the no-whitespace requirement and is not supported here.
 var mysqlFuncCallKeywords = map[string]struct{}{
 	"adddate": {}, "bit_and": {}, "bit_or": {}, "bit_xor": {}, "cast": {}, "count": {},
 	"curdate": {}, "curtime": {}, "date_add": {}, "date_sub": {}, "extract": {},
-	"group_concat": {}, "max": {}, "mid": {}, "min": {}, "now": {}, "position": {},
-	"session_user": {}, "std": {}, "stddev": {}, "stddev_pop": {}, "stddev_samp": {},
-	"subdate": {}, "substr": {}, "substring": {}, "sum": {}, "sysdate": {},
-	"system_user": {}, "trim": {}, "variance": {}, "var_pop": {}, "var_samp": {},
+	"group_concat": {}, "json_arrayagg": {}, "json_objectagg": {}, "max": {}, "mid": {},
+	"min": {}, "now": {}, "position": {}, "session_user": {}, "std": {}, "stddev": {},
+	"stddev_pop": {}, "stddev_samp": {}, "subdate": {}, "substr": {}, "substring": {},
+	"sum": {}, "sysdate": {}, "system_user": {}, "trim": {}, "variance": {}, "var_pop": {},
+	"var_samp": {},
 }
 
 // isFuncCallKeyword reports whether the token is the keyword of one of the
@@ -866,8 +869,9 @@ var mysqlFuncCallKeywords = map[string]struct{}{
 func isFuncCallKeyword(id int) bool {
 	switch id {
 	case ADDDATE, BIT_AND, BIT_OR, BIT_XOR, CAST, COUNT, CURDATE, CURTIME, DATE_ADD, DATE_SUB,
-		EXTRACT, GROUP_CONCAT, MAX, MID, MIN, NOW, POSITION, SESSION_USER, STD, STDDEV, STDDEV_POP,
-		STDDEV_SAMP, SUBDATE, SUBSTRING, SUM, SYSDATE, SYSTEM_USER, TRIM, VARIANCE, VAR_POP, VAR_SAMP:
+		EXTRACT, GROUP_CONCAT, JSON_ARRAYAGG, JSON_OBJECTAGG, MAX, MID, MIN, NOW, POSITION,
+		SESSION_USER, STD, STDDEV, STDDEV_POP, STDDEV_SAMP, SUBDATE, SUBSTRING, SUM, SYSDATE,
+		SYSTEM_USER, TRIM, VARIANCE, VAR_POP, VAR_SAMP:
 		return true
 	default:
 		return false

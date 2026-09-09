@@ -4293,6 +4293,14 @@ var validSQL = []struct {
 }, {
 	input:  "insert into system_user(a) values (1)",
 	output: "insert into `system_user`(a) values (1)",
+}, {
+	// json_arrayagg and json_objectagg follow the same rule in MySQL 8.0
+	// although the manual's list leaves them out
+	input:  "select json_arrayagg(a), json_objectagg(a, b), json_arrayagg (a), json_objectagg (a, b) from t",
+	output: "select json_arrayagg(a), json_objectagg(a, b), `json_arrayagg`(a), `json_objectagg`(a, b) from t",
+}, {
+	input:  "select json_arrayagg, json_objectagg from t",
+	output: "select `json_arrayagg`, `json_objectagg` from t",
 }}
 
 func TestValid(t *testing.T) {
