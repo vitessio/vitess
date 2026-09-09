@@ -274,6 +274,24 @@ func TestClientConfigCRL(t *testing.T) {
 	rootCRL := path.Join(root, "ca-crl.pem")
 	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
 
+	t.Run("verify_ca consults the root's CRL for a configured intermediate that the chain ends at", func(t *testing.T) {
+		// The CA file holds the intermediate and the root, so
+		// verification of a server that presents only its
+		// certificate stops at the intermediate. It is the root's
+		// CRL that revokes the intermediate.
+		intermediatePEM, err := os.ReadFile(certs.ServerCA)
+		require.NoError(t, err)
+		rootPEM, err := os.ReadFile(path.Join(root, "ca-cert.pem"))
+		require.NoError(t, err)
+		bundle := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(bundle, append(intermediatePEM, rootPEM...), 0o600))
+		clientConfig, err := ClientConfig(VerifyCA, "", "", bundle, rootCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, leafOnlyValidServer, clientConfig)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+	})
+
 	t.Run("a revoked intermediate that the server presents is rejected", func(t *testing.T) {
 		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
 		require.NoError(t, err)
@@ -517,10 +535,11 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 
-	t.Run("a configured CA in the middle of a verified chain is checked against the CRL above it", func(t *testing.T) {
+	t.Run("a configured CA that a verified chain ends at is checked against its issuer's CRL", func(t *testing.T) {
 		// The intermediate is configured as well as the root, so
-		// verification builds a chain that ends at it and one that
-		// goes on to the root. It is the root's CRL that revokes it.
+		// verification of a leaf presented alone builds the one
+		// chain that ends at the intermediate. It is the root's
+		// CRL that revokes it, and the root is configured.
 		intermediatePEM, err := os.ReadFile(certs.ServerCA)
 		require.NoError(t, err)
 		rootPEM, err := os.ReadFile(rootCA)
@@ -531,8 +550,8 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 		require.NoError(t, err)
 
 		err = checker.verifyConnection(tls.ConnectionState{
-			PeerCertificates: []*x509.Certificate{leaf, intermediate},
-			VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate}, {leaf, intermediate, rootCert}},
+			PeerCertificates: []*x509.Certificate{leaf},
+			VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate}},
 		})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 	})

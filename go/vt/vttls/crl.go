@@ -87,11 +87,8 @@ type (
 	crlCheck struct {
 		checker   *crlChecker
 		presented []*x509.Certificate
-		// chains are the certificate chains the check walks, and
-		// verified tells whether they were built by verification,
-		// in which case their last certificate is a trust anchor.
-		chains   [][]*x509.Certificate
-		verified bool
+		// chains are the certificate chains the check walks.
+		chains [][]*x509.Certificate
 		// bySubject indexes the certificates that may be an
 		// issuer by subject, the configured ones first.
 		bySubject       map[string][]*x509.Certificate
@@ -231,14 +228,12 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		checker:      c,
 		presented:    presented,
 		chains:       verifiedChains,
-		verified:     true,
 		bySubject:    map[string][]*x509.Certificate{},
 		indexed:      map[string]struct{}{},
 		crlsByIssuer: map[string]crlBinding{},
 	}
 	if len(verifiedChains) == 0 {
 		check.chains = [][]*x509.Certificate{presented}
-		check.verified = false
 	}
 	for _, issuer := range c.issuers {
 		check.index(issuer)
@@ -251,13 +246,13 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 	return check
 }
 
-// run walks the chains in the order the certificates were sent. The
-// trust anchor is the last certificate of each verified chain, which
-// is not checked; a configured CA that sits elsewhere in a chain is
-// checked against the CRL of the certificate above it like any other,
-// as it always was, and a self-signed certificate the peer presents
-// is not an anchor either, so that recognizing it costs one of the
-// bounded signature checks like any other issuer lookup. The issuer of the
+// run walks the chains in the order the certificates were sent, and
+// checks every certificate in them, the one a verified chain ends at
+// included: a configured CA that verification stops at can still be
+// revoked by the CRL of its own issuer when that issuer is configured
+// or presented too. A self-signed certificate is checked like any
+// other, so that recognizing it costs one of the bounded signature
+// checks like any other issuer lookup. The issuer of the
 // leaf certificate has to be found when a CRL is configured under
 // its name, so that a peer cannot dodge that CRL by leaving its chain
 // out; other certificates whose issuer is not available go unchecked,
@@ -270,10 +265,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 func (ck *crlCheck) run() error {
 	checked := make(map[string]struct{}, len(ck.presented))
 	for _, chain := range ck.chains {
-		for i, cert := range chain {
-			if ck.verified && i == len(chain)-1 {
-				continue
-			}
+		for _, cert := range chain {
 			if _, done := checked[string(cert.Raw)]; done {
 				continue
 			}
