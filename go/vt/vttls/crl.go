@@ -68,14 +68,27 @@ type (
 // encoding/asn1 has no constant for.
 const tagUniversalString = 28
 
+// errUndecodableName is returned for a name that holds a T.61 string
+// with characters beyond ASCII: T.61 is a legacy encoding that is not
+// UTF-8 past ASCII, and such a name cannot be compared with its other
+// encodings.
+var errUndecodableName = errors.New("the name holds a T.61 string with characters beyond ASCII, which cannot be compared with other encodings of the name")
+
 // directoryString decodes the string types that a DirectoryString, or
-// the other string types found in names, may be encoded as.
+// the other string types found in names, may be encoded as. A T.61
+// string is decoded within ASCII, where it agrees with UTF-8, and
+// left as it is beyond that, see errUndecodableName.
 func directoryString(value asn1.RawValue) (string, bool) {
 	if value.Class != asn1.ClassUniversal {
 		return "", false
 	}
 	switch value.Tag {
-	case asn1.TagUTF8String, asn1.TagPrintableString, asn1.TagIA5String, asn1.TagT61String, asn1.TagGeneralString, asn1.TagNumericString:
+	case asn1.TagT61String:
+		if !isASCII(value.Bytes) {
+			return "", false
+		}
+		return string(value.Bytes), true
+	case asn1.TagUTF8String, asn1.TagPrintableString, asn1.TagIA5String, asn1.TagGeneralString, asn1.TagNumericString:
 		return string(value.Bytes), true
 	case asn1.TagBMPString:
 		if len(value.Bytes)%2 != 0 {
@@ -97,6 +110,33 @@ func directoryString(value asn1.RawValue) (string, bool) {
 		return string(runes), true
 	}
 	return "", false
+}
+
+func isASCII(text []byte) bool {
+	for _, b := range text {
+		if b >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+// checkNameDecodable reports whether a DER encoded name can be compared
+// with its other encodings, see errUndecodableName. A name that does
+// not parse is compared as it is and passes.
+func checkNameDecodable(rawName []byte) error {
+	var sequence rawRDNSequence
+	if rest, err := asn1.Unmarshal(rawName, &sequence); err != nil || len(rest) > 0 {
+		return nil
+	}
+	for _, rdn := range sequence {
+		for _, attribute := range rdn {
+			if attribute.Value.Class == asn1.ClassUniversal && attribute.Value.Tag == asn1.TagT61String && !isASCII(attribute.Value.Bytes) {
+				return errUndecodableName
+			}
+		}
+	}
+	return nil
 }
 
 // expiredCRLWarnings holds, per CRL, when the CRL was last warned
@@ -293,7 +333,15 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		configuredBindings: map[string]crlBinding{},
 		revokedSerials:     map[*x509.RevocationList]map[string]struct{}{},
 	}
+	for _, issuer := range issuers {
+		if err := checkNameDecodable(issuer.RawSubject); err != nil {
+			return nil, fmt.Errorf("the configured CA certificate %s cannot be matched with the CRLs: %w", issuer.Subject.CommonName, err)
+		}
+	}
 	for _, crl := range crls {
+		if err := checkNameDecodable(crl.RawIssuer); err != nil {
+			return nil, fmt.Errorf("the CRL from issuer %s cannot be matched with its issuer: %w", crl.Issuer.CommonName, err)
+		}
 		name := nameKey(crl.RawIssuer)
 		checker.crlIssuers[name] = struct{}{}
 		checker.crlIssuerName[crl] = name

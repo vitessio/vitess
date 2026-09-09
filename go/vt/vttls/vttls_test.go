@@ -998,6 +998,24 @@ func TestNewCRLCheckerIndirectCRL(t *testing.T) {
 	require.ErrorContains(t, err, "indirect CRLs are not supported")
 }
 
+// TestNewCRLCheckerUndecodableName checks that a CRL whose issuer name
+// holds a T.61 string with characters beyond ASCII is refused, since
+// such a name cannot be compared with its other encodings, while one
+// within ASCII is accepted.
+func TestNewCRLCheckerUndecodableName(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	intermediate := loadOneCert(t, certs.ServerCA)
+	intermediateKey := strings.TrimSuffix(certs.ServerCA, "-cert.pem") + "-key.pem"
+
+	ascii := crlWithIssuerName(t, certs.ServerCA, intermediateKey, big.NewInt(1), intermediate.Subject.CommonName, asn1.TagT61String, time.Now().Add(time.Hour))
+	_, err := newCRLChecker(ascii, certs.ServerCA)
+	require.NoError(t, err)
+
+	beyondASCII := crlWithIssuerName(t, certs.ServerCA, intermediateKey, big.NewInt(1), "Jos\u00e9", asn1.TagT61String, time.Now().Add(time.Hour))
+	_, err = newCRLChecker(beyondASCII, certs.ServerCA)
+	require.ErrorContains(t, err, "T.61 string with characters beyond ASCII")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
@@ -1174,6 +1192,7 @@ func TestNameKey(t *testing.T) {
 		{"case folding beyond ASCII", name(rdn(utf8Attribute(commonName, "Stra\u00dfe"))), name(rdn(utf8Attribute(commonName, "STRASSE")))},
 		{"UniversalString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, 28, utf32BigEndian("Jos\u00e9"))))},
 		{"BMPString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagBMPString, utf16BigEndian("Jos\u00e9"))))},
+		{"T61String and UTF8String, within ASCII", name(rdn(utf8Attribute(commonName, "Example CA"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Example CA"))))},
 	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {
@@ -1190,6 +1209,7 @@ func TestNameKey(t *testing.T) {
 		{"RDN order", name(rdn(attribute(commonName, "a")), rdn(attribute(organization, "b"))), name(rdn(attribute(organization, "b")), rdn(attribute(commonName, "a")))},
 		{"one attribute holding delimiters versus two attributes", name(rdn(attribute(commonName, "a+2.5.4.3=b"))), name(rdn(attribute(commonName, "a"), attribute(commonName, "b")))},
 		{"one RDN versus two", name(rdn(attribute(commonName, "a"), attribute(organization, "b"))), name(rdn(attribute(commonName, "a")), rdn(attribute(organization, "b")))},
+		{"T61String beyond ASCII and its UTF8String reading", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Jos\u00e9"))))},
 	}
 	for _, tc := range different {
 		t.Run("different "+tc.name, func(t *testing.T) {
