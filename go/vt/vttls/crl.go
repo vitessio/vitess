@@ -63,6 +63,12 @@ type (
 		// CRL, to tell when a certificate's issuer has a CRL that
 		// the check must be able to bind.
 		crlIssuers map[string]struct{}
+		// unnamedCRLs are the CRLs whose issuer name matches no
+		// configured issuer's subject, byte for byte. A CRL made
+		// by another tool than the CA certificate can encode the
+		// same name differently, so such a CRL is bound to the
+		// issuers by its signature alone, as every CRL used to be.
+		unnamedCRLs map[*x509.RevocationList]struct{}
 	}
 
 	// crlCheck is the state of one connection's revocation check.
@@ -120,20 +126,38 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 	if err != nil {
 		return nil, err
 	}
-	checker := &crlChecker{crls: crls, anchors: map[string]struct{}{}, crlIssuers: map[string]struct{}{}}
+	checker := &crlChecker{
+		crls:        crls,
+		anchors:     map[string]struct{}{},
+		crlIssuers:  map[string]struct{}{},
+		unnamedCRLs: map[*x509.RevocationList]struct{}{},
+	}
 	if ca != "" {
 		checker.issuers, err = loadx509Certificates(ca)
 		if err != nil {
 			return nil, err
 		}
 	}
+	issuerNames := make(map[string]struct{}, len(checker.issuers))
 	for _, issuer := range checker.issuers {
 		checker.anchors[string(issuer.Raw)] = struct{}{}
+		issuerNames[string(issuer.RawSubject)] = struct{}{}
 	}
 	for _, crl := range crls {
 		checker.crlIssuers[string(crl.RawIssuer)] = struct{}{}
+		if _, named := issuerNames[string(crl.RawIssuer)]; !named {
+			checker.unnamedCRLs[crl] = struct{}{}
+		}
 	}
 	return checker, nil
+}
+
+// hasCRLFrom reports whether a CRL may come from the issuer with the
+// given name: one carries that name, or one could not be matched by
+// name to any configured issuer and may be that issuer's all the same.
+func (c *crlChecker) hasCRLFrom(rawIssuer []byte) bool {
+	_, named := c.crlIssuers[string(rawIssuer)]
+	return named || len(c.unnamedCRLs) > 0
 }
 
 // verifyConnection is a tls.Config.VerifyConnection callback. Unlike
@@ -217,7 +241,7 @@ func (ck *crlCheck) run() error {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: %w", cert.Subject.CommonName, err)
 			}
 			if !lookup.issued {
-				if _, named := ck.checker.crlIssuers[string(cert.RawIssuer)]; named && bytes.Equal(cert.Raw, ck.presented[0].Raw) {
+				if ck.checker.hasCRLFrom(cert.RawIssuer) && bytes.Equal(cert.Raw, ck.presented[0].Raw) {
 					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
 				}
 				continue
@@ -260,7 +284,7 @@ func (ck *crlCheck) index(cert *x509.Certificate) {
 // fails the check instead of hiding a certificate from it.
 func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 	var lookup crlLookup
-	_, named := ck.checker.crlIssuers[string(cert.RawIssuer)]
+	named := ck.checker.hasCRLFrom(cert.RawIssuer)
 	for _, candidate := range ck.bySubject[string(cert.RawIssuer)] {
 		issued, err := ck.issuedBy(cert, candidate)
 		if err != nil {
@@ -298,19 +322,20 @@ func (ck *crlCheck) issuedBy(cert, issuer *x509.Certificate) (bool, error) {
 }
 
 // crlsSignedBy returns what issuer makes of the CRLs that carry its
-// name, the only ones it can have signed, verifying their signature
-// once per issuer for the connection within the bounded signature
-// checks. A CRL that another key signed, as happens when two CAs
-// share a subject, is simply not the issuer's. A CRL that the
-// issuer's own key signed while the certificate is not allowed to
-// sign CRLs is reported as orphaned.
+// name, along with the ones that could not be matched by name to any
+// configured issuer, verifying their signature once per issuer for
+// the connection within the bounded signature checks. A CRL that
+// another key signed, as happens when two CAs share a subject, is
+// simply not the issuer's. A CRL that the issuer's own key signed
+// while the certificate is not allowed to sign CRLs is reported as
+// orphaned.
 func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) (crlBinding, error) {
 	if binding, done := ck.crlsByIssuer[string(issuer.Raw)]; done {
 		return binding, nil
 	}
 	var binding crlBinding
 	for _, crl := range ck.checker.crls {
-		if !bytes.Equal(crl.RawIssuer, issuer.RawSubject) {
+		if _, unnamed := ck.checker.unnamedCRLs[crl]; !unnamed && !bytes.Equal(crl.RawIssuer, issuer.RawSubject) {
 			continue
 		}
 		if err := ck.spendSignatureCheck(); err != nil {

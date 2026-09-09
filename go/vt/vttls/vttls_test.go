@@ -18,12 +18,15 @@ package vttls
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"math/big"
@@ -585,4 +588,72 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 
 	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))}})
 	require.NoError(t, err)
+}
+
+// crlWithReencodedIssuer writes a CRL signed by the CA whose
+// certificate and key files are given, revoking the given serial
+// number, with the CA's name encoded as a UTF8String rather than the
+// PrintableString of the CA certificate, as a CRL produced by another
+// tool than the certificate can be.
+func crlWithReencodedIssuer(t *testing.T, caCert, caKey string, serial *big.Int) string {
+	t.Helper()
+	ca := loadOneCert(t, caCert)
+	keyPair, err := tls.LoadX509KeyPair(caCert, caKey)
+	require.NoError(t, err)
+	reencoded := *ca
+	reencoded.RawSubject, err = asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
+		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
+		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(ca.Subject.CommonName)},
+	}}})
+	require.NoError(t, err)
+	require.NotEqual(t, ca.RawSubject, reencoded.RawSubject)
+
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:     big.NewInt(1),
+		ThisUpdate: time.Now().Add(-time.Hour),
+		NextUpdate: time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{
+			SerialNumber:   serial,
+			RevocationTime: time.Now().Add(-time.Hour),
+		}},
+	}, &reencoded, keyPair.PrivateKey.(crypto.Signer))
+	require.NoError(t, err)
+	file := path.Join(t.TempDir(), "reencoded-crl.pem")
+	require.NoError(t, os.WriteFile(file, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der}), 0o600))
+	return file
+}
+
+// TestCRLCheckerIssuerNameEncoding checks that a CRL whose issuer name
+// is encoded differently from the subject of the CA certificate is
+// still bound to that CA by its signature, as it was before the
+// issuer names were compared.
+func TestCRLCheckerIssuerNameEncoding(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
+	intermediate := loadOneCert(t, certs.ServerCA)
+	crl := crlWithReencodedIssuer(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", revokedLeaf.SerialNumber)
+
+	t.Run("with the issuer configured", func(t *testing.T) {
+		checker, err := newCRLChecker(crl, certs.ServerCA)
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+
+	t.Run("with the issuer presented", func(t *testing.T) {
+		checker, err := newCRLChecker(crl, "")
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf, intermediate}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+
+	t.Run("with the issuer missing, the check fails closed rather than silently", func(t *testing.T) {
+		checker, err := newCRLChecker(crl, "")
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
+		require.ErrorContains(t, err, "no certificate is available for its issuer")
+	})
 }
