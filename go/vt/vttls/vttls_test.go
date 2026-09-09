@@ -241,12 +241,20 @@ func TestClientConfigCRL(t *testing.T) {
 	})
 
 	t.Run("a chain padded to exhaust the signature checks is rejected", func(t *testing.T) {
-		// The decoys carry the intermediate's name, so finding the
-		// leaf's issuer spends the whole budget on them and the real
-		// intermediate; its own issuer would need one more check.
+		// The CRLs come from both the intermediate and the root, so
+		// the leaf's issuer is worth looking for. The decoys carry
+		// the intermediate's name, so finding it spends the whole
+		// budget on them and the real intermediate, and binding its
+		// CRL would need one more check.
+		intermediateCRL, err := os.ReadFile(certs.ServerCRL)
+		require.NoError(t, err)
+		rootCRLBytes, err := os.ReadFile(rootCRL)
+		require.NoError(t, err)
+		bothCRLs := path.Join(t.TempDir(), "both-crl.pem")
+		require.NoError(t, os.WriteFile(bothCRLs, append(intermediateCRL, rootCRLBytes...), 0o600))
 		chain := append([]*x509.Certificate{leaf}, selfSignedCACerts(t, leaf.RawIssuer, maxSignatureChecks-1)...)
 		chain = append(chain, intermediate, rootCert)
-		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
+		clientConfig, err := ClientConfig(Required, "", "", "", bothCRLs, certs.ServerName, tls.VersionTLS12)
 		require.NoError(t, err)
 
 		res := handshake(t, serverPresenting(chain...), clientConfig)
