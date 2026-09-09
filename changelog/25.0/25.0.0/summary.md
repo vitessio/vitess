@@ -641,6 +641,7 @@ The certificate revocation lists configured with `--grpc-crl`, `--mysql-server-s
 Two more configurations that used to connect with the CRL silently ignored are now refused, since the CRL cannot be applied as configured:
 
 - A CA certificate that is not allowed to sign CRLs, that is, without the `cRLSign` key usage, while its key signed a configured CRL: connections under that CA are rejected. Reissue the CA certificate with `cRLSign`, or sign the CRL with a certificate that has it.
+- A server-side CRL (`--grpc-crl`, `--mysql-server-ssl-crl`) without the matching CA (`--grpc-ca`, `--mysql-server-ssl-ca`): the TLS configuration fails to build, since without a CA no client certificate is requested and the CRL could not apply. Configure the CA, or drop the CRL.
 - A `*-crl` file that holds no CRL: the TLS configuration fails to build. Point the flag at a file with at least one `X509 CRL` block, or drop the flag.
 - A CRL that cannot be validated: one signed with an insecure or unsupported algorithm, or one whose signature does not verify against the CA certificate its authority key identifier names. The TLS configuration fails to build when that CA is in the CA file, and a connection whose peer presents that CA is rejected. Re-issue the CRL, or drop it from the file.
 - A delta CRL or an indirect CRL in a `*-crl` file, or a CRL that carries a critical extension other than the issuing distribution point, on the list or on an entry: the TLS configuration fails to build. Provide full, direct CRLs whose critical extensions are limited to that one.

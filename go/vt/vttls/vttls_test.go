@@ -471,6 +471,11 @@ func TestServerConfigCRL(t *testing.T) {
 		return clientConfig
 	}
 
+	t.Run("a CRL without a CA is refused, since no client certificate would be requested", func(t *testing.T) {
+		_, err := ServerConfig(certs.ServerCert, certs.ServerKey, "", certs.ClientCRL, certs.ServerCA, tls.VersionTLS12)
+		require.ErrorContains(t, err, "a CRL is configured without a CA")
+	})
+
 	t.Run("a revoked client certificate is rejected", func(t *testing.T) {
 		res := handshake(t, newServerConfig(t, certs.ClientCRL), newClientConfig(t, certs.RevokedClientCert, certs.RevokedClientKey))
 		require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+certs.RevokedClientName)

@@ -232,6 +232,11 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 	}
 
 	if crl != "" {
+		if ca == "" {
+			// Without a CA no client certificate is requested, so
+			// there would be nothing to check the CRL against.
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "a CRL is configured without a CA: no client certificate is requested without one, so the CRL could not apply")
+		}
 		checker, err := newCRLChecker(crl, ca)
 		if err != nil {
 			return nil, err
