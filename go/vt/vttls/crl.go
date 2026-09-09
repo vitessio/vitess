@@ -97,10 +97,12 @@ type (
 		// issuer need not be available.
 		chains   [][]*x509.Certificate
 		verified bool
-		// bySubject indexes the certificates of the connection that
-		// may be an issuer by subject, as rendered by nameKey: the
-		// ones from the chains being checked, then the presented
-		// ones. The configured issuers are indexed by the checker.
+		// trusted indexes, by subject as rendered by nameKey, the
+		// certificates of the verified chains, which verification
+		// vouches for, and bySubject the other certificates the
+		// peer presented, which it alone vouches for. The configured
+		// issuers are indexed by the checker.
+		trusted   map[string][]*x509.Certificate
 		bySubject map[string][]*x509.Certificate
 		indexed   map[string]struct{}
 		// names memoizes nameKey by DER encoded name.
@@ -512,6 +514,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		presented:    presented,
 		chains:       verifiedChains,
 		verified:     true,
+		trusted:      map[string][]*x509.Certificate{},
 		bySubject:    map[string][]*x509.Certificate{},
 		indexed:      map[string]struct{}{},
 		names:        map[string]string{},
@@ -521,9 +524,11 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		check.chains = [][]*x509.Certificate{presented}
 		check.verified = false
 	}
-	for _, chain := range check.chains {
-		for _, cert := range chain {
-			check.index(cert)
+	if check.verified {
+		for _, chain := range check.chains {
+			for _, cert := range chain {
+				check.index(cert, check.trusted)
+			}
 		}
 	}
 	// The certificates presented beyond the chains being checked are
@@ -532,7 +537,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 	// a verified chain ends at. Serving as a candidate costs nothing
 	// unless a checked certificate carries the candidate's name.
 	for _, cert := range presented {
-		check.index(cert)
+		check.index(cert, check.bySubject)
 	}
 	return check
 }
@@ -587,12 +592,12 @@ func (ck *crlCheck) run() error {
 	return nil
 }
 
-// index records cert as a possible issuer of the certificates that
-// carry its subject as their issuer, once per distinct certificate
-// and leaving out the configured issuers, which the checker indexed,
-// keeping the order in which it was indexed: the certificates of the
-// chains being checked come first, then the presented ones.
-func (ck *crlCheck) index(cert *x509.Certificate) {
+// index records cert in the given index as a possible issuer of the
+// certificates that carry its subject as their issuer, once per
+// distinct certificate across the indexes and leaving out the
+// configured issuers, which the checker indexed, keeping the order in
+// which it was indexed.
+func (ck *crlCheck) index(cert *x509.Certificate, into map[string][]*x509.Certificate) {
 	if _, configured := ck.checker.configuredBindings[string(cert.Raw)]; configured {
 		return
 	}
@@ -601,7 +606,7 @@ func (ck *crlCheck) index(cert *x509.Certificate) {
 	}
 	ck.indexed[string(cert.Raw)] = struct{}{}
 	subject := ck.nameOf(cert.RawSubject)
-	ck.bySubject[subject] = append(ck.bySubject[subject], cert)
+	into[subject] = append(into[subject], cert)
 }
 
 // nameOf renders a DER encoded name with nameKey, once per name for
@@ -617,15 +622,23 @@ func (ck *crlCheck) nameOf(rawName []byte) string {
 
 // crlsFor looks for a certificate that issued cert among the
 // candidates that carry its issuer's name, and for the CRLs that such
-// a certificate validates. The candidates are tried in order, the
-// configured ones first, and the search stops at the first issuer
-// that validates a CRL: every certificate that issued cert holds the
-// same key, so the ones after it validate no other CRL. It carries
-// on past an issuer that validates none, since that may be a forged
-// one, and reports whether one of them left a CRL of its key's
-// unvalidated. It returns an error, and not merely no issuer, when
-// the connection's signature checks run out, so that a padded chain
-// fails the check instead of hiding a certificate from it.
+// a certificate validates. The candidates that the operator or
+// verification vouches for, the configured issuers and the
+// certificates of the verified chains, are tried first, and the
+// search stops at the first issuer that validates a CRL: every
+// certificate that issued cert holds the same key, so the ones after
+// it validate no other CRL. When one of those leaves a CRL of its
+// key's unvalidated, for want of the CRL signing key usage, that
+// verdict is final: the certificates the peer alone vouches for are
+// only tried when none of the others issued cert or failed it, so
+// that a wrapper the peer presents, carrying the issuer's key along
+// with the key usage the issuer lacks, cannot lift the verdict. Among
+// the peer's own certificates, the search carries on past an issuer
+// that validates none, since that may be a forged one, and reports
+// whether one of them left a CRL of its key's unvalidated. It returns
+// an error, and not merely no issuer, when the connection's signature
+// checks run out, so that a padded chain fails the check instead of
+// hiding a certificate from it.
 func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 	var lookup crlLookup
 	issuerName := ck.nameOf(cert.RawIssuer)
@@ -635,23 +648,29 @@ func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 		// a certificate whose issuer has no CRL.
 		return lookup, nil
 	}
-	for _, candidate := range slices.Concat(ck.checker.configuredBySubject[issuerName], ck.bySubject[issuerName]) {
-		issued, err := ck.issuedBy(cert, candidate)
-		if err != nil {
-			return crlLookup{}, err
+	vouchedFor := slices.Concat(ck.checker.configuredBySubject[issuerName], ck.trusted[issuerName])
+	for _, candidates := range [][]*x509.Certificate{vouchedFor, ck.bySubject[issuerName]} {
+		if lookup.orphaned {
+			return lookup, nil
 		}
-		if !issued {
-			continue
+		for _, candidate := range candidates {
+			issued, err := ck.issuedBy(cert, candidate)
+			if err != nil {
+				return crlLookup{}, err
+			}
+			if !issued {
+				continue
+			}
+			lookup.issued = true
+			binding, err := ck.crlsSignedBy(candidate)
+			if err != nil {
+				return crlLookup{}, err
+			}
+			if len(binding.crls) > 0 {
+				return crlLookup{issued: true, crls: binding.crls}, nil
+			}
+			lookup.orphaned = lookup.orphaned || binding.orphaned
 		}
-		lookup.issued = true
-		binding, err := ck.crlsSignedBy(candidate)
-		if err != nil {
-			return crlLookup{}, err
-		}
-		if len(binding.crls) > 0 {
-			return crlLookup{issued: true, crls: binding.crls}, nil
-		}
-		lookup.orphaned = lookup.orphaned || binding.orphaned
 	}
 	return lookup, nil
 }

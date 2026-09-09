@@ -400,6 +400,14 @@ func TestClientConfigCRL(t *testing.T) {
 // of the forger's own.
 func forgedIssuer(t *testing.T, issuer *x509.Certificate) *x509.Certificate {
 	t.Helper()
+	return forgedIssuerWithKeyUsage(t, issuer, x509.KeyUsageCertSign)
+}
+
+// forgedIssuerWithKeyUsage returns a CA certificate that carries
+// issuer's subject and public key with the given key usage, signed by
+// a key of the forger's own.
+func forgedIssuerWithKeyUsage(t *testing.T, issuer *x509.Certificate, keyUsage x509.KeyUsage) *x509.Certificate {
+	t.Helper()
 	forgerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	forger := &x509.Certificate{
@@ -424,7 +432,7 @@ func forgedIssuer(t *testing.T, issuer *x509.Certificate) *x509.Certificate {
 		NotAfter:              time.Now().Add(time.Hour),
 		IsCA:                  true,
 		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageCertSign,
+		KeyUsage:              keyUsage,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, forgerCert, issuer.PublicKey, forgerKey)
 	require.NoError(t, err)
@@ -1046,6 +1054,70 @@ func TestCRLCheckerNewestCompleteCRL(t *testing.T) {
 		require.NoError(t, err)
 		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
+	})
+}
+
+// TestCRLCheckerWrapperCannotOverrideConfiguredIssuer checks that when
+// the configured issuer certificate is not allowed to sign CRLs while
+// its key signed the configured CRL, which fails closed, a peer cannot
+// lift that by presenting a wrapper certificate that carries the
+// issuer's key and subject along with the CRL signing key usage.
+func TestCRLCheckerWrapperCannotOverrideConfiguredIssuer(t *testing.T) {
+	// The CA may sign certificates but not CRLs; a copy of it that
+	// may is what signs the CRL, with the same key.
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	caTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "No CRL Signing CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+	ca, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	caFile := path.Join(dir, "ca-cert.pem")
+	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw}), 0o600))
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "leaf.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, ca, &leafKey.PublicKey, caKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	require.NoError(t, err)
+
+	crlSigner := *ca
+	crlSigner.KeyUsage |= x509.KeyUsageCRLSign
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:     big.NewInt(1),
+		ThisUpdate: time.Now().Add(-time.Hour),
+		NextUpdate: time.Now().Add(time.Hour),
+	}, &crlSigner, caKey)
+	require.NoError(t, err)
+	checker, err := newCRLChecker(crlFile(t, crlDER), caFile)
+	require.NoError(t, err)
+
+	orphaned := "none of the certificates found for that issuer may sign CRLs"
+	t.Run("the configured issuer fails closed on its own", func(t *testing.T) {
+		err := checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
+		require.ErrorContains(t, err, orphaned)
+	})
+
+	t.Run("a presented wrapper allowed to sign CRLs does not lift it", func(t *testing.T) {
+		wrapper := forgedIssuerWithKeyUsage(t, ca, x509.KeyUsageCertSign|x509.KeyUsageCRLSign)
+		err := checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, wrapper}})
+		require.ErrorContains(t, err, orphaned)
 	})
 }
 
