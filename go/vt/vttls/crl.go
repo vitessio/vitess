@@ -241,6 +241,11 @@ var expiredCRLWarnings sync.Map
 
 const expiredCRLWarningInterval = time.Minute
 
+// crlClockSkew is how far in the future a CRL's thisUpdate may lie
+// and still count as current, to allow for the clocks of the CA and
+// of this host to disagree a little.
+const crlClockSkew = 5 * time.Minute
+
 var (
 	// oidDeltaCRLIndicator is the id of the extension that marks a
 	// delta CRL, RFC 5280 section 5.2.4.
@@ -252,7 +257,8 @@ var (
 
 // unsupportedCRL reports why crl cannot be evaluated the way the
 // checker evaluates every CRL, on its own and against the public key
-// certificates its issuer signed: a delta CRL's entries only make
+// certificates its issuer signed: a CRL issued in the future is not
+// current, a delta CRL's entries only make
 // sense together with the base CRL they amend, an indirect CRL's
 // entries may belong to other issuers than the CRL's, a CRL scoped to
 // attribute certificates covers no certificate the checker sees, and
@@ -260,6 +266,11 @@ var (
 // meaning the checker does not handle, which RFC 5280 says must not
 // be ignored.
 func unsupportedCRL(crl *x509.RevocationList) error {
+	if crl.ThisUpdate.After(time.Now().Add(crlClockSkew)) {
+		// A CRL staged ahead of time must not supersede the current
+		// one, nor be applied before its time.
+		return fmt.Errorf("the CRL from issuer %s is not valid yet: it was issued at %s", crl.Issuer.CommonName, crl.ThisUpdate.UTC().Format(time.RFC3339))
+	}
 	for _, extension := range crl.Extensions {
 		switch {
 		case extension.Id.Equal(oidDeltaCRLIndicator):

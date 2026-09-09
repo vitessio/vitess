@@ -1210,6 +1210,27 @@ func TestNewCRLCheckerUndecodableName(t *testing.T) {
 	require.ErrorContains(t, err, "T.61 string with characters beyond ASCII")
 }
 
+// TestNewCRLCheckerFutureCRL checks that a CRL whose thisUpdate lies
+// in the future, beyond what clock skew accounts for, is refused, so
+// that a CRL staged ahead of time cannot supersede the current one.
+func TestNewCRLCheckerFutureCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	crlIssuedAt := func(issued time.Time) string {
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{Number: big.NewInt(1), ThisUpdate: issued, NextUpdate: issued.Add(24 * time.Hour)}, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		return crlFile(t, der)
+	}
+
+	_, err = newCRLChecker(crlIssuedAt(time.Now().Add(time.Hour)), certs.ServerCA)
+	require.ErrorContains(t, err, "is not valid yet")
+
+	_, err = newCRLChecker(crlIssuedAt(time.Now().Add(time.Minute)), certs.ServerCA)
+	require.NoError(t, err, "a CRL issued within the clock skew allowance is accepted")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
