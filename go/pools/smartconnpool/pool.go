@@ -57,6 +57,8 @@ type Metrics struct {
 	idleClosed           atomic.Int64
 	diffSetting          atomic.Int64
 	resetSetting         atomic.Int64
+	resetSession         atomic.Int64
+	resetSessionFailed   atomic.Int64
 	waiterCapRejected    atomic.Int64
 }
 
@@ -90,6 +92,26 @@ func (m *Metrics) DiffSettingCount() int64 {
 
 func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
+}
+
+// ResetSessionCount is the number of connections whose server-side session
+// was reset before returning to the pool.
+func (m *Metrics) ResetSessionCount() int64 {
+	return m.resetSession.Load()
+}
+
+// ResetSessionFailedCount is the number of session resets that failed, each
+// costing the pool the connection.
+func (m *Metrics) ResetSessionFailedCount() int64 {
+	return m.resetSessionFailed.Load()
+}
+
+// RecordResetSession counts a session reset and its outcome.
+func (m *Metrics) RecordResetSession(err error) {
+	m.resetSession.Add(1)
+	if err != nil {
+		m.resetSessionFailed.Add(1)
+	}
 }
 
 func (m *Metrics) WaiterCapRejected() int64 {
@@ -1060,5 +1082,11 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	})
 	stats.NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", func() int64 {
 		return pool.Metrics.ResetSettingCount()
+	})
+	stats.NewCounterFunc(name+"ResetSession", "Number of times a connection's session was reset before returning to the pool", func() int64 {
+		return pool.Metrics.ResetSessionCount()
+	})
+	stats.NewCounterFunc(name+"ResetSessionFailed", "Number of session resets that failed, costing the connection", func() int64 {
+		return pool.Metrics.ResetSessionFailedCount()
 	})
 }
