@@ -1408,6 +1408,9 @@ func TestNameKey(t *testing.T) {
 		{"UniversalString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, 28, utf32BigEndian("Jos\u00e9"))))},
 		{"BMPString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagBMPString, utf16BigEndian("Jos\u00e9"))))},
 		{"T61String and UTF8String, within ASCII", name(rdn(utf8Attribute(commonName, "Example CA"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Example CA"))))},
+		{"a character mapped to nothing", name(rdn(utf8Attribute(commonName, "Exam\u00adple CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
+		{"a character mapped to space", name(rdn(utf8Attribute(commonName, "Example\u00a0CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
+		{"a control character mapped to nothing", name(rdn(utf8Attribute(commonName, "Example\u0001 CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
 	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {

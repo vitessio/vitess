@@ -514,10 +514,11 @@ func (c *crlChecker) hasCRLFrom(issuerName string) bool {
 
 // nameKey renders a DER encoded distinguished name for comparison
 // under the X.509 matching rules, by which attribute values compare
-// after Unicode normalization and case folding and without regard to
+// after the character mapping, Unicode normalization, and case
+// folding of the RFC 4518 string preparation, and without regard to
 // leading, trailing, and repeated whitespace, and the attributes of a
-// multi-valued RDN compare as a set; the string preparation of RFC
-// 4518 is approximated, not followed to the letter. Go compares the
+// multi-valued RDN compare as a set; that preparation is approximated
+// closely, not followed to the letter. Go compares the
 // names of certificates byte for byte, but a CRL
 // can come from another tool than the CA certificate and encode,
 // case, space, or order the same name differently, and nothing rides
@@ -537,7 +538,7 @@ func nameKey(rawName []byte) string {
 		for _, attribute := range rdn {
 			value := hex.EncodeToString(attribute.Value.FullBytes)
 			if text, ok := directoryString(attribute.Value); ok {
-				value = strings.Join(strings.Fields(cases.Fold().String(norm.NFKC.String(text))), " ")
+				value = strings.Join(strings.Fields(cases.Fold().String(norm.NFKC.String(strings.Map(mapForMatching, text)))), " ")
 			}
 			oid := attribute.Type.String()
 			attributes = append(attributes, fmt.Sprintf("%d:%s%d:%s", len(oid), oid, len(value), value))
@@ -549,6 +550,26 @@ func nameKey(rawName []byte) string {
 		}
 	}
 	return key.String()
+}
+
+// mapForMatching applies the character mapping of RFC 4518 section
+// 2.2 to r: the characters that carry no meaning for matching, such
+// as control characters and the soft hyphen, map to nothing, and
+// the ones that separate words map to a space, which the whitespace
+// handling then takes care of. It returns -1 for a character mapped
+// to nothing, as strings.Map expects.
+func mapForMatching(r rune) rune {
+	switch {
+	case r <= 0x0008, r >= 0x000e && r <= 0x001f, r >= 0x007f && r <= 0x0084, r >= 0x0086 && r <= 0x009f:
+		return -1 // control characters
+	case r == 0x00ad, r == 0x1806, r == 0x034f, r >= 0x180b && r <= 0x180d, r >= 0xfe00 && r <= 0xfe0f, r == 0xfffc:
+		return -1 // soft hyphen, format and variation selectors
+	case r == 0x200b, r == 0x2060, r == 0xfeff:
+		return -1 // zero-width space, word joiner, byte order mark
+	case r >= 0x0009 && r <= 0x000d, r == 0x0085, r == 0x00a0, r == 0x1680, r >= 0x2000 && r <= 0x200a, r == 0x2028, r == 0x2029, r == 0x202f, r == 0x205f, r == 0x3000:
+		return ' '
+	}
+	return r
 }
 
 // verifyConnection is a tls.Config.VerifyConnection callback. Unlike
