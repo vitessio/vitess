@@ -59,7 +59,7 @@
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
-        - [Certificate revocation lists are enforced in every SSL mode and on resumed TLS sessions](#vttls-crl-every-connection)
+        - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -634,10 +634,6 @@ User-visible consequences:
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
 
-#### <a id="vttls-crl-every-connection"/>Certificate revocation lists are enforced in every SSL mode and on resumed TLS sessions</a>
+#### <a id="vttls-crl-fail-closed"/>Connections whose certificate revocation cannot be checked against a configured CRL are rejected</a>
 
-This is a fix for the following security advisory
-
-- Advisory: <https://github.com/vitessio/vitess/security/advisories/GHSA-fxqj-c35w-x6rq>
-
-A configured certificate revocation list (`--grpc-crl`, `--mysql-server-ssl-crl`, `--tablet-grpc-crl`, `--vtgate-grpc-crl`, and the other `*-crl` flags) was silently ignored by clients using the `preferred`, `required`, and `verify_ca` SSL modes, and by both clients and servers on resumed TLS sessions, so a revoked certificate could keep connecting. The revocation check now runs on every connection, whatever the SSL mode and whether or not the session was resumed. A CRL applies to a peer certificate when it is signed by that certificate's issuer, which is looked for in the configured CA file as well as among the certificates the peer presents. When a CRL is configured, a connection is now also rejected when the peer presents only its own certificate and no certificate for its issuer is available, since its revocation status cannot be established. To keep such connections working, configure the CA file for the connection or have the peer present its certificate chain.
+The certificate revocation lists configured with `--grpc-crl`, `--mysql-server-ssl-crl`, `--tablet-grpc-crl`, `--vtgate-grpc-crl`, and the other `*-crl` flags are now enforced in every SSL mode and on resumed TLS sessions, see [GHSA-fxqj-c35w-x6rq](https://github.com/vitessio/vitess/security/advisories/GHSA-fxqj-c35w-x6rq). Along with that, a connection is now rejected rather than left unchecked when the peer's certificate was issued under the name of a CA that has a CRL configured but no certificate for that CA is available to check it against: for example, a client in `required` mode with a CRL but no CA file, connecting to a server that presents only its own certificate. To keep such connections working, configure the CA file for the connection or have the peer present its certificate chain.
