@@ -723,33 +723,19 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			dbConn.Close()
 			return err
 		}
-		// The procedure must not leak a transaction onto the pooled connection.
-		leakedTx := trailing.IsInTransaction()
-		if leakedTx {
-			dbConn.Close()
-		}
+		// The connection is never reused after a CALL (see execCallProc), so a
+		// transaction the procedure leaked dies with it; the CALL still reports
+		// it, as the client's procedure is at fault.
+		qre.discardPooledConnAfterCall(dbConn)
 		if multipleResultsets {
-			return qre.finishPooledCallProc(dbConn, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure"))
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
-		if leakedTx {
+		if trailing.IsInTransaction() {
 			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
-		return qre.finishPooledCallProc(dbConn, nil)
+		return nil
 	}
 	return err
-}
-
-// finishPooledCallProc resets a still-open pooled connection's session after a
-// streamed CALL (see execCallProc for why) and returns the CALL's own outcome,
-// or the reset's error when the CALL had none.
-func (qre *QueryExecutor) finishPooledCallProc(dbConn *connpool.PooledConn, callErr error) error {
-	if dbConn.Conn.IsClosed() {
-		return callErr
-	}
-	if err := qre.resetPooledSession(dbConn); err != nil && callErr == nil {
-		return err
-	}
-	return callErr
 }
 
 // streamSingleResult delivers a fully-materialized result from a dedicated
@@ -1517,7 +1503,7 @@ func rewriteOUTParamError(err error) error {
 	return err
 }
 
-func (qre *QueryExecutor) execCallProc() (result *sqltypes.Result, err error) {
+func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
@@ -1525,18 +1511,12 @@ func (qre *QueryExecutor) execCallProc() (result *sqltypes.Result, err error) {
 	defer conn.Recycle()
 	// A procedure body can leave session state behind (SET SESSION, a temporary
 	// table) that the tablet's statement classification cannot see, and a pooled
-	// connection is shared with every later borrower: reset the session before
-	// the connection returns to the pool, whatever the CALL's outcome. A
-	// connection that could not be reset is closed instead of recycled. Paths
-	// that already closed the connection have nothing left to reset.
-	defer func() {
-		if conn.Conn.IsClosed() {
-			return
-		}
-		if rerr := qre.resetPooledSession(conn); rerr != nil && err == nil {
-			result, err = nil, rerr
-		}
-	}()
+	// connection is shared with every later borrower: the connection is closed
+	// rather than returned to the pool, whatever the CALL's outcome. Closing is
+	// the one cleanup that restores every piece of a fresh connection's state —
+	// COM_RESET_CONNECTION restores globals, losing the negotiated charset and
+	// anything init_connect applied. The recycle then frees the slot.
+	defer qre.discardPooledConnAfterCall(conn)
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err
@@ -1551,7 +1531,6 @@ func (qre *QueryExecutor) execCallProc() (result *sqltypes.Result, err error) {
 	}
 	if !qr.IsMoreResultsExists() {
 		if qr.IsInTransaction() {
-			conn.Close()
 			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return qr, nil
@@ -1563,17 +1542,15 @@ func (qre *QueryExecutor) execCallProc() (result *sqltypes.Result, err error) {
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 }
 
-// resetPooledSession resets a pooled connection's server-side session after a
-// statement that may have changed it (see execCallProc), recording the outcome
-// on the pool's metrics. The connection is closed on failure.
-func (qre *QueryExecutor) resetPooledSession(conn *connpool.PooledConn) error {
-	err := conn.Conn.ResetSession(qre.ctx)
-	qre.tsv.qe.conns.Metrics.RecordResetSession(err)
-	if err != nil {
-		log.Warn("closing pooled connection: its session could not be reset after a CALL",
-			slog.Any("error", err), slog.Int64("connID", conn.Conn.ID()))
+// discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
+// execCallProc) so it is not reused, counting the discard. A connection an
+// earlier error path already closed needs nothing.
+func (qre *QueryExecutor) discardPooledConnAfterCall(conn *connpool.PooledConn) {
+	if conn.Conn.IsClosed() {
+		return
 	}
-	return err
+	conn.Close()
+	qre.tsv.qe.conns.Metrics.RecordDiscardedAfterCall()
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {

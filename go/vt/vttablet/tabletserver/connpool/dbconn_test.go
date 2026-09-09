@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -31,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -633,63 +631,6 @@ func TestDBConnReApplySetting(t *testing.T) {
 	require.NotEqual(t, oldConnID, dbConn.conn.ID())
 
 	db.VerifyAllExecutedOrFail()
-}
-
-// TestDBConnResetSession covers the post-CALL session reset: the connection is
-// reset with COM_RESET_CONNECTION, its sql_mode neutralization is re-applied
-// (the reset restored the server's global sql_mode), and a tracked Setting is
-// re-applied after that so the settings pool keeps serving the state it
-// classifies the connection by. A failed reset leaves the connection closed.
-func TestDBConnResetSession(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	connPool := newPool()
-	params := dbconfigs.New(db.ConnParams())
-	connPool.Open(params, params, params)
-	defer connPool.Close()
-	ctx := t.Context()
-
-	t.Run("resets and re-neutralizes", func(t *testing.T) {
-		dbConn, err := newPooledConn(ctx, connPool, params)
-		require.NoError(t, err)
-		defer dbConn.Close()
-		neutralizations := db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery)
-		db.ResetQueryLog()
-
-		require.NoError(t, dbConn.ResetSession(ctx))
-		require.Equal(t, fakesqldb.ResetConnectionLogEntry, db.QueryLog(), "the reset must be the only logged statement")
-		require.Equal(t, neutralizations+1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery),
-			"the connect-time sql_mode neutralization must be re-applied after the reset")
-		require.False(t, dbConn.IsClosed())
-	})
-
-	t.Run("re-applies a tracked setting after the reset", func(t *testing.T) {
-		dbConn, err := newPooledConn(ctx, connPool, params)
-		require.NoError(t, err)
-		defer dbConn.Close()
-		setQ := "set @@sql_mode='ANSI_QUOTES'"
-		db.AddQuery(setQ, &sqltypes.Result{})
-		setting := smartconnpool.NewSetting(setQ, "set @@sql_mode = default")
-		require.NoError(t, dbConn.ApplySetting(ctx, setting))
-		db.ResetQueryLog()
-
-		require.NoError(t, dbConn.ResetSession(ctx))
-		require.Equal(t, fakesqldb.ResetConnectionLogEntry+";"+strings.ToLower(setQ), db.QueryLog(),
-			"the setting must be re-applied after the reset wiped it")
-		require.Same(t, setting, dbConn.Setting(), "the connection must still be classified by its setting")
-	})
-
-	t.Run("a failed reset closes the connection", func(t *testing.T) {
-		dbConn, err := newPooledConn(ctx, connPool, params)
-		require.NoError(t, err)
-		defer dbConn.Close()
-		db.SetFailResetConnection(true)
-		defer db.SetFailResetConnection(false)
-
-		require.Error(t, dbConn.ResetSession(ctx))
-		require.True(t, dbConn.IsClosed(), "a connection whose session could not be reset must not be reusable")
-	})
 }
 
 func TestDBExecOnceKillTimeout(t *testing.T) {

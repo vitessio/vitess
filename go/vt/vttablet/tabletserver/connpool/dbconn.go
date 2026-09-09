@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -704,47 +703,6 @@ func (dbc *Conn) Reconnect(ctx context.Context) error {
 	dbc.errmu.Lock()
 	dbc.err = nil
 	dbc.errmu.Unlock()
-	return nil
-}
-
-// ResetSession returns the connection's server-side session to the state a
-// freshly pooled connection has: COM_RESET_CONNECTION drops the session's
-// temporary tables and session/user variables (everything a statement the
-// tablet could not classify, such as a stored-procedure body, may have left
-// behind), then the connect-time sql_mode neutralization the reset undid is
-// re-applied, and so is a tracked Setting, which the pool still classifies the
-// connection by. On any failure the connection is closed: a session in an
-// unknown state must not reach the next borrower.
-func (dbc *Conn) ResetSession(ctx context.Context) error {
-	if err := dbc.resetSession(ctx); err != nil {
-		dbc.Close()
-		return err
-	}
-	return nil
-}
-
-func (dbc *Conn) resetSession(ctx context.Context) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	// The reset is a single command with no query text; closing the
-	// connection when the context ends fails it right away.
-	stop := context.AfterFunc(ctx, dbc.Close)
-	err := dbc.conn.ResetConnection()
-	if !stop() {
-		return ctx.Err()
-	}
-	if err != nil {
-		return vterrors.Wrap(err, "failed to reset the connection's session")
-	}
-	if _, err := dbc.execOnce(ctx, sqlmode.NeutralizeSessionQuery, 1, false, false); err != nil {
-		return vterrors.Wrap(err, "failed to neutralize the connection's sql_mode after resetting its session")
-	}
-	if dbc.setting != nil {
-		if err := dbc.applySameSetting(ctx); err != nil {
-			return vterrors.Wrap(err, "failed to re-apply the connection's setting after resetting its session")
-		}
-	}
 	return nil
 }
 

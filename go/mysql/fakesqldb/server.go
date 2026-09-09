@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,9 +110,8 @@ type DB struct {
 	queryCalled map[string]int
 	// querylog keeps track of all called queries
 	querylog []string
-	// failResetConnection, when set, makes COM_RESET_CONNECTION fail by closing
-	// the connection (the server always answers a reset with OK otherwise).
-	failResetConnection atomic.Bool
+	// queryConnIDs records, per logged query, the id of the connection it ran on.
+	queryConnIDs map[string][]uint32
 
 	// This next set of fields is used when ordering of the queries matters.
 
@@ -190,6 +190,7 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 		data:                     make(map[string]*ExpectedResult),
 		rejectedData:             make(map[string]error),
 		queryCalled:              make(map[string]int),
+		queryConnIDs:             make(map[string][]uint32),
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
@@ -360,29 +361,6 @@ func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Resu
 	return db.Handler.HandleQuery(c, query, callback)
 }
 
-// ResetConnectionLogEntry is what a COM_RESET_CONNECTION appears as in the query
-// log, so tests can assert its position relative to the queries around it.
-const ResetConnectionLogEntry = "/* com_reset_connection */"
-
-// ComResetConnection is part of the mysql.Handler interface. The fake records the
-// reset in the query log and, if SetFailResetConnection is on, closes the
-// connection so the client sees the reset fail.
-func (db *DB) ComResetConnection(c *mysql.Conn) {
-	db.mu.Lock()
-	db.querylog = append(db.querylog, ResetConnectionLogEntry)
-	db.queryCalled[ResetConnectionLogEntry]++
-	db.mu.Unlock()
-	if db.failResetConnection.Load() {
-		c.Close()
-	}
-}
-
-// SetFailResetConnection makes every following COM_RESET_CONNECTION fail (the
-// fake closes the connection instead of answering).
-func (db *DB) SetFailResetConnection(fail bool) {
-	db.failResetConnection.Store(fail)
-}
-
 func (db *DB) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
 	qries, err := db.Env().Parser().SplitStatementToPieces(sql)
 	if err != nil {
@@ -443,6 +421,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	db.mu.Lock()
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
+	db.queryConnIDs[key] = append(db.queryConnIDs[key], c.ConnectionID)
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose.Load() {
 		defer db.mu.Unlock()
@@ -727,6 +706,24 @@ func (db *DB) GetQueryCalledNum(query string) int {
 	return num
 }
 
+// IsConnectionOpen reports whether the server still holds the connection with
+// the given id.
+func (db *DB) IsConnectionOpen(id uint32) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	_, ok := db.connections[id]
+	return ok
+}
+
+// QueryConnIDs returns the ids of the connections the given query ran on, one
+// per execution in order, so a test can tell whether two queries shared a
+// connection.
+func (db *DB) QueryConnIDs(query string) []uint32 {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return slices.Clone(db.queryConnIDs[strings.ToLower(query)])
+}
+
 // QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
 	db.mu.Lock()
@@ -739,6 +736,7 @@ func (db *DB) ResetQueryLog() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.querylog = nil
+	db.queryConnIDs = make(map[string][]uint32)
 }
 
 // EnableConnFail makes connection to this fake DB fail.

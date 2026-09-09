@@ -162,6 +162,7 @@ BEGIN
 	CREATE TEMPORARY TABLE leaked (id int);
 	SET SESSION transaction_isolation = 'READ-UNCOMMITTED';
 	SET SESSION time_zone = '+05:30';
+	SET NAMES latin1;
 END`,
 	}
 )
@@ -336,10 +337,12 @@ func TestDDLUnsharded(t *testing.T) {
 
 // TestCallProcedureSessionResidue pins the fix for vitessio/vitess#21046: session
 // state a procedure body leaves behind — a temporary table, SET SESSION
-// variables — must not survive on the pooled connection the CALL ran on and be
-// served to the next borrower. Reads are repeated on a fresh vtgate connection
-// each time so they land on recycled pool connections; before the fix the very
-// first read after the CALL observed READ-UNCOMMITTED and the leaked table.
+// variables, SET NAMES — must not survive on the pooled connection the CALL ran
+// on and be served to the next borrower. Reads are repeated so they land on
+// recycled pool connections; before the fix the very first read after the CALL
+// observed READ-UNCOMMITTED and the leaked table. The charset probe also pins
+// that the cleanup restores the negotiated connection charset (utf8mb4), which
+// a COM_RESET_CONNECTION would not: it restores the server globals.
 func TestCallProcedureSessionResidue(t *testing.T) {
 	ctx := t.Context()
 	vtParams := mysql.ConnParams{
@@ -347,7 +350,7 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		Port:   clusterInstance.VtgateMySQLPort,
 		DbName: "@primary",
 	}
-	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*) from information_schema.innodb_temp_table_info"
+	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*), @@session.character_set_client, hex('é') from information_schema.innodb_temp_table_info"
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -356,6 +359,8 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 	require.Len(t, baseline.Rows, 1)
 	require.NotEqual(t, "READ-UNCOMMITTED", baseline.Rows[0][0].ToString())
 	require.Equal(t, "0", baseline.Rows[0][2].ToString(), "no temp tables before the test")
+	require.Equal(t, "utf8mb4", baseline.Rows[0][3].ToString(), "the pooled connections negotiate utf8mb4")
+	require.Equal(t, "C3A9", baseline.Rows[0][4].ToString(), "a UTF-8 literal round-trips under the negotiated charset")
 
 	assertClean := func(t *testing.T, what string) {
 		t.Helper()
@@ -376,7 +381,7 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		utils.Exec(t, conn, "set workload = oltp")
 		assertClean(t, "streaming CALL")
 	})
-	t.Run("the default database survives the reset", func(t *testing.T) {
+	t.Run("the default database is unchanged afterwards", func(t *testing.T) {
 		before := utils.Exec(t, conn, "select database()")
 		utils.Exec(t, conn, "CALL dirty_session()")
 		for range 5 {
