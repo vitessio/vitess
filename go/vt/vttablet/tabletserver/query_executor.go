@@ -919,21 +919,16 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
-	// Fail closed for statements whose table set the planner cannot
-	// determine. DO, CALL, REPAIR, OPTIMIZE and LOAD DATA are forwarded to
-	// MySQL as opaque text and can still read or modify tables (a
-	// table-reading subquery inside DO, a stored procedure body, the tables
-	// named by REPAIR/OPTIMIZE and the target table of LOAD DATA, all of which
-	// the parser discards), but BuildPermissions derives no permissions for
-	// them, so the per-table loop below has nothing to iterate and would let
-	// any authenticated caller run them under strict table ACL. LOAD DATA is
-	// the write side of that gap: the stock init_db.sql grants vt_app the FILE
-	// privilege, so a server-side INFILE into a denied table would succeed.
-	// When we cannot enumerate a statement's tables, deny it rather than skip
-	// the check; the exempt ACL applied above stays as the escape hatch for
-	// operators who need these statements.
-	switch qre.plan.PlanID {
-	case p.PlanOtherAdmin, p.PlanCallProc, p.PlanLoad:
+	// Fail closed for a statement whose table set the planner could not
+	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA). It is forwarded to
+	// MySQL as opaque text and can still read or modify tables, but no
+	// permission could be derived for it, so the per-table loop below has
+	// nothing to iterate and would let any authenticated caller run it under
+	// strict table ACL. The planner flags such statements in the one switch
+	// that must account for every statement type (BuildPermissions), so this
+	// needs no list of its own. The exempt ACL applied above stays as the
+	// escape hatch for operators who need these statements.
+	if qre.plan.TablesUndetermined {
 		return qre.checkUndeterminedTableAccess(callerID)
 	}
 
