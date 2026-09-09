@@ -302,6 +302,7 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 // newCRLCheckerFrom builds the checker of the given CRLs and configured
 // issuers, indexing the CRLs and binding them to the issuers once.
 func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate) (*crlChecker, error) {
+	crls = newestCompleteCRLs(crls)
 	checker := &crlChecker{
 		crls:                crls,
 		issuers:             issuers,
@@ -337,6 +338,51 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		checker.configuredBySubject[subject] = append(checker.configuredBySubject[subject], issuer)
 	}
 	return checker, nil
+}
+
+// newestCompleteCRLs keeps, of several complete CRLs from one issuer
+// for one scope, the newest alone: a complete CRL supersedes the ones
+// issued before it, and an entry of an older one that the newest
+// dropped, such as a certificate taken off hold, is a revocation no
+// more. The CRLs keep their order otherwise.
+func newestCompleteCRLs(crls []*x509.RevocationList) []*x509.RevocationList {
+	newest := make(map[string]*x509.RevocationList, len(crls))
+	scope := func(crl *x509.RevocationList) string {
+		return nameKey(crl.RawIssuer) + "|" + crlScope(crl)
+	}
+	for _, crl := range crls {
+		if current, found := newest[scope(crl)]; !found || newerCRL(crl, current) {
+			newest[scope(crl)] = crl
+		}
+	}
+	kept := make([]*x509.RevocationList, 0, len(newest))
+	for _, crl := range crls {
+		if newest[scope(crl)] == crl {
+			kept = append(kept, crl)
+		}
+	}
+	return kept
+}
+
+// crlScope renders the issuing distribution point of crl, which tells
+// the partitioned CRLs of one issuer apart, or nothing for a CRL that
+// has none.
+func crlScope(crl *x509.RevocationList) string {
+	for _, extension := range crl.Extensions {
+		if extension.Id.Equal(oidIssuingDistributionPoint) {
+			return hex.EncodeToString(extension.Value)
+		}
+	}
+	return ""
+}
+
+// newerCRL reports whether a is a newer CRL than b: by number when
+// both carry one and they differ, by issue time otherwise.
+func newerCRL(a, b *x509.RevocationList) bool {
+	if a.Number != nil && b.Number != nil && a.Number.Cmp(b.Number) != 0 {
+		return a.Number.Cmp(b.Number) > 0
+	}
+	return a.ThisUpdate.After(b.ThisUpdate)
 }
 
 // bindCRLs works out what issuer makes of the CRLs that carry its

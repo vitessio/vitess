@@ -759,11 +759,9 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 	})
 
 	// manyCRLs holds as many CRLs from the leaf's issuer as the
-	// budget allows.
-	crl, err := os.ReadFile(certs.ServerCRL)
-	require.NoError(t, err)
-	manyCRLs := path.Join(t.TempDir(), "many-crl.pem")
-	require.NoError(t, os.WriteFile(manyCRLs, bytes.Repeat(crl, maxSignatureChecks), 0o600))
+	// budget allows, each for a distribution point of its own, as
+	// partitioned CRLs are.
+	manyCRLs := partitionedCRLs(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", maxSignatureChecks)
 
 	t.Run("the CRLs of a configured issuer cost no signature checks per connection", func(t *testing.T) {
 		// They are validated once, when the checker is built, so
@@ -996,6 +994,59 @@ func TestNewCRLCheckerIndirectCRL(t *testing.T) {
 
 	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
 	require.ErrorContains(t, err, "indirect CRLs are not supported")
+}
+
+// TestCRLCheckerNewestCompleteCRL checks that of several complete CRLs
+// from one issuer, the newest one alone applies: a certificate that an
+// older one lists and the newest one dropped, as one taken off hold,
+// is not revoked, while one the newest lists is.
+func TestCRLCheckerNewestCompleteCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	leaf := loadOneCert(t, certs.ServerCert)
+	completeCRL := func(number int64, issued time.Time, serials ...*big.Int) []byte {
+		template := &x509.RevocationList{Number: big.NewInt(number), ThisUpdate: issued, NextUpdate: issued.Add(24 * time.Hour)}
+		for _, serial := range serials {
+			template.RevokedCertificateEntries = append(template.RevokedCertificateEntries, x509.RevocationListEntry{SerialNumber: serial, RevocationTime: issued})
+		}
+		der, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		return der
+	}
+	crlsFile := func(crls ...[]byte) string {
+		var content []byte
+		for _, der := range crls {
+			content = append(content, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der})...)
+		}
+		file := path.Join(t.TempDir(), "crls.pem")
+		require.NoError(t, os.WriteFile(file, content, 0o600))
+		return file
+	}
+	older := time.Now().Add(-2 * time.Hour)
+	newer := time.Now().Add(-time.Hour)
+	holdThenReleased := []struct {
+		name string
+		file string
+	}{
+		{"older first", crlsFile(completeCRL(1, older, leaf.SerialNumber), completeCRL(2, newer))},
+		{"newer first", crlsFile(completeCRL(2, newer), completeCRL(1, older, leaf.SerialNumber))},
+	}
+	for _, tc := range holdThenReleased {
+		t.Run("a certificate the newest CRL dropped is not revoked, "+tc.name, func(t *testing.T) {
+			checker, err := newCRLChecker(tc.file, certs.ServerCA)
+			require.NoError(t, err)
+			require.NoError(t, checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}))
+		})
+	}
+
+	t.Run("a certificate the newest CRL lists is revoked", func(t *testing.T) {
+		checker, err := newCRLChecker(crlsFile(completeCRL(1, older), completeCRL(2, newer, leaf.SerialNumber)), certs.ServerCA)
+		require.NoError(t, err)
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
+	})
 }
 
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
@@ -1298,4 +1349,34 @@ func utf16BigEndian(text string) []byte {
 		encoded = append(encoded, byte(unit>>8), byte(unit))
 	}
 	return encoded
+}
+
+// partitionedCRLs writes a file holding n complete CRLs from the given
+// CA, each scoped to a distribution point of its own by its issuing
+// distribution point extension, and returns its path.
+func partitionedCRLs(t *testing.T, caCert, caKey string, n int) string {
+	t.Helper()
+	ca := loadOneCert(t, caCert)
+	keyPair, err := tls.LoadX509KeyPair(caCert, caKey)
+	require.NoError(t, err)
+	var content []byte
+	for i := range n {
+		uri, err := asn1.Marshal(asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 6, Bytes: fmt.Appendf(nil, "http://crl.example.com/%d", i)})
+		require.NoError(t, err)
+		fullName, err := asn1.Marshal(asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: uri})
+		require.NoError(t, err)
+		distributionPoint, err := asn1.Marshal(struct{ DistributionPoint asn1.RawValue }{asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: fullName}})
+		require.NoError(t, err)
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:          big.NewInt(int64(i + 1)),
+			ThisUpdate:      time.Now().Add(-time.Hour),
+			NextUpdate:      time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: distributionPoint}},
+		}, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		content = append(content, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der})...)
+	}
+	file := path.Join(t.TempDir(), "partitioned-crls.pem")
+	require.NoError(t, os.WriteFile(file, content, 0o600))
+	return file
 }
