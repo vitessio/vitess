@@ -537,19 +537,19 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
 	})
 
-	t.Run("self-signed padding counts against the signature checks", func(t *testing.T) {
-		// The padding does not carry the issuer's name, so the leaf
-		// resolves at once through the configured issuer; the
-		// self-signed certificates then spend the remaining checks.
+	t.Run("self-signed padding that no CRL applies to costs nothing", func(t *testing.T) {
+		// The padding carries names that no CRL comes from, so it
+		// is not worth a signature check, and the check spends the
+		// same on the chain with and without it.
 		checker, err := newCRLChecker(certs.ServerCRL, certs.ServerCA)
 		require.NoError(t, err)
 		valid := loadOneCert(t, certs.ServerCert)
-		selfSignedPadded := append([]*x509.Certificate{valid}, selfSignedCACerts(t, nil, 200)...)
-
-		start := time.Now()
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: selfSignedPadded})
-		t.Logf("checked a %d certificate chain in %s", len(selfSignedPadded), time.Since(start))
-		require.ErrorContains(t, err, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxSignatureChecks))
+		alone := checker.newCheck([]*x509.Certificate{valid}, nil)
+		require.NoError(t, alone.run())
+		selfSignedPadded := checker.newCheck(append([]*x509.Certificate{valid}, selfSignedCACerts(t, nil, 200)...), nil)
+		require.NoError(t, selfSignedPadded.run())
+		require.Equal(t, alone.signatureChecks, selfSignedPadded.signatureChecks)
+		require.Positive(t, alone.signatureChecks)
 	})
 
 	t.Run("the CRL signature checks count against the signature checks", func(t *testing.T) {
