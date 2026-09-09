@@ -95,11 +95,14 @@ func handshake(t *testing.T, serverConfig, clientConfig *tls.Config) handshakeRe
 		conn.Close()
 	}
 	res.clientErr = err
-	select {
-	case res.serverErr = <-serverErr:
-	case <-time.After(timeout):
-		require.FailNow(t, "the server side did not finish the handshake in time")
-	}
+	require.Eventually(t, func() bool {
+		select {
+		case res.serverErr = <-serverErr:
+			return true
+		default:
+			return false
+		}
+	}, timeout, 10*time.Millisecond, "the server side did not finish the handshake in time")
 	return res
 }
 
