@@ -267,6 +267,14 @@ func TestClientConfigCRL(t *testing.T) {
 		return serverConfig
 	}
 
+	t.Run("a decoy issuer that carries the issuer's name but not its key is not the issuer", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, revokedServerPresenting(revokedLeaf, selfSignedCACerts(t, revokedLeaf.RawIssuer, 1)[0]), clientConfig)
+		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName+": no certificate is available for its issuer")
+	})
+
 	t.Run("a forged issuer that validates no CRL fails the check when it is the only one", func(t *testing.T) {
 		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
 		require.NoError(t, err)
