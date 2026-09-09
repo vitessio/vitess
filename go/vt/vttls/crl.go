@@ -17,6 +17,8 @@ limitations under the License.
 package vttls
 
 import (
+	"bytes"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -26,7 +28,17 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-type verifyPeerCertificateFunc func([][]byte, [][]*x509.Certificate) error
+// crlChecker rejects a connection whose peer presents a certificate
+// listed in one of the configured Certificate Revocation Lists.
+type crlChecker struct {
+	crls []*x509.RevocationList
+	// issuers are the CA certificates configured for the connection.
+	// A CRL only applies to a certificate when the CRL's signature
+	// verifies from that certificate's issuer, and a peer commonly
+	// presents its leaf certificate alone, so the issuer is looked
+	// for here as well as among the certificates the peer sent.
+	issuers []*x509.Certificate
+}
 
 func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
@@ -41,28 +53,52 @@ func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	return false
 }
 
-func verifyPeerCertificateAgainstCRL(crl string) (verifyPeerCertificateFunc, error) {
-	crlSet, err := loadCRLSet(crl)
+// newCRLChecker loads the CRLs in crl and, when ca is set, the CA
+// certificates that the CRLs may be signed by.
+func newCRLChecker(crl, ca string) (*crlChecker, error) {
+	crls, err := loadCRLSet(crl)
 	if err != nil {
 		return nil, err
 	}
+	checker := &crlChecker{crls: crls}
+	if ca != "" {
+		checker.issuers, err = loadx509Certificates(ca)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return checker, nil
+}
 
-	return func(_ [][]byte, verifiedChains [][]*x509.Certificate) error {
-		for _, chain := range verifiedChains {
-			for i := 0; i < len(chain)-1; i++ {
-				cert := chain[i]
-				issuerCert := chain[i+1]
-				for _, crl := range crlSet {
-					if crl.CheckSignatureFrom(issuerCert) == nil {
-						if certIsRevoked(cert, crl) {
-							return fmt.Errorf("Certificate revoked: CommonName=%v", cert.Subject.CommonName)
-						}
-					}
+// verifyConnection is a tls.Config.VerifyConnection callback. Unlike
+// VerifyPeerCertificate, Go runs it on every connection: it is not
+// skipped on resumed sessions, and it sees the peer's certificates
+// even when InsecureSkipVerify disables Go's own chain verification,
+// which is the case for every client mode short of verify_identity.
+func (c *crlChecker) verifyConnection(cs tls.ConnectionState) error {
+	candidates := make([]*x509.Certificate, 0, len(c.issuers)+len(cs.PeerCertificates))
+	candidates = append(candidates, c.issuers...)
+	candidates = append(candidates, cs.PeerCertificates...)
+	for _, chain := range cs.VerifiedChains {
+		candidates = append(candidates, chain...)
+	}
+
+	for _, cert := range cs.PeerCertificates {
+		for _, issuer := range candidates {
+			if !bytes.Equal(cert.RawIssuer, issuer.RawSubject) || cert.CheckSignatureFrom(issuer) != nil {
+				continue
+			}
+			for _, crl := range c.crls {
+				if crl.CheckSignatureFrom(issuer) != nil {
+					continue
+				}
+				if certIsRevoked(cert, crl) {
+					return fmt.Errorf("Certificate revoked: CommonName=%v", cert.Subject.CommonName)
 				}
 			}
 		}
-		return nil
-	}, nil
+	}
+	return nil
 }
 
 func loadCRLSet(crl string) ([]*x509.RevocationList, error) {

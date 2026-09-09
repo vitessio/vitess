@@ -19,6 +19,7 @@ package vttls
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"strings"
 	"sync"
@@ -166,11 +167,11 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	}
 
 	if crl != "" {
-		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		checker, err := newCRLChecker(crl, ca)
 		if err != nil {
 			return nil, err
 		}
-		config.VerifyPeerCertificate = crlFunc
+		config.VerifyConnection = composeVerifyConnection(config.VerifyConnection, checker.verifyConnection)
 	}
 
 	return config, nil
@@ -210,14 +211,30 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 	}
 
 	if crl != "" {
-		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		checker, err := newCRLChecker(crl, ca)
 		if err != nil {
 			return nil, err
 		}
-		config.VerifyPeerCertificate = crlFunc
+		config.VerifyConnection = composeVerifyConnection(config.VerifyConnection, checker.verifyConnection)
 	}
 
 	return config, nil
+}
+
+// composeVerifyConnection chains VerifyConnection callbacks, skipping
+// nil ones and stopping at the first error.
+func composeVerifyConnection(callbacks ...func(tls.ConnectionState) error) func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		for _, callback := range callbacks {
+			if callback == nil {
+				continue
+			}
+			if err := callback(cs); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 var certPools = sync.Map{}
@@ -254,6 +271,65 @@ func doLoadx509CertPool(ca string) error {
 	}
 
 	certPools.Store(ca, cp)
+
+	return nil
+}
+
+var caCertificates = sync.Map{}
+
+// loadx509Certificates returns the certificates in the PEM file ca,
+// parsed once per path like loadx509CertPool does.
+func loadx509Certificates(ca string) ([]*x509.Certificate, error) {
+	identifier := tlsCertificatesIdentifier("ca-certificates", ca)
+	once, _ := onceByKeys.LoadOrStore(identifier, &sync.Once{})
+
+	var err error
+	once.(*sync.Once).Do(func() {
+		err = doLoadx509Certificates(ca)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result, ok := caCertificates.Load(ca)
+
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded x509 certificates for ca: %s", ca)
+	}
+
+	return result.([]*x509.Certificate), nil
+}
+
+// doLoadx509Certificates parses the certificates in the PEM file ca,
+// skipping the blocks that are not parsable certificates just like
+// x509.CertPool.AppendCertsFromPEM does.
+func doLoadx509Certificates(ca string) error {
+	b, err := os.ReadFile(ca)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
+	}
+
+	var certificates []*x509.Certificate
+	for len(b) > 0 {
+		var block *pem.Block
+		block, b = pem.Decode(b)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			continue
+		}
+		certificate, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+		certificates = append(certificates, certificate)
+	}
+	if len(certificates) == 0 {
+		return vterrors.Errorf(vtrpc.Code_UNKNOWN, "no certificates found in ca file: %s", ca)
+	}
+
+	caCertificates.Store(ca, certificates)
 
 	return nil
 }
