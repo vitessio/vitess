@@ -179,7 +179,41 @@ func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T
 	assert.Empty(t, qr.Rows)
 }
 
-func TestCallProcedureStreamingMultiResultsetCleanConnectionReused(t *testing.T) {
+// TestCallProcedureDiscardsConnection pins that a buffered CALL costs the OLTP
+// pool its connection — on success and after the procedure's own error alike:
+// a procedure body can change the session in ways the tablet cannot see, so no
+// connection a CALL ran on is reused (vitessio/vitess#21046). With a
+// one-connection pool, the next query on a different connection id proves the
+// CALL's connection was closed, not recycled.
+func TestCallProcedureDiscardsConnection(t *testing.T) {
+	setOltpPoolSize(t, 1)
+
+	client := framework.NewClient()
+	connID := func() string {
+		qr, err := client.Execute("select connection_id()", nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+
+	before := connID()
+	_, err := client.Execute("call proc_dml()", nil)
+	require.NoError(t, err)
+	after := connID()
+	assert.NotEqual(t, before, after, "the connection a successful CALL ran on must not be reused")
+
+	_, err = client.Execute("call proc_select4()", nil)
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+	assert.NotEqual(t, after, connID(), "the connection a failed CALL ran on must not be reused either")
+}
+
+// TestCallProcedureStreamingMultiResultsetDiscardsConnection pins that even a
+// cleanly drained multi-resultset CALL costs the streaming pool its connection:
+// a procedure body can change the session in ways the tablet cannot see, so no
+// connection a CALL ran on is reused (vitessio/vitess#21046). The CALL's own
+// outcome is still what the client sees, and the pool serves the next query on
+// a fresh connection.
+func TestCallProcedureStreamingMultiResultsetDiscardsConnection(t *testing.T) {
 	setStreamPoolSize(t, 1)
 
 	client := framework.NewClient()
@@ -195,7 +229,7 @@ func TestCallProcedureStreamingMultiResultsetCleanConnectionReused(t *testing.T)
 	qr, err = client.StreamExecute("select connection_id()", nil)
 	require.NoError(t, err)
 	require.Len(t, qr.Rows, 1)
-	assert.Equal(t, beforeConnID, qr.Rows[0][0].ToString())
+	assert.NotEqual(t, beforeConnID, qr.Rows[0][0].ToString(), "the connection a CALL ran on must not be reused")
 }
 
 func TestCallProcedureStreamingCallbackErrorClosesConnection(t *testing.T) {
@@ -227,6 +261,16 @@ func setStreamPoolSize(t *testing.T, size int) {
 	require.NoError(t, framework.Server.SetStreamPoolSize(t.Context(), size))
 	t.Cleanup(func() {
 		require.NoError(t, framework.Server.SetStreamPoolSize(t.Context(), defaultPoolSize))
+	})
+}
+
+func setOltpPoolSize(t *testing.T, size int) {
+	t.Helper()
+
+	defaultPoolSize := framework.Server.PoolSize()
+	require.NoError(t, framework.Server.SetPoolSize(t.Context(), size))
+	t.Cleanup(func() {
+		require.NoError(t, framework.Server.SetPoolSize(t.Context(), defaultPoolSize))
 	})
 }
 
