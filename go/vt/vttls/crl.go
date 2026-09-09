@@ -111,7 +111,7 @@ type (
 		// them, since a peer can present many that nothing needs.
 		presentedIndexed bool
 		// names memoizes nameKey by DER encoded name.
-		names           map[string]string
+		names           map[string]renderedName
 		crlsByIssuer    map[string]crlBinding
 		signatureChecks int
 	}
@@ -131,6 +131,12 @@ type (
 		issued   bool
 		crls     []*x509.RevocationList
 		orphaned bool
+	}
+
+	// renderedName is what nameKey makes of a name.
+	renderedName struct {
+		key string
+		err error
 	}
 
 	// rawRDNSequence is a distinguished name whose attribute values
@@ -218,24 +224,6 @@ func isASCII(text []byte) bool {
 		}
 	}
 	return true
-}
-
-// checkNameDecodable reports whether a DER encoded name can be compared
-// with its other encodings, see errUndecodableName. A name that does
-// not parse is compared as it is and passes.
-func checkNameDecodable(rawName []byte) error {
-	var sequence rawRDNSequence
-	if rest, err := asn1.Unmarshal(rawName, &sequence); err != nil || len(rest) > 0 {
-		return nil
-	}
-	for _, rdn := range sequence {
-		for _, attribute := range rdn {
-			if attribute.Value.Class == asn1.ClassUniversal && attribute.Value.Tag == asn1.TagT61String && !isASCII(attribute.Value.Bytes) {
-				return errUndecodableName
-			}
-		}
-	}
-	return nil
 }
 
 // expiredCRLWarnings holds, per CRL, when the CRL was last warned
@@ -386,15 +374,15 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		warningKeys:         map[*x509.RevocationList]string{},
 	}
 	for _, issuer := range issuers {
-		if err := checkNameDecodable(issuer.RawSubject); err != nil {
+		if _, err := nameKey(issuer.RawSubject); err != nil {
 			return nil, fmt.Errorf("the configured CA certificate %s cannot be matched with the CRLs: %w", issuer.Subject.CommonName, err)
 		}
 	}
 	for _, crl := range crls {
-		if err := checkNameDecodable(crl.RawIssuer); err != nil {
+		name, err := nameKey(crl.RawIssuer)
+		if err != nil {
 			return nil, fmt.Errorf("the CRL from issuer %s cannot be matched with its issuer: %w", crl.Issuer.CommonName, err)
 		}
-		name := nameKey(crl.RawIssuer)
 		checker.crlIssuers[name] = struct{}{}
 		checker.crlIssuerName[crl] = name
 		serials := make(map[string]struct{}, len(crl.RevokedCertificateEntries))
@@ -409,7 +397,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		if _, done := checker.configuredBindings[string(issuer.Raw)]; done {
 			continue
 		}
-		subject := nameKey(issuer.RawSubject)
+		subject, _ := nameKey(issuer.RawSubject)
 		binding, err := checker.bindCRLs(issuer, subject, unbounded)
 		if err != nil {
 			return nil, err
@@ -535,19 +523,25 @@ func (c *crlChecker) hasCRLFrom(issuerName string) bool {
 // CRL is applied. Every component of the key is prefixed with its
 // length, so that delimiter characters inside a value cannot make
 // distinct names collide. A name that does not parse is compared as
-// it is.
-func nameKey(rawName []byte) string {
+// it is. A name that holds a value that cannot be decoded, see
+// errUndecodableName, is rendered all the same, with that value as
+// encoded, and reported: it cannot be compared with its other
+// encodings, so nothing may ride on the rendering.
+func nameKey(rawName []byte) (string, error) {
 	var sequence rawRDNSequence
 	if rest, err := asn1.Unmarshal(rawName, &sequence); err != nil || len(rest) > 0 {
-		return string(rawName)
+		return string(rawName), nil
 	}
 	var key strings.Builder
+	var undecodable error
 	for _, rdn := range sequence {
 		attributes := make([]string, 0, len(rdn))
 		for _, attribute := range rdn {
 			value := hex.EncodeToString(attribute.Value.FullBytes)
 			if text, ok := directoryString(attribute.Value); ok {
 				value = strings.Join(strings.Fields(cases.Fold().String(norm.NFKC.String(strings.Map(mapForMatching, text)))), " ")
+			} else if attribute.Value.Class == asn1.ClassUniversal && attribute.Value.Tag == asn1.TagT61String {
+				undecodable = errUndecodableName
 			}
 			oid := attribute.Type.String()
 			attributes = append(attributes, fmt.Sprintf("%d:%s%d:%s", len(oid), oid, len(value), value))
@@ -558,7 +552,7 @@ func nameKey(rawName []byte) string {
 			key.WriteString(attribute)
 		}
 	}
-	return key.String()
+	return key.String(), undecodable
 }
 
 // mapForMatching applies the character mapping of RFC 4518 section
@@ -619,7 +613,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		trusted:      map[string][]*x509.Certificate{},
 		bySubject:    map[string][]*x509.Certificate{},
 		indexed:      map[string]struct{}{},
-		names:        map[string]string{},
+		names:        map[string]renderedName{},
 		crlsByIssuer: map[string]crlBinding{},
 	}
 	if len(verifiedChains) == 0 {
@@ -679,6 +673,13 @@ func (ck *crlCheck) run() error {
 				continue
 			}
 			checked[string(cert.Raw)] = struct{}{}
+			if issuer := ck.renderName(cert.RawIssuer); issuer.err != nil {
+				// Nothing can tell whether a CRL applies to a
+				// certificate whose issuer name cannot be compared,
+				// so the check fails closed on it, as it is refused
+				// in a configured CRL or CA certificate.
+				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, issuer.err)
+			}
 			lookup, err := ck.crlsFor(cert)
 			if err != nil {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, err)
@@ -723,10 +724,16 @@ func (ck *crlCheck) index(cert *x509.Certificate, into map[string][]*x509.Certif
 // nameOf renders a DER encoded name with nameKey, once per name for
 // the connection.
 func (ck *crlCheck) nameOf(rawName []byte) string {
+	return ck.renderName(rawName).key
+}
+
+// renderName is nameOf along with whether the name could be decoded.
+func (ck *crlCheck) renderName(rawName []byte) renderedName {
 	if name, done := ck.names[string(rawName)]; done {
 		return name
 	}
-	name := nameKey(rawName)
+	key, err := nameKey(rawName)
+	name := renderedName{key: key, err: err}
 	ck.names[string(rawName)] = name
 	return name
 }

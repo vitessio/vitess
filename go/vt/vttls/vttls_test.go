@@ -1234,6 +1234,45 @@ func TestNewCRLCheckerFutureCRL(t *testing.T) {
 	require.NoError(t, err, "a CRL issued within the clock skew allowance is accepted")
 }
 
+// TestCRLCheckerUndecodablePeerIssuerName checks that a presented
+// certificate whose issuer name holds a T.61 string with characters
+// beyond ASCII fails the check rather than slipping past the CRL of
+// its issuer for want of a comparable name, as a configured name
+// with such a string is refused.
+func TestCRLCheckerUndecodablePeerIssuerName(t *testing.T) {
+	rootCA, rootKey := selfSignedCA(t, 1, "Jos\u00e9 Root CA", nil)
+
+	// The leaf names its issuer in T.61, Latin-1 style, where the
+	// root's subject is a UTF8String.
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	renamedRoot := *rootCA
+	renamedRoot.RawSubject = encodedCommonName(t, "Jos\xe9 Root CA", asn1.TagT61String)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "leaf.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, &renamedRoot, &leafKey.PublicKey, rootKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	require.NoError(t, err)
+
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, rootCA, rootKey)
+	require.NoError(t, err)
+	checker, err := newCRLChecker(crlFile(t, crlDER), "")
+	require.NoError(t, err)
+
+	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, rootCA}})
+	require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName=leaf.example.com: the name holds a T.61 string with characters beyond ASCII")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
@@ -1417,9 +1456,14 @@ func TestNameKey(t *testing.T) {
 		{"a zero width non-joiner mapped to nothing", name(rdn(utf8Attribute(commonName, "Exam\u200cple CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
 		{"a bidirectional format character mapped to nothing", name(rdn(utf8Attribute(commonName, "\u202aExample CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
 	}
+	key := func(t *testing.T, raw []byte) string {
+		t.Helper()
+		rendered, _ := nameKey(raw)
+		return rendered
+	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {
-			require.Equal(t, nameKey(tc.a), nameKey(tc.b))
+			require.Equal(t, key(t, tc.a), key(t, tc.b))
 		})
 	}
 
@@ -1437,9 +1481,16 @@ func TestNameKey(t *testing.T) {
 	}
 	for _, tc := range different {
 		t.Run("different "+tc.name, func(t *testing.T) {
-			require.NotEqual(t, nameKey(tc.a), nameKey(tc.b))
+			require.NotEqual(t, key(t, tc.a), key(t, tc.b))
 		})
 	}
+
+	t.Run("a T61String beyond ASCII is reported as undecodable", func(t *testing.T) {
+		_, err := nameKey(name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte{'J', 'o', 's', 0xe9}))))
+		require.ErrorIs(t, err, errUndecodableName)
+		_, err = nameKey(name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Jose")))))
+		require.NoError(t, err)
+	})
 }
 
 // loadOneCRL loads the CRL file and returns its only CRL.
