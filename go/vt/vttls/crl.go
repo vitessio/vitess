@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -33,6 +34,8 @@ import (
 // peer presented, whose number and names the peer controls. It
 // mirrors the bound that crypto/x509 puts on chain building.
 const maxIssuerSignatureChecks = 100
+
+var errSignatureChecksSpent = errors.New("the signature checks allowed per connection are spent")
 
 // expiredCRLLogger throttles the warning about an expired CRL, which
 // would otherwise repeat on every handshake that consults it.
@@ -142,7 +145,10 @@ func (c *crlChecker) check(presented []*x509.Certificate, verifiedChains [][]*x5
 			if i+1 < len(chain) {
 				next = chain[i+1]
 			}
-			issuer := check.findIssuer(cert, next)
+			issuer, err := check.findIssuer(cert, next)
+			if err != nil {
+				return err
+			}
 			if issuer == nil {
 				if bytes.Equal(cert.Raw, presented[0].Raw) {
 					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
@@ -200,30 +206,42 @@ func (ck *crlCheck) index(cert *x509.Certificate) {
 
 // findIssuer returns the certificate that issued cert, trying next,
 // the certificate that follows it in its chain, before the other
-// candidates that carry the issuer's name.
-func (ck *crlCheck) findIssuer(cert, next *x509.Certificate) *x509.Certificate {
-	if next != nil && ck.issuedBy(cert, next) {
-		return next
+// candidates that carry the issuer's name. It returns an error, and
+// not merely no issuer, when the connection's signature checks run
+// out, so that a padded chain fails the check instead of hiding a
+// certificate from it.
+func (ck *crlCheck) findIssuer(cert, next *x509.Certificate) (*x509.Certificate, error) {
+	candidates := ck.bySubject[string(cert.RawIssuer)]
+	if next != nil {
+		candidates = append([]*x509.Certificate{next}, candidates...)
 	}
-	for _, candidate := range ck.bySubject[string(cert.RawIssuer)] {
-		if candidate != next && ck.issuedBy(cert, candidate) {
-			return candidate
+	for i, candidate := range candidates {
+		if i > 0 && candidate == next {
+			continue
+		}
+		issued, err := ck.issuedBy(cert, candidate)
+		if err != nil {
+			return nil, fmt.Errorf("cannot check the revocation of certificate CommonName=%v: the search for its issuer exceeded the %d signature checks allowed per connection", cert.Subject.CommonName, maxIssuerSignatureChecks)
+		}
+		if issued {
+			return candidate, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // issuedBy reports whether issuer signed cert, spending one of the
-// connection's bounded signature checks when the names match.
-func (ck *crlCheck) issuedBy(cert, issuer *x509.Certificate) bool {
+// connection's bounded signature checks when the names match, and
+// fails once they are spent.
+func (ck *crlCheck) issuedBy(cert, issuer *x509.Certificate) (bool, error) {
 	if !bytes.Equal(cert.RawIssuer, issuer.RawSubject) {
-		return false
+		return false, nil
 	}
 	if ck.signatureChecks >= maxIssuerSignatureChecks {
-		return false
+		return false, errSignatureChecksSpent
 	}
 	ck.signatureChecks++
-	return cert.CheckSignatureFrom(issuer) == nil
+	return cert.CheckSignatureFrom(issuer) == nil, nil
 }
 
 // crlsSignedBy returns the CRLs whose signature verifies from issuer,

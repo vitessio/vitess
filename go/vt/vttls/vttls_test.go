@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"io"
 	"math/big"
 	"path"
@@ -97,7 +98,8 @@ func recordResumption(config *tls.Config) *bool {
 }
 
 func TestClientConfigCRL(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
 
 	// The servers present the intermediate CA that signed both their
 	// certificates and the CRL, as a real server chain does.
@@ -189,6 +191,56 @@ func TestClientConfigCRL(t *testing.T) {
 		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
 		require.True(t, *resumed, "the rejected handshake must be a resumed one")
 	})
+
+	// Revoke the intermediate CA that issued the server certificate,
+	// under the root CA, and have servers present that chain with
+	// and without padding. The client has no CA configured, so the
+	// issuers are only found among the certificates presented.
+	intermediateName := strings.TrimSuffix(filepath.Base(certs.ServerCA), "-cert.pem")
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, intermediateName)
+	rootCRL := path.Join(root, "ca-crl.pem")
+	leaf := loadOneCert(t, certs.ServerCert)
+	intermediate := loadOneCert(t, certs.ServerCA)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCert, certs.ServerKey)
+	require.NoError(t, err)
+	serverPresenting := func(chain ...*x509.Certificate) *tls.Config {
+		certificate := tls.Certificate{PrivateKey: keyPair.PrivateKey}
+		for _, cert := range chain {
+			certificate.Certificate = append(certificate.Certificate, cert.Raw)
+		}
+		return &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}
+	}
+
+	t.Run("a revoked intermediate that the server presents is rejected", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, serverPresenting(leaf, intermediate, rootCert), clientConfig)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+	})
+
+	t.Run("a chain padded to exhaust the signature checks is rejected", func(t *testing.T) {
+		// The decoys carry the intermediate's name, so finding the
+		// leaf's issuer spends the whole budget on them and the real
+		// intermediate; its own issuer would need one more check.
+		chain := append([]*x509.Certificate{leaf}, sameSubjectCACerts(t, leaf.RawIssuer, maxIssuerSignatureChecks-1)...)
+		chain = append(chain, intermediate, rootCert)
+		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, serverPresenting(chain...), clientConfig)
+		require.ErrorContains(t, res.clientErr, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxIssuerSignatureChecks))
+	})
+}
+
+// loadOneCert returns the single certificate in the PEM file.
+func loadOneCert(t *testing.T, file string) *x509.Certificate {
+	t.Helper()
+	loaded, err := loadx509Certificates(file)
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+	return loaded[0]
 }
 
 func TestServerConfigCRL(t *testing.T) {
@@ -267,16 +319,9 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	rootCA := path.Join(root, "ca-cert.pem")
 	rootCRL := path.Join(root, "ca-crl.pem")
 
-	loadCert := func(t *testing.T, file string) *x509.Certificate {
-		t.Helper()
-		loaded, err := loadx509Certificates(file)
-		require.NoError(t, err)
-		require.Len(t, loaded, 1)
-		return loaded[0]
-	}
-	leaf := loadCert(t, certs.ServerCert)
-	intermediate := loadCert(t, certs.ServerCA)
-	rootCert := loadCert(t, rootCA)
+	leaf := loadOneCert(t, certs.ServerCert)
+	intermediate := loadOneCert(t, certs.ServerCA)
+	rootCert := loadOneCert(t, rootCA)
 
 	checker, err := newCRLChecker(rootCRL, rootCA)
 	require.NoError(t, err)
@@ -326,14 +371,14 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 	leaf := loaded[0]
 	padded := append([]*x509.Certificate{leaf}, sameSubjectCACerts(t, leaf.RawIssuer, 200)...)
 
-	t.Run("the search stops and fails closed when the issuer is not available", func(t *testing.T) {
+	t.Run("the search stops and fails closed once the signature checks are spent", func(t *testing.T) {
 		checker, err := newCRLChecker(certs.ServerCRL, "")
 		require.NoError(t, err)
 
 		start := time.Now()
 		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: padded})
 		t.Logf("checked a %d certificate chain in %s", len(padded), time.Since(start))
-		require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName)
+		require.ErrorContains(t, err, fmt.Sprintf("cannot check the revocation of certificate CommonName=%s: the search for its issuer exceeded the %d signature checks allowed per connection", certs.RevokedServerName, maxIssuerSignatureChecks))
 	})
 
 	t.Run("the configured issuer is consulted before the presented certificates", func(t *testing.T) {
