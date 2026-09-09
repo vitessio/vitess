@@ -23,6 +23,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -76,15 +77,24 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 // even when InsecureSkipVerify disables Go's own chain verification,
 // which is the case for every client mode short of verify_identity.
 func (c *crlChecker) verifyConnection(cs tls.ConnectionState) error {
-	candidates := make([]*x509.Certificate, 0, len(c.issuers)+len(cs.PeerCertificates))
-	candidates = append(candidates, c.issuers...)
-	candidates = append(candidates, cs.PeerCertificates...)
+	// The peer's certificates are the ones it presented plus any that
+	// a verified chain added to them, which a platform verifier can
+	// do, so that every certificate below a trust anchor is checked.
+	peerCerts := make([]*x509.Certificate, 0, len(cs.PeerCertificates))
+	peerCerts = append(peerCerts, cs.PeerCertificates...)
 	for _, chain := range cs.VerifiedChains {
-		candidates = append(candidates, chain...)
+		for _, cert := range chain {
+			if !slices.ContainsFunc(peerCerts, cert.Equal) {
+				peerCerts = append(peerCerts, cert)
+			}
+		}
 	}
+	issuers := make([]*x509.Certificate, 0, len(c.issuers)+len(peerCerts))
+	issuers = append(issuers, c.issuers...)
+	issuers = append(issuers, peerCerts...)
 
-	for _, cert := range cs.PeerCertificates {
-		for _, issuer := range candidates {
+	for _, cert := range peerCerts {
+		for _, issuer := range issuers {
 			if !bytes.Equal(cert.RawIssuer, issuer.RawSubject) || cert.CheckSignatureFrom(issuer) != nil {
 				continue
 			}

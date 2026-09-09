@@ -19,7 +19,11 @@ package vttls
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"io"
+	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -169,4 +173,40 @@ func TestServerConfigCRL(t *testing.T) {
 		res = handshake(t, afterRevocation, clientConfig)
 		require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+certs.RevokedClientName)
 	})
+}
+
+// TestCRLCheckerVerifiedChains checks that a certificate which only a
+// verified chain contains, as happens when a platform verifier
+// completes the chain with certificates the peer did not present,
+// is checked against the CRLs like the presented ones.
+func TestCRLCheckerVerifiedChains(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+
+	// Revoke the intermediate CA that issued the server certificate,
+	// under the root CA that issued the intermediate.
+	intermediateName := strings.TrimSuffix(filepath.Base(certs.ServerCA), "-cert.pem")
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, intermediateName)
+	rootCA := path.Join(root, "ca-cert.pem")
+	rootCRL := path.Join(root, "ca-crl.pem")
+
+	loadCert := func(t *testing.T, file string) *x509.Certificate {
+		t.Helper()
+		loaded, err := loadx509Certificates(file)
+		require.NoError(t, err)
+		require.Len(t, loaded, 1)
+		return loaded[0]
+	}
+	leaf := loadCert(t, certs.ServerCert)
+	intermediate := loadCert(t, certs.ServerCA)
+	rootCert := loadCert(t, rootCA)
+
+	checker, err := newCRLChecker(rootCRL, rootCA)
+	require.NoError(t, err)
+
+	err = checker.verifyConnection(tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{leaf},
+		VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate, rootCert}},
+	})
+	require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 }
