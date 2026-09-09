@@ -62,11 +62,11 @@ type (
 		// so the issuer is looked for here as well as among the
 		// certificates the peer sent.
 		issuers []*x509.Certificate
-		// crlIssuers holds the issuer name of each CRL, as
-		// rendered by nameKey, to tell when a certificate's issuer
-		// has a CRL that the check must be able to bind.
-		crlIssuers    map[string]struct{}
-		crlIssuerName map[*x509.RevocationList]string
+		// crlsByIssuerName indexes the CRLs by their issuer name, as
+		// rendered by nameKey, both to tell when a certificate's
+		// issuer has a CRL that the check must be able to bind and
+		// to bind an issuer to its CRLs without scanning them all.
+		crlsByIssuerName map[string][]*x509.RevocationList
 		// configuredBindings holds, by DER encoding, what each
 		// configured issuer makes of the CRLs, worked out once
 		// here rather than on every connection: only the issuers
@@ -366,8 +366,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 	checker := &crlChecker{
 		crls:                crls,
 		issuers:             issuers,
-		crlIssuers:          map[string]struct{}{},
-		crlIssuerName:       map[*x509.RevocationList]string{},
+		crlsByIssuerName:    map[string][]*x509.RevocationList{},
 		configuredBindings:  map[string]crlBinding{},
 		configuredBySubject: map[string][]*x509.Certificate{},
 		revokedSerials:      map[*x509.RevocationList]map[string]struct{}{},
@@ -383,8 +382,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		if err != nil {
 			return nil, fmt.Errorf("the CRL from issuer %s cannot be matched with its issuer: %w", crl.Issuer.CommonName, err)
 		}
-		checker.crlIssuers[name] = struct{}{}
-		checker.crlIssuerName[crl] = name
+		checker.crlsByIssuerName[name] = append(checker.crlsByIssuerName[name], crl)
 		serials := make(map[string]struct{}, len(crl.RevokedCertificateEntries))
 		for _, revoked := range crl.RevokedCertificateEntries {
 			serials[revoked.SerialNumber.String()] = struct{}{}
@@ -454,17 +452,15 @@ func newerCRL(a, b *x509.RevocationList) bool {
 }
 
 // bindCRLs works out what issuer makes of the CRLs that carry its
-// name, the only ones it can have signed, calling spend before each
+// name, the only ones it can have signed, found in the index rather
+// than by scanning them all, calling spend before each
 // signature verification. A CRL that another key signed, as happens
 // when two CAs share a subject, is simply not the issuer's. A CRL that
 // the issuer's own key signed while the certificate is not allowed to
 // sign CRLs is reported as orphaned.
 func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend func() error) (crlBinding, error) {
 	var binding crlBinding
-	for _, crl := range c.crls {
-		if c.crlIssuerName[crl] != issuerName {
-			continue
-		}
+	for _, crl := range c.crlsByIssuerName[issuerName] {
 		if err := spend(); err != nil {
 			return crlBinding{}, err
 		}
@@ -505,8 +501,7 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend
 // hasCRLFrom reports whether a CRL carries the given issuer name, as
 // rendered by nameKey.
 func (c *crlChecker) hasCRLFrom(issuerName string) bool {
-	_, named := c.crlIssuers[issuerName]
-	return named
+	return len(c.crlsByIssuerName[issuerName]) > 0
 }
 
 // nameKey renders a DER encoded distinguished name for comparison
