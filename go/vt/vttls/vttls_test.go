@@ -878,6 +878,31 @@ func TestCRLCheckerIssuerNameEncoding(t *testing.T) {
 	})
 }
 
+// TestNewCRLCheckerDeltaCRL checks that a delta CRL is refused: the
+// checker evaluates each CRL on its own, and a delta CRL's entries
+// only make sense together with the base CRL it amends, an entry that
+// takes a certificate off hold included.
+func TestNewCRLCheckerDeltaCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	baseNumber, err := asn1.Marshal(1)
+	require.NoError(t, err)
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:          big.NewInt(2),
+		ThisUpdate:      time.Now().Add(-time.Hour),
+		NextUpdate:      time.Now().Add(time.Hour),
+		ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 27}, Critical: true, Value: baseNumber}},
+	}, ca, keyPair.PrivateKey.(crypto.Signer))
+	require.NoError(t, err)
+	file := path.Join(t.TempDir(), "delta-crl.pem")
+	require.NoError(t, os.WriteFile(file, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der}), 0o600))
+
+	_, err = newCRLChecker(file, certs.ServerCA)
+	require.ErrorContains(t, err, "delta CRLs are not supported")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {

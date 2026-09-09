@@ -55,6 +55,10 @@ var expiredCRLWarnings sync.Map
 
 const expiredCRLWarningInterval = time.Minute
 
+// oidDeltaCRLIndicator is the id of the extension that marks a delta
+// CRL, RFC 5280 section 5.2.4.
+var oidDeltaCRLIndicator = asn1.ObjectIdentifier{2, 5, 29, 27}
+
 // expiredCRLKey identifies a CRL across the configurations that load
 // it, for the throttle of the warning about its expiry, by a digest of
 // its encoding: an issuer can publish several CRLs due at the same
@@ -541,6 +545,15 @@ func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
 		parsedCRL, err := x509.ParseRevocationList(block.Bytes)
 		if err != nil {
 			return nil, err
+		}
+		for _, extension := range parsedCRL.Extensions {
+			// Each CRL is evaluated on its own, and a delta CRL's
+			// entries only make sense together with the base CRL
+			// they amend: one of them can take a certificate off
+			// hold, which read alone looks like a revocation.
+			if extension.Id.Equal(oidDeltaCRLIndicator) {
+				return nil, fmt.Errorf("delta CRLs are not supported: the CRL from issuer %s in file %s is one", parsedCRL.Issuer.CommonName, crl)
+			}
 		}
 		crlSet = append(crlSet, parsedCRL)
 	}
