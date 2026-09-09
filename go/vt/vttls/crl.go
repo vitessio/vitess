@@ -391,5 +391,8 @@ func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
 		}
 		crlSet = append(crlSet, parsedCRL)
 	}
+	if len(crlSet) == 0 {
+		return nil, fmt.Errorf("no CRL found in file: %s", crl)
+	}
 	return crlSet, nil
 }

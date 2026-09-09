@@ -673,3 +673,12 @@ func TestCRLCheckerIssuerNameEncoding(t *testing.T) {
 		require.ErrorContains(t, err, "no certificate is available for its issuer")
 	})
 }
+
+// TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
+// CRL is refused rather than silently enforcing nothing.
+func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	// A certificate is valid PEM but not a CRL.
+	_, err := newCRLChecker(certs.ServerCert, "")
+	require.ErrorContains(t, err, "no CRL found in file")
+}
