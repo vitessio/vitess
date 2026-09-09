@@ -157,6 +157,12 @@ END;
 `,
 		`CREATE PROCEDURE p1 (in x BIGINT) BEGIN declare y DECIMAL(14,2); set y = 4.2; END`,
 		`CREATE PROCEDURE p2 (in x BIGINT) BEGIN START TRANSACTION; SELECT 128 from dual; COMMIT; END`,
+		`CREATE PROCEDURE dirty_session()
+BEGIN
+	CREATE TEMPORARY TABLE leaked (id int);
+	SET SESSION transaction_isolation = 'READ-UNCOMMITTED';
+	SET SESSION time_zone = '+05:30';
+END`,
 	}
 )
 
@@ -326,6 +332,67 @@ func TestDDLUnsharded(t *testing.T) {
 	utils.Exec(t, conn, `drop view v1`)
 	utils.Exec(t, conn, `drop table tempt1`)
 	utils.AssertMatchesAny(t, conn, "show tables", `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`, `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+}
+
+// TestCallProcedureSessionResidue pins the fix for vitessio/vitess#21046: session
+// state a procedure body leaves behind — a temporary table, SET SESSION
+// variables — must not survive on the pooled connection the CALL ran on and be
+// served to the next borrower. Reads are repeated on a fresh vtgate connection
+// each time so they land on recycled pool connections; before the fix the very
+// first read after the CALL observed READ-UNCOMMITTED and the leaked table.
+func TestCallProcedureSessionResidue(t *testing.T) {
+	ctx := t.Context()
+	vtParams := mysql.ConnParams{
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		DbName: "@primary",
+	}
+	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*) from information_schema.innodb_temp_table_info"
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	// The backend's own defaults, read before anything dirties a session.
+	baseline := utils.Exec(t, conn, probe)
+	require.Len(t, baseline.Rows, 1)
+	require.NotEqual(t, "READ-UNCOMMITTED", baseline.Rows[0][0].ToString())
+	require.Equal(t, "0", baseline.Rows[0][2].ToString(), "no temp tables before the test")
+
+	assertClean := func(t *testing.T, what string) {
+		t.Helper()
+		for i := range 20 {
+			qr := utils.Exec(t, conn, probe)
+			require.Equal(t, baseline.Rows, qr.Rows, "%s: read %d after the CALL must see the backend's defaults, not the procedure's session residue", what, i)
+		}
+	}
+
+	t.Run("buffered", func(t *testing.T) {
+		utils.Exec(t, conn, "CALL dirty_session()")
+		assertClean(t, "buffered CALL")
+	})
+	t.Run("streaming", func(t *testing.T) {
+		utils.Exec(t, conn, "set workload = olap")
+		defer utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		utils.Exec(t, conn, "set workload = oltp")
+		assertClean(t, "streaming CALL")
+	})
+	t.Run("the default database survives the reset", func(t *testing.T) {
+		before := utils.Exec(t, conn, "select database()")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		for range 5 {
+			utils.AssertMatches(t, conn, "select database()", fmt.Sprintf("%v", before.Rows))
+		}
+	})
+	t.Run("a session setting survives a CALL on the settings pool", func(t *testing.T) {
+		// A vtgate session SET is applied to every pooled connection the session
+		// borrows; the reset must re-apply it so later queries still see it.
+		// Last subtest on this connection: the setting dies with it.
+		utils.Exec(t, conn, "set @@sql_mode = 'STRICT_TRANS_TABLES'")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		for range 5 {
+			utils.AssertMatches(t, conn, "select @@session.sql_mode", `[[VARCHAR("STRICT_TRANS_TABLES")]]`)
+		}
+	})
 }
 
 func TestCallProcedure(t *testing.T) {

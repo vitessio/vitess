@@ -37,6 +37,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/callerid"
@@ -2664,6 +2665,120 @@ func (m mockTxThrottler) Close() {
 
 func (m mockTxThrottler) Throttle(priority int, workload string) (result bool) {
 	return m.throttle
+}
+
+// TestExecCallProcResetsSession pins the fix for vitessio/vitess#21046: a CALL
+// on a pooled connection may leave session state behind (a SET SESSION or a
+// temporary table inside the procedure body is invisible to the tablet's
+// statement classification), so the connection's session is reset before the
+// connection returns to the pool — on success, after a statement error, and
+// after draining a multi-resultset — while a failed reset costs the connection.
+func TestExecCallProcResetsSession(t *testing.T) {
+	ctx := t.Context()
+	query := "call test_proc()"
+	newExecutor := func(t *testing.T) (*fakesqldb.DB, *TabletServer) {
+		db := setUpQueryExecutorTest(t)
+		t.Cleanup(db.Close)
+		tsv := newTestTabletServer(ctx, noFlags, db)
+		t.Cleanup(tsv.StopService)
+		return db, tsv
+	}
+	resetsAndNeutralizes := func(t *testing.T, db *fakesqldb.DB, neutralizationsBefore int) {
+		t.Helper()
+		log := db.QueryLog()
+		callIdx := strings.Index(log, query)
+		resetIdx := strings.Index(log, fakesqldb.ResetConnectionLogEntry)
+		require.NotEqual(t, -1, callIdx, "the CALL must run")
+		require.NotEqual(t, -1, resetIdx, "the session must be reset")
+		assert.Less(t, callIdx, resetIdx, "the reset must follow the CALL")
+		assert.Equal(t, neutralizationsBefore+1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery),
+			"the sql_mode neutralization must be re-applied after the reset")
+	}
+
+	t.Run("success", func(t *testing.T) {
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		before := db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery)
+		qre := newTestQueryExecutor(ctx, tsv, query, 0)
+		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		resetsAndNeutralizes(t, db, before)
+		assert.EqualValues(t, 1, tsv.qe.conns.Metrics.ResetSessionCount(), "a successful reset must be counted")
+	})
+	t.Run("statement error", func(t *testing.T) {
+		// A procedure that dirtied the session and then failed (a SIGNAL, a
+		// typo'd name) leaves the same residue as one that succeeded.
+		db, tsv := newExecutor(t)
+		db.AddRejectedQuery(query, errors.New("procedure failed"))
+		before := db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery)
+		qre := newTestQueryExecutor(ctx, tsv, query, 0)
+
+		_, err := qre.Execute()
+		require.ErrorContains(t, err, "procedure failed")
+		resetsAndNeutralizes(t, db, before)
+	})
+	t.Run("failed reset closes the connection", func(t *testing.T) {
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		db.SetFailResetConnection(true)
+		t.Cleanup(func() { db.SetFailResetConnection(false) })
+		qre := newTestQueryExecutor(ctx, tsv, query, 0)
+
+		_, err := qre.Execute()
+		require.ErrorContains(t, err, "failed to reset the connection's session",
+			"a CALL whose connection could not be reset must report it")
+		assert.EqualValues(t, 1, tsv.qe.conns.Metrics.ResetSessionFailedCount(), "a failed reset must be counted")
+		// The pooled connection was closed, not recycled: the next borrower
+		// gets a fresh connection (a new connection id), never the dirty one.
+		require.Equal(t, 1, strings.Count(db.QueryLog(), fakesqldb.ResetConnectionLogEntry))
+		db.SetFailResetConnection(false)
+		db.AddQueryPattern("select 1 from dual.*", &sqltypes.Result{})
+		_, err = newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, tsv.qe.conns.Metrics.ResetSessionFailedCount())
+	})
+	t.Run("settings pool connection keeps its setting", func(t *testing.T) {
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		setQ := "set @@sql_mode = 'strict_trans_tables'"
+		db.AddQueryPattern("set @@sql_mode.*", &sqltypes.Result{})
+		setting, err := tsv.qe.GetConnSetting(ctx, []string{setQ})
+		require.NoError(t, err)
+		qre := newTestQueryExecutor(ctx, tsv, query, 0)
+		qre.setting = setting
+
+		_, err = qre.Execute()
+		require.NoError(t, err)
+		log := db.QueryLog()
+		resetIdx := strings.Index(log, fakesqldb.ResetConnectionLogEntry)
+		require.NotEqual(t, -1, resetIdx)
+		assert.Contains(t, log[resetIdx:], strings.ToLower(setting.ApplyQuery()),
+			"the tracked setting must be re-applied after the reset, so the settings pool keeps serving it")
+	})
+}
+
+// TestExecProcDoesNotResetSession pins the scope of the CALL session reset: on a
+// reserved or transaction connection the session belongs to the caller, and
+// resetting it would destroy that caller's own SETs and temporary tables.
+func TestExecProcDoesNotResetSession(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	query := "call test_proc()"
+	db.AddQuery(query, &sqltypes.Result{})
+
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+	qre := newTestQueryExecutor(ctx, tsv, query, conn.ReservedID())
+	_, err = qre.execProc(conn)
+	require.NoError(t, err)
+	assert.NotContains(t, db.QueryLog(), fakesqldb.ResetConnectionLogEntry,
+		"a CALL on a reserved connection must not reset the caller's own session")
 }
 
 // TestExecProcClosesConnOnError verifies that a failed CALL on a reserved
