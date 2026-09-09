@@ -300,6 +300,14 @@ func TestClientConfigCRL(t *testing.T) {
 		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 	})
 
+	t.Run("a revoked intermediate presented without its root is rejected for want of the root", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, serverPresenting(leaf, intermediate), clientConfig)
+		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+intermediate.Subject.CommonName+": no certificate is available for its issuer")
+	})
+
 	t.Run("a chain padded to exhaust the signature checks is rejected", func(t *testing.T) {
 		// The CRLs come from both the intermediate and the root, so
 		// the leaf's issuer is worth looking for. The decoys carry
@@ -420,7 +428,8 @@ func loadOneCert(t *testing.T, file string) *x509.Certificate {
 // full and resumed handshakes, and with certificates presented beyond
 // the verified chain.
 func TestServerConfigCRL(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
 
 	newServerConfig := func(t *testing.T, crl string) *tls.Config {
 		t.Helper()
@@ -483,6 +492,23 @@ func TestServerConfigCRL(t *testing.T) {
 			require.True(t, *resumed, "the rejected handshake must be a resumed one")
 		})
 	}
+
+	t.Run("a CRL from the issuer of the trust anchor does not require that issuer to be configured", func(t *testing.T) {
+		// The server trusts the clients' CA alone, while its CRL
+		// file also holds the root's CRL. The root is not
+		// configured, but verification vouches for the anchor.
+		tlstest.CreateCRL(root, tlstest.CA)
+		rootCRL, err := os.ReadFile(path.Join(root, "ca-crl.pem"))
+		require.NoError(t, err)
+		clientCRL, err := os.ReadFile(certs.ClientCRL)
+		require.NoError(t, err)
+		bothCRLs := path.Join(t.TempDir(), "both-crl.pem")
+		require.NoError(t, os.WriteFile(bothCRLs, append(clientCRL, rootCRL...), 0o600))
+
+		res := handshake(t, newServerConfig(t, bothCRLs), newClientConfig(t, certs.ClientCert, certs.ClientKey))
+		require.NoError(t, res.serverErr)
+		require.NoError(t, res.clientErr)
+	})
 
 	t.Run("certificates presented beyond the verified chain are ignored", func(t *testing.T) {
 		// The client presents, after its own chain, a certificate

@@ -17,7 +17,6 @@ limitations under the License.
 package vttls
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -87,8 +86,12 @@ type (
 	crlCheck struct {
 		checker   *crlChecker
 		presented []*x509.Certificate
-		// chains are the certificate chains the check walks.
-		chains [][]*x509.Certificate
+		// chains are the certificate chains the check walks, and
+		// verified tells whether verification built them, in which
+		// case the certificate each ends at is a trust anchor whose
+		// issuer need not be available.
+		chains   [][]*x509.Certificate
+		verified bool
 		// bySubject indexes the certificates that may be an
 		// issuer by subject, as rendered by nameKey, the configured
 		// ones first, then the ones from the chains being checked.
@@ -232,6 +235,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		checker:      c,
 		presented:    presented,
 		chains:       verifiedChains,
+		verified:     true,
 		bySubject:    map[string][]*x509.Certificate{},
 		indexed:      map[string]struct{}{},
 		names:        map[string]string{},
@@ -239,6 +243,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 	}
 	if len(verifiedChains) == 0 {
 		check.chains = [][]*x509.Certificate{presented}
+		check.verified = false
 	}
 	for _, issuer := range c.issuers {
 		check.index(issuer)
@@ -257,12 +262,14 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 // revoked by the CRL of its own issuer when that issuer is configured
 // or presented too. A self-signed certificate is checked like any
 // other, so that recognizing it costs one of the bounded signature
-// checks like any other issuer lookup. The issuer of the
-// leaf certificate has to be found when a CRL is configured under
-// its name, so that a peer cannot dodge that CRL by leaving its chain
-// out; other certificates whose issuer is not available go unchecked,
-// as they always did, and so does a leaf whose issuer has no CRL
-// configured, since there would be nothing to check it against. When
+// checks like any other issuer lookup. A certificate whose issuer
+// cannot be found while a CRL is configured under its issuer's name
+// fails the check, so that a peer cannot dodge that CRL by leaving
+// part of its chain out, unless it is the trust anchor a verified
+// chain ends at: verification vouches for that one, and its issuer,
+// when neither configured nor presented, is not the peer's to supply.
+// A certificate whose issuer has no CRL configured goes unchecked,
+// since there would be nothing to check it against. When
 // a configured CRL is signed by the key of a certificate's issuer,
 // one of the issuer certificates found has to be allowed to validate
 // it, since a peer could otherwise present a forged issuer that
@@ -270,7 +277,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 func (ck *crlCheck) run() error {
 	checked := make(map[string]struct{}, len(ck.presented))
 	for _, chain := range ck.chains {
-		for _, cert := range chain {
+		for i, cert := range chain {
 			if _, done := checked[string(cert.Raw)]; done {
 				continue
 			}
@@ -280,7 +287,8 @@ func (ck *crlCheck) run() error {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: %w", cert.Subject.CommonName, err)
 			}
 			if !lookup.issued {
-				if ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) && bytes.Equal(cert.Raw, ck.presented[0].Raw) {
+				anchor := ck.verified && i == len(chain)-1
+				if !anchor && ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) {
 					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
 				}
 				continue
