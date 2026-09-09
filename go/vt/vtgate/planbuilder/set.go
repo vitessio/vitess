@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -30,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -67,6 +70,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
 				return nil, vterrors.VT12001(fmt.Sprintf("system setting: %s", expr.Var.Name))
 			}
+			if err := rejectQualifiedName(expr); err != nil {
+				return nil, err
+			}
 			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
 			if err != nil {
 				return nil, err
@@ -99,6 +105,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
 			}
 		case sqlparser.VitessMetadataScope:
+			if err := rejectQualifiedName(expr); err != nil {
+				return nil, err
+			}
 			value, err := getValueFor(expr)
 			if err != nil {
 				return nil, err
@@ -124,6 +133,34 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 		Ops:   setOps,
 		Input: input,
 	}), nil
+}
+
+// rejectQualifiedName rejects a system variable assignment whose value is a qualified
+// name, such as `set autocommit = t.off`. MySQL accepts an unqualified bare identifier
+// as the equivalent string, and the plan functions coerce it the same way (on/off,
+// enumeration values, mode names); a qualified name is never a value, and MySQL rejects
+// it as the wrong argument type, whatever the qualifier. As in MySQL, the variable is
+// resolved first: an unknown or denied variable is reported as such, whatever its value,
+// so for session-scope variables this runs from rejectQualifiedNamePlan, which wraps
+// every known variable's plan function, ahead of any coercion.
+func rejectQualifiedName(expr *sqlparser.SetExpr) error {
+	colName, ok := expr.Expr.(*sqlparser.ColName)
+	if !ok || colName.Qualifier.IsEmpty() {
+		return nil
+	}
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", expr.Var.Name.Lowered())
+}
+
+// rejectQualifiedNamePlan wraps a known system variable's plan function with
+// rejectQualifiedName, so a qualified name is rejected before the plan function coerces
+// the value.
+func rejectQualifiedNamePlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if err := rejectQualifiedName(expr); err != nil {
+			return nil, err
+		}
+		return inner(expr, vschema, ec)
+	}
 }
 
 func buildSetOpReadOnly(setting) planFunc {
@@ -182,6 +219,15 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 // execution time, once their value is known.
 func validateSQLModePlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if colName, ok := expr.Expr.(*sqlparser.ColName); ok {
+			// MySQL accepts an unquoted mode name as the equivalent string: a constant,
+			// judged here like its quoted spelling. Qualified names never get here
+			// (see rejectQualifiedName).
+			if _, err := sqlmode.Validate(sqltypes.NewVarChar(colName.Name.String())); err != nil {
+				return nil, err
+			}
+			return inner(expr, vschema, ec)
+		}
 		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
 			Collation:   vschema.ConnCollation(),
 			Environment: vschema.Environment(),
@@ -295,7 +341,11 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 		case "off":
 			return "0", nil
 		}
-		return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
+		// the identifier's own text, not its formatted form: formatting backticks a
+		// name that is a keyword in the Vitess grammar, and MySQL would take the
+		// backticks as part of the string value. Qualified names never get here
+		// (see rejectQualifiedName).
+		return sqltypes.EncodeStringSQL(node.Name.String()), nil
 
 	case *sqlparser.Default:
 		return "", vterrors.VT12001(defaultNotSupportedErrFmt, expr.Var.Name)

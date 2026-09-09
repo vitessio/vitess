@@ -142,6 +142,35 @@
     }
   },
   {
+    "comment": "an unquoted mode name is the equivalent string; rendered without the backticks the formatter adds for a keyword",
+    "query": "set @@sql_mode = TRADITIONAL",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SET",
+      "Original": "set @@sql_mode = TRADITIONAL",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "'TRADITIONAL'",
+            "SupportSetVar": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
     "comment": "multiple sysvar cases",
     "query": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
     "plan": {
