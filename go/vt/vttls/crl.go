@@ -642,58 +642,85 @@ func (ck *crlCheck) presentedBySubject() map[string][]*x509.Certificate {
 	return ck.bySubject
 }
 
-// run walks the chains in the order the certificates were sent, and
-// checks every certificate in them, the one a verified chain ends at
-// included: a configured CA that verification stops at can still be
-// revoked by the CRL of its own issuer when that issuer is configured
-// or presented too. A self-signed certificate is checked like any
-// other, so that recognizing it costs one of the bounded signature
-// checks like any other issuer lookup. A certificate whose issuer
-// cannot be found while a CRL is configured under its issuer's name
-// fails the check, so that a peer cannot dodge that CRL by leaving
-// part of its chain out, unless it is the trust anchor a verified
-// chain ends at: verification vouches for that one, and its issuer,
-// when neither configured nor presented, is not the peer's to supply.
-// A certificate whose issuer has no CRL configured goes unchecked,
-// since there would be nothing to check it against. When
-// a configured CRL is signed by the key of a certificate's issuer,
-// one of the issuer certificates found has to be allowed to validate
-// it, since a peer could otherwise present a forged issuer that
-// carries the real issuer's key but not the CRL signing key usage.
+// run checks the chains, and passes the peer when any of the verified
+// chains passes, as verification itself accepts the peer on the
+// strength of any valid chain: an intermediate cross-signed by two
+// roots may be revoked by one and not the other, as during a CA
+// rollover, and the chain through the other root still carries the
+// peer. A chain passes when none of its certificates fails, each of
+// which is checked once, its outcome shared by the chains that hold
+// it. When every chain fails, the peer fails with the first chain's
+// failure.
 func (ck *crlCheck) run() error {
-	checked := make(map[string]struct{}, len(ck.presented))
+	outcomes := make(map[string]error, len(ck.presented))
+	var failure error
 	for _, chain := range ck.chains {
+		var chainFailure error
 		for i, cert := range chain {
-			if _, done := checked[string(cert.Raw)]; done {
-				continue
+			anchor := ck.verified && i == len(chain)-1
+			key := string(cert.Raw)
+			if anchor {
+				key += "|anchor"
 			}
-			checked[string(cert.Raw)] = struct{}{}
-			if issuer := ck.renderName(cert.RawIssuer); issuer.err != nil {
-				// Nothing can tell whether a CRL applies to a
-				// certificate whose issuer name cannot be compared,
-				// so the check fails closed on it, as it is refused
-				// in a configured CRL or CA certificate.
-				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, issuer.err)
+			outcome, done := outcomes[key]
+			if !done {
+				outcome = ck.checkCertificate(cert, anchor)
+				outcomes[key] = outcome
 			}
-			lookup, err := ck.crlsFor(cert)
-			if err != nil {
-				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, err)
+			if outcome != nil {
+				chainFailure = outcome
+				break
 			}
-			if !lookup.issued {
-				anchor := ck.verified && i == len(chain)-1
-				if !anchor && ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) {
-					return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: no certificate is available for its issuer %s", cert.Subject.CommonName, cert.Issuer.CommonName)
-				}
-				continue
-			}
-			if lookup.orphaned {
-				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: a CRL signed by the key of its issuer %s is configured, but none of the certificates found for that issuer may sign CRLs", cert.Subject.CommonName, cert.Issuer.CommonName)
-			}
-			for _, crl := range lookup.crls {
-				if ck.checker.isRevoked(cert, crl) {
-					return fmt.Errorf("Certificate revoked: CommonName=%s", cert.Subject.CommonName)
-				}
-			}
+		}
+		if chainFailure == nil {
+			return nil
+		}
+		if failure == nil {
+			failure = chainFailure
+		}
+	}
+	return failure
+}
+
+// checkCertificate checks one certificate of a chain against the
+// CRLs of its issuer. A certificate whose issuer cannot be found while
+// a CRL is configured under its issuer's name fails, so that a peer
+// cannot dodge that CRL by leaving part of its chain out, unless it
+// is the trust anchor a verified chain ends at: verification vouches
+// for that one, and its issuer, when neither configured nor
+// presented, is not the peer's to supply. A certificate whose issuer
+// has no CRL configured passes, since there would be nothing to check
+// it against. When a configured CRL is signed by the key of the
+// certificate's issuer, one of the issuer certificates found has to
+// be allowed to validate it, since a peer could otherwise present a
+// forged issuer that carries the real issuer's key but not the CRL
+// signing key usage. A self-signed certificate is checked like any
+// other, so that recognizing it costs one of the bounded signature
+// checks like any other issuer lookup.
+func (ck *crlCheck) checkCertificate(cert *x509.Certificate, anchor bool) error {
+	if issuer := ck.renderName(cert.RawIssuer); issuer.err != nil {
+		// Nothing can tell whether a CRL applies to a certificate
+		// whose issuer name cannot be compared, so the check fails
+		// closed on it, as it is refused in a configured CRL or CA
+		// certificate.
+		return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, issuer.err)
+	}
+	lookup, err := ck.crlsFor(cert)
+	if err != nil {
+		return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, err)
+	}
+	if !lookup.issued {
+		if !anchor && ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) {
+			return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: no certificate is available for its issuer %s", cert.Subject.CommonName, cert.Issuer.CommonName)
+		}
+		return nil
+	}
+	if lookup.orphaned {
+		return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: a CRL signed by the key of its issuer %s is configured, but none of the certificates found for that issuer may sign CRLs", cert.Subject.CommonName, cert.Issuer.CommonName)
+	}
+	for _, crl := range lookup.crls {
+		if ck.checker.isRevoked(cert, crl) {
+			return fmt.Errorf("Certificate revoked: CommonName=%s", cert.Subject.CommonName)
 		}
 	}
 	return nil

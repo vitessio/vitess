@@ -1278,6 +1278,71 @@ func TestCRLCheckerUndecodablePeerIssuerName(t *testing.T) {
 	require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName=leaf.example.com: the name holds a T.61 string with characters beyond ASCII")
 }
 
+// TestCRLCheckerAlternateVerifiedChain checks that a peer whose
+// verification found several chains passes when any of them holds no
+// revoked certificate, as verification itself accepts the peer on any
+// valid chain: an intermediate cross-signed by two roots may be
+// revoked by one root and not the other, as during a CA rollover.
+func TestCRLCheckerAlternateVerifiedChain(t *testing.T) {
+	rootA, rootAKey := selfSignedCA(t, 1, "Root A", nil)
+	rootB, rootBKey := selfSignedCA(t, 2, "Root B", nil)
+	crossKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	crossSigned := func(serial int64, root *x509.Certificate, rootKey *ecdsa.PrivateKey) *x509.Certificate {
+		der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(serial),
+			Subject:               pkix.Name{CommonName: "Cross-signed CA"},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}, root, &crossKey.PublicKey, rootKey)
+		require.NoError(t, err)
+		cert, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+		return cert
+	}
+	crossA := crossSigned(10, rootA, rootAKey)
+	crossB := crossSigned(20, rootB, rootBKey)
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject:      pkix.Name{CommonName: "leaf.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, crossA, &leafKey.PublicKey, crossKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	require.NoError(t, err)
+
+	// Root A revokes its cross-signed certificate; root B has not.
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: crossA.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, rootA, rootAKey)
+	require.NoError(t, err)
+	bundle := path.Join(t.TempDir(), "roots.pem")
+	require.NoError(t, os.WriteFile(bundle, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootA.Raw}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootB.Raw})...), 0o600))
+	checker, err := newCRLChecker(crlFile(t, crlDER), bundle)
+	require.NoError(t, err)
+
+	t.Run("the chain through the other root carries the peer", func(t *testing.T) {
+		err := checker.check([]*x509.Certificate{leaf}, [][]*x509.Certificate{{leaf, crossA, rootA}, {leaf, crossB, rootB}})
+		require.NoError(t, err)
+	})
+
+	t.Run("the peer fails when the only chain holds the revoked certificate", func(t *testing.T) {
+		err := checker.check([]*x509.Certificate{leaf}, [][]*x509.Certificate{{leaf, crossA, rootA}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName=Cross-signed CA")
+	})
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
