@@ -25,7 +25,7 @@ import (
 	"os"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
 // maxIssuerSignatureChecks bounds the signature verifications spent
@@ -33,6 +33,10 @@ import (
 // peer presented, whose number and names the peer controls. It
 // mirrors the bound that crypto/x509 puts on chain building.
 const maxIssuerSignatureChecks = 100
+
+// expiredCRLLogger throttles the warning about an expired CRL, which
+// would otherwise repeat on every handshake that consults it.
+var expiredCRLLogger = logutil.NewThrottledLogger("vttls-expired-crl", time.Minute)
 
 type (
 	// crlChecker rejects a connection whose peer presents a
@@ -68,7 +72,7 @@ type (
 
 func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
-		log.Warn("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
+		expiredCRLLogger.Warningf("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
 	}
 
 	for _, revoked := range crl.RevokedCertificateEntries {
