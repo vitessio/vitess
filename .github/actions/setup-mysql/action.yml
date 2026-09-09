@@ -50,15 +50,52 @@ runs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
+        # Set when MySQL is unpacked from a tarball instead of installed from a
+        # package: there is then no mysql service or apparmor profile to disable.
+        MYSQL_FROM_TARBALL=""
+
         if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then
-          # Oracle's apt repo only publishes amd64 packages for Ubuntu, so on
-          # arm64 we install MySQL from the Ubuntu archive instead, which only
-          # ships MySQL 8.0.
-          if [[ "$FLAVOR" != "mysql-8.0" ]]; then
+          # Oracle's apt repo only publishes amd64 packages for Ubuntu. On arm64
+          # we install MySQL 8.0 from the Ubuntu archive (the only version it
+          # ships on noble) and MySQL 8.4 from Oracle's generic Linux aarch64
+          # tarball.
+          if [[ "$FLAVOR" == "mysql-8.0" ]]; then
+            sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+          elif [[ "$FLAVOR" == "mysql-8.4" ]]; then
+            MYSQL_FROM_TARBALL="1"
+            MYSQL_TARBALL="mysql-8.4.11-linux-glibc2.28-aarch64.tar.xz"
+            MYSQL_TARBALL_SHA256="04b2f9791d314167a9eb83abcb476f45a7cd9e4aa88fa7a638cba40d1bc2a109"
+
+            # The tarball's mysqld links against libaio.so.1 and libnuma.so.1,
+            # and its client against libncurses.so.6. noble's libaio1t64 no
+            # longer provides libaio.so.1 (see the libaio1 note in the amd64
+            # branch below), so we install the older libaio1 package from the
+            # Ubuntu ports archive.
+            sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y libnuma1 libncurses6 xz-utils
+            download_with_ip_failover \
+              https://ports.ubuntu.com/pool/main/liba/libaio/libaio1_0.3.112-13build1_arm64.deb \
+              libaio1_0.3.112-13build1_arm64.deb || {
+              echo "Failed to download libaio1. The pinned version may have been superseded and removed from ports.ubuntu.com; check https://ports.ubuntu.com/pool/main/liba/libaio/ for the current version."
+              exit 1
+            }
+            echo "1bcb0d9c08aa35298741b1c68904844e9b71ebf64f15b3e05e6ec6f3fa01d93b  libaio1_0.3.112-13build1_arm64.deb" | sha256sum --check
+            sudo dpkg -i libaio1_0.3.112-13build1_arm64.deb
+            rm libaio1_0.3.112-13build1_arm64.deb
+
+            # dev.mysql.com/get redirects to cdn.mysql.com.
+            curl -fsSL --retry 3 --retry-delay 5 -o "$MYSQL_TARBALL" "https://dev.mysql.com/get/Downloads/MySQL-8.4/${MYSQL_TARBALL}"
+            echo "${MYSQL_TARBALL_SHA256}  ${MYSQL_TARBALL}" | sha256sum --check
+            sudo tar -xJf "$MYSQL_TARBALL" -C /usr/local
+            rm "$MYSQL_TARBALL"
+            sudo ln -sfn "/usr/local/${MYSQL_TARBALL%.tar.xz}" /usr/local/mysql
+
+            # Later steps, and the Vitess binaries they start, find mysqld and
+            # the client tools through PATH.
+            echo "/usr/local/mysql/bin" >> "$GITHUB_PATH"
+          else
             echo "Unsupported MySQL flavor on arm64: $FLAVOR"
             exit 1
           fi
-          sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         else
           # We have to install this old version of libaio1. See also:
           # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
@@ -114,7 +151,9 @@ runs:
           fi
         fi
 
-        sudo service mysql stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+        if [[ -z "$MYSQL_FROM_TARBALL" ]]; then
+          sudo service mysql stop
+          sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+        fi
