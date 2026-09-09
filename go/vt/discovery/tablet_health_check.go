@@ -51,9 +51,11 @@ type tabletHealthCheck struct {
 	// connMu protects Conn and all the mutable health fields below
 	// (Target, Serving, PrimaryTermStartTime, Stats, LastError): the
 	// checkConn goroutine writes them while readers such as SimpleCopy
-	// and currentConnection copy them from other goroutines. It must
-	// not be held across network IO (connection Close or dialing) or
-	// while invoking the logger.
+	// and currentConnection copy them from other goroutines. It must not
+	// be held across a connection Close or while invoking the logger. The
+	// dial in connectionLocked runs under connMu, but it is non-blocking
+	// (grpcclient.DialContext does not set WithBlock), so it does no
+	// synchronous network IO.
 	connMu sync.Mutex
 	// Conn is the connection associated with the tablet.
 	Conn queryservice.QueryService
@@ -145,7 +147,7 @@ func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.S
 	err := conn.StreamHealth(ctx, callback)
 	if err != nil {
 		// Depending on the specific error the caller can take action
-		thc.closeConnection(ctx, err)
+		thc.closeConnection(ctx, conn, err)
 	}
 	return err
 }
@@ -365,12 +367,11 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 	}
 }
 
-func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
+func (thc *tabletHealthCheck) closeConnection(ctx context.Context, conn queryservice.QueryService, err error) {
 	thc.logger.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
 	thc.connMu.Lock()
 	logServingChange := thc.setServingState(false, err.Error())
 	thc.LastError = err
-	conn := thc.Conn
 	thc.Conn = nil
 	thc.connMu.Unlock()
 	if logServingChange != nil {

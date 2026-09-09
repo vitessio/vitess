@@ -441,7 +441,6 @@ func TestHealthCheckReentrantLoggerCallback(t *testing.T) {
 	})
 
 	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "", nil, WithLogger(logger))
-	defer hc.Close()
 	hcPtr.Store(hc)
 
 	input := make(chan *querypb.StreamHealthResponse)
@@ -463,6 +462,11 @@ func TestHealthCheckReentrantLoggerCallback(t *testing.T) {
 	}
 	select {
 	case <-reentered:
+		// Only close once the callback has completed. On the buggy path the
+		// checkConn goroutine is wedged on connMu, so hc.Close would block
+		// forever on connsWG.Wait and turn the clean failure below into a
+		// test timeout with a goroutine dump.
+		defer hc.Close()
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "logger callback did not complete; the serving-state log likely ran while holding connMu")
 	}
