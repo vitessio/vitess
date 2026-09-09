@@ -822,13 +822,18 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("the CRLs of both CAs apply, each to the certificates of its own", func(t *testing.T) {
-		// The old CA revokes its leaf; the new CA's newer CRL, under
-		// the same name, revokes nothing, and must not supersede it.
+		// The old CA revokes its leaf; the new CA's CRL, under the
+		// same name and with a higher number, revokes a leaf of its
+		// own and must not supersede the old CA's CRL.
 		tlstest.RevokeCertAndRegenerateCRL(root, "old-ca", "old-leaf")
+		tlstest.CreateSignedCert(root, "new-ca", "04", "new-leaf", "new.example.com")
+		tlstest.RevokeCertAndRegenerateCRL(root, "new-ca", "new-leaf")
+		tlstest.RevokeCertAndRegenerateCRL(root, "new-ca", "new-leaf")
 		oldCRL, err := os.ReadFile(path.Join(root, "old-ca-crl.pem"))
 		require.NoError(t, err)
 		newCRL, err := os.ReadFile(path.Join(root, "new-ca-crl.pem"))
 		require.NoError(t, err)
+		require.Positive(t, loadOneCRL(t, path.Join(root, "new-ca-crl.pem")).Number.Cmp(loadOneCRL(t, path.Join(root, "old-ca-crl.pem")).Number), "the new CA's CRL must be the newer one by number for this test to be meaningful")
 		bothCRLs := path.Join(t.TempDir(), "both-crl.pem")
 		require.NoError(t, os.WriteFile(bothCRLs, append(newCRL, oldCRL...), 0o600))
 		checker, err := newCRLChecker(bothCRLs, bundle)
