@@ -39,7 +39,7 @@ func TestTableACL(t *testing.T) {
 	// caller the ACL does not exempt, whatever that caller's table grants: a
 	// CALL runs an opaque procedure body, DO can carry a table-reading
 	// subquery, and LOAD DATA writes a table the parser discards.
-	undeterminedErr := "command denied to user 'dev': its table set cannot be determined for a table ACL check"
+	undeterminedErr := "command denied to user 'dev' for a table set that cannot be determined"
 	execCases := []struct {
 		query string
 		err   string

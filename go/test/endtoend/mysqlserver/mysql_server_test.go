@@ -200,7 +200,7 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 	_, err = conn.ExecuteFetch("CALL testing()", 1, false)
 	require.Errorf(t, err, "error expected, got nil")
 	assert.Contains(t, err.Error(), "CallProcedure command denied to user 'vtgate client 2'")
-	assert.Contains(t, err.Error(), "its table set cannot be determined for a table ACL check (ACL check error)")
+	assert.Contains(t, err.Error(), "for a table set that cannot be determined (ACL check error)")
 }
 
 // TestPartitionedTable validates that partitioned tables are recognized by schema engine

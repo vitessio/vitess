@@ -1162,7 +1162,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 		}},
 	}
 	require.NoError(t, tableacl.InitFromProto(config))
-	callerID := &querypb.VTGateCallerID{Username: "u2"}
+	callerID := &querypb.VTGateCallerID{Username: "u2", Groups: []string{"eng", "beta"}}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
 	for _, tc := range cases {
@@ -1180,6 +1180,8 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 			_, err := qre.Execute()
 			require.Error(t, err, "an authenticated caller with no grants must not run an opaque statement under strict table ACL")
 			assert.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
+			// The denial names the caller's groups like a per-table one does.
+			require.EqualError(t, err, tc.planID.String()+" command denied to user 'u2', in groups [eng, beta], for a table set that cannot be determined (ACL check error)")
 			assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[statsKey], "the denial must be counted under the undetermined-table key")
 			tsv.StopService()
 
