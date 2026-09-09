@@ -1179,6 +1179,7 @@ func TestNewCRLCheckerCriticalExtensions(t *testing.T) {
 		{"an unknown critical extension", crlWith([]pkix.Extension{{Id: unknown, Critical: true, Value: flag}}, nil), "critical extension 1.3.6.1.4.1.99999.1"},
 		{"an unknown critical entry extension", crlWith(nil, []pkix.Extension{{Id: unknown, Critical: true, Value: flag}}), "critical extension 1.3.6.1.4.1.99999.1"},
 		{"a scope limited to attribute certificates", crlWith([]pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: attributeCertsOnly}}, nil), "attribute certificates"},
+		{"an issuing distribution point followed by trailing data", crlWith([]pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: append(slices.Clone(attributeCertsOnly[:0]), append(mustMarshal(t, struct{}{}), 0x00)...)}}, nil), "cannot be parsed"},
 	} {
 		t.Run(tc.name+" is refused", func(t *testing.T) {
 			_, err := newCRLChecker(tc.file, certs.ServerCA)
@@ -1564,4 +1565,12 @@ func partitionedCRLs(t *testing.T, caCert, caKey string, n int) string {
 	file := path.Join(t.TempDir(), "partitioned-crls.pem")
 	require.NoError(t, os.WriteFile(file, content, 0o600))
 	return file
+}
+
+// mustMarshal DER encodes v.
+func mustMarshal(t *testing.T, v any) []byte {
+	t.Helper()
+	der, err := asn1.Marshal(v)
+	require.NoError(t, err)
+	return der
 }

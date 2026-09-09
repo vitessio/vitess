@@ -277,7 +277,11 @@ func unsupportedCRL(crl *x509.RevocationList) error {
 			return fmt.Errorf("delta CRLs are not supported: the CRL from issuer %s is one", crl.Issuer.CommonName)
 		case extension.Id.Equal(oidIssuingDistributionPoint):
 			var scope issuingDistributionPoint
-			if _, err := asn1.Unmarshal(extension.Value, &scope); err != nil {
+			rest, err := asn1.Unmarshal(extension.Value, &scope)
+			if err == nil && len(rest) > 0 {
+				err = fmt.Errorf("%d bytes of trailing data", len(rest))
+			}
+			if err != nil {
 				return fmt.Errorf("the issuing distribution point of the CRL from issuer %s cannot be parsed: %w", crl.Issuer.CommonName, err)
 			}
 			if scope.IndirectCRL {
