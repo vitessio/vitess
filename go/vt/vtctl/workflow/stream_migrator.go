@@ -29,7 +29,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -475,13 +474,19 @@ func filterStreamsByTerminalUUIDs(streams []*VReplicationStream, terminalUUIDs m
 // the given migration UUIDs have reached a terminal state. This uses the same
 // criteria as gcArtifacts() to determine when a migration is done.
 func (sm *StreamMigrator) getTerminalOnlineDDLMigrations(ctx context.Context, tablet *topodatapb.Tablet, uuids []string) (map[string]bool, error) {
+	sidecarDBName, err := sm.ts.TopoServer().GetSidecarDBName(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get sidecar database name for keyspace %s", tablet.Keyspace)
+	}
+	sidecarDBIdentifier := sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
+
 	quotedUUIDs := make([]string, 0, len(uuids))
 	for _, uuid := range uuids {
 		quotedUUIDs = append(quotedUUIDs, encodeString(uuid))
 	}
 	query := fmt.Sprintf(
 		"select migration_uuid from %s.schema_migrations where migration_uuid in (%s) and migration_status in (%s, %s, %s)",
-		sidecar.GetIdentifier(),
+		sidecarDBIdentifier,
 		strings.Join(quotedUUIDs, ", "),
 		encodeString(string(schema.OnlineDDLStatusComplete)),
 		encodeString(string(schema.OnlineDDLStatusFailed)),
