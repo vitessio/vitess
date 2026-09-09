@@ -99,6 +99,10 @@ func recordResumption(config *tls.Config) *bool {
 	return &resumed
 }
 
+// TestClientConfigCRL checks the revocation of server certificates by
+// a client configured with a CRL, through real TLS handshakes: in
+// every SSL mode, on resumed sessions, with and without a configured
+// CA, and against chains crafted to dodge or exhaust the check.
 func TestClientConfigCRL(t *testing.T) {
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)
@@ -321,6 +325,10 @@ func loadOneCert(t *testing.T, file string) *x509.Certificate {
 	return loaded[0]
 }
 
+// TestServerConfigCRL checks the revocation of client certificates by
+// a server configured with a CRL, through real TLS handshakes: on
+// full and resumed handshakes, and with certificates presented beyond
+// the verified chain.
 func TestServerConfigCRL(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 

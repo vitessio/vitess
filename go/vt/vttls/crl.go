@@ -215,6 +215,10 @@ func (ck *crlCheck) run() error {
 	return nil
 }
 
+// index records cert as a possible issuer of the certificates that
+// carry its subject as their issuer, once per distinct certificate,
+// keeping the order in which it was indexed: the configured issuers
+// come first, then the certificates of the chains being checked.
 func (ck *crlCheck) index(cert *x509.Certificate) {
 	if _, done := ck.indexed[string(cert.Raw)]; done {
 		return
@@ -295,6 +299,10 @@ func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) ([]*x509.RevocationLi
 	return crls, nil
 }
 
+// spendSignatureCheck accounts for one signature verification against
+// the connection's budget, before an issuer lookup or a CRL binding
+// performs it, and fails once the budget is spent so that the check
+// aborts rather than carrying on without the verification.
 func (ck *crlCheck) spendSignatureCheck() error {
 	if ck.signatureChecks >= maxSignatureChecks {
 		return errSignatureChecksSpent
