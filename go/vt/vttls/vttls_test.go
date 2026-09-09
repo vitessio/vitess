@@ -17,14 +17,19 @@ limitations under the License.
 package vttls
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"io"
+	"math/big"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -113,6 +118,34 @@ func TestClientConfigCRL(t *testing.T) {
 
 		res := handshake(t, revokedServer, clientConfig)
 		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+
+	// These servers present their certificate alone, without the
+	// intermediate CA that issued it.
+	leafOnlyRevokedServer, err := ServerConfig(certs.RevokedServerCert, certs.RevokedServerKey, "", "", "", tls.VersionTLS12)
+	require.NoError(t, err)
+	leafOnlyValidServer, err := ServerConfig(certs.ServerCert, certs.ServerKey, "", "", "", tls.VersionTLS12)
+	require.NoError(t, err)
+
+	t.Run("a server that presents only its certificate is rejected when its issuer is not available", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, leafOnlyValidServer, clientConfig)
+		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.ServerName)
+	})
+
+	t.Run("a server that presents only its certificate is checked against the configured CA", func(t *testing.T) {
+		clientConfig, err := ClientConfig(Required, "", "", certs.ServerCA, certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		res := handshake(t, leafOnlyRevokedServer, clientConfig)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+
+		clientConfig, err = ClientConfig(Required, "", "", certs.ServerCA, certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		res = handshake(t, leafOnlyValidServer, clientConfig)
+		require.NoError(t, res.clientErr)
+		require.NoError(t, res.serverErr)
 	})
 }
 
@@ -209,4 +242,61 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 		VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate, rootCert}},
 	})
 	require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+}
+
+// sameSubjectCACerts returns n distinct self-signed CA certificates
+// that all carry the given subject, each with its own key.
+func sameSubjectCACerts(t *testing.T, rawSubject []byte, n int) []*x509.Certificate {
+	t.Helper()
+	certs := make([]*x509.Certificate, 0, n)
+	for i := range n {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		template := &x509.Certificate{
+			SerialNumber:          big.NewInt(int64(i + 1)),
+			Subject:               pkix.Name{CommonName: "same subject"},
+			RawSubject:            rawSubject,
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}
+		der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+		require.NoError(t, err)
+		cert, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+		certs = append(certs, cert)
+	}
+	return certs
+}
+
+// TestCRLCheckerBoundedIssuerSearch checks that a peer cannot make the
+// checker spend unbounded signature verifications by padding its chain
+// with certificates that carry the issuer's name, and that the padding
+// does not hide a revoked certificate when the issuer is configured.
+func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	loaded, err := loadx509Certificates(certs.RevokedServerCert)
+	require.NoError(t, err)
+	leaf := loaded[0]
+	padded := append([]*x509.Certificate{leaf}, sameSubjectCACerts(t, leaf.RawIssuer, 200)...)
+
+	t.Run("the search stops and fails closed when the issuer is not available", func(t *testing.T) {
+		checker, err := newCRLChecker(certs.ServerCRL, "")
+		require.NoError(t, err)
+
+		start := time.Now()
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: padded})
+		t.Logf("checked a %d certificate chain in %s", len(padded), time.Since(start))
+		require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName)
+	})
+
+	t.Run("the configured issuer is consulted before the presented certificates", func(t *testing.T) {
+		checker, err := newCRLChecker(certs.ServerCRL, certs.ServerCA)
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: padded})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
 }

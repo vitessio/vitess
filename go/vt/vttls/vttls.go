@@ -134,47 +134,68 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		config.ServerName = name
 	}
 
+	var checker *crlChecker
+	if crl != "" {
+		var err error
+		checker, err = newCRLChecker(crl, ca)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	switch mode {
 	case Disabled:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "can't create config for disabled mode")
 	case Preferred, Required:
 		config.InsecureSkipVerify = true
+		if checker != nil {
+			config.VerifyConnection = checker.verifyConnection
+		}
 	case VerifyCA:
 		config.InsecureSkipVerify = true
 		config.VerifyConnection = func(cs tls.ConnectionState) error {
-			caRoots := config.RootCAs
-			if caRoots == nil {
-				var err error
-				caRoots, err = x509.SystemCertPool()
-				if err != nil {
-					return err
-				}
+			// The chains built here are handed to the CRL check,
+			// since Go builds none of its own in this mode.
+			chains, err := verifyPeerChain(config.RootCAs, cs)
+			if err != nil {
+				return err
 			}
-			opts := x509.VerifyOptions{
-				Roots:         caRoots,
-				Intermediates: x509.NewCertPool(),
+			if checker == nil {
+				return nil
 			}
-			for _, cert := range cs.PeerCertificates[1:] {
-				opts.Intermediates.AddCert(cert)
-			}
-			_, err := cs.PeerCertificates[0].Verify(opts)
-			return err
+			return checker.check(cs.PeerCertificates, chains)
 		}
 	case VerifyIdentity:
-		// Nothing to do here, default config is the strictest and correct.
+		// Go's own verification is the strictest and correct.
+		if checker != nil {
+			config.VerifyConnection = checker.verifyConnection
+		}
 	default:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid mode: %s", mode)
 	}
 
-	if crl != "" {
-		checker, err := newCRLChecker(crl, ca)
+	return config, nil
+}
+
+// verifyPeerChain verifies the certificate chain the peer presented
+// against roots, or against the system roots when roots is nil, and
+// returns the chains it built.
+func verifyPeerChain(roots *x509.CertPool, cs tls.ConnectionState) ([][]*x509.Certificate, error) {
+	if roots == nil {
+		var err error
+		roots, err = x509.SystemCertPool()
 		if err != nil {
 			return nil, err
 		}
-		config.VerifyConnection = composeVerifyConnection(config.VerifyConnection, checker.verifyConnection)
 	}
-
-	return config, nil
+	opts := x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: x509.NewCertPool(),
+	}
+	for _, cert := range cs.PeerCertificates[1:] {
+		opts.Intermediates.AddCert(cert)
+	}
+	return cs.PeerCertificates[0].Verify(opts)
 }
 
 // ServerConfig returns the TLS config to use for a server to
@@ -215,26 +236,10 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 		if err != nil {
 			return nil, err
 		}
-		config.VerifyConnection = composeVerifyConnection(config.VerifyConnection, checker.verifyConnection)
+		config.VerifyConnection = checker.verifyConnection
 	}
 
 	return config, nil
-}
-
-// composeVerifyConnection chains VerifyConnection callbacks, skipping
-// nil ones and stopping at the first error.
-func composeVerifyConnection(callbacks ...func(tls.ConnectionState) error) func(tls.ConnectionState) error {
-	return func(cs tls.ConnectionState) error {
-		for _, callback := range callbacks {
-			if callback == nil {
-				continue
-			}
-			if err := callback(cs); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
 }
 
 var certPools = sync.Map{}

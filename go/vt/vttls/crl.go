@@ -23,23 +23,48 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
-	"slices"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
-// crlChecker rejects a connection whose peer presents a certificate
-// listed in one of the configured Certificate Revocation Lists.
-type crlChecker struct {
-	crls []*x509.RevocationList
-	// issuers are the CA certificates configured for the connection.
-	// A CRL only applies to a certificate when the CRL's signature
-	// verifies from that certificate's issuer, and a peer commonly
-	// presents its leaf certificate alone, so the issuer is looked
-	// for here as well as among the certificates the peer sent.
-	issuers []*x509.Certificate
-}
+// maxIssuerSignatureChecks bounds the signature verifications spent
+// per connection on looking for the issuers of the certificates the
+// peer presented, whose number and names the peer controls. It
+// mirrors the bound that crypto/x509 puts on chain building.
+const maxIssuerSignatureChecks = 100
+
+type (
+	// crlChecker rejects a connection whose peer presents a
+	// certificate listed in one of the configured Certificate
+	// Revocation Lists.
+	crlChecker struct {
+		crls []*x509.RevocationList
+		// issuers are the CA certificates configured for the
+		// connection. A CRL only applies to a certificate when the
+		// CRL's signature verifies from that certificate's issuer,
+		// and a peer commonly presents its leaf certificate alone,
+		// so the issuer is looked for here as well as among the
+		// certificates the peer sent.
+		issuers []*x509.Certificate
+		// anchors holds the DER encoding of the configured
+		// issuers, which are trust anchors: their own revocation
+		// is not checked, as it never was.
+		anchors map[string]struct{}
+	}
+
+	// crlCheck is the state of one connection's revocation check.
+	crlCheck struct {
+		checker *crlChecker
+		// bySubject indexes the certificates that may be an
+		// issuer by subject, the configured ones first, then the
+		// ones from verified chains, then the presented ones.
+		bySubject       map[string][]*x509.Certificate
+		indexed         map[string]struct{}
+		crlsByIssuer    map[*x509.Certificate][]*x509.RevocationList
+		signatureChecks int
+	}
+)
 
 func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
@@ -61,12 +86,15 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 	if err != nil {
 		return nil, err
 	}
-	checker := &crlChecker{crls: crls}
+	checker := &crlChecker{crls: crls, anchors: map[string]struct{}{}}
 	if ca != "" {
 		checker.issuers, err = loadx509Certificates(ca)
 		if err != nil {
 			return nil, err
 		}
+	}
+	for _, issuer := range checker.issuers {
+		checker.anchors[string(issuer.Raw)] = struct{}{}
 	}
 	return checker, nil
 }
@@ -77,31 +105,47 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 // even when InsecureSkipVerify disables Go's own chain verification,
 // which is the case for every client mode short of verify_identity.
 func (c *crlChecker) verifyConnection(cs tls.ConnectionState) error {
-	// The peer's certificates are the ones it presented plus any that
-	// a verified chain added to them, which a platform verifier can
-	// do, so that every certificate below a trust anchor is checked.
-	peerCerts := make([]*x509.Certificate, 0, len(cs.PeerCertificates))
-	peerCerts = append(peerCerts, cs.PeerCertificates...)
-	for _, chain := range cs.VerifiedChains {
-		for _, cert := range chain {
-			if !slices.ContainsFunc(peerCerts, cert.Equal) {
-				peerCerts = append(peerCerts, cert)
-			}
-		}
-	}
-	issuers := make([]*x509.Certificate, 0, len(c.issuers)+len(peerCerts))
-	issuers = append(issuers, c.issuers...)
-	issuers = append(issuers, peerCerts...)
+	return c.check(cs.PeerCertificates, cs.VerifiedChains)
+}
 
-	for _, cert := range peerCerts {
-		for _, issuer := range issuers {
-			if !bytes.Equal(cert.RawIssuer, issuer.RawSubject) || cert.CheckSignatureFrom(issuer) != nil {
+// check walks the verified chains and then the presented chain in
+// the order the certificates were sent, and rejects the connection
+// when a certificate below a trust anchor is listed in a CRL signed
+// by its issuer. The issuer of the leaf certificate has to be found,
+// so that a peer cannot dodge the check by leaving its chain out;
+// other certificates whose issuer is not available go unchecked, as
+// they always did.
+func (c *crlChecker) check(presented []*x509.Certificate, verifiedChains [][]*x509.Certificate) error {
+	if len(presented) == 0 {
+		return nil
+	}
+	check := c.newCheck(presented, verifiedChains)
+	chains := make([][]*x509.Certificate, 0, len(verifiedChains)+1)
+	chains = append(chains, verifiedChains...)
+	chains = append(chains, presented)
+	checked := make(map[string]struct{}, len(presented))
+	for chainIndex, chain := range chains {
+		verified := chainIndex < len(verifiedChains)
+		for i, cert := range chain {
+			if _, done := checked[string(cert.Raw)]; done {
 				continue
 			}
-			for _, crl := range c.crls {
-				if crl.CheckSignatureFrom(issuer) != nil {
-					continue
+			checked[string(cert.Raw)] = struct{}{}
+			if c.isAnchor(cert) || (verified && i == len(chain)-1) {
+				continue
+			}
+			var next *x509.Certificate
+			if i+1 < len(chain) {
+				next = chain[i+1]
+			}
+			issuer := check.findIssuer(cert, next)
+			if issuer == nil {
+				if bytes.Equal(cert.Raw, presented[0].Raw) {
+					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
 				}
+				continue
+			}
+			for _, crl := range check.crlsSignedBy(issuer) {
 				if certIsRevoked(cert, crl) {
 					return fmt.Errorf("Certificate revoked: CommonName=%v", cert.Subject.CommonName)
 				}
@@ -109,6 +153,89 @@ func (c *crlChecker) verifyConnection(cs tls.ConnectionState) error {
 		}
 	}
 	return nil
+}
+
+// isAnchor reports whether cert is a configured issuer or is
+// self-signed, neither of which has an issuer to check it against.
+func (c *crlChecker) isAnchor(cert *x509.Certificate) bool {
+	if _, ok := c.anchors[string(cert.Raw)]; ok {
+		return true
+	}
+	return bytes.Equal(cert.RawIssuer, cert.RawSubject) &&
+		cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature) == nil
+}
+
+func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]*x509.Certificate) *crlCheck {
+	check := &crlCheck{
+		checker:      c,
+		bySubject:    map[string][]*x509.Certificate{},
+		indexed:      map[string]struct{}{},
+		crlsByIssuer: map[*x509.Certificate][]*x509.RevocationList{},
+	}
+	for _, issuer := range c.issuers {
+		check.index(issuer)
+	}
+	for _, chain := range verifiedChains {
+		for _, cert := range chain {
+			check.index(cert)
+		}
+	}
+	for _, cert := range presented {
+		check.index(cert)
+	}
+	return check
+}
+
+func (ck *crlCheck) index(cert *x509.Certificate) {
+	if _, done := ck.indexed[string(cert.Raw)]; done {
+		return
+	}
+	ck.indexed[string(cert.Raw)] = struct{}{}
+	ck.bySubject[string(cert.RawSubject)] = append(ck.bySubject[string(cert.RawSubject)], cert)
+}
+
+// findIssuer returns the certificate that issued cert, trying next,
+// the certificate that follows it in its chain, before the other
+// candidates that carry the issuer's name.
+func (ck *crlCheck) findIssuer(cert, next *x509.Certificate) *x509.Certificate {
+	if next != nil && ck.issuedBy(cert, next) {
+		return next
+	}
+	for _, candidate := range ck.bySubject[string(cert.RawIssuer)] {
+		if candidate != next && ck.issuedBy(cert, candidate) {
+			return candidate
+		}
+	}
+	return nil
+}
+
+// issuedBy reports whether issuer signed cert, spending one of the
+// connection's bounded signature checks when the names match.
+func (ck *crlCheck) issuedBy(cert, issuer *x509.Certificate) bool {
+	if !bytes.Equal(cert.RawIssuer, issuer.RawSubject) {
+		return false
+	}
+	if ck.signatureChecks >= maxIssuerSignatureChecks {
+		return false
+	}
+	ck.signatureChecks++
+	return cert.CheckSignatureFrom(issuer) == nil
+}
+
+// crlsSignedBy returns the CRLs whose signature verifies from issuer,
+// checking each CRL once per issuer for the connection.
+func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) []*x509.RevocationList {
+	if crls, done := ck.crlsByIssuer[issuer]; done {
+		return crls
+	}
+	var crls []*x509.RevocationList
+	for _, crl := range ck.checker.crls {
+		if crl.CheckSignatureFrom(issuer) == nil {
+			crls = append(crls, crl)
+		}
+	}
+	ck.crlsByIssuer[issuer] = crls
+	return crls
 }
 
 func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
