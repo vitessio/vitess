@@ -71,14 +71,16 @@ func crlNumber(crl *x509.RevocationList) string {
 }
 
 // warnExpiredCRL logs that crl is past its due date, at most once per
-// interval for that CRL.
+// interval for that CRL, however many handshakes consult it at once:
+// the one that records the warning first is the one that logs it.
 func warnExpiredCRL(crl *x509.RevocationList) {
 	key := expiredCRLKey(crl)
 	now := time.Now()
-	if last, warned := expiredCRLWarnings.Load(key); warned && now.Sub(last.(time.Time)) < expiredCRLWarningInterval {
-		return
+	if last, warned := expiredCRLWarnings.LoadOrStore(key, now); warned {
+		if now.Sub(last.(time.Time)) < expiredCRLWarningInterval || !expiredCRLWarnings.CompareAndSwap(key, last, now) {
+			return
+		}
 	}
-	expiredCRLWarnings.Store(key, now)
 	log.Warn("The Certificate Revocation List (CRL) is past its due date and must be updated. Revoked certificates will still be rejected in this state.",
 		slog.String("issuer", crl.Issuer.CommonName),
 		slog.String("crl_number", crlNumber(crl)),

@@ -29,17 +29,21 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"net"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -959,6 +963,21 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		require.NotEqual(t, keys[0], keys[1])
 	})
 
+	t.Run("handshakes consulting an expired CRL at once warn about it once", func(t *testing.T) {
+		warnings := atomic.Int32{}
+		warn := log.Warn
+		log.Warn = func(string, ...slog.Attr) { warnings.Add(1) }
+		t.Cleanup(func() { log.Warn = warn })
+		crl := loadOneCRL(t, crlWithIssuerName(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", big.NewInt(7), "Expired At Once CA", asn1.TagPrintableString, expired))
+
+		var handshakes sync.WaitGroup
+		for range 50 {
+			handshakes.Go(func() { certIsRevoked(cert, crl) })
+		}
+		handshakes.Wait()
+		require.EqualValues(t, 1, warnings.Load())
+	})
+
 	t.Run("CRLs that differ in content alone are told apart", func(t *testing.T) {
 		// The CRL number is optional, so two CRLs of one issuer due
 		// at the same time can carry the same number, or none.
@@ -1029,6 +1048,15 @@ func TestNameKey(t *testing.T) {
 			require.NotEqual(t, nameKey(tc.a), nameKey(tc.b))
 		})
 	}
+}
+
+// loadOneCRL loads the CRL file and returns its only CRL.
+func loadOneCRL(t *testing.T, file string) *x509.RevocationList {
+	t.Helper()
+	crls, err := loadCRLSet(file)
+	require.NoError(t, err)
+	require.Len(t, crls, 1)
+	return crls[0]
 }
 
 // encodedCommonName encodes a distinguished name made of the given
