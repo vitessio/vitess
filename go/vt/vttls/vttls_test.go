@@ -562,25 +562,92 @@ func selfSignedCACerts(t *testing.T, rawSubject []byte, n int) []*x509.Certifica
 	t.Helper()
 	certs := make([]*x509.Certificate, 0, n)
 	for i := range n {
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		require.NoError(t, err)
-		template := &x509.Certificate{
-			SerialNumber:          big.NewInt(int64(i + 1)),
-			Subject:               pkix.Name{CommonName: fmt.Sprintf("decoy %d", i+1)},
-			RawSubject:            rawSubject,
-			NotBefore:             time.Now().Add(-time.Hour),
-			NotAfter:              time.Now().Add(time.Hour),
-			IsCA:                  true,
-			BasicConstraintsValid: true,
-			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		}
-		der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-		require.NoError(t, err)
-		cert, err := x509.ParseCertificate(der)
-		require.NoError(t, err)
+		cert, _ := selfSignedCA(t, int64(i+1), fmt.Sprintf("decoy %d", i+1), rawSubject)
 		certs = append(certs, cert)
 	}
 	return certs
+}
+
+// selfSignedCA returns a self-signed CA certificate and its key, with
+// the given serial number and common name, or with rawSubject as its
+// subject when it is set.
+func selfSignedCA(t *testing.T, serial int64, commonName string, rawSubject []byte) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(serial),
+		Subject:               pkix.Name{CommonName: commonName},
+		RawSubject:            rawSubject,
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return cert, key
+}
+
+// multiValuedRDN encodes a distinguished name made of one RDN that
+// holds the given common names, in the given order.
+func multiValuedRDN(t *testing.T, commonNames ...string) []byte {
+	t.Helper()
+	var rdn pkix.RelativeDistinguishedNameSET
+	for _, commonName := range commonNames {
+		rdn = append(rdn, pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
+			Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagPrintableString, Bytes: []byte(commonName)},
+		})
+	}
+	raw, err := asn1.Marshal(pkix.RDNSequence{rdn})
+	require.NoError(t, err)
+	return raw
+}
+
+// TestCRLCheckerMultiValuedRDN checks that a CRL whose issuer name
+// holds the attributes of a multi-valued RDN in another order, and
+// another case, than the CA certificate's subject is still bound to
+// that CA: the attributes of an RDN form a set.
+func TestCRLCheckerMultiValuedRDN(t *testing.T) {
+	dir := t.TempDir()
+	ca, caKey := selfSignedCA(t, 1, "", multiValuedRDN(t, "Bob", "amy"))
+	caFile := path.Join(dir, "ca-cert.pem")
+	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw}), 0o600))
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "leaf.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, ca, &leafKey.PublicKey, caKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	require.NoError(t, err)
+
+	reordered := *ca
+	reordered.RawSubject = multiValuedRDN(t, "AMY", "bob")
+	require.NotEqual(t, ca.RawSubject, reordered.RawSubject)
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, &reordered, caKey)
+	require.NoError(t, err)
+	crlFile := path.Join(dir, "reordered-crl.pem")
+	require.NoError(t, os.WriteFile(crlFile, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlDER}), 0o600))
+
+	checker, err := newCRLChecker(crlFile, caFile)
+	require.NoError(t, err)
+	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
+	require.ErrorContains(t, err, "Certificate revoked: CommonName=leaf.example.com")
 }
 
 // TestCRLCheckerBoundedIssuerSearch checks that a peer cannot make the

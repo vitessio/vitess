@@ -21,9 +21,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -48,7 +50,7 @@ var expiredCRLLoggers sync.Map
 // expiredCRLKey identifies a CRL across the configurations that load
 // it, for the throttle of the warning about its expiry.
 func expiredCRLKey(crl *x509.RevocationList) string {
-	return nameKey(crl.Issuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339)
+	return nameKey(crl.RawIssuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339)
 }
 
 func warnExpiredCRL(crl *x509.RevocationList) {
@@ -148,7 +150,7 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 		}
 	}
 	for _, crl := range crls {
-		name := nameKey(crl.Issuer)
+		name := nameKey(crl.RawIssuer)
 		checker.crlIssuers[name] = struct{}{}
 		checker.crlIssuerName[crl] = name
 	}
@@ -157,33 +159,36 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 
 // hasCRLFrom reports whether a CRL carries the name of cert's issuer.
 func (c *crlChecker) hasCRLFrom(cert *x509.Certificate) bool {
-	_, named := c.crlIssuers[nameKey(cert.Issuer)]
+	_, named := c.crlIssuers[nameKey(cert.RawIssuer)]
 	return named
 }
 
-// nameKey renders a distinguished name for comparison under the X.509
-// matching rules, by which attribute values compare without regard to
-// case or to leading, trailing, and repeated whitespace. Go compares
-// the names of certificates byte for byte, but a CRL can come from
-// another tool than the CA certificate and encode, case, or space the
-// same name differently, and nothing rides on the name alone since
-// the CRL's signature is verified before the CRL is applied.
-func nameKey(name pkix.Name) string {
-	attributes := name.Names
-	if len(attributes) == 0 {
-		for _, rdn := range name.ToRDNSequence() {
-			attributes = append(attributes, rdn...)
-		}
+// nameKey renders a DER encoded distinguished name for comparison
+// under the X.509 matching rules, by which attribute values compare
+// without regard to case or to leading, trailing, and repeated
+// whitespace, and the attributes of a multi-valued RDN compare as a
+// set. Go compares the names of certificates byte for byte, but a CRL
+// can come from another tool than the CA certificate and encode,
+// case, space, or order the same name differently, and nothing rides
+// on the name alone since the CRL's signature is verified before the
+// CRL is applied. A name that does not parse is compared as it is.
+func nameKey(rawName []byte) string {
+	var sequence pkix.RDNSequence
+	if rest, err := asn1.Unmarshal(rawName, &sequence); err != nil || len(rest) > 0 {
+		return string(rawName)
 	}
 	var key strings.Builder
-	for _, attribute := range attributes {
-		value := fmt.Sprint(attribute.Value)
-		if text, ok := attribute.Value.(string); ok {
-			value = strings.ToLower(strings.Join(strings.Fields(text), " "))
+	for _, rdn := range sequence {
+		attributes := make([]string, 0, len(rdn))
+		for _, attribute := range rdn {
+			value := fmt.Sprint(attribute.Value)
+			if text, ok := attribute.Value.(string); ok {
+				value = strings.ToLower(strings.Join(strings.Fields(text), " "))
+			}
+			attributes = append(attributes, attribute.Type.String()+"="+value)
 		}
-		key.WriteString(attribute.Type.String())
-		key.WriteByte('=')
-		key.WriteString(value)
+		slices.Sort(attributes)
+		key.WriteString(strings.Join(attributes, "+"))
 		key.WriteByte(',')
 	}
 	return key.String()
@@ -366,7 +371,7 @@ func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) (crlBinding, error) {
 		return binding, nil
 	}
 	var binding crlBinding
-	issuerName := nameKey(issuer.Subject)
+	issuerName := nameKey(issuer.RawSubject)
 	for _, crl := range ck.checker.crls {
 		if ck.checker.crlIssuerName[crl] != issuerName {
 			continue
