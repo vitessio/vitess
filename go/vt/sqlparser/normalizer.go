@@ -277,8 +277,9 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	case *Union:
 		nz.rewriteUnion(node)
 	case *FuncExpr:
-		// a generic call by a keyword-function name is a stored-function call
-		if !IsKeywordFunctionName(node.Name.String()) {
+		// a qualified call, or a generic call by a keyword-function name, is
+		// a stored-function call: MySQL's to resolve
+		if node.Qualifier.IsEmpty() && !IsKeywordFunctionName(node.Name.String()) {
 			nz.funcRewrite(cursor, node.Name, node.Exprs)
 		}
 	case *BuiltinFuncExpr:
