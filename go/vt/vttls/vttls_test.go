@@ -224,7 +224,7 @@ func TestClientConfigCRL(t *testing.T) {
 		// The decoys carry the intermediate's name, so finding the
 		// leaf's issuer spends the whole budget on them and the real
 		// intermediate; its own issuer would need one more check.
-		chain := append([]*x509.Certificate{leaf}, sameSubjectCACerts(t, leaf.RawIssuer, maxIssuerSignatureChecks-1)...)
+		chain := append([]*x509.Certificate{leaf}, selfSignedCACerts(t, leaf.RawIssuer, maxIssuerSignatureChecks-1)...)
 		chain = append(chain, intermediate, rootCert)
 		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
 		require.NoError(t, err)
@@ -333,9 +333,10 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 }
 
-// sameSubjectCACerts returns n distinct self-signed CA certificates
-// that all carry the given subject, each with its own key.
-func sameSubjectCACerts(t *testing.T, rawSubject []byte, n int) []*x509.Certificate {
+// selfSignedCACerts returns n distinct self-signed CA certificates,
+// each with its own key. They all carry rawSubject when it is set,
+// and each its own subject otherwise.
+func selfSignedCACerts(t *testing.T, rawSubject []byte, n int) []*x509.Certificate {
 	t.Helper()
 	certs := make([]*x509.Certificate, 0, n)
 	for i := range n {
@@ -343,7 +344,7 @@ func sameSubjectCACerts(t *testing.T, rawSubject []byte, n int) []*x509.Certific
 		require.NoError(t, err)
 		template := &x509.Certificate{
 			SerialNumber:          big.NewInt(int64(i + 1)),
-			Subject:               pkix.Name{CommonName: "same subject"},
+			Subject:               pkix.Name{CommonName: fmt.Sprintf("decoy %d", i+1)},
 			RawSubject:            rawSubject,
 			NotBefore:             time.Now().Add(-time.Hour),
 			NotAfter:              time.Now().Add(time.Hour),
@@ -369,7 +370,7 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 	loaded, err := loadx509Certificates(certs.RevokedServerCert)
 	require.NoError(t, err)
 	leaf := loaded[0]
-	padded := append([]*x509.Certificate{leaf}, sameSubjectCACerts(t, leaf.RawIssuer, 200)...)
+	padded := append([]*x509.Certificate{leaf}, selfSignedCACerts(t, leaf.RawIssuer, 200)...)
 
 	t.Run("the search stops and fails closed once the signature checks are spent", func(t *testing.T) {
 		checker, err := newCRLChecker(certs.ServerCRL, "")
@@ -387,5 +388,20 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 
 		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: padded})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+
+	t.Run("self-signed padding counts against the signature checks", func(t *testing.T) {
+		// The padding does not carry the issuer's name, so the leaf
+		// resolves at once through the configured issuer; the
+		// self-signed certificates then spend the remaining checks.
+		checker, err := newCRLChecker(certs.ServerCRL, certs.ServerCA)
+		require.NoError(t, err)
+		valid := loadOneCert(t, certs.ServerCert)
+		selfSignedPadded := append([]*x509.Certificate{valid}, selfSignedCACerts(t, nil, 200)...)
+
+		start := time.Now()
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: selfSignedPadded})
+		t.Logf("checked a %d certificate chain in %s", len(selfSignedPadded), time.Since(start))
+		require.ErrorContains(t, err, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxIssuerSignatureChecks))
 	})
 }

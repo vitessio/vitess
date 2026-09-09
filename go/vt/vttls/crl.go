@@ -118,10 +118,14 @@ func (c *crlChecker) verifyConnection(cs tls.ConnectionState) error {
 // check walks the verified chains and then the presented chain in
 // the order the certificates were sent, and rejects the connection
 // when a certificate below a trust anchor is listed in a CRL signed
-// by its issuer. The issuer of the leaf certificate has to be found,
-// so that a peer cannot dodge the check by leaving its chain out;
-// other certificates whose issuer is not available go unchecked, as
-// they always did.
+// by its issuer. The trust anchors are the configured issuers and
+// the last certificate of each verified chain; a self-signed
+// certificate the peer presents is not one, so that recognizing it
+// costs one of the bounded signature checks like any other issuer
+// lookup. The issuer of the leaf certificate has to be found, so
+// that a peer cannot dodge the check by leaving its chain out; other
+// certificates whose issuer is not available go unchecked, as they
+// always did.
 func (c *crlChecker) check(presented []*x509.Certificate, verifiedChains [][]*x509.Certificate) error {
 	if len(presented) == 0 {
 		return nil
@@ -138,7 +142,7 @@ func (c *crlChecker) check(presented []*x509.Certificate, verifiedChains [][]*x5
 				continue
 			}
 			checked[string(cert.Raw)] = struct{}{}
-			if c.isAnchor(cert) || (verified && i == len(chain)-1) {
+			if _, anchor := c.anchors[string(cert.Raw)]; anchor || (verified && i == len(chain)-1) {
 				continue
 			}
 			var next *x509.Certificate
@@ -163,16 +167,6 @@ func (c *crlChecker) check(presented []*x509.Certificate, verifiedChains [][]*x5
 		}
 	}
 	return nil
-}
-
-// isAnchor reports whether cert is a configured issuer or is
-// self-signed, neither of which has an issuer to check it against.
-func (c *crlChecker) isAnchor(cert *x509.Certificate) bool {
-	if _, ok := c.anchors[string(cert.Raw)]; ok {
-		return true
-	}
-	return bytes.Equal(cert.RawIssuer, cert.RawSubject) &&
-		cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature) == nil
 }
 
 func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]*x509.Certificate) *crlCheck {
