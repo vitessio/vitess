@@ -23,13 +23,14 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // maxSignatureChecks bounds the signature verifications spent per
@@ -41,10 +42,13 @@ const maxSignatureChecks = 100
 
 var errSignatureChecksSpent = fmt.Errorf("checking it exceeded the %d signature checks allowed per connection", maxSignatureChecks)
 
-// expiredCRLLoggers throttle the warning about an expired CRL, which
-// would otherwise repeat on every handshake that consults it, one
-// throttle per CRL so that every stale CRL stays visible in the logs.
-var expiredCRLLoggers sync.Map
+// expiredCRLWarnings holds, per CRL, when the CRL was last warned
+// about being past its due date, since the warning would otherwise
+// repeat on every handshake that consults the CRL. One entry per CRL
+// keeps every stale CRL visible in the logs.
+var expiredCRLWarnings sync.Map
+
+const expiredCRLWarningInterval = time.Minute
 
 // expiredCRLKey identifies a CRL across the configurations that load
 // it, for the throttle of the warning about its expiry.
@@ -52,14 +56,19 @@ func expiredCRLKey(crl *x509.RevocationList) string {
 	return nameKey(crl.RawIssuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339)
 }
 
+// warnExpiredCRL logs that crl is past its due date, at most once per
+// interval for that CRL.
 func warnExpiredCRL(crl *x509.RevocationList) {
 	key := expiredCRLKey(crl)
-	logger, found := expiredCRLLoggers.Load(key)
-	if !found {
-		logger, _ = expiredCRLLoggers.LoadOrStore(key, logutil.NewThrottledLogger("vttls-expired-crl:"+key, time.Minute))
+	now := time.Now()
+	if last, warned := expiredCRLWarnings.Load(key); warned && now.Sub(last.(time.Time)) < expiredCRLWarningInterval {
+		return
 	}
-	logger.(*logutil.ThrottledLogger).Warningf("The Certificate Revocation List (CRL) from issuer %q was due for an update at %s and must be updated. Revoked certificates will still be rejected in this state.",
-		crl.Issuer.CommonName, crl.NextUpdate.UTC().Format(time.RFC3339))
+	expiredCRLWarnings.Store(key, now)
+	log.Warn("The Certificate Revocation List (CRL) is past its due date and must be updated. Revoked certificates will still be rejected in this state.",
+		slog.String("issuer", crl.Issuer.CommonName),
+		slog.Time("next_update", crl.NextUpdate),
+	)
 }
 
 type (

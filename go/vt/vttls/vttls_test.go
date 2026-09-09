@@ -40,7 +40,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -922,9 +921,9 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		require.False(t, certIsRevoked(cert, crl))
 	}
 	for _, crl := range crls {
-		logger, found := expiredCRLLoggers.Load(expiredCRLKey(crl))
-		require.True(t, found, "no throttle for the CRL from %s", crl.Issuer.CommonName)
-		require.False(t, logger.(*logutil.ThrottledLogger).GetLastLogTime().IsZero(), "the CRL from %s was not warned about", crl.Issuer.CommonName)
+		warned, found := expiredCRLWarnings.Load(expiredCRLKey(crl))
+		require.True(t, found, "the CRL from %s was not warned about", crl.Issuer.CommonName)
+		require.False(t, warned.(time.Time).IsZero())
 	}
 }
 
