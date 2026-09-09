@@ -637,3 +637,8 @@ The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable o
 #### <a id="vttls-crl-fail-closed"/>Connections whose certificate revocation cannot be checked against a configured CRL are rejected</a>
 
 The certificate revocation lists configured with `--grpc-crl`, `--mysql-server-ssl-crl`, `--tablet-grpc-crl`, `--vtgate-grpc-crl`, and the other `*-crl` flags are now enforced in every SSL mode and on resumed TLS sessions, see [GHSA-fxqj-c35w-x6rq](https://github.com/vitessio/vitess/security/advisories/GHSA-fxqj-c35w-x6rq). Along with that, a connection is now rejected rather than left unchecked when the peer's certificate was issued under the name of a CA that has a CRL configured but no certificate for that CA is available to check it against: for example, a client in `required` mode with a CRL but no CA file, connecting to a server that presents only its own certificate. To keep such connections working, configure the CA file for the connection or have the peer present its certificate chain.
+
+Two more configurations that used to connect with the CRL silently ignored are now refused, since the CRL cannot be applied as configured:
+
+- A CA certificate that is not allowed to sign CRLs, that is, without the `cRLSign` key usage, while its key signed a configured CRL: connections under that CA are rejected. Reissue the CA certificate with `cRLSign`, or sign the CRL with a certificate that has it.
+- A `*-crl` file that holds no CRL: the TLS configuration fails to build. Point the flag at a file with at least one `X509 CRL` block, or drop the flag.
