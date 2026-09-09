@@ -612,7 +612,8 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	t.Run("certificates presented beyond the verified chain cost nothing", func(t *testing.T) {
 		// The check of a verified chain spends the same signature
 		// checks whether or not the peer presented other certificates
-		// after its own, since those are not inspected.
+		// after its own, since those are not inspected, nor even
+		// indexed when no checked certificate needs them.
 		validLeaf := loadOneCert(t, certs.ServerCert)
 		chain := [][]*x509.Certificate{{validLeaf, intermediate, rootCert}}
 		checker, err := newCRLChecker(certs.ServerCRL, rootCA)
@@ -624,6 +625,7 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 		require.NoError(t, padded.run())
 		require.Equal(t, alone.signatureChecks, padded.signatureChecks)
 		require.Positive(t, alone.signatureChecks)
+		require.Empty(t, padded.bySubject, "the presented certificates were indexed although no checked certificate needed them")
 	})
 }
 

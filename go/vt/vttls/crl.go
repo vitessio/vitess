@@ -105,6 +105,11 @@ type (
 		trusted   map[string][]*x509.Certificate
 		bySubject map[string][]*x509.Certificate
 		indexed   map[string]struct{}
+		// presentedIndexed tells whether the presented certificates
+		// have been indexed into bySubject, which is put off until a
+		// checked certificate's issuer has to be looked for among
+		// them, since a peer can present many that nothing needs.
+		presentedIndexed bool
 		// names memoizes nameKey by DER encoded name.
 		names           map[string]string
 		crlsByIssuer    map[string]crlBinding
@@ -628,15 +633,24 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 			}
 		}
 	}
-	// The certificates presented beyond the chains being checked are
-	// not checked, but one of them may be the issuer of a certificate
-	// that is, such as a root presented beyond the intermediate that
-	// a verified chain ends at. Serving as a candidate costs nothing
-	// unless a checked certificate carries the candidate's name.
-	for _, cert := range presented {
-		check.index(cert, check.bySubject)
-	}
 	return check
+}
+
+// presentedBySubject indexes the presented certificates on first use
+// and returns the index. The certificates presented beyond the chains
+// being checked are not checked, but one of them may be the issuer of
+// a certificate that is, such as a root presented beyond the
+// intermediate that a verified chain ends at. They are only indexed
+// once a checked certificate's issuer has to be looked for among
+// them, so that presenting many of them costs nothing otherwise.
+func (ck *crlCheck) presentedBySubject() map[string][]*x509.Certificate {
+	if !ck.presentedIndexed {
+		ck.presentedIndexed = true
+		for _, cert := range ck.presented {
+			ck.index(cert, ck.bySubject)
+		}
+	}
+	return ck.bySubject
 }
 
 // run walks the chains in the order the certificates were sent, and
@@ -746,11 +760,14 @@ func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 		return lookup, nil
 	}
 	vouchedFor := slices.Concat(ck.checker.configuredBySubject[issuerName], ck.trusted[issuerName])
-	for _, candidates := range [][]*x509.Certificate{vouchedFor, ck.bySubject[issuerName]} {
+	for _, candidates := range []func() []*x509.Certificate{
+		func() []*x509.Certificate { return vouchedFor },
+		func() []*x509.Certificate { return ck.presentedBySubject()[issuerName] },
+	} {
 		if lookup.orphaned {
 			return lookup, nil
 		}
-		for _, candidate := range candidates {
+		for _, candidate := range candidates() {
 			issued, err := ck.issuedBy(cert, candidate)
 			if err != nil {
 				return crlLookup{}, err
