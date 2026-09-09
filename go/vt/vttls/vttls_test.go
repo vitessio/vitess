@@ -157,6 +157,17 @@ func TestClientConfigCRL(t *testing.T) {
 		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.ServerName)
 	})
 
+	t.Run("a server that presents only its certificate is accepted when no CRL is configured for its issuer", func(t *testing.T) {
+		// The only CRL configured comes from the clients' CA, which
+		// has nothing to say about the server's certificate.
+		clientConfig, err := ClientConfig(Required, "", "", "", certs.ClientCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, leafOnlyValidServer, clientConfig)
+		require.NoError(t, res.clientErr)
+		require.NoError(t, res.serverErr)
+	})
+
 	t.Run("a server that presents only its certificate is checked against the configured CA", func(t *testing.T) {
 		clientConfig, err := ClientConfig(Required, "", "", certs.ServerCA, certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
 		require.NoError(t, err)

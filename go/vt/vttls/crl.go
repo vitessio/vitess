@@ -174,9 +174,12 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 // of each verified chain; a self-signed certificate the peer presents
 // is not one, so that recognizing it costs one of the bounded
 // signature checks like any other issuer lookup. The issuer of the
-// leaf certificate has to be found, so that a peer cannot dodge the
-// check by leaving its chain out; other certificates whose issuer is
-// not available go unchecked, as they always did. When a CRL is
+// leaf certificate has to be found when a CRL is configured under
+// its name, so that a peer cannot dodge that CRL by leaving its chain
+// out; other certificates whose issuer is not available go unchecked,
+// as they always did, and so does a leaf whose issuer has no CRL
+// configured, since there would be nothing to check it against.
+// When a CRL is
 // configured for a certificate's issuer, one of the issuer
 // certificates found has to validate it, since a peer could
 // otherwise present a forged issuer that carries the real issuer's
@@ -197,7 +200,7 @@ func (ck *crlCheck) run() error {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: %w", cert.Subject.CommonName, err)
 			}
 			if !issued {
-				if bytes.Equal(cert.Raw, ck.presented[0].Raw) {
+				if _, named := ck.checker.crlIssuers[string(cert.RawIssuer)]; named && bytes.Equal(cert.Raw, ck.presented[0].Raw) {
 					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
 				}
 				continue
