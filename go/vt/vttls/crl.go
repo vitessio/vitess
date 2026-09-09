@@ -17,10 +17,12 @@ limitations under the License.
 package vttls
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"log/slog"
@@ -51,10 +53,12 @@ var expiredCRLWarnings sync.Map
 const expiredCRLWarningInterval = time.Minute
 
 // expiredCRLKey identifies a CRL across the configurations that load
-// it, for the throttle of the warning about its expiry: an issuer can
-// publish several CRLs due at the same time, told apart by number.
+// it, for the throttle of the warning about its expiry, by a digest of
+// its encoding: an issuer can publish several CRLs due at the same
+// time, and the number that would tell them apart is optional.
 func expiredCRLKey(crl *x509.RevocationList) string {
-	return nameKey(crl.RawIssuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339) + "|" + crlNumber(crl)
+	digest := sha256.Sum256(crl.Raw)
+	return hex.EncodeToString(digest[:])
 }
 
 // crlNumber renders the number of crl, which the extension carrying

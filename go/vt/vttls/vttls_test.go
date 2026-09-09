@@ -947,6 +947,28 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		}
 		require.NotEqual(t, keys[0], keys[1])
 	})
+
+	t.Run("CRLs that differ in content alone are told apart", func(t *testing.T) {
+		// The CRL number is optional, so two CRLs of one issuer due
+		// at the same time can carry the same number, or none.
+		ca := loadOneCert(t, certs.ServerCA)
+		keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+		require.NoError(t, err)
+		var keys []string
+		for serial := int64(1); serial <= 2; serial++ {
+			der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+				Number:                    big.NewInt(1),
+				ThisUpdate:                expired.Add(-2 * time.Hour),
+				NextUpdate:                expired,
+				RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: big.NewInt(serial), RevocationTime: expired.Add(-2 * time.Hour)}},
+			}, ca, keyPair.PrivateKey.(crypto.Signer))
+			require.NoError(t, err)
+			crl, err := x509.ParseRevocationList(der)
+			require.NoError(t, err)
+			keys = append(keys, expiredCRLKey(crl))
+		}
+		require.NotEqual(t, keys[0], keys[1])
+	})
 }
 
 // TestNameKey pins which distinguished names the CRL matching treats
