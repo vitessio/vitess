@@ -672,35 +672,35 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// crlWithReencodedIssuer writes a CRL signed by the CA whose
-// certificate and key files are given, revoking the given serial
-// number, with the CA's name encoded as a UTF8String rather than the
-// PrintableString of the CA certificate, as a CRL produced by another
-// tool than the certificate can be.
-func crlWithReencodedIssuer(t *testing.T, caCert, caKey string, serial *big.Int) string {
+// crlWithIssuerName writes a CRL signed by the CA whose certificate
+// and key files are given, revoking the given serial number, but with
+// the issuer's common name written as commonName with the given ASN.1
+// string tag rather than as the CA certificate's subject has it, as a
+// CRL produced by another tool than the certificate can be.
+func crlWithIssuerName(t *testing.T, caCert, caKey string, serial *big.Int, commonName string, tag int, nextUpdate time.Time) string {
 	t.Helper()
 	ca := loadOneCert(t, caCert)
 	keyPair, err := tls.LoadX509KeyPair(caCert, caKey)
 	require.NoError(t, err)
-	reencoded := *ca
-	reencoded.RawSubject, err = asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
+	renamed := *ca
+	renamed.RawSubject, err = asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
 		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
-		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(ca.Subject.CommonName)},
+		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: tag, Bytes: []byte(commonName)},
 	}}})
 	require.NoError(t, err)
-	require.NotEqual(t, ca.RawSubject, reencoded.RawSubject)
+	require.NotEqual(t, ca.RawSubject, renamed.RawSubject)
 
 	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
 		Number:     big.NewInt(1),
-		ThisUpdate: time.Now().Add(-time.Hour),
-		NextUpdate: time.Now().Add(time.Hour),
+		ThisUpdate: nextUpdate.Add(-2 * time.Hour),
+		NextUpdate: nextUpdate,
 		RevokedCertificateEntries: []x509.RevocationListEntry{{
 			SerialNumber:   serial,
-			RevocationTime: time.Now().Add(-time.Hour),
+			RevocationTime: nextUpdate.Add(-2 * time.Hour),
 		}},
-	}, &reencoded, keyPair.PrivateKey.(crypto.Signer))
+	}, &renamed, keyPair.PrivateKey.(crypto.Signer))
 	require.NoError(t, err)
-	file := path.Join(t.TempDir(), "reencoded-crl.pem")
+	file := path.Join(t.TempDir(), "renamed-crl.pem")
 	require.NoError(t, os.WriteFile(file, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der}), 0o600))
 	return file
 }
@@ -713,7 +713,7 @@ func TestCRLCheckerIssuerNameEncoding(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
 	intermediate := loadOneCert(t, certs.ServerCA)
-	crl := crlWithReencodedIssuer(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", revokedLeaf.SerialNumber)
+	crl := crlWithIssuerName(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", revokedLeaf.SerialNumber, intermediate.Subject.CommonName, asn1.TagUTF8String, time.Now().Add(time.Hour))
 
 	t.Run("with the issuer configured", func(t *testing.T) {
 		checker, err := newCRLChecker(crl, certs.ServerCA)
@@ -747,4 +747,43 @@ func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
 	// A certificate is valid PEM but not a CRL.
 	_, err := newCRLChecker(certs.ServerCert, "")
 	require.ErrorContains(t, err, "no CRL found in file")
+}
+
+// TestCRLCheckerIssuerNameMatching checks that a CRL whose issuer name
+// differs from the subject of the CA certificate only in case and in
+// insignificant whitespace, which X.509 treats as the same name, is
+// still bound to that CA, while a CRL from a differently named CA is
+// still not held against the CA's certificates.
+func TestCRLCheckerIssuerNameMatching(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
+	intermediate := loadOneCert(t, certs.ServerCA)
+	intermediateKey := strings.TrimSuffix(certs.ServerCA, "-cert.pem") + "-key.pem"
+	sameName := "  " + strings.ToUpper(intermediate.Subject.CommonName) + "  "
+	crl := crlWithIssuerName(t, certs.ServerCA, intermediateKey, revokedLeaf.SerialNumber, sameName, asn1.TagPrintableString, time.Now().Add(time.Hour))
+
+	t.Run("with the issuer configured", func(t *testing.T) {
+		checker, err := newCRLChecker(crl, certs.ServerCA)
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	})
+
+	t.Run("with the issuer missing, the check fails closed rather than silently", func(t *testing.T) {
+		checker, err := newCRLChecker(crl, "")
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
+		require.ErrorContains(t, err, "no certificate is available for its issuer")
+	})
+
+	t.Run("a differently named issuer's CRL still does not apply", func(t *testing.T) {
+		otherName := crlWithIssuerName(t, certs.ServerCA, intermediateKey, revokedLeaf.SerialNumber, intermediate.Subject.CommonName+" Other", asn1.TagPrintableString, time.Now().Add(time.Hour))
+		checker, err := newCRLChecker(otherName, "")
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
+		require.NoError(t, err)
+	})
 }

@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -54,13 +56,9 @@ type (
 		// so the issuer is looked for here as well as among the
 		// certificates the peer sent.
 		issuers []*x509.Certificate
-		// crlIssuers holds the issuer name of each CRL, to tell
-		// when a certificate's issuer has a CRL that the check must
-		// be able to bind. Names are compared by value, as rendered
-		// by pkix.Name.String, rather than by their DER encoding: a
-		// CRL made by another tool than the CA certificate can
-		// encode the same name differently, and nothing rides on
-		// the name alone since the CRL's signature is verified.
+		// crlIssuers holds the issuer name of each CRL, as
+		// rendered by nameKey, to tell when a certificate's issuer
+		// has a CRL that the check must be able to bind.
 		crlIssuers    map[string]struct{}
 		crlIssuerName map[*x509.RevocationList]string
 	}
@@ -133,7 +131,7 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 		}
 	}
 	for _, crl := range crls {
-		name := crl.Issuer.String()
+		name := nameKey(crl.Issuer)
 		checker.crlIssuers[name] = struct{}{}
 		checker.crlIssuerName[crl] = name
 	}
@@ -142,8 +140,36 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 
 // hasCRLFrom reports whether a CRL carries the name of cert's issuer.
 func (c *crlChecker) hasCRLFrom(cert *x509.Certificate) bool {
-	_, named := c.crlIssuers[cert.Issuer.String()]
+	_, named := c.crlIssuers[nameKey(cert.Issuer)]
 	return named
+}
+
+// nameKey renders a distinguished name for comparison under the X.509
+// matching rules, by which attribute values compare without regard to
+// case or to leading, trailing, and repeated whitespace. Go compares
+// the names of certificates byte for byte, but a CRL can come from
+// another tool than the CA certificate and encode, case, or space the
+// same name differently, and nothing rides on the name alone since
+// the CRL's signature is verified before the CRL is applied.
+func nameKey(name pkix.Name) string {
+	attributes := name.Names
+	if len(attributes) == 0 {
+		for _, rdn := range name.ToRDNSequence() {
+			attributes = append(attributes, rdn...)
+		}
+	}
+	var key strings.Builder
+	for _, attribute := range attributes {
+		value := fmt.Sprint(attribute.Value)
+		if text, ok := attribute.Value.(string); ok {
+			value = strings.ToLower(strings.Join(strings.Fields(text), " "))
+		}
+		key.WriteString(attribute.Type.String())
+		key.WriteByte('=')
+		key.WriteString(value)
+		key.WriteByte(',')
+	}
+	return key.String()
 }
 
 // verifyConnection is a tls.Config.VerifyConnection callback. Unlike
@@ -323,7 +349,7 @@ func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) (crlBinding, error) {
 		return binding, nil
 	}
 	var binding crlBinding
-	issuerName := issuer.Subject.String()
+	issuerName := nameKey(issuer.Subject)
 	for _, crl := range ck.checker.crls {
 		if ck.checker.crlIssuerName[crl] != issuerName {
 			continue
