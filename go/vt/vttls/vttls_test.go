@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -1461,6 +1462,26 @@ func TestCRLCheckerChainLocalIssuers(t *testing.T) {
 	require.ErrorContains(t, err, "none of the certificates found for that issuer may sign CRLs")
 }
 
+// TestNewCRLCheckerNoAuthorityKeyIdentifier checks that a CRL without
+// an authority key identifier is refused, since without one a CRL
+// whose signature does not verify cannot be told from another CA's.
+func TestNewCRLCheckerNoAuthorityKeyIdentifier(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	// Go will not create a CRL without one, so this one is put
+	// together by hand: a bare list with no extension at all.
+	der := crlWithoutExtensions(t, ca, keyPair.PrivateKey.(*ecdsa.PrivateKey))
+	crl, err := x509.ParseRevocationList(der)
+	require.NoError(t, err)
+	require.Empty(t, crl.AuthorityKeyId)
+	require.NoError(t, crl.CheckSignatureFrom(ca))
+
+	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
+	require.ErrorContains(t, err, "carries no authority key identifier")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
@@ -1814,6 +1835,43 @@ func partitionedCRLs(t *testing.T, caCert, caKey string, n int) string {
 func mustMarshal(t *testing.T, v any) []byte {
 	t.Helper()
 	der, err := asn1.Marshal(v)
+	require.NoError(t, err)
+	return der
+}
+
+// crlWithoutExtensions DER encodes and signs, with the given CA and
+// its key, a CRL that carries no extension at all, which Go's own
+// constructor cannot produce: it always writes the authority key
+// identifier.
+func crlWithoutExtensions(t *testing.T, ca *x509.Certificate, key *ecdsa.PrivateKey) []byte {
+	t.Helper()
+	ecdsaWithSHA256 := pkix.AlgorithmIdentifier{Algorithm: asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}}
+	tbs, err := asn1.Marshal(struct {
+		Version    int
+		Signature  pkix.AlgorithmIdentifier
+		Issuer     asn1.RawValue
+		ThisUpdate time.Time
+		NextUpdate time.Time
+	}{
+		Version:    1,
+		Signature:  ecdsaWithSHA256,
+		Issuer:     asn1.RawValue{FullBytes: ca.RawSubject},
+		ThisUpdate: time.Now().Add(-time.Hour).UTC().Truncate(time.Second),
+		NextUpdate: time.Now().Add(time.Hour).UTC().Truncate(time.Second),
+	})
+	require.NoError(t, err)
+	digest := sha256.Sum256(tbs)
+	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
+	require.NoError(t, err)
+	der, err := asn1.Marshal(struct {
+		TBSCertList        asn1.RawValue
+		SignatureAlgorithm pkix.AlgorithmIdentifier
+		SignatureValue     asn1.BitString
+	}{
+		TBSCertList:        asn1.RawValue{FullBytes: tbs},
+		SignatureAlgorithm: ecdsaWithSHA256,
+		SignatureValue:     asn1.BitString{Bytes: signature, BitLength: len(signature) * 8},
+	})
 	require.NoError(t, err)
 	return der
 }

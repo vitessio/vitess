@@ -18,9 +18,11 @@ package vttls
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
@@ -267,6 +269,12 @@ func unsupportedCRL(crl *x509.RevocationList) error {
 		// one, nor be applied before its time.
 		return fmt.Errorf("the CRL from issuer %s is not valid yet: it was issued at %s", crl.Issuer.CommonName, crl.ThisUpdate.UTC().Format(time.RFC3339))
 	}
+	if len(crl.AuthorityKeyId) == 0 {
+		// RFC 5280 section 5.2.1 has every CRL carry one, and it is
+		// what tells a CRL of the issuer's whose signature does not
+		// verify from another CA's under the same name.
+		return fmt.Errorf("the CRL from issuer %s carries no authority key identifier", crl.Issuer.CommonName)
+	}
 	for _, extension := range crl.Extensions {
 		switch {
 		case extension.Id.Equal(oidDeltaCRLIndicator):
@@ -493,16 +501,36 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend
 		if _, insecure := err.(x509.InsecureAlgorithmError); insecure || errors.Is(err, x509.ErrUnsupportedAlgorithm) {
 			return crlBinding{}, fmt.Errorf("the CRL from issuer %s cannot be validated: %w", crl.Issuer.CommonName, err)
 		}
-		// Nor can a CRL that names this very certificate as its
-		// authority: its signature ought to verify, and one that does
-		// not is a CRL that has gone bad, not another CA's.
-		if len(crl.AuthorityKeyId) > 0 && bytes.Equal(crl.AuthorityKeyId, issuer.SubjectKeyId) {
+		// Nor can a CRL that names this very certificate's key as
+		// its authority: its signature ought to verify, and one that
+		// does not is a CRL that has gone bad, not another CA's.
+		if bytes.Equal(crl.AuthorityKeyId, keyIdentifier(issuer)) {
 			return crlBinding{}, fmt.Errorf("the CRL from issuer %s names the certificate found for that issuer as its authority, but its signature does not verify: %w", crl.Issuer.CommonName, err)
 		}
 		// Signed by another key under the same name: not this issuer's.
 	}
 	binding.crls = newestCompleteCRLs(binding.crls)
 	return binding, nil
+}
+
+// keyIdentifier returns the identifier of cert's key that a CRL it
+// signed names as its authority: the subject key identifier the
+// certificate carries or, for one that carries none, the identifier
+// that RFC 5280 section 4.2.1.2 derives from the key, the SHA-1 of
+// the bits of the subject public key.
+func keyIdentifier(cert *x509.Certificate) []byte {
+	if len(cert.SubjectKeyId) > 0 {
+		return cert.SubjectKeyId
+	}
+	var info struct {
+		Algorithm pkix.AlgorithmIdentifier
+		PublicKey asn1.BitString
+	}
+	if _, err := asn1.Unmarshal(cert.RawSubjectPublicKeyInfo, &info); err != nil {
+		return nil
+	}
+	digest := sha1.Sum(info.PublicKey.RightAlign()) //nolint:gosec // The identifier, not a security property.
+	return digest[:]
 }
 
 // hasCRLFrom reports whether a CRL that covers cert carries the given
