@@ -102,13 +102,12 @@ type (
 		chains   [][]*x509.Certificate
 		verified bool
 		// trusted indexes, by subject as rendered by nameKey, the
-		// certificates of the verified chains, which verification
-		// vouches for, and bySubject the other certificates the
-		// peer presented, which it alone vouches for. The configured
-		// issuers are indexed by the checker.
+		// certificates of the verified chain being checked, which
+		// verification vouches for, and bySubject the other
+		// certificates the peer presented, which it alone vouches
+		// for. The configured issuers are indexed by the checker.
 		trusted   map[string][]*x509.Certificate
 		bySubject map[string][]*x509.Certificate
-		indexed   map[string]struct{}
 		// presentedIndexed tells whether the presented certificates
 		// have been indexed into bySubject, which is put off until a
 		// checked certificate's issuer has to be looked for among
@@ -648,20 +647,12 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		verified:     true,
 		trusted:      map[string][]*x509.Certificate{},
 		bySubject:    map[string][]*x509.Certificate{},
-		indexed:      map[string]struct{}{},
 		names:        map[string]renderedName{},
 		crlsByIssuer: map[string]crlBinding{},
 	}
 	if len(verifiedChains) == 0 {
 		check.chains = [][]*x509.Certificate{presented}
 		check.verified = false
-	}
-	if check.verified {
-		for _, chain := range check.chains {
-			for _, cert := range chain {
-				check.index(cert, check.trusted)
-			}
-		}
 	}
 	return check
 }
@@ -688,28 +679,23 @@ func (ck *crlCheck) presentedBySubject() map[string][]*x509.Certificate {
 // strength of any valid chain: an intermediate cross-signed by two
 // roots may be revoked by one and not the other, as during a CA
 // rollover, and the chain through the other root still carries the
-// peer. A chain passes when none of its certificates fails, each of
-// which is checked once, its outcome shared by the chains that hold
-// it. When every chain fails, the peer fails with the first chain's
-// failure.
+// peer. A chain passes when none of its certificates fails. Each
+// chain is checked with the certificates of that chain alone as the
+// issuers verification vouches for, so that a certificate of one
+// chain cannot settle the check of another. When every chain fails,
+// the peer fails with the first chain's failure.
 func (ck *crlCheck) run() error {
-	outcomes := make(map[string]error, len(ck.presented))
 	var failure error
 	for _, chain := range ck.chains {
+		ck.trusted = map[string][]*x509.Certificate{}
+		if ck.verified {
+			for _, cert := range chain {
+				ck.index(cert, ck.trusted)
+			}
+		}
 		var chainFailure error
 		for i, cert := range chain {
-			anchor := ck.verified && i == len(chain)-1
-			key := string(cert.Raw)
-			if anchor {
-				key += "|anchor"
-			}
-			outcome, done := outcomes[key]
-			if !done {
-				outcome = ck.checkCertificate(cert, anchor)
-				outcomes[key] = outcome
-			}
-			if outcome != nil {
-				chainFailure = outcome
+			if chainFailure = ck.checkCertificate(cert, ck.verified && i == len(chain)-1); chainFailure != nil {
 				break
 			}
 		}
@@ -768,19 +754,18 @@ func (ck *crlCheck) checkCertificate(cert *x509.Certificate, anchor bool) error 
 }
 
 // index records cert in the given index as a possible issuer of the
-// certificates that carry its subject as their issuer, once per
-// distinct certificate across the indexes and leaving out the
-// configured issuers, which the checker indexed, keeping the order in
-// which it was indexed.
+// certificates that carry its subject as their issuer, leaving out
+// the configured issuers, which the checker indexed, and a
+// certificate already in the index, keeping the order in which it
+// was indexed.
 func (ck *crlCheck) index(cert *x509.Certificate, into map[string][]*x509.Certificate) {
 	if _, configured := ck.checker.configuredBindings[string(cert.Raw)]; configured {
 		return
 	}
-	if _, done := ck.indexed[string(cert.Raw)]; done {
+	subject := ck.nameOf(cert.RawSubject)
+	if slices.ContainsFunc(into[subject], cert.Equal) {
 		return
 	}
-	ck.indexed[string(cert.Raw)] = struct{}{}
-	subject := ck.nameOf(cert.RawSubject)
 	into[subject] = append(into[subject], cert)
 }
 

@@ -1397,6 +1397,70 @@ func TestCRLCheckerScopedCRL(t *testing.T) {
 	})
 }
 
+// TestCRLCheckerChainLocalIssuers checks that a certificate of one
+// verified chain cannot serve as the issuer of a certificate in
+// another: with a CA certificate that may not sign CRLs in one chain
+// and one carrying the same key and name that may in another, the
+// first chain fails on the CRL signed by that key, whatever the
+// second one holds, and the second fails on its own revocation.
+func TestCRLCheckerChainLocalIssuers(t *testing.T) {
+	rootA, rootAKey := selfSignedCA(t, 1, "Root A", nil)
+	rootB, rootBKey := selfSignedCA(t, 2, "Root B", nil)
+	crossKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	crossSigned := func(serial int64, keyUsage x509.KeyUsage, root *x509.Certificate, rootKey *ecdsa.PrivateKey) *x509.Certificate {
+		der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(serial),
+			Subject:               pkix.Name{CommonName: "Cross-signed CA"},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              keyUsage,
+		}, root, &crossKey.PublicKey, rootKey)
+		require.NoError(t, err)
+		cert, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+		return cert
+	}
+	crossA := crossSigned(10, x509.KeyUsageCertSign, rootA, rootAKey)
+	crossB := crossSigned(20, x509.KeyUsageCertSign|x509.KeyUsageCRLSign, rootB, rootBKey)
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject:      pkix.Name{CommonName: "leaf.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, crossB, &leafKey.PublicKey, crossKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	require.NoError(t, err)
+
+	// The cross-signed key signs a CRL, and root B revokes its
+	// cross-signed certificate.
+	crossCRL, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{Number: big.NewInt(1), ThisUpdate: time.Now().Add(-time.Hour), NextUpdate: time.Now().Add(time.Hour)}, crossB, crossKey)
+	require.NoError(t, err)
+	rootBCRL, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: crossB.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, rootB, rootBKey)
+	require.NoError(t, err)
+	crls := path.Join(t.TempDir(), "crls.pem")
+	require.NoError(t, os.WriteFile(crls, append(pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crossCRL}), pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: rootBCRL})...), 0o600))
+	roots := path.Join(t.TempDir(), "roots.pem")
+	require.NoError(t, os.WriteFile(roots, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootA.Raw}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootB.Raw})...), 0o600))
+	checker, err := newCRLChecker(crls, roots)
+	require.NoError(t, err)
+
+	err = checker.check([]*x509.Certificate{leaf}, [][]*x509.Certificate{{leaf, crossA, rootA}, {leaf, crossB, rootB}})
+	require.ErrorContains(t, err, "none of the certificates found for that issuer may sign CRLs")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
