@@ -85,6 +85,10 @@ type (
 		// warning about its expiry, a digest of the CRL worked out
 		// once rather than on every handshake that consults it.
 		warningKeys map[*x509.RevocationList]string
+		// scopes holds, for each CRL whose issuing distribution
+		// point limits it to end-entity or to CA certificates, that
+		// limit, which a CRL without one does not have.
+		scopes map[*x509.RevocationList]issuingDistributionPoint
 	}
 
 	// crlCheck is the state of one connection's revocation check.
@@ -371,6 +375,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		configuredBySubject: map[string][]*x509.Certificate{},
 		revokedSerials:      map[*x509.RevocationList]map[string]struct{}{},
 		warningKeys:         map[*x509.RevocationList]string{},
+		scopes:              map[*x509.RevocationList]issuingDistributionPoint{},
 	}
 	for _, issuer := range issuers {
 		if _, err := nameKey(issuer.RawSubject); err != nil {
@@ -389,6 +394,9 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		}
 		checker.revokedSerials[crl] = serials
 		checker.warningKeys[crl] = expiredCRLKey(crl)
+		if scope, scoped := issuingScope(crl); scoped {
+			checker.scopes[crl] = scope
+		}
 	}
 	unbounded := func() error { return nil }
 	for _, issuer := range checker.issuers {
@@ -498,10 +506,43 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend
 	return binding, nil
 }
 
-// hasCRLFrom reports whether a CRL carries the given issuer name, as
-// rendered by nameKey.
-func (c *crlChecker) hasCRLFrom(issuerName string) bool {
-	return len(c.crlsByIssuerName[issuerName]) > 0
+// hasCRLFrom reports whether a CRL that covers cert carries the given
+// issuer name, as rendered by nameKey.
+func (c *crlChecker) hasCRLFrom(issuerName string, cert *x509.Certificate) bool {
+	for _, crl := range c.crlsByIssuerName[issuerName] {
+		if c.covers(crl, cert) {
+			return true
+		}
+	}
+	return false
+}
+
+// covers reports whether crl can list cert at all: a CRL that its
+// issuing distribution point limits to CA certificates covers no
+// end-entity certificate, and one limited to end-entity certificates
+// covers no CA certificate.
+func (c *crlChecker) covers(crl *x509.RevocationList, cert *x509.Certificate) bool {
+	scope, scoped := c.scopes[crl]
+	if !scoped {
+		return true
+	}
+	return !(scope.OnlyContainsCACerts && !cert.IsCA) && !(scope.OnlyContainsUserCerts && cert.IsCA)
+}
+
+// issuingScope returns the issuing distribution point of crl, and
+// whether it has one. The extension was parsed once already, when
+// the CRL was loaded, and refused then if it could not be.
+func issuingScope(crl *x509.RevocationList) (issuingDistributionPoint, bool) {
+	for _, extension := range crl.Extensions {
+		if extension.Id.Equal(oidIssuingDistributionPoint) {
+			var scope issuingDistributionPoint
+			if _, err := asn1.Unmarshal(extension.Value, &scope); err != nil {
+				return issuingDistributionPoint{}, false
+			}
+			return scope, true
+		}
+	}
+	return issuingDistributionPoint{}, false
 }
 
 // nameKey renders a DER encoded distinguished name for comparison
@@ -710,7 +751,7 @@ func (ck *crlCheck) checkCertificate(cert *x509.Certificate, anchor bool) error 
 		return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, err)
 	}
 	if !lookup.issued {
-		if !anchor && ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) {
+		if !anchor && ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer), cert) {
 			return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: no certificate is available for its issuer %s", cert.Subject.CommonName, cert.Issuer.CommonName)
 		}
 		return nil
@@ -719,7 +760,7 @@ func (ck *crlCheck) checkCertificate(cert *x509.Certificate, anchor bool) error 
 		return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: a CRL signed by the key of its issuer %s is configured, but none of the certificates found for that issuer may sign CRLs", cert.Subject.CommonName, cert.Issuer.CommonName)
 	}
 	for _, crl := range lookup.crls {
-		if ck.checker.isRevoked(cert, crl) {
+		if ck.checker.covers(crl, cert) && ck.checker.isRevoked(cert, crl) {
 			return fmt.Errorf("Certificate revoked: CommonName=%s", cert.Subject.CommonName)
 		}
 	}
@@ -782,7 +823,7 @@ func (ck *crlCheck) renderName(rawName []byte) renderedName {
 func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 	var lookup crlLookup
 	issuerName := ck.nameOf(cert.RawIssuer)
-	if !ck.checker.hasCRLFrom(issuerName) {
+	if !ck.checker.hasCRLFrom(issuerName, cert) {
 		// Nothing could apply to cert, so its issuer is not worth
 		// a signature check: not finding one changes nothing for
 		// a certificate whose issuer has no CRL.

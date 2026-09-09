@@ -1343,6 +1343,60 @@ func TestCRLCheckerAlternateVerifiedChain(t *testing.T) {
 	})
 }
 
+// TestCRLCheckerScopedCRL checks that a CRL scoped by its issuing
+// distribution point to CA certificates alone is not held against an
+// end-entity certificate, neither as a CRL that requires the issuer
+// to be found nor as a list to look the certificate up in, and the
+// other way around for one scoped to end-entity certificates.
+func TestCRLCheckerScopedCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	leaf := loadOneCert(t, certs.ServerCert)
+	scopedCRL := func(scope any, serials ...*big.Int) string {
+		scopeDER, err := asn1.Marshal(scope)
+		require.NoError(t, err)
+		template := &x509.RevocationList{
+			Number:          big.NewInt(1),
+			ThisUpdate:      time.Now().Add(-time.Hour),
+			NextUpdate:      time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: scopeDER}},
+		}
+		for _, serial := range serials {
+			template.RevokedCertificateEntries = append(template.RevokedCertificateEntries, x509.RevocationListEntry{SerialNumber: serial, RevocationTime: time.Now().Add(-time.Hour)})
+		}
+		der, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		return crlFile(t, der)
+	}
+	caCertsOnly := struct {
+		OnlyContainsCACerts bool `asn1:"tag:2,optional"`
+	}{OnlyContainsCACerts: true}
+	userCertsOnly := struct {
+		OnlyContainsUserCerts bool `asn1:"tag:1,optional"`
+	}{OnlyContainsUserCerts: true}
+
+	t.Run("a CA-only CRL does not make a leaf presented alone need its issuer", func(t *testing.T) {
+		checker, err := newCRLChecker(scopedCRL(caCertsOnly), "")
+		require.NoError(t, err)
+		require.NoError(t, checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}))
+	})
+
+	t.Run("a CA-only CRL that lists a leaf's serial number does not revoke the leaf", func(t *testing.T) {
+		checker, err := newCRLChecker(scopedCRL(caCertsOnly, leaf.SerialNumber), certs.ServerCA)
+		require.NoError(t, err)
+		require.NoError(t, checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}))
+	})
+
+	t.Run("a user-only CRL that lists a leaf's serial number revokes the leaf", func(t *testing.T) {
+		checker, err := newCRLChecker(scopedCRL(userCertsOnly, leaf.SerialNumber), certs.ServerCA)
+		require.NoError(t, err)
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
+	})
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
