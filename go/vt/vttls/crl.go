@@ -21,7 +21,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
@@ -33,6 +32,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -48,6 +48,56 @@ import (
 const maxSignatureChecks = 100
 
 var errSignatureChecksSpent = fmt.Errorf("checking it exceeded the %d signature checks allowed per connection", maxSignatureChecks)
+
+type (
+	// rawRDNSequence is a distinguished name whose attribute values
+	// are kept as they were encoded, since encoding/asn1 decodes
+	// only some of the string types a DirectoryString may use and
+	// leaves the others as nothing.
+	rawRDNSequence []rawRelativeDistinguishedNameSET
+	// rawRelativeDistinguishedNameSET is one RDN of a rawRDNSequence;
+	// the SET suffix has encoding/asn1 treat it as a SET OF.
+	rawRelativeDistinguishedNameSET []rawAttributeTypeAndValue
+	rawAttributeTypeAndValue        struct {
+		Type  asn1.ObjectIdentifier
+		Value asn1.RawValue
+	}
+)
+
+// tagUniversalString is the ASN.1 tag of UniversalString, which
+// encoding/asn1 has no constant for.
+const tagUniversalString = 28
+
+// directoryString decodes the string types that a DirectoryString, or
+// the other string types found in names, may be encoded as.
+func directoryString(value asn1.RawValue) (string, bool) {
+	if value.Class != asn1.ClassUniversal {
+		return "", false
+	}
+	switch value.Tag {
+	case asn1.TagUTF8String, asn1.TagPrintableString, asn1.TagIA5String, asn1.TagT61String, asn1.TagGeneralString, asn1.TagNumericString:
+		return string(value.Bytes), true
+	case asn1.TagBMPString:
+		if len(value.Bytes)%2 != 0 {
+			return "", false
+		}
+		units := make([]uint16, 0, len(value.Bytes)/2)
+		for i := 0; i < len(value.Bytes); i += 2 {
+			units = append(units, uint16(value.Bytes[i])<<8|uint16(value.Bytes[i+1]))
+		}
+		return string(utf16.Decode(units)), true
+	case tagUniversalString:
+		if len(value.Bytes)%4 != 0 {
+			return "", false
+		}
+		runes := make([]rune, 0, len(value.Bytes)/4)
+		for i := 0; i < len(value.Bytes); i += 4 {
+			runes = append(runes, rune(value.Bytes[i])<<24|rune(value.Bytes[i+1])<<16|rune(value.Bytes[i+2])<<8|rune(value.Bytes[i+3]))
+		}
+		return string(runes), true
+	}
+	return "", false
+}
 
 // expiredCRLWarnings holds, per CRL, when the CRL was last warned
 // about being past its due date, since the warning would otherwise
@@ -295,7 +345,7 @@ func (c *crlChecker) hasCRLFrom(issuerName string) bool {
 // distinct names collide. A name that does not parse is compared as
 // it is.
 func nameKey(rawName []byte) string {
-	var sequence pkix.RDNSequence
+	var sequence rawRDNSequence
 	if rest, err := asn1.Unmarshal(rawName, &sequence); err != nil || len(rest) > 0 {
 		return string(rawName)
 	}
@@ -303,8 +353,8 @@ func nameKey(rawName []byte) string {
 	for _, rdn := range sequence {
 		attributes := make([]string, 0, len(rdn))
 		for _, attribute := range rdn {
-			value := fmt.Sprint(attribute.Value)
-			if text, ok := attribute.Value.(string); ok {
+			value := hex.EncodeToString(attribute.Value.FullBytes)
+			if text, ok := directoryString(attribute.Value); ok {
 				value = strings.Join(strings.Fields(cases.Fold().String(norm.NFKC.String(text))), " ")
 			}
 			oid := attribute.Type.String()

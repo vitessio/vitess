@@ -41,6 +41,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/stretchr/testify/require"
 
@@ -1128,6 +1129,9 @@ func TestNameKey(t *testing.T) {
 	utf8Attribute := func(oid asn1.ObjectIdentifier, value string) pkix.AttributeTypeAndValue {
 		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(value)}}
 	}
+	encodedAttribute := func(oid asn1.ObjectIdentifier, tag int, value []byte) pkix.AttributeTypeAndValue {
+		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: tag, Bytes: value}}
+	}
 	name := func(rdns ...pkix.RelativeDistinguishedNameSET) []byte {
 		raw, err := asn1.Marshal(pkix.RDNSequence(rdns))
 		require.NoError(t, err)
@@ -1144,6 +1148,8 @@ func TestNameKey(t *testing.T) {
 		{"attribute order within an RDN", name(rdn(attribute(commonName, "Bob"), attribute(commonName, "amy"))), name(rdn(attribute(commonName, "AMY"), attribute(commonName, "bob")))},
 		{"Unicode normalization", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(utf8Attribute(commonName, "Jose\u0301")))},
 		{"case folding beyond ASCII", name(rdn(utf8Attribute(commonName, "Stra\u00dfe"))), name(rdn(utf8Attribute(commonName, "STRASSE")))},
+		{"UniversalString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, 28, utf32BigEndian("Jos\u00e9"))))},
+		{"BMPString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagBMPString, utf16BigEndian("Jos\u00e9"))))},
 	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {
@@ -1247,4 +1253,22 @@ func TestCRLCheckerIssuerLookupNameEncoding(t *testing.T) {
 	require.NoError(t, err)
 	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, intermediate, rootCA}})
 	require.ErrorContains(t, err, "Certificate revoked: CommonName=Intermediate CA")
+}
+
+// utf32BigEndian encodes text as a UniversalString's bytes.
+func utf32BigEndian(text string) []byte {
+	var encoded []byte
+	for _, r := range text {
+		encoded = append(encoded, byte(r>>24), byte(r>>16), byte(r>>8), byte(r))
+	}
+	return encoded
+}
+
+// utf16BigEndian encodes text as a BMPString's bytes.
+func utf16BigEndian(text string) []byte {
+	var encoded []byte
+	for _, unit := range utf16.Encode([]rune(text)) {
+		encoded = append(encoded, byte(unit>>8), byte(unit))
+	}
+	return encoded
 }
