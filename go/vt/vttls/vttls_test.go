@@ -470,6 +470,26 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 
+	t.Run("a configured CA in the middle of a verified chain is checked against the CRL above it", func(t *testing.T) {
+		// The intermediate is configured as well as the root, so
+		// verification builds a chain that ends at it and one that
+		// goes on to the root. It is the root's CRL that revokes it.
+		intermediatePEM, err := os.ReadFile(certs.ServerCA)
+		require.NoError(t, err)
+		rootPEM, err := os.ReadFile(rootCA)
+		require.NoError(t, err)
+		bundle := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(bundle, append(intermediatePEM, rootPEM...), 0o600))
+		checker, err := newCRLChecker(rootCRL, bundle)
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{leaf, intermediate},
+			VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate}, {leaf, intermediate, rootCert}},
+		})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+	})
+
 	t.Run("certificates presented beyond the verified chain cost nothing", func(t *testing.T) {
 		// The check of a verified chain spends the same signature
 		// checks whether or not the peer presented other certificates

@@ -54,10 +54,6 @@ type (
 		// so the issuer is looked for here as well as among the
 		// certificates the peer sent.
 		issuers []*x509.Certificate
-		// anchors holds the DER encoding of the configured
-		// issuers, which are trust anchors: their own revocation
-		// is not checked, as it never was.
-		anchors map[string]struct{}
 		// crlIssuers holds the issuer name of each CRL, to tell
 		// when a certificate's issuer has a CRL that the check must
 		// be able to bind. Names are compared by value, as rendered
@@ -127,7 +123,6 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 	}
 	checker := &crlChecker{
 		crls:          crls,
-		anchors:       map[string]struct{}{},
 		crlIssuers:    map[string]struct{}{},
 		crlIssuerName: map[*x509.RevocationList]string{},
 	}
@@ -136,9 +131,6 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-	for _, issuer := range checker.issuers {
-		checker.anchors[string(issuer.Raw)] = struct{}{}
 	}
 	for _, crl := range crls {
 		name := crl.Issuer.String()
@@ -206,10 +198,12 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 }
 
 // run walks the chains in the order the certificates were sent. The
-// trust anchors are the configured issuers and the last certificate
-// of each verified chain; a self-signed certificate the peer presents
-// is not one, so that recognizing it costs one of the bounded
-// signature checks like any other issuer lookup. The issuer of the
+// trust anchor is the last certificate of each verified chain, which
+// is not checked; a configured CA that sits elsewhere in a chain is
+// checked against the CRL of the certificate above it like any other,
+// as it always was, and a self-signed certificate the peer presents
+// is not an anchor either, so that recognizing it costs one of the
+// bounded signature checks like any other issuer lookup. The issuer of the
 // leaf certificate has to be found when a CRL is configured under
 // its name, so that a peer cannot dodge that CRL by leaving its chain
 // out; other certificates whose issuer is not available go unchecked,
@@ -223,13 +217,13 @@ func (ck *crlCheck) run() error {
 	checked := make(map[string]struct{}, len(ck.presented))
 	for _, chain := range ck.chains {
 		for i, cert := range chain {
+			if ck.verified && i == len(chain)-1 {
+				continue
+			}
 			if _, done := checked[string(cert.Raw)]; done {
 				continue
 			}
 			checked[string(cert.Raw)] = struct{}{}
-			if _, anchor := ck.checker.anchors[string(cert.Raw)]; anchor || (ck.verified && i == len(chain)-1) {
-				continue
-			}
 			lookup, err := ck.crlsFor(cert)
 			if err != nil {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: %w", cert.Subject.CommonName, err)
