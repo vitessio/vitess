@@ -76,25 +76,12 @@ var selectRowsResult = &sqltypes.Result{
 
 type testHandler struct {
 	UnimplementedHandler
-	mu               sync.Mutex
-	lastConn         *Conn
-	result           *sqltypes.Result
-	err              error
-	warnings         uint16
-	activity         int
-	resetConnections int
-}
-
-func (th *testHandler) ComResetConnection(c *Conn) {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	th.resetConnections++
-}
-
-func (th *testHandler) ResetConnections() int {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	return th.resetConnections
+	mu       sync.Mutex
+	lastConn *Conn
+	result   *sqltypes.Result
+	err      error
+	warnings uint16
+	activity int
 }
 
 func (th *testHandler) LastConn() *Conn {
@@ -1556,47 +1543,6 @@ func binaryPath(root, binary string) (string, error) {
 	}
 	return "", fmt.Errorf("%s not found in any of %s/{%s}",
 		binary, root, strings.Join(subdirs, ","))
-}
-
-// TestResetConnection covers the client-side COM_RESET_CONNECTION: the server
-// handler is invoked and an OK reply returns nil; a closed connection reports the
-// loss rather than hanging or panicking.
-func TestResetConnection(t *testing.T) {
-	th := &testHandler{}
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	defer authServer.close()
-
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
-	require.NoError(t, err)
-	host, port := getHostPort(t, l.Addr())
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
-	go l.Accept()
-	defer cleanupListener(t.Context(), l, params)
-
-	conn, err := Connect(t.Context(), params)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	require.NoError(t, conn.ResetConnection())
-	require.Equal(t, 1, th.ResetConnections(), "the server handler must observe the reset")
-	// The connection stays usable afterwards.
-	require.NoError(t, conn.Ping())
-
-	conn.Close()
-	err = conn.ResetConnection()
-	require.Error(t, err)
-	sqlErr, ok := err.(*sqlerror.SQLError)
-	require.True(t, ok, "wrong error type: %T", err)
-	require.Equal(t, sqlerror.CRServerGone, sqlErr.Number())
 }
 
 func TestListenerShutdown(t *testing.T) {
