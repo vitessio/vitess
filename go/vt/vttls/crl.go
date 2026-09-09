@@ -171,7 +171,10 @@ func (c *crlChecker) hasCRLFrom(cert *x509.Certificate) bool {
 // can come from another tool than the CA certificate and encode,
 // case, space, or order the same name differently, and nothing rides
 // on the name alone since the CRL's signature is verified before the
-// CRL is applied. A name that does not parse is compared as it is.
+// CRL is applied. Every component of the key is prefixed with its
+// length, so that delimiter characters inside a value cannot make
+// distinct names collide. A name that does not parse is compared as
+// it is.
 func nameKey(rawName []byte) string {
 	var sequence pkix.RDNSequence
 	if rest, err := asn1.Unmarshal(rawName, &sequence); err != nil || len(rest) > 0 {
@@ -185,11 +188,14 @@ func nameKey(rawName []byte) string {
 			if text, ok := attribute.Value.(string); ok {
 				value = strings.ToLower(strings.Join(strings.Fields(text), " "))
 			}
-			attributes = append(attributes, attribute.Type.String()+"="+value)
+			oid := attribute.Type.String()
+			attributes = append(attributes, fmt.Sprintf("%d:%s%d:%s", len(oid), oid, len(value), value))
 		}
 		slices.Sort(attributes)
-		key.WriteString(strings.Join(attributes, "+"))
-		key.WriteByte(',')
+		fmt.Fprintf(&key, "%d:", len(attributes))
+		for _, attribute := range attributes {
+			key.WriteString(attribute)
+		}
 	}
 	return key.String()
 }

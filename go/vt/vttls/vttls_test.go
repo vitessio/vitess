@@ -883,3 +883,52 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		require.False(t, logger.(*logutil.ThrottledLogger).GetLastLogTime().IsZero(), "the CRL from %s was not warned about", crl.Issuer.CommonName)
 	}
 }
+
+// TestNameKey pins which distinguished names the CRL matching treats
+// as the same: the X.509 matching rules make attribute values compare
+// without regard to case or insignificant whitespace and the
+// attributes of an RDN compare as a set, while delimiter characters
+// inside a value must not make distinct names collide.
+func TestNameKey(t *testing.T) {
+	commonName := asn1.ObjectIdentifier{2, 5, 4, 3}
+	organization := asn1.ObjectIdentifier{2, 5, 4, 10}
+	attribute := func(oid asn1.ObjectIdentifier, value string) pkix.AttributeTypeAndValue {
+		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagPrintableString, Bytes: []byte(value)}}
+	}
+	name := func(rdns ...pkix.RelativeDistinguishedNameSET) []byte {
+		raw, err := asn1.Marshal(pkix.RDNSequence(rdns))
+		require.NoError(t, err)
+		return raw
+	}
+	rdn := func(attributes ...pkix.AttributeTypeAndValue) pkix.RelativeDistinguishedNameSET { return attributes }
+
+	same := []struct {
+		name string
+		a, b []byte
+	}{
+		{"case", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "EXAMPLE ca")))},
+		{"whitespace", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "  Example   CA ")))},
+		{"attribute order within an RDN", name(rdn(attribute(commonName, "Bob"), attribute(commonName, "amy"))), name(rdn(attribute(commonName, "AMY"), attribute(commonName, "bob")))},
+	}
+	for _, tc := range same {
+		t.Run("same "+tc.name, func(t *testing.T) {
+			require.Equal(t, nameKey(tc.a), nameKey(tc.b))
+		})
+	}
+
+	different := []struct {
+		name string
+		a, b []byte
+	}{
+		{"values", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "Example CA 2")))},
+		{"attribute types", name(rdn(attribute(commonName, "Example"))), name(rdn(attribute(organization, "Example")))},
+		{"RDN order", name(rdn(attribute(commonName, "a")), rdn(attribute(organization, "b"))), name(rdn(attribute(organization, "b")), rdn(attribute(commonName, "a")))},
+		{"one attribute holding delimiters versus two attributes", name(rdn(attribute(commonName, "a+2.5.4.3=b"))), name(rdn(attribute(commonName, "a"), attribute(commonName, "b")))},
+		{"one RDN versus two", name(rdn(attribute(commonName, "a"), attribute(organization, "b"))), name(rdn(attribute(commonName, "a")), rdn(attribute(organization, "b")))},
+	}
+	for _, tc := range different {
+		t.Run("different "+tc.name, func(t *testing.T) {
+			require.NotEqual(t, nameKey(tc.a), nameKey(tc.b))
+		})
+	}
+}
