@@ -1024,8 +1024,8 @@ func injectTerminalOnlineDDLStream(t *testing.T, tablet *cluster.VttabletProcess
 
 	insertVRepl := fmt.Sprintf(
 		"insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, options) "+
-			"values ('%s', '', '', 0, 0, 0, 0, 'Stopped', '%s', %d, '{}')",
-		sidecarDBIdentifier, fakeUUID, dbName, binlogdatapb.VReplicationWorkflowType_OnlineDDL)
+			"values ('%s', 'keyspace:\"%s\" shard:\"-80\" filter:{rules:{match:\"customer\"}}', '', 0, 0, 0, 0, 'Stopped', '%s', %d, '{}')",
+		sidecarDBIdentifier, fakeUUID, defaultTargetKs, dbName, binlogdatapb.VReplicationWorkflowType_OnlineDDL)
 	_, err := tablet.QueryTablet(insertVRepl, "", false)
 	require.NoError(t, err, "failed to insert fake VReplication stream: %v", err)
 
