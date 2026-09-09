@@ -770,11 +770,7 @@ func crlWithIssuerName(t *testing.T, caCert, caKey string, serial *big.Int, comm
 	keyPair, err := tls.LoadX509KeyPair(caCert, caKey)
 	require.NoError(t, err)
 	renamed := *ca
-	renamed.RawSubject, err = asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
-		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
-		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: tag, Bytes: []byte(commonName)},
-	}}})
-	require.NoError(t, err)
+	renamed.RawSubject = encodedCommonName(t, commonName, tag)
 	require.NotEqual(t, ca.RawSubject, renamed.RawSubject)
 
 	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
@@ -950,4 +946,76 @@ func TestNameKey(t *testing.T) {
 			require.NotEqual(t, nameKey(tc.a), nameKey(tc.b))
 		})
 	}
+}
+
+// encodedCommonName encodes a distinguished name made of the given
+// common name alone, written with the given ASN.1 string tag.
+func encodedCommonName(t *testing.T, commonName string, tag int) []byte {
+	t.Helper()
+	raw, err := asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
+		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
+		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: tag, Bytes: []byte(commonName)},
+	}}})
+	require.NoError(t, err)
+	return raw
+}
+
+// TestCRLCheckerIssuerLookupNameEncoding checks that a certificate
+// whose issuer name is encoded differently from the subject of the
+// presented certificate that issued it still finds its issuer, so that
+// the issuer's CRL is held against it: names are matched under the
+// X.509 rules for the lookup too, with the signature as the binding.
+func TestCRLCheckerIssuerLookupNameEncoding(t *testing.T) {
+	rootCA, rootKey := selfSignedCA(t, 1, "Root CA", nil)
+
+	// The intermediate names its issuer as a UTF8String where the
+	// root's subject is a PrintableString.
+	intermediateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	renamedRoot := *rootCA
+	renamedRoot.RawSubject = encodedCommonName(t, rootCA.Subject.CommonName, asn1.TagUTF8String)
+	require.NotEqual(t, rootCA.RawSubject, renamedRoot.RawSubject)
+	intermediateDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "Intermediate CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}, &renamedRoot, &intermediateKey.PublicKey, rootKey)
+	require.NoError(t, err)
+	intermediate, err := x509.ParseCertificate(intermediateDER)
+	require.NoError(t, err)
+	require.NotEqual(t, rootCA.RawSubject, intermediate.RawIssuer)
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject:      pkix.Name{CommonName: "leaf.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, intermediate, &leafKey.PublicKey, intermediateKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	require.NoError(t, err)
+
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: intermediate.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, rootCA, rootKey)
+	require.NoError(t, err)
+	crlFile := path.Join(t.TempDir(), "root-crl.pem")
+	require.NoError(t, os.WriteFile(crlFile, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlDER}), 0o600))
+
+	// No CA is configured: the issuers are found among the presented
+	// certificates, as in required mode.
+	checker, err := newCRLChecker(crlFile, "")
+	require.NoError(t, err)
+	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, intermediate, rootCA}})
+	require.ErrorContains(t, err, "Certificate revoked: CommonName=Intermediate CA")
 }
