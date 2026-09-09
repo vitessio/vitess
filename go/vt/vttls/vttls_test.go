@@ -294,6 +294,17 @@ func TestClientConfigCRL(t *testing.T) {
 		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 	})
 
+	t.Run("verify_ca consults the root's CRL for a trusted intermediate when the server presents the root", func(t *testing.T) {
+		// The client trusts the intermediate alone, so verification
+		// stops at it, but the server presents the root too, and it
+		// is the root's CRL that revokes the intermediate.
+		clientConfig, err := ClientConfig(VerifyCA, "", "", certs.ServerCA, rootCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, serverPresenting(leaf, intermediate, rootCert), clientConfig)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+	})
+
 	t.Run("a revoked intermediate that the server presents is rejected", func(t *testing.T) {
 		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
 		require.NoError(t, err)

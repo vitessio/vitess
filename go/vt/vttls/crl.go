@@ -250,10 +250,11 @@ func (c *crlChecker) check(presented []*x509.Certificate, verifiedChains [][]*x5
 
 // newCheck prepares the check of the verified chains, when
 // verification built any: the certificates a peer presents beyond
-// them play no part in the trust decision, so they are not inspected
-// and cannot be used to make the check expensive. Only when there is
-// no verified chain, because verification is disabled, is the
-// presented chain checked as it is.
+// them play no part in the trust decision, so they are not checked
+// themselves and cannot be used to make the check expensive, though
+// they may serve as the issuer of a certificate that is checked. Only
+// when there is no verified chain, because verification is disabled,
+// is the presented chain checked as it is.
 func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]*x509.Certificate) *crlCheck {
 	check := &crlCheck{
 		checker:      c,
@@ -276,6 +277,14 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		for _, cert := range chain {
 			check.index(cert)
 		}
+	}
+	// The certificates presented beyond the chains being checked are
+	// not checked, but one of them may be the issuer of a certificate
+	// that is, such as a root presented beyond the intermediate that
+	// a verified chain ends at. Serving as a candidate costs nothing
+	// unless a checked certificate carries the candidate's name.
+	for _, cert := range presented {
+		check.index(cert)
 	}
 	return check
 }
