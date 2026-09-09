@@ -2055,27 +2055,27 @@ now
 now:
 CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_timestamp"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 | LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("localtime"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 | LOCALTIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("localtimestamp"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 | UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 | NOW func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 | SYSDATE func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("sysdate"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 
 signed_literal_or_null:
@@ -6783,7 +6783,7 @@ UTC_DATE func_paren_opt
   }
 | CURDATE func_paren_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("curdate")} // a dedicated node like now/curtime/sysdate, so the keyword form is never a generic call (see FuncExpr.Format)
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1)}
   }
 | USER openb closeb
   {
@@ -6799,17 +6799,17 @@ UTC_DATE func_paren_opt
   }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_time"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
   // curtime
 | CURTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("curtime"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_time"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI($1), Fsp: $2}
   }
 | COUNT openb '*' closeb over_clause_opt
   {

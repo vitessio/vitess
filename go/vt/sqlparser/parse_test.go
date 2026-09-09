@@ -49,7 +49,7 @@ var validSQL = []struct {
 	output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 }, {
 	input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
-	output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
+	output: "create table t (\n\tid int primary key,\n\tdt datetime default (CURRENT_TIMESTAMP())\n)",
 }, {
 	input:  "create table t (id int primary key, dt datetime DEFAULT now())",
 	output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
@@ -3437,7 +3437,7 @@ var validSQL = []struct {
 	output: "select json_array(BIN(11)) from dual",
 }, {
 	input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
-	output: `select json_array(1, 'abc', null, true, curtime()) from dual`,
+	output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
 }, {
 	input:  "SELECT JSON_OBJECT(1,2)",
 	output: "select json_object(1, 2) from dual",
@@ -4314,6 +4314,11 @@ var validSQL = []struct {
 	// the new keywords stay usable as identifiers
 	input:  "select row_count, get_format, st_collect, repeat from t",
 	output: "select `row_count`, `get_format`, `st_collect`, `repeat` from t",
+}, {
+	// the date and time built-ins keep their spelling too, with or
+	// without parentheses and precision
+	input:  "select NOW(), CURDATE(), Sysdate(6), CURRENT_TIMESTAMP, Localtime(3), utc_time(), UTC_TIMESTAMP, Current_Date from t",
+	output: "select NOW(), CURDATE(), Sysdate(6), CURRENT_TIMESTAMP(), Localtime(3), utc_time(), UTC_TIMESTAMP(), Current_Date() from t",
 }}
 
 func TestValid(t *testing.T) {
@@ -6009,7 +6014,7 @@ PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
 			output: `create table quarterly_report_status (
 	report_id INT not null,
 	report_status VARCHAR(20) not null,
-	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+	report_updated TIMESTAMP not null default CURRENT_TIMESTAMP() on update CURRENT_TIMESTAMP()
 )
 partition by range (UNIX_TIMESTAMP(report_updated))
 (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')),
@@ -6044,7 +6049,7 @@ PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
 			output: `create table quarterly_report_status (
 	report_id INT not null,
 	report_status VARCHAR(20) not null,
-	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+	report_updated TIMESTAMP not null default CURRENT_TIMESTAMP() on update CURRENT_TIMESTAMP()
 )
 partition by range (UNIX_TIMESTAMP(report_updated))
 (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')),
@@ -6336,8 +6341,8 @@ partition by list (val)
 	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
 	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
 	employee varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
-	creationTimestamp timestamp null default current_timestamp(),
-	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	creationTimestamp timestamp null default CURRENT_TIMESTAMP(),
+	updatedTimestamp timestamp null default CURRENT_TIMESTAMP() on update CURRENT_TIMESTAMP(),
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,

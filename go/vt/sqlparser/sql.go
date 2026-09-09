@@ -15398,7 +15398,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2057
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_timestamp"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 295:
@@ -15406,7 +15406,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2061
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtime"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 296:
@@ -15414,7 +15414,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2065
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtimestamp"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 297:
@@ -15422,7 +15422,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2069
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_timestamp"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 298:
@@ -15430,7 +15430,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2073
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 299:
@@ -15438,7 +15438,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:2077
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("sysdate"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 302:
@@ -23547,7 +23547,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6785
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("curdate")} // a dedicated node like now/curtime/sysdate, so the keyword form is never a generic call (see FuncExpr.Format)
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1300:
@@ -23579,7 +23579,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6801
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_time"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1304:
@@ -23587,7 +23587,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6806
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("curtime"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1305:
@@ -23595,7 +23595,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6811
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_time"), Fsp: yyDollar[2].integer()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI(yyDollar[1].str()), Fsp: yyDollar[2].integer()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1306:
