@@ -77,6 +77,10 @@ type (
 		// revokes, so that a handshake looks a certificate up
 		// rather than scanning a CRL that may hold many entries.
 		revokedSerials map[*x509.RevocationList]map[string]struct{}
+		// warningKeys holds each CRL's key for the throttle of the
+		// warning about its expiry, a digest of the CRL worked out
+		// once rather than on every handshake that consults it.
+		warningKeys map[*x509.RevocationList]string
 	}
 
 	// crlCheck is the state of one connection's revocation check.
@@ -276,11 +280,11 @@ func crlNumber(crl *x509.RevocationList) string {
 	return crl.Number.String()
 }
 
-// warnExpiredCRL logs that crl is past its due date, at most once per
-// interval for that CRL, however many handshakes consult it at once:
-// the one that records the warning first is the one that logs it.
-func warnExpiredCRL(crl *x509.RevocationList) {
-	key := expiredCRLKey(crl)
+// warnExpiredCRL logs that crl, identified by key for the throttle,
+// is past its due date, at most once per interval for that CRL,
+// however many handshakes consult it at once: the one that records
+// the warning first is the one that logs it.
+func warnExpiredCRL(crl *x509.RevocationList, key string) {
 	now := time.Now()
 	if last, warned := expiredCRLWarnings.LoadOrStore(key, now); warned {
 		if now.Sub(last.(time.Time)) < expiredCRLWarningInterval || !expiredCRLWarnings.CompareAndSwap(key, last, now) {
@@ -298,7 +302,7 @@ func warnExpiredCRL(crl *x509.RevocationList) {
 // lists cert, warning when the CRL is past its due date.
 func (c *crlChecker) isRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
-		warnExpiredCRL(crl)
+		warnExpiredCRL(crl, c.warningKeys[crl])
 	}
 	_, revoked := c.revokedSerials[crl][cert.SerialNumber.String()]
 	return revoked
@@ -331,6 +335,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		crlIssuerName:      map[*x509.RevocationList]string{},
 		configuredBindings: map[string]crlBinding{},
 		revokedSerials:     map[*x509.RevocationList]map[string]struct{}{},
+		warningKeys:        map[*x509.RevocationList]string{},
 	}
 	for _, issuer := range issuers {
 		if err := checkNameDecodable(issuer.RawSubject); err != nil {
@@ -349,6 +354,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			serials[revoked.SerialNumber.String()] = struct{}{}
 		}
 		checker.revokedSerials[crl] = serials
+		checker.warningKeys[crl] = expiredCRLKey(crl)
 	}
 	unbounded := func() error { return nil }
 	for _, issuer := range checker.issuers {
