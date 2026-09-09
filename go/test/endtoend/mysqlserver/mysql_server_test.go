@@ -135,7 +135,12 @@ func TestInvalidField(t *testing.T) {
 func TestWarnings(t *testing.T) {
 	ctx := t.Context()
 
-	conn, err := mysql.Connect(ctx, &vtParams)
+	// The CALLs below need a caller the table ACL exempts: under strict table
+	// ACL the tablet denies CALL to everyone else (see TestSelectWithUnauthorizedUser).
+	exemptVtParams := vtParams
+	exemptVtParams.Uname = "testuser3"
+	exemptVtParams.Pass = "testpassword3"
+	conn, err := mysql.Connect(ctx, &exemptVtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -188,6 +193,14 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 	require.Errorf(t, err, "error expected, got nil")
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
+
+	// A CALL runs an opaque procedure body whose tables the tablet cannot
+	// determine, so under strict table ACL it is denied to any caller the ACL
+	// does not exempt, without a table to name.
+	_, err = conn.ExecuteFetch("CALL testing()", 1, false)
+	require.Errorf(t, err, "error expected, got nil")
+	assert.Contains(t, err.Error(), "CallProcedure command denied to user 'vtgate client 2'")
+	assert.Contains(t, err.Error(), "its table set cannot be determined for a table ACL check (ACL check error)")
 }
 
 // TestPartitionedTable validates that partitioned tables are recognized by schema engine

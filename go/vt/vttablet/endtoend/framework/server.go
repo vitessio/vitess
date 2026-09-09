@@ -108,6 +108,9 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
 	config := tabletenv.NewDefaultConfig()
 	config.StrictTableACL = true
+	// Built by the query engine at start from the registered ACL factory, so
+	// the factory must be registered before StartServer is called.
+	config.TableACLExemptACL = ExemptCallerID
 	config.TwoPCAbandonAge = 1 * time.Second
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
