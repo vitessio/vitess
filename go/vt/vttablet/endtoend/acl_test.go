@@ -138,6 +138,11 @@ func TestTableACL(t *testing.T) {
 	}, {
 		query: "call proc_dml()",
 		err:   undeterminedErr,
+	}, {
+		// LOAD DATA streams through its own entry point (streamDML); it is
+		// denied before it reaches MySQL, so the file need not exist.
+		query: "load data infile '/nonexistent' into table vitess_test",
+		err:   undeterminedErr,
 	}}
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)
