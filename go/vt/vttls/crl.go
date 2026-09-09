@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -346,7 +345,8 @@ func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) (crlBinding, error) {
 			binding.crls = append(binding.crls, crl)
 			continue
 		}
-		if _, violation := errors.AsType[x509.ConstraintViolationError](err); !violation {
+		// CheckSignatureFrom returns the violation as is, unwrapped.
+		if _, violation := err.(x509.ConstraintViolationError); !violation {
 			continue
 		}
 		if err := ck.spendSignatureCheck(); err != nil {
