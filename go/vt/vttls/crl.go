@@ -50,6 +50,73 @@ const maxSignatureChecks = 100
 var errSignatureChecksSpent = fmt.Errorf("checking it exceeded the %d signature checks allowed per connection", maxSignatureChecks)
 
 type (
+	// crlChecker rejects a connection whose peer presents a
+	// certificate listed in one of the configured Certificate
+	// Revocation Lists.
+	crlChecker struct {
+		crls []*x509.RevocationList
+		// issuers are the CA certificates configured for the
+		// connection. A CRL only applies to a certificate when the
+		// CRL's signature verifies from that certificate's issuer,
+		// and a peer commonly presents its leaf certificate alone,
+		// so the issuer is looked for here as well as among the
+		// certificates the peer sent.
+		issuers []*x509.Certificate
+		// crlIssuers holds the issuer name of each CRL, as
+		// rendered by nameKey, to tell when a certificate's issuer
+		// has a CRL that the check must be able to bind.
+		crlIssuers    map[string]struct{}
+		crlIssuerName map[*x509.RevocationList]string
+		// configuredBindings holds, by DER encoding, what each
+		// configured issuer makes of the CRLs, worked out once
+		// here rather than on every connection: only the issuers
+		// that a peer presents, whose number the peer controls,
+		// spend a connection's signature checks on that.
+		configuredBindings map[string]crlBinding
+		// revokedSerials indexes the serial numbers each CRL
+		// revokes, so that a handshake looks a certificate up
+		// rather than scanning a CRL that may hold many entries.
+		revokedSerials map[*x509.RevocationList]map[string]struct{}
+	}
+
+	// crlCheck is the state of one connection's revocation check.
+	crlCheck struct {
+		checker   *crlChecker
+		presented []*x509.Certificate
+		// chains are the certificate chains the check walks, and
+		// verified tells whether verification built them, in which
+		// case the certificate each ends at is a trust anchor whose
+		// issuer need not be available.
+		chains   [][]*x509.Certificate
+		verified bool
+		// bySubject indexes the certificates that may be an
+		// issuer by subject, as rendered by nameKey, the configured
+		// ones first, then the ones from the chains being checked.
+		bySubject map[string][]*x509.Certificate
+		indexed   map[string]struct{}
+		// names memoizes nameKey by DER encoded name.
+		names           map[string]string
+		crlsByIssuer    map[string]crlBinding
+		signatureChecks int
+	}
+
+	// crlBinding is what an issuer certificate makes of the CRLs
+	// that carry its name: the ones it validates, and whether one
+	// of them is signed by its key while it is not allowed to sign
+	// CRLs, which is what a forged issuer arranges.
+	crlBinding struct {
+		crls     []*x509.RevocationList
+		orphaned bool
+	}
+
+	// crlLookup is the outcome of looking for the issuer of a
+	// certificate and for the CRLs that apply to it.
+	crlLookup struct {
+		issued   bool
+		crls     []*x509.RevocationList
+		orphaned bool
+	}
+
 	// rawRDNSequence is a distinguished name whose attribute values
 	// are kept as they were encoded, since encoding/asn1 decodes
 	// only some of the string types a DirectoryString may use and
@@ -61,6 +128,19 @@ type (
 	rawAttributeTypeAndValue        struct {
 		Type  asn1.ObjectIdentifier
 		Value asn1.RawValue
+	}
+
+	// issuingDistributionPoint is the part of the extension of that
+	// name that the checker cares about: whether the CRL is an
+	// indirect one, whose entries may belong to other issuers than
+	// the CRL's.
+	issuingDistributionPoint struct {
+		DistributionPoint          asn1.RawValue  `asn1:"tag:0,optional"`
+		OnlyContainsUserCerts      bool           `asn1:"tag:1,optional"`
+		OnlyContainsCACerts        bool           `asn1:"tag:2,optional"`
+		OnlySomeReasons            asn1.BitString `asn1:"tag:3,optional"`
+		IndirectCRL                bool           `asn1:"tag:4,optional"`
+		OnlyContainsAttributeCerts bool           `asn1:"tag:5,optional"`
 	}
 )
 
@@ -156,18 +236,6 @@ var (
 	oidIssuingDistributionPoint = asn1.ObjectIdentifier{2, 5, 29, 28}
 )
 
-// issuingDistributionPoint is the part of the extension of that name
-// that the checker cares about: whether the CRL is an indirect one,
-// whose entries may belong to other issuers than the CRL's.
-type issuingDistributionPoint struct {
-	DistributionPoint          asn1.RawValue  `asn1:"tag:0,optional"`
-	OnlyContainsUserCerts      bool           `asn1:"tag:1,optional"`
-	OnlyContainsCACerts        bool           `asn1:"tag:2,optional"`
-	OnlySomeReasons            asn1.BitString `asn1:"tag:3,optional"`
-	IndirectCRL                bool           `asn1:"tag:4,optional"`
-	OnlyContainsAttributeCerts bool           `asn1:"tag:5,optional"`
-}
-
 // unsupportedCRL reports why crl cannot be evaluated on its own, as
 // the checker evaluates every CRL: a delta CRL's entries only make
 // sense together with the base CRL they amend, and an indirect CRL's
@@ -225,75 +293,6 @@ func warnExpiredCRL(crl *x509.RevocationList) {
 		slog.Time("next_update", crl.NextUpdate),
 	)
 }
-
-type (
-	// crlChecker rejects a connection whose peer presents a
-	// certificate listed in one of the configured Certificate
-	// Revocation Lists.
-	crlChecker struct {
-		crls []*x509.RevocationList
-		// issuers are the CA certificates configured for the
-		// connection. A CRL only applies to a certificate when the
-		// CRL's signature verifies from that certificate's issuer,
-		// and a peer commonly presents its leaf certificate alone,
-		// so the issuer is looked for here as well as among the
-		// certificates the peer sent.
-		issuers []*x509.Certificate
-		// crlIssuers holds the issuer name of each CRL, as
-		// rendered by nameKey, to tell when a certificate's issuer
-		// has a CRL that the check must be able to bind.
-		crlIssuers    map[string]struct{}
-		crlIssuerName map[*x509.RevocationList]string
-		// configuredBindings holds, by DER encoding, what each
-		// configured issuer makes of the CRLs, worked out once
-		// here rather than on every connection: only the issuers
-		// that a peer presents, whose number the peer controls,
-		// spend a connection's signature checks on that.
-		configuredBindings map[string]crlBinding
-		// revokedSerials indexes the serial numbers each CRL
-		// revokes, so that a handshake looks a certificate up
-		// rather than scanning a CRL that may hold many entries.
-		revokedSerials map[*x509.RevocationList]map[string]struct{}
-	}
-
-	// crlCheck is the state of one connection's revocation check.
-	crlCheck struct {
-		checker   *crlChecker
-		presented []*x509.Certificate
-		// chains are the certificate chains the check walks, and
-		// verified tells whether verification built them, in which
-		// case the certificate each ends at is a trust anchor whose
-		// issuer need not be available.
-		chains   [][]*x509.Certificate
-		verified bool
-		// bySubject indexes the certificates that may be an
-		// issuer by subject, as rendered by nameKey, the configured
-		// ones first, then the ones from the chains being checked.
-		bySubject map[string][]*x509.Certificate
-		indexed   map[string]struct{}
-		// names memoizes nameKey by DER encoded name.
-		names           map[string]string
-		crlsByIssuer    map[string]crlBinding
-		signatureChecks int
-	}
-
-	// crlBinding is what an issuer certificate makes of the CRLs
-	// that carry its name: the ones it validates, and whether one
-	// of them is signed by its key while it is not allowed to sign
-	// CRLs, which is what a forged issuer arranges.
-	crlBinding struct {
-		crls     []*x509.RevocationList
-		orphaned bool
-	}
-
-	// crlLookup is the outcome of looking for the issuer of a
-	// certificate and for the CRLs that apply to it.
-	crlLookup struct {
-		issued   bool
-		crls     []*x509.RevocationList
-		orphaned bool
-	}
-)
 
 // isRevoked reports whether crl, which has to be one of the checker's,
 // lists cert, warning when the CRL is past its due date.
