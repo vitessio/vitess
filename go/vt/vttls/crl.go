@@ -51,9 +51,19 @@ var expiredCRLWarnings sync.Map
 const expiredCRLWarningInterval = time.Minute
 
 // expiredCRLKey identifies a CRL across the configurations that load
-// it, for the throttle of the warning about its expiry.
+// it, for the throttle of the warning about its expiry: an issuer can
+// publish several CRLs due at the same time, told apart by number.
 func expiredCRLKey(crl *x509.RevocationList) string {
-	return nameKey(crl.RawIssuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339)
+	return nameKey(crl.RawIssuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339) + "|" + crlNumber(crl)
+}
+
+// crlNumber renders the number of crl, which the extension carrying
+// it may leave out.
+func crlNumber(crl *x509.RevocationList) string {
+	if crl.Number == nil {
+		return ""
+	}
+	return crl.Number.String()
 }
 
 // warnExpiredCRL logs that crl is past its due date, at most once per
@@ -67,6 +77,7 @@ func warnExpiredCRL(crl *x509.RevocationList) {
 	expiredCRLWarnings.Store(key, now)
 	log.Warn("The Certificate Revocation List (CRL) is past its due date and must be updated. Revoked certificates will still be rejected in this state.",
 		slog.String("issuer", crl.Issuer.CommonName),
+		slog.String("crl_number", crlNumber(crl)),
 		slog.Time("next_update", crl.NextUpdate),
 	)
 }

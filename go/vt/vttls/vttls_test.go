@@ -925,6 +925,28 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		require.True(t, found, "the CRL from %s was not warned about", crl.Issuer.CommonName)
 		require.False(t, warned.(time.Time).IsZero())
 	}
+
+	t.Run("CRLs of one issuer due at the same time are told apart by their number", func(t *testing.T) {
+		ca := loadOneCert(t, certs.ServerCA)
+		keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+		require.NoError(t, err)
+		var keys []string
+		for number := int64(1); number <= 2; number++ {
+			der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+				Number:     big.NewInt(number),
+				ThisUpdate: expired.Add(-2 * time.Hour),
+				NextUpdate: expired,
+			}, ca, keyPair.PrivateKey.(crypto.Signer))
+			require.NoError(t, err)
+			crl, err := x509.ParseRevocationList(der)
+			require.NoError(t, err)
+			require.False(t, certIsRevoked(cert, crl))
+			_, found := expiredCRLWarnings.Load(expiredCRLKey(crl))
+			require.True(t, found, "CRL number %d was not warned about", number)
+			keys = append(keys, expiredCRLKey(crl))
+		}
+		require.NotEqual(t, keys[0], keys[1])
+	})
 }
 
 // TestNameKey pins which distinguished names the CRL matching treats
