@@ -109,6 +109,9 @@ type DB struct {
 	queryCalled map[string]int
 	// querylog keeps track of all called queries
 	querylog []string
+	// failResetConnection, when set, makes COM_RESET_CONNECTION fail by closing
+	// the connection (the server always answers a reset with OK otherwise).
+	failResetConnection atomic.Bool
 
 	// This next set of fields is used when ordering of the queries matters.
 
@@ -355,6 +358,29 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 // ComQuery is part of the mysql.Handler interface.
 func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	return db.Handler.HandleQuery(c, query, callback)
+}
+
+// ResetConnectionLogEntry is what a COM_RESET_CONNECTION appears as in the query
+// log, so tests can assert its position relative to the queries around it.
+const ResetConnectionLogEntry = "/* com_reset_connection */"
+
+// ComResetConnection is part of the mysql.Handler interface. The fake records the
+// reset in the query log and, if SetFailResetConnection is on, closes the
+// connection so the client sees the reset fail.
+func (db *DB) ComResetConnection(c *mysql.Conn) {
+	db.mu.Lock()
+	db.querylog = append(db.querylog, ResetConnectionLogEntry)
+	db.queryCalled[ResetConnectionLogEntry]++
+	db.mu.Unlock()
+	if db.failResetConnection.Load() {
+		c.Close()
+	}
+}
+
+// SetFailResetConnection makes every following COM_RESET_CONNECTION fail (the
+// fake closes the connection instead of answering).
+func (db *DB) SetFailResetConnection(fail bool) {
+	db.failResetConnection.Store(fail)
 }
 
 func (db *DB) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {

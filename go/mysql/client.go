@@ -204,6 +204,34 @@ func (c *Conn) Ping() error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
+// ResetConnection sends COM_RESET_CONNECTION, which returns the server-side
+// session to its just-authenticated state — temporary tables, session and
+// user variables, prepared statements and LAST_INSERT_ID are all reset, while
+// the authenticated user and the current database are kept — without the cost
+// of reconnecting.
+func (c *Conn) ResetConnection() error {
+	// This is a new command, need to reset the sequence.
+	c.sequence = 0
+	data, pos := c.startEphemeralPacketWithHeader(1)
+	data[pos] = ComResetConnection
+
+	if err := c.writeEphemeralPacket(); err != nil {
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
+	}
+	data, err := c.readEphemeralPacket()
+	if err != nil {
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+	}
+	defer c.recycleReadPacket()
+	switch data[0] {
+	case OKPacket:
+		return nil
+	case ErrPacket:
+		return ParseErrorPacket(data)
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
+}
+
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
