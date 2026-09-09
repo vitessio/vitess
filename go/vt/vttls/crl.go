@@ -566,10 +566,12 @@ func mapForMatching(r rune) rune {
 	switch {
 	case r <= 0x0008, r >= 0x000e && r <= 0x001f, r >= 0x007f && r <= 0x0084, r >= 0x0086 && r <= 0x009f:
 		return -1 // control characters
-	case r == 0x00ad, r == 0x1806, r == 0x034f, r >= 0x180b && r <= 0x180d, r >= 0xfe00 && r <= 0xfe0f, r == 0xfffc:
-		return -1 // soft hyphen, format and variation selectors
-	case r == 0x200b, r == 0x2060, r == 0xfeff:
-		return -1 // zero-width space, word joiner, byte order mark
+	case r == 0x06dd, r == 0x070f, r == 0x180e, r >= 0x200c && r <= 0x200f, r >= 0x202a && r <= 0x202e,
+		r >= 0x2060 && r <= 0x2063, r >= 0x206a && r <= 0x206f, r == 0xfeff, r >= 0xfff9 && r <= 0xfffb,
+		r >= 0x1d173 && r <= 0x1d17a, r == 0xe0001, r >= 0xe0020 && r <= 0xe007f:
+		return -1 // the other characters with a control function
+	case r == 0x00ad, r == 0x1806, r == 0x034f, r >= 0x180b && r <= 0x180d, r >= 0xfe00 && r <= 0xfe0f, r == 0xfffc, r == 0x200b:
+		return -1 // soft hyphens, grapheme joiner, variation selectors, object replacement, zero width space
 	case r >= 0x0009 && r <= 0x000d, r == 0x0085, r == 0x00a0, r == 0x1680, r >= 0x2000 && r <= 0x200a, r == 0x2028, r == 0x2029, r == 0x202f, r == 0x205f, r == 0x3000:
 		return ' '
 	}

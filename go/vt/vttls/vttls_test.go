@@ -1412,6 +1412,8 @@ func TestNameKey(t *testing.T) {
 		{"a character mapped to nothing", name(rdn(utf8Attribute(commonName, "Exam\u00adple CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
 		{"a character mapped to space", name(rdn(utf8Attribute(commonName, "Example\u00a0CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
 		{"a control character mapped to nothing", name(rdn(utf8Attribute(commonName, "Example\u0001 CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
+		{"a zero width non-joiner mapped to nothing", name(rdn(utf8Attribute(commonName, "Exam\u200cple CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
+		{"a bidirectional format character mapped to nothing", name(rdn(utf8Attribute(commonName, "\u202aExample CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
 	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {
