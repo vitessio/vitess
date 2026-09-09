@@ -283,7 +283,12 @@ func (ck *crlCheck) index(cert *x509.Certificate) {
 // fails the check instead of hiding a certificate from it.
 func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 	var lookup crlLookup
-	named := ck.checker.hasCRLFrom(cert.RawIssuer)
+	if !ck.checker.hasCRLFrom(cert.RawIssuer) {
+		// Nothing could apply to cert, so its issuer is not worth
+		// a signature check: not finding one changes nothing for
+		// a certificate whose issuer has no CRL.
+		return lookup, nil
+	}
 	for _, candidate := range ck.bySubject[string(cert.RawIssuer)] {
 		issued, err := ck.issuedBy(cert, candidate)
 		if err != nil {
@@ -293,9 +298,6 @@ func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 			continue
 		}
 		lookup.issued = true
-		if !named {
-			return lookup, nil
-		}
 		binding, err := ck.crlsSignedBy(candidate)
 		if err != nil {
 			return crlLookup{}, err
