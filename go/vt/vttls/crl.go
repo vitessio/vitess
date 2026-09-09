@@ -107,9 +107,48 @@ var expiredCRLWarnings sync.Map
 
 const expiredCRLWarningInterval = time.Minute
 
-// oidDeltaCRLIndicator is the id of the extension that marks a delta
-// CRL, RFC 5280 section 5.2.4.
-var oidDeltaCRLIndicator = asn1.ObjectIdentifier{2, 5, 29, 27}
+var (
+	// oidDeltaCRLIndicator is the id of the extension that marks a
+	// delta CRL, RFC 5280 section 5.2.4.
+	oidDeltaCRLIndicator = asn1.ObjectIdentifier{2, 5, 29, 27}
+	// oidIssuingDistributionPoint is the id of the extension that
+	// scopes a CRL, RFC 5280 section 5.2.5, and marks an indirect one.
+	oidIssuingDistributionPoint = asn1.ObjectIdentifier{2, 5, 29, 28}
+)
+
+// issuingDistributionPoint is the part of the extension of that name
+// that the checker cares about: whether the CRL is an indirect one,
+// whose entries may belong to other issuers than the CRL's.
+type issuingDistributionPoint struct {
+	DistributionPoint          asn1.RawValue  `asn1:"tag:0,optional"`
+	OnlyContainsUserCerts      bool           `asn1:"tag:1,optional"`
+	OnlyContainsCACerts        bool           `asn1:"tag:2,optional"`
+	OnlySomeReasons            asn1.BitString `asn1:"tag:3,optional"`
+	IndirectCRL                bool           `asn1:"tag:4,optional"`
+	OnlyContainsAttributeCerts bool           `asn1:"tag:5,optional"`
+}
+
+// unsupportedCRL reports why crl cannot be evaluated on its own, as
+// the checker evaluates every CRL: a delta CRL's entries only make
+// sense together with the base CRL they amend, and an indirect CRL's
+// entries may belong to other issuers than the CRL's.
+func unsupportedCRL(crl *x509.RevocationList) error {
+	for _, extension := range crl.Extensions {
+		switch {
+		case extension.Id.Equal(oidDeltaCRLIndicator):
+			return fmt.Errorf("delta CRLs are not supported: the CRL from issuer %s is one", crl.Issuer.CommonName)
+		case extension.Id.Equal(oidIssuingDistributionPoint):
+			var scope issuingDistributionPoint
+			if _, err := asn1.Unmarshal(extension.Value, &scope); err != nil {
+				return fmt.Errorf("the issuing distribution point of the CRL from issuer %s cannot be parsed: %w", crl.Issuer.CommonName, err)
+			}
+			if scope.IndirectCRL {
+				return fmt.Errorf("indirect CRLs are not supported: the CRL from issuer %s is one", crl.Issuer.CommonName)
+			}
+		}
+	}
+	return nil
+}
 
 // expiredCRLKey identifies a CRL across the configurations that load
 // it, for the throttle of the warning about its expiry, by a digest of
@@ -612,14 +651,8 @@ func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, extension := range parsedCRL.Extensions {
-			// Each CRL is evaluated on its own, and a delta CRL's
-			// entries only make sense together with the base CRL
-			// they amend: one of them can take a certificate off
-			// hold, which read alone looks like a revocation.
-			if extension.Id.Equal(oidDeltaCRLIndicator) {
-				return nil, fmt.Errorf("delta CRLs are not supported: the CRL from issuer %s in file %s is one", parsedCRL.Issuer.CommonName, crl)
-			}
+		if err := unsupportedCRL(parsedCRL); err != nil {
+			return nil, fmt.Errorf("%w (file %s)", err, crl)
 		}
 		crlSet = append(crlSet, parsedCRL)
 	}

@@ -974,6 +974,30 @@ func TestCRLCheckerCRLThatCannotBeValidated(t *testing.T) {
 	}
 }
 
+// TestNewCRLCheckerIndirectCRL checks that an indirect CRL is refused:
+// its entries may belong to other issuers than the CRL's, which the
+// checker, keying every CRL by its issuer, cannot tell.
+func TestNewCRLCheckerIndirectCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	distributionPoint, err := asn1.Marshal(struct {
+		IndirectCRL bool `asn1:"tag:4,optional"`
+	}{IndirectCRL: true})
+	require.NoError(t, err)
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:          big.NewInt(1),
+		ThisUpdate:      time.Now().Add(-time.Hour),
+		NextUpdate:      time.Now().Add(time.Hour),
+		ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: distributionPoint}},
+	}, ca, keyPair.PrivateKey.(crypto.Signer))
+	require.NoError(t, err)
+
+	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
+	require.ErrorContains(t, err, "indirect CRLs are not supported")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
