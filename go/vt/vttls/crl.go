@@ -284,21 +284,21 @@ func (ck *crlCheck) run() error {
 			checked[string(cert.Raw)] = struct{}{}
 			lookup, err := ck.crlsFor(cert)
 			if err != nil {
-				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: %w", cert.Subject.CommonName, err)
+				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: %w", cert.Subject.CommonName, err)
 			}
 			if !lookup.issued {
 				anchor := ck.verified && i == len(chain)-1
 				if !anchor && ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) {
-					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
+					return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: no certificate is available for its issuer %s", cert.Subject.CommonName, cert.Issuer.CommonName)
 				}
 				continue
 			}
 			if lookup.orphaned {
-				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: a CRL signed by the key of its issuer %v is configured, but none of the certificates found for that issuer may sign CRLs", cert.Subject.CommonName, cert.Issuer.CommonName)
+				return fmt.Errorf("cannot check the revocation of certificate CommonName=%s: a CRL signed by the key of its issuer %s is configured, but none of the certificates found for that issuer may sign CRLs", cert.Subject.CommonName, cert.Issuer.CommonName)
 			}
 			for _, crl := range lookup.crls {
 				if certIsRevoked(cert, crl) {
-					return fmt.Errorf("Certificate revoked: CommonName=%v", cert.Subject.CommonName)
+					return fmt.Errorf("Certificate revoked: CommonName=%s", cert.Subject.CommonName)
 				}
 			}
 		}
