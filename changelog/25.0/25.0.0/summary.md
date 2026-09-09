@@ -35,7 +35,7 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
-        - [MySQL-faithful lexing of built-in function names](#sqlparser-function-name-keywords)
+        - [MySQL-faithful parsing of built-in function names](#sqlparser-function-name-keywords)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
@@ -352,9 +352,11 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
-#### <a id="sqlparser-function-name-keywords"/>MySQL-faithful lexing of built-in function names</a>
+#### <a id="sqlparser-function-name-keywords"/>MySQL-faithful parsing of built-in function names</a>
 
-MySQL's lexer treats the built-in function names it lists under "Function Name Parsing and Resolution" (`ADDDATE`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `CAST`, `COUNT`, `CURDATE`, `CURTIME`, `DATE_ADD`, `DATE_SUB`, `EXTRACT`, `GROUP_CONCAT`, `MAX`, `MID`, `MIN`, `NOW`, `POSITION`, `SESSION_USER`, `STD`, `STDDEV`, `STDDEV_POP`, `STDDEV_SAMP`, `SUBDATE`, `SUBSTR`/`SUBSTRING`, `SUM`, `SYSDATE`, `SYSTEM_USER`, `TRIM`, `VARIANCE`, `VAR_POP`, `VAR_SAMP`), and `JSON_ARRAYAGG` and `JSON_OBJECTAGG` in the same way although that page does not list them, as keywords only when the name is immediately followed by `(` with no whitespace in between. In any other position the name is an ordinary identifier, and `name (` with whitespace is a call of a stored function by that name. Vitess reserved some of these words unconditionally, rejecting valid MySQL DDL like `create table CAST (a int)` or columns named `now`, and read `count (*)` or `sum (x)` with whitespace as the built-in. The Vitess parser now applies MySQL's rule to the whole list. This also underpins `sql_mode=IGNORE_SPACE` support, which relaxes the no-whitespace requirement.
+MySQL parses many of its built-in functions through a grammar rule of their own: the function name is a keyword (`LEFT`, `IF`, `COALESCE`, `DATABASE`, `COUNT`, `NOW`, `USER`, `WEEK`, `YEAR`, ...), and a call by an identifier of the same spelling is a call of a stored function by that name, looked up in the current database. That is what a quoted `` `left`(a, 1) `` or a qualified `db.left(a, 1)` means to MySQL. For the names on its "Function Name Parsing and Resolution" list (`ADDDATE`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `CAST`, `COUNT`, `CURDATE`, `CURTIME`, `DATE_ADD`, `DATE_SUB`, `EXTRACT`, `GROUP_CONCAT`, `MAX`, `MID`, `MIN`, `NOW`, `POSITION`, `SESSION_USER`, `STD`, `STDDEV`, `STDDEV_POP`, `STDDEV_SAMP`, `SUBDATE`, `SUBSTR`/`SUBSTRING`, `SUM`, `SYSDATE`, `SYSTEM_USER`, `TRIM`, `VARIANCE`, `VAR_POP`, `VAR_SAMP`, and `JSON_ARRAYAGG`, `JSON_OBJECTAGG` and `ST_COLLECT`, which MySQL 8.0 treats the same way although the page does not list them) the name is the keyword only when immediately followed by `(`; anywhere else it is an ordinary identifier, and `name (` with whitespace is the stored-function call too.
+
+The Vitess parser now follows both rules, verified against MySQL 8.0.46. Every built-in that MySQL parses as a keyword parses into a node of its own here, and a call by an identifier of that spelling is a generic call that serializes with the name quoted, so that MySQL takes the stored-function path instead of re-lexing the bare name as the built-in. Vitess previously reserved some of the whitespace-sensitive words unconditionally, rejecting valid MySQL DDL like `create table CAST (a int)` or columns named `now`, read `count (*)` or `sum (x)` with whitespace as the built-in, and sent a quoted `` `left`(a, 1) `` or `` `user`() `` bare, running the built-in where MySQL would have looked up a stored function. This also underpins `sql_mode=IGNORE_SPACE` support, which relaxes the no-whitespace requirement.
 
 Each of the following matches MySQL, but removes a Vitess-only leniency:
 
@@ -362,11 +364,14 @@ Each of the following matches MySQL, but removes a Vitess-only leniency:
 - A bare `now` in an expression is now a column reference, not `now()`.
 - `cast (1 as char)` with whitespace before `(` is now a syntax error.
 - `now ()` / `substr (...)` / `sum (x)` with whitespace still parse, but as generic function calls rather than the dedicated AST nodes (a `sum (x)` is no longer an aggregate). That is MySQL's stored-function path, and the call serializes with the name quoted (`` `now`() ``, `` `sum`(x) ``) so that MySQL takes the same path instead of re-lexing the bare name as the built-in.
-- A quoted `` `user`() ``, `` `current_user`() ``, `` `session_user`() `` or `` `system_user`() `` stays quoted, and so remains the stored-function call MySQL reads it as; previously it was sent bare and ran as the built-in.
-- Programs that use the `go/vt/sqlparser` package directly: a `FuncExpr` carrying one of these names, or `user`/`current_user`, now serializes with the name quoted, since the parser represents the built-ins with dedicated nodes (`CurTimeFuncExpr`, `UserFuncExpr`, the aggregate nodes, ...). Code that built such a call with `NewFuncExpr` and meant the built-in should construct the dedicated node.
+- A quoted call of any built-in that MySQL parses as a keyword (`` `user`() ``, `` `left`(a, 1) ``, `` `if`(a, 1, 2) ``, `` `coalesce`(a, 1) ``, `` `database`() ``, `` `avg`(a) ``, ...) stays quoted, and so remains the stored-function call MySQL reads it as; previously it was sent bare and ran as the built-in. VTGate no longer evaluates such a call itself either: `SET @x = `session_user`()` reaches MySQL, where the stored function is looked up.
 - The built-in argument syntax needs the attached parenthesis: `count (*)`, `trim (leading ...)`, `position (... in ...)`, `date_add (..., interval ...)`, `group_concat (distinct ...)`, `substring (... from ...)` and `extract (... from ...)` with whitespace are syntax errors, as in MySQL. A comment between the name and the parenthesis (`count/*c*/(*)`) separates them the same way.
 - `user(1)`, `session_user(1)` and `system_user(1)` are syntax errors, as in MySQL; previously they were sent to MySQL as generic calls.
 - A qualified call such as `db.abs(x)` names a stored function and is evaluated by MySQL, which reports that the function does not exist unless it does; previously VTGate ignored the qualifier and evaluated the built-in itself.
+- The keyword form of a built-in keeps the spelling it was written with, so an unaliased `SELECT IF(a, 1, 2)` or `SELECT USER()` returns a column named `IF(a, 1, 2)` or `USER()`, as MySQL does; previously some of these were lower-cased.
+- `repeat`, `row_count`, `get_format` and `st_collect` are non-reserved keywords now. `repeat` was a reserved word before and is usable as an identifier again; the other three print back-quoted when used as identifiers.
+
+Programs that use the `go/vt/sqlparser` package directly: a `FuncExpr` is a generic call, a call by an identifier, and serializes with the name quoted whenever the name is one of these built-ins (`IsKeywordFunctionName`). The keyword form of a built-in with regular argument syntax (`left`, `if`, `coalesce`, `database`, `user`, `week`, ...) parses into the new `BuiltinFuncExpr`; the others keep their dedicated nodes (`CurTimeFuncExpr`, the aggregates, `TrimFuncExpr`, ...). Code that built such a call with `NewFuncExpr` and meant the built-in should use `NewBuiltinFuncExpr` or the dedicated node.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 
