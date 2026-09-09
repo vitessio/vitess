@@ -40,6 +40,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -786,4 +787,32 @@ func TestCRLCheckerIssuerNameMatching(t *testing.T) {
 		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
 		require.NoError(t, err)
 	})
+}
+
+// TestCertIsRevokedWarnsPerExpiredCRL checks that each expired CRL gets
+// its own throttled warning, so that one stale CRL that is consulted
+// often does not hide another one that also needs updating.
+func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	cert := loadOneCert(t, certs.ServerCert)
+	expired := time.Now().Add(-time.Hour)
+	var crls []*x509.RevocationList
+	for _, ca := range []struct{ cert, name string }{
+		{certs.ServerCA, "Expired Servers CA"},
+		{certs.ClientCA, "Expired Clients CA"},
+	} {
+		file := crlWithIssuerName(t, ca.cert, strings.TrimSuffix(ca.cert, "-cert.pem")+"-key.pem", big.NewInt(1), ca.name, asn1.TagPrintableString, expired)
+		loaded, err := loadCRLSet(file)
+		require.NoError(t, err)
+		crls = append(crls, loaded...)
+	}
+
+	for _, crl := range crls {
+		require.False(t, certIsRevoked(cert, crl))
+	}
+	for _, crl := range crls {
+		logger, found := expiredCRLLoggers.Load(expiredCRLKey(crl))
+		require.True(t, found, "no throttle for the CRL from %s", crl.Issuer.CommonName)
+		require.False(t, logger.(*logutil.ThrottledLogger).GetLastLogTime().IsZero(), "the CRL from %s was not warned about", crl.Issuer.CommonName)
+	}
 }

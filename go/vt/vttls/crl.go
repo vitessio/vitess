@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -39,9 +40,26 @@ const maxSignatureChecks = 100
 
 var errSignatureChecksSpent = fmt.Errorf("checking it exceeded the %d signature checks allowed per connection", maxSignatureChecks)
 
-// expiredCRLLogger throttles the warning about an expired CRL, which
-// would otherwise repeat on every handshake that consults it.
-var expiredCRLLogger = logutil.NewThrottledLogger("vttls-expired-crl", time.Minute)
+// expiredCRLLoggers throttle the warning about an expired CRL, which
+// would otherwise repeat on every handshake that consults it, one
+// throttle per CRL so that every stale CRL stays visible in the logs.
+var expiredCRLLoggers sync.Map
+
+// expiredCRLKey identifies a CRL across the configurations that load
+// it, for the throttle of the warning about its expiry.
+func expiredCRLKey(crl *x509.RevocationList) string {
+	return nameKey(crl.Issuer) + "|" + crl.NextUpdate.UTC().Format(time.RFC3339)
+}
+
+func warnExpiredCRL(crl *x509.RevocationList) {
+	key := expiredCRLKey(crl)
+	logger, found := expiredCRLLoggers.Load(key)
+	if !found {
+		logger, _ = expiredCRLLoggers.LoadOrStore(key, logutil.NewThrottledLogger("vttls-expired-crl:"+key, time.Minute))
+	}
+	logger.(*logutil.ThrottledLogger).Warningf("The Certificate Revocation List (CRL) from issuer %q was due for an update at %s and must be updated. Revoked certificates will still be rejected in this state.",
+		crl.Issuer.CommonName, crl.NextUpdate.UTC().Format(time.RFC3339))
+}
 
 type (
 	// crlChecker rejects a connection whose peer presents a
@@ -100,8 +118,7 @@ type (
 
 func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 	if !time.Now().Before(crl.NextUpdate) {
-		expiredCRLLogger.Warningf("The Certificate Revocation List (CRL) from issuer %q was due for an update at %s and must be updated. Revoked certificates will still be rejected in this state.",
-			crl.Issuer.CommonName, crl.NextUpdate.UTC().Format(time.RFC3339))
+		warnExpiredCRL(crl)
 	}
 
 	for _, revoked := range crl.RevokedCertificateEntries {
