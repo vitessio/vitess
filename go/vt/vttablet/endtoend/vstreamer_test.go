@@ -405,8 +405,11 @@ func TestSchemaVersioning(t *testing.T) {
 
 	_, err = client.Execute("drop table vitess_version", nil)
 	require.NoError(t, err)
-	_, err = client.Execute("drop table _vt.schema_version", nil)
-	require.NoError(t, err)
+	// Leave _vt.schema_version and its rows in place. Dropping the table left
+	// the deferred SetTracking(true) unable to restart the tracker, and
+	// emptying it makes the restart take a fresh snapshot, whose schema reload
+	// can race the barrier table's cleanup DDL and kill the tracker's startup.
+	// With the rows present the restart resumes from the last saved position.
 
 	log.Info("=== END OF TEST")
 }
