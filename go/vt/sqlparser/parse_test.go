@@ -6847,6 +6847,22 @@ var invalidSQL = []struct {
 	// bare now (without parens) is an identifier, not the now() function
 	input:  "create table t (a datetime default now)",
 	output: "syntax error at position 39 near 'now'",
+}, {
+	// the user-information functions take no arguments; the keyword form
+	// does not fall back to a generic call
+	input:  "select user(1)",
+	output: "syntax error at position 14 near '1'",
+}, {
+	input:  "select session_user(1)",
+	output: "syntax error at position 22 near '1'",
+}, {
+	input:  "select system_user(1)",
+	output: "syntax error at position 21 near '1'",
+}, {
+	// a comment before the parenthesis separates the name from it, like
+	// whitespace does
+	input:  "select count/*c*/(*) from t",
+	output: "syntax error at position 20",
 }}
 
 func TestErrors(t *testing.T) {
