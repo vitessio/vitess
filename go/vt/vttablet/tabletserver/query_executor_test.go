@@ -1191,8 +1191,12 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				require.Equal(t, tc.planID, qre.plan.PlanID)
 				require.True(t, qre.plan.TablesUndetermined, "the planner must flag the statement's table set as undetermined")
 				deniedBefore := tsv.stats.TableaclDenied.Counts()[statsKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err := qre.Execute()
 				require.Error(t, err, "an authenticated caller with no grants must not run an opaque statement under strict table ACL")
+				// Denied means denied before execution: the backend must not have
+				// seen the statement at all.
+				assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
 				assert.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
 				// The denial names the caller's groups like a per-table one does.
 				require.EqualError(t, err, tc.planID.String()+" command denied to user 'u2', in groups [eng, beta], for a table set that cannot be determined (ACL check error)")
@@ -1208,8 +1212,10 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				require.NoError(t, err)
 				exemptCtx := callerid.NewContext(context.Background(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
 				qre := newTestQueryExecutor(exemptCtx, tsv, tc.query, 0)
+				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err = qre.Execute()
 				require.NoError(t, err, "an exempt caller must still be able to run the statement under strict table ACL")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 			})
 
 			t.Run("dry run only records", func(t *testing.T) {
@@ -1217,16 +1223,20 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				tsv.qe.enableTableACLDryRun = true
 				qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
 				pseudoBefore := tsv.stats.TableaclPseudoDenied.Counts()[statsKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err := qre.Execute()
 				require.NoError(t, err, "a dry run must not enforce the ACL")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 				assert.Equal(t, pseudoBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[statsKey], "a dry run must count the denial under the undetermined-table key")
 			})
 
 			t.Run("strict table ACL off runs", func(t *testing.T) {
 				tsv := newServer(t, noFlags)
 				qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err := qre.Execute()
 				require.NoError(t, err, "with strict table ACL off the statement must still run")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 			})
 		})
 	}
