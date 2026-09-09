@@ -1,7 +1,7 @@
 name: Assign Milestone
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] only checks out the base ref, never PR code
     types: [opened]
 
 permissions:
