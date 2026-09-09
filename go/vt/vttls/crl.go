@@ -90,9 +90,12 @@ type (
 		// chains are the certificate chains the check walks.
 		chains [][]*x509.Certificate
 		// bySubject indexes the certificates that may be an
-		// issuer by subject, the configured ones first.
-		bySubject       map[string][]*x509.Certificate
-		indexed         map[string]struct{}
+		// issuer by subject, as rendered by nameKey, the configured
+		// ones first, then the ones from the chains being checked.
+		bySubject map[string][]*x509.Certificate
+		indexed   map[string]struct{}
+		// names memoizes nameKey by DER encoded name.
+		names           map[string]string
 		crlsByIssuer    map[string]crlBinding
 		signatureChecks int
 	}
@@ -154,9 +157,10 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 	return checker, nil
 }
 
-// hasCRLFrom reports whether a CRL carries the name of cert's issuer.
-func (c *crlChecker) hasCRLFrom(cert *x509.Certificate) bool {
-	_, named := c.crlIssuers[nameKey(cert.RawIssuer)]
+// hasCRLFrom reports whether a CRL carries the given issuer name, as
+// rendered by nameKey.
+func (c *crlChecker) hasCRLFrom(issuerName string) bool {
+	_, named := c.crlIssuers[issuerName]
 	return named
 }
 
@@ -230,6 +234,7 @@ func (c *crlChecker) newCheck(presented []*x509.Certificate, verifiedChains [][]
 		chains:       verifiedChains,
 		bySubject:    map[string][]*x509.Certificate{},
 		indexed:      map[string]struct{}{},
+		names:        map[string]string{},
 		crlsByIssuer: map[string]crlBinding{},
 	}
 	if len(verifiedChains) == 0 {
@@ -275,7 +280,7 @@ func (ck *crlCheck) run() error {
 				return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: %w", cert.Subject.CommonName, err)
 			}
 			if !lookup.issued {
-				if ck.checker.hasCRLFrom(cert) && bytes.Equal(cert.Raw, ck.presented[0].Raw) {
+				if ck.checker.hasCRLFrom(ck.nameOf(cert.RawIssuer)) && bytes.Equal(cert.Raw, ck.presented[0].Raw) {
 					return fmt.Errorf("cannot check the revocation of certificate CommonName=%v: no certificate is available for its issuer %v", cert.Subject.CommonName, cert.Issuer.CommonName)
 				}
 				continue
@@ -302,7 +307,19 @@ func (ck *crlCheck) index(cert *x509.Certificate) {
 		return
 	}
 	ck.indexed[string(cert.Raw)] = struct{}{}
-	ck.bySubject[string(cert.RawSubject)] = append(ck.bySubject[string(cert.RawSubject)], cert)
+	subject := ck.nameOf(cert.RawSubject)
+	ck.bySubject[subject] = append(ck.bySubject[subject], cert)
+}
+
+// nameOf renders a DER encoded name with nameKey, once per name for
+// the connection.
+func (ck *crlCheck) nameOf(rawName []byte) string {
+	if name, done := ck.names[string(rawName)]; done {
+		return name
+	}
+	name := nameKey(rawName)
+	ck.names[string(rawName)] = name
+	return name
 }
 
 // crlsFor looks for a certificate that issued cert among the
@@ -318,13 +335,14 @@ func (ck *crlCheck) index(cert *x509.Certificate) {
 // fails the check instead of hiding a certificate from it.
 func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 	var lookup crlLookup
-	if !ck.checker.hasCRLFrom(cert) {
+	issuerName := ck.nameOf(cert.RawIssuer)
+	if !ck.checker.hasCRLFrom(issuerName) {
 		// Nothing could apply to cert, so its issuer is not worth
 		// a signature check: not finding one changes nothing for
 		// a certificate whose issuer has no CRL.
 		return lookup, nil
 	}
-	for _, candidate := range ck.bySubject[string(cert.RawIssuer)] {
+	for _, candidate := range ck.bySubject[issuerName] {
 		issued, err := ck.issuedBy(cert, candidate)
 		if err != nil {
 			return crlLookup{}, err
@@ -346,9 +364,12 @@ func (ck *crlCheck) crlsFor(cert *x509.Certificate) (crlLookup, error) {
 }
 
 // issuedBy reports whether issuer signed cert, spending one of the
-// connection's bounded signature checks when the names match.
+// connection's bounded signature checks when the names match under
+// the X.509 rules. Go itself matches the names of a chain byte for
+// byte, but the chains a peer presents in the non-verifying modes
+// never go through Go's verifier, and the signature is what binds.
 func (ck *crlCheck) issuedBy(cert, issuer *x509.Certificate) (bool, error) {
-	if !bytes.Equal(cert.RawIssuer, issuer.RawSubject) {
+	if ck.nameOf(cert.RawIssuer) != ck.nameOf(issuer.RawSubject) {
 		return false, nil
 	}
 	if err := ck.spendSignatureCheck(); err != nil {
@@ -369,7 +390,7 @@ func (ck *crlCheck) crlsSignedBy(issuer *x509.Certificate) (crlBinding, error) {
 		return binding, nil
 	}
 	var binding crlBinding
-	issuerName := nameKey(issuer.RawSubject)
+	issuerName := ck.nameOf(issuer.RawSubject)
 	for _, crl := range ck.checker.crls {
 		if ck.checker.crlIssuerName[crl] != issuerName {
 			continue
