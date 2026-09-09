@@ -258,9 +258,13 @@ func TestNewTabletDoesNotMirrorMysqlWaitTimeout(t *testing.T) {
 			Cell: Cell,
 		},
 	}, ts, srvTopoCounts)
-	defer tablet.tsv.StopService()
+	defer func() {
+		tablet.tsv.StopService()
+		tablet.tsv.Close(ctx)
+		tablet.db.Close()
+	}()
 
-	require.Zero(t, tablet.tsv.Config().TempTableIdleTimeout, "vtexplain tablets must not mirror mysqld's wait_timeout")
+	assert.Zero(t, tablet.tsv.Config().TempTableIdleTimeout, "vtexplain tablets must not mirror mysqld's wait_timeout")
 
 	// A schema broadcast is what triggers the background read in auto mode;
 	// the fake database reports any such read reaching the tablet.
