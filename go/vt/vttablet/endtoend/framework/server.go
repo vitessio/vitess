@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/yaml2"
 
+	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -124,6 +125,13 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.SchemaReloadInterval = 5 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Info(fmt.Sprintf("Config:\n%s", gotBytes))
+	// The engine builds the exempt ACL from the registered factory as it
+	// starts, and with none registered it only logs and runs with no exempt
+	// ACL, which would surface as every CALL test being denied. Fail here
+	// instead, so the mistake is reported at startup.
+	if _, err := tableacl.GetCurrentACLFactory(); err != nil {
+		return vterrors.Wrapf(err, "the table ACL factory must be registered before StartServer, or the exempt ACL for %q cannot be built", ExemptCallerID)
+	}
 	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)
 }
 
