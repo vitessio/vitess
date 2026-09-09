@@ -29,6 +29,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -479,7 +480,8 @@ func (sm *StreamMigrator) getTerminalOnlineDDLMigrations(ctx context.Context, ta
 		quotedUUIDs = append(quotedUUIDs, encodeString(uuid))
 	}
 	query := fmt.Sprintf(
-		"select migration_uuid from _vt.schema_migrations where migration_uuid in (%s) and migration_status in (%s, %s, %s)",
+		"select migration_uuid from %s.schema_migrations where migration_uuid in (%s) and migration_status in (%s, %s, %s)",
+		sidecar.GetIdentifier(),
 		strings.Join(quotedUUIDs, ", "),
 		encodeString(string(schema.OnlineDDLStatusComplete)),
 		encodeString(string(schema.OnlineDDLStatusFailed)),
