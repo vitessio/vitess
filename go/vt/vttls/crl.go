@@ -304,7 +304,6 @@ func newCRLChecker(crl, ca string) (*crlChecker, error) {
 // newCRLCheckerFrom builds the checker of the given CRLs and configured
 // issuers, indexing the CRLs and binding them to the issuers once.
 func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate) (*crlChecker, error) {
-	crls = newestCompleteCRLs(crls)
 	checker := &crlChecker{
 		crls:                crls,
 		issuers:             issuers,
@@ -342,24 +341,24 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 	return checker, nil
 }
 
-// newestCompleteCRLs keeps, of several complete CRLs from one issuer
-// for one scope, the newest alone: a complete CRL supersedes the ones
-// issued before it, and an entry of an older one that the newest
-// dropped, such as a certificate taken off hold, is a revocation no
-// more. The CRLs keep their order otherwise.
+// newestCompleteCRLs keeps, of several complete CRLs that one issuer
+// certificate validated, the newest for each scope alone: a complete
+// CRL supersedes the ones issued before it, and an entry of an older
+// one that the newest dropped, such as a certificate taken off hold,
+// is a revocation no more. Supersession is decided among the CRLs
+// that one key signed, so that the CRLs of two CAs sharing a name,
+// as a re-keyed CA and its predecessor do, never supersede each
+// other. The CRLs keep their order otherwise.
 func newestCompleteCRLs(crls []*x509.RevocationList) []*x509.RevocationList {
 	newest := make(map[string]*x509.RevocationList, len(crls))
-	scope := func(crl *x509.RevocationList) string {
-		return nameKey(crl.RawIssuer) + "|" + crlScope(crl)
-	}
 	for _, crl := range crls {
-		if current, found := newest[scope(crl)]; !found || newerCRL(crl, current) {
-			newest[scope(crl)] = crl
+		if current, found := newest[crlScope(crl)]; !found || newerCRL(crl, current) {
+			newest[crlScope(crl)] = crl
 		}
 	}
 	kept := make([]*x509.RevocationList, 0, len(newest))
 	for _, crl := range crls {
-		if newest[scope(crl)] == crl {
+		if newest[crlScope(crl)] == crl {
 			kept = append(kept, crl)
 		}
 	}
@@ -432,6 +431,7 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate, issuerName string, spend
 		}
 		// Signed by another key under the same name: not this issuer's.
 	}
+	binding.crls = newestCompleteCRLs(binding.crls)
 	return binding, nil
 }
 

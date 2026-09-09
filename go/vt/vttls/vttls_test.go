@@ -820,6 +820,23 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 
 	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))}})
 	require.NoError(t, err)
+
+	t.Run("the CRLs of both CAs apply, each to the certificates of its own", func(t *testing.T) {
+		// The old CA revokes its leaf; the new CA's newer CRL, under
+		// the same name, revokes nothing, and must not supersede it.
+		tlstest.RevokeCertAndRegenerateCRL(root, "old-ca", "old-leaf")
+		oldCRL, err := os.ReadFile(path.Join(root, "old-ca-crl.pem"))
+		require.NoError(t, err)
+		newCRL, err := os.ReadFile(path.Join(root, "new-ca-crl.pem"))
+		require.NoError(t, err)
+		bothCRLs := path.Join(t.TempDir(), "both-crl.pem")
+		require.NoError(t, os.WriteFile(bothCRLs, append(newCRL, oldCRL...), 0o600))
+		checker, err := newCRLChecker(bothCRLs, bundle)
+		require.NoError(t, err)
+
+		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName=old.example.com")
+	})
 }
 
 // crlWithIssuerName writes a CRL signed by the CA whose certificate
