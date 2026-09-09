@@ -269,7 +269,7 @@ func TestClientConfigCRL(t *testing.T) {
 		require.NoError(t, err)
 
 		res := handshake(t, revokedServerPresenting(revokedLeaf, forged), clientConfig)
-		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName+": none of the certificates found for its issuer "+intermediate.Subject.CommonName+" validates the CRL configured for that issuer")
+		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName+": a CRL signed by the key of its issuer "+intermediate.Subject.CommonName+" is configured, but none of the certificates found for that issuer may sign CRLs")
 	})
 
 	t.Run("a forged issuer presented ahead of the configured one does not hide the CRL", func(t *testing.T) {
@@ -555,4 +555,34 @@ func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
 		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, certs.ServerCert)}})
 		require.ErrorContains(t, err, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxSignatureChecks))
 	})
+}
+
+// TestCRLCheckerIssuersSharingASubject checks that a CRL from a CA is
+// not held against the certificates of another CA that carries the
+// same subject with a different key, as a re-keyed CA and its
+// predecessor do.
+func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
+	root := t.TempDir()
+	tlstest.CreateCA(root)
+	tlstest.CreateIntermediateCA(root, tlstest.CA, "01", "old-ca", "Shared CA")
+	tlstest.CreateIntermediateCA(root, tlstest.CA, "02", "new-ca", "Shared CA")
+	tlstest.CreateSignedCert(root, "old-ca", "03", "old-leaf", "old.example.com")
+	tlstest.CreateCRL(root, "new-ca")
+	oldCA := loadOneCert(t, path.Join(root, "old-ca-cert.pem"))
+	newCA := loadOneCert(t, path.Join(root, "new-ca-cert.pem"))
+	require.Equal(t, oldCA.RawSubject, newCA.RawSubject)
+	require.NotEqual(t, oldCA.PublicKey, newCA.PublicKey)
+
+	// Both CAs are configured, but only the new one has a CRL.
+	oldPEM, err := os.ReadFile(path.Join(root, "old-ca-cert.pem"))
+	require.NoError(t, err)
+	newPEM, err := os.ReadFile(path.Join(root, "new-ca-cert.pem"))
+	require.NoError(t, err)
+	bundle := path.Join(root, "shared-ca-bundle.pem")
+	require.NoError(t, os.WriteFile(bundle, append(oldPEM, newPEM...), 0o600))
+	checker, err := newCRLChecker(path.Join(root, "new-ca-crl.pem"), bundle)
+	require.NoError(t, err)
+
+	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))}})
+	require.NoError(t, err)
 }
