@@ -4267,6 +4267,27 @@ var validSQL = []struct {
 }, {
 	input:  "select t.now from t",
 	output: "select t.`now` from t",
+}, {
+	// session_user and system_user are keywords only before '(' in an
+	// expression; in identifier positions they name tables, indexes and
+	// procedures, as in MySQL
+	input:  "create table t (a int, index session_user(a), index system_user(a))",
+	output: "create table t (\n\ta int,\n\tkey `session_user` (a),\n\tkey `system_user` (a)\n)",
+}, {
+	input:  "create table session_user(a int)",
+	output: "create table `session_user` (\n\ta int\n)",
+}, {
+	input:  "create table system_user(a int)",
+	output: "create table `system_user` (\n\ta int\n)",
+}, {
+	input:  "call session_user(1)",
+	output: "call `session_user`(1)",
+}, {
+	input:  "call system_user(1)",
+	output: "call `system_user`(1)",
+}, {
+	input:  "insert into system_user(a) values (1)",
+	output: "insert into `system_user`(a) values (1)",
 }}
 
 func TestValid(t *testing.T) {
