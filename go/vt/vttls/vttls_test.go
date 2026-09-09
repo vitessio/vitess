@@ -82,6 +82,20 @@ func handshake(t *testing.T, serverConfig, clientConfig *tls.Config) handshakeRe
 	return res
 }
 
+// recordResumption wraps config's VerifyConnection so that the test
+// can tell whether the handshake that the callback rejected was a
+// resumed one, which the connection state of a failed handshake does
+// not reveal.
+func recordResumption(config *tls.Config) *bool {
+	var resumed bool
+	verify := config.VerifyConnection
+	config.VerifyConnection = func(cs tls.ConnectionState) error {
+		resumed = cs.DidResume
+		return verify(cs)
+	}
+	return &resumed
+}
+
 func TestClientConfigCRL(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 
@@ -147,6 +161,34 @@ func TestClientConfigCRL(t *testing.T) {
 		require.NoError(t, res.clientErr)
 		require.NoError(t, res.serverErr)
 	})
+
+	t.Run("a revoked server certificate is rejected on a resumed session", func(t *testing.T) {
+		// The session is established before the client has the CRL
+		// and resumed once it does. The two client configurations
+		// share the session cache, which is keyed by server name.
+		sessionCache := tls.NewLRUClientSessionCache(1)
+		beforeRevocation, err := ClientConfig(VerifyIdentity, "", "", certs.ServerCA, "", certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		beforeRevocation.ClientSessionCache = sessionCache
+		afterRevocation, err := ClientConfig(VerifyIdentity, "", "", certs.ServerCA, certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		afterRevocation.ClientSessionCache = sessionCache
+		resumed := recordResumption(afterRevocation)
+
+		res := handshake(t, revokedServer, beforeRevocation)
+		require.NoError(t, res.clientErr)
+		require.NoError(t, res.serverErr)
+		require.False(t, res.clientState.DidResume)
+
+		res = handshake(t, revokedServer, beforeRevocation)
+		require.NoError(t, res.clientErr)
+		require.NoError(t, res.serverErr)
+		require.True(t, res.clientState.DidResume, "the client must resume the session for this test to be meaningful")
+
+		res = handshake(t, revokedServer, afterRevocation)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+		require.True(t, *resumed, "the rejected handshake must be a resumed one")
+	})
 }
 
 func TestServerConfigCRL(t *testing.T) {
@@ -192,6 +234,7 @@ func TestServerConfigCRL(t *testing.T) {
 
 		clientConfig := newClientConfig(t, certs.RevokedClientCert, certs.RevokedClientKey)
 		clientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(1)
+		resumed := recordResumption(afterRevocation)
 
 		res := handshake(t, beforeRevocation, clientConfig)
 		require.NoError(t, res.clientErr)
@@ -205,6 +248,7 @@ func TestServerConfigCRL(t *testing.T) {
 
 		res = handshake(t, afterRevocation, clientConfig)
 		require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+certs.RevokedClientName)
+		require.True(t, *resumed, "the rejected handshake must be a resumed one")
 	})
 }
 
