@@ -32,6 +32,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -195,9 +198,11 @@ func (c *crlChecker) hasCRLFrom(issuerName string) bool {
 
 // nameKey renders a DER encoded distinguished name for comparison
 // under the X.509 matching rules, by which attribute values compare
-// without regard to case or to leading, trailing, and repeated
-// whitespace, and the attributes of a multi-valued RDN compare as a
-// set. Go compares the names of certificates byte for byte, but a CRL
+// after Unicode normalization and case folding and without regard to
+// leading, trailing, and repeated whitespace, and the attributes of a
+// multi-valued RDN compare as a set; the string preparation of RFC
+// 4518 is approximated, not followed to the letter. Go compares the
+// names of certificates byte for byte, but a CRL
 // can come from another tool than the CA certificate and encode,
 // case, space, or order the same name differently, and nothing rides
 // on the name alone since the CRL's signature is verified before the
@@ -216,7 +221,7 @@ func nameKey(rawName []byte) string {
 		for _, attribute := range rdn {
 			value := fmt.Sprint(attribute.Value)
 			if text, ok := attribute.Value.(string); ok {
-				value = strings.ToLower(strings.Join(strings.Fields(text), " "))
+				value = strings.Join(strings.Fields(cases.Fold().String(norm.NFKC.String(text))), " ")
 			}
 			oid := attribute.Type.String()
 			attributes = append(attributes, fmt.Sprintf("%d:%s%d:%s", len(oid), oid, len(value), value))

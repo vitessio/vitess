@@ -1012,6 +1012,9 @@ func TestNameKey(t *testing.T) {
 	attribute := func(oid asn1.ObjectIdentifier, value string) pkix.AttributeTypeAndValue {
 		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagPrintableString, Bytes: []byte(value)}}
 	}
+	utf8Attribute := func(oid asn1.ObjectIdentifier, value string) pkix.AttributeTypeAndValue {
+		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(value)}}
+	}
 	name := func(rdns ...pkix.RelativeDistinguishedNameSET) []byte {
 		raw, err := asn1.Marshal(pkix.RDNSequence(rdns))
 		require.NoError(t, err)
@@ -1026,6 +1029,8 @@ func TestNameKey(t *testing.T) {
 		{"case", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "EXAMPLE ca")))},
 		{"whitespace", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "  Example   CA ")))},
 		{"attribute order within an RDN", name(rdn(attribute(commonName, "Bob"), attribute(commonName, "amy"))), name(rdn(attribute(commonName, "AMY"), attribute(commonName, "bob")))},
+		{"Unicode normalization", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(utf8Attribute(commonName, "Jose\u0301")))},
+		{"case folding beyond ASCII", name(rdn(utf8Attribute(commonName, "Stra\u00dfe"))), name(rdn(utf8Attribute(commonName, "STRASSE")))},
 	}
 	for _, tc := range same {
 		t.Run("same "+tc.name, func(t *testing.T) {
