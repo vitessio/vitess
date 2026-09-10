@@ -1012,6 +1012,25 @@ func TestCRLCheckerNewestCompleteCRL(t *testing.T) {
 		err = checker.check(chain)
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
 	})
+
+	// Two CRLs with the same number, issued at the same time, are
+	// neither newer than the other, and both apply, whichever comes
+	// first in the file.
+	tied := []struct {
+		name string
+		file string
+	}{
+		{"listing first", crlsFile(t, completeCRL(3, newer, leaf.SerialNumber), completeCRL(3, newer))},
+		{"listing second", crlsFile(t, completeCRL(3, newer), completeCRL(3, newer, leaf.SerialNumber))},
+	}
+	for _, tc := range tied {
+		t.Run("a certificate that one of two CRLs of the same version lists is revoked, "+tc.name, func(t *testing.T) {
+			checker, err := newCRLChecker(tc.file, certs.ServerCA)
+			require.NoError(t, err)
+			err = checker.check(chain)
+			require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
+		})
+	}
 }
 
 // crlsFile writes the DER encoded CRLs to one PEM file and returns

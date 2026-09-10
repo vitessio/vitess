@@ -418,10 +418,12 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate) ([]*x509.RevocationList,
 // certificate validated, the newest for each scope alone: a complete
 // CRL supersedes the ones issued before it, and an entry of an older
 // one that the newest dropped, such as a certificate taken off hold,
-// is a revocation no more. Supersession is decided among the CRLs
-// that one certificate validated, so that the CRLs of two CAs sharing
-// a name, as a re-keyed CA and its predecessor do, never supersede
-// each other. The CRLs keep their order otherwise.
+// is a revocation no more. CRLs that are neither newer than the other,
+// with the same number and issue time, are all kept, so that which
+// comes first in the file decides nothing. Supersession is decided
+// among the CRLs that one certificate validated, so that the CRLs of
+// two CAs sharing a name, as a re-keyed CA and its predecessor do,
+// never supersede each other. The CRLs keep their order otherwise.
 func newestCompleteCRLs(crls []*x509.RevocationList) []*x509.RevocationList {
 	newest := make(map[string]*x509.RevocationList, len(crls))
 	for _, crl := range crls {
@@ -431,7 +433,7 @@ func newestCompleteCRLs(crls []*x509.RevocationList) []*x509.RevocationList {
 	}
 	kept := make([]*x509.RevocationList, 0, len(newest))
 	for _, crl := range crls {
-		if newest[crlScope(crl)] == crl {
+		if !newerCRL(newest[crlScope(crl)], crl) {
 			kept = append(kept, crl)
 		}
 	}
