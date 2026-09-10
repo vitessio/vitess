@@ -275,7 +275,9 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		checker.revokedSerials[crl] = serials
 		checker.warningKeys[crl] = expiredCRLKey(crl)
 	}
+	configuredNames := make(map[string]bool, len(issuers))
 	for _, issuer := range issuers {
+		configuredNames[string(issuer.RawSubject)] = true
 		if _, done := checker.configured[string(issuer.Raw)]; done {
 			continue
 		}
@@ -284,6 +286,25 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the configured CA certificate %s: %v", issuer.Subject.CommonName, err)
 		}
 		checker.configured[string(issuer.Raw)] = bound
+	}
+	// A CRL whose issuer name no configured certificate carries is
+	// applied under none of them, which is right for the CRL of a
+	// CA that peers present, but silence for a configured CA's whose
+	// issuer name is encoded differently from the certificate's
+	// subject, as a CRL that another tool than the CA's wrote can
+	// be. Such a CRL is told by its signature, once here, and
+	// refused rather than left unapplied.
+	for name, crls := range checker.crlsByIssuer {
+		if configuredNames[name] {
+			continue
+		}
+		for _, crl := range crls {
+			for _, issuer := range issuers {
+				if crl.CheckSignatureFrom(issuer) == nil {
+					return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRL from issuer %s is signed by the configured CA certificate %s, but its issuer name is encoded differently from that certificate's subject, so it would not be applied: re-issue the CRL with the certificate's subject as its issuer", crl.Issuer.CommonName, issuer.Subject.CommonName)
+				}
+			}
+		}
 	}
 	for _, cert := range issuers {
 		for _, parent := range issuers {

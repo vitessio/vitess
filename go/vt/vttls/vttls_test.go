@@ -1286,6 +1286,39 @@ func TestCRLCheckerCRLWithoutAuthorityKeyIdentifier(t *testing.T) {
 	})
 }
 
+// TestNewCRLCheckerIssuerNameEncoding checks that a CRL signed by a
+// configured CA whose issuer name is encoded differently from that
+// certificate's subject, as a CRL that another tool than the CA's
+// wrote can be, is refused rather than left silently unapplied: the
+// names are matched byte for byte, so nothing would read it. A CRL
+// from a CA that is not configured still loads, since it may be an
+// intermediate's that peers present.
+func TestNewCRLCheckerIssuerNameEncoding(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	renamed := *ca
+	renamed.RawSubject, err = asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
+		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
+		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(ca.Subject.CommonName)},
+	}}})
+	require.NoError(t, err)
+	require.NotEqual(t, ca.RawSubject, renamed.RawSubject, "the CA's subject must not be a UTF8String already for this test to be meaningful")
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:     big.NewInt(1),
+		ThisUpdate: time.Now().Add(-time.Hour),
+		NextUpdate: time.Now().Add(time.Hour),
+	}, &renamed, keyPair.PrivateKey.(crypto.Signer))
+	require.NoError(t, err)
+
+	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
+	require.ErrorContains(t, err, "the CRL from issuer "+ca.Subject.CommonName+" is signed by the configured CA certificate "+ca.Subject.CommonName+", but its issuer name is encoded differently from that certificate's subject")
+
+	_, err = newCRLChecker(certs.ClientCRL, certs.ServerCA)
+	require.NoError(t, err, "a CRL from a CA that is not configured loads")
+}
+
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
 // CRL is refused rather than silently enforcing nothing.
 func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
