@@ -53,6 +53,13 @@ type (
 		// configured CA certificate validates, bound once here
 		// rather than on every connection.
 		configured map[string][]*x509.RevocationList
+		// bound holds, by DER encoding, what binding the CRLs to an
+		// issuer that verification alone vouches for made of them,
+		// as a crlBinding, kept from the first connection through
+		// that issuer for the ones after it: neither the CRLs nor
+		// the certificate change. Only the issuers of verified
+		// chains get in, which the trusted CAs issued.
+		bound sync.Map
 		// revokedSerials indexes the serial numbers each CRL
 		// revokes, so that a handshake looks a certificate up
 		// rather than scanning a CRL that may hold many entries.
@@ -61,6 +68,13 @@ type (
 		// warning about its expiry, a digest of the CRL worked out
 		// once rather than on every handshake that consults it.
 		warningKeys map[*x509.RevocationList]string
+	}
+
+	// crlBinding is what binding the CRLs to an issuer made of
+	// them: the CRLs it validates, or why they cannot be applied.
+	crlBinding struct {
+		crls []*x509.RevocationList
+		err  error
 	}
 
 	// issuingDistributionPoint is the extension of that name, RFC
@@ -385,17 +399,11 @@ func (c *crlChecker) checkChain(chain []*x509.Certificate) error {
 	return nil
 }
 
-// checkCertificate checks cert against the CRLs that issuer validates:
-// bound once for a configured CA certificate, and here for one that
-// verification alone vouches for, such as an intermediate the peer
-// presented, whose CRLs then cost a signature check each.
+// checkCertificate checks cert against the CRLs that issuer validates.
 func (c *crlChecker) checkCertificate(cert, issuer *x509.Certificate) error {
-	crls, configured := c.configured[string(issuer.Raw)]
-	if !configured {
-		var err error
-		if crls, err = c.bindCRLs(issuer); err != nil {
-			return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "cannot check the revocation of certificate CommonName=%s: %v", cert.Subject.CommonName, err)
-		}
+	crls, err := c.crlsOf(issuer)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "cannot check the revocation of certificate CommonName=%s: %v", cert.Subject.CommonName, err)
 	}
 	for _, crl := range crls {
 		if c.isRevoked(cert, crl) {
@@ -403,6 +411,24 @@ func (c *crlChecker) checkCertificate(cert, issuer *x509.Certificate) error {
 		}
 	}
 	return nil
+}
+
+// crlsOf returns the CRLs that issuer validates, or why they cannot
+// be applied: bound when the checker was built for a configured CA
+// certificate, and on first sight for an issuer that verification
+// alone vouches for, such as an intermediate the peer presented,
+// whose CRLs cost a signature check each that one connection.
+func (c *crlChecker) crlsOf(issuer *x509.Certificate) ([]*x509.RevocationList, error) {
+	if crls, configured := c.configured[string(issuer.Raw)]; configured {
+		return crls, nil
+	}
+	if cached, done := c.bound.Load(string(issuer.Raw)); done {
+		binding := cached.(crlBinding)
+		return binding.crls, binding.err
+	}
+	crls, err := c.bindCRLs(issuer)
+	c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err})
+	return crls, err
 }
 
 func loadCRLSet(crl string) ([]*x509.RevocationList, error) {

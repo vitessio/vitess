@@ -513,6 +513,32 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	})
 }
 
+// TestCRLCheckerBindsChainIssuersOnce checks that the CRLs of an
+// issuer that is not configured but found in a verified chain, such
+// as an intermediate the peer presents while the CA file holds the
+// root, are bound on first sight and kept, so that later handshakes
+// through that issuer do not verify the CRL signatures again.
+func TestCRLCheckerBindsChainIssuersOnce(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	intermediate := loadOneCert(t, certs.ServerCA)
+	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
+	checker, err := newCRLChecker(certs.ServerCRL, path.Join(root, "ca-cert.pem"))
+	require.NoError(t, err)
+	_, cached := checker.bound.Load(string(intermediate.Raw))
+	require.False(t, cached)
+
+	for range 2 {
+		err = checker.check([][]*x509.Certificate{{revokedLeaf, intermediate, rootCert}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	}
+	_, cached = checker.bound.Load(string(intermediate.Raw))
+	require.True(t, cached, "the intermediate's CRLs were not kept")
+	_, cached = checker.bound.Load(string(rootCert.Raw))
+	require.False(t, cached, "the configured root is bound when the checker is built, not here")
+}
+
 // selfSignedCA returns a self-signed CA certificate and its key, with
 // the given serial number and common name, or with rawSubject as its
 // subject when it is set.
