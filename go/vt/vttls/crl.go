@@ -283,11 +283,11 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		if _, done := checker.configured[string(issuer.Raw)]; done {
 			continue
 		}
-		bound, err := checker.bindCRLs(issuer)
+		crls, err := checker.bindCRLs(issuer)
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the configured CA certificate %s: %v", issuer.Subject.CommonName, err)
 		}
-		checker.configured[string(issuer.Raw)] = bound
+		checker.configured[string(issuer.Raw)] = crls
 	}
 	// A CRL whose issuer name no configured certificate carries is
 	// applied under none of them, which is right for the CRL of a
@@ -338,11 +338,11 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 // another key than the issuer's, which is what the CRL of a re-keyed
 // CA's predecessor does.
 func (c *crlChecker) bindCRLs(issuer *x509.Certificate) ([]*x509.RevocationList, error) {
-	var bound []*x509.RevocationList
+	var crls []*x509.RevocationList
 	for _, crl := range c.crlsByIssuer[string(issuer.RawSubject)] {
 		err := crl.CheckSignatureFrom(issuer)
 		if err == nil {
-			bound = append(bound, crl)
+			crls = append(crls, crl)
 			continue
 		}
 		if len(crl.AuthorityKeyId) > 0 && len(issuer.SubjectKeyId) > 0 && !bytes.Equal(crl.AuthorityKeyId, issuer.SubjectKeyId) {
@@ -354,7 +354,7 @@ func (c *crlChecker) bindCRLs(issuer *x509.Certificate) ([]*x509.RevocationList,
 		}
 		return nil, fmt.Errorf("the CRL from issuer %s cannot be validated: its signature does not verify against the certificate of that issuer: %w", crl.Issuer.CommonName, err)
 	}
-	return newestCompleteCRLs(bound), nil
+	return newestCompleteCRLs(crls), nil
 }
 
 // newestCompleteCRLs keeps, of several complete CRLs that one issuer
