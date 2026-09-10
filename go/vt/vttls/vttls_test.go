@@ -736,6 +736,46 @@ func TestCRLCheckerBoundsTheBindings(t *testing.T) {
 	checker.bound.Range(func(any, any) bool { bindings++; return true })
 	require.LessOrEqual(t, bindings, maxBoundIssuers)
 	require.Positive(t, bindings)
+
+	t.Run("connections at once do not overshoot the bound", func(t *testing.T) {
+		// One slot is left, and many handshakes race for it.
+		checker, err := newCRLChecker(certs.ServerCRL, path.Join(root, "ca-cert.pem"))
+		require.NoError(t, err)
+		checker.boundIssuers.Store(maxBoundIssuers - 1)
+		const handshakes = 200
+		issuers := make([]*x509.Certificate, 0, handshakes)
+		for i := range handshakes {
+			der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+				SerialNumber:          big.NewInt(1<<42 + int64(i)),
+				Subject:               pkix.Name{CommonName: fmt.Sprintf("Racing Sub CA %d", i)},
+				NotBefore:             time.Now().Add(-time.Hour),
+				NotAfter:              time.Now().Add(time.Hour),
+				IsCA:                  true,
+				BasicConstraintsValid: true,
+				KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+			}, intermediate, &subCAKey.PublicKey, intermediateKey)
+			require.NoError(t, err)
+			issuer, err := x509.ParseCertificate(der)
+			require.NoError(t, err)
+			issuers = append(issuers, issuer)
+		}
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for _, issuer := range issuers {
+			wg.Go(func() {
+				<-start
+				_, err := checker.crlsOf(issuer)
+				require.NoError(t, err)
+			})
+		}
+		close(start)
+		wg.Wait()
+		bindings := 0
+		checker.bound.Range(func(any, any) bool { bindings++; return true })
+		require.LessOrEqual(t, bindings, 1, "more bindings were kept than slots were left")
+		require.LessOrEqual(t, checker.boundIssuers.Load(), int64(maxBoundIssuers))
+	})
 }
 
 // selfSignedCA returns a self-signed CA certificate and its key, with

@@ -545,12 +545,29 @@ func (c *crlChecker) crlsOf(issuer *x509.Certificate) ([]*x509.RevocationList, e
 		return binding.crls, binding.err
 	}
 	crls, err := c.bindCRLs(issuer)
-	if c.boundIssuers.Load() < maxBoundIssuers {
-		if _, loaded := c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err}); !loaded {
-			c.boundIssuers.Add(1)
+	if c.reserveBinding() {
+		if _, loaded := c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err}); loaded {
+			c.boundIssuers.Add(-1)
 		}
 	}
 	return crls, err
+}
+
+// reserveBinding takes one of the maxBoundIssuers slots for a
+// binding to keep, and reports whether there was one: the slot is
+// taken before the binding is stored, so that connections racing for
+// the last slots cannot together keep more bindings than there are
+// slots.
+func (c *crlChecker) reserveBinding() bool {
+	for {
+		kept := c.boundIssuers.Load()
+		if kept >= maxBoundIssuers {
+			return false
+		}
+		if c.boundIssuers.CompareAndSwap(kept, kept+1) {
+			return true
+		}
+	}
 }
 
 func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
