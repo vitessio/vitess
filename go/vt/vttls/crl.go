@@ -325,15 +325,33 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			for _, crl := range checker.configured[string(parent.Raw)] {
 				if checker.isRevoked(cert, crl) {
 					checker.revokedAnchors[string(cert.Raw)] = true
-					log.Warn("A configured CA certificate is revoked by the CRL of its issuer: connections whose chain ends at it will be rejected.",
-						slog.String("subject", cert.Subject.CommonName),
-						slog.String("issuer", parent.Subject.CommonName),
-					)
+					warnRevokedAnchor(cert, parent)
+					break
 				}
 			}
 		}
 	}
 	return checker, nil
+}
+
+// revokedAnchorWarnings holds, by DER encoding, the configured CA
+// certificates already warned about being revoked: a checker is
+// built for every configuration, which the MySQL client does for
+// every connection, and the warning is worth one line per
+// certificate for the life of the process.
+var revokedAnchorWarnings sync.Map
+
+// warnRevokedAnchor logs, once per certificate, that cert, a
+// configured CA certificate, is revoked by the CRL of parent, its
+// configured issuer.
+func warnRevokedAnchor(cert, parent *x509.Certificate) {
+	if _, warned := revokedAnchorWarnings.LoadOrStore(string(cert.Raw), struct{}{}); warned {
+		return
+	}
+	log.Warn("A configured CA certificate is revoked by the CRL of its issuer: connections whose chain ends at it will be rejected.",
+		slog.String("subject", cert.Subject.CommonName),
+		slog.String("issuer", parent.Subject.CommonName),
+	)
 }
 
 // bindCRLs returns the CRLs that issuer validates, the newest complete

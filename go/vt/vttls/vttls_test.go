@@ -962,21 +962,7 @@ func TestCRLCheckerPartitionedCRLs(t *testing.T) {
 	leaf := loadOneCert(t, certs.ServerCert)
 	chain := [][]*x509.Certificate{{leaf, ca}}
 	partition := func(number int64, distributionPoint int, serials ...*big.Int) []byte {
-		uri := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 6, Bytes: fmt.Appendf(nil, "http://crl.example.com/%d", distributionPoint)})
-		fullName := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: uri})
-		scope := mustMarshal(t, struct{ DistributionPoint asn1.RawValue }{asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: fullName}})
-		template := &x509.RevocationList{
-			Number:          big.NewInt(number),
-			ThisUpdate:      time.Now().Add(-time.Duration(number) * time.Hour),
-			NextUpdate:      time.Now().Add(time.Hour),
-			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: scope}},
-		}
-		for _, serial := range serials {
-			template.RevokedCertificateEntries = append(template.RevokedCertificateEntries, x509.RevocationListEntry{SerialNumber: serial, RevocationTime: template.ThisUpdate})
-		}
-		der, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
-		require.NoError(t, err)
-		return der
+		return partitionCRL(t, ca, keyPair.PrivateKey.(crypto.Signer), number, distributionPoint, serials...)
 	}
 
 	t.Run("every partition applies", func(t *testing.T) {
@@ -991,6 +977,63 @@ func TestCRLCheckerPartitionedCRLs(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, checker.check(chain))
 	})
+}
+
+// partitionCRL DER encodes a CRL from ca with the given number,
+// scoped by its issuing distribution point to the distribution point
+// of the given index, revoking the given serial numbers.
+func partitionCRL(t *testing.T, ca *x509.Certificate, key crypto.Signer, number int64, distributionPoint int, serials ...*big.Int) []byte {
+	t.Helper()
+	uri := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 6, Bytes: fmt.Appendf(nil, "http://crl.example.com/%d", distributionPoint)})
+	fullName := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: uri})
+	scope := mustMarshal(t, struct{ DistributionPoint asn1.RawValue }{asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: fullName}})
+	template := &x509.RevocationList{
+		Number:          big.NewInt(number),
+		ThisUpdate:      time.Now().Add(-time.Duration(number) * time.Hour),
+		NextUpdate:      time.Now().Add(time.Hour),
+		ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: scope}},
+	}
+	for _, serial := range serials {
+		template.RevokedCertificateEntries = append(template.RevokedCertificateEntries, x509.RevocationListEntry{SerialNumber: serial, RevocationTime: template.ThisUpdate})
+	}
+	der, err := x509.CreateRevocationList(rand.Reader, template, ca, key)
+	require.NoError(t, err)
+	return der
+}
+
+// TestNewCRLCheckerWarnsOncePerRevokedAnchor checks that a configured
+// CA certificate revoked by its configured issuer's CRL is warned
+// about once: not once per CRL of the issuer that lists it, and not
+// again when the checker is built again for the same configuration,
+// which the MySQL client does for every connection.
+func TestNewCRLCheckerWarnsOncePerRevokedAnchor(t *testing.T) {
+	warnings := atomic.Int32{}
+	warn := log.Warn
+	log.Warn = func(string, ...slog.Attr) { warnings.Add(1) }
+	t.Cleanup(func() { log.Warn = warn })
+
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	rootKeyPair, err := tls.LoadX509KeyPair(path.Join(root, "ca-cert.pem"), path.Join(root, "ca-key.pem"))
+	require.NoError(t, err)
+	intermediate := loadOneCert(t, certs.ServerCA)
+	// Both partitions of the root's CRL list the intermediate.
+	crls := crlsFile(t,
+		partitionCRL(t, rootCert, rootKeyPair.PrivateKey.(crypto.Signer), 1, 0, intermediate.SerialNumber),
+		partitionCRL(t, rootCert, rootKeyPair.PrivateKey.(crypto.Signer), 1, 1, intermediate.SerialNumber),
+	)
+	intermediatePEM, err := os.ReadFile(certs.ServerCA)
+	require.NoError(t, err)
+	bundle := path.Join(t.TempDir(), "bundle.pem")
+	require.NoError(t, os.WriteFile(bundle, append(intermediatePEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootCert.Raw})...), 0o600))
+
+	for range 2 {
+		checker, err := newCRLChecker(crls, bundle)
+		require.NoError(t, err)
+		require.True(t, checker.revokedAnchors[string(intermediate.Raw)])
+	}
+	require.EqualValues(t, 1, warnings.Load())
 }
 
 // TestCRLCheckerCAThatMayNotSignCRLs checks that a CRL that the key
