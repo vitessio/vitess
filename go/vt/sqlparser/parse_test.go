@@ -1337,7 +1337,7 @@ var validSQL = []struct {
 	input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
 }, {
 	input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
-	output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
+	output: "insert into `user`(`format`, tree, `vitess`) values ('Chuck', 42, 'Barry')",
 }, {
 	input: "insert into customer() values ()",
 }, {
@@ -2790,6 +2790,21 @@ var validSQL = []struct {
 }, {
 	input: "explain format = traditional select * from t",
 }, {
+	// the EXPLAIN format names are matched by text, not as keywords: they stay plain
+	// identifiers everywhere else, as they are in MySQL
+	input:  "select tree, traditional from t",
+	output: "select tree, traditional from t",
+}, {
+	input:  "set sql_mode = TRADITIONAL",
+	output: "set sql_mode = TRADITIONAL",
+}, {
+	// MySQL also accepts the format name as a quoted string
+	input:  "explain format = 'json' select * from t",
+	output: "explain format = json select * from t",
+}, {
+	input:  "explain format = 'Tree' select * from t",
+	output: "explain format = tree select * from t",
+}, {
 	input: "vexplain queries select * from t",
 }, {
 	input: "vexplain all select * from t",
@@ -2802,6 +2817,8 @@ var validSQL = []struct {
 	input: "vexplain trace select * from t",
 }, {
 	input: "vexplain keys select * from t",
+}, {
+	input: "vexplain mysqlplan select * from t",
 }, {
 	input: "explain analyze select * from t",
 }, {
@@ -6518,6 +6535,13 @@ var invalidSQL = []struct {
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",
 }, {
+	// MySQL's own error text (1791)
+	input:  "explain format = bogus select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
+}, {
+	input:  "explain format = 'bogus' select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 25 near 'bogus'",
+}, {
 	input:  "alter vitess_migration cleanup context ''",
 	output: "migration context cannot be empty at position 42",
 }, {
@@ -7195,4 +7219,30 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 
 func locateFile(name string) string {
 	return "testdata/" + name
+}
+
+// MySQL recognizes the national-character string introducer only as N'…'. In
+// N"…" the N is an identifier followed by "…" — a string, which MySQL reads as
+// an alias — so the lexer must not take the national-string path on a double
+// quote.
+func TestNationalStringRequiresSingleQuote(t *testing.T) {
+	parser := NewTestParser()
+	for _, in := range []string{`select N'foo' from t`, `select n'foo' from t`} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+		nstr, ok := expr.(*UnaryExpr)
+		require.True(t, ok, "%s: got %T", in, expr)
+		assert.Equal(t, NStringOp, nstr.Operator)
+		assert.Equal(t, "select N'foo' from t", String(stmt))
+	}
+	for _, in := range []string{`select N"foo" from t`, `select n"foo" from t`} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
+		col, ok := ae.Expr.(*ColName)
+		require.True(t, ok, "%s: got %T", in, ae.Expr)
+		assert.True(t, col.Name.EqualString("n"), in)
+		assert.Equal(t, "foo", ae.As.String(), in)
+	}
 }

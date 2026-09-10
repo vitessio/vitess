@@ -449,7 +449,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN VEXPLAIN PLAN
+%token <str> FORMAT VITESS VTEXPLAIN VEXPLAIN PLAN MYSQLPLAN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -5194,17 +5194,28 @@ explain_format_opt:
   {
     $$ = EmptyType
   }
-| FORMAT '=' JSON
+| FORMAT '=' sql_id
   {
-    $$ = JSONType
+    // The format names are matched by text rather than as keywords. MySQL accepts
+    // them as ordinary identifiers everywhere else, and rejects an unknown name
+    // rather than the syntax; keeping them out of the keyword table means the
+    // formatter does not backtick columns or values spelled tree or traditional.
+    typ, ok := ExplainTypeFromName($3.String())
+    if !ok {
+      yylex.Error("Unknown EXPLAIN format name: '" + $3.String() + "'")
+      return 1
+    }
+    $$ = typ
   }
-| FORMAT '=' TREE
+| FORMAT '=' STRING
   {
-    $$ = TreeType
-  }
-| FORMAT '=' TRADITIONAL
-  {
-    $$ = TraditionalType
+    // MySQL also accepts the format name as a quoted string
+    typ, ok := ExplainTypeFromName($3)
+    if !ok {
+      yylex.Error("Unknown EXPLAIN format name: '" + $3 + "'")
+      return 1
+    }
+    $$ = typ
   }
 | ANALYZE
   {
@@ -5234,6 +5245,10 @@ vexplain_type_opt:
 | KEYS
   {
     $$ = KeysVExplainType
+  }
+| MYSQLPLAN
+  {
+    $$ = MySQLVExplainType
   }
 
 explain_synonyms:
@@ -9357,6 +9372,7 @@ non_reserved_keyword:
 | MULTIPOINT %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOLYGON %prec FUNCTION_CALL_NON_KEYWORD
 | MUTEX
+| MYSQLPLAN
 | MYSQL_ERRNO
 | NAME
 | NAMES
@@ -9565,10 +9581,8 @@ non_reserved_keyword:
 | TINYINT
 | TINYTEXT
 | TRACE
-| TRADITIONAL
 | TRANSACTION
 | TRANSACTIONS
-| TREE
 | TRIGGER
 | TRIGGERS
 | TRIM %prec FUNCTION_CALL_NON_KEYWORD

@@ -189,5 +189,11 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Info("mysqlctld shut down gracefully")
 	}
 
+	// Close waits out any replica-state restoration a failed shutdown armed
+	// (bounded by the restoration's own deadlines): exiting before it
+	// finishes would leave a still-running replica fenced with replication
+	// stopped.
+	mysqld.Close()
+
 	return nil
 }

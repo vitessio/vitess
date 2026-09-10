@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -390,6 +391,18 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		}
 	}()
 	if db.allowAll.Load() {
+		return callback(&sqltypes.Result{})
+	}
+
+	// The connection-setup statement every Vitess-created connection runs (see
+	// sqlmode.NeutralizeSessionQuery) is answered here so it interferes neither with
+	// ordered expectations nor with per-test query registration. It counts in
+	// GetQueryCalledNum so coverage tests can assert it ran, but stays out of the
+	// query log, which tests use to assert the queries they are actually about.
+	if strings.EqualFold(query, sqlmode.NeutralizeSessionQuery) {
+		db.mu.Lock()
+		db.queryCalled[strings.ToLower(query)]++
+		db.mu.Unlock()
 		return callback(&sqltypes.Result{})
 	}
 

@@ -126,8 +126,11 @@ func (*stLN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]boo
 func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
+
 func (*stLN) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*stLN) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+
+func (*stLN) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error { return nil }
+
 func (*stLN) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
@@ -157,8 +160,11 @@ func (*stLU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]boo
 func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
+
 func (*stLU) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*stLU) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+
+func (*stLU) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error { return nil }
+
 func (*stLU) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
@@ -192,8 +198,11 @@ func (*stLO) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]boo
 func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
+
 func (*stLO) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*stLO) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+
+func (*stLO) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error { return nil }
+
 func (*stLO) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }

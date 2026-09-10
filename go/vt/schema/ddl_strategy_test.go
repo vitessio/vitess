@@ -367,11 +367,19 @@ func TestParseDDLStrategy(t *testing.T) {
 			},
 		},
 		{
+			// sql_mode values get MySQL-faithful validation at strategy parse time
 			strategyVariable: "direct --session-variable sql_mode='ANSI QUOTES'",
-			strategy:         DDLStrategyDirect,
-			options:          "--session-variable sql_mode='ANSI QUOTES'",
-			runtimeOptions:   "",
-			sessionVariables: []SessionVariable{{Name: "sql_mode", Value: "ANSI QUOTES"}},
+			expectError:      "Variable 'sql_mode' can't be set to the value of 'ANSI QUOTES'",
+		},
+		{
+			// modes the Vitess parser does not support are rejected like on a vtgate
+			// session: the migration statements are Vitess-formatted SQL
+			strategyVariable: "online --session-variable sql_mode=ANSI_QUOTES",
+			expectError:      "setting the ANSI_QUOTES sql_mode is unsupported",
+		},
+		{
+			strategyVariable: "online --session-variable sql_mode=IGNORE_SPACE",
+			expectError:      "setting the IGNORE_SPACE sql_mode is unsupported",
 		},
 		{
 			strategyVariable: "direct --session-variable",
@@ -402,7 +410,7 @@ func TestParseDDLStrategy(t *testing.T) {
 			expectError:      `session variable "FOREIGN_KEY_CHECKS" is not allowed`,
 		},
 		{
-			strategyVariable: "direct --session-variable sql_mode=ANSI --session-variable SQL_MODE=TRADITIONAL",
+			strategyVariable: "direct --session-variable sql_mode=NO_ZERO_DATE --session-variable SQL_MODE=TRADITIONAL",
 			expectError:      "duplicate session variable name",
 		},
 		{

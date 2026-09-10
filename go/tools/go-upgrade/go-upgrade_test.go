@@ -17,11 +17,20 @@ limitations under the License.
 package main
 
 import (
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
+	gocr "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/go-version"
 	"github.com/stretchr/testify/require"
 )
@@ -221,4 +230,68 @@ func TestUpgradeGoModFiles(t *testing.T) {
 	got, err := os.ReadFile(currentTool)
 	require.NoError(t, err)
 	require.Equal(t, currentContent, got)
+}
+
+func TestUpdateBootstrapVersionInCodebaseKeepsDockerfileDefaultsInSync(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(dir, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	}
+	write("Makefile", "BOOTSTRAP_VERSION=60\n")
+	write("test.go", "flag.String(\"bootstrap-version\", \"60\", \"the version identifier to use for the docker images\")\n")
+	write("docker/bootstrap/CHANGELOG.md", "# Changelog\n")
+	flavors := []string{"mysql80", "mysql84", "percona80", "percona84"}
+	for _, flavor := range flavors {
+		write("docker/bootstrap/Dockerfile."+flavor, "ARG bootstrap_version=60\nARG image=\"vitess/bootstrap:${bootstrap_version}-common\"\n\nFROM $image\n")
+	}
+	t.Chdir(dir)
+
+	goVersion, err := version.NewVersion("1.27.1")
+	require.NoError(t, err)
+	require.NoError(t, updateBootstrapVersionInCodebase("60", "61", goVersion))
+
+	for _, flavor := range flavors {
+		content, err := os.ReadFile(filepath.Join(dir, "docker/bootstrap/Dockerfile."+flavor))
+		require.NoError(t, err)
+		require.Equal(t, "ARG bootstrap_version=61\nARG image=\"vitess/bootstrap:${bootstrap_version}-common\"\n\nFROM $image\n", string(content))
+	}
+	makefile, err := os.ReadFile(filepath.Join(dir, "Makefile"))
+	require.NoError(t, err)
+	require.Equal(t, "BOOTSTRAP_VERSION=61\n", string(makefile))
+}
+
+// TestResolveGolangImageDigestPinsMultiPlatformIndex publishes a golang tag whose manifest is a
+// multi-platform index and checks that the resolver pins the index itself rather than one of its
+// per-platform children. A per-platform pin cannot be built natively on any other architecture.
+func TestResolveGolangImageDigestPinsMultiPlatformIndex(t *testing.T) {
+	srv := httptest.NewServer(registry.New())
+	t.Cleanup(srv.Close)
+	registryURL, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+
+	var idx gocr.ImageIndex = empty.Index
+	for _, arch := range []string{"amd64", "arm64"} {
+		img, err := random.Image(256, 1)
+		require.NoError(t, err)
+		idx = mutate.AppendManifests(idx, mutate.IndexAddendum{
+			Add:      img,
+			Platform: &gocr.Platform{OS: "linux", Architecture: arch},
+		})
+	}
+
+	goVersion, err := version.NewVersion("1.27.1")
+	require.NoError(t, err)
+	repository := registryURL.Host + "/golang"
+	ref, err := name.ParseReference(repository + ":" + golangDockerTag(goVersion, "bookworm"))
+	require.NoError(t, err)
+	require.NoError(t, remote.WriteIndex(ref, idx))
+
+	want, err := idx.Digest()
+	require.NoError(t, err)
+
+	got, err := resolveGolangImageDigest(repository, goVersion, "bookworm")
+	require.NoError(t, err)
+	require.Equal(t, want.String(), got)
 }

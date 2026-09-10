@@ -901,179 +901,58 @@ func TestGetAllTablets(t *testing.T) {
 	}
 }
 
-// TestRefreshTabletsUsingCellsToWatch verifies that refreshTabletsUsing respects
-// the cellsToWatch filter, only discovering tablets in watched cells.
-func TestRefreshTabletsUsingCellsToWatch(t *testing.T) {
+// TestValidateCellsNoRecovery verifies that validateCellsNoRecovery accepts an
+// empty list and cells that exist in the topology, and rejects a cell name that
+// is not a known topo cell (guarding against typos silently disabling the
+// recovery-skip protection).
+func TestValidateCellsNoRecovery(t *testing.T) {
 	oldTs := ts
-	oldCellsToWatch := cellsToWatch
-	oldClustersToWatch := clustersToWatch
-	oldShardsToWatch := shardsToWatch
+	oldCellsNoRecovery := cellsNoRecovery
 	defer func() {
 		ts = oldTs
-		cellsToWatch = oldCellsToWatch
-		clustersToWatch = oldClustersToWatch
-		shardsToWatch = oldShardsToWatch
-		db.ClearVTOrcDatabase()
+		cellsNoRecovery = oldCellsNoRecovery
 	}()
 
 	cell2 := "zone-2"
-
-	tabCell1 := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: cell1,
-			Uid:  200,
-		},
-		Hostname:      hostname,
-		Keyspace:      keyspace,
-		Shard:         shard,
-		Type:          topodatapb.TabletType_REPLICA,
-		MysqlHostname: hostname,
-		MysqlPort:     200,
-	}
-	tabCell2 := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: cell2,
-			Uid:  201,
-		},
-		Hostname:      hostname,
-		Keyspace:      keyspace,
-		Shard:         shard,
-		Type:          topodatapb.TabletType_REPLICA,
-		MysqlHostname: hostname,
-		MysqlPort:     201,
-	}
-
 	ctx := t.Context()
-
 	ts = memorytopo.NewServer(ctx, cell1, cell2)
-	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
-	require.NoError(t, err)
 
-	err = ts.CreateTablet(t.Context(), tabCell1)
-	require.NoError(t, err)
-	err = ts.CreateTablet(t.Context(), tabCell2)
-	require.NoError(t, err)
-
-	clustersToWatch = nil
-	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
-	cellsToWatch = []string{cell1}
-
-	var discoveredAliases []string
-	err = refreshTabletsUsing(ctx, func(tabletAlias *topodatapb.TabletAlias) {
-		discoveredAliases = append(discoveredAliases, topoproto.TabletAliasString(tabletAlias))
-	}, true)
-	require.NoError(t, err)
-
-	assert.Contains(t, discoveredAliases, topoproto.TabletAliasString(tabCell1.Alias))
-	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
-
-	tabletFromDB, err := inst.ReadTablet(tabCell1.Alias)
-	require.NoError(t, err)
-	assert.NotNil(t, tabletFromDB)
-
-	_, err = inst.ReadTablet(tabCell2.Alias)
-	assert.Error(t, err)
-}
-
-// TestRefreshTabletsInKeyspaceShardCellsToWatch verifies that refreshTabletsInKeyspaceShard
-// respects the cellsToWatch filter via GetTabletsByShardCell, only discovering tablets in watched cells.
-func TestRefreshTabletsInKeyspaceShardCellsToWatch(t *testing.T) {
-	oldTs := ts
-	oldCellsToWatch := cellsToWatch
-	oldClustersToWatch := clustersToWatch
-	oldShardsToWatch := shardsToWatch
-	defer func() {
-		ts = oldTs
-		cellsToWatch = oldCellsToWatch
-		clustersToWatch = oldClustersToWatch
-		shardsToWatch = oldShardsToWatch
-		db.ClearVTOrcDatabase()
-	}()
-
-	cell2 := "zone-2"
-
-	tabCell1 := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: cell1,
-			Uid:  200,
+	tests := []struct {
+		name            string
+		cellsNoRecovery []string
+		wantErr         bool
+	}{
+		{
+			name:            "empty list is valid",
+			cellsNoRecovery: nil,
+			wantErr:         false,
 		},
-		Hostname:      hostname,
-		Keyspace:      keyspace,
-		Shard:         shard,
-		Type:          topodatapb.TabletType_REPLICA,
-		MysqlHostname: hostname,
-		MysqlPort:     200,
-	}
-	tabCell2 := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: cell2,
-			Uid:  201,
+		{
+			name:            "single known cell is valid",
+			cellsNoRecovery: []string{cell1},
+			wantErr:         false,
 		},
-		Hostname:      hostname,
-		Keyspace:      keyspace,
-		Shard:         shard,
-		Type:          topodatapb.TabletType_REPLICA,
-		MysqlHostname: hostname,
-		MysqlPort:     201,
+		{
+			name:            "multiple known cells are valid",
+			cellsNoRecovery: []string{cell1, cell2},
+			wantErr:         false,
+		},
+		{
+			name:            "unknown cell is rejected",
+			cellsNoRecovery: []string{cell1, "nonexistent-cell"},
+			wantErr:         true,
+		},
 	}
-
-	ctx := t.Context()
-
-	ts = memorytopo.NewServer(ctx, cell1, cell2)
-	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
-	require.NoError(t, err)
-
-	err = ts.CreateTablet(t.Context(), tabCell1)
-	require.NoError(t, err)
-	err = ts.CreateTablet(t.Context(), tabCell2)
-	require.NoError(t, err)
-
-	clustersToWatch = nil
-	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
-	cellsToWatch = []string{cell1}
-
-	var discoveredAliases []string
-	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {
-		discoveredAliases = append(discoveredAliases, topoproto.TabletAliasString(tabletAlias))
-	}, true, nil)
-
-	assert.Contains(t, discoveredAliases, topoproto.TabletAliasString(tabCell1.Alias))
-	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
-
-	tabletFromDB, err := inst.ReadTablet(tabCell1.Alias)
-	require.NoError(t, err)
-	assert.NotNil(t, tabletFromDB)
-
-	_, err = inst.ReadTablet(tabCell2.Alias)
-	assert.Error(t, err)
-}
-
-// TestRefreshTabletsUsingCellsToWatch_InvalidCell verifies that refreshTabletsUsing
-// returns an error when cellsToWatch contains a cell that does not exist in the topo.
-func TestRefreshTabletsUsingCellsToWatch_InvalidCell(t *testing.T) {
-	oldTs := ts
-	oldCellsToWatch := cellsToWatch
-	oldClustersToWatch := clustersToWatch
-	oldShardsToWatch := shardsToWatch
-	defer func() {
-		ts = oldTs
-		cellsToWatch = oldCellsToWatch
-		clustersToWatch = oldClustersToWatch
-		shardsToWatch = oldShardsToWatch
-		db.ClearVTOrcDatabase()
-	}()
-
-	ctx := t.Context()
-
-	ts = memorytopo.NewServer(ctx, cell1)
-	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
-	require.NoError(t, err)
-
-	clustersToWatch = nil
-	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
-	cellsToWatch = []string{"nonexistent-cell"}
-
-	err = refreshTabletsUsing(ctx, func(tabletAlias *topodatapb.TabletAlias) {}, true)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not exist in the topo")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cellsNoRecovery = tt.cellsNoRecovery
+			err := validateCellsNoRecovery(ctx)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "does not exist in the topology")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
