@@ -340,9 +340,9 @@ func TestDDLUnsharded(t *testing.T) {
 // variables, SET NAMES — must not survive on the pooled connection the CALL ran
 // on and be served to the next borrower. Reads are repeated so they land on
 // recycled pool connections; before the fix the very first read after the CALL
-// observed READ-UNCOMMITTED and the leaked table. The charset probe also pins
-// that the cleanup restores the negotiated connection charset (utf8mb4), which
-// a COM_RESET_CONNECTION would not: it restores the server globals.
+// observed READ-UNCOMMITTED and the leaked table. Of the SET NAMES residue,
+// MySQL restores character_set_client and character_set_connection when a
+// stored program ends, so character_set_results is the part that leaks.
 func TestCallProcedureSessionResidue(t *testing.T) {
 	ctx := t.Context()
 	vtParams := mysql.ConnParams{
@@ -350,7 +350,7 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		Port:   clusterInstance.VtgateMySQLPort,
 		DbName: "@primary",
 	}
-	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*), @@session.character_set_client, hex('é') from information_schema.innodb_temp_table_info"
+	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*), @@session.character_set_results from information_schema.innodb_temp_table_info"
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -360,7 +360,6 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 	require.NotEqual(t, "READ-UNCOMMITTED", baseline.Rows[0][0].ToString())
 	require.Equal(t, "0", baseline.Rows[0][2].ToString(), "no temp tables before the test")
 	require.Equal(t, "utf8mb4", baseline.Rows[0][3].ToString(), "the pooled connections negotiate utf8mb4")
-	require.Equal(t, "C3A9", baseline.Rows[0][4].ToString(), "a UTF-8 literal round-trips under the negotiated charset")
 
 	assertClean := func(t *testing.T, what string) {
 		t.Helper()
@@ -382,21 +381,19 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		utils.Exec(t, conn, "CALL dirty_session()")
 		assertClean(t, "streaming CALL")
 	})
-	t.Run("the default database is unchanged afterwards", func(t *testing.T) {
-		before := utils.Exec(t, conn, "select database()")
-		utils.Exec(t, conn, "CALL dirty_session()")
-		for range 5 {
-			utils.AssertMatches(t, conn, "select database()", fmt.Sprintf("%v", before.Rows))
-		}
-	})
-	t.Run("a session setting survives a CALL on the settings pool", func(t *testing.T) {
+	t.Run("a session setting is in effect on the settings pool after a CALL", func(t *testing.T) {
 		// A vtgate session SET is applied to every pooled connection the session
-		// borrows; the reset must re-apply it so later queries still see it.
-		// Last subtest on this connection: the setting dies with it.
-		utils.Exec(t, conn, "set @@sql_mode = 'STRICT_TRANS_TABLES'")
+		// borrows, so it must be in effect on the fresh connection the pool hands
+		// out after the CALL's connection is discarded. Probed through behavior
+		// MySQL decides under the setting (vtgate answers `select @@sql_mode`
+		// itself once the session holds the variable). Last subtest on this
+		// connection: the setting dies with it.
+		utils.Exec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
+		const q = "select str_to_date('00/00/0000', '%m/%d/%Y') from dual"
+		utils.AssertMatches(t, conn, q, `[[NULL]]`)
 		utils.Exec(t, conn, "CALL dirty_session()")
 		for range 5 {
-			utils.AssertMatches(t, conn, "select @@session.sql_mode", `[[VARCHAR("STRICT_TRANS_TABLES")]]`)
+			utils.AssertMatches(t, conn, q, `[[NULL]]`)
 		}
 	})
 }

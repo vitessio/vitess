@@ -2721,18 +2721,43 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		// so the connection's session is untouched and must not be discarded:
 		// malformed requests must not churn connections.
 		db, tsv := newExecutor(t)
+		// Warm exactly one pool connection; an idle pool hands the most recently
+		// returned connection out first, so the same id afterwards proves the
+		// CALL did not cost it.
+		const next = "select 1 from dual limit 10001"
+		db.AddQuery(next, &sqltypes.Result{})
+		_, err := newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
+		require.NoError(t, err)
+		warmConns := db.QueryConnIDs(next)
+		require.Len(t, warmConns, 1)
+
 		qre := newTestQueryExecutor(ctx, tsv, "call test_proc(:missing)", 0)
 		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
-
-		_, err := qre.Execute()
+		_, err = qre.Execute()
 		require.ErrorContains(t, err, "missing bind var")
 		assert.Empty(t, db.QueryConnIDs(query), "nothing must have reached MySQL")
 		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "a CALL that was never sent must not cost the connection")
-		// The pool's only connection is still open and serves the next query.
-		const next = "select 1 from dual limit 10001"
-		db.AddQuery(next, &sqltypes.Result{})
+
 		_, err = newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
 		require.NoError(t, err)
+		afterConns := db.QueryConnIDs(next)
+		require.Len(t, afterConns, 2)
+		assert.Equal(t, warmConns[0], afterConns[1], "the connection must still be the one the pool had")
+	})
+	t.Run("a timed-out CALL is discarded and counted", func(t *testing.T) {
+		// A query timeout kills only the query on a pooled connection, leaving
+		// it open — so the CALL policy is what discards it, and that is counted.
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		db.SetBeforeFunc(query, func() { time.Sleep(1 * time.Second) })
+		db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+		execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+		qre := newTestQueryExecutor(execCtx, tsv, query, 0)
+
+		_, err := qre.Execute()
+		require.Error(t, err)
+		callConnDiscarded(t, db, tsv)
 	})
 	t.Run("an appdebug connection is not counted as a discard", func(t *testing.T) {
 		// The appdebug caller gets a standalone connection that Recycle closes

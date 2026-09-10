@@ -655,11 +655,13 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 
 	// If we have a transaction id, stream on the txPool connection; otherwise
 	// stream on a stream pool connection. Each branch holds the concrete
-	// connection it must clean up. For a stored procedure call, a mid-stream
-	// error closes that connection — it may have left trailing resultsets or the
-	// final OK packet unread, or already be killed, and the client is gone, so we
-	// close rather than attempt a drain-and-recover — while a clean stream runs
-	// the post-stream safety checks.
+	// connection it must clean up. For a stored procedure call on the
+	// transaction connection, a mid-stream error closes that connection — it may
+	// have left trailing resultsets or the final OK packet unread, or already be
+	// killed, and the client is gone, so we close rather than attempt a
+	// drain-and-recover — while a clean stream runs the post-stream safety
+	// checks. A stored procedure call on a pooled connection always costs the
+	// connection, whatever the outcome (see execCallProc).
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {
@@ -712,13 +714,16 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	}
 	defer dbConn.Recycle()
 
-	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		// The connection is never reused after a CALL (see execCallProc),
 		// whatever the outcome: a transaction the procedure leaked dies with it
 		// (the CALL still reports it, as the client's procedure is at fault),
-		// and a mid-stream error may have left it with unread packets.
+		// and a mid-stream error may have left it with unread packets. Deferred
+		// before the stream runs so a callback panic cannot recycle it dirty.
 		defer qre.discardPooledConnAfterCall(qre.tsv.qe.streamConns, dbConn)
+	}
+	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
+	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			return err
 		}
@@ -1544,10 +1549,12 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 
 // discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
 // execCallProc) so it is not reused, counting the discard on the pool that
-// owns the connection. A connection an earlier error path already closed needs
-// nothing, and a connection no pool owns (the appdebug user's standalone
-// connection, which Recycle closes after every query) costs the pool nothing,
-// so it is not counted.
+// owns the connection. A timed-out CALL is counted like any other: KILL QUERY
+// leaves the connection open, and this policy is what then closes it. Not
+// counted: a connection something else already closed — a kill that had to
+// escalate to the connection, or a connection error — since that loss is not
+// this policy's, and a connection no pool owns (the appdebug user's standalone
+// connection, which Recycle closes after every query anyway).
 func (qre *QueryExecutor) discardPooledConnAfterCall(pool *connpool.Pool, conn *connpool.PooledConn) {
 	if conn.Conn.IsClosed() {
 		return
