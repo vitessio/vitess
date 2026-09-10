@@ -287,7 +287,6 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		checker.revokedSerials[crl] = serials
 		checker.warningKeys[crl] = expiredCRLKey(crl)
 	}
-	applied := make(map[*x509.RevocationList]bool, len(crls))
 	for _, issuer := range issuers {
 		if _, done := checker.configured[string(issuer.Raw)]; done {
 			continue
@@ -297,21 +296,16 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the configured CA certificate %s: %v", issuer.Subject.CommonName, err)
 		}
 		checker.configured[string(issuer.Raw)] = issuerCRLs
-		for _, crl := range issuerCRLs {
-			applied[crl] = true
-		}
 	}
-	// A CRL that no configured certificate applies is right for the
-	// CRL of a CA that peers present, but silence for a configured
-	// CA's whose issuer name is encoded differently from the
-	// certificate's subject, as a CRL that another tool than the
-	// CA's wrote can be: the names are matched byte for byte, so
-	// nothing would read it. Such a CRL is told by its signature,
-	// once here, and refused rather than left unapplied.
+	// A CRL that a configured certificate validates while its issuer
+	// name is not that certificate's subject byte for byte is read
+	// under nothing, whatever else applies it: a CRL that another
+	// tool than the CA's wrote, encoding the name differently, or one
+	// written against the certificate that a renewal with the same
+	// key replaced, whose certificates the CRL then misses. Such a
+	// CRL is told by its signature, once here, and refused rather
+	// than left unapplied.
 	for _, crl := range crls {
-		if applied[crl] {
-			continue
-		}
 		for _, issuer := range issuers {
 			if !bytes.Equal(crl.RawIssuer, issuer.RawSubject) && crl.CheckSignatureFrom(issuer) == nil {
 				return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRL from issuer %s is signed by the configured CA certificate %s, but its issuer name is encoded differently from that certificate's subject, so it would not be applied: re-issue the CRL with the certificate's subject as its issuer", crl.Issuer.CommonName, issuer.Subject.CommonName)
