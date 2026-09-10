@@ -4313,6 +4313,11 @@ var validSQL = []struct {
 }, {
 	input:  "insert into system_user(a) values (1)",
 	output: "insert into `system_user`(a) values (1)",
+}, {
+	// the direction is dropped for the built-in rand() only; a qualified
+	// call is a stored function, and is ordered by like any expression
+	input:  "select a from t order by rand() desc, db.rand() desc, rand(1) asc",
+	output: "select a from t order by rand(), db.rand() desc, rand(1)",
 }}
 
 func TestValid(t *testing.T) {

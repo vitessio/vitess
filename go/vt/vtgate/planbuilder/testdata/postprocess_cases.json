@@ -2484,5 +2484,29 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "ORDER BY a qualified rand() is a stored function: sorted like any expression, direction kept",
+    "query": "select col from user order by db.rand() desc",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select col from user order by db.rand() desc",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, db.rand(), weight_string(db.rand()) from `user` where 1 != 1",
+        "OrderBy": "(1|2) DESC",
+        "Query": "select col, db.rand(), weight_string(db.rand()) from `user` order by db.rand() desc",
+        "ResultColumns": 1
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

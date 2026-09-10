@@ -2984,7 +2984,8 @@ func (node *Order) FormatFast(buf *TrackedBuffer) {
 		return
 	}
 	if node, ok := node.Expr.(*FuncExpr); ok {
-		if node.Name.Lowered() == "rand" {
+		// the built-in rand() only: a qualified call is a stored function
+		if node.Qualifier.IsEmpty() && node.Name.Lowered() == "rand" {
 			buf.printExpr(node, node, true)
 			return
 		}
