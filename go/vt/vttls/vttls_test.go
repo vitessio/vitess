@@ -306,12 +306,13 @@ func TestClientConfigCRL(t *testing.T) {
 		})
 	}
 
-	t.Run("an intermediate configured as a trust anchor is not checked against the root's CRL", func(t *testing.T) {
+	t.Run("an intermediate configured along with the root that revokes it is rejected as a trust anchor", func(t *testing.T) {
 		// The CA file holds the intermediate along with the root, so
-		// the chain of a server that presents its certificate alone
-		// ends at the intermediate, which is then a trust anchor:
-		// trusted as configured, whatever its own issuer's CRL says.
-		// Configuring the root alone has the intermediate checked.
+		// a chain may end at the intermediate, a trust anchor that
+		// no chain checks. The root is configured too, and its CRL
+		// lists the intermediate, so no chain may end there: the
+		// server is rejected whether or not it presents the
+		// intermediate.
 		intermediatePEM, err := os.ReadFile(certs.ServerCA)
 		require.NoError(t, err)
 		rootPEM, err := os.ReadFile(rootCA)
@@ -321,7 +322,17 @@ func TestClientConfigCRL(t *testing.T) {
 		clientConfig, err := ClientConfig(VerifyCA, "", "", bundle, rootCRL, certs.ServerName, tls.VersionTLS12)
 		require.NoError(t, err)
 
-		res := handshake(t, leafOnlyValidServer, clientConfig)
+		for name, server := range map[string]*tls.Config{"presenting the intermediate": validServer, "presenting its certificate alone": leafOnlyValidServer} {
+			res := handshake(t, server, clientConfig)
+			require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName, name)
+		}
+	})
+
+	t.Run("an intermediate configured without the root that revokes it is a trust anchor that is not checked", func(t *testing.T) {
+		clientConfig, err := ClientConfig(VerifyCA, "", "", certs.ServerCA, rootCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, validServer, clientConfig)
 		require.NoError(t, res.clientErr)
 		require.NoError(t, res.serverErr)
 	})
@@ -449,6 +460,26 @@ func TestServerConfigCRL(t *testing.T) {
 		require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+clientCA.Subject.CommonName)
 	})
 
+	t.Run("a configured intermediate that the configured root's CRL revokes ends no chain", func(t *testing.T) {
+		// The server trusts the root and the clients' CA, so a
+		// client's chain may end at either; the root's CRL revokes
+		// the clients' CA, so a chain ending there is rejected too,
+		// whether or not the client presents the CA.
+		rootPEM, err := os.ReadFile(rootCA)
+		require.NoError(t, err)
+		clientCAPEM, err := os.ReadFile(certs.ClientCA)
+		require.NoError(t, err)
+		bundle := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(bundle, append(clientCAPEM, rootPEM...), 0o600))
+		serverConfig, err := ServerConfig(certs.ServerCert, certs.ServerKey, bundle, rootCRL, certs.ServerCA, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		for name, client := range map[string]*tls.Config{"presenting the CA": clientPresentingItsCA(t), "presenting its certificate alone": newClientConfig(t, certs.ClientCert, certs.ClientKey)} {
+			res := handshake(t, serverConfig, client)
+			require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+clientCA.Subject.CommonName, name)
+		}
+	})
+
 	t.Run("the trust anchor is not checked against the CRL of its own issuer", func(t *testing.T) {
 		// The server trusts the clients' CA alone, so it is the
 		// anchor of every client's chain, trusted as configured: the
@@ -525,6 +556,25 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	t.Run("the certificates a peer presents are not checked on their own", func(t *testing.T) {
 		err := checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{intermediate, rootCert}})
 		require.NoError(t, err)
+	})
+
+	t.Run("a configured anchor that its configured issuer's CRL revokes ends no chain", func(t *testing.T) {
+		// The anchor's issuer is beyond the chain, but when both are
+		// configured the checker holds the issuer and its CRL, with
+		// no part for the peer in it.
+		intermediatePEM, err := os.ReadFile(certs.ServerCA)
+		require.NoError(t, err)
+		rootPEM, err := os.ReadFile(rootCA)
+		require.NoError(t, err)
+		bundle := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(bundle, append(intermediatePEM, rootPEM...), 0o600))
+		checker, err := newCRLChecker(rootCRL, bundle)
+		require.NoError(t, err)
+
+		err = checker.check([][]*x509.Certificate{{leaf, intermediate}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+		err = checker.check([][]*x509.Certificate{{leaf, intermediate}, {leaf, intermediate, rootCert}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 	})
 }
 

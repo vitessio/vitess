@@ -53,6 +53,14 @@ type (
 		// configured CA certificate validates, bound once here
 		// rather than on every connection.
 		configured map[string][]*x509.RevocationList
+		// revokedAnchors holds, by DER encoding, the configured CA
+		// certificates that the CRL of their issuer, another
+		// configured CA certificate, lists: no chain may end at
+		// one. The anchor of a chain is otherwise not checked, its
+		// issuer being beyond the chain, but here the checker holds
+		// both certificates and the CRL, with no part for the peer
+		// in it, worked out once when the checker is built.
+		revokedAnchors map[string]bool
 		// bound holds, by DER encoding, what binding the CRLs to an
 		// issuer that verification alone vouches for made of them,
 		// as a crlBinding, kept from the first connection through
@@ -254,6 +262,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 	checker := &crlChecker{
 		crlsByIssuer:   make(map[string][]*x509.RevocationList),
 		configured:     make(map[string][]*x509.RevocationList, len(issuers)),
+		revokedAnchors: make(map[string]bool),
 		revokedSerials: make(map[*x509.RevocationList]map[string]struct{}, len(crls)),
 		warningKeys:    make(map[*x509.RevocationList]string, len(crls)),
 	}
@@ -275,6 +284,22 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the configured CA certificate %s: %v", issuer.Subject.CommonName, err)
 		}
 		checker.configured[string(issuer.Raw)] = bound
+	}
+	for _, cert := range issuers {
+		for _, parent := range issuers {
+			if checker.revokedAnchors[string(cert.Raw)] || cert.Equal(parent) || !bytes.Equal(cert.RawIssuer, parent.RawSubject) || cert.CheckSignatureFrom(parent) != nil {
+				continue
+			}
+			for _, crl := range checker.configured[string(parent.Raw)] {
+				if checker.isRevoked(cert, crl) {
+					checker.revokedAnchors[string(cert.Raw)] = true
+					log.Warn("A configured CA certificate is revoked by the CRL of its issuer: connections whose chain ends at it will be rejected.",
+						slog.String("subject", cert.Subject.CommonName),
+						slog.String("issuer", parent.Subject.CommonName),
+					)
+				}
+			}
+		}
 	}
 	return checker, nil
 }
@@ -389,11 +414,19 @@ func (c *crlChecker) check(chains [][]*x509.Certificate) error {
 // trust anchor it ends at against the CRLs of its issuer, the next
 // certificate of the chain, which verification vouches signed it. The
 // anchor is trusted as configured: its issuer is not part of the
-// chain, and Go does not verify its signature either. The chain is
-// walked from the anchor down, so that a revoked CA certificate is
-// found before the certificates below it are bound: whoever holds
-// its key can mint any number of those, and none is worth keeping.
+// chain, and Go does not verify its signature either; only an anchor
+// that its issuer's CRL is known to list, see revokedAnchors, ends
+// no chain. The chain is walked from the anchor down, so that a
+// revoked CA certificate is found before the certificates below it
+// are bound: whoever holds its key can mint any number of those, and
+// none is worth keeping.
 func (c *crlChecker) checkChain(chain []*x509.Certificate) error {
+	if len(chain) == 0 {
+		return nil
+	}
+	if anchor := chain[len(chain)-1]; c.revokedAnchors[string(anchor.Raw)] {
+		return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "Certificate revoked: CommonName=%s", anchor.Subject.CommonName)
+	}
 	for i := len(chain) - 2; i >= 0; i-- {
 		if err := c.checkCertificate(chain[i], chain[i+1]); err != nil {
 			return err
