@@ -6892,6 +6892,12 @@ var invalidSQL = []struct {
 	input:  "select curdate(3)",
 	output: "syntax error at position 17 near '3'",
 }, {
+	input:  "select current_date(3)",
+	output: "syntax error at position 22 near '3'",
+}, {
+	input:  "select utc_date(3)",
+	output: "syntax error at position 18 near '3'",
+}, {
 	// st_collect takes exactly one argument, as in MySQL
 	input:  "select st_collect() from t",
 	output: "syntax error at position 20",

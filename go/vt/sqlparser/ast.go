@@ -2954,7 +2954,8 @@ type (
 
 	// BuiltinFuncExpr is the keyword form of a built-in function with regular
 	// argument syntax that MySQL parses through a grammar rule of its own
-	// (curdate, session_user, system_user), as opposed to a FuncExpr, which
+	// (curdate, current_date, utc_date, session_user, system_user), as
+	// opposed to a FuncExpr, which
 	// is a call by an identifier. It prints bare, since the bare name re-lexes
 	// as the keyword; the same name arriving quoted, qualified or with
 	// whitespace before the parenthesis is a FuncExpr and prints quoted.

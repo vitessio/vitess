@@ -23467,7 +23467,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6782
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("utc_date")}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI("utc_date")}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1296:
@@ -23483,7 +23483,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6792
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("current_date")}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI("current_date")}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1298:

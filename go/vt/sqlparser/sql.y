@@ -6780,7 +6780,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("utc_date")}
   }
 | now
   {
@@ -6790,7 +6790,7 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("current_date")}
   }
 | CURDATE func_paren_opt
   {
