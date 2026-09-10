@@ -690,6 +690,9 @@ func TestReadFileInvalidDownloadFlags(t *testing.T) {
 }
 
 func TestReadFileSSECHeaderForwarding(t *testing.T) {
+	// Pins the SDK's SSE-C header forwarding to its internal HeadObject call.
+	// The transfer manager (v0.3.6+) handles this natively; this test guards
+	// against regressions in future SDK versions.
 	testData := []byte("sse-c parallel download test data")
 	sseAlg := "AES256"
 	sseKey := "dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODk=" // base64 test key
@@ -768,14 +771,20 @@ func TestReadFileSSECHeaderForwarding(t *testing.T) {
 }
 
 func TestReadFileParallelismSmallReads(t *testing.T) {
-	const objectSize = 40 * 1024 * 1024 // 40MiB
+	const objectSize = 32 * 1024 * 1024 // 32MiB — exactly 4 parts at 8 MiB each
 	testData := bytes.Repeat([]byte("x"), objectSize)
 
-	var (
-		mu          sync.Mutex
-		maxInFlight int
-		curInFlight int
-	)
+	// Rendezvous: block each GET handler until the expected number of concurrent
+	// requests have arrived. This is deterministic (no timing dependency) and
+	// passes under -race -cpu=1.
+	const expectedConcurrency = 4
+	var arrived sync.WaitGroup
+	arrived.Add(expectedConcurrency)
+	allArrived := make(chan struct{})
+	go func() {
+		arrived.Wait()
+		close(allArrived)
+	}()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "HEAD" {
@@ -784,18 +793,13 @@ func TestReadFileParallelismSmallReads(t *testing.T) {
 			return
 		}
 		if r.Method == "GET" {
-			mu.Lock()
-			curInFlight++
-			if curInFlight > maxInFlight {
-				maxInFlight = curInFlight
+			arrived.Done()
+			select {
+			case <-allArrived:
+			case <-time.After(30 * time.Second):
+				http.Error(w, "rendezvous timed out", http.StatusInternalServerError)
+				return
 			}
-			mu.Unlock()
-
-			time.Sleep(20 * time.Millisecond)
-
-			mu.Lock()
-			curInFlight--
-			mu.Unlock()
 
 			rangeHdr := r.Header.Get("Range")
 			if rangeHdr == "" {
@@ -818,7 +822,7 @@ func TestReadFileParallelismSmallReads(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
@@ -833,7 +837,7 @@ func TestReadFileParallelismSmallReads(t *testing.T) {
 	bucket = "test-bucket"
 	root = ""
 	downloadPartSize = 8 * 1024 * 1024 // 8MiB parts
-	downloadConcurrency = 4            // expect ~4 parallel GETs
+	downloadConcurrency = expectedConcurrency
 
 	s3Client := s3.New(s3.Options{
 		Region:       "us-east-1",
@@ -877,8 +881,13 @@ func TestReadFileParallelismSmallReads(t *testing.T) {
 	require.Equal(t, objectSize, totalRead)
 	require.NoError(t, rc.Close())
 
-	assert.GreaterOrEqual(t, maxInFlight, downloadConcurrency-1,
-		"expected at least %d parallel GETs, got %d", downloadConcurrency-1, maxInFlight)
+	// If we got here without the rendezvous timing out, all expectedConcurrency
+	// requests were in flight simultaneously — parallelism is confirmed.
+	select {
+	case <-allArrived:
+	default:
+		t.Fatal("expected all concurrent requests to arrive at rendezvous")
+	}
 }
 
 func TestDownloadBufferSizeValidation(t *testing.T) {
@@ -974,7 +983,7 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
@@ -1039,8 +1048,8 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 		"response body should be closed exactly once after rc.Close()")
 }
 
-func TestCoalescingReaderSmallReads(t *testing.T) {
-	// Verify that newCoalescingReader batches small reads (4 KiB, as pgzip does)
+func TestDownloadReaderSmallReads(t *testing.T) {
+	// Verify that newDownloadReader batches small reads (4 KiB, as pgzip does)
 	// into fewer large reads on the underlying body. Without coalescing, each
 	// 4 KiB caller-read maps 1:1 to a concurrentReader.Read(), each of which
 	// spawns Concurrency goroutines in the transfer manager.
@@ -1051,8 +1060,8 @@ func TestCoalescingReaderSmallReads(t *testing.T) {
 	downloadPartSize = 8 * 1024 * 1024
 
 	inner := &readCounter{reader: bytes.NewReader(bytes.Repeat([]byte("y"), objectSize))}
-	_, cancel := context.WithCancel(context.Background())
-	rc := newCoalescingReader(inner, cancel)
+	_, cancel := context.WithCancel(t.Context())
+	rc := newDownloadReader(inner, cancel, objectSize)
 
 	buf := make([]byte, 4096)
 	callerReads := 0
@@ -1124,7 +1133,7 @@ func TestReadFileMidStreamError(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
@@ -1180,7 +1189,7 @@ func TestReadFileMidStreamError(t *testing.T) {
 		}
 	}
 	assert.True(t, sawError, "expected a non-EOF error to surface from failed range GET")
-	rc.Close()
+	require.NoError(t, rc.Close())
 }
 
 func TestReadFileCloseAfterPartialRead(t *testing.T) {
@@ -1216,7 +1225,7 @@ func TestReadFileCloseAfterPartialRead(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
@@ -1266,8 +1275,117 @@ func TestReadFileCloseAfterPartialRead(t *testing.T) {
 	require.Equal(t, 1024*1024, n)
 
 	// Close without reading the rest — must not panic or hang
-	err = rc.Close()
+	require.NoError(t, rc.Close())
+}
+
+func TestReadFileCloseDuringInflightRead(t *testing.T) {
+	// Verifies that Close() aborts a Read() that is blocked waiting for an
+	// in-flight part download. This is the case that matters for stripe cleanup
+	// and pgzip read-ahead: a reader is blocked in Read, and another goroutine
+	// calls Close to abort it.
+	const objectSize = 24 * 1024 * 1024
+	var firstPart sync.WaitGroup
+	firstPart.Add(1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(objectSize))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			rangeHdr := r.Header.Get("Range")
+			var start, end int
+			fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+			if end >= objectSize {
+				end = objectSize - 1
+			}
+			chunk := bytes.Repeat([]byte("q"), end-start+1)
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, objectSize))
+			w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+			w.WriteHeader(http.StatusPartialContent)
+			if start == 0 {
+				w.Write(chunk)
+				firstPart.Done()
+				return
+			}
+			// Stall all parts after the first — simulate a slow download.
+			// Use a short timeout: the test verifies that Close() returns
+			// promptly, not that the server hangs forever.
+			select {
+			case <-r.Context().Done():
+			case <-time.After(5 * time.Second):
+			}
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 2
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
 	require.NoError(t, err)
+
+	// Read through the first part. The transfer manager issues GETs lazily
+	// (on first Read), so we must read to trigger the downloads.
+	buf := make([]byte, 64*1024)
+	var totalRead int
+	for totalRead < 8*1024*1024 {
+		n, readErr := rc.Read(buf)
+		totalRead += n
+		if readErr != nil {
+			break
+		}
+	}
+	// Ensure the first part was actually served before we test Close behavior.
+	firstPart.Wait()
+
+	// Close from another goroutine while Read would block on the stalled part.
+	// This must return promptly (context cancellation aborts the in-flight GET).
+	done := make(chan error, 1)
+	go func() { done <- rc.Close() }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close() did not return within 10s — in-flight download was not aborted")
+	}
 }
 
 func TestReadFileSubPartObject(t *testing.T) {
@@ -1282,6 +1400,20 @@ func TestReadFileSubPartObject(t *testing.T) {
 			return
 		}
 		if r.Method == "GET" {
+			rangeHdr := r.Header.Get("Range")
+			if rangeHdr != "" {
+				var start, end int
+				fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+				if end >= len(testData) {
+					end = len(testData) - 1
+				}
+				chunk := testData[start : end+1]
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(testData)))
+				w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+				w.WriteHeader(http.StatusPartialContent)
+				w.Write(chunk)
+				return
+			}
 			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
 			w.WriteHeader(http.StatusOK)
 			w.Write(testData)
@@ -1289,7 +1421,7 @@ func TestReadFileSubPartObject(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
