@@ -769,7 +769,6 @@ func isSpecialOrderBy(o OrderBy) bool {
 		return true
 	}
 	f, isFunction := o.Inner.Expr.(*sqlparser.FuncExpr)
-	// the built-in rand() only: a qualified call is a stored function
 	return isFunction && f.Qualifier.IsEmpty() && f.Name.Lowered() == "rand"
 }
 
