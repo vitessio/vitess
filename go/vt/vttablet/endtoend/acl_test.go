@@ -35,6 +35,11 @@ func TestTableACL(t *testing.T) {
 	client := framework.NewClient()
 
 	aclErr := "command denied to user 'dev' for table"
+	// Statements whose table set the tablet cannot determine are denied to any
+	// caller the ACL does not exempt, whatever that caller's table grants: a
+	// CALL runs an opaque procedure body, DO can carry a table-reading
+	// subquery, and LOAD DATA writes a table the parser discards.
+	undeterminedErr := "command denied to user 'dev' for a table set that cannot be determined"
 	execCases := []struct {
 		query string
 		err   string
@@ -93,6 +98,16 @@ func TestTableACL(t *testing.T) {
 	}, {
 		query: "update vitess_acl_read_write join vitess_acl_read_only on 1!=1 set key1=1",
 		err:   aclErr,
+	}, {
+		query: "call proc_dml()",
+		err:   undeterminedErr,
+	}, {
+		query: "do (select intval from vitess_test limit 1)",
+		err:   undeterminedErr,
+	}, {
+		// Denied before it reaches MySQL, so the file need not exist.
+		query: "load data infile '/nonexistent' into table vitess_test",
+		err:   undeterminedErr,
 	}}
 
 	for _, tcase := range execCases {
@@ -120,6 +135,14 @@ func TestTableACL(t *testing.T) {
 		query: "select * from vitess_acl_unmatched where key1=1",
 	}, {
 		query: "select * from vitess_acl_all_user_read_only where key1=1",
+	}, {
+		query: "call proc_dml()",
+		err:   undeterminedErr,
+	}, {
+		// LOAD DATA streams through its own entry point (streamDML); it is
+		// denied before it reaches MySQL, so the file need not exist.
+		query: "load data infile '/nonexistent' into table vitess_test",
+		err:   undeterminedErr,
 	}}
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)

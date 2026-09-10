@@ -88,6 +88,10 @@ func TestMain(m *testing.M) {
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+		// The server builds its exempt table ACL at start from the registered
+		// factory, so register it first; the ACL config itself is loaded after
+		// the server is up (initTableACL) because its reload callback needs it.
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
 		err = framework.StartServer(ctx, connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
@@ -120,7 +124,6 @@ func initTableACL() error {
 		return errors.New("table acl: short write")
 	}
 	file.Close()
-	tableacl.Register("simpleacl", &simpleacl.Factory{})
 	tableacl.Init(file.Name(), func() { framework.Server.ClearQueryPlanCache() })
 	return nil
 }
