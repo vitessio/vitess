@@ -2734,6 +2734,24 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		_, err = newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
 		require.NoError(t, err)
 	})
+	t.Run("an appdebug connection is not counted as a discard", func(t *testing.T) {
+		// The appdebug caller gets a standalone connection that Recycle closes
+		// after every query regardless of the CALL policy: no pool member is
+		// lost, so nothing must be counted against the pool.
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		debugParams, err := tsv.config.DB.AppDebugWithDB().MysqlParams()
+		require.NoError(t, err)
+		debugUser := debugParams.Uname
+		require.NotEmpty(t, debugUser)
+		debugCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("p", "c", "sc"), callerid.NewImmediateCallerID(debugUser))
+		qre := newTestQueryExecutor(debugCtx, tsv, query, 0)
+
+		_, err = qre.Execute()
+		require.NoError(t, err)
+		require.Len(t, db.QueryConnIDs(query), 1)
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "an appdebug connection is never a pool member, so it must not count as a discard")
+	})
 	t.Run("streaming discard is attributed to the streaming pool", func(t *testing.T) {
 		db, tsv := newExecutor(t)
 		db.AddQuery(query, &sqltypes.Result{})

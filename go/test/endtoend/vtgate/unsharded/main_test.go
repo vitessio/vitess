@@ -375,10 +375,11 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		assertClean(t, "buffered CALL")
 	})
 	t.Run("streaming", func(t *testing.T) {
+		// The probes stay on the OLAP workload too, so they draw from the
+		// streaming pool the CALL ran on rather than the untouched OLTP pool.
 		utils.Exec(t, conn, "set workload = olap")
 		defer utils.Exec(t, conn, "set workload = oltp")
 		utils.Exec(t, conn, "CALL dirty_session()")
-		utils.Exec(t, conn, "set workload = oltp")
 		assertClean(t, "streaming CALL")
 	})
 	t.Run("the default database is unchanged afterwards", func(t *testing.T) {

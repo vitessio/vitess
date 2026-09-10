@@ -43,6 +43,13 @@ func (dbc *Pooled[C]) Close() {
 	dbc.Conn.Close()
 }
 
+// IsPooled reports whether the connection belongs to a pool. A connection with
+// no pool (a standalone one handed out for the appdebug user, or one taken out
+// of its pool by Taint) is closed by Recycle rather than returned.
+func (dbc *Pooled[C]) IsPooled() bool {
+	return dbc.pool != nil
+}
+
 func (dbc *Pooled[C]) Recycle() {
 	switch {
 	case dbc.pool == nil:

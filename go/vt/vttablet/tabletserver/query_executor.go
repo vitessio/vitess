@@ -1546,13 +1546,17 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 // discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
 // execCallProc) so it is not reused, counting the discard on the pool that
 // owns the connection. A connection an earlier error path already closed needs
-// nothing.
+// nothing, and a connection no pool owns (the appdebug user's standalone
+// connection, which Recycle closes after every query) costs the pool nothing,
+// so it is not counted.
 func (qre *QueryExecutor) discardPooledConnAfterCall(pool *connpool.Pool, conn *connpool.PooledConn) {
 	if conn.Conn.IsClosed() {
 		return
 	}
 	conn.Close()
-	pool.Metrics.RecordDiscardedAfterCall()
+	if conn.IsPooled() {
+		pool.Metrics.RecordDiscardedAfterCall()
+	}
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
