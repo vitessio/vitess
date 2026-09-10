@@ -50,11 +50,14 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
-type handshakeResult struct {
-	clientErr   error
-	serverErr   error
-	clientState tls.ConnectionState
-}
+type (
+	// handshakeResult is what each side of a test handshake saw.
+	handshakeResult struct {
+		clientErr   error
+		serverErr   error
+		clientState tls.ConnectionState
+	}
+)
 
 // handshake completes one TLS connection between a server using
 // serverConfig and a client using clientConfig over a loopback
