@@ -155,6 +155,27 @@ func TestNoBlob(t *testing.T) {
 					Count: 4,
 					Cols:  []byte{0x0b}, // Columns bitmap of 00001011 as the third column/bit position representing the blob column has no data
 				},
+				beforeDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // The blob column is also absent from the before image, which is signaled the same way
+				},
+			}}}},
+		}},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"delete from t1 where id = 1", []TestRowEvent{
+			// A delete only has a before image; the blob column is absent from it and the
+			// BeforeDataColumns bitmap says so.
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{
+				beforeRaw: &querypb.Row{
+					Lengths: []int64{1, -1, 3}, // -1 for the 2nd column / blob field, as it's not present
+					Values:  []byte("1bbb"),
+				},
+				beforeDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 3,
+					Cols:  []byte{0x05}, // Columns bitmap of 00000101 as the second column/bit position representing the blob column has no data
+				},
 			}}}},
 		}},
 		{"commit", nil},

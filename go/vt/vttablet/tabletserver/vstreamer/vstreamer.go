@@ -1211,7 +1211,9 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
 		// The BEFORE image does not have partial JSON values so we pass an empty bitmap.
-		beforeRawValues, beforeCharsets, _, err := vs.getValues(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{})
+		// It can however be a partial row image when binlog_row_image=NOBLOB is used, as
+		// MySQL then omits BLOB/TEXT columns that are not part of the primary key.
+		beforeRawValues, beforeCharsets, beforePartial, err := vs.getValues(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{})
 		if err != nil {
 			return nil, err
 		}
@@ -1252,6 +1254,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 					return nil, err
 				}
 				rowChange.Before = sqltypes.RowToProto3(beforeValues)
+				if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && beforePartial {
+					rowChange.BeforeDataColumns = &binlogdatapb.RowChange_Bitmap{
+						Count: int64(rows.IdentifyColumns.Count()),
+						Cols:  rows.IdentifyColumns.Bits(),
+					}
+				}
 			}
 		}
 		if afterOK {

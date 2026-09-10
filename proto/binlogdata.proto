@@ -349,6 +349,12 @@ message RowChange {
   // value is used the fmt directive must be replaced by the actual
   // column name of the JSON field.
   Bitmap json_partial_values = 4;
+  // BeforeDataColumns is a bitmap of all columns: bit is set if column is
+  // present in the before image. It is only set when the before image is
+  // partial, i.e. when binlog_row_image=NOBLOB omitted BLOB/TEXT columns
+  // that are not part of the primary key, so that consumers can tell an
+  // omitted column apart from a NULL value.
+  Bitmap before_data_columns = 5;
 }
 
 // RowEvent represent row events for one table.
