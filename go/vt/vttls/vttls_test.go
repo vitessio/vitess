@@ -634,7 +634,9 @@ func TestCRLCheckerRejectedChainsLeaveNoBindings(t *testing.T) {
 		subCAKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 		subCADER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-			SerialNumber:          big.NewInt(int64(100 + i)),
+			// Well clear of the serial numbers the fixture hands out,
+			// which grow with every fixture the process creates.
+			SerialNumber:          big.NewInt(1<<40 + int64(i)),
 			Subject:               pkix.Name{CommonName: fmt.Sprintf("Sub CA %d", i)},
 			NotBefore:             time.Now().Add(-time.Hour),
 			NotAfter:              time.Now().Add(time.Hour),
@@ -645,7 +647,7 @@ func TestCRLCheckerRejectedChainsLeaveNoBindings(t *testing.T) {
 		require.NoError(t, err)
 		subCA, err := x509.ParseCertificate(subCADER)
 		require.NoError(t, err)
-		leaf := signedLeaf(t, subCA, subCAKey, int64(200+i), fmt.Sprintf("leaf%d.example.com", i))
+		leaf := signedLeaf(t, subCA, subCAKey, 1<<41+int64(i), fmt.Sprintf("leaf%d.example.com", i))
 
 		err = checker.check([][]*x509.Certificate{{leaf, subCA, intermediate, rootCert}})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
@@ -676,7 +678,9 @@ func TestCRLCheckerBoundsTheBindings(t *testing.T) {
 	require.NoError(t, err)
 	for i := range maxBoundIssuers + 5 {
 		subCADER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-			SerialNumber:          big.NewInt(int64(100 + i)),
+			// Well clear of the serial numbers the fixture hands out,
+			// which grow with every fixture the process creates.
+			SerialNumber:          big.NewInt(1<<40 + int64(i)),
 			Subject:               pkix.Name{CommonName: fmt.Sprintf("Sub CA %d", i)},
 			NotBefore:             time.Now().Add(-time.Hour),
 			NotAfter:              time.Now().Add(time.Hour),
@@ -687,7 +691,7 @@ func TestCRLCheckerBoundsTheBindings(t *testing.T) {
 		require.NoError(t, err)
 		subCA, err := x509.ParseCertificate(subCADER)
 		require.NoError(t, err)
-		leaf := signedLeaf(t, subCA, subCAKey, int64(maxBoundIssuers+100+i), fmt.Sprintf("leaf%d.example.com", i))
+		leaf := signedLeaf(t, subCA, subCAKey, 1<<41+int64(i), fmt.Sprintf("leaf%d.example.com", i))
 
 		require.NoError(t, checker.check([][]*x509.Certificate{{leaf, subCA, intermediate, rootCert}}))
 	}
