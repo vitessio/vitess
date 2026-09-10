@@ -18,11 +18,13 @@ package grpctmserver
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/hook"
@@ -701,9 +703,22 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	// Send a terminal message carrying the backup's MANIFEST and outcome so the
 	// caller can identify the backup (by name) and detect an empty incremental
 	// backup without scraping log lines.
+	//
+	// The terminal message also carries a real (non-nil) completion Event. Older
+	// vtctld/vtctldclient peers predate the manifest/status fields and dereference
+	// Event unconditionally (logutil.LogEvent switches on event.Level), so a nil
+	// Event would panic them during a mixed-version rolling upgrade or downgrade.
+	// A populated Event keeps the terminal message safe for those peers, which log
+	// it as an ordinary line and ignore the unknown manifest/status fields.
+	status := backupResultToStatus(result)
 	return stream.Send(&tabletmanagerdatapb.BackupResponse{
+		Event: &logutilpb.Event{
+			Time:  protoutil.TimeToProto(time.Now()),
+			Level: logutilpb.Level_INFO,
+			Value: fmt.Sprintf("backup completed: %s", status),
+		},
 		Manifest: manifest,
-		Status:   backupResultToStatus(result),
+		Status:   status,
 	})
 }
 

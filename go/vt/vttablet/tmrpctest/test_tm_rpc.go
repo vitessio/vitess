@@ -1507,6 +1507,12 @@ func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupS
 	}
 	compare(t, "Backup manifest", term.Manifest, testBackupManifest)
 	compare(t, "Backup status", term.Status, tabletmanagerdatapb.BackupResponse_USABLE)
+	// The terminal message must carry a non-nil Event: older vtctld/vtctldclient
+	// peers dereference Event unconditionally, so a nil Event would panic them
+	// during a mixed-version rolling upgrade or downgrade.
+	if term.Event == nil {
+		t.Errorf("terminal Backup message for %v has a nil Event; older peers would panic on it", name)
+	}
 	_, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("log channel wasn't closed for %v", name)
