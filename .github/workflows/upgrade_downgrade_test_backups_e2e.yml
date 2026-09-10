@@ -16,7 +16,7 @@ permissions: read-all
 
 jobs:
   upgrade_downgrade_test_e2e:
-    timeout-minutes: 60
+    timeout-minutes: 90
     name: Run Upgrade Downgrade Test - Backups - E2E
     runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
@@ -218,3 +218,34 @@ jobs:
         set -x
         source build.env
         go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
+
+    # Swap binaries again, use last release's control plane, and current version's VTTablet
+    - name: Use last release's Vtctl/Vtctld, and current version VTTablet
+      if: steps.changes.outputs.end_to_end == 'true'
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
+        cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
+
+        rm -f $PWD/bin/vtctl $PWD/bin/vtctld $PWD/bin/vtctlclient $PWD/bin/vtctldclient
+        cp /tmp/vitess-build-other/bin/vtctl $PWD/bin/vtctl
+        cp /tmp/vitess-build-other/bin/vtctld $PWD/bin/vtctld
+        cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin/vtctlclient
+        cp /tmp/vitess-build-other/bin/vtctldclient $PWD/bin/vtctldclient
+        vtctld --version
+        vttablet --version
+
+    # Run test again with the control plane at version N-1 and VTTablet at version N. This guards
+    # the forward-compatibility of the terminal Backup stream message: a newer vttablet must not
+    # break an older vtctld that predates the manifest/status fields.
+    - name: Run backups tests (vtctld=N-1, vttablet=N)
+      if: steps.changes.outputs.end_to_end == 'true'
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+        set -x
+        source build.env
+        go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_backups_e2e_old_vtctld
