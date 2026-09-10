@@ -56,9 +56,16 @@ func getSchemaVersionTableCreationEvents() []string {
 }
 
 func TestSchemaVersioning(t *testing.T) {
-	// Let's disable the already running tracker to prevent it from
-	// picking events from the previous test, and then re-enable it at the end.
+	// Restart the tracker and historian so this test starts them from a known
+	// state, and re-enable everything at the end.
 	tsv := framework.Server
+	// The reopened tracker resumes from the last row saved in schema_version.
+	// If the table is still empty, which is the normal case when this test
+	// runs on its own and the boot-time snapshot has not landed yet, it takes
+	// a fresh snapshot instead, at a position read after a full schema reload
+	// that may already include the barrier DDL below; the barrier would then
+	// never be streamed. Wait for a saved row before restarting the tracker.
+	waitForSchemaVersionRow(t)
 	tsv.EnableHistorian(false)
 	tsv.SetTracking(false)
 	tsv.EnableHeartbeat(false)
@@ -71,7 +78,12 @@ func TestSchemaVersioning(t *testing.T) {
 	wg := sync.WaitGroup{}
 	tsv.EnableHistorian(true)
 	tsv.SetTracking(true)
-	time.Sleep(100 * time.Millisecond) // wait for _vt tables to be created
+	// The reopened tracker may still be replaying DDL from the preceding
+	// tests, and each replayed DDL produces a VERSION event. Wait for it to
+	// catch up before starting the stream below, so that the stream sees only
+	// the VERSION events for this test's own DDL. A fixed sleep raced the
+	// replay on slow runners.
+	waitForSchemaTrackerToCatchUp(t)
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
@@ -393,10 +405,45 @@ func TestSchemaVersioning(t *testing.T) {
 
 	_, err = client.Execute("drop table vitess_version", nil)
 	require.NoError(t, err)
-	_, err = client.Execute("drop table _vt.schema_version", nil)
-	require.NoError(t, err)
+	// Leave _vt.schema_version and its rows in place. Dropping the table left
+	// the deferred SetTracking(true) unable to restart the tracker, and
+	// emptying it makes the restart take a fresh snapshot, whose schema reload
+	// can race the barrier table's cleanup DDL and kill the tracker's startup.
+	// With the rows present the restart resumes from the last saved position.
 
 	log.Info("=== END OF TEST")
+}
+
+// waitForSchemaVersionRow waits until the schema tracker has saved at least
+// one schema_version row, so that a subsequent restart resumes from a saved
+// position rather than taking a fresh snapshot.
+func waitForSchemaVersionRow(t *testing.T) {
+	t.Helper()
+	client := framework.NewClient()
+	require.Eventually(t, func() bool {
+		qr, err := client.Execute("select id from _vt.schema_version limit 1", nil)
+		return err == nil && len(qr.Rows) > 0
+	}, 30*time.Second, 100*time.Millisecond, "schema tracker never saved its initial schema_version row")
+}
+
+// waitForSchemaTrackerToCatchUp runs a DDL and waits for the schema tracker to
+// save its schema_version row. The tracker saves rows in binlog order, so once
+// that row exists every DDL that preceded it has a row too, and a stream
+// started afterwards from "current" sees VERSION events only for later DDL.
+// The DDL is spelled the way the tablet re-serializes it, since the row is
+// matched on the statement text. The table is dropped when the test ends.
+func waitForSchemaTrackerToCatchUp(t *testing.T) {
+	t.Helper()
+	const ddl = "create table vitess_version_barrier (\n\tid int\n)"
+	client := framework.NewClient()
+	_, err := client.Execute(ddl, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := client.Execute("drop table if exists vitess_version_barrier", nil)
+		assert.NoError(t, err)
+	})
+	_, err = waitForVersionInsert(client, ddl)
+	require.NoError(t, err, "schema tracker never saved a schema_version row for %s", ddl)
 }
 
 func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*binlogdatapb.VEvent) {
@@ -512,8 +559,13 @@ func encodeString(in string) string {
 }
 
 func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
-	qr, _ := client.Execute("select * from _vt.schema_version where ddl = "+encodeString(ddl), nil)
-	if len(qr.Rows) == 1 {
+	qr, err := client.Execute("select * from _vt.schema_version where ddl = "+encodeString(ddl), nil)
+	if err != nil {
+		return false
+	}
+	// A DDL can have more than one row: a save that committed but was
+	// reported as failed, e.g. because Close() killed it, is replayed.
+	if len(qr.Rows) >= 1 {
 		log.Info("Found ddl in schema_version: " + ddl)
 		return true
 	}
@@ -522,7 +574,8 @@ func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
 
 // To avoid races between ddls and the historian refreshing its cache explicitly wait for tracker's insert to be visible
 func waitForVersionInsert(client *framework.QueryClient, ddl string) (bool, error) {
-	timeout := time.After(3000 * time.Millisecond)
+	// Generous: the tracker may be saving a backlog of rows on a slow runner.
+	timeout := time.After(30 * time.Second)
 	tick := time.Tick(100 * time.Millisecond)
 	for {
 		select {
