@@ -4188,6 +4188,11 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	// the direction is dropped for the built-in rand() only; a qualified
+	// call is a stored function, and is ordered by like any expression
+	input:  "select a from t order by rand() desc, db.rand() desc, rand(1) asc",
+	output: "select a from t order by rand(), db.rand() desc, rand(1)",
 }}
 
 func TestValid(t *testing.T) {
