@@ -1438,6 +1438,52 @@ func TestNewCRLCheckerIssuerNameEncoding(t *testing.T) {
 	})
 }
 
+// TestNewCRLCheckerSameKeyUnderAnotherName checks that a CRL from a
+// CA certificate that carries the key of a configured one under
+// another name, as a cross-certificate does, is not taken for an
+// encoding mismatch: it loads, and it is bound to its own certificate
+// the first time a chain carries it.
+func TestNewCRLCheckerSameKeyUnderAnotherName(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	certify := func(serial int64, commonName string, parent *x509.Certificate) *x509.Certificate {
+		template := &x509.Certificate{
+			SerialNumber:          big.NewInt(serial),
+			Subject:               pkix.Name{CommonName: commonName},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}
+		if parent == nil {
+			parent = template
+		}
+		der, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, key)
+		require.NoError(t, err)
+		cert, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+		return cert
+	}
+	x := certify(1, "X", nil)
+	xCross := certify(2, "X Cross", x)
+	leaf := signedLeaf(t, xCross, key, 3, "leaf.example.com")
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, xCross, key)
+	require.NoError(t, err)
+	xFile := path.Join(t.TempDir(), "x-cert.pem")
+	require.NoError(t, os.WriteFile(xFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: x.Raw}), 0o600))
+
+	checker, err := newCRLChecker(crlFile(t, der), xFile)
+	require.NoError(t, err)
+	err = checker.check([][]*x509.Certificate{{leaf, xCross, x}})
+	require.ErrorContains(t, err, "Certificate revoked: CommonName=leaf.example.com")
+}
+
 // utf8CommonName encodes a distinguished name made of the given
 // common name alone, written as a UTF8String.
 func utf8CommonName(t *testing.T, commonName string) []byte {
