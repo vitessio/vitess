@@ -2716,6 +2716,39 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		require.ErrorContains(t, err, "procedure failed")
 		callConnDiscarded(t, db, tsv)
 	})
+	t.Run("a CALL that never reached MySQL keeps its connection", func(t *testing.T) {
+		// A missing bind variable fails the CALL before any statement is sent,
+		// so the connection's session is untouched and must not be discarded:
+		// malformed requests must not churn connections.
+		db, tsv := newExecutor(t)
+		qre := newTestQueryExecutor(ctx, tsv, "call test_proc(:missing)", 0)
+		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+		_, err := qre.Execute()
+		require.ErrorContains(t, err, "missing bind var")
+		assert.Empty(t, db.QueryConnIDs(query), "nothing must have reached MySQL")
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "a CALL that was never sent must not cost the connection")
+		// The pool's only connection is still open and serves the next query.
+		const next = "select 1 from dual limit 10001"
+		db.AddQuery(next, &sqltypes.Result{})
+		_, err = newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
+		require.NoError(t, err)
+	})
+	t.Run("streaming discard is attributed to the streaming pool", func(t *testing.T) {
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+		err := qre.Stream(func(*sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+		callConns := db.QueryConnIDs(query)
+		require.Len(t, callConns, 1)
+		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
+			30*time.Second, 10*time.Millisecond, "the streaming connection a CALL ran on must be closed")
+		assert.EqualValues(t, 1, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "the discard must be counted on the streaming pool")
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "and not on the OLTP pool")
+	})
 }
 
 // TestExecProcKeepsReservedConn pins the scope of the post-CALL discard: on a

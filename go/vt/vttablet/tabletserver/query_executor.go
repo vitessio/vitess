@@ -726,7 +726,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		// The connection is never reused after a CALL (see execCallProc), so a
 		// transaction the procedure leaked dies with it; the CALL still reports
 		// it, as the client's procedure is at fault.
-		qre.discardPooledConnAfterCall(dbConn)
+		qre.discardPooledConnAfterCall(qre.tsv.qe.streamConns, dbConn)
 		if multipleResultsets {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
@@ -1509,6 +1509,11 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		// Nothing reached MySQL, so the connection's session is untouched.
+		return nil, err
+	}
 	// A procedure body can leave session state behind (SET SESSION, a temporary
 	// table) that the tablet's statement classification cannot see, and a pooled
 	// connection is shared with every later borrower: the connection is closed
@@ -1516,11 +1521,7 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	// the one cleanup that restores every piece of a fresh connection's state —
 	// COM_RESET_CONNECTION restores globals, losing the negotiated charset and
 	// anything init_connect applied. The recycle then frees the slot.
-	defer qre.discardPooledConnAfterCall(conn)
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
+	defer qre.discardPooledConnAfterCall(qre.tsv.qe.conns, conn)
 
 	qr, err := qre.execDBConn(conn.Conn, sql, true)
 	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
@@ -1543,14 +1544,15 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 }
 
 // discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
-// execCallProc) so it is not reused, counting the discard. A connection an
-// earlier error path already closed needs nothing.
-func (qre *QueryExecutor) discardPooledConnAfterCall(conn *connpool.PooledConn) {
+// execCallProc) so it is not reused, counting the discard on the pool that
+// owns the connection. A connection an earlier error path already closed needs
+// nothing.
+func (qre *QueryExecutor) discardPooledConnAfterCall(pool *connpool.Pool, conn *connpool.PooledConn) {
 	if conn.Conn.IsClosed() {
 		return
 	}
 	conn.Close()
-	qre.tsv.qe.conns.Metrics.RecordDiscardedAfterCall()
+	pool.Metrics.RecordDiscardedAfterCall()
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
