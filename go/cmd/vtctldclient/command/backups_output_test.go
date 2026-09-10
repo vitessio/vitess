@@ -118,9 +118,10 @@ func TestConsumeBackupStream_TextUsable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, status)
 
-	// In text mode, both the progress line and the manifest go to stdout.
+	// In text mode, progress goes to stdout but the MANIFEST is NOT printed --
+	// it is surfaced only via --json, so text output matches prior releases.
 	assert.Contains(t, out.String(), "backing up")
-	assert.Contains(t, out.String(), manifest)
+	assert.NotContains(t, out.String(), manifest)
 	assert.Empty(t, errOut.String())
 }
 

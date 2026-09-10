@@ -633,11 +633,11 @@ The upgrade changes how `--compression-level` is interpreted for the lz4 engine.
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 #### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
 
-The `vtctldclient Backup` and `BackupShard` commands now report the outcome of a backup directly, instead of requiring callers to scrape it from the log stream:
+The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream:
 
-- On successful completion the backup's MANIFEST is printed.
 - With the new `--json`/`-j` flag, a JSON object with the backup's outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`) and its MANIFEST is written to stdout, while log events go to stderr, so the output can be parsed by tooling.
-- An incremental backup that finds no new data to back up (an "empty" backup) completes successfully and prints no MANIFEST. In `--json` mode it also exits with **code 2** so scripts can skip follow-up work by checking `$?`. Without `--json`, an empty backup still exits `0`, so existing automation is unaffected.
+- Without `--json`, output is unchanged from prior releases: progress is streamed as log events and no MANIFEST is printed.
+- An incremental backup that finds no new data to back up (an "empty" backup) completes successfully. In `--json` mode it reports status `EMPTY` and exits with **code 2** so scripts can skip follow-up work by checking `$?`. Without `--json`, an empty backup behaves exactly as before and exits `0`, so existing automation is unaffected.
 
 This is carried by two additive fields on the `BackupResponse` proto messages (`manifest` and `status`); see the [related breaking change](#tmclient-backup-stream) for the Go API impact. When talking to an older server that does not populate these fields, the status is reported as `UNKNOWN` and the previous behaviour is preserved.
 

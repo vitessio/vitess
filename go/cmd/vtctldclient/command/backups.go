@@ -51,13 +51,14 @@ var (
 		Short: "Uses the BackupStorage service on the given tablet to create and store a new backup.",
 		Long: `Uses the BackupStorage service on the given tablet to create and store a new backup.
 
-On successful completion the backup's MANIFEST is printed. With --json, a JSON object
-with the backup's outcome status ("USABLE", "EMPTY", or "UNKNOWN") and its MANIFEST is
-printed to stdout, while log events are written to stderr.
+With --json, a JSON object with the backup's outcome status ("USABLE", "EMPTY", or
+"UNKNOWN") and its MANIFEST is printed to stdout, while log events are written to stderr.
+Without --json the output is unchanged from prior releases: progress is streamed as log
+events and the MANIFEST is not printed.
 
-An incremental backup that finds no new data to back up completes successfully and prints
-no MANIFEST. In --json mode it also exits with code 2 so callers can skip follow-up work
-by checking $?; without --json an empty backup still exits 0.`,
+An incremental backup that finds no new data to back up completes successfully. In --json
+mode it reports status "EMPTY" and exits with code 2 so callers can skip follow-up work by
+checking $?; without --json an empty backup behaves as before and exits 0.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackup,
@@ -70,13 +71,14 @@ by checking $?; without --json an empty backup still exits 0.`,
 
 If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.
 
-On successful completion the backup's MANIFEST is printed. With --json, a JSON object
-with the backup's outcome status ("USABLE", "EMPTY", or "UNKNOWN") and its MANIFEST is
-printed to stdout, while log events are written to stderr.
+With --json, a JSON object with the backup's outcome status ("USABLE", "EMPTY", or
+"UNKNOWN") and its MANIFEST is printed to stdout, while log events are written to stderr.
+Without --json the output is unchanged from prior releases: progress is streamed as log
+events and the MANIFEST is not printed.
 
-An incremental backup that finds no new data to back up completes successfully and prints
-no MANIFEST. In --json mode it also exits with code 2 so callers can skip follow-up work
-by checking $?; without --json an empty backup still exits 0.`,
+An incremental backup that finds no new data to back up completes successfully. In --json
+mode it reports status "EMPTY" and exits with code 2 so callers can skip follow-up work by
+checking $?; without --json an empty backup behaves as before and exits 0.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackupShard,
@@ -286,30 +288,27 @@ func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errO
 	}
 }
 
-// printBackupResult writes the backup's MANIFEST and outcome to out.
+// printBackupResult writes the backup's outcome to out. Machine-readable output
+// is emitted only in --json mode; in the default (text) mode nothing is printed
+// here, so the command's output stays identical to prior releases (progress is
+// already streamed as log events).
 func printBackupResult(out io.Writer, outputJSON bool, manifest string, status tabletmanagerdatapb.BackupResponse_Status) error {
-	if outputJSON {
-		raw := json.RawMessage("null")
-		if manifest != "" {
-			raw = json.RawMessage(manifest)
-		}
-		data, err := json.MarshalIndent(backupJSONOutput{
-			Status:   backupStatusString(status),
-			Manifest: raw,
-		}, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "%s\n", data)
+	if !outputJSON {
 		return nil
 	}
 
-	// Not JSON: print the MANIFEST of a usable backup. An empty incremental
-	// backup has no manifest and its outcome was already reported as a log event
-	// (mysqlctl.EmptyBackupMessage), so nothing more is printed here.
+	raw := json.RawMessage("null")
 	if manifest != "" {
-		fmt.Fprintf(out, "%s\n", manifest)
+		raw = json.RawMessage(manifest)
 	}
+	data, err := json.MarshalIndent(backupJSONOutput{
+		Status:   backupStatusString(status),
+		Manifest: raw,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s\n", data)
 	return nil
 }
 
