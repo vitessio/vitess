@@ -22,6 +22,53 @@
     }
   },
   {
+    "comment": "an unaliased select expression keeps the column name MySQL derives from the text as written",
+    "query": "select COUNT(*), sum( a ), NOW(), a+1, col from user where id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select COUNT(*), sum( a ), NOW(), a+1, col from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) as `COUNT(*)`, sum(a) as `sum( a )`, NOW(), a + 1 as `a+1`, col from `user` where 1 != 1",
+        "Query": "select count(*) as `COUNT(*)`, sum(a) as `sum( a )`, NOW(), a + 1 as `a+1`, col from `user` where id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "an expression evaluated on vtgate keeps the column name MySQL derives from the text as written",
+    "query": "select 1+1, Concat( 'a' , 'b' ) from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1+1, Concat( 'a' , 'b' ) from dual",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "2 as 1+1",
+          "'ab' as Concat( 'a' , 'b' )"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
     "comment": "'*' expression for simple route",
     "query": "select user.* from user",
     "plan": {
@@ -665,8 +712,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual"
+        "FieldQuery": "select @@auto_increment_increment as `@@session.auto_increment_increment` from dual where 1 != 1",
+        "Query": "select @@auto_increment_increment as `@@session.auto_increment_increment` from dual"
       }
     }
   },
@@ -687,7 +734,7 @@
         "FieldQuery": "select * from pin_test where 1 != 1",
         "Query": "select * from pin_test",
         "Values": [
-          "'\ufffd'"
+          "'�'"
         ],
         "Vindex": "binary"
       },
@@ -2253,7 +2300,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "44 as 42 + 2"
+          "44 as 42+2"
         ],
         "Inputs": [
           {
@@ -2826,8 +2873,8 @@
   {
     "comment": "Backtick-quoted dual is a real table, not virtual dual",
     "query": "select 1 from `dual`",
-    "skip_e2e": true,
-    "plan": "table dual not found"
+    "plan": "table dual not found",
+    "skip_e2e": true
   },
   {
     "comment": "subquery in select expression of derived table",
@@ -3609,8 +3656,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user` where 1 != 1",
-        "Query": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user`"
+        "FieldQuery": "select `user`.id, trim(leading 'x' from `user`.`name`) as `trim(leading 'x' from user.name)` from `user` where 1 != 1",
+        "Query": "select `user`.id, trim(leading 'x' from `user`.`name`) as `trim(leading 'x' from user.name)` from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -3632,8 +3679,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user` where 1 != 1",
-        "Query": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user`"
+        "FieldQuery": "select jcol, json_storage_size(jcol) as `JSON_STORAGE_SIZE(jcol)`, json_storage_free(jcol) as `JSON_STORAGE_FREE(jcol)`, json_pretty(jcol) as `JSON_PRETTY(jcol)` from `user` where 1 != 1",
+        "Query": "select jcol, json_storage_size(jcol) as `JSON_STORAGE_SIZE(jcol)`, json_storage_free(jcol) as `JSON_STORAGE_FREE(jcol)`, json_pretty(jcol) as `JSON_PRETTY(jcol)` from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -3676,8 +3723,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual"
+        "FieldQuery": "select json_quote('null') as `JSON_QUOTE('null')`, json_quote('\"null\"') as `JSON_QUOTE('\"null\"')`, json_object(BIN(1), 2, 'abc', ASCII(4)) as `JSON_OBJECT(BIN(1),2,'abc',ASCII(4))`, json_array(1, 'abc', null, true, CURTIME()) as `JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())` from dual where 1 != 1",
+        "Query": "select json_quote('null') as `JSON_QUOTE('null')`, json_quote('\"null\"') as `JSON_QUOTE('\"null\"')`, json_object(BIN(1), 2, 'abc', ASCII(4)) as `JSON_OBJECT(BIN(1),2,'abc',ASCII(4))`, json_array(1, 'abc', null, true, CURTIME()) as `JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())` from dual"
       }
     }
   },
@@ -3773,8 +3820,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual where 1 != 1",
-        "Query": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual"
+        "FieldQuery": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') as `JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')`, json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') as `JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')` from dual where 1 != 1",
+        "Query": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') as `JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')`, json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') as `JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')` from dual"
       }
     }
   },
@@ -3792,8 +3839,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
-        "Query": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual"
+        "FieldQuery": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') as `JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1')`, json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e') as `JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e')`, json_extract('[10, 20, [30, 40]]', '$[1]') as `JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]')`, json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')) as `JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]'))`, json_keys('{\"a\": 1, \"b\": {\"c\": 30}}') as `JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}')`, json_overlaps('[1,3,5,7]', '[2,5,7]') as `JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\")`, json_search('[\"abc\"]', 'one', 'abc') as `JSON_SEARCH('[\"abc\"]', 'one', 'abc')`, json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname') as `JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname')`, json_array(4, 5) member of ('[[3,4],[4,5]]') as `JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')` from dual where 1 != 1",
+        "Query": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') as `JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1')`, json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e') as `JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e')`, json_extract('[10, 20, [30, 40]]', '$[1]') as `JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]')`, json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')) as `JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]'))`, json_keys('{\"a\": 1, \"b\": {\"c\": 30}}') as `JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}')`, json_overlaps('[1,3,5,7]', '[2,5,7]') as `JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\")`, json_search('[\"abc\"]', 'one', 'abc') as `JSON_SEARCH('[\"abc\"]', 'one', 'abc')`, json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname') as `JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname')`, json_array(4, 5) member of ('[[3,4],[4,5]]') as `JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')` from dual"
       }
     }
   },
@@ -3811,8 +3858,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select json_extract(a, '$[4]'), json_unquote(json_extract(a, '$[3]')) from `user` where 1 != 1",
-        "Query": "select json_extract(a, '$[4]'), json_unquote(json_extract(a, '$[3]')) from `user`"
+        "FieldQuery": "select json_extract(a, '$[4]') as `a->\"$[4]\"`, json_unquote(json_extract(a, '$[3]')) as `a->>\"$[3]\"` from `user` where 1 != 1",
+        "Query": "select json_extract(a, '$[4]') as `a->\"$[4]\"`, json_unquote(json_extract(a, '$[3]')) as `a->>\"$[3]\"` from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -3857,8 +3904,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual where 1 != 1",
-        "Query": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual"
+        "FieldQuery": "select json_depth('{}') as `JSON_DEPTH('{}')`, json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b') as `JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b')`, json_type(json_extract('{\"a\": [10, true]}', '$.a')) as `JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a'))`, json_valid('{\"a\": 1}') as `JSON_VALID('{\"a\": 1}')` from dual where 1 != 1",
+        "Query": "select json_depth('{}') as `JSON_DEPTH('{}')`, json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b') as `JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b')`, json_type(json_extract('{\"a\": [10, true]}', '$.a')) as `JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a'))`, json_valid('{\"a\": 1}') as `JSON_VALID('{\"a\": 1}')` from dual"
       }
     }
   },
@@ -3876,8 +3923,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
-        "Query": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual"
+        "FieldQuery": "select json_array_append('{\"a\": 1}', '$', 'z') as `JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z')`, json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y') as `JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y')`, json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) as `JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))` from dual where 1 != 1",
+        "Query": "select json_array_append('{\"a\": 1}', '$', 'z') as `JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z')`, json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y') as `JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y')`, json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) as `JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))` from dual"
       }
     }
   },
@@ -3895,8 +3942,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual where 1 != 1",
-        "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual"
+        "FieldQuery": "select json_merge('[1, 2]', '[true, false]') as `JSON_MERGE('[1, 2]', '[true, false]')`, json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}') as `JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}')`, json_merge_preserve('[1, 2]', '{\"id\": 47}') as `JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')` from dual where 1 != 1",
+        "Query": "select json_merge('[1, 2]', '[true, false]') as `JSON_MERGE('[1, 2]', '[true, false]')`, json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}') as `JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}')`, json_merge_preserve('[1, 2]', '{\"id\": 47}') as `JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')` from dual"
       }
     }
   },
@@ -3914,8 +3961,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual where 1 != 1",
-        "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual"
+        "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]') as `JSON_REMOVE('[1, [2, 3], 4]', '$[1]')`, json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]') as `JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]')`, json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]') as `JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]')`, json_unquote('\"abc\"') as `JSON_UNQUOTE('\"abc\"')` from dual where 1 != 1",
+        "Query": "select json_remove('[1, [2, 3], 4]', '$[1]') as `JSON_REMOVE('[1, [2, 3], 4]', '$[1]')`, json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]') as `JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]')`, json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]') as `JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]')`, json_unquote('\"abc\"') as `JSON_UNQUOTE('\"abc\"')` from dual"
       }
     }
   },
@@ -4046,8 +4093,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
-        "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual"
+        "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') as `gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')`, gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') as `gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')` from dual where 1 != 1",
+        "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') as `gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')`, gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') as `gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')` from dual"
       }
     }
   },
@@ -4796,8 +4843,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(max(music.id)) from music where 1 != 1",
-                "Query": "select max(music.id), weight_string(max(music.id)) from music where music.user_id in ::__vals",
+                "FieldQuery": "select max(music.id) as `MAX(music.id)`, weight_string(max(music.id)) from music where 1 != 1",
+                "Query": "select max(music.id) as `MAX(music.id)`, weight_string(max(music.id)) from music where music.user_id in ::__vals",
                 "Values": [
                   "(5, 6)"
                 ],
@@ -5502,8 +5549,8 @@
   {
     "comment": "Unresolved column in dual subquery should fail",
     "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT y FROM dual)",
-    "skip_e2e": true,
-    "plan": "column 'y' not found"
+    "plan": "column 'y' not found",
+    "skip_e2e": true
   },
   {
     "comment": "Subquery can reference parent alias even when parent has FROM clause",
@@ -5534,14 +5581,14 @@
   {
     "comment": "Same-scope alias reference in SELECT without FROM should fail",
     "query": "SELECT 1 AS x, x",
-    "skip_e2e": true,
-    "plan": "column 'x' not found"
+    "plan": "column 'x' not found",
+    "skip_e2e": true
   },
   {
     "comment": "Same-scope alias reference in WHERE without FROM should fail",
     "query": "SELECT 1 AS x WHERE x = 1",
-    "skip_e2e": true,
-    "plan": "column 'x' not found"
+    "plan": "column 'x' not found",
+    "skip_e2e": true
   },
   {
     "comment": "Subquery can reference parent alias in dual context",
@@ -6763,8 +6810,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a where 1 != 1",
-        "Query": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a"
+        "FieldQuery": "select val, cume_dist() over w as `CUME_DIST() OVER w`, row_number() over w as `ROW_NUMBER() OVER w`, dense_rank() over w as `DENSE_RANK() OVER w`, percent_rank() over w as `PERCENT_RANK() OVER w`, rank() over w as cd from unsharded_a where 1 != 1",
+        "Query": "select val, cume_dist() over w as `CUME_DIST() OVER w`, row_number() over w as `ROW_NUMBER() OVER w`, dense_rank() over w as `DENSE_RANK() OVER w`, percent_rank() over w as `PERCENT_RANK() OVER w`, rank() over w as cd from unsharded_a"
       },
       "TablesUsed": [
         "main.unsharded_a"
@@ -6786,8 +6833,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select sum(id) over (partition by `name`) from `user` where 1 != 1",
-        "Query": "select sum(id) over (partition by `name`) from `user` where id = 5",
+        "FieldQuery": "select sum(id) over (partition by `name`) as `Sum(id) OVER ( PARTITION BY name  )` from `user` where 1 != 1",
+        "Query": "select sum(id) over (partition by `name`) as `Sum(id) OVER ( PARTITION BY name  )` from `user` where id = 5",
         "Values": [
           "5"
         ],

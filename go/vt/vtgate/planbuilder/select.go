@@ -316,10 +316,8 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if err != nil {
 			return nil, nil
 		}
-		cols[i] = expr.As.String()
-		if cols[i] == "" {
-			cols[i] = sqlparser.String(expr.Expr)
-		}
+		// the alias, or the name MySQL derives from the text as written
+		cols[i] = expr.ColumnName()
 	}
 	if len(lockFunctions) > 0 {
 		return buildLockingPrimitive(sel, vschema, lockFunctions)

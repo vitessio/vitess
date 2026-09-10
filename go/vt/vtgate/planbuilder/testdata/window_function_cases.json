@@ -236,8 +236,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select rank() over (order by col asc) from `user` where 1 != 1",
-        "Query": "select rank() over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select rank() over (order by col asc) as `rank() over (order by col)` from `user` where 1 != 1",
+        "Query": "select rank() over (order by col asc) as `rank() over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -288,8 +288,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select dense_rank() over (order by col asc) from `user` where 1 != 1",
-        "Query": "select dense_rank() over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select dense_rank() over (order by col asc) as `dense_rank() over (order by col)` from `user` where 1 != 1",
+        "Query": "select dense_rank() over (order by col asc) as `dense_rank() over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -314,8 +314,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select avg(col) over (partition by textcol1 order by col asc rows between 1 preceding and 1 following) from `user` where 1 != 1",
-        "Query": "select avg(col) over (partition by textcol1 order by col asc rows between 1 preceding and 1 following) from `user` where Id = 1",
+        "FieldQuery": "select avg(col) over (partition by textcol1 order by col asc rows between 1 preceding and 1 following) as `avg(col) over (partition by textcol1 order by col rows between 1 preceding and 1 following)` from `user` where 1 != 1",
+        "Query": "select avg(col) over (partition by textcol1 order by col asc rows between 1 preceding and 1 following) as `avg(col) over (partition by textcol1 order by col rows between 1 preceding and 1 following)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -340,8 +340,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select lead(col, 1) over (order by col asc) from `user` where 1 != 1",
-        "Query": "select lead(col, 1) over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select lead(col, 1) over (order by col asc) as `lead(col, 1) over (order by col)` from `user` where 1 != 1",
+        "Query": "select lead(col, 1) over (order by col asc) as `lead(col, 1) over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -366,8 +366,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select lag(col, 1) over (order by col asc) from `user` where 1 != 1",
-        "Query": "select lag(col, 1) over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select lag(col, 1) over (order by col asc) as `lag(col, 1) over (order by col)` from `user` where 1 != 1",
+        "Query": "select lag(col, 1) over (order by col asc) as `lag(col, 1) over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -392,8 +392,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select first_value(col) over (order by col asc) from `user` where 1 != 1",
-        "Query": "select first_value(col) over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select first_value(col) over (order by col asc) as `first_value(col) over (order by col)` from `user` where 1 != 1",
+        "Query": "select first_value(col) over (order by col asc) as `first_value(col) over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -418,8 +418,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select last_value(col) over (order by col asc) from `user` where 1 != 1",
-        "Query": "select last_value(col) over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select last_value(col) over (order by col asc) as `last_value(col) over (order by col)` from `user` where 1 != 1",
+        "Query": "select last_value(col) over (order by col asc) as `last_value(col) over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -444,8 +444,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select nth_value(col, 2) over (order by col asc) from `user` where 1 != 1",
-        "Query": "select nth_value(col, 2) over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select nth_value(col, 2) over (order by col asc) as `nth_value(col, 2) over (order by col)` from `user` where 1 != 1",
+        "Query": "select nth_value(col, 2) over (order by col asc) as `nth_value(col, 2) over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -470,8 +470,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select ntile(4) over (order by col asc) from `user` where 1 != 1",
-        "Query": "select ntile(4) over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select ntile(4) over (order by col asc) as `ntile(4) over (order by col)` from `user` where 1 != 1",
+        "Query": "select ntile(4) over (order by col asc) as `ntile(4) over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -496,8 +496,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select rank() over (order by col asc), row_number() over (partition by textcol1) from `user` where 1 != 1",
-        "Query": "select rank() over (order by col asc), row_number() over (partition by textcol1) from `user` where Id = 1",
+        "FieldQuery": "select rank() over (order by col asc) as `rank() over (order by col)`, row_number() over (partition by textcol1) from `user` where 1 != 1",
+        "Query": "select rank() over (order by col asc) as `rank() over (order by col)`, row_number() over (partition by textcol1) from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -522,8 +522,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*) over (order by col asc range between unbounded preceding and current row) from `user` where 1 != 1",
-        "Query": "select count(*) over (order by col asc range between unbounded preceding and current row) from `user` where Id = 1",
+        "FieldQuery": "select count(*) over (order by col asc range between unbounded preceding and current row) as `count(*) over (order by col range between unbounded preceding and current row)` from `user` where 1 != 1",
+        "Query": "select count(*) over (order by col asc range between unbounded preceding and current row) as `count(*) over (order by col range between unbounded preceding and current row)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -626,8 +626,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, rank() over (order by col asc) from `user` where 1 != 1",
-        "Query": "select distinct col, rank() over (order by col asc) from `user` where Id = 1",
+        "FieldQuery": "select col, rank() over (order by col asc) as `rank() over (order by col)` from `user` where 1 != 1",
+        "Query": "select distinct col, rank() over (order by col asc) as `rank() over (order by col)` from `user` where Id = 1",
         "Values": [
           "1"
         ],
@@ -652,8 +652,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select rank() over (order by col asc) from `user` where 1 != 1",
-        "Query": "select rank() over (order by col asc) from `user` where Id = 1 limit 5",
+        "FieldQuery": "select rank() over (order by col asc) as `rank() over (order by col)` from `user` where 1 != 1",
+        "Query": "select rank() over (order by col asc) as `rank() over (order by col)` from `user` where Id = 1 limit 5",
         "Values": [
           "1"
         ],
@@ -890,8 +890,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.id, rank() over (order by u.col asc) from `user` as u where 1 != 1",
-        "Query": "select u.id, rank() over (order by u.col asc) from `user` as u where u.id = 1",
+        "FieldQuery": "select u.id, rank() over (order by u.col asc) as `rank() over (order by u.col)` from `user` as u where 1 != 1",
+        "Query": "select u.id, rank() over (order by u.col asc) as `rank() over (order by u.col)` from `user` as u where u.id = 1",
         "Values": [
           "1"
         ],
@@ -964,8 +964,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id, col, rank() over (order by intcol asc) from `user` where 1 != 1",
-        "Query": "select id, col, rank() over (order by intcol asc) from `user` where id = 1",
+        "FieldQuery": "select id, col, rank() over (order by intcol asc) as `rank() over (order by intcol)` from `user` where 1 != 1",
+        "Query": "select id, col, rank() over (order by intcol asc) as `rank() over (order by intcol)` from `user` where id = 1",
         "Values": [
           "1"
         ],
@@ -1016,8 +1016,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3 asc) from unsharded where 1 != 1",
-        "Query": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3 asc) from unsharded"
+        "FieldQuery": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3 asc) as `row_number() over (order by predef3)` from unsharded where 1 != 1",
+        "Query": "select predef1, rank() over (partition by predef1), row_number() over (order by predef3 asc) as `row_number() over (order by predef3)` from unsharded"
       },
       "TablesUsed": [
         "main.unsharded"

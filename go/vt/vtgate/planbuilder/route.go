@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"slices"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -25,9 +27,57 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// addImplicitColumnAliases gives every unaliased select expression of the
+// statement that no longer prints the way the client wrote it (COUNT(*) prints
+// as count(*), sum( a ) as sum(a)) the written text as its alias. MySQL names
+// an unaliased column from the text it receives, so without the alias the
+// client would see the printer's spelling instead of its own. Only the
+// statement's own select lists are aliased: a derived table or subquery inside
+// the same route is MySQL's to name. The statement may be the one the client's
+// query was parsed into, so nothing is changed in place: a select whose list
+// changes is returned as a shallow copy, and the input is returned unchanged
+// otherwise.
+func addImplicitColumnAliases(stmt sqlparser.SQLNode) sqlparser.SQLNode {
+	switch node := stmt.(type) {
+	case *sqlparser.Select:
+		var exprs *sqlparser.SelectExprs
+		for i, expr := range node.SelectExprs.Exprs {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok || ae.As.NotEmpty() || ae.InputExpression == "" || sqlparser.String(ae.Expr) == ae.InputExpression {
+				continue
+			}
+			if exprs == nil {
+				exprs = &sqlparser.SelectExprs{Exprs: slices.Clone(node.SelectExprs.Exprs)}
+			}
+			exprs.Exprs[i] = &sqlparser.AliasedExpr{
+				Expr:            ae.Expr,
+				As:              sqlparser.NewIdentifierCI(ae.InputExpression),
+				InputExpression: ae.InputExpression,
+			}
+		}
+		if exprs == nil {
+			return node
+		}
+		aliased := *node
+		aliased.SelectExprs = exprs
+		return &aliased
+	case *sqlparser.Union:
+		left := addImplicitColumnAliases(node.Left).(sqlparser.TableStatement)
+		right := addImplicitColumnAliases(node.Right).(sqlparser.TableStatement)
+		if left == node.Left && right == node.Right {
+			return node
+		}
+		aliased := *node
+		aliased.Left, aliased.Right = left, right
+		return &aliased
+	}
+	return stmt
+}
+
 // WireupRoute returns an engine primitive for the given route.
 func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.SelectStatement) (engine.Primitive, error) {
 	// prepare the queries we will pass down
+	sel = addImplicitColumnAliases(sel).(sqlparser.SelectStatement)
 	eroute.Query = sqlparser.String(sel)
 	eroute.QueryStatement = sel
 	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)

@@ -90,8 +90,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select sum(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select sum(`user`.col), `user`.foo from `user` group by `user`.foo"
+                    "FieldQuery": "select sum(`user`.col) as `sum(user.col)`, `user`.foo from `user` where 1 != 1 group by `user`.foo",
+                    "Query": "select sum(`user`.col) as `sum(user.col)`, `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -148,8 +148,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select count(`user`.col), `user`.foo from `user` group by `user`.foo"
+                    "FieldQuery": "select count(`user`.col) as `count(user.col)`, `user`.foo from `user` where 1 != 1 group by `user`.foo",
+                    "Query": "select count(`user`.col) as `count(user.col)`, `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -200,8 +200,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                "Query": "select max(`user`.col), `user`.foo from `user` group by `user`.foo"
+                "FieldQuery": "select max(`user`.col) as `max(user.col)`, `user`.foo from `user` where 1 != 1 group by `user`.foo",
+                "Query": "select max(`user`.col) as `max(user.col)`, `user`.foo from `user` group by `user`.foo"
               },
               {
                 "OperatorType": "Route",
@@ -3065,8 +3065,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select group_concat(user_id order by `name` asc), id from `user` where 1 != 1 group by id",
-        "Query": "select group_concat(user_id order by `name` asc), id from `user` group by id"
+        "FieldQuery": "select group_concat(user_id order by `name` asc) as `group_concat(user_id order by name)`, id from `user` where 1 != 1 group by id",
+        "Query": "select group_concat(user_id order by `name` asc) as `group_concat(user_id order by name)`, id from `user` group by id"
       },
       "TablesUsed": [
         "user.user"
@@ -3087,8 +3087,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select count(distinct user_id, `name`) from unsharded where 1 != 1",
-        "Query": "select count(distinct user_id, `name`) from unsharded"
+        "FieldQuery": "select count(distinct user_id, `name`) as `count(distinct user_id, name)` from unsharded where 1 != 1",
+        "Query": "select count(distinct user_id, `name`) as `count(distinct user_id, name)` from unsharded"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -5656,8 +5656,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), any_value(u.`name`), u.bar from `user` as u where 1 != 1 group by u.bar",
-                    "Query": "select count(*), any_value(u.`name`), u.bar from `user` as u group by u.bar"
+                    "FieldQuery": "select count(*), any_value(u.`name`) as `any_value(u.name)`, u.bar from `user` as u where 1 != 1 group by u.bar",
+                    "Query": "select count(*), any_value(u.`name`) as `any_value(u.name)`, u.bar from `user` as u group by u.bar"
                   },
                   {
                     "OperatorType": "Route",
@@ -6299,8 +6299,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select sum(id), count(id) from `user` where 1 != 1",
-                "Query": "select sum(id), count(id) from `user`"
+                "FieldQuery": "select sum(id) as `avg(id)`, count(id) from `user` where 1 != 1",
+                "Query": "select sum(id) as `avg(id)`, count(id) from `user`"
               }
             ]
           }
@@ -6435,8 +6435,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select sum(foo), sum(bar), count(foo), count(bar) from `user` where 1 != 1",
-                "Query": "select sum(foo), sum(bar), count(foo), count(bar) from `user`"
+                "FieldQuery": "select sum(foo) as `avg(foo)`, sum(bar) as `avg(bar)`, count(foo), count(bar) from `user` where 1 != 1",
+                "Query": "select sum(foo) as `avg(foo)`, sum(bar) as `avg(bar)`, count(foo), count(bar) from `user`"
               }
             ]
           }
@@ -6473,8 +6473,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select sum(foo), count(foo), count(foo) from `user` where 1 != 1",
-                "Query": "select sum(foo), count(foo), count(foo) from `user`"
+                "FieldQuery": "select sum(foo) as `avg(foo)`, count(foo), count(foo) from `user` where 1 != 1",
+                "Query": "select sum(foo) as `avg(foo)`, count(foo), count(foo) from `user`"
               }
             ]
           }
@@ -6789,8 +6789,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select max((select min(col) from `user` where 1 != 1)) from dual where 1 != 1",
-        "Query": "select max((select min(col) from `user` where id = 1)) from dual",
+        "FieldQuery": "select max((select min(col) from `user` where 1 != 1)) as `max((select min(col) from user where id = 1))` from dual where 1 != 1",
+        "Query": "select max((select min(col) from `user` where id = 1)) as `max((select min(col) from user where id = 1))` from dual",
         "Values": [
           "1"
         ],
@@ -6840,8 +6840,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
-                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 1 group by weight_string(:__sq1)",
+                "FieldQuery": "select max(:__sq1) as `max((select min(col) from unsharded))`, weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1) as `max((select min(col) from unsharded))`, weight_string(:__sq1) from `user` where id = 1 group by weight_string(:__sq1)",
                 "Values": [
                   "1"
                 ],
@@ -6900,8 +6900,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where 1 != 1 group by weight_string(:__sq1 /* INT16 */)",
-                "Query": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where id = 2 group by weight_string(:__sq1 /* INT16 */)",
+                "FieldQuery": "select max(:__sq1 /* INT16 */) as `max((select min(col) from user where id = 1))`, weight_string(:__sq1 /* INT16 */) from `user` where 1 != 1 group by weight_string(:__sq1 /* INT16 */)",
+                "Query": "select max(:__sq1 /* INT16 */) as `max((select min(col) from user where id = 1))`, weight_string(:__sq1 /* INT16 */) from `user` where id = 2 group by weight_string(:__sq1 /* INT16 */)",
                 "Values": [
                   "2"
                 ],
@@ -6930,8 +6930,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from dual where 1 != 1",
-        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from dual",
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) as `max((select group_concat(col1, col2) from user where id = 1))` from dual where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) as `max((select group_concat(col1, col2) from user where id = 1))` from dual",
         "Values": [
           "1"
         ],
@@ -6956,8 +6956,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from `user` where 1 != 1",
-        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from `user` where id = 1",
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) as `max((select group_concat(col1, col2) from user where id = 1))` from `user` where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) as `max((select group_concat(col1, col2) from user where id = 1))` from `user` where id = 1",
         "Values": [
           "1"
         ],
@@ -7011,8 +7011,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
-                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` group by weight_string(:__sq1)"
+                "FieldQuery": "select max(:__sq1) as `max((select group_concat(col1, col2) from user where id = 1))`, weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1) as `max((select group_concat(col1, col2) from user where id = 1))`, weight_string(:__sq1) from `user` group by weight_string(:__sq1)"
               }
             ]
           }
@@ -7043,8 +7043,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string(max((select max(col2) from `user` as u1 where 1 != 1))) from `user` as u2 where 1 != 1",
-            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2"
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)) as `max((select max(col2) from user u1 where u1.id = u2.id))`, weight_string(max((select max(col2) from `user` as u1 where 1 != 1))) from `user` as u2 where 1 != 1",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)) as `max((select max(col2) from user u1 where u1.id = u2.id))`, weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2"
           }
         ]
       },
@@ -7072,8 +7072,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(a, b) from `user` where 1 != 1",
-            "Query": "select count(a, b) from `user`"
+            "FieldQuery": "select count(a, b) as `count(a,b)` from `user` where 1 != 1",
+            "Query": "select count(a, b) as `count(a,b)` from `user`"
           }
         ]
       },
@@ -7130,8 +7130,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(distinct `name`, id) from `user` where 1 != 1",
-            "Query": "select count(distinct `name`, id) from `user`"
+            "FieldQuery": "select count(distinct `name`, id) as `count(distinct name, id)` from `user` where 1 != 1",
+            "Query": "select count(distinct `name`, id) as `count(distinct name, id)` from `user`"
           }
         ]
       },
@@ -7366,8 +7366,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select sum(`user`.type), `user`.team_id from `user` where 1 != 1 group by `user`.team_id",
-                        "Query": "select sum(`user`.type), `user`.team_id from `user` group by `user`.team_id"
+                        "FieldQuery": "select sum(`user`.type) as `sum(user.type)`, `user`.team_id from `user` where 1 != 1 group by `user`.team_id",
+                        "Query": "select sum(`user`.type) as `sum(user.type)`, `user`.team_id from `user` group by `user`.team_id"
                       },
                       {
                         "OperatorType": "Route",

@@ -155,12 +155,12 @@ select distinct name from user where id = 1 /* select distinct */
 ----------------------------------------------------------------------
 select id, substring(name, 1, -1) from user where id = 123 /* select substring */
 
-1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
+1 ks_sharded/-40: select id, substr(`name`, 1, -1) as `substring(name, 1, -1)` from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
 
 ----------------------------------------------------------------------
 select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */
 
-1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
+1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) as `substring_index(name, '123456', -1)` from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
 
 ----------------------------------------------------------------------
 select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */

@@ -1539,8 +1539,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id + 1, weight_string(id + 1) from `user` where 1 != 1 union select user_id, weight_string(user_id) from user_extra where 1 != 1",
-            "Query": "select id, weight_string(id) from `user` union select id + 1, weight_string(id + 1) from `user` union select user_id, weight_string(user_id) from user_extra"
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id + 1 as `id+1`, weight_string(id + 1) from `user` where 1 != 1 union select user_id, weight_string(user_id) from user_extra where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select id + 1 as `id+1`, weight_string(id + 1) from `user` union select user_id, weight_string(user_id) from user_extra"
           }
         ]
       },
