@@ -389,9 +389,12 @@ func (c *crlChecker) check(chains [][]*x509.Certificate) error {
 // trust anchor it ends at against the CRLs of its issuer, the next
 // certificate of the chain, which verification vouches signed it. The
 // anchor is trusted as configured: its issuer is not part of the
-// chain, and Go does not verify its signature either.
+// chain, and Go does not verify its signature either. The chain is
+// walked from the anchor down, so that a revoked CA certificate is
+// found before the certificates below it are bound: whoever holds
+// its key can mint any number of those, and none is worth keeping.
 func (c *crlChecker) checkChain(chain []*x509.Certificate) error {
-	for i := 0; i+1 < len(chain); i++ {
+	for i := len(chain) - 2; i >= 0; i-- {
 		if err := c.checkCertificate(chain[i], chain[i+1]); err != nil {
 			return err
 		}

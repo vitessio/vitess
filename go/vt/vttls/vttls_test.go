@@ -554,6 +554,49 @@ func TestCRLCheckerBindsChainIssuersOnce(t *testing.T) {
 	require.False(t, cached, "the configured root is bound when the checker is built, not here")
 }
 
+// TestCRLCheckerRejectedChainsLeaveNoBindings checks that a chain
+// rejected for a revoked CA certificate leaves no binding behind for
+// the certificates below it: whoever holds the key of a revoked
+// intermediate can mint any number of CA certificates under it, each
+// of which Go verifies, and each would otherwise be bound and kept
+// for the life of the configuration before the chain is rejected.
+func TestCRLCheckerRejectedChainsLeaveNoBindings(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, strings.TrimSuffix(filepath.Base(certs.ServerCA), "-cert.pem"))
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	intermediate := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	intermediateKey := keyPair.PrivateKey.(*ecdsa.PrivateKey)
+	checker, err := newCRLChecker(path.Join(root, "ca-crl.pem"), path.Join(root, "ca-cert.pem"))
+	require.NoError(t, err)
+
+	for i := range 20 {
+		subCAKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		subCADER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(int64(100 + i)),
+			Subject:               pkix.Name{CommonName: fmt.Sprintf("Sub CA %d", i)},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}, intermediate, &subCAKey.PublicKey, intermediateKey)
+		require.NoError(t, err)
+		subCA, err := x509.ParseCertificate(subCADER)
+		require.NoError(t, err)
+		leaf := signedLeaf(t, subCA, subCAKey, int64(200+i), fmt.Sprintf("leaf%d.example.com", i))
+
+		err = checker.check([][]*x509.Certificate{{leaf, subCA, intermediate, rootCert}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+	}
+	bindings := 0
+	checker.bound.Range(func(any, any) bool { bindings++; return true })
+	require.Zero(t, bindings, "the rejected chains left bindings behind")
+}
+
 // selfSignedCA returns a self-signed CA certificate and its key, with
 // the given serial number and common name, or with rawSubject as its
 // subject when it is set.
