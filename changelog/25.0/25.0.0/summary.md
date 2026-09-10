@@ -37,6 +37,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [A qualified function call is a stored-function call](#vtgate-qualified-function-call)
+        - [Built-in function names are lexed the way MySQL lexes them](#sqlparser-function-name-keywords)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -385,6 +386,20 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 #### <a id="vtgate-qualified-function-call"/>A qualified function call is a stored-function call</a>
 
 A function call qualified with a schema name, such as `db.last_insert_id()` or `db.udf_aggr(col)`, names a stored function in that schema, whatever the name, and MySQL resolves and evaluates it. VTGate used to treat such a call like the unqualified built-in or aggregate UDF of the same name: the normalizer replaced `db.last_insert_id()`, `db.found_rows()` and `db.row_count()` with the session's own values, the evalengine computed `db.abs(-1)` itself, and a qualified call by the name of an aggregate UDF registered in the VSchema made the planner fail. Qualified calls are now always sent to MySQL as written.
+
+#### <a id="sqlparser-function-name-keywords"/>Built-in function names are lexed the way MySQL lexes them</a>
+
+MySQL treats the function names on its "Function Name Parsing and Resolution" list (`ADDDATE`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `CAST`, `COUNT`, `CURDATE`, `CURTIME`, `DATE_ADD`, `DATE_SUB`, `EXTRACT`, `GROUP_CONCAT`, `MAX`, `MID`, `MIN`, `NOW`, `POSITION`, `SESSION_USER`, `STD`, `STDDEV`, `STDDEV_POP`, `STDDEV_SAMP`, `SUBDATE`, `SUBSTR`/`SUBSTRING`, `SUM`, `SYSDATE`, `SYSTEM_USER`, `TRIM`, `VARIANCE`, `VAR_POP`, `VAR_SAMP`, and `JSON_ARRAYAGG`, `JSON_OBJECTAGG` and `ST_COLLECT`, which MySQL 8.0 treats the same way although the page does not list them) as a keyword only when the name is immediately followed by `(`. Anywhere else the name is an ordinary identifier: `count (*)` with whitespace, a quoted `` `count`(*) `` and a qualified `db.count(1)` are all calls of a stored function named `count`, and a bare `now` is a column.
+
+The Vitess parser now follows that rule. This is groundwork for `sql_mode=IGNORE_SPACE` support, which relaxes the no-whitespace requirement for exactly these names. Each of the following matches MySQL, but removes a Vitess-only leniency or fixes a Vitess-only rejection:
+
+- Tables and columns may be named after any of these functions without quoting: `create table CAST (a int)`, `create table t (now int, extract int)` and `select now from t` are valid, as in MySQL. Vitess previously reserved some of these words unconditionally.
+- `default now` / `on update now` without parentheses no longer parse; write `now()`, as MySQL requires.
+- `cast (1 as char)`, `count (*)`, `trim (leading 'a' from b)`, `position ('a' in b)`, `extract (year from d)`, `substring (a from 1)`, `date_add (d, interval 1 day)` and `group_concat (distinct a)` with whitespace before the parenthesis are syntax errors, as in MySQL, since the built-in argument syntax needs the attached parenthesis. A comment between the name and the parenthesis (`count/*c*/(*)`) separates them the same way.
+- `now ()`, `sum (x)`, `substr (a, 1)` and the other names with regular argument syntax still parse with whitespace, but as generic function calls rather than the built-in (a `sum (x)` is no longer an aggregate). That is MySQL's stored-function path, and VTGate serializes the call with the name quoted (`` `now`() ``, `` `sum`(x) ``) so that MySQL takes the same path rather than re-lexing the bare name as the built-in. VTGate no longer evaluates such a call itself either: `SELECT curdate ()` reaches MySQL, which reports that the function does not exist unless a stored function by that name does.
+- `session_user()` and `system_user()` are keywords now, and `session_user(1)` and `system_user(1)` are syntax errors, as in MySQL; previously they were sent to MySQL as generic calls.
+
+Programs that use the `go/vt/sqlparser` package directly: a `FuncExpr` is a generic call, a call by an identifier, and serializes with the name quoted whenever the name is one of these built-ins (`IsFuncCallKeywordName`). `session_user()`, `system_user()` and `st_collect(...)` parse into the new `BuiltinFuncExpr`, and `curdate()` into `CurTimeFuncExpr` like the other date and time functions; previously all four were `FuncExpr`.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

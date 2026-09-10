@@ -404,7 +404,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Functions
 %token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE SESSION_USER SYSTEM_USER ST_COLLECT
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
@@ -6794,7 +6794,15 @@ UTC_DATE func_paren_opt
   }
 | CURDATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI("curdate")}
+  }
+| SESSION_USER openb closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("session_user")}
+  }
+| SYSTEM_USER openb closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("system_user")}
   }
 | UTC_TIME func_datetime_precision
   {
@@ -6989,6 +6997,10 @@ UTC_DATE func_paren_opt
 | JSON_ARRAY openb expression_list_opt closeb
   {
     $$ = &JSONArrayExpr{ Params:$3 }
+  }
+| ST_COLLECT openb expression_list_opt closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("st_collect"), Exprs: $3}
   }
 | ST_AsBinary openb expression closeb
   {
@@ -9472,6 +9484,7 @@ non_reserved_keyword:
 | SECURITY
 | SEQUENCE
 | SESSION
+| SESSION_USER %prec FUNCTION_CALL_NON_KEYWORD
 | SERIALIZABLE
 | SHARE
 | SHARED
@@ -9515,6 +9528,7 @@ non_reserved_keyword:
 | ST_AsGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Centroid %prec FUNCTION_CALL_NON_KEYWORD
+| ST_COLLECT %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
 | ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
@@ -9561,6 +9575,7 @@ non_reserved_keyword:
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
+| SYSTEM_USER %prec FUNCTION_CALL_NON_KEYWORD
 | TABLE_NAME
 | TABLES
 | TABLESAMPLE

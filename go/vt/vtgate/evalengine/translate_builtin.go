@@ -45,8 +45,23 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error)
 }
 
 func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
+	// A qualified call names a stored function, whatever the name. So does a
+	// generic call by a name MySQL lexes as a keyword only directly before
+	// '(': the parser gives the built-in a node of its own, and a FuncExpr by
+	// that name came with whitespace before the parenthesis or quoted (see
+	// sqlparser.IsFuncCallKeywordName). Both are MySQL's to resolve and
+	// evaluate.
+	if fn.Qualifier.NotEmpty() || sqlparser.IsFuncCallKeywordName(fn.Name.String()) {
+		return nil, translateExprNotSupported(fn)
+	}
+	return ast.translateFuncCall(fn, fn.Name, fn.Exprs)
+}
+
+// translateFuncCall translates a call of the built-in function name with the
+// given arguments; fn is the node the call came from, for error messages.
+func (ast *astCompiler) translateFuncCall(fn sqlparser.Expr, name sqlparser.IdentifierCI, exprs []sqlparser.Expr) (IR, error) {
 	var args TupleExpr
-	for _, expr := range fn.Exprs {
+	for _, expr := range exprs {
 		convertedExpr, err := ast.translateExpr(expr)
 		if err != nil {
 			return nil, err
@@ -54,13 +69,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		args = append(args, convertedExpr)
 	}
 
-	// A qualified call names a stored function, whatever the name: MySQL's to
-	// resolve and evaluate.
-	if fn.Qualifier.NotEmpty() {
-		return nil, translateExprNotSupported(fn)
-	}
-
-	method := fn.Name.Lowered()
+	method := name.Lowered()
 	call := CallExpr{Arguments: args, Method: method}
 
 	switch method {
@@ -374,7 +383,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		default:
 			return nil, argError(method)
 		}
-	case "curdate", "current_date":
+	case "current_date":
 		if len(args) != 0 {
 			return nil, argError(method)
 		}
@@ -681,6 +690,9 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 	case *sqlparser.FuncExpr:
 		return ast.translateFuncExpr(call)
 
+	case *sqlparser.BuiltinFuncExpr:
+		return ast.translateFuncCall(call, call.Name, call.Exprs)
+
 	case *sqlparser.ConvertExpr:
 		return ast.translateConvertExpr(call.Expr, call.Type)
 
@@ -816,6 +828,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 				CallExpr: cexpr,
 				prec:     uint8(call.Fsp),
 			}, nil
+		case "curdate":
+			return &builtinCurdate{CallExpr: cexpr}, nil
 		}
 		return &builtinNow{
 			CallExpr: cexpr,

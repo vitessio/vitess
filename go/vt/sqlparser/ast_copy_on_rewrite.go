@@ -84,6 +84,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfBitXor(n, parent)
 	case BoolVal:
 		return c.copyOnRewriteBoolVal(n, parent)
+	case *BuiltinFuncExpr:
+		return c.copyOnRewriteRefOfBuiltinFuncExpr(n, parent)
 	case *CallProc:
 		return c.copyOnRewriteRefOfCallProc(n, parent)
 	case *CaseExpr:
@@ -1332,6 +1334,39 @@ func (c *cow) copyOnRewriteRefOfBitXor(n *BitXor, parent SQLNode) (out SQLNode, 
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
 			res.OverClause, _ = _OverClause.(*OverClause)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfBuiltinFuncExpr(n *BuiltinFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
+			}
+		}
+		if changedName || changedExprs {
+			res := *n
+			res.Name, _ = _Name.(IdentifierCI)
+			res.Exprs = _Exprs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -7990,6 +8025,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *Avg:
 		return c.copyOnRewriteRefOfAvg(n, parent)
+	case *BuiltinFuncExpr:
+		return c.copyOnRewriteRefOfBuiltinFuncExpr(n, parent)
 	case *CharExpr:
 		return c.copyOnRewriteRefOfCharExpr(n, parent)
 	case *ConvertExpr:
@@ -8309,6 +8346,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfBitXor(n, parent)
 	case BoolVal:
 		return c.copyOnRewriteBoolVal(n, parent)
+	case *BuiltinFuncExpr:
+		return c.copyOnRewriteRefOfBuiltinFuncExpr(n, parent)
 	case *CaseExpr:
 		return c.copyOnRewriteRefOfCaseExpr(n, parent)
 	case *CastExpr:

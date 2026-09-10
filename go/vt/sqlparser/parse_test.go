@@ -4188,6 +4188,127 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	// MySQL's lexer treats these function names as keywords only when
+	// immediately followed by '(', otherwise they are plain identifiers.
+	input:  "create table CAST (a int)",
+	output: "create table `CAST` (\n\ta int\n)",
+}, {
+	input:  "drop table CAST",
+	output: "drop table `CAST`",
+}, {
+	input:  "create table CURDATE (a int)",
+	output: "create table `CURDATE` (\n\ta int\n)",
+}, {
+	input:  "create table CURTIME (a int)",
+	output: "create table `CURTIME` (\n\ta int\n)",
+}, {
+	input:  "create table EXTRACT (a int)",
+	output: "create table `EXTRACT` (\n\ta int\n)",
+}, {
+	input:  "create table NOW (a int)",
+	output: "create table `NOW` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTR (a int)",
+	output: "create table `SUBSTR` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTRING (a int)",
+	output: "create table `SUBSTRING` (\n\ta int\n)",
+}, {
+	input:  "create table SYSDATE (a int)",
+	output: "create table `SYSDATE` (\n\ta int\n)",
+}, {
+	input:  "create table t (cast int, now int, extract int)",
+	output: "create table t (\n\t`cast` int,\n\t`now` int,\n\t`extract` int\n)",
+}, {
+	// bare, each name on the list is an identifier
+	input:  "select now from t",
+	output: "select `now` from t",
+}, {
+	input:  "select t.now from t",
+	output: "select t.`now` from t",
+}, {
+	input:  "select count, sum, position, trim, std, var_pop from t",
+	output: "select `count`, `sum`, `position`, `trim`, `std`, `var_pop` from t",
+}, {
+	// directly before '(' it is the built-in
+	input:  "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+	output: "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+}, {
+	// with whitespace before '(' the name is an identifier, and the call is
+	// a generic function call, MySQL's stored-function call path. It
+	// serializes quoted so that MySQL takes that path too, rather than
+	// re-lexing the bare name as the built-in
+	input:  "select now () from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select `now`() from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select sysdate (), curdate (), curtime () from t",
+	output: "select `sysdate`(), `curdate`(), `curtime`() from t",
+}, {
+	input:  "select substr ('abc', 1, 2) from t",
+	output: "select `substr`('abc', 1, 2) from t",
+}, {
+	// the rule covers MySQL's whole list of whitespace-sensitive function
+	// names
+	input:  "select count (1), sum (x), max (x), min (x) from t",
+	output: "select `count`(1), `sum`(x), `max`(x), `min`(x) from t",
+}, {
+	input:  "select trim (' a '), mid ('abc', 1, 1), adddate (d, 1), std (x), var_pop (x), bit_and (x) from t",
+	output: "select `trim`(' a '), `mid`('abc', 1, 1), `adddate`(d, 1), `std`(x), `var_pop`(x), `bit_and`(x) from t",
+}, {
+	// json_arrayagg, json_objectagg and st_collect follow the same rule in
+	// MySQL 8.0 although the manual's list leaves them out
+	input:  "select json_arrayagg(a), json_objectagg(a, b), json_arrayagg (a), json_objectagg (a, b) from t",
+	output: "select json_arrayagg(a), json_objectagg(a, b), `json_arrayagg`(a), `json_objectagg`(a, b) from t",
+}, {
+	input:  "select json_arrayagg, json_objectagg from t",
+	output: "select `json_arrayagg`, `json_objectagg` from t",
+}, {
+	input:  "select st_collect(g), st_collect (g), st_collect from t",
+	output: "select st_collect(g), `st_collect`(g), `st_collect` from t",
+}, {
+	// a qualified name is never a keyword: it names a stored function or a
+	// column in the schema, with or without whitespace before the parenthesis
+	input:  "select db.cast(1), t.`cast` from t",
+	output: "select db.`cast`(1), t.`cast` from t",
+}, {
+	input:  "select db.cast (1), db.now () from t",
+	output: "select db.`cast`(1), db.`now`() from t",
+}, {
+	input:  "select t.count(1), db.sum (x) from t",
+	output: "select t.`count`(1), db.`sum`(x) from t",
+}, {
+	// session_user and system_user parse through keyword rules into a node
+	// of their own; with whitespace before the parenthesis, or quoted, the
+	// call is a generic one
+	input:  "select session_user(), system_user(), session_user (), system_user (), `session_user`() from t",
+	output: "select session_user(), system_user(), `session_user`(), `system_user`(), `session_user`() from t",
+}, {
+	input:  "select session_user, system_user from t",
+	output: "select `session_user`, `system_user` from t",
+}, {
+	// in identifier positions they name tables, indexes and procedures, as
+	// in MySQL
+	input:  "create table t (a int, index session_user(a), index system_user(a))",
+	output: "create table t (\n\ta int,\n\tkey `session_user` (a),\n\tkey `system_user` (a)\n)",
+}, {
+	input:  "create table session_user(a int)",
+	output: "create table `session_user` (\n\ta int\n)",
+}, {
+	input:  "create table system_user(a int)",
+	output: "create table `system_user` (\n\ta int\n)",
+}, {
+	input:  "call session_user(1)",
+	output: "call `session_user`(1)",
+}, {
+	input:  "call system_user(1)",
+	output: "call `system_user`(1)",
+}, {
+	input:  "insert into system_user(a) values (1)",
+	output: "insert into `system_user`(a) values (1)",
 }}
 
 func TestValid(t *testing.T) {
@@ -5528,7 +5649,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
-	s41 timestamp default now,
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -5589,12 +5710,13 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			// test now with and without ()
+			// test now() variants; bare now (without parens) is an
+			// identifier, like in MySQL
 			input: `create table t (
-	time1 timestamp default now,
+	time1 timestamp default now(),
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now on update now,
+	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,
@@ -6716,6 +6838,51 @@ var invalidSQL = []struct {
 }, {
 	input:  "select *, * from t",
 	output: "syntax error at position 12",
+}, {
+	// CAST is only a keyword when directly followed by '('; with a space it
+	// is an identifier and AS is not valid in a generic argument list.
+	input:  "select cast (1 as char)",
+	output: "syntax error at position 18 near 'as'",
+}, {
+	// the same for every name on MySQL's list whose built-in form has its own
+	// argument syntax: with whitespace, the generic argument list applies
+	input:  "select count (*) from t",
+	output: "syntax error at position 16",
+}, {
+	input:  "select position ('a' in 'abc') from t",
+	output: "syntax error at position 30 near 'abc'",
+}, {
+	input:  "select trim (leading 'a' from 'abc') from t",
+	output: "syntax error at position 21 near 'leading'",
+}, {
+	input:  "select date_add (now(), interval 1 day) from t",
+	output: "syntax error at position 40",
+}, {
+	input:  "select group_concat (distinct a) from t",
+	output: "syntax error at position 30 near 'distinct'",
+}, {
+	input:  "select substring ('abc' from 1) from t",
+	output: "syntax error at position 29 near 'from'",
+}, {
+	input:  "select extract (year from now()) from t",
+	output: "syntax error at position 26 near 'from'",
+}, {
+	// bare now (without parens) is an identifier, not the now() function
+	input:  "create table t (a datetime default now)",
+	output: "syntax error at position 39 near 'now'",
+}, {
+	// the user-information functions take no arguments; the keyword form
+	// does not fall back to a generic call
+	input:  "select session_user(1)",
+	output: "syntax error at position 22 near '1'",
+}, {
+	input:  "select system_user(1)",
+	output: "syntax error at position 21 near '1'",
+}, {
+	// a comment before the parenthesis separates the name from it, like
+	// whitespace does
+	input:  "select count/*c*/(*) from t",
+	output: "syntax error at position 20",
 }}
 
 func TestErrors(t *testing.T) {
@@ -7244,5 +7411,62 @@ func TestNationalStringRequiresSingleQuote(t *testing.T) {
 		require.True(t, ok, "%s: got %T", in, ae.Expr)
 		assert.True(t, col.Name.EqualString("n"), in)
 		assert.Equal(t, "foo", ae.As.String(), in)
+	}
+}
+
+// Every name MySQL lexes as a keyword only directly before '('
+// (mysqlFuncCallKeywords) is a keyword of this grammar whose call form parses
+// into a node of its own, so that a call by an identifier of the same spelling
+// is a generic FuncExpr and prints quoted.
+func TestFuncCallKeywords(t *testing.T) {
+	// arguments that satisfy each name's built-in syntax; "" means no arguments
+	args := map[string]string{
+		"cast": "a as char", "date_add": "a, interval 1 day", "date_sub": "a, interval 1 day", "adddate": "a, 1", "subdate": "a, 1",
+		"extract": "year from a", "position": "'a' in a", "trim": "a", "substring": "a, 1", "substr": "a, 1", "mid": "a, 1, 1",
+		"group_concat": "a", "json_objectagg": "a, b",
+	}
+	noArgs := map[string]bool{
+		"now": true, "curdate": true, "curtime": true, "sysdate": true, "session_user": true, "system_user": true,
+	}
+	parser := NewTestParser()
+	for _, name := range mysqlFuncCallKeywords {
+		t.Run(name, func(t *testing.T) {
+			id, ok := keywordLookupTable.LookupString(name)
+			require.True(t, ok, "not a keyword")
+			assert.True(t, isFuncCallKeyword(id))
+			assert.True(t, IsFuncCallKeywordName(name))
+
+			arg, ok := args[name]
+			if !ok && !noArgs[name] {
+				arg = "a"
+			}
+			stmt, err := parser.Parse(fmt.Sprintf("select %s(%s) from t", name, arg))
+			require.NoError(t, err)
+			expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+			assert.NotEqual(t, "*sqlparser.FuncExpr", fmt.Sprintf("%T", expr), "keyword form must not be a generic call")
+
+			// with whitespace before the parenthesis, or quoted, the name is
+			// an identifier and the call takes the generic argument syntax
+			// whatever the built-in's is; it prints quoted
+			quoted := fmt.Sprintf("select `%s`(a) from t", name)
+			for _, in := range []string{fmt.Sprintf("select %s (a) from t", name), quoted} {
+				stmt, err = parser.Parse(in)
+				require.NoError(t, err, in)
+				_, isGeneric := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr.(*FuncExpr)
+				assert.True(t, isGeneric, "%s must be a generic call", in)
+				assert.Equal(t, quoted, String(stmt), in)
+			}
+
+			// and bare, it is a column
+			stmt, err = parser.Parse(fmt.Sprintf("select %s from t", name))
+			require.NoError(t, err)
+			_, isColumn := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr.(*ColName)
+			assert.True(t, isColumn, "bare name must be a column")
+		})
+	}
+	for _, kw := range keywords {
+		if kw.id != UNUSED && isFuncCallKeyword(kw.id) {
+			assert.Contains(t, mysqlFuncCallKeywords, kw.name)
+		}
 	}
 }

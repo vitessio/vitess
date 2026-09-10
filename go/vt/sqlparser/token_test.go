@@ -246,6 +246,51 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+// The function-name rule reads its context from the input, not from the
+// tokens Lex handed to the parser, so Tokenizer.Scan callers see the same
+// stream the parser does: a name directly after '.' is an identifier, and a
+// dot separated from the name by whitespace or a comment does not qualify it.
+func TestFuncCallKeywordAfterDot(t *testing.T) {
+	testcases := []struct {
+		in  string
+		ids []int
+	}{{
+		in:  "db.cast(1)",
+		ids: []int{ID, '.', ID, '(', INTEGRAL, ')'},
+	}, {
+		in:  "`db`.count(1)",
+		ids: []int{ID, '.', ID, '(', INTEGRAL, ')'},
+	}, {
+		in:  "db. cast(1)",
+		ids: []int{ID, '.', CAST, '(', INTEGRAL, ')'},
+	}, {
+		in:  "db./*c*/cast(1)",
+		ids: []int{ID, '.', COMMENT, CAST, '(', INTEGRAL, ')'},
+	}, {
+		in:  "cast(1)",
+		ids: []int{CAST, '(', INTEGRAL, ')'},
+	}, {
+		in:  "cast (1)",
+		ids: []int{ID, '(', INTEGRAL, ')'},
+	}}
+
+	parser := NewTestParser()
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			tkn := parser.NewStringTokenizer(tcase.in)
+			var ids []int
+			for {
+				id, _ := tkn.Scan()
+				if id == 0 || id == LEX_ERROR {
+					break
+				}
+				ids = append(ids, id)
+			}
+			require.Equal(t, tcase.ids, ids)
+		})
+	}
+}
+
 func TestIntegerAndID(t *testing.T) {
 	testcases := []struct {
 		in  string

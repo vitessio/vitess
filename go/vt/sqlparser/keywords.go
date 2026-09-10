@@ -608,6 +608,7 @@ var keywords = []keyword{
 	{"sequence", SEQUENCE},
 	{"serializable", SERIALIZABLE},
 	{"session", SESSION},
+	{"session_user", SESSION_USER},
 	{"set", SET},
 	{"share", SHARE},
 	{"shared", SHARED},
@@ -665,6 +666,7 @@ var keywords = []keyword{
 	{"st_aswkb", ST_AsBinary},
 	{"st_aswkt", ST_AsText},
 	{"st_centroid", ST_Centroid},
+	{"st_collect", ST_COLLECT},
 	{"st_dimension", ST_Dimension},
 	{"st_endpoint", ST_EndPoint},
 	{"st_envelope", ST_Envelope},
@@ -727,6 +729,7 @@ var keywords = []keyword{
 	{"sum", SUM},
 	{"sysdate", SYSDATE},
 	{"system", UNUSED},
+	{"system_user", SYSTEM_USER},
 	{"table", TABLE},
 	{"table_name", TABLE_NAME},
 	{"tables", TABLES},
@@ -829,6 +832,85 @@ var keywords = []keyword{
 	{"year", YEAR},
 	{"year_month", YEAR_MONTH},
 	{"zerofill", ZEROFILL},
+}
+
+// mysqlFuncCallKeywords lists the function names that MySQL's lexer treats as
+// a keyword only when '(' follows the name directly. Anywhere else the name is
+// an ordinary identifier, so `name (` with whitespace before the parenthesis
+// is a generic call, MySQL's stored-function path, and a bare `name` is a
+// column. The list is the one under "Function Name Parsing and Resolution" in
+// the MySQL reference manual, plus json_arrayagg, json_objectagg and
+// st_collect, which MySQL 8.0 treats the same way. Every name must be a
+// keyword of the grammar whose call form parses into a node other than
+// FuncExpr, so that a FuncExpr by one of these names always stands for the
+// stored-function call (see FuncExpr.Format). sql_mode=IGNORE_SPACE, which
+// permits the whitespace and makes these names reserved, is not supported yet.
+var mysqlFuncCallKeywords = []string{
+	"adddate", "bit_and", "bit_or", "bit_xor", "cast", "count", "curdate", "curtime",
+	"date_add", "date_sub", "extract", "group_concat", "json_arrayagg", "json_objectagg",
+	"max", "mid", "min", "now", "position", "session_user", "st_collect", "std", "stddev",
+	"stddev_pop", "stddev_samp", "subdate", "substr", "substring", "sum", "sysdate",
+	"system_user", "trim", "variance", "var_pop", "var_samp",
+}
+
+// tokenSet is a set of token ids with constant-time membership, for the lexer.
+type tokenSet struct {
+	lo  int
+	has []bool
+}
+
+func (ts tokenSet) contains(id int) bool {
+	i := id - ts.lo
+	return i >= 0 && i < len(ts.has) && ts.has[i]
+}
+
+func newTokenSet(ids []int) tokenSet {
+	lo, hi := ids[0], ids[0]
+	for _, id := range ids {
+		lo, hi = min(lo, id), max(hi, id)
+	}
+	ts := tokenSet{lo: lo, has: make([]bool, hi-lo+1)}
+	for _, id := range ids {
+		ts.has[id-lo] = true
+	}
+	return ts
+}
+
+// funcCallKeywordTokens holds the tokens of the mysqlFuncCallKeywords names.
+var funcCallKeywordTokens = buildFuncCallKeywordTokens()
+
+func buildFuncCallKeywordTokens() tokenSet {
+	ids := make(map[string]int, len(keywords))
+	for _, kw := range keywords {
+		ids[kw.name] = kw.id
+	}
+	tokens := make([]int, 0, len(mysqlFuncCallKeywords))
+	for _, name := range mysqlFuncCallKeywords {
+		id, ok := ids[name]
+		if !ok {
+			panic(fmt.Sprintf("sqlparser: %s is in mysqlFuncCallKeywords but is not a keyword", name))
+		}
+		tokens = append(tokens, id)
+	}
+	return newTokenSet(tokens)
+}
+
+// isFuncCallKeyword reports whether the token is the keyword of one of the
+// mysqlFuncCallKeywords names: the lexer only produces it when '(' follows the
+// name directly, and returns an identifier otherwise.
+func isFuncCallKeyword(id int) bool {
+	return funcCallKeywordTokens.contains(id)
+}
+
+// IsFuncCallKeywordName reports whether name is one of the function names
+// that MySQL, and this lexer, treat as a keyword only directly before '('
+// (mysqlFuncCallKeywords). The keyword form of such a name parses into a node
+// of its own, so a generic FuncExpr by that name came with whitespace before
+// the parenthesis, quoted, or qualified: it is a call of a stored function by
+// that name, MySQL's to resolve, and serializes with the name quoted.
+func IsFuncCallKeywordName(name string) bool {
+	id, ok := keywordLookupTable.LookupString(name)
+	return ok && isFuncCallKeyword(id)
 }
 
 // keywordStrings contains the reverse mapping of token to keyword strings

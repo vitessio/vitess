@@ -596,6 +596,28 @@ func (cached *BitXor) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *BuiltinFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	size += cached.Name.CachedSize(false)
+	// field Exprs []vitess.io/vitess/go/vt/sqlparser.Expr
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
+		for _, elem := range cached.Exprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+
 func (cached *CallProc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -212,6 +212,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *BuiltinFuncExpr:
+		b, ok := inB.(*BuiltinFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBuiltinFuncExpr(a, b)
 	case *CallProc:
 		b, ok := inB.(*CallProc)
 		if !ok {
@@ -2197,6 +2203,18 @@ func (cmp *Comparator) RefOfBitXor(a, b *BitXor) bool {
 	}
 	return cmp.Expr(a.Arg, b.Arg) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
+}
+
+// RefOfBuiltinFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfBuiltinFuncExpr(a, b *BuiltinFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCI(a.Name, b.Name) &&
+		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfCallProc does deep equals between the two objects.
@@ -5834,6 +5852,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfAvg(a, b)
+	case *BuiltinFuncExpr:
+		b, ok := inB.(*BuiltinFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBuiltinFuncExpr(a, b)
 	case *CharExpr:
 		b, ok := inB.(*CharExpr)
 		if !ok {
@@ -6623,6 +6647,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return a == b
+	case *BuiltinFuncExpr:
+		b, ok := inB.(*BuiltinFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBuiltinFuncExpr(a, b)
 	case *CaseExpr:
 		b, ok := inB.(*CaseExpr)
 		if !ok {

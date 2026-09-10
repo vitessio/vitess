@@ -2840,7 +2840,12 @@ type (
 		As   *ConvertType
 	}
 
-	// FuncExpr represents a function call.
+	// FuncExpr represents a generic function call: a call by an identifier,
+	// whether a native function such as abs() or concat(), a user-defined or
+	// stored function, or a qualified call. The built-ins that MySQL lexes as
+	// a keyword only directly before '(' (IsFuncCallKeywordName) have nodes of
+	// their own; a FuncExpr by one of those names is MySQL's stored-function
+	// path and serializes with the name quoted.
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
@@ -2945,6 +2950,17 @@ type (
 	CurTimeFuncExpr struct {
 		Name IdentifierCI
 		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
+	}
+
+	// BuiltinFuncExpr is the keyword form of a built-in function with regular
+	// argument syntax that MySQL parses through a grammar rule of its own
+	// (session_user, system_user, st_collect), as opposed to a FuncExpr, which
+	// is a call by an identifier. It prints bare, since the bare name re-lexes
+	// as the keyword; the same name arriving quoted, qualified or with
+	// whitespace before the parenthesis is a FuncExpr and prints quoted.
+	BuiltinFuncExpr struct {
+		Name  IdentifierCI
+		Exprs []Expr
 	}
 
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
@@ -3666,6 +3682,7 @@ func (*TimestampDiffExpr) IsExpr()                  {}
 func (*ExtractFuncExpr) IsExpr()                    {}
 func (*WeightStringFuncExpr) IsExpr()               {}
 func (*CurTimeFuncExpr) IsExpr()                    {}
+func (*BuiltinFuncExpr) IsExpr()                    {}
 func (*CaseExpr) IsExpr()                           {}
 func (*ValuesFuncExpr) IsExpr()                     {}
 func (*CastExpr) IsExpr()                           {}
@@ -3764,6 +3781,7 @@ func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
+func (*BuiltinFuncExpr) iCallable()                    {}
 func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
 func (*TrimFuncExpr) iCallable()                       {}

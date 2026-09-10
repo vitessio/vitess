@@ -54,6 +54,16 @@ func TestTranslateSimplification(t *testing.T) {
 	}{
 		{"42", ok("42"), ok("42")},
 		{"1 + (1 + 1) * 8", ok("1 + (1 + 1) * 8"), ok("17")},
+		// the keyword form of a built-in evaluates here; a stored-function call by
+		// the same name (whitespace before the parenthesis, or quoted) is MySQL's
+		// to evaluate
+		{"session_user()", ok("session_user()"), ok("session_user()")},
+		{"system_user()", ok("system_user()"), ok("system_user()")},
+		{"curdate()", ok("curdate()"), ok("curdate()")},
+		{"session_user ()", err("not supported"), err("not supported")},
+		{"curdate ()", err("not supported"), err("not supported")},
+		{"now ()", err("not supported"), err("not supported")},
+		{"`now`()", err("not supported"), err("not supported")},
 		{"1.0e0 + (1 + 1) * 8.0e0", ok("1 + (1 + 1) * 8"), ok("17")},
 		{"'pokemon' LIKE 'poke%'", ok("'pokemon' like 'poke%'"), ok("1")},
 		{
