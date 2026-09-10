@@ -653,7 +653,7 @@ func TestReadFileInvalidDownloadFlags(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
@@ -715,23 +715,43 @@ func TestReadFileSSECHeaderForwarding(t *testing.T) {
 			return
 		}
 		if r.Method == "GET" {
-			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(testData)-1, len(testData)))
+			rangeHdr := r.Header.Get("Range")
+			if rangeHdr != "" {
+				var start, end int
+				fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+				if end >= len(testData) {
+					end = len(testData) - 1
+				}
+				chunk := testData[start : end+1]
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(testData)))
+				w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+				w.WriteHeader(http.StatusPartialContent)
+				w.Write(chunk)
+				return
+			}
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
 			w.WriteHeader(http.StatusOK)
 			w.Write(testData)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	originalBucket := bucket
 	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
 	defer func() {
 		bucket = originalBucket
 		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
 	}()
 	bucket = "test-bucket"
 	root = ""
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 2
 
 	s3Client := s3.New(s3.Options{
 		Region:       "us-east-1",
