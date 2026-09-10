@@ -465,6 +465,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRowAlias(in)
 	case *SRollback:
 		return CloneRefOfSRollback(in)
+	case *STCollect:
+		return CloneRefOfSTCollect(in)
 	case *Savepoint:
 		return CloneRefOfSavepoint(in)
 	case *Select:
@@ -2981,6 +2983,17 @@ func CloneRefOfSRollback(n *SRollback) *SRollback {
 	return &out
 }
 
+// CloneRefOfSTCollect creates a deep clone of the input.
+func CloneRefOfSTCollect(n *STCollect) *STCollect {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
 // CloneRefOfSavepoint creates a deep clone of the input.
 func CloneRefOfSavepoint(n *Savepoint) *Savepoint {
 	if n == nil {
@@ -3869,6 +3882,8 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return CloneRefOfMax(in)
 	case *Min:
 		return CloneRefOfMin(in)
+	case *STCollect:
+		return CloneRefOfSTCollect(in)
 	case *Std:
 		return CloneRefOfStd(in)
 	case *StdDev:
@@ -4097,6 +4112,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfRegexpReplaceExpr(in)
 	case *RegexpSubstrExpr:
 		return CloneRefOfRegexpSubstrExpr(in)
+	case *STCollect:
+		return CloneRefOfSTCollect(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
@@ -4447,6 +4464,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfRegexpReplaceExpr(in)
 	case *RegexpSubstrExpr:
 		return CloneRefOfRegexpSubstrExpr(in)
+	case *STCollect:
+		return CloneRefOfSTCollect(in)
 	case *Std:
 		return CloneRefOfStd(in)
 	case *StdDev:
@@ -4811,6 +4830,8 @@ func CloneWindowFunc(in WindowFunc) WindowFunc {
 		return CloneRefOfNTHValueExpr(in)
 	case *NtileExpr:
 		return CloneRefOfNtileExpr(in)
+	case *STCollect:
+		return CloneRefOfSTCollect(in)
 	case *Std:
 		return CloneRefOfStd(in)
 	case *StdDev:

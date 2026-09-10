@@ -3024,6 +3024,18 @@ func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *STCollect) Format(buf *TrackedBuffer) {
+	buf.WriteString("st_collect(")
+	if node.Distinct {
+		buf.literal(DistinctStr)
+	}
+	buf.astPrintf(node, "%v)", node.Arg)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
+// Format formats the node.
 func (node *JSONArrayAgg) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_arrayagg(%v)", node.Expr)
 	if node.OverClause != nil {

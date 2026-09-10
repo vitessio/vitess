@@ -7430,5 +7430,36 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "st_collect is an aggregate VTGate cannot combine across shards",
+    "query": "select st_collect(col) from user",
+    "plan": "VT12001: unsupported: in scatter query: aggregation function 'st_collect(col)'"
+  },
+  {
+    "comment": "st_collect on a single shard is pushed down",
+    "query": "select st_collect(col) from user where id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select st_collect(col) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select st_collect(col) from `user` where 1 != 1",
+        "Query": "select st_collect(col) from `user` where id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

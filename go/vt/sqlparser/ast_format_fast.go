@@ -3907,6 +3907,20 @@ func (node *JSONArrayExpr) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *STCollect) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_collect(")
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.FormatFast(buf)
+	}
+}
+
+// FormatFast formats the node.
 func (node *JSONArrayAgg) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_arrayagg(")
 	buf.printExpr(node, node.Expr, true)

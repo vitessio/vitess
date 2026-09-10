@@ -4270,6 +4270,10 @@ var validSQL = []struct {
 	input:  "select st_collect(g), st_collect (g), st_collect from t",
 	output: "select st_collect(g), `st_collect`(g), `st_collect` from t",
 }, {
+	// st_collect is an aggregate: one argument, distinct, and a window form
+	input:  "select ST_Collect(DISTINCT g), st_collect(g) over (partition by id) from t group by id",
+	output: "select st_collect(distinct g), st_collect(g) over (partition by id) from t group by id",
+}, {
 	// a qualified name is never a keyword: it names a stored function or a
 	// column in the schema, with or without whitespace before the parenthesis
 	input:  "select db.cast(1), t.`cast` from t",
@@ -6878,6 +6882,13 @@ var invalidSQL = []struct {
 }, {
 	input:  "select system_user(1)",
 	output: "syntax error at position 21 near '1'",
+}, {
+	// st_collect takes exactly one argument, as in MySQL
+	input:  "select st_collect() from t",
+	output: "syntax error at position 20",
+}, {
+	input:  "select st_collect(g, g) from t",
+	output: "syntax error at position 21",
 }, {
 	// a comment before the parenthesis separates the name from it, like
 	// whitespace does

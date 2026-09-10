@@ -416,6 +416,8 @@ const (
 	RefOfRowAliasTableName
 	RefOfRowAliasColumns
 	RefOfSRollbackName
+	RefOfSTCollectArg
+	RefOfSTCollectOverClause
 	RefOfSavepointName
 	RefOfSelectWith
 	RefOfSelectFromOffset
@@ -1401,6 +1403,10 @@ func (s ASTStep) DebugString() string {
 		return "(*RowAlias).Columns"
 	case RefOfSRollbackName:
 		return "(*SRollback).Name"
+	case RefOfSTCollectArg:
+		return "(*STCollect).Arg"
+	case RefOfSTCollectOverClause:
+		return "(*STCollect).OverClause"
 	case RefOfSavepointName:
 		return "(*Savepoint).Name"
 	case RefOfSelectWith:
@@ -2670,6 +2676,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*RowAlias).Columns
 		case RefOfSRollbackName:
 			node = node.(*SRollback).Name
+		case RefOfSTCollectArg:
+			node = node.(*STCollect).Arg
+		case RefOfSTCollectOverClause:
+			node = node.(*STCollect).OverClause
 		case RefOfSavepointName:
 			node = node.(*Savepoint).Name
 		case RefOfSelectWith:

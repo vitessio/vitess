@@ -1352,6 +1352,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfSRollback(a, b)
+	case *STCollect:
+		b, ok := inB.(*STCollect)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSTCollect(a, b)
 	case *Savepoint:
 		b, ok := inB.(*Savepoint)
 		if !ok {
@@ -4554,6 +4560,19 @@ func (cmp *Comparator) RefOfSRollback(a, b *SRollback) bool {
 	return cmp.IdentifierCI(a.Name, b.Name)
 }
 
+// RefOfSTCollect does deep equals between the two objects.
+func (cmp *Comparator) RefOfSTCollect(a, b *STCollect) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
+}
+
 // RefOfSavepoint does deep equals between the two objects.
 func (cmp *Comparator) RefOfSavepoint(a, b *Savepoint) bool {
 	if a == b {
@@ -5624,6 +5643,12 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 			return false
 		}
 		return cmp.RefOfMin(a, b)
+	case *STCollect:
+		b, ok := inB.(*STCollect)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSTCollect(a, b)
 	case *Std:
 		b, ok := inB.(*Std)
 		if !ok {
@@ -6266,6 +6291,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfRegexpSubstrExpr(a, b)
+	case *STCollect:
+		b, ok := inB.(*STCollect)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSTCollect(a, b)
 	case *SubstrExpr:
 		b, ok := inB.(*SubstrExpr)
 		if !ok {
@@ -7169,6 +7200,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfRegexpSubstrExpr(a, b)
+	case *STCollect:
+		b, ok := inB.(*STCollect)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSTCollect(a, b)
 	case *Std:
 		b, ok := inB.(*Std)
 		if !ok {
@@ -8051,6 +8088,12 @@ func (cmp *Comparator) WindowFunc(inA, inB WindowFunc) bool {
 			return false
 		}
 		return cmp.RefOfNtileExpr(a, b)
+	case *STCollect:
+		b, ok := inB.(*STCollect)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSTCollect(a, b)
 	case *Std:
 		b, ok := inB.(*Std)
 		if !ok {

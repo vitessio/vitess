@@ -4287,6 +4287,23 @@ func (cached *SRollback) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *STCollect) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
+
 func (cached *Savepoint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

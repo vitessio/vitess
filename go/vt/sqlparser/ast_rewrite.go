@@ -465,6 +465,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRowAlias(parent, node, replacer)
 	case *SRollback:
 		return a.rewriteRefOfSRollback(parent, node, replacer)
+	case *STCollect:
+		return a.rewriteRefOfSTCollect(parent, node, replacer)
 	case *Savepoint:
 		return a.rewriteRefOfSavepoint(parent, node, replacer)
 	case *Select:
@@ -11283,6 +11285,55 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfSTCollect(parent SQLNode, node *STCollect, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSTCollectArg))
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*STCollect).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSTCollectOverClause))
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*STCollect).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -15141,6 +15192,8 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *Min:
 		return a.rewriteRefOfMin(parent, node, replacer)
+	case *STCollect:
+		return a.rewriteRefOfSTCollect(parent, node, replacer)
 	case *Std:
 		return a.rewriteRefOfStd(parent, node, replacer)
 	case *StdDev:
@@ -15373,6 +15426,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
 	case *RegexpSubstrExpr:
 		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
+	case *STCollect:
+		return a.rewriteRefOfSTCollect(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
@@ -15737,6 +15792,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
 	case *RegexpSubstrExpr:
 		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
+	case *STCollect:
+		return a.rewriteRefOfSTCollect(parent, node, replacer)
 	case *Std:
 		return a.rewriteRefOfStd(parent, node, replacer)
 	case *StdDev:
@@ -16121,6 +16178,8 @@ func (a *application) rewriteWindowFunc(parent SQLNode, node WindowFunc, replace
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NtileExpr:
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
+	case *STCollect:
+		return a.rewriteRefOfSTCollect(parent, node, replacer)
 	case *Std:
 		return a.rewriteRefOfStd(parent, node, replacer)
 	case *StdDev:

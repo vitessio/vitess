@@ -6922,6 +6922,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONArrayAgg{Expr: $3, OverClause: $5}
   }
+| ST_COLLECT openb distinct_opt expression closeb over_clause_opt
+  {
+    $$ = &STCollect{Distinct: $3, Arg: $4, OverClause: $6}
+  }
 | JSON_OBJECTAGG openb expression ',' expression closeb over_clause_opt
   {
     $$ = &JSONObjectAgg{Key: $3, Value: $5, OverClause: $7}
@@ -6997,10 +7001,6 @@ UTC_DATE func_paren_opt
 | JSON_ARRAY openb expression_list_opt closeb
   {
     $$ = &JSONArrayExpr{ Params:$3 }
-  }
-| ST_COLLECT openb expression_list_opt closeb
-  {
-    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("st_collect"), Exprs: $3}
   }
 | ST_AsBinary openb expression closeb
   {
