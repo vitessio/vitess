@@ -1387,6 +1387,18 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		require.EqualValues(t, 1, warnings.Load())
 	})
 
+	t.Run("a CRL without a due date is not warned about", func(t *testing.T) {
+		// The nextUpdate field is optional, and a CRL without one
+		// parses with a zero due date, which every moment is past.
+		crl := loadOneCRL(t, certs.ServerCRL)
+		require.True(t, crl.NextUpdate.IsZero(), "the fixture CRL must carry no nextUpdate for this test to be meaningful")
+		checker, err := newCRLCheckerFrom([]*x509.RevocationList{crl}, nil)
+		require.NoError(t, err)
+		require.False(t, checker.isRevoked(cert, crl))
+		_, found := expiredCRLWarnings.Load(expiredCRLKey(crl))
+		require.False(t, found, "a CRL without a due date was warned about as past it")
+	})
+
 	t.Run("CRLs that differ in content alone are told apart", func(t *testing.T) {
 		// The CRL number is optional, so two CRLs of one issuer due
 		// at the same time can carry the same number, or none.

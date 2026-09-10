@@ -227,9 +227,11 @@ func warnExpiredCRL(crl *x509.RevocationList, key string) {
 }
 
 // isRevoked reports whether crl, which has to be one of the checker's,
-// lists cert, warning when the CRL is past its due date.
+// lists cert, warning when the CRL is past its due date. A CRL
+// without a nextUpdate, which RFC 5280 has issuers include but
+// leaves optional, has no due date to be past.
 func (c *crlChecker) isRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
-	if !time.Now().Before(crl.NextUpdate) {
+	if !crl.NextUpdate.IsZero() && !time.Now().Before(crl.NextUpdate) {
 		warnExpiredCRL(crl, c.warningKeys[crl])
 	}
 	_, revoked := c.revokedSerials[crl][cert.SerialNumber.String()]
