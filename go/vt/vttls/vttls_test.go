@@ -652,6 +652,48 @@ func TestCRLCheckerRejectedChainsLeaveNoBindings(t *testing.T) {
 	require.Zero(t, bindings, "the rejected chains left bindings behind")
 }
 
+// TestCRLCheckerBoundsTheBindings checks that the bindings kept for
+// the issuers found in verified chains are bounded in number: a peer
+// that holds the key of a permitted intermediate can present a CA
+// certificate minted under it on every connection, each of which Go
+// verifies, and none of which may be kept for the life of the
+// configuration once enough are.
+func TestCRLCheckerBoundsTheBindings(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	intermediate := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	intermediateKey := keyPair.PrivateKey.(*ecdsa.PrivateKey)
+	checker, err := newCRLChecker(certs.ServerCRL, path.Join(root, "ca-cert.pem"))
+	require.NoError(t, err)
+
+	subCAKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	for i := range maxBoundIssuers + 5 {
+		subCADER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(int64(100 + i)),
+			Subject:               pkix.Name{CommonName: fmt.Sprintf("Sub CA %d", i)},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}, intermediate, &subCAKey.PublicKey, intermediateKey)
+		require.NoError(t, err)
+		subCA, err := x509.ParseCertificate(subCADER)
+		require.NoError(t, err)
+		leaf := signedLeaf(t, subCA, subCAKey, int64(maxBoundIssuers+100+i), fmt.Sprintf("leaf%d.example.com", i))
+
+		require.NoError(t, checker.check([][]*x509.Certificate{{leaf, subCA, intermediate, rootCert}}))
+	}
+	bindings := 0
+	checker.bound.Range(func(any, any) bool { bindings++; return true })
+	require.LessOrEqual(t, bindings, maxBoundIssuers)
+	require.Positive(t, bindings)
+}
+
 // selfSignedCA returns a self-signed CA certificate and its key, with
 // the given serial number and common name, or with rawSubject as its
 // subject when it is set.

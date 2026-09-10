@@ -28,6 +28,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -66,8 +67,10 @@ type (
 		// as a crlBinding, kept from the first connection through
 		// that issuer for the ones after it: neither the CRLs nor
 		// the certificate change. Only the issuers of verified
-		// chains get in, which the trusted CAs issued.
-		bound sync.Map
+		// chains get in, which the trusted CAs issued, and at most
+		// maxBoundIssuers of them, counted by boundIssuers.
+		bound        sync.Map
+		boundIssuers atomic.Int64
 		// revokedSerials indexes the serial numbers each CRL
 		// revokes, so that a handshake looks a certificate up
 		// rather than scanning a CRL that may hold many entries.
@@ -105,6 +108,13 @@ type (
 var expiredCRLWarnings sync.Map
 
 const expiredCRLWarningInterval = time.Minute
+
+// maxBoundIssuers bounds how many issuers found in verified chains
+// have their bindings kept, see crlChecker.bound: a peer that holds
+// the key of a permitted intermediate can present a CA certificate
+// minted under it on every connection, and the ones past the bound
+// are bound again on each connection rather than kept.
+const maxBoundIssuers = 1024
 
 // crlClockSkew is how far in the future a CRL's thisUpdate may lie
 // and still count as current, to allow for the clocks of the CA and
@@ -486,7 +496,11 @@ func (c *crlChecker) crlsOf(issuer *x509.Certificate) ([]*x509.RevocationList, e
 		return binding.crls, binding.err
 	}
 	crls, err := c.bindCRLs(issuer)
-	c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err})
+	if c.boundIssuers.Load() < maxBoundIssuers {
+		if _, loaded := c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err}); !loaded {
+			c.boundIssuers.Add(1)
+		}
+	}
 	return crls, err
 }
 
