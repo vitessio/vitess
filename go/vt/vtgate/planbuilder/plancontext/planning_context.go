@@ -269,7 +269,6 @@ func (ctx *PlanningContext) IsAggr(e sqlparser.SQLNode) bool {
 	case sqlparser.AggrFunc:
 		return true
 	case *sqlparser.FuncExpr:
-		// a qualified call names a stored function, never the aggregate UDF
 		return node.Qualifier.IsEmpty() && node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
 	}
 
