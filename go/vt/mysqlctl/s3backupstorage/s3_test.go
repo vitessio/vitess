@@ -1303,9 +1303,12 @@ func TestReadFileCloseDuringInflightRead(t *testing.T) {
 	// in-flight part download. This is the case that matters for stripe cleanup
 	// and pgzip read-ahead: a reader is blocked in Read, and another goroutine
 	// calls Close to abort it.
+	//
+	// The read runs in a goroutine so it blocks on the stalled second part.
+	// The main goroutine waits for the stall to begin, then calls Close and
+	// asserts that both the read and close return promptly.
 	const objectSize = 24 * 1024 * 1024
-	var firstPart sync.WaitGroup
-	firstPart.Add(1)
+	stallStarted := make(chan struct{})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "HEAD" {
@@ -1326,15 +1329,17 @@ func TestReadFileCloseDuringInflightRead(t *testing.T) {
 			w.WriteHeader(http.StatusPartialContent)
 			if start == 0 {
 				w.Write(chunk)
-				firstPart.Done()
 				return
 			}
-			// Stall all parts after the first — simulate a slow download.
-			// Use a short timeout: the test verifies that Close() returns
-			// promptly, not that the server hangs forever.
+			// Signal that a non-first part is stalling, then block until
+			// the request context is cancelled (by Close) or 30s elapses.
+			select {
+			case stallStarted <- struct{}{}:
+			default:
+			}
 			select {
 			case <-r.Context().Done():
-			case <-time.After(5 * time.Second):
+			case <-time.After(30 * time.Second):
 			}
 			return
 		}
@@ -1383,28 +1388,41 @@ func TestReadFileCloseDuringInflightRead(t *testing.T) {
 	rc, err := bh.ReadFile(t.Context(), "testfile")
 	require.NoError(t, err)
 
-	// Read through the first part. The transfer manager issues GETs lazily
-	// (on first Read), so we must read to trigger the downloads.
-	buf := make([]byte, 64*1024)
-	var totalRead int
-	for totalRead < 8*1024*1024 {
-		n, readErr := rc.Read(buf)
-		totalRead += n
-		if readErr != nil {
-			break
+	// Start reading in a goroutine. It will consume the first part, then
+	// block on the second part which is stalled by the server.
+	readErr := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 64*1024)
+		for {
+			_, err := rc.Read(buf)
+			if err != nil {
+				readErr <- err
+				return
+			}
 		}
-	}
-	// Ensure the first part was actually served before we test Close behavior.
-	firstPart.Wait()
+	}()
 
-	// Close from another goroutine while Read would block on the stalled part.
-	// This must return promptly (context cancellation aborts the in-flight GET).
-	done := make(chan error, 1)
-	go func() { done <- rc.Close() }()
+	// Wait for the server to confirm a non-first part is stalling.
 	select {
-	case <-done:
+	case <-stallStarted:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for a stalled range request to begin")
+	}
+
+	// Close while Read is blocked on the stalled part.
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- rc.Close() }()
+	select {
+	case <-closeDone:
 	case <-time.After(10 * time.Second):
 		t.Fatal("Close() did not return within 10s — in-flight download was not aborted")
+	}
+
+	// The blocked Read must also unblock promptly.
+	select {
+	case <-readErr:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Read() did not return within 10s after Close()")
 	}
 }
 
