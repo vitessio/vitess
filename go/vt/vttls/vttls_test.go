@@ -1548,199 +1548,143 @@ func TestCRLCheckerCRLWithoutAuthorityKeyIdentifier(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, checker.check(chain))
 	})
-}
 
-// TestNewCRLCheckerIssuerNameEncoding checks that a CRL signed by a
-// configured CA whose issuer name is encoded differently from that
-// certificate's subject, as a CRL that another tool than the CA's
-// wrote can be, is refused rather than left silently unapplied: the
-// names are matched byte for byte, so nothing would read it. A CRL
-// from a CA that is not configured still loads, since it may be an
-// intermediate's that peers present.
-func TestNewCRLCheckerIssuerNameEncoding(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	ca := loadOneCert(t, certs.ServerCA)
-	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	// A CRL that the issuer's key signed under another key's
+	// identifier: the identifiers are what tells a CRL apart, and
+	// they are compared before the signature, so that a certificate
+	// presented under an issuer's name with another key costs no
+	// signature check per CRL of that issuer.
+	mislabeled := *ca
+	mislabeled.SubjectKeyId = other.SubjectKeyId
+	mislabeledDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:                    big.NewInt(1),
+		ThisUpdate:                time.Now().Add(-time.Hour),
+		NextUpdate:                time.Now().Add(time.Hour),
+		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: revokedLeaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+	}, &mislabeled, keyPair.PrivateKey.(crypto.Signer))
 	require.NoError(t, err)
-	renamed := *ca
-	renamed.RawSubject = utf8CommonName(t, ca.Subject.CommonName)
-	require.NotEqual(t, ca.RawSubject, renamed.RawSubject, "the CA's subject must not be a UTF8String already for this test to be meaningful")
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:     big.NewInt(1),
-		ThisUpdate: time.Now().Add(-time.Hour),
-		NextUpdate: time.Now().Add(time.Hour),
-	}, &renamed, keyPair.PrivateKey.(crypto.Signer))
+	mislabeledCRL, err := x509.ParseRevocationList(mislabeledDER)
 	require.NoError(t, err)
+	require.NoError(t, mislabeledCRL.CheckSignatureFrom(ca), "the issuer must validate the CRL for this test to be meaningful")
 
-	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
-	require.ErrorContains(t, err, "the CRL from issuer "+ca.Subject.CommonName+" is signed by the configured CA certificate "+ca.Subject.CommonName+", but its issuer name is encoded differently from that certificate's subject")
-
-	_, err = newCRLChecker(certs.ClientCRL, certs.ServerCA)
-	require.NoError(t, err, "a CRL from a CA that is not configured loads")
-
-	t.Run("a configured CA that carries the CRL's issuer name as encoded does not hide the mismatch", func(t *testing.T) {
-		// Two CAs are configured under one name, encoded as a
-		// PrintableString by one and as a UTF8String by the other.
-		// The second signs a CRL with the first's encoding as its
-		// issuer name: the first passes the CRL over, since the
-		// CRL names another key, and the second never sees it.
-		printable, _ := selfSignedCA(t, 1, "Shared CA", nil)
-		utf8, utf8Key := selfSignedCA(t, 2, "", utf8CommonName(t, "Shared CA"))
-		require.NotEqual(t, printable.RawSubject, utf8.RawSubject)
-		signer := *utf8
-		signer.RawSubject = printable.RawSubject
-		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-			Number:     big.NewInt(1),
-			ThisUpdate: time.Now().Add(-time.Hour),
-			NextUpdate: time.Now().Add(time.Hour),
-		}, &signer, utf8Key)
+	t.Run("a CRL under another key's identifier is passed over before its signature is checked when its issuer is only in the chain", func(t *testing.T) {
+		checker, err := newCRLChecker(crlFile(t, mislabeledDER), "")
 		require.NoError(t, err)
-		bundle := path.Join(t.TempDir(), "bundle.pem")
-		require.NoError(t, os.WriteFile(bundle, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: printable.Raw}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: utf8.Raw})...), 0o600))
-
-		_, err = newCRLChecker(crlFile(t, der), bundle)
-		require.ErrorContains(t, err, "is signed by the configured CA certificate Shared CA, but its issuer name is encoded differently from that certificate's subject")
+		require.NoError(t, checker.check(chain))
 	})
 
-	t.Run("a configured certificate of the same key under another encoding does not hide the mismatch", func(t *testing.T) {
-		// One key certified twice under one name, encoded as a
-		// PrintableString by one tool and as a UTF8String by
-		// another, as a CA renewed with its key is, with the CRL
-		// still written against the old certificate: a leaf issued
-		// under the new one chains to the new certificate alone,
-		// which the CRL, applied by the old one, is not bound to.
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		require.NoError(t, err)
-		certify := func(serial int64, rawSubject []byte) *x509.Certificate {
-			template := &x509.Certificate{
-				SerialNumber:          big.NewInt(serial),
-				Subject:               pkix.Name{CommonName: "Renewed CA"},
-				RawSubject:            rawSubject,
-				NotBefore:             time.Now().Add(-time.Hour),
-				NotAfter:              time.Now().Add(time.Hour),
-				IsCA:                  true,
-				BasicConstraintsValid: true,
-				KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-			}
-			der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-			require.NoError(t, err)
-			cert, err := x509.ParseCertificate(der)
-			require.NoError(t, err)
-			return cert
-		}
-		old := certify(1, nil)
-		renewed := certify(2, utf8CommonName(t, "Renewed CA"))
-		require.NotEqual(t, old.RawSubject, renewed.RawSubject)
-		require.Equal(t, old.SubjectKeyId, renewed.SubjectKeyId)
-		leaf := signedLeaf(t, renewed, key, 3, "leaf.example.com")
+	t.Run("a CRL under another key's identifier that the configured issuer's key signed is refused", func(t *testing.T) {
+		// Passed over, every CRL of a CA whose tool writes another
+		// identifier than the certificate's would enforce nothing,
+		// silently.
+		_, err := newCRLChecker(crlFile(t, mislabeledDER), certs.ServerCA)
+		require.ErrorContains(t, err, "the CRL from issuer "+ca.Subject.CommonName+" names another key than the configured CA certificate's as its authority, yet that certificate's key signed it")
+	})
+}
+
+// TestCRLCheckerIssuerWithoutSubjectKeyIdentifier checks that a CA
+// certificate without a subject key identifier is told from another
+// key by the identifier derived from its key, as RFC 5280 derives
+// it, so that a CRL naming that identifier binds to it and one
+// naming another key is passed over without a signature check, as
+// with a certificate that carries its identifier.
+func TestCRLCheckerIssuerWithoutSubjectKeyIdentifier(t *testing.T) {
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "No SKI CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	withIdentifier, err := x509.CreateCertificate(rand.Reader, template, template, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+	ca := withoutSubjectKeyIdentifier(t, withIdentifier, caKey)
+	require.Empty(t, ca.SubjectKeyId)
+	leaf := signedLeaf(t, ca, caKey, 2, "leaf.example.com")
+	chain := [][]*x509.Certificate{{leaf, ca}}
+	crlNaming := func(authorityKeyID []byte) []byte {
+		signer := *ca
+		signer.SubjectKeyId = authorityKeyID
 		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
 			Number:                    big.NewInt(1),
 			ThisUpdate:                time.Now().Add(-time.Hour),
 			NextUpdate:                time.Now().Add(time.Hour),
 			RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
-		}, old, key)
+		}, &signer, caKey)
 		require.NoError(t, err)
-		bundle := path.Join(t.TempDir(), "bundle.pem")
-		require.NoError(t, os.WriteFile(bundle, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: old.Raw}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: renewed.Raw})...), 0o600))
+		return der
+	}
+	derived := keyIdentifier(ca)
+	require.NotEmpty(t, derived)
 
-		_, err = newCRLChecker(crlFile(t, der), bundle)
-		require.ErrorContains(t, err, "is signed by the configured CA certificate Renewed CA, but its issuer name is encoded differently from that certificate's subject")
+	t.Run("a CRL naming the derived identifier binds", func(t *testing.T) {
+		checker, err := newCRLChecker(crlFile(t, crlNaming(derived)), "")
+		require.NoError(t, err)
+		err = checker.check(chain)
+		require.ErrorContains(t, err, "Certificate revoked: CommonName=leaf.example.com")
+	})
+
+	t.Run("a CRL naming another key is passed over", func(t *testing.T) {
+		other, _ := selfSignedCA(t, 3, "Other", nil)
+		checker, err := newCRLChecker(crlFile(t, crlNaming(other.SubjectKeyId)), "")
+		require.NoError(t, err)
+		require.NoError(t, checker.check(chain))
 	})
 }
 
-// TestNewCRLCheckerSameKeyUnderAnotherName checks that a CRL from a
-// CA certificate that carries the key of a configured one under
-// another name, as a cross-certificate does, is not taken for an
-// encoding mismatch: it loads, and it is bound to its own certificate
-// the first time a chain carries it.
-func TestNewCRLCheckerSameKeyUnderAnotherName(t *testing.T) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	certify := func(serial int64, commonName string, parent *x509.Certificate) *x509.Certificate {
-		template := &x509.Certificate{
-			SerialNumber:          big.NewInt(serial),
-			Subject:               pkix.Name{CommonName: commonName},
-			NotBefore:             time.Now().Add(-time.Hour),
-			NotAfter:              time.Now().Add(time.Hour),
-			IsCA:                  true,
-			BasicConstraintsValid: true,
-			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		}
-		if parent == nil {
-			parent = template
-		}
-		der, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, key)
-		require.NoError(t, err)
-		cert, err := x509.ParseCertificate(der)
-		require.NoError(t, err)
-		return cert
-	}
-	x := certify(1, "X", nil)
-	xCross := certify(2, "X Cross", x)
-	leaf := signedLeaf(t, xCross, key, 3, "leaf.example.com")
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:                    big.NewInt(1),
-		ThisUpdate:                time.Now().Add(-time.Hour),
-		NextUpdate:                time.Now().Add(time.Hour),
-		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
-	}, xCross, key)
-	require.NoError(t, err)
-	xFile := path.Join(t.TempDir(), "x-cert.pem")
-	require.NoError(t, os.WriteFile(xFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: x.Raw}), 0o600))
-
-	checker, err := newCRLChecker(crlFile(t, der), xFile)
-	require.NoError(t, err)
-	err = checker.check([][]*x509.Certificate{{leaf, xCross, x}})
-	require.ErrorContains(t, err, "Certificate revoked: CommonName=leaf.example.com")
-}
-
-// TestNewCRLCheckerIssuerNameEncodingWithoutCRLSign checks that a
-// configured CA certificate that is not allowed to sign CRLs does not
-// hide a differently encoded CRL that its key signed: the CRL is told
-// by the key, whatever the certificate's key usage says.
-func TestNewCRLCheckerIssuerNameEncodingWithoutCRLSign(t *testing.T) {
-	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	caTemplate := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "No CRL Signing CA"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageCertSign,
-	}
-	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
-	require.NoError(t, err)
-	ca, err := x509.ParseCertificate(caDER)
-	require.NoError(t, err)
-	caFile := path.Join(t.TempDir(), "ca-cert.pem")
-	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw}), 0o600))
-	signer := *ca
-	signer.KeyUsage |= x509.KeyUsageCRLSign
-	signer.RawSubject = utf8CommonName(t, ca.Subject.CommonName)
-	require.NotEqual(t, ca.RawSubject, signer.RawSubject)
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:     big.NewInt(1),
-		ThisUpdate: time.Now().Add(-time.Hour),
-		NextUpdate: time.Now().Add(time.Hour),
-	}, &signer, caKey)
-	require.NoError(t, err)
-
-	_, err = newCRLChecker(crlFile(t, der), caFile)
-	require.ErrorContains(t, err, "the CRL from issuer No CRL Signing CA is signed by the configured CA certificate No CRL Signing CA, but its issuer name is encoded differently from that certificate's subject")
-}
-
-// utf8CommonName encodes a distinguished name made of the given
-// common name alone, written as a UTF8String.
-func utf8CommonName(t *testing.T, commonName string) []byte {
+// withoutSubjectKeyIdentifier re-signs the self-signed certificate
+// encoded in der with key, leaving the subject key identifier
+// extension out, which Go's constructor always writes for a CA.
+func withoutSubjectKeyIdentifier(t *testing.T, der []byte, key *ecdsa.PrivateKey) *x509.Certificate {
 	t.Helper()
-	raw, err := asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
-		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
-		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(commonName)},
-	}}})
+	type validity struct {
+		NotBefore, NotAfter time.Time
+	}
+	type publicKeyInfo struct {
+		Algorithm pkix.AlgorithmIdentifier
+		PublicKey asn1.BitString
+	}
+	type tbsCertificate struct {
+		Version            int `asn1:"optional,explicit,default:0,tag:0"`
+		SerialNumber       *big.Int
+		SignatureAlgorithm pkix.AlgorithmIdentifier
+		Issuer             asn1.RawValue
+		Validity           validity
+		Subject            asn1.RawValue
+		PublicKey          publicKeyInfo
+		Extensions         []pkix.Extension `asn1:"omitempty,optional,explicit,tag:3"`
+	}
+	signed, err := x509.ParseCertificate(der)
 	require.NoError(t, err)
-	return raw
+	var tbs tbsCertificate
+	rest, err := asn1.Unmarshal(signed.RawTBSCertificate, &tbs)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+	tbs.Extensions = slices.DeleteFunc(tbs.Extensions, func(extension pkix.Extension) bool {
+		return extension.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 14})
+	})
+	tbsDER, err := asn1.Marshal(tbs)
+	require.NoError(t, err)
+	digest := sha256.Sum256(tbsDER)
+	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
+	require.NoError(t, err)
+	certDER, err := asn1.Marshal(struct {
+		TBSCertificate     asn1.RawValue
+		SignatureAlgorithm pkix.AlgorithmIdentifier
+		SignatureValue     asn1.BitString
+	}{
+		TBSCertificate:     asn1.RawValue{FullBytes: tbsDER},
+		SignatureAlgorithm: tbs.SignatureAlgorithm,
+		SignatureValue:     asn1.BitString{Bytes: signature, BitLength: len(signature) * 8},
+	})
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cert
 }
 
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no

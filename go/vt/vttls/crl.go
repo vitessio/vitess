@@ -18,9 +18,11 @@ package vttls
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
@@ -298,6 +300,19 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the configured CA certificate %s: %v", issuer.Subject.CommonName, err)
 		}
 		checker.configured[string(issuer.Raw)] = issuerCRLs
+		// A CRL under the certificate's name that names another key
+		// as its authority is passed over as another CA's, without
+		// its signature being looked at; when the certificate's key
+		// signed it all the same, its authority key identifier is
+		// wrong, and passed over, every CRL of a CA whose tool
+		// writes such identifiers would enforce nothing, silently.
+		// The key is checked once here, for the configured
+		// certificates, and such a CRL refused.
+		for _, crl := range checker.crlsByIssuer[string(issuer.RawSubject)] {
+			if namesAnotherKey(crl, issuer) && issuer.CheckSignature(crl.SignatureAlgorithm, crl.RawTBSRevocationList, crl.Signature) == nil {
+				return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRL from issuer %s names another key than the configured CA certificate's as its authority, yet that certificate's key signed it: re-issue the CRL with the certificate's subject key identifier as its authority key identifier", crl.Issuer.CommonName)
+			}
+		}
 	}
 	// A CRL that a configured certificate's key signed while the
 	// CRL's issuer name is the certificate's subject in another
@@ -377,6 +392,35 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 	return checker, nil
 }
 
+// namesAnotherKey reports whether crl names, as its authority,
+// another key than issuer's: the CRL then belongs to another CA
+// under the same name, as the CRL of a re-keyed CA's predecessor
+// does. A CRL without an authority key identifier names no key.
+func namesAnotherKey(crl *x509.RevocationList, issuer *x509.Certificate) bool {
+	return len(crl.AuthorityKeyId) > 0 && !bytes.Equal(crl.AuthorityKeyId, keyIdentifier(issuer))
+}
+
+// keyIdentifier returns the identifier of cert's key that a CRL it
+// signed names as its authority: the subject key identifier the
+// certificate carries or, for one that carries none, the identifier
+// that RFC 5280 section 4.2.1.2 derives from the key, the SHA-1 of
+// the bits of the subject public key, which is what the tools that
+// write CRLs derive as well.
+func keyIdentifier(cert *x509.Certificate) []byte {
+	if len(cert.SubjectKeyId) > 0 {
+		return cert.SubjectKeyId
+	}
+	var info struct {
+		Algorithm pkix.AlgorithmIdentifier
+		PublicKey asn1.BitString
+	}
+	if _, err := asn1.Unmarshal(cert.RawSubjectPublicKeyInfo, &info); err != nil {
+		return nil
+	}
+	digest := sha1.Sum(info.PublicKey.RightAlign()) //nolint:gosec // The identifier, not a security property.
+	return digest[:]
+}
+
 // revokedAnchorWarnings holds, by DER encoding, the configured CA
 // certificates already warned about being revoked: a checker is
 // built for every configuration, which the MySQL client does for
@@ -400,23 +444,25 @@ func warnRevokedAnchor(cert *x509.Certificate, revoked string) {
 
 // bindCRLs returns the CRLs that issuer validates, the newest complete
 // one for each scope, among the CRLs that carry its subject as their
-// issuer. A CRL is bound by its signature, which the issuer has to be
-// allowed to make, with the cRLSign key usage. A CRL under the
-// issuer's name that it does not validate is refused rather than
-// passed over, since nothing else tells a CRL of the issuer's that
-// has gone bad from another CA's under the same name, and the check
-// fails closed; except when the CRL's authority key identifier names
-// another key than the issuer's, which is what the CRL of a re-keyed
-// CA's predecessor does.
+// issuer. A CRL whose authority key identifier names another key
+// than the issuer's is another CA's under the same name, as the CRL
+// of a re-keyed CA's predecessor is, and is passed over before its
+// signature is looked at, so that a certificate carrying an issuer's
+// name with another key costs no signature check per CRL. The other
+// CRLs are bound by their signature, which the issuer has to be
+// allowed to make, with the cRLSign key usage, and one that the
+// issuer does not validate is refused rather than passed over, since
+// nothing else tells a CRL of the issuer's that has gone bad from
+// another CA's under the same name, and the check fails closed.
 func (c *crlChecker) bindCRLs(issuer *x509.Certificate) ([]*x509.RevocationList, error) {
 	var crls []*x509.RevocationList
 	for _, crl := range c.crlsByIssuer[string(issuer.RawSubject)] {
+		if namesAnotherKey(crl, issuer) {
+			continue
+		}
 		err := crl.CheckSignatureFrom(issuer)
 		if err == nil {
 			crls = append(crls, crl)
-			continue
-		}
-		if len(crl.AuthorityKeyId) > 0 && len(issuer.SubjectKeyId) > 0 && !bytes.Equal(crl.AuthorityKeyId, issuer.SubjectKeyId) {
 			continue
 		}
 		// CheckSignatureFrom returns the violation as is, unwrapped.
