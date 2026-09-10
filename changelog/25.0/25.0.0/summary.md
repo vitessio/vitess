@@ -643,6 +643,7 @@ Along with that:
 - A trust anchor, that is, a CA certificate in the CA file that a chain ends at, is trusted as configured and not checked against a CRL of its own issuer. To have an intermediate CA checked against the root's CRL, configure the root alone, and have peers present the intermediate.
 - When a CRL file holds several complete CRLs from one issuer, only the newest applies, as a complete CRL supersedes the ones issued before it; they used to be combined.
 - A CRL only applies when the certificate of its issuer in the chain validates it. A CA that signs its CRLs with a separate certificate under the same name is therefore not supported.
+- A gRPC client with a CRL configured (`--tablet-grpc-crl`, `--vtgate-grpc-crl`, `--vtctld-grpc-crl`, and the other `*-grpc-crl` flags) but neither a client certificate nor a CA now connects with TLS, verifying the server against the system roots, rather than in plaintext with the CRL silently ignored. Configure the CA along with the CRL, or drop the CRL.
 
 Several configurations that used to connect with the CRL silently ignored are now refused when the TLS configuration is built, at startup, since the CRL cannot be applied as configured:
 

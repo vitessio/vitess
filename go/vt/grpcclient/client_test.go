@@ -30,6 +30,7 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 func TestDialErrors(t *testing.T) {
@@ -66,6 +67,31 @@ func TestDialErrors(t *testing.T) {
 		gconn.Close()
 		require.ErrorContainsf(t, err, wantErr, "DialContext(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
 	}
+}
+
+// TestSecureCredentials checks what makes a client connection use
+// TLS: a CRL alone does, since a CRL that a plaintext connection
+// silently ignored would enforce nothing.
+func TestSecureCredentials(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+
+	t.Run("nothing set connects without TLS", func(t *testing.T) {
+		creds, err := secureCredentials("", "", "", "", "")
+		require.NoError(t, err)
+		require.Equal(t, "insecure", creds.Info().SecurityProtocol)
+	})
+
+	t.Run("a CA alone connects with TLS", func(t *testing.T) {
+		creds, err := secureCredentials("", "", certs.ServerCA, "", "")
+		require.NoError(t, err)
+		require.Equal(t, "tls", creds.Info().SecurityProtocol)
+	})
+
+	t.Run("a CRL alone connects with TLS", func(t *testing.T) {
+		creds, err := secureCredentials("", "", "", certs.ServerCRL, "")
+		require.NoError(t, err)
+		require.Equal(t, "tls", creds.Info().SecurityProtocol)
+	})
 }
 
 func TestRegisterGRPCClientFlags(t *testing.T) {

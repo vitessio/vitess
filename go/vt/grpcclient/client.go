@@ -177,21 +177,27 @@ func interceptors() []grpc.DialOption {
 // given client connection. It is either using TLS, or Insecure if
 // nothing is set.
 func SecureDialOption(cert, key, ca, crl, name string) (grpc.DialOption, error) {
-	// No security options set, just return.
-	if (cert == "" || key == "") && ca == "" {
-		return grpc.WithTransportCredentials(insecure.NewCredentials()), nil
+	creds, err := secureCredentials(cert, key, ca, crl, name)
+	if err != nil {
+		return nil, err
 	}
+	return grpc.WithTransportCredentials(creds), nil
+}
 
-	// Load the config. At this point we know
-	// we want a strict config with verify identity.
+// secureCredentials returns the transport credentials of the given
+// client connection: TLS, with the identity of the server verified,
+// when a certificate, a CA, or a CRL is set, and none otherwise. A CRL
+// alone has the connection use TLS, against the system roots, rather
+// than connect in plaintext with the CRL silently ignored.
+func secureCredentials(cert, key, ca, crl, name string) (credentials.TransportCredentials, error) {
+	if (cert == "" || key == "") && ca == "" && crl == "" {
+		return insecure.NewCredentials(), nil
+	}
 	config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, crl, name, tls.VersionTLS12)
 	if err != nil {
 		return nil, err
 	}
-
-	// Create the creds server options.
-	creds := credentials.NewTLS(config)
-	return grpc.WithTransportCredentials(creds), nil
+	return credentials.NewTLS(config), nil
 }
 
 var dialConcurrencyLimitOpt grpc.DialOption
