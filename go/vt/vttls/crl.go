@@ -56,12 +56,14 @@ type (
 		configured map[string][]*x509.RevocationList
 		// revokedAnchors holds, by DER encoding, the configured CA
 		// certificates that the CRL of their issuer, another
-		// configured CA certificate, lists: no chain may end at
-		// one. The anchor of a chain is otherwise not checked, its
-		// issuer being beyond the chain, but here the checker holds
-		// both certificates and the CRL, with no part for the peer
-		// in it, worked out once when the checker is built.
-		revokedAnchors map[string]bool
+		// configured CA certificate, lists, and the configured CA
+		// certificates issued under one of those, each with the
+		// common name of the revoked certificate: no chain may end
+		// at one. The anchor of a chain is otherwise not checked,
+		// its issuer being beyond the chain, but here the checker
+		// holds the certificates and the CRL, with no part for the
+		// peer in it, worked out once when the checker is built.
+		revokedAnchors map[string]string
 		// bound holds, by DER encoding, what binding the CRLs to an
 		// issuer that verification alone vouches for made of them,
 		// as a crlBinding, kept from the first connection through
@@ -274,7 +276,7 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 	checker := &crlChecker{
 		crlsByIssuer:   make(map[string][]*x509.RevocationList),
 		configured:     make(map[string][]*x509.RevocationList, len(issuers)),
-		revokedAnchors: make(map[string]bool),
+		revokedAnchors: make(map[string]string),
 		revokedSerials: make(map[*x509.RevocationList]map[string]struct{}, len(crls)),
 		warningKeys:    make(map[*x509.RevocationList]string, len(crls)),
 	}
@@ -317,17 +319,44 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			}
 		}
 	}
+	// The configured issuer of each configured certificate, matched
+	// by name and signature as a chain is.
+	parents := make(map[*x509.Certificate]*x509.Certificate, len(issuers))
 	for _, cert := range issuers {
 		for _, parent := range issuers {
-			if checker.revokedAnchors[string(cert.Raw)] || cert.Equal(parent) || !bytes.Equal(cert.RawIssuer, parent.RawSubject) || cert.CheckSignatureFrom(parent) != nil {
+			if !cert.Equal(parent) && bytes.Equal(cert.RawIssuer, parent.RawSubject) && cert.CheckSignatureFrom(parent) == nil {
+				parents[cert] = parent
+				break
+			}
+		}
+	}
+	for _, cert := range issuers {
+		parent, issued := parents[cert]
+		if _, done := checker.revokedAnchors[string(cert.Raw)]; done || !issued {
+			continue
+		}
+		for _, crl := range checker.configured[string(parent.Raw)] {
+			if checker.isRevoked(cert, crl) {
+				checker.revokedAnchors[string(cert.Raw)] = cert.Subject.CommonName
+				warnRevokedAnchor(cert, cert.Subject.CommonName)
+				break
+			}
+		}
+	}
+	// A configured certificate issued under a revoked one is one no
+	// chain may end at either, however many configured certificates
+	// lie between them.
+	for changed := true; changed; {
+		changed = false
+		for _, cert := range issuers {
+			parent, issued := parents[cert]
+			if _, done := checker.revokedAnchors[string(cert.Raw)]; done || !issued {
 				continue
 			}
-			for _, crl := range checker.configured[string(parent.Raw)] {
-				if checker.isRevoked(cert, crl) {
-					checker.revokedAnchors[string(cert.Raw)] = true
-					warnRevokedAnchor(cert, parent)
-					break
-				}
+			if revoked, found := checker.revokedAnchors[string(parent.Raw)]; found {
+				checker.revokedAnchors[string(cert.Raw)] = revoked
+				warnRevokedAnchor(cert, revoked)
+				changed = true
 			}
 		}
 	}
@@ -342,15 +371,16 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 var revokedAnchorWarnings sync.Map
 
 // warnRevokedAnchor logs, once per certificate, that cert, a
-// configured CA certificate, is revoked by the CRL of parent, its
-// configured issuer.
-func warnRevokedAnchor(cert, parent *x509.Certificate) {
+// configured CA certificate, is the certificate named by revoked,
+// which the CRL of its configured issuer lists, or is issued under
+// it.
+func warnRevokedAnchor(cert *x509.Certificate, revoked string) {
 	if _, warned := revokedAnchorWarnings.LoadOrStore(string(cert.Raw), struct{}{}); warned {
 		return
 	}
-	log.Warn("A configured CA certificate is revoked by the CRL of its issuer: connections whose chain ends at it will be rejected.",
+	log.Warn("A configured CA certificate is revoked by the CRL of its issuer, or issued under one that is: connections whose chain ends at it will be rejected.",
 		slog.String("subject", cert.Subject.CommonName),
-		slog.String("issuer", parent.Subject.CommonName),
+		slog.String("revoked", revoked),
 	)
 }
 
@@ -465,8 +495,10 @@ func (c *crlChecker) check(chains [][]*x509.Certificate) error {
 // certificate of the chain, which verification vouches signed it. The
 // anchor is trusted as configured: its issuer is not part of the
 // chain, and Go does not verify its signature either; only an anchor
-// that its issuer's CRL is known to list, see revokedAnchors, ends
-// no chain. The chain is walked from the anchor down, so that a
+// known to be revoked, or issued under a revoked configured
+// certificate, see revokedAnchors, ends no chain, and the chain then
+// fails on the revoked certificate. The chain is walked from the
+// anchor down, so that a
 // revoked CA certificate is found before the certificates below it
 // are bound: whoever holds its key can mint any number of those, and
 // none is worth keeping.
@@ -474,8 +506,8 @@ func (c *crlChecker) checkChain(chain []*x509.Certificate) error {
 	if len(chain) == 0 {
 		return nil
 	}
-	if anchor := chain[len(chain)-1]; c.revokedAnchors[string(anchor.Raw)] {
-		return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "Certificate revoked: CommonName=%s", anchor.Subject.CommonName)
+	if revoked, found := c.revokedAnchors[string(chain[len(chain)-1].Raw)]; found {
+		return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "Certificate revoked: CommonName=%s", revoked)
 	}
 	for i := len(chain) - 2; i >= 0; i-- {
 		if err := c.checkCertificate(chain[i], chain[i+1]); err != nil {

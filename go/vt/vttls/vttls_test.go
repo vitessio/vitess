@@ -562,6 +562,43 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("a configured anchor issued under a revoked configured CA ends no chain", func(t *testing.T) {
+		// The CA file holds the root, the intermediate the root's
+		// CRL revokes, and a CA certificate issued by that
+		// intermediate: a chain ending at the last one is rejected
+		// too, whether or not the peer presents the intermediate.
+		keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+		require.NoError(t, err)
+		subCAKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		subCADER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(1 << 40),
+			Subject:               pkix.Name{CommonName: "Sub CA"},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}, intermediate, &subCAKey.PublicKey, keyPair.PrivateKey)
+		require.NoError(t, err)
+		subCA, err := x509.ParseCertificate(subCADER)
+		require.NoError(t, err)
+		subLeaf := signedLeaf(t, subCA, subCAKey, 1<<41, "sub.example.com")
+		intermediatePEM, err := os.ReadFile(certs.ServerCA)
+		require.NoError(t, err)
+		rootPEM, err := os.ReadFile(rootCA)
+		require.NoError(t, err)
+		bundle := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(bundle, slices.Concat(rootPEM, intermediatePEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: subCA.Raw})), 0o600))
+		checker, err := newCRLChecker(rootCRL, bundle)
+		require.NoError(t, err)
+
+		err = checker.check([][]*x509.Certificate{{subLeaf, subCA}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+		err = checker.check([][]*x509.Certificate{{subLeaf, subCA}, {subLeaf, subCA, intermediate}, {subLeaf, subCA, intermediate, rootCert}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+	})
+
 	t.Run("a configured anchor that its configured issuer's CRL revokes ends no chain", func(t *testing.T) {
 		// The anchor's issuer is beyond the chain, but when both are
 		// configured the checker holds the issuer and its CRL, with
@@ -1031,7 +1068,7 @@ func TestNewCRLCheckerWarnsOncePerRevokedAnchor(t *testing.T) {
 	for range 2 {
 		checker, err := newCRLChecker(crls, bundle)
 		require.NoError(t, err)
-		require.True(t, checker.revokedAnchors[string(intermediate.Raw)])
+		require.Contains(t, checker.revokedAnchors, string(intermediate.Raw))
 	}
 	require.EqualValues(t, 1, warnings.Load())
 }
