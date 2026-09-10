@@ -383,7 +383,7 @@ func (ast *astCompiler) translateFuncCall(fn sqlparser.Expr, name sqlparser.Iden
 		default:
 			return nil, argError(method)
 		}
-	case "current_date":
+	case "curdate", "current_date":
 		if len(args) != 0 {
 			return nil, argError(method)
 		}
@@ -828,8 +828,6 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 				CallExpr: cexpr,
 				prec:     uint8(call.Fsp),
 			}, nil
-		case "curdate":
-			return &builtinCurdate{CallExpr: cexpr}, nil
 		}
 		return &builtinNow{
 			CallExpr: cexpr,

@@ -23491,7 +23491,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6796
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("curdate")}
+			yyLOCAL = &BuiltinFuncExpr{Name: NewIdentifierCI("curdate")}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1299:

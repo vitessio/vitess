@@ -6794,7 +6794,7 @@ UTC_DATE func_paren_opt
   }
 | CURDATE func_paren_opt
   {
-    $$ = &CurTimeFuncExpr{Name: NewIdentifierCI("curdate")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("curdate")}
   }
 | SESSION_USER openb closeb
   {
