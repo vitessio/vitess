@@ -1322,6 +1322,35 @@ func TestNewCRLCheckerIssuerNameEncoding(t *testing.T) {
 
 	_, err = newCRLChecker(certs.ClientCRL, certs.ServerCA)
 	require.NoError(t, err, "a CRL from a CA that is not configured loads")
+
+	t.Run("a configured CA that carries the CRL's issuer name as encoded does not hide the mismatch", func(t *testing.T) {
+		// Two CAs are configured under one name, encoded as a
+		// PrintableString by one and as a UTF8String by the other.
+		// The second signs a CRL with the first's encoding as its
+		// issuer name: the first passes the CRL over, since the
+		// CRL names another key, and the second never sees it.
+		printable, _ := selfSignedCA(t, 1, "Shared CA", nil)
+		utf8Name, err := asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
+			Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
+			Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte("Shared CA")},
+		}}})
+		require.NoError(t, err)
+		utf8, utf8Key := selfSignedCA(t, 2, "", utf8Name)
+		require.NotEqual(t, printable.RawSubject, utf8.RawSubject)
+		signer := *utf8
+		signer.RawSubject = printable.RawSubject
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:     big.NewInt(1),
+			ThisUpdate: time.Now().Add(-time.Hour),
+			NextUpdate: time.Now().Add(time.Hour),
+		}, &signer, utf8Key)
+		require.NoError(t, err)
+		bundle := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(bundle, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: printable.Raw}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: utf8.Raw})...), 0o600))
+
+		_, err = newCRLChecker(crlFile(t, der), bundle)
+		require.ErrorContains(t, err, "is signed by the configured CA certificate Shared CA, but its issuer name is encoded differently from that certificate's subject")
+	})
 }
 
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
