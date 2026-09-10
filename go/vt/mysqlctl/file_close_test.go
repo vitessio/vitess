@@ -33,9 +33,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // mockCloser is a mock implementation of io.Closer that can be configured
@@ -637,6 +639,240 @@ func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
 	restoredContent, err := os.ReadFile(destPath)
 	require.NoError(t, err)
 	assert.Equal(t, content, restoredContent)
+}
+
+// TestBackupFileCompressorCloseNotRetried backs up a file through an
+// external compressor whose process exits with a failure, so that the
+// compressor's Close fails. Closing a compressor again cannot repair the
+// stream it was writing, and the compressors used here answer every later
+// Close with the same error, so the close must run once and surface its
+// own error. Running it through closeWithRetry would burn all
+// maxFileCloseRetries attempts and then replace that error with the
+// loop's "giving up" message.
+func TestBackupFileCompressorCloseNotRetried(t *testing.T) {
+	if _, err := validateExternalCmd("false"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(path.Join(tmpDir, "source.txt"), []byte("test content"), 0o644))
+
+	oldCmd := ExternalCompressorCmd
+	oldMaxRetries := maxFileCloseRetries
+	t.Cleanup(func() {
+		ExternalCompressorCmd = oldCmd
+		maxFileCloseRetries = oldMaxRetries
+	})
+	ExternalCompressorCmd = "false"
+	maxFileCloseRetries = 0
+
+	bh := newMockBackupHandle()
+	bh.addFileReturn = newMockReadWriteCloser(0, nil)
+	params := BackupParams{
+		Cnf:         &Mycnf{DataDir: tmpDir},
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "source.txt",
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.backupFile(t.Context(), params, bh, fe, "0", -1)
+
+	require.ErrorContains(t, err, "failed to close compressor")
+	require.ErrorContains(t, err, "exit status 1")
+	assert.NotContains(t, err.Error(), "giving up")
+}
+
+// TestRestoreFileDecompressorCloseNotRetried restores a file through an
+// external decompressor whose process exits with a failure, so that the
+// decompressor's Close fails. As with the compressor, a second Close cannot
+// change the outcome, so the close must run once and surface its own error
+// instead of going through closeWithRetry. The close also has to happen
+// before the restored file's hash is compared: the process can exit without
+// draining its input, so until it has been waited for, the source reader's
+// hash is still being written by the goroutine feeding the process and is
+// not the file's hash.
+func TestRestoreFileDecompressorCloseNotRetried(t *testing.T) {
+	if _, err := validateExternalCmd("false"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+
+	oldCmd := ExternalDecompressorCmd
+	oldMaxRetries := maxFileCloseRetries
+	t.Cleanup(func() {
+		ExternalDecompressorCmd = oldCmd
+		maxFileCloseRetries = oldMaxRetries
+	})
+	ExternalDecompressorCmd = "false"
+	maxFileCloseRetries = 0
+
+	source := newMockReadOnlyCloser(0, nil)
+	bh := newMockBackupHandle()
+	bh.readFileReturn = source
+	params := RestoreParams{
+		Cnf:    &Mycnf{DataDir: tmpDir},
+		Logger: logutil.NewMemoryLogger(),
+		Stats:  backupstats.NoStats(),
+	}
+	// The expected hash is deliberately wrong: the decompressor's failure
+	// must be reported before the hash is compared, so the mismatch never
+	// shows up.
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "restored.txt",
+		Hash: "not the hash",
+	}
+	bm := builtinBackupManifest{
+		CompressionEngine: ExternalCompressor,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.restoreFile(t.Context(), params, bh, fe, bm, "0")
+
+	require.ErrorContains(t, err, "failed to close decompressor")
+	require.ErrorContains(t, err, "exit status 1")
+	assert.NotContains(t, err.Error(), "giving up")
+	assert.NotContains(t, err.Error(), "hash mismatch")
+}
+
+// TestRestoreFileChunkDecompressorCloseNotRetried is the chunked-file
+// counterpart of TestRestoreFileDecompressorCloseNotRetried: a chunk's
+// decompressor is closed once, before the chunk's hash is compared, and its
+// own error comes back.
+func TestRestoreFileChunkDecompressorCloseNotRetried(t *testing.T) {
+	if _, err := validateExternalCmd("false"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+	destPath := path.Join(tmpDir, "restored.txt")
+	require.NoError(t, os.WriteFile(destPath, nil, 0o644))
+
+	oldCmd := ExternalDecompressorCmd
+	oldMaxRetries := maxFileCloseRetries
+	t.Cleanup(func() {
+		ExternalDecompressorCmd = oldCmd
+		maxFileCloseRetries = oldMaxRetries
+	})
+	ExternalDecompressorCmd = "false"
+	maxFileCloseRetries = 0
+
+	bh := newMockBackupHandle()
+	bh.readFileReturn = newMockReadOnlyCloser(0, nil)
+	params := RestoreParams{
+		Cnf:    &Mycnf{DataDir: tmpDir},
+		Logger: logutil.NewMemoryLogger(),
+		Stats:  backupstats.NoStats(),
+	}
+	chunk := &FileChunk{
+		StorageName: "0-0",
+		Hash:        "not the hash",
+	}
+	bm := builtinBackupManifest{
+		CompressionEngine: ExternalCompressor,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.restoreFileChunk(t.Context(), params, bh, chunk, bm, destPath)
+
+	require.ErrorContains(t, err, "failed to close decompressor")
+	require.ErrorContains(t, err, "exit status 1")
+	assert.NotContains(t, err.Error(), "giving up")
+	assert.NotContains(t, err.Error(), "hash mismatch")
+}
+
+// TestBackupFileCompressorCloseAbandonedIsFatal backs up a file through an
+// external compressor whose Close never returns: `sleep` neither exits nor
+// closes its stderr, so the compressor's Close blocks waiting for it and the
+// TimeoutCloser gives up. The abandoned Close may still be writing into this
+// attempt's buffer and destination, so the error must carry
+// FAILED_PRECONDITION to stop the caller from retrying the file, and not a
+// context code, which the dispatch would retry.
+func TestBackupFileCompressorCloseAbandonedIsFatal(t *testing.T) {
+	if _, err := validateExternalCmd("sleep"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(path.Join(tmpDir, "source.txt"), []byte("test content"), 0o644))
+
+	oldCmd := ExternalCompressorCmd
+	oldTimeout := closeTimeout
+	t.Cleanup(func() {
+		ExternalCompressorCmd = oldCmd
+		closeTimeout = oldTimeout
+	})
+	ExternalCompressorCmd = "sleep 1000"
+	closeTimeout = 100 * time.Millisecond
+
+	bh := newMockBackupHandle()
+	bh.addFileReturn = newMockReadWriteCloser(0, nil)
+	params := BackupParams{
+		Cnf:         &Mycnf{DataDir: tmpDir},
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "source.txt",
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.backupFile(t.Context(), params, bh, fe, "0", -1)
+
+	require.ErrorContains(t, err, "failed to close compressor")
+	require.ErrorContains(t, err, ioutil.ErrCloseAbandoned.Error())
+	assert.True(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "an abandoned compressor close must be fatal, got: %v", err)
+}
+
+// TestRestoreFileDecompressorCloseAbandonedRetries restores a file through
+// an external decompressor whose Close never returns: the shell closes its
+// stdout so the copy finishes, then replaces itself with a `sleep` that
+// keeps stderr open, so the decompressor's Close blocks and the
+// TimeoutCloser gives up. Unlike the compressor, a stale decompressor shares
+// nothing with the retry, so the error must come back without
+// FAILED_PRECONDITION and the caller's per-file retry gets its turn.
+func TestRestoreFileDecompressorCloseAbandonedRetries(t *testing.T) {
+	if _, err := validateExternalCmd("sh"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+
+	oldCmd := ExternalDecompressorCmd
+	oldTimeout := closeTimeout
+	t.Cleanup(func() {
+		ExternalDecompressorCmd = oldCmd
+		closeTimeout = oldTimeout
+	})
+	ExternalDecompressorCmd = "sh -c 'exec 1>&-; exec sleep 1000'"
+	closeTimeout = 100 * time.Millisecond
+
+	bh := newMockBackupHandle()
+	bh.readFileReturn = newMockReadOnlyCloser(0, nil)
+	params := RestoreParams{
+		Cnf:    &Mycnf{DataDir: tmpDir},
+		Logger: logutil.NewMemoryLogger(),
+		Stats:  backupstats.NoStats(),
+	}
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "restored.txt",
+		Hash: "not the hash",
+	}
+	bm := builtinBackupManifest{
+		CompressionEngine: ExternalCompressor,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.restoreFile(t.Context(), params, bh, fe, bm, "0")
+
+	require.ErrorContains(t, err, "failed to close decompressor")
+	require.ErrorContains(t, err, ioutil.ErrCloseAbandoned.Error())
+	assert.False(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "an abandoned decompressor close must stay retryable, got: %v", err)
+	assert.NotContains(t, err.Error(), "hash mismatch")
 }
 
 // Helper function to create a test replication position.

@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -35,23 +34,6 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 )
-
-type (
-	// failingWriter rejects every Write while armed, so a compressor's
-	// Close can be made to fail once and then be retried against a
-	// destination that accepts writes again.
-	failingWriter struct {
-		bytes.Buffer
-		fail bool
-	}
-)
-
-func (w *failingWriter) Write(p []byte) (int, error) {
-	if w.fail {
-		return 0, errors.New("destination unavailable")
-	}
-	return w.Buffer.Write(p)
-}
 
 func TestGetExtensionFromEngine(t *testing.T) {
 	tests := []struct {
@@ -201,44 +183,6 @@ func TestLz4ConcurrencyBlocksMapping(t *testing.T) {
 	require.Equal(t, -1, lz4ConcurrencyBlocks(-1))
 	require.Equal(t, 1, lz4ConcurrencyBlocks(1))
 	require.Equal(t, 2, lz4ConcurrencyBlocks(2))
-}
-
-// TestLz4CompressorCloseRetry closes an lz4 compressor whose destination
-// fails during the first Close, then closes it again the way the builtin
-// backup engine's closeWithRetry does. The lz4 v4 writer cannot be closed
-// twice in concurrent mode: the second Close blocks forever on a manager
-// goroutine that exited during the first one. The compressor must close
-// the writer once and answer every later Close with the recorded result,
-// so the retry loop fails fast with the original error.
-func TestLz4CompressorCloseRetry(t *testing.T) {
-	logger := logutil.NewMemoryLogger()
-	oldBlocks := backupCompressBlocks
-	backupCompressBlocks = 2
-	t.Cleanup(func() { backupCompressBlocks = oldBlocks })
-
-	dest := &failingWriter{}
-	compressor, err := newBuiltinCompressor(Lz4Compressor, dest, logger)
-	require.NoError(t, err)
-	_, err = compressor.Write(bytes.Repeat([]byte("lz4 backup data "), 4096))
-	require.NoError(t, err)
-
-	dest.fail = true
-	firstErr := compressor.Close()
-	require.ErrorContains(t, firstErr, "destination unavailable")
-
-	dest.fail = false
-	retried := make(chan error, 1)
-	go func() { retried <- compressor.Close() }()
-	var retriedErr error
-	require.Eventually(t, func() bool {
-		select {
-		case retriedErr = <-retried:
-			return true
-		default:
-			return false
-		}
-	}, 30*time.Second, 10*time.Millisecond, "retried Close did not return")
-	assert.Equal(t, firstErr, retriedErr)
 }
 
 // TestBuiltinDecompressorsPartialReadThenCopy reads a few bytes from each
