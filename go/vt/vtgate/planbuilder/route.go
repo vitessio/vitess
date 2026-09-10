@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"slices"
+	"unicode/utf8"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -51,7 +52,7 @@ func addImplicitColumnAliases(stmt sqlparser.SQLNode) sqlparser.SQLNode {
 			}
 			exprs.Exprs[i] = &sqlparser.AliasedExpr{
 				Expr:            ae.Expr,
-				As:              sqlparser.NewIdentifierCI(ae.InputExpression),
+				As:              sqlparser.NewIdentifierCI(implicitColumnName(ae.InputExpression)),
 				InputExpression: ae.InputExpression,
 			}
 		}
@@ -72,6 +73,23 @@ func addImplicitColumnAliases(stmt sqlparser.SQLNode) sqlparser.SQLNode {
 		return &aliased
 	}
 	return stmt
+}
+
+// implicitColumnName returns the name MySQL derives from the text of an
+// unaliased select expression: the text itself, cut to its first 255 bytes
+// without splitting a character. An alias is what carries that name to MySQL,
+// and MySQL cuts an alias at 256 bytes, with a warning, so the text is not
+// passed on whole beyond that point.
+func implicitColumnName(text string) string {
+	const limit = 255
+	if len(text) <= limit {
+		return text
+	}
+	cut := limit
+	for !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
 }
 
 // WireupRoute returns an engine primitive for the given route.
