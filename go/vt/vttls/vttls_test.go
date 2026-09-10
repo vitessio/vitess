@@ -327,6 +327,21 @@ func TestClientConfigCRL(t *testing.T) {
 	})
 }
 
+// TestPeerChainRoots checks what the modes that build the peer's
+// chain themselves verify it against: the configured CA when there
+// is one, and the system roots otherwise, resolved once when the
+// configuration is built rather than on every handshake.
+func TestPeerChainRoots(t *testing.T) {
+	configured := x509.NewCertPool()
+	roots, err := peerChainRoots(configured)
+	require.NoError(t, err)
+	require.Same(t, configured, roots)
+
+	system, err := peerChainRoots(nil)
+	require.NoError(t, err)
+	require.NotNil(t, system)
+}
+
 // loadOneCert returns the single certificate in the PEM file.
 func loadOneCert(t *testing.T, file string) *x509.Certificate {
 	t.Helper()

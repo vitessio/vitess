@@ -143,6 +143,17 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		}
 	}
 
+	// The modes that build the peer's chain themselves verify it
+	// against the configured CA, or the system roots without one,
+	// resolved once here rather than on every handshake.
+	var roots *x509.CertPool
+	if mode == VerifyCA || (checker != nil && (mode == Preferred || mode == Required)) {
+		var err error
+		if roots, err = peerChainRoots(config.RootCAs); err != nil {
+			return nil, err
+		}
+	}
+
 	switch mode {
 	case Disabled:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "can't create config for disabled mode")
@@ -156,7 +167,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 				// does. A peer whose chain cannot be built is
 				// rejected: its certificates cannot be checked, and
 				// the ones it presents are its own to choose.
-				chains, err := verifyPeerChain(config.RootCAs, cs)
+				chains, err := verifyPeerChain(roots, cs)
 				if err != nil {
 					return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "cannot check the revocation of the peer's certificates against the configured CRL, since no chain to a trusted CA could be built for them: %v", err)
 				}
@@ -168,7 +179,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		config.VerifyConnection = func(cs tls.ConnectionState) error {
 			// The chains built here are handed to the CRL check,
 			// since Go builds none of its own in this mode.
-			chains, err := verifyPeerChain(config.RootCAs, cs)
+			chains, err := verifyPeerChain(roots, cs)
 			if err != nil {
 				return err
 			}
@@ -189,17 +200,19 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	return config, nil
 }
 
-// verifyPeerChain verifies the certificate chain the peer presented
-// against roots, or against the system roots when roots is nil, and
-// returns the chains it built.
-func verifyPeerChain(roots *x509.CertPool, cs tls.ConnectionState) ([][]*x509.Certificate, error) {
-	if roots == nil {
-		var err error
-		roots, err = x509.SystemCertPool()
-		if err != nil {
-			return nil, err
-		}
+// peerChainRoots returns what the peer's chain is verified against
+// in the modes that build it themselves: the configured CA when
+// there is one, and the system roots otherwise.
+func peerChainRoots(configured *x509.CertPool) (*x509.CertPool, error) {
+	if configured != nil {
+		return configured, nil
 	}
+	return x509.SystemCertPool()
+}
+
+// verifyPeerChain verifies the certificate chain the peer presented
+// against roots and returns the chains it built.
+func verifyPeerChain(roots *x509.CertPool, cs tls.ConnectionState) ([][]*x509.Certificate, error) {
 	opts := x509.VerifyOptions{
 		Roots:         roots,
 		Intermediates: x509.NewCertPool(),
