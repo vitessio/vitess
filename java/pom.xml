@@ -72,7 +72,7 @@
     <netty.handler.version>4.2.17.Final</netty.handler.version>
     <tcnative.boring.ssl.version>2.0.81.Final</tcnative.boring.ssl.version>
 
-    <protobuf.java.version>4.35.1</protobuf.java.version>
+    <protobuf.java.version>4.36.0</protobuf.java.version>
     <protobuf.protoc.version>${protobuf.java.version}</protobuf.protoc.version>
     <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
     <log4j2.version>2.26.1</log4j2.version>
