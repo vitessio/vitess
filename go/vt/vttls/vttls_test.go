@@ -28,6 +28,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -581,27 +582,31 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 // TestCRLCheckerBindsChainIssuersOnce checks that the CRLs of an
 // issuer that is not configured but found in a verified chain, such
 // as an intermediate the peer presents while the CA file holds the
-// root, are bound on first sight and kept, so that later handshakes
-// through that issuer do not verify the CRL signatures again.
+// root, are bound on first sight and kept, and that later handshakes
+// through that issuer read what was kept rather than bind again.
 func TestCRLCheckerBindsChainIssuersOnce(t *testing.T) {
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)
 	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
 	intermediate := loadOneCert(t, certs.ServerCA)
-	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
+	leaf := loadOneCert(t, certs.ServerCert)
+	chain := [][]*x509.Certificate{{leaf, intermediate, rootCert}}
 	checker, err := newCRLChecker(certs.ServerCRL, path.Join(root, "ca-cert.pem"))
 	require.NoError(t, err)
 	_, cached := checker.bound.Load(string(intermediate.Raw))
 	require.False(t, cached)
 
-	for range 2 {
-		err = checker.check([][]*x509.Certificate{{revokedLeaf, intermediate, rootCert}})
-		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	}
+	require.NoError(t, checker.check(chain))
 	_, cached = checker.bound.Load(string(intermediate.Raw))
 	require.True(t, cached, "the intermediate's CRLs were not kept")
 	_, cached = checker.bound.Load(string(rootCert.Raw))
 	require.False(t, cached, "the configured root is bound when the checker is built, not here")
+
+	// What was kept is what later connections read: a binding put
+	// in its place decides them.
+	checker.bound.Store(string(intermediate.Raw), crlBinding{err: errors.New("the kept binding")})
+	err = checker.check(chain)
+	require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName="+certs.ServerName+": the kept binding")
 }
 
 // TestCRLCheckerRejectedChainsLeaveNoBindings checks that a chain
