@@ -19,9 +19,11 @@ package reparentutil
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
@@ -67,6 +69,9 @@ func TestReparentSorter(t *testing.T) {
 		},
 		Type: topodatapb.TabletType_RDONLY,
 	}
+	tabletWithoutAlias := &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	}
 
 	mysqlGTID1 := replication.Mysql56GTID{
 		Server:   sid1,
@@ -100,6 +105,17 @@ func TestReparentSorter(t *testing.T) {
 	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
 	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
+	positionExecutedGap := &RelayLogPositions{
+		Combined: positionMostAdvanced.Combined,
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionExecutedGap.Executed.GTIDSet = positionExecutedGap.Executed.GTIDSet.AddGTID(mysqlGTID3)
+
+	positionNothingExecuted := &RelayLogPositions{
+		Combined: positionMostAdvanced.Combined,
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+
 	positionEmpty := &RelayLogPositions{
 		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
@@ -120,10 +136,38 @@ func TestReparentSorter(t *testing.T) {
 	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
 	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
+	// positions with GTIDs from servers no other position has seen, making them
+	// incomparable to every other position in this test
+	sid3 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+	sid4 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
+	mysqlGTID4 := replication.Mysql56GTID{
+		Server:   sid3,
+		Sequence: 12,
+	}
+	mysqlGTID5 := replication.Mysql56GTID{
+		Server:   sid4,
+		Sequence: 13,
+	}
+
+	positionDisjoint1 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionDisjoint1.Combined.GTIDSet = positionDisjoint1.Combined.GTIDSet.AddGTID(mysqlGTID4)
+	positionDisjoint1.Executed.GTIDSet = positionDisjoint1.Executed.GTIDSet.AddGTID(mysqlGTID4)
+
+	positionDisjoint2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionDisjoint2.Combined.GTIDSet = positionDisjoint2.Combined.GTIDSet.AddGTID(mysqlGTID5)
+	positionDisjoint2.Executed.GTIDSet = positionDisjoint2.Executed.GTIDSet.AddGTID(mysqlGTID5)
+
 	testcases := []struct {
 		name             string
 		tablets          []*topodatapb.Tablet
 		innodbBufferPool []int
+		mysqlVersions    []mysqlctl.ServerVersion
 		positions        []*RelayLogPositions
 		containsErr      string
 		sortedTablets    []*topodatapb.Tablet
@@ -150,10 +194,32 @@ func TestReparentSorter(t *testing.T) {
 			positions:   []*RelayLogPositions{positionEmpty, positionIntermediate1, positionMostAdvanced},
 			containsErr: "unequal number of tablets and positions",
 		}, {
+			name:             "innodb buffer pool count error",
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
+			positions:        []*RelayLogPositions{positionEmpty, positionIntermediate1},
+			innodbBufferPool: []int{10},
+			containsErr:      "unequal number of tablets and innodb buffer pool entries",
+		}, {
+			name:          "mysql versions count error",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
+			positions:     []*RelayLogPositions{positionEmpty, positionIntermediate1},
+			mysqlVersions: []mysqlctl.ServerVersion{{Major: 8, Minor: 0, Patch: 35}},
+			containsErr:   "unequal number of tablets and mysql versions",
+		}, {
 			name:          "promotion rule check",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
+		}, {
+			name:          "nil alias sorts last",
+			tablets:       []*topodatapb.Tablet{tabletWithoutAlias, tabletRdonly1_102},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletWithoutAlias},
+		}, {
+			name:          "nil alias does not affect dominance counts",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletWithoutAlias},
+			positions:     []*RelayLogPositions{positionIntermediate1, positionDisjoint1, positionIntermediate2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletWithoutAlias},
 		}, {
 			name:          "mixed",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102, tabletReplica3_103},
@@ -170,6 +236,19 @@ func TestReparentSorter(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletReplica1_100},
 			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica1_101, tabletReplica3_103, tabletReplica2_100},
+		}, {
+			// an incomparable position must not shadow the ordering between two
+			// comparable positions: tabletReplica1_100 strictly dominates
+			// tabletReplica1_101 and must sort above it
+			name:          "dominated tablet sorts below an incomparable maximum",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100},
+			positions:     []*RelayLogPositions{positionIntermediate1, positionDisjoint1, positionIntermediate2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
+		}, {
+			name:          "incomparable positions fall through to deterministic tiebreak",
+			tablets:       []*topodatapb.Tablet{tabletReplica2_100, tabletReplica1_101},
+			positions:     []*RelayLogPositions{positionDisjoint1, positionDisjoint2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
 		},
 	}
 
@@ -177,12 +256,487 @@ func TestReparentSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, durability)
+			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, testcase.mysqlVersions, durability, SortByPosition)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, testcase.sortedTablets, testcase.tablets)
+			}
+		})
+	}
+
+	mariaDBPosition10Server1 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+	}
+	mariaDBPosition5Server1 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-5"),
+	}
+	mariaDBPosition10Server2 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+	}
+	mariaDBPosition1Server1 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-1"),
+	}
+
+	layerTests := []struct {
+		name               string
+		candidatePositions []*RelayLogPositions
+		expectedPositions  []*RelayLogPositions
+	}{
+		{
+			name: "combined position dominance layers are input order independent",
+			candidatePositions: []*RelayLogPositions{
+				positionIntermediate2,
+				positionIntermediate1,
+				positionDisjoint1,
+				positionEmpty,
+			},
+			expectedPositions: []*RelayLogPositions{
+				positionDisjoint1,
+				positionIntermediate2,
+				positionIntermediate1,
+				positionEmpty,
+			},
+		},
+		{
+			name: "executed position dominance layers are input order independent",
+			candidatePositions: []*RelayLogPositions{
+				positionMostAdvanced,
+				positionAlmostMostAdvanced,
+				positionExecutedGap,
+				positionNothingExecuted,
+			},
+			expectedPositions: []*RelayLogPositions{
+				positionExecutedGap,
+				positionMostAdvanced,
+				positionAlmostMostAdvanced,
+				positionNothingExecuted,
+			},
+		},
+		{
+			name: "reciprocal MariaDB containment preserves executed position dominance layers",
+			candidatePositions: []*RelayLogPositions{
+				mariaDBPosition10Server1,
+				mariaDBPosition5Server1,
+				mariaDBPosition10Server2,
+				mariaDBPosition1Server1,
+			},
+			expectedPositions: []*RelayLogPositions{
+				mariaDBPosition10Server2,
+				mariaDBPosition10Server1,
+				mariaDBPosition5Server1,
+				mariaDBPosition1Server1,
+			},
+		},
+	}
+	candidateTablets := []*topodatapb.Tablet{
+		tabletReplica2_100,
+		tabletReplica1_100,
+		tabletReplica1_101,
+		tabletReplica3_103,
+	}
+	expectedTablets := []*topodatapb.Tablet{
+		tabletReplica1_101,
+		tabletReplica2_100,
+		tabletReplica1_100,
+		tabletReplica3_103,
+	}
+
+	for _, testcase := range layerTests {
+		t.Run(testcase.name, func(t *testing.T) {
+			forEachReparentSorterPermutation([]int{0, 1, 2, 3}, func(permutation []int) {
+				tablets := make([]*topodatapb.Tablet, 0, len(permutation))
+				positions := make([]*RelayLogPositions, 0, len(permutation))
+				for _, index := range permutation {
+					tablets = append(tablets, candidateTablets[index])
+					positions = append(positions, testcase.candidatePositions[index])
+				}
+
+				err := sortTabletsForReparent(tablets, positions, nil, nil, durability, SortByPosition)
+				require.NoError(t, err)
+				assert.Equalf(t, expectedTablets, tablets, "input permutation: %v", permutation)
+				assert.Equalf(t, testcase.expectedPositions, positions, "input permutation: %v", permutation)
+			})
+		})
+	}
+}
+
+func forEachReparentSorterPermutation(values []int, test func([]int)) {
+	var permute func(int)
+	permute = func(i int) {
+		if i == len(values) {
+			test(values)
+			return
+		}
+		for j := i; j < len(values); j++ {
+			values[i], values[j] = values[j], values[i]
+			permute(i + 1)
+			values[i], values[j] = values[j], values[i]
+		}
+	}
+	permute(0)
+}
+
+func TestReparentSorter_MySQLVersion(t *testing.T) {
+	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+
+	tabletA := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	tabletB := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	tabletC := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	tabletRdonly := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 103},
+		Type:  topodatapb.TabletType_RDONLY,
+	}
+
+	posAdvanced := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	posAdvanced.Combined.GTIDSet = posAdvanced.Combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid1, Sequence: 9})
+	posAdvanced.Combined.GTIDSet = posAdvanced.Combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid2, Sequence: 10})
+	posAdvanced.Executed.GTIDSet = posAdvanced.Executed.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid1, Sequence: 9})
+	posAdvanced.Executed.GTIDSet = posAdvanced.Executed.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid2, Sequence: 10})
+
+	posBehind := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	posBehind.Combined.GTIDSet = posBehind.Combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid1, Sequence: 9})
+	posBehind.Executed.GTIDSet = posBehind.Executed.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid1, Sequence: 9})
+
+	mysql80 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+	mysql84 := mysqlctl.ServerVersion{Major: 8, Minor: 4, Patch: 0}
+	// A pre-8.0.34 patch and a later 8.0 patch: within the 8.0 series before the
+	// bugfix-only cutoff, the patch is significant (see CompareForReplication).
+	mysql8020 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 20}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name          string
+		tablets       []*topodatapb.Tablet
+		positions     []*RelayLogPositions
+		mysqlVersions []mysqlctl.ServerVersion
+		mode          SortMode
+		sortedTablets []*topodatapb.Tablet
+	}{
+		{
+			name:          "ERS: lower version preferred when positions are equal",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+		{
+			name:          "ERS: position wins over lower version",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
+		},
+		{
+			name:          "ERS: same version falls through to position",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
+		},
+		{
+			name:          "ERS: unknown version sorts last",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB, tabletC},
+			positions:     []*RelayLogPositions{posAdvanced, posAdvanced, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{unknownVersion, mysql84, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletC, tabletB, tabletA},
+		},
+		{
+			name:          "ERS: nil version slice preserves position-based ordering",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posBehind, posAdvanced},
+			mysqlVersions: nil,
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+		{
+			name:          "ERS: position still wins when lower version is behind",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
+		},
+		{
+			name:          "ERS: position gates before promotion rules - advanced MustNot beats behind Neutral",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletRdonly},
+			positions:     []*RelayLogPositions{posBehind, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletRdonly, tabletA},
+		},
+		{
+			// Pins the version-first contract: on SortByVersion the lower release wins
+			// over a candidate that strictly dominates it in position (posAdvanced =
+			// {sid1:9, sid2:10} dominates posBehind = {sid1:9}), and it is version doing
+			// it, not the alias tiebreak — the winner tabletB has the *higher* alias, so
+			// an alias tiebreak would elect tabletA instead. The sorter compares a binary
+			// dominance count, not a position magnitude, so this holds regardless of how
+			// far behind the lower-version candidate is; that unbounded-gap behavior is a
+			// user-facing decision documented in the v25 changelog ("no bound on the
+			// position gap").
+			name:          "PRS: lower release wins over a strictly-dominated position (unbounded gap)",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
+			mode:          SortByVersion,
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+		{
+			name:          "PRS: same release falls through to position",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
+			mode:          SortByVersion,
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
+		},
+		{
+			name:          "PRS: promotion rule gates before version - MustNot on lower version loses",
+			tablets:       []*topodatapb.Tablet{tabletRdonly, tabletA},
+			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql84},
+			mode:          SortByVersion,
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletRdonly},
+		},
+		{
+			name:          "ERS: lower 8.0 patch preferred below the bugfix-only cutoff when positions are equal",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql8020},
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+		{
+			name:          "PRS: lower 8.0 patch preferred below the bugfix-only cutoff even when slightly behind",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql8020},
+			mode:          SortByVersion,
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := sortTabletsForReparent(tc.tablets, tc.positions, nil, tc.mysqlVersions, durability, tc.mode)
+			require.NoError(t, err)
+			require.Equal(t, tc.sortedTablets, tc.tablets)
+		})
+	}
+}
+
+// TestReparentSorter_ExecutedTiebreak pins the sorter's behavior when two
+// candidates have equal Combined (relay-log) positions but different Executed
+// (applied) positions: the one that has applied more sorts first. This is the
+// tie-break RelayLogPositions.AtLeast implements, exercised at the election
+// level. It must hold independently of the version tiebreaker (no versions
+// supplied here), so a change to AtLeast or the sorter is caught even if the
+// version-aware tests change.
+func TestReparentSorter_ExecutedTiebreak(t *testing.T) {
+	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+	tabletBehind := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	tabletCaughtUp := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+
+	// Both relay logs hold GTIDs 1-10 (equal Combined). tabletCaughtUp has applied
+	// all of them; tabletBehind has applied only 1-5.
+	combined := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	combined.GTIDSet = combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 5})
+	combined.GTIDSet = combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 10})
+	executedBehind := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	executedBehind.GTIDSet = executedBehind.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 5})
+
+	posCaughtUp := &RelayLogPositions{Combined: combined, Executed: combined}
+	posBehind := &RelayLogPositions{Combined: combined, Executed: executedBehind}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	for _, mode := range []SortMode{SortByPosition, SortByVersion} {
+		t.Run(map[SortMode]string{SortByPosition: "ERS", SortByVersion: "PRS"}[mode], func(t *testing.T) {
+			// Input order deliberately puts the behind tablet first to prove the sort
+			// reorders on the Executed tiebreak rather than preserving input order.
+			tablets := []*topodatapb.Tablet{tabletBehind, tabletCaughtUp}
+			positions := []*RelayLogPositions{posBehind, posCaughtUp}
+
+			err := sortTabletsForReparent(tablets, positions, nil, nil, durability, mode)
+			require.NoError(t, err)
+			require.Equal(t, []*topodatapb.Tablet{tabletCaughtUp, tabletBehind}, tablets,
+				"candidate that applied more relay log should sort first")
+		})
+	}
+}
+
+// TestUsableMySQLVersions verifies the guard that disables version-aware
+// election when candidates span multiple flavor families (MariaDB vs
+// MySQL/Percona), allows a MySQL+Percona mix (same family), and confirms that an
+// unknown flavor among otherwise-uniform candidates does not disable it.
+func TestUsableMySQLVersions(t *testing.T) {
+	v80 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+	v84 := mysqlctl.ServerVersion{Major: 8, Minor: 4, Patch: 0}
+
+	tests := []struct {
+		name     string
+		versions []mysqlctl.ServerVersion
+		flavors  []mysqlctl.MySQLFlavor
+		wantNil  bool
+	}{
+		{
+			name:     "empty versions stays empty",
+			versions: nil,
+			flavors:  nil,
+			wantNil:  true,
+		},
+		{
+			name:     "single flavor is usable",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMySQL, mysqlctl.FlavorMySQL},
+			wantNil:  false,
+		},
+		{
+			name:     "MySQL and Percona mix is usable (same family)",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMySQL, mysqlctl.FlavorPercona},
+			wantNil:  false,
+		},
+		{
+			name:     "MariaDB alongside MySQL disables version ordering",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMySQL, mysqlctl.FlavorMariaDB},
+			wantNil:  true,
+		},
+		{
+			name:     "MariaDB alongside Percona disables version ordering",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorPercona, mysqlctl.FlavorMariaDB},
+			wantNil:  true,
+		},
+		{
+			name:     "all MariaDB is usable (single family)",
+			versions: []mysqlctl.ServerVersion{{Major: 10, Minor: 6}, {Major: 11, Minor: 4}},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMariaDB, mysqlctl.FlavorMariaDB},
+			wantNil:  false,
+		},
+		{
+			name:     "unknown flavor alongside a known flavor is still usable",
+			versions: []mysqlctl.ServerVersion{unknownVersion, v80},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorUnknown, mysqlctl.FlavorMySQL},
+			wantNil:  false,
+		},
+		{
+			name:     "all unknown flavors is usable (no conflicting known families)",
+			versions: []mysqlctl.ServerVersion{unknownVersion, unknownVersion},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorUnknown, mysqlctl.FlavorUnknown},
+			wantNil:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := usableMySQLVersions(tt.versions, tt.flavors)
+			if tt.wantNil {
+				require.Nil(t, got)
+			} else {
+				require.NotNil(t, got)
+			}
+		})
+	}
+}
+
+// TestScopedVersionMap verifies the map-based family guard used on the ERS
+// election path (findMostAdvanced, identifyPrimaryCandidate). Returning nil for a
+// mixed-family candidate set is what disables version-aware comparison in the
+// final candidate selection, not just the intermediate-source sort. Crucially,
+// the guard is scoped to the passed candidates: a non-candidate tablet elsewhere
+// in the shard must not disable version ordering for the real candidates.
+func TestScopedVersionMap(t *testing.T) {
+	v80 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+	v106 := mysqlctl.ServerVersion{Major: 10, Minor: 6}
+
+	tabletA := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	tabletB := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}
+	tabletC := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}}
+
+	// A full-shard map where C is a MariaDB tablet, A and B are MySQL/Percona.
+	versionMap := map[string]mysqlctl.ServerVersion{
+		"zone1-0000000100": v80,
+		"zone1-0000000101": v80,
+		"zone1-0000000102": v106,
+	}
+	flavorMap := map[string]mysqlctl.MySQLFlavor{
+		"zone1-0000000100": mysqlctl.FlavorMySQL,
+		"zone1-0000000101": mysqlctl.FlavorPercona,
+		"zone1-0000000102": mysqlctl.FlavorMariaDB,
+	}
+
+	tests := []struct {
+		name       string
+		candidates []*topodatapb.Tablet
+		versionMap map[string]mysqlctl.ServerVersion
+		flavorMap  map[string]mysqlctl.MySQLFlavor
+		wantNil    bool
+	}{
+		{
+			name:       "empty version map stays nil",
+			candidates: []*topodatapb.Tablet{tabletA, tabletB},
+			versionMap: nil,
+			flavorMap:  nil,
+			wantNil:    true,
+		},
+		{
+			name:       "same family candidates are usable",
+			candidates: []*topodatapb.Tablet{tabletA, tabletB},
+			versionMap: versionMap,
+			flavorMap:  flavorMap,
+			wantNil:    false,
+		},
+		{
+			name:       "mixed family candidates disable version ordering",
+			candidates: []*topodatapb.Tablet{tabletA, tabletC},
+			versionMap: versionMap,
+			flavorMap:  flavorMap,
+			wantNil:    true,
+		},
+		{
+			// Point-1 regression: C (MariaDB) is in the shard-wide maps but NOT in
+			// the candidate set. The guard must ignore it and keep version ordering
+			// for the MySQL-only candidates A and B.
+			name:       "non-candidate other-family tablet does not disable ordering",
+			candidates: []*topodatapb.Tablet{tabletA, tabletB},
+			versionMap: versionMap,
+			flavorMap:  flavorMap,
+			wantNil:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := scopedVersionMap(tt.candidates, tt.versionMap, tt.flavorMap)
+			if tt.wantNil {
+				require.Nil(t, got)
+			} else {
+				require.NotNil(t, got)
 			}
 		})
 	}

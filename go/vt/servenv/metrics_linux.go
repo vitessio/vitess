@@ -18,10 +18,22 @@ limitations under the License.
 
 package servenv
 
-func getCgroupCpu() (float64, error) {
-	return getCgroupCpuUsage()
+func getCpuUsage() float64 {
+	if value, err := getCgroupCpuUsage(); err == nil {
+		return value
+	}
+	if value, err := getHostCpuUsage(); err == nil {
+		return value
+	}
+	return -1
 }
 
-func getCgroupMemory() (float64, error) {
-	return getCgroupMemoryUsage()
+func getMemoryUsage() float64 {
+	if value, err := getCgroupMemoryUsage(); err == nil {
+		return value
+	}
+	if value, err := getHostMemoryUsage(); err == nil {
+		return value
+	}
+	return -1
 }

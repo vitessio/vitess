@@ -75,6 +75,9 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	var cfg dbconfigs.DBConfigs
 	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
 	cfg.Dba.User = "root"
+	// use the replication user created by createInitSQLFile: replicating with an
+	// empty username makes the IO thread fail on MySQL 8.0.24+
+	cfg.Repl.User = "vt_repl"
 	cfg.InitWithSocket(mycnf.SocketFile, collations.MySQL8())
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
@@ -139,6 +142,11 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 		return "", err
 	}
 	_, err = fmt.Fprintf(f, "CREATE DATABASE IF NOT EXISTS %s;", ksName)
+	if err != nil {
+		return "", err
+	}
+	// create the replication user the same way config/init_db.sql does
+	_, err = f.WriteString("CREATE USER 'vt_repl'@'%';GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';")
 	if err != nil {
 		return "", err
 	}

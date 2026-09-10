@@ -39,8 +39,7 @@ var (
 // are either application-level errors, or context errors.
 func convertError(err error, nodePath string) error {
 	// Unwrap errors from the Go HTTP client.
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		err = urlErr.Err
 	}
 

@@ -153,11 +153,6 @@ var (
 	once              sync.Once
 )
 
-type LogExpectation struct {
-	Type   string
-	Detail string
-}
-
 func init() {
 	tabletconn.RegisterDialer("test", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vdiffenv.mu.Lock()

@@ -109,14 +109,12 @@ func TestHTTP(t *testing.T) {
 	logger.mu.Lock()
 	assert.Lenf(t, logger.subscribed, 1, "len(logger.subscribed) = %v, want %v", len(logger.subscribed), 1)
 	logger.mu.Unlock()
-	for range 10 {
+	assert.Eventually(t, func() bool {
 		logger.Send(&logMessage{"val3"})
-		// Allow time for propagation (loopback interface - expected to be fast).
-		time.Sleep(1 * time.Millisecond)
-	}
-	logger.mu.Lock()
-	assert.Emptyf(t, logger.subscribed, "len(logger.subscribed) = %v, want %v", len(logger.subscribed), 0)
-	logger.mu.Unlock()
+		logger.mu.Lock()
+		defer logger.mu.Unlock()
+		return len(logger.subscribed) == 0
+	}, 5*time.Second, 1*time.Millisecond, "expected the server handler to notice the closed client and unsubscribe")
 }
 
 func TestChannel(t *testing.T) {

@@ -67,11 +67,9 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 	p.children[file] = n
 
 	n.propagateRecursiveWatch(&topo.WatchDataRecursive{
-		Path: filePath,
-		WatchData: topo.WatchData{
-			Contents: n.contents,
-			Version:  NodeVersion(n.version),
-		},
+		Path:     filePath,
+		Contents: n.contents,
+		Version:  NodeVersion(n.version),
 	})
 
 	return NodeVersion(n.version), nil
@@ -150,11 +148,9 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 	}
 
 	n.propagateRecursiveWatch(&topo.WatchDataRecursive{
-		Path: filePath,
-		WatchData: topo.WatchData{
-			Contents: n.contents,
-			Version:  NodeVersion(n.version),
-		},
+		Path:     filePath,
+		Contents: n.contents,
+		Version:  NodeVersion(n.version),
 	})
 
 	return NodeVersion(n.version), nil
@@ -316,9 +312,7 @@ func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version
 
 	n.propagateRecursiveWatch(&topo.WatchDataRecursive{
 		Path: filePath,
-		WatchData: topo.WatchData{
-			Err: topo.NewError(topo.NoNode, filePath),
-		},
+		Err:  topo.NewError(topo.NoNode, filePath),
 	})
 
 	return nil

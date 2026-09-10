@@ -23,8 +23,8 @@ func Slice(charset Charset, input []byte, from, to int) []byte {
 	iter := input
 	start := 0
 	for i := range to {
-		r, size := charset.DecodeRune(iter)
-		if r == RuneError && size < 2 {
+		_, size, ok := charset.DecodeRune(iter)
+		if !ok {
 			break
 		}
 		if i < from {
@@ -40,8 +40,8 @@ func Validate(charset Charset, input []byte) bool {
 		return charset.Validate(input)
 	}
 	for len(input) > 0 {
-		r, size := charset.DecodeRune(input)
-		if r == RuneError {
+		_, size, ok := charset.DecodeRune(input)
+		if !ok {
 			return false
 		}
 		input = input[size:]
@@ -55,7 +55,7 @@ func Length(charset Charset, input []byte) int {
 	}
 	var count int
 	for len(input) > 0 {
-		_, size := charset.DecodeRune(input)
+		_, size, _ := charset.DecodeRune(input)
 		input = input[size:]
 		count++
 	}

@@ -53,11 +53,31 @@ func TestDetachedCoordinates2(t *testing.T) {
 }
 
 func TestPreviousFileCoordinates(t *testing.T) {
-	previous, err := testCoordinates.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, "mysql-bin.000009", previous.LogFile)
-	require.Equal(t, uint64(0), previous.LogPos)
+	tests := []struct {
+		name        string
+		coordinates BinlogCoordinates
+		wantLogFile string
+		wantErr     bool
+	}{
+		{name: "standard", coordinates: BinlogCoordinates{LogFile: "mysql-bin.000010", LogPos: 108}, wantLogFile: "mysql-bin.000009"},
+		{name: "five digit suffix", coordinates: BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}, wantLogFile: "mysql-bin.00016"},
+		{name: "decrement hundreds", coordinates: BinlogCoordinates{LogFile: "mysql-bin.00100", LogPos: 104}, wantLogFile: "mysql-bin.00099"},
+		{name: "dotted hostname prefix", coordinates: BinlogCoordinates{LogFile: "mysql.00.prod.com.00100", LogPos: 104}, wantLogFile: "mysql.00.prod.com.00099"},
+		{name: "underflow errors", coordinates: BinlogCoordinates{LogFile: "mysql.00.prod.com.00000", LogPos: 104}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			previous, err := tt.coordinates.PreviousFileCoordinates()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantLogFile, previous.LogFile)
+			require.Equal(t, tt.coordinates.Type, previous.Type)
+			require.Equal(t, uint64(0), previous.LogPos)
+		})
+	}
 }
 
 func TestNextFileCoordinates(t *testing.T) {
@@ -87,34 +107,6 @@ func TestBinlogCoordinates(t *testing.T) {
 
 	require.True(t, c1.SmallerThanOrEquals(&c2))
 	require.True(t, c1.SmallerThanOrEquals(&c3))
-}
-
-func TestBinlogPrevious(t *testing.T) {
-	c1 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
-	cres, err := c1.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, c1.Type, cres.Type)
-	require.Equal(t, "mysql-bin.00016", cres.LogFile)
-
-	c2 := BinlogCoordinates{LogFile: "mysql-bin.00100", LogPos: 104}
-	cres, err = c2.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, c1.Type, cres.Type)
-	require.Equal(t, "mysql-bin.00099", cres.LogFile)
-
-	c3 := BinlogCoordinates{LogFile: "mysql.00.prod.com.00100", LogPos: 104}
-	cres, err = c3.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, c1.Type, cres.Type)
-	require.Equal(t, "mysql.00.prod.com.00099", cres.LogFile)
-
-	c4 := BinlogCoordinates{LogFile: "mysql.00.prod.com.00000", LogPos: 104}
-	_, err = c4.PreviousFileCoordinates()
-
-	require.Error(t, err)
 }
 
 func TestBinlogCoordinatesAsKey(t *testing.T) {

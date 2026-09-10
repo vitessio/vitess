@@ -86,7 +86,7 @@ func Init(fs *pflag.FlagSet) error {
 func newLogger(level slog.Level) *slog.Logger {
 	if logFormat == "text" || testing.Testing() {
 		w := os.Stderr
-		return slog.New(tint.NewHandler(w, &tint.Options{
+		return slog.New(tint.NewTextHandler(w, &tint.Options{
 			AddSource:  true,
 			Level:      level,
 			TimeFormat: "2006-01-02 15:04:05.000 MST",

@@ -80,7 +80,7 @@ func main() {
 	args := servenv.ParseFlagsWithArgs("vtctlclient")
 
 	closer := trace.StartTracing("vtctlclient")
-	defer trace.LogErrorsWhenClosing(closer)
+	defer trace.LogErrorsWhenClosing(closer)()
 
 	logger := logutil.NewConsoleLogger()
 

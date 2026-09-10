@@ -45,7 +45,7 @@ func TestPersistConfig(t *testing.T) {
 		return cfg
 	}
 
-	setup := func(t *testing.T, v *Viper, minWaitInterval time.Duration) (afero.Fs, <-chan struct{}) {
+	setup := func(t *testing.T, v *Viper, minWaitInterval time.Duration) (afero.Fs, <-chan time.Time) {
 		t.Helper()
 
 		fs := afero.NewMemMapFs()
@@ -66,8 +66,11 @@ func TestPersistConfig(t *testing.T) {
 		require.NoError(t, static.ReadInConfig())
 		require.Equal(t, cfg.Foo, static.GetInt("foo"))
 
-		ch := make(chan struct{}, 1)
-		v.onConfigWrite = func() { ch <- struct{}{} }
+		// The hook runs synchronously in the persist goroutine right after
+		// each disk write, so the timestamps it sends can be used to verify
+		// the spacing between writes.
+		ch := make(chan time.Time, 1)
+		v.onConfigWrite = func() { ch <- time.Now() }
 		v.SetFs(fs)
 
 		cancel, err := v.Watch(t.Context(), static, minWaitInterval)
@@ -80,28 +83,33 @@ func TestPersistConfig(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		v := New()
 
-		minPersistWaitInterval := 10 * time.Second
+		minPersistWaitInterval := 500 * time.Millisecond
 		get := AdaptGetter("foo", func(v *viper.Viper) func(key string) int { return v.GetInt }, v)
 		fs, ch := setup(t, v, minPersistWaitInterval)
 
 		old := get("foo")
 		loadConfig(t, fs)
 		v.Set("foo", old+1)
-		// This should happen immediately in-memory and on-disk.
+		// This should happen immediately in-memory, and on-disk once the
+		// initial wait interval elapses.
 		assert.Equal(t, old+1, get("foo"))
-		<-ch
+		firstPersist := <-ch
 		assert.Equal(t, old+1, loadConfig(t, fs).Foo)
 
 		v.Set("foo", old+2)
-		// This should _also_ happen immediately in-memory, but not on-disk.
-		// It will take up to 2 * minPersistWaitInterval to reach the disk.
+		// This should _also_ happen immediately in-memory, but the on-disk
+		// write is debounced by minPersistWaitInterval.
 		assert.Equal(t, old+2, get("foo"))
-		assert.Equal(t, old+1, loadConfig(t, fs).Foo)
 
+		// Every disk write signals ch, so the next signal must be the second
+		// persist. Its timestamp being at least minPersistWaitInterval after
+		// the first proves the debounce: this holds regardless of scheduling
+		// pauses, which can only widen the gap, never shrink it.
 		select {
-		case <-ch:
-		case <-time.After(3 * minPersistWaitInterval):
-			assert.Fail(t, "config was not persisted quickly enough", "config took longer than %s to persist (minPersistWaitInterval = %s)", 3*minPersistWaitInterval, minPersistWaitInterval)
+		case secondPersist := <-ch:
+			assert.GreaterOrEqual(t, secondPersist.Sub(firstPersist), minPersistWaitInterval)
+		case <-time.After(30 * time.Second):
+			assert.Fail(t, "config was not persisted quickly enough", "config took longer than 30s to persist (minPersistWaitInterval = %s)", minPersistWaitInterval)
 		}
 
 		assert.Equal(t, old+2, loadConfig(t, fs).Foo)

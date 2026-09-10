@@ -54,7 +54,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	// mcmp.Exec("set sql_mode=''")
 
 	// insert data
-	mcmp.Exec("INSERT INTO emp(empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES (7369,'SMITH','CLERK',7902,'1980-12-17',800,NULL,20), (7499,'ALLEN','SALESMAN',7698,'1981-02-20',1600,300,30), (7521,'WARD','SALESMAN',7698,'1981-02-22',1250,500,30), (7566,'JONES','MANAGER',7839,'1981-04-02',2975,NULL,20), (7654,'MARTIN','SALESMAN',7698,'1981-09-28',1250,1400,30), (7698,'BLAKE','MANAGER',7839,'1981-05-01',2850,NULL,30), (7782,'CLARK','MANAGER',7839,'1981-06-09',2450,NULL,10), (7788,'SCOTT','ANALYST',7566,'1982-12-09',3000,NULL,20), (7839,'KING','PRESIDENT',NULL,'1981-11-17',5000,NULL,10), (7844,'TURNER','SALESMAN',7698,'1981-09-08',1500,0,30), (7876,'ADAMS','CLERK',7788,'1983-01-12',1100,NULL,20), (7900,'JAMES','CLERK',7698,'1981-12-03',950,NULL,30), (7902,'FORD','ANALYST',7566,'1981-12-03',3000,NULL,20), (7934,'MILLER','CLERK',7782,'1982-01-23',1300,NULL,10)")
+	mcmp.Exec(`INSERT INTO emp(empno, ename, job, mgr, hiredate, sal, comm, deptno, grade, skills, meta) VALUES (7369,'SMITH','CLERK',7902,'1980-12-17',800,NULL,20,'A','sql','{"lvl": 1}'), (7499,'ALLEN','SALESMAN',7698,'1981-02-20',1600,300,30,'B','go','{"lvl": 2}'), (7521,'WARD','SALESMAN',7698,'1981-02-22',1250,500,30,'C','sql,go','{"lvl": 3}'), (7566,'JONES','MANAGER',7839,'1981-04-02',2975,NULL,20,'D','java','{"lvl": 4}'), (7654,'MARTIN','SALESMAN',7698,'1981-09-28',1250,1400,30,'E','go,java','{"lvl": 5}'), (7698,'BLAKE','MANAGER',7839,'1981-05-01',2850,NULL,30,'A','python','{"lvl": 6}'), (7782,'CLARK','MANAGER',7839,'1981-06-09',2450,NULL,10,'B','sql,python','{"lvl": 7}'), (7788,'SCOTT','ANALYST',7566,'1982-12-09',3000,NULL,20,'C','java,python','{"lvl": 8}'), (7839,'KING','PRESIDENT',NULL,'1981-11-17',5000,NULL,10,'D','sql,go,java','{"lvl": 9}'), (7844,'TURNER','SALESMAN',7698,'1981-09-08',1500,0,30,'E','go,java,python','{"lvl": 10}'), (7876,'ADAMS','CLERK',7788,'1983-01-12',1100,NULL,20,'A','','{"lvl": 11}'), (7900,'JAMES','CLERK',7698,'1981-12-03',950,NULL,30,'B','sql','{"lvl": 12}'), (7902,'FORD','ANALYST',7566,'1981-12-03',3000,NULL,20,'C','go','{"lvl": 13}'), (7934,'MILLER','CLERK',7782,'1982-01-23',1300,NULL,10,'D','java','{"lvl": 14}')`)
 	mcmp.Exec("INSERT INTO dept(deptno, dname, loc) VALUES ('10','ACCOUNTING','NEW YORK'), ('20','RESEARCH','DALLAS'), ('30','SALES','CHICAGO'), ('40','OPERATIONS','BOSTON')")
 
 	return mcmp, func() {
@@ -335,4 +335,38 @@ func TestBuggyQueries(t *testing.T) {
 	mcmp.Exec("select count(*) from (select count(*) from dept as tbl0) as tbl0")
 	mcmp.Exec("select count(*), count(*) from (select count(*) from dept as tbl0) as tbl0, dept as tbl1")
 	mcmp.Exec(`select distinct case max(tbl0.ename) when min(tbl0.job) then 'sole' else count(case when false then -27 when 'gazelle' then tbl0.deptno end) end as caggr0 from emp as tbl0`)
+}
+
+// TestEnumSetJSONTypeAxes exercises the ENUM, SET and JSON type axes end to end
+// against MySQL, which are otherwise thinly covered by this suite. The ENUM
+// numeric-context cases below are pushdown-friendly (MySQL evaluates them on each
+// tablet), so they assert end-to-end parity with MySQL for #20454's behavior
+// rather than directly guarding the vtgate evalengine fix; the precise regression
+// guard for the 1-based ordinal belongs at the evalengine unit layer.
+func TestEnumSetJSONTypeAxes(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+
+	// projection of each type
+	mcmp.Exec("select empno, grade, skills, meta from emp order by empno")
+
+	// ENUM in numeric context — end-to-end parity with MySQL (see #20454)
+	mcmp.Exec("select empno, grade + 0 from emp order by empno")
+	mcmp.Exec("select empno, cast(grade as unsigned) from emp order by empno")
+	mcmp.Exec("select empno from emp where grade = 3 order by empno")
+	mcmp.Exec("select empno from emp where grade > 2 order by empno")
+
+	// ENUM string comparison and ordering
+	mcmp.Exec("select empno from emp where grade = 'C' order by empno")
+	mcmp.Exec("select grade, empno from emp order by grade, empno")
+
+	// SET projection and membership
+	mcmp.Exec("select empno, skills from emp order by empno")
+	mcmp.Exec("select empno from emp where find_in_set('go', skills) order by empno")
+
+	// JSON extraction
+	mcmp.Exec("select empno, json_extract(meta, '$.lvl') from emp order by empno")
+	mcmp.Exec("select empno from emp where json_extract(meta, '$.lvl') > 7 order by empno")
 }

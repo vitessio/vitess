@@ -21,13 +21,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -157,17 +160,33 @@ func (qrs *Rules) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// FilterByPlan creates a new Rules by prefiltering on the query and planId. This allows
-// us to create query plan specific Rules out of the original Rules. In the new rules,
-// query, plans and tableNames predicates are empty.
-func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
+// FilterByPlan creates a new Rules by prefiltering on the query and plan ids.
+// This allows us to create query plan specific Rules out of the original
+// Rules. In the new rules, query, plans and tableNames predicates are empty.
+// A rule matches if any of the given plan ids satisfies its plan condition;
+// most plans carry a single id, the streaming path adds PlanSelectStream for
+// the shapes it labeled before v25.
+func (qrs *Rules) FilterByPlan(query string, planids []planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
 	var newrules []*Rule
 	for _, qr := range qrs.rules {
-		if newrule := qr.FilterByPlan(query, planid, tableNames); newrule != nil {
+		if newrule := qr.FilterByPlan(query, planids, tableNames); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
 	return &Rules{newrules}
+}
+
+// PlanMatchesExclusively reports whether any rule matches the query and tables
+// through exclusiveID but not through any of baseIDs — that is, exclusiveID is
+// the sole reason the rule applies. It is used to flag rules that only match a
+// statement through a deprecated compatibility plan type.
+func (qrs *Rules) PlanMatchesExclusively(query string, baseIDs []planbuilder.PlanType, exclusiveID planbuilder.PlanType, tableNames ...string) bool {
+	for _, qr := range qrs.rules {
+		if qr.matchesExclusively(query, baseIDs, exclusiveID, tableNames) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetAction runs the input against the rules engine and returns the action to be performed.
@@ -459,15 +478,15 @@ Error:
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid operator %v for type %T (%v)", op, value, value)
 }
 
-// FilterByPlan returns a new Rule if the query and planid match.
+// FilterByPlan returns a new Rule if the query and any of the plan ids match.
 // The new Rule will contain all the original constraints other
-// than the plan and query. If the plan and query don't match the Rule,
+// than the plan and query. If the plans and query don't match the Rule,
 // then it returns nil.
-func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNames []string) (newqr *Rule) {
+func (qr *Rule) FilterByPlan(query string, planids []planbuilder.PlanType, tableNames []string) (newqr *Rule) {
 	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
-	if !planMatch(qr.plans, planid) {
+	if !planMatch(qr.plans, planids) {
 		return nil
 	}
 	if !tableMatch(qr.tableNames, tableNames) {
@@ -480,6 +499,16 @@ func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNam
 	newqr.plans = nil
 	newqr.tableNames = nil
 	return newqr
+}
+
+// matchesExclusively reports whether the rule matches the query and tables
+// through exclusiveID but not through any of baseIDs. A rule with no plan
+// condition matches every plan id and so is never exclusive to one.
+func (qr *Rule) matchesExclusively(query string, baseIDs []planbuilder.PlanType, exclusiveID planbuilder.PlanType, tableNames []string) bool {
+	return reMatch(qr.query.Regexp, query) &&
+		tableMatch(qr.tableNames, tableNames) &&
+		planMatchOne(qr.plans, exclusiveID) &&
+		!planMatch(qr.plans, baseIDs)
 }
 
 // GetAction returns the action for a single rule.
@@ -523,11 +552,17 @@ func reMatch(re *regexp.Regexp, val string) bool {
 	return re == nil || re.MatchString(val)
 }
 
-func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
+func planMatch(plans []planbuilder.PlanType, planids []planbuilder.PlanType) bool {
 	if plans == nil {
 		return true
 	}
-	return slices.Contains(plans, plan)
+	return slices.ContainsFunc(planids, func(planid planbuilder.PlanType) bool {
+		return slices.Contains(plans, planid)
+	})
+}
+
+func planMatchOne(plans []planbuilder.PlanType, planid planbuilder.PlanType) bool {
+	return plans == nil || slices.Contains(plans, planid)
 }
 
 func tableMatch(tableNames []string, otherNames []string) bool {
@@ -926,6 +961,12 @@ func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 				if !ok {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid plan name: %s", pv)
 				}
+				if pt == planbuilder.PlanSelectStream {
+					// qr.Name may not be set yet (map iteration order), so
+					// read the name from the raw rule info.
+					name, _ := ruleInfo["Name"].(string)
+					warnSelectStreamDeprecated(name)
+				}
 				qr.AddPlanCond(pt)
 			}
 		case "TableNames":
@@ -961,6 +1002,21 @@ func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 		}
 	}
 	return qr, nil
+}
+
+// selectStreamDeprecationOnce limits the SelectStream deprecation warning to
+// one line per process: rule files are re-parsed on every file-watch or topo
+// update and may contain many SelectStream rules, and the warning is equally
+// actionable however often the name occurs.
+var selectStreamDeprecationOnce sync.Once
+
+func warnSelectStreamDeprecated(ruleName string) {
+	selectStreamDeprecationOnce.Do(func() {
+		log.Warn("query rule uses the deprecated SelectStream plan name, which will be removed in v26; "+
+			"it matches only queries on the streaming path, for the statement shapes streamed reads carried before v25; "+
+			"update rules to use concrete plan names (Select, SelectImpossible, SelectLockFunc, Nextval, Show, ShowMigrations, OtherRead)",
+			slog.String("rule", ruleName))
+	})
 }
 
 func buildBindVarCondition(bvc any) (name string, onAbsent, onMismatch bool, op Operator, value any, err error) {

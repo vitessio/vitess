@@ -208,12 +208,10 @@ func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
 		combinedLabels[i] = IsDimensionCombined(label)
 	}
 	t := &MultiTimings{
-		Timings: Timings{
-			histograms: make(map[string]*Histogram),
-			name:       name,
-			help:       help,
-			label:      safeJoinLabels(labels, combinedLabels),
-		},
+		histograms:     make(map[string]*Histogram),
+		name:           name,
+		help:           help,
+		label:          safeJoinLabels(labels, combinedLabels),
 		labels:         labels,
 		combinedLabels: combinedLabels,
 	}

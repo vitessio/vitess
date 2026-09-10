@@ -18,67 +18,27 @@ package planbuilder
 
 import (
 	"context"
-	"regexp"
-	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// regexParams checks that argument names are in the form v1, v2, v3...
-var regexParams = regexp.MustCompile(`^v\d+`)
-
-func prepareStmt(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlparser.PrepareStmt) (*planResult, error) {
-	stmtName := pStmt.Name.Lowered()
-	vschema.ClearPrepareData(stmtName)
-
-	var pQuery string
-	var err error
+func prepareStmt(pStmt *sqlparser.PrepareStmt) (*planResult, error) {
+	prep := &engine.PrepareStmt{
+		Name: pStmt.Name.Lowered(),
+	}
 	switch expr := pStmt.Statement.(type) {
 	case *sqlparser.Literal:
-		pQuery = expr.Val
+		prep.Query = expr.Val
 	case *sqlparser.Variable:
-		pQuery, err = fetchUDVValue(vschema, expr.Name.Lowered())
-	case *sqlparser.Argument:
-		udv, _ := strings.CutPrefix(expr.Name, sqlparser.UserDefinedVariableName)
-		pQuery, err = fetchUDVValue(vschema, udv)
+		prep.UserDefinedVariable = expr.Name.Lowered()
 	default:
 		return nil, vterrors.VT13002("prepare statement should not have : %T", pStmt.Statement)
 	}
-	if err != nil {
-		return nil, err
-	}
 
-	plan, err := vschema.PlanPrepareStatement(ctx, pQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	vschema.StorePrepareData(stmtName, &vtgatepb.PrepareData{
-		PrepareStatement: plan.Original,
-		ParamsCount:      int32(plan.ParamsCount),
-	})
-
-	return &planResult{
-		primitive: engine.NewRowsPrimitive(nil, nil),
-		tables:    plan.TablesUsed,
-	}, nil
-}
-
-func fetchUDVValue(vschema plancontext.VSchema, udv string) (string, error) {
-	bv := vschema.GetUDV(udv)
-	if bv == nil {
-		return "", vterrors.VT03024(udv)
-	}
-	val, err := sqltypes.BindVariableToValue(bv)
-	if err != nil {
-		return "", err
-	}
-	return val.ToString(), nil
+	return newPlanResult(prep), nil
 }
 
 func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStmt *sqlparser.ExecuteStmt) (*planResult, error) {
@@ -105,18 +65,8 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 	}, nil
 }
 
-func dropPreparedStatement(
-	vschema plancontext.VSchema,
-	stmt *sqlparser.DeallocateStmt,
-) (*planResult, error) {
-	stmtName := stmt.Name.Lowered()
-	prepareData := vschema.GetPrepareData(stmtName)
-	if prepareData == nil {
-		return nil, vterrors.VT09011(stmtName, "DEALLOCATE PREPARE")
-	}
-
-	vschema.ClearPrepareData(stmtName)
-	return &planResult{
-		primitive: engine.NewRowsPrimitive(nil, nil),
-	}, nil
+func dropPreparedStatement(stmt *sqlparser.DeallocateStmt) (*planResult, error) {
+	return newPlanResult(&engine.DeallocateStmt{
+		Name: stmt.Name.Lowered(),
+	}), nil
 }

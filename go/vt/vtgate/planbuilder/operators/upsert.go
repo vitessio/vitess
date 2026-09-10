@@ -55,6 +55,9 @@ func (u *Upsert) setInputs(inputs []Operator) {
 
 func (u *Upsert) Inputs() []Operator {
 	var inputs []Operator
+	if len(u.Sources) > 0 {
+		inputs = make([]Operator, 0, 2*len(u.Sources))
+	}
 	for _, source := range u.Sources {
 		inputs = append(inputs, source.Insert, source.Update)
 	}

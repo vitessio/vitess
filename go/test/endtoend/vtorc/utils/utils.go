@@ -383,6 +383,24 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 	}
 }
 
+// FindReplicaAndRdonly returns the shard's replica tablet (the "replica"-type tablet that is
+// not the given primary) and its rdonly tablet. It fails the test if either cannot be found.
+func FindReplicaAndRdonly(t *testing.T, shard *cluster.Shard, primary *cluster.Vttablet) (replica, rdonly *cluster.Vttablet) {
+	t.Helper()
+	for _, tablet := range shard.Vttablets {
+		// we know we have only two replica tablets, so the one not the primary must be the other replica
+		if tablet.Alias != primary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	require.NotNil(t, replica, "could not find replica tablet")
+	require.NotNil(t, rdonly, "could not find rdonly tablet")
+	return replica, rdonly
+}
+
 // CheckPrimaryTablet waits until the specified tablet becomes the primary tablet
 // Makes sure the tablet type is primary, and its health check agrees.
 func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet, checkServing bool) {
