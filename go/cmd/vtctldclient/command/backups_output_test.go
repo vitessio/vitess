@@ -151,6 +151,24 @@ func TestConsumeBackupStream_TextEmpty(t *testing.T) {
 	assert.Empty(t, errOut.String())
 }
 
+// TestHandleBackupStream_EmptySentinel pins the contract between the command and
+// main: an empty backup in --json mode reports ErrEmptyBackup (which main maps to
+// EmptyBackupExitCode) rather than exiting the process here, so cobra still runs
+// the root command's cleanup. Without --json it stays a plain success.
+func TestHandleBackupStream_EmptySentinel(t *testing.T) {
+	emptyStream := func() *fakeBackupStream {
+		return &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
+			{Status: tabletmanagerdatapb.BackupResponse_EMPTY},
+		}}
+	}
+
+	err := handleBackupStream(emptyStream(), true /* outputJSON */)
+	require.ErrorIs(t, err, ErrEmptyBackup, "--json empty backup must report the sentinel")
+
+	err = handleBackupStream(emptyStream(), false /* outputJSON */)
+	require.NoError(t, err, "without --json an empty backup stays a plain success")
+}
+
 func TestConsumeBackupStream_Error(t *testing.T) {
 	// A terminal error from the stream is returned to the caller.
 	stream := &erroringBackupStream{}

@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -501,9 +502,16 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 		}
 
 		// Send the terminal message carrying the manifest and outcome status, as
-		// a real tablet does at the end of a successful backup.
+		// a real tablet does at the end of a successful backup. Like a real
+		// tablet, it also carries a completion log event: older peers dereference
+		// Event unconditionally, so grpctmserver never sends a nil one.
 		if testdata.Manifest != "" || testdata.Status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
 			stream.ch <- &tabletmanagerdatapb.BackupResponse{
+				Event: &logutilpb.Event{
+					Time:  protoutil.TimeToProto(time.Now()),
+					Level: logutilpb.Level_INFO,
+					Value: fmt.Sprintf("backup completed: %s", testdata.Status),
+				},
 				Manifest: testdata.Manifest,
 				Status:   testdata.Status,
 			}

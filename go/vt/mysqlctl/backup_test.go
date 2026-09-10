@@ -125,6 +125,72 @@ func TestBackupEmitsStats(t *testing.T) {
 
 // TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
 // backupstorage.Params to backupstorage, but only if it responds to
+// TestBackupReturnsManifestAndResult covers the values Backup returns to its
+// callers: the raw MANIFEST read back from storage for a usable backup, the
+// BackupEmpty classification for a no-op incremental, and the fact that a
+// failure to read the manifest back is non-fatal. Without these, a regression
+// that makes the manifest always empty -- i.e. silently no-ops the feature --
+// would still pass the rest of this suite.
+func TestBackupReturnsManifestAndResult(t *testing.T) {
+	const manifestJSON = `{"BackupName":"test-backup","BackupMethod":"fake"}`
+
+	// backupHandleNamed builds a read handle matching the name Backup derives
+	// from BackupTime/TabletAlias, serving the given MANIFEST contents.
+	backupHandleNamed := func(env *fakeBackupRestoreEnv, contents string, readErr error) {
+		name := fmt.Sprintf("%v.%v",
+			env.backupParams.BackupTime.UTC().Format(BackupTimestampFormat),
+			env.backupParams.TabletAlias,
+		)
+		env.backupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
+			BackupHandles: []backupstorage.BackupHandle{
+				&FakeBackupHandle{
+					NameV: name,
+					ReadFileReturnF: func(_ context.Context, filename string) (io.ReadCloser, error) {
+						if readErr != nil {
+							return nil, readErr
+						}
+						require.Equal(t, backupManifestFileName, filename)
+						return io.NopCloser(strings.NewReader(contents)), nil
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("usable backup returns the persisted manifest", func(t *testing.T) {
+		env := createFakeBackupRestoreEnv(t)
+		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
+		backupHandleNamed(env, manifestJSON, nil)
+
+		manifest, result, err := Backup(env.ctx, env.backupParams)
+		require.NoError(t, err, env.logger.Events)
+		assert.Equal(t, BackupUsable, result)
+		assert.Equal(t, manifestJSON, manifest, "the raw MANIFEST bytes should be returned verbatim")
+	})
+
+	t.Run("empty incremental returns no manifest", func(t *testing.T) {
+		env := createFakeBackupRestoreEnv(t)
+		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupEmpty, nil}
+		backupHandleNamed(env, manifestJSON, nil)
+
+		manifest, result, err := Backup(env.ctx, env.backupParams)
+		require.NoError(t, err, env.logger.Events)
+		assert.Equal(t, BackupEmpty, result)
+		assert.Empty(t, manifest, "an empty backup persists no manifest")
+	})
+
+	t.Run("manifest read failure does not fail the backup", func(t *testing.T) {
+		env := createFakeBackupRestoreEnv(t)
+		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
+		backupHandleNamed(env, "", errors.New("storage unavailable"))
+
+		manifest, result, err := Backup(env.ctx, env.backupParams)
+		require.NoError(t, err, "the backup succeeded; reading its manifest back is best-effort")
+		assert.Equal(t, BackupUsable, result)
+		assert.Empty(t, manifest)
+	})
+}
+
 // backupstorage.WithParams.
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)

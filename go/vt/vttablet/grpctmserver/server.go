@@ -18,16 +18,16 @@ package grpctmserver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path/filepath"
 	"time"
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -711,15 +711,27 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	// A populated Event keeps the terminal message safe for those peers, which log
 	// it as an ordinary line and ignore the unknown manifest/status fields.
 	status := backupResultToStatus(result)
-	return stream.Send(&tabletmanagerdatapb.BackupResponse{
-		Event: &logutilpb.Event{
-			Time:  protoutil.TimeToProto(time.Now()),
-			Level: logutilpb.Level_INFO,
-			Value: fmt.Sprintf("backup completed: %s", status),
-		},
+	// Build the completion event through logutil so it carries the same
+	// Time/Level/File/Line shape as every other event on this stream; a
+	// hand-built event would render with an empty "file:line]" prefix.
+	completion := logutil.NewMemoryLogger()
+	completion.Infof("backup completed: %s", status)
+	if sendErr := stream.Send(&tabletmanagerdatapb.BackupResponse{
+		Event:    completion.Events[0],
 		Manifest: manifest,
 		Status:   status,
-	})
+	}); sendErr != nil {
+		// The backup itself already succeeded and is persisted, so failing to
+		// deliver this last message must not turn it into a reported failure.
+		// This mirrors the logger callback above, which likewise tolerates a
+		// disconnected client. Note the manifest can be large on shards with
+		// very many files, so an oversized message is one way this can fail.
+		log.Warn("backup completed but sending the terminal Backup message failed",
+			slog.String("status", status.String()),
+			slog.Any("error", sendErr),
+		)
+	}
+	return nil
 }
 
 // backupResultToStatus maps the mysqlctl backup classification to the proto

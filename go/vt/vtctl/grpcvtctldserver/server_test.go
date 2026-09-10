@@ -782,7 +782,11 @@ func TestBackup(t *testing.T) {
 				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
 				term := responses[len(responses)-1]
-				assert.Nil(t, term.Event, "terminal message should carry no log event")
+				// The terminal message must carry a non-nil Event: older peers
+				// dereference Event unconditionally, so a nil one would panic
+				// them during a mixed-version rolling upgrade or downgrade.
+				require.NotNil(t, term.Event, "terminal message must carry a completion log event")
+				assert.Contains(t, term.Event.Value, "backup completed")
 				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
 				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},

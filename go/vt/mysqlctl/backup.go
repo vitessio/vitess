@@ -207,25 +207,31 @@ func Backup(ctx context.Context, params BackupParams) (manifest string, result B
 		}
 		return "", backupResult, err
 	}
+	// The backup engine ran; record its duration whether or not finalizing the
+	// backup succeeded, matching the stats emitted before the manifest/result
+	// return values were introduced.
+	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
+
 	if finishErr != nil {
 		// The backup engine succeeded but finalizing the backup (EndBackup/
 		// AbortBackup) failed, so the backup is not usable.
 		return "", BackupUnusable, finishErr
 	}
 
-	// The backup worked.
-	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
-
 	// For a usable backup, read back the persisted MANIFEST so callers can identify
 	// and log the backup (e.g. by BackupName) without scraping log lines. Reading it
 	// back is best-effort: the backup itself already succeeded, so a read failure is
 	// logged and returns an empty manifest rather than failing the backup.
+	//
+	// The read error is kept in a local rather than assigned to the named result
+	// err, so it can never leak out as a backup failure.
 	if backupResult == BackupUsable {
-		manifest, err = readBackupManifest(ctx, bs, backupDir, name)
-		if err != nil {
-			logger.Warningf("backup %v succeeded but reading its MANIFEST failed: %v", name, err)
-			manifest = ""
+		readManifest, readErr := readBackupManifest(ctx, bs, backupDir, name)
+		if readErr != nil {
+			logger.Warningf("backup %v succeeded but reading its MANIFEST failed: %v", name, readErr)
+		} else {
+			manifest = readManifest
 		}
 	}
 	return manifest, backupResult, nil
