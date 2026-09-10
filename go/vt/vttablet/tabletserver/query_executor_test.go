@@ -2766,6 +2766,14 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 			30*time.Second, 10*time.Millisecond, "the streaming connection a CALL ran on must be closed")
 		assert.EqualValues(t, 1, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "the discard must be counted on the streaming pool")
 		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "and not on the OLTP pool")
+
+		// A streaming CALL that fails with the procedure's own error also
+		// costs its connection, and that discard must be counted like the
+		// buffered path counts it.
+		db.AddRejectedQuery(query, errors.New("procedure failed"))
+		err = newTestQueryExecutorStreaming(ctx, tsv, query, 0).Stream(func(*sqltypes.Result) error { return nil })
+		require.ErrorContains(t, err, "procedure failed")
+		assert.EqualValues(t, 2, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "a failed streaming CALL's discard must be counted too")
 	})
 }
 

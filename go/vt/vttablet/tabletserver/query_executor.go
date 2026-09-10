@@ -714,19 +714,18 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 
 	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
+		// The connection is never reused after a CALL (see execCallProc),
+		// whatever the outcome: a transaction the procedure leaked dies with it
+		// (the CALL still reports it, as the client's procedure is at fault),
+		// and a mid-stream error may have left it with unread packets.
+		defer qre.discardPooledConnAfterCall(qre.tsv.qe.streamConns, dbConn)
 		if err != nil {
-			dbConn.Close()
 			return err
 		}
 		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
 		if err != nil {
-			dbConn.Close()
 			return err
 		}
-		// The connection is never reused after a CALL (see execCallProc), so a
-		// transaction the procedure leaked dies with it; the CALL still reports
-		// it, as the client's procedure is at fault.
-		qre.discardPooledConnAfterCall(qre.tsv.qe.streamConns, dbConn)
 		if multipleResultsets {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
