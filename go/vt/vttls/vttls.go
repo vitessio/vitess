@@ -149,7 +149,19 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	case Preferred, Required:
 		config.InsecureSkipVerify = true
 		if checker != nil {
-			config.VerifyConnection = checker.verifyConnection
+			config.VerifyConnection = func(cs tls.ConnectionState) error {
+				// Go verifies nothing in these modes, so the chain
+				// that the CRLs are held against is built here, to
+				// the configured CA or the system roots, as verify_ca
+				// does. A peer whose chain cannot be built is
+				// rejected: its certificates cannot be checked, and
+				// the ones it presents are its own to choose.
+				chains, err := verifyPeerChain(config.RootCAs, cs)
+				if err != nil {
+					return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "cannot check the revocation of the peer's certificates against the configured CRL, since no chain to a trusted CA could be built for them: %v", err)
+				}
+				return checker.check(chains)
+			}
 		}
 	case VerifyCA:
 		config.InsecureSkipVerify = true
@@ -163,7 +175,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 			if checker == nil {
 				return nil
 			}
-			return checker.check(cs.PeerCertificates, chains)
+			return checker.check(chains)
 		}
 	case VerifyIdentity:
 		// Go's own verification is the strictest and correct.

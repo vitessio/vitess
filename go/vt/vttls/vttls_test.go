@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -42,7 +42,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unicode/utf16"
 
 	"github.com/stretchr/testify/require"
 
@@ -132,8 +131,9 @@ func recordResumption(config *tls.Config) *bool {
 
 // TestClientConfigCRL checks the revocation of server certificates by
 // a client configured with a CRL, through real TLS handshakes: in
-// every SSL mode, on resumed sessions, with and without a configured
-// CA, and against chains crafted to dodge or exhaust the check.
+// every SSL mode, on resumed sessions, and against the chain that the
+// client builds for the server itself in the modes where Go verifies
+// none.
 func TestClientConfigCRL(t *testing.T) {
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)
@@ -165,13 +165,26 @@ func TestClientConfigCRL(t *testing.T) {
 		})
 	}
 
-	t.Run("without a configured CA, the issuer presented by the server binds the CRL", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
-		require.NoError(t, err)
+	// In the modes where Go verifies nothing, the chain the CRL is
+	// held against is built to the configured CA, or to the system
+	// roots without one, which the test CA is not among.
+	for _, mode := range []SslMode{Preferred, Required} {
+		t.Run(fmt.Sprintf("in %s mode, a server whose chain cannot be built to a trusted CA is rejected when a CRL is configured", mode), func(t *testing.T) {
+			clientConfig, err := ClientConfig(mode, "", "", "", certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+			require.NoError(t, err)
 
-		res := handshake(t, revokedServer, clientConfig)
-		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
+			res := handshake(t, validServer, clientConfig)
+			require.ErrorContains(t, res.clientErr, "cannot check the revocation of the peer's certificates against the configured CRL, since no chain to a trusted CA could be built")
+		})
+		t.Run(fmt.Sprintf("in %s mode, a server whose chain cannot be built to a trusted CA is accepted when no CRL is configured", mode), func(t *testing.T) {
+			clientConfig, err := ClientConfig(mode, "", "", "", "", certs.ServerName, tls.VersionTLS12)
+			require.NoError(t, err)
+
+			res := handshake(t, validServer, clientConfig)
+			require.NoError(t, res.clientErr)
+			require.NoError(t, res.serverErr)
+		})
+	}
 
 	// These servers present their certificate alone, without the
 	// intermediate CA that issued it.
@@ -179,27 +192,9 @@ func TestClientConfigCRL(t *testing.T) {
 	require.NoError(t, err)
 	leafOnlyValidServer, err := ServerConfig(certs.ServerCert, certs.ServerKey, "", "", "", tls.VersionTLS12)
 	require.NoError(t, err)
+	rootCA := path.Join(root, "ca-cert.pem")
 
-	t.Run("a server that presents only its certificate is rejected when its issuer is not available", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, leafOnlyValidServer, clientConfig)
-		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.ServerName)
-	})
-
-	t.Run("a server that presents only its certificate is accepted when no CRL is configured for its issuer", func(t *testing.T) {
-		// The only CRL configured comes from the clients' CA, which
-		// has nothing to say about the server's certificate.
-		clientConfig, err := ClientConfig(Required, "", "", "", certs.ClientCRL, certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, leafOnlyValidServer, clientConfig)
-		require.NoError(t, res.clientErr)
-		require.NoError(t, res.serverErr)
-	})
-
-	t.Run("a server that presents only its certificate is checked against the configured CA", func(t *testing.T) {
+	t.Run("a server that presents only its certificate is checked against the chain built to the configured CA", func(t *testing.T) {
 		clientConfig, err := ClientConfig(Required, "", "", certs.ServerCA, certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
 		require.NoError(t, err)
 		res := handshake(t, leafOnlyRevokedServer, clientConfig)
@@ -212,19 +207,28 @@ func TestClientConfigCRL(t *testing.T) {
 		require.NoError(t, res.serverErr)
 	})
 
-	leaf := loadOneCert(t, certs.ServerCert)
-	intermediate := loadOneCert(t, certs.ServerCA)
-	keyPair, err := tls.LoadX509KeyPair(certs.ServerCert, certs.ServerKey)
-	require.NoError(t, err)
-	serverPresenting := func(chain ...*x509.Certificate) *tls.Config {
-		certificate := tls.Certificate{PrivateKey: keyPair.PrivateKey}
-		for _, cert := range chain {
-			certificate.Certificate = append(certificate.Certificate, cert.Raw)
-		}
-		return &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}
-	}
+	t.Run("a server that presents only its certificate is rejected when the configured CA is not its issuer", func(t *testing.T) {
+		// The client trusts the root, and the server leaves out the
+		// intermediate that would connect its certificate to it.
+		clientConfig, err := ClientConfig(Required, "", "", rootCA, certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
 
-	for _, mode := range []SslMode{Required, VerifyCA, VerifyIdentity} {
+		res := handshake(t, leafOnlyValidServer, clientConfig)
+		require.ErrorContains(t, res.clientErr, "no chain to a trusted CA could be built")
+	})
+
+	t.Run("a server certificate is accepted when no CRL is configured for its issuer", func(t *testing.T) {
+		// The only CRL configured comes from the clients' CA, which
+		// has nothing to say about the server's certificate.
+		clientConfig, err := ClientConfig(Required, "", "", certs.ServerCA, certs.ClientCRL, certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+
+		res := handshake(t, leafOnlyValidServer, clientConfig)
+		require.NoError(t, res.clientErr)
+		require.NoError(t, res.serverErr)
+	})
+
+	for _, mode := range []SslMode{Preferred, Required, VerifyCA, VerifyIdentity} {
 		for _, version := range tlsVersions {
 			t.Run(fmt.Sprintf("a revoked server certificate is rejected on a resumed %s session in %s mode", tls.VersionName(version), mode), func(t *testing.T) {
 				// The session is established before the client has
@@ -262,6 +266,18 @@ func TestClientConfigCRL(t *testing.T) {
 		}
 	}
 
+	leaf := loadOneCert(t, certs.ServerCert)
+	intermediate := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCert, certs.ServerKey)
+	require.NoError(t, err)
+	serverPresenting := func(chain ...*x509.Certificate) *tls.Config {
+		certificate := tls.Certificate{PrivateKey: keyPair.PrivateKey}
+		for _, cert := range chain {
+			certificate.Certificate = append(certificate.Certificate, cert.Raw)
+		}
+		return &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}
+	}
+
 	t.Run("verify_ca hands the chain it builds to the check, so certificates beyond it are not inspected", func(t *testing.T) {
 		// The server presents, after its own chain, a certificate
 		// that the client's CRLs revoke along with that certificate's
@@ -275,22 +291,30 @@ func TestClientConfigCRL(t *testing.T) {
 	})
 
 	// Revoke the intermediate CA that issued the server certificate,
-	// under the root CA, and have servers present that chain with
-	// and without padding. The client has no CA configured, so the
-	// issuers are only found among the certificates presented.
+	// under the root CA.
 	intermediateName := strings.TrimSuffix(filepath.Base(certs.ServerCA), "-cert.pem")
 	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, intermediateName)
 	rootCRL := path.Join(root, "ca-crl.pem")
-	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
 
-	t.Run("verify_ca consults the root's CRL for a configured intermediate that the chain ends at", func(t *testing.T) {
-		// The CA file holds the intermediate and the root, so
-		// verification of a server that presents only its
-		// certificate stops at the intermediate. It is the root's
-		// CRL that revokes the intermediate.
+	for _, mode := range []SslMode{Required, VerifyCA, VerifyIdentity} {
+		t.Run(fmt.Sprintf("in %s mode, a revoked intermediate in the chain to the configured root is rejected", mode), func(t *testing.T) {
+			clientConfig, err := ClientConfig(mode, "", "", rootCA, rootCRL, certs.ServerName, tls.VersionTLS12)
+			require.NoError(t, err)
+
+			res := handshake(t, validServer, clientConfig)
+			require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+		})
+	}
+
+	t.Run("an intermediate configured as a trust anchor is not checked against the root's CRL", func(t *testing.T) {
+		// The CA file holds the intermediate along with the root, so
+		// the chain of a server that presents its certificate alone
+		// ends at the intermediate, which is then a trust anchor:
+		// trusted as configured, whatever its own issuer's CRL says.
+		// Configuring the root alone has the intermediate checked.
 		intermediatePEM, err := os.ReadFile(certs.ServerCA)
 		require.NoError(t, err)
-		rootPEM, err := os.ReadFile(path.Join(root, "ca-cert.pem"))
+		rootPEM, err := os.ReadFile(rootCA)
 		require.NoError(t, err)
 		bundle := path.Join(t.TempDir(), "bundle.pem")
 		require.NoError(t, os.WriteFile(bundle, append(intermediatePEM, rootPEM...), 0o600))
@@ -298,148 +322,9 @@ func TestClientConfigCRL(t *testing.T) {
 		require.NoError(t, err)
 
 		res := handshake(t, leafOnlyValidServer, clientConfig)
-		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
+		require.NoError(t, res.clientErr)
+		require.NoError(t, res.serverErr)
 	})
-
-	t.Run("verify_ca consults the root's CRL for a trusted intermediate when the server presents the root", func(t *testing.T) {
-		// The client trusts the intermediate alone, so verification
-		// stops at it, but the server presents the root too, and it
-		// is the root's CRL that revokes the intermediate.
-		clientConfig, err := ClientConfig(VerifyCA, "", "", certs.ServerCA, rootCRL, certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, serverPresenting(leaf, intermediate, rootCert), clientConfig)
-		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
-	})
-
-	t.Run("a revoked intermediate that the server presents is rejected", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, serverPresenting(leaf, intermediate, rootCert), clientConfig)
-		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
-	})
-
-	t.Run("a revoked intermediate presented without its root is rejected for want of the root", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", rootCRL, certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, serverPresenting(leaf, intermediate), clientConfig)
-		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+intermediate.Subject.CommonName+": no certificate is available for its issuer")
-	})
-
-	t.Run("a chain padded to exhaust the signature checks is rejected", func(t *testing.T) {
-		// The CRLs come from both the intermediate and the root, so
-		// the leaf's issuer is worth looking for. The decoys carry
-		// the intermediate's name, so finding it spends the whole
-		// budget on them and the real intermediate, and binding its
-		// CRL would need one more check.
-		intermediateCRL, err := os.ReadFile(certs.ServerCRL)
-		require.NoError(t, err)
-		rootCRLBytes, err := os.ReadFile(rootCRL)
-		require.NoError(t, err)
-		bothCRLs := path.Join(t.TempDir(), "both-crl.pem")
-		require.NoError(t, os.WriteFile(bothCRLs, append(intermediateCRL, rootCRLBytes...), 0o600))
-		chain := append([]*x509.Certificate{leaf}, selfSignedCACerts(t, leaf.RawIssuer, maxSignatureChecks-1)...)
-		chain = append(chain, intermediate, rootCert)
-		clientConfig, err := ClientConfig(Required, "", "", "", bothCRLs, certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, serverPresenting(chain...), clientConfig)
-		require.ErrorContains(t, res.clientErr, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxSignatureChecks))
-	})
-
-	// A forged issuer carries the real intermediate's subject and
-	// public key, so it verifies the certificates the intermediate
-	// issued, but it lacks the CRL signing key usage, so it
-	// validates none of the intermediate's CRLs.
-	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
-	revokedKeyPair, err := tls.LoadX509KeyPair(certs.RevokedServerCert, certs.RevokedServerKey)
-	require.NoError(t, err)
-	forged := forgedIssuer(t, intermediate)
-	revokedServerPresenting := func(chain ...*x509.Certificate) *tls.Config {
-		serverConfig := serverPresenting(chain...)
-		serverConfig.Certificates[0].PrivateKey = revokedKeyPair.PrivateKey
-		return serverConfig
-	}
-
-	t.Run("a decoy issuer that carries the issuer's name but not its key is not the issuer", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, revokedServerPresenting(revokedLeaf, selfSignedCACerts(t, revokedLeaf.RawIssuer, 1)[0]), clientConfig)
-		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName+": no certificate is available for its issuer")
-	})
-
-	t.Run("a forged issuer that validates no CRL fails the check when it is the only one", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, revokedServerPresenting(revokedLeaf, forged), clientConfig)
-		require.ErrorContains(t, res.clientErr, "cannot check the revocation of certificate CommonName="+certs.RevokedServerName+": a CRL signed by the key of its issuer "+intermediate.Subject.CommonName+" is configured, but none of the certificates found for that issuer may sign CRLs")
-	})
-
-	t.Run("a forged issuer presented ahead of the configured one does not hide the CRL", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", certs.ServerCA, certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, revokedServerPresenting(revokedLeaf, forged), clientConfig)
-		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
-
-	t.Run("a forged issuer presented ahead of the real one does not hide the CRL", func(t *testing.T) {
-		clientConfig, err := ClientConfig(Required, "", "", "", certs.ServerCRL, certs.RevokedServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-
-		res := handshake(t, revokedServerPresenting(revokedLeaf, forged, intermediate), clientConfig)
-		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
-}
-
-// forgedIssuer returns a CA certificate that carries issuer's subject
-// and public key but not the CRL signing key usage, signed by a key
-// of the forger's own.
-func forgedIssuer(t *testing.T, issuer *x509.Certificate) *x509.Certificate {
-	t.Helper()
-	return forgedIssuerWithKeyUsage(t, issuer, x509.KeyUsageCertSign)
-}
-
-// forgedIssuerWithKeyUsage returns a CA certificate that carries
-// issuer's subject and public key with the given key usage, signed by
-// a key of the forger's own.
-func forgedIssuerWithKeyUsage(t *testing.T, issuer *x509.Certificate, keyUsage x509.KeyUsage) *x509.Certificate {
-	t.Helper()
-	forgerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	forger := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "forger"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageCertSign,
-	}
-	forgerDER, err := x509.CreateCertificate(rand.Reader, forger, forger, &forgerKey.PublicKey, forgerKey)
-	require.NoError(t, err)
-	forgerCert, err := x509.ParseCertificate(forgerDER)
-	require.NoError(t, err)
-
-	template := &x509.Certificate{
-		SerialNumber:          big.NewInt(2),
-		Subject:               pkix.Name{CommonName: "forged"},
-		RawSubject:            issuer.RawSubject,
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              keyUsage,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, forgerCert, issuer.PublicKey, forgerKey)
-	require.NoError(t, err)
-	cert, err := x509.ParseCertificate(der)
-	require.NoError(t, err)
-	return cert
 }
 
 // loadOneCert returns the single certificate in the PEM file.
@@ -526,19 +411,42 @@ func TestServerConfigCRL(t *testing.T) {
 		})
 	}
 
-	t.Run("a CRL from the issuer of the trust anchor does not require that issuer to be configured", func(t *testing.T) {
-		// The server trusts the clients' CA alone, while its CRL
-		// file also holds the root's CRL. The root is not
-		// configured, but verification vouches for the anchor.
-		tlstest.CreateCRL(root, tlstest.CA)
-		rootCRL, err := os.ReadFile(path.Join(root, "ca-crl.pem"))
+	// Revoke the clients' CA under the root.
+	clientCA := loadOneCert(t, certs.ClientCA)
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, strings.TrimSuffix(filepath.Base(certs.ClientCA), "-cert.pem"))
+	rootCA := path.Join(root, "ca-cert.pem")
+	rootCRL := path.Join(root, "ca-crl.pem")
+	clientPresentingItsCA := func(t *testing.T) *tls.Config {
+		t.Helper()
+		clientConfig := newClientConfig(t, certs.ClientCert, certs.ClientKey)
+		clientConfig.Certificates = []tls.Certificate{{
+			Certificate: [][]byte{loadOneCert(t, certs.ClientCert).Raw, clientCA.Raw},
+			PrivateKey:  clientConfig.Certificates[0].PrivateKey,
+		}}
+		return clientConfig
+	}
+
+	t.Run("a revoked intermediate in the chain to the configured root is rejected", func(t *testing.T) {
+		serverConfig, err := ServerConfig(certs.ServerCert, certs.ServerKey, rootCA, rootCRL, certs.ServerCA, tls.VersionTLS12)
 		require.NoError(t, err)
-		clientCRL, err := os.ReadFile(certs.ClientCRL)
+
+		res := handshake(t, serverConfig, clientPresentingItsCA(t))
+		require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+clientCA.Subject.CommonName)
+	})
+
+	t.Run("the trust anchor is not checked against the CRL of its own issuer", func(t *testing.T) {
+		// The server trusts the clients' CA alone, so it is the
+		// anchor of every client's chain, trusted as configured: the
+		// root's CRL, which revokes it, is not held against it, even
+		// when the client presents the CA.
+		rootCRLPEM, err := os.ReadFile(rootCRL)
+		require.NoError(t, err)
+		clientCRLPEM, err := os.ReadFile(certs.ClientCRL)
 		require.NoError(t, err)
 		bothCRLs := path.Join(t.TempDir(), "both-crl.pem")
-		require.NoError(t, os.WriteFile(bothCRLs, append(clientCRL, rootCRL...), 0o600))
+		require.NoError(t, os.WriteFile(bothCRLs, append(clientCRLPEM, rootCRLPEM...), 0o600))
 
-		res := handshake(t, newServerConfig(t, bothCRLs), newClientConfig(t, certs.ClientCert, certs.ClientKey))
+		res := handshake(t, newServerConfig(t, bothCRLs), clientPresentingItsCA(t))
 		require.NoError(t, res.serverErr)
 		require.NoError(t, res.clientErr)
 	})
@@ -566,10 +474,11 @@ func TestServerConfigCRL(t *testing.T) {
 	})
 }
 
-// TestCRLCheckerVerifiedChains checks that a certificate which only a
-// verified chain contains, as happens when a platform verifier
-// completes the chain with certificates the peer did not present,
-// is checked against the CRLs like the presented ones.
+// TestCRLCheckerVerifiedChains checks that the certificates of a
+// verified chain, but the trust anchor it ends at, are checked
+// against the CRLs of their issuer, the next certificate of the
+// chain, and that the certificates a peer presents are not checked
+// on their own.
 func TestCRLCheckerVerifiedChains(t *testing.T) {
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)
@@ -588,64 +497,20 @@ func TestCRLCheckerVerifiedChains(t *testing.T) {
 	checker, err := newCRLChecker(rootCRL, rootCA)
 	require.NoError(t, err)
 
-	err = checker.verifyConnection(tls.ConnectionState{
-		PeerCertificates: []*x509.Certificate{leaf},
-		VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate, rootCert}},
-	})
-	require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
-
-	t.Run("a configured CA that a verified chain ends at is checked against its issuer's CRL", func(t *testing.T) {
-		// The intermediate is configured as well as the root, so
-		// verification of a leaf presented alone builds the one
-		// chain that ends at the intermediate. It is the root's
-		// CRL that revokes it, and the root is configured.
-		intermediatePEM, err := os.ReadFile(certs.ServerCA)
-		require.NoError(t, err)
-		rootPEM, err := os.ReadFile(rootCA)
-		require.NoError(t, err)
-		bundle := path.Join(t.TempDir(), "bundle.pem")
-		require.NoError(t, os.WriteFile(bundle, append(intermediatePEM, rootPEM...), 0o600))
-		checker, err := newCRLChecker(rootCRL, bundle)
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{
-			PeerCertificates: []*x509.Certificate{leaf},
-			VerifiedChains:   [][]*x509.Certificate{{leaf, intermediate}},
-		})
+	t.Run("a revoked certificate below the anchor is rejected", func(t *testing.T) {
+		err := checker.check([][]*x509.Certificate{{leaf, intermediate, rootCert}})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+intermediate.Subject.CommonName)
 	})
 
-	t.Run("certificates presented beyond the verified chain cost nothing", func(t *testing.T) {
-		// The check of a verified chain spends the same signature
-		// checks whether or not the peer presented other certificates
-		// after its own, since those are not inspected, nor even
-		// indexed when no checked certificate needs them.
-		validLeaf := loadOneCert(t, certs.ServerCert)
-		chain := [][]*x509.Certificate{{validLeaf, intermediate, rootCert}}
-		checker, err := newCRLChecker(certs.ServerCRL, rootCA)
+	t.Run("the anchor is not checked", func(t *testing.T) {
+		err := checker.check([][]*x509.Certificate{{leaf, intermediate}})
 		require.NoError(t, err)
-
-		alone := checker.newCheck([]*x509.Certificate{validLeaf}, chain)
-		require.NoError(t, alone.run())
-		padded := checker.newCheck(append([]*x509.Certificate{validLeaf}, selfSignedCACerts(t, nil, 50)...), chain)
-		require.NoError(t, padded.run())
-		require.Equal(t, alone.signatureChecks, padded.signatureChecks)
-		require.Positive(t, alone.signatureChecks)
-		require.Empty(t, padded.bySubject, "the presented certificates were indexed although no checked certificate needed them")
 	})
-}
 
-// selfSignedCACerts returns n distinct self-signed CA certificates,
-// each with its own key. They all carry rawSubject when it is set,
-// and each its own subject otherwise.
-func selfSignedCACerts(t *testing.T, rawSubject []byte, n int) []*x509.Certificate {
-	t.Helper()
-	certs := make([]*x509.Certificate, 0, n)
-	for i := range n {
-		cert, _ := selfSignedCA(t, int64(i+1), fmt.Sprintf("decoy %d", i+1), rawSubject)
-		certs = append(certs, cert)
-	}
-	return certs
+	t.Run("the certificates a peer presents are not checked on their own", func(t *testing.T) {
+		err := checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{intermediate, rootCert}})
+		require.NoError(t, err)
+	})
 }
 
 // selfSignedCA returns a self-signed CA certificate and its key, with
@@ -672,138 +537,11 @@ func selfSignedCA(t *testing.T, serial int64, commonName string, rawSubject []by
 	return cert, key
 }
 
-// multiValuedRDN encodes a distinguished name made of one RDN that
-// holds the given common names, in the given order.
-func multiValuedRDN(t *testing.T, commonNames ...string) []byte {
-	t.Helper()
-	var rdn pkix.RelativeDistinguishedNameSET
-	for _, commonName := range commonNames {
-		rdn = append(rdn, pkix.AttributeTypeAndValue{
-			Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
-			Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagPrintableString, Bytes: []byte(commonName)},
-		})
-	}
-	raw, err := asn1.Marshal(pkix.RDNSequence{rdn})
-	require.NoError(t, err)
-	return raw
-}
-
-// TestCRLCheckerMultiValuedRDN checks that a CRL whose issuer name
-// holds the attributes of a multi-valued RDN in another order, and
-// another case, than the CA certificate's subject is still bound to
-// that CA: the attributes of an RDN form a set.
-func TestCRLCheckerMultiValuedRDN(t *testing.T) {
-	dir := t.TempDir()
-	ca, caKey := selfSignedCA(t, 1, "", multiValuedRDN(t, "Bob", "amy"))
-	caFile := path.Join(dir, "ca-cert.pem")
-	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw}), 0o600))
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "leaf.example.com"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}, ca, &leafKey.PublicKey, caKey)
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(leafDER)
-	require.NoError(t, err)
-
-	reordered := *ca
-	reordered.RawSubject = multiValuedRDN(t, "AMY", "bob")
-	require.NotEqual(t, ca.RawSubject, reordered.RawSubject)
-	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:                    big.NewInt(1),
-		ThisUpdate:                time.Now().Add(-time.Hour),
-		NextUpdate:                time.Now().Add(time.Hour),
-		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
-	}, &reordered, caKey)
-	require.NoError(t, err)
-	crlFile := path.Join(dir, "reordered-crl.pem")
-	require.NoError(t, os.WriteFile(crlFile, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlDER}), 0o600))
-
-	checker, err := newCRLChecker(crlFile, caFile)
-	require.NoError(t, err)
-	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
-	require.ErrorContains(t, err, "Certificate revoked: CommonName=leaf.example.com")
-}
-
-// TestCRLCheckerBoundedIssuerSearch checks that a peer cannot make the
-// checker spend unbounded signature verifications by padding its chain
-// with certificates that carry the issuer's name, and that the padding
-// does not hide a revoked certificate when the issuer is configured.
-func TestCRLCheckerBoundedIssuerSearch(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	loaded, err := loadx509Certificates(certs.RevokedServerCert)
-	require.NoError(t, err)
-	leaf := loaded[0]
-	padded := append([]*x509.Certificate{leaf}, selfSignedCACerts(t, leaf.RawIssuer, 200)...)
-
-	t.Run("the search stops and fails closed once the signature checks are spent", func(t *testing.T) {
-		checker, err := newCRLChecker(certs.ServerCRL, "")
-		require.NoError(t, err)
-
-		start := time.Now()
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: padded})
-		t.Logf("checked a %d certificate chain in %s", len(padded), time.Since(start))
-		require.ErrorContains(t, err, fmt.Sprintf("cannot check the revocation of certificate CommonName=%s: checking it exceeded the %d signature checks allowed per connection", certs.RevokedServerName, maxSignatureChecks))
-	})
-
-	t.Run("the configured issuer is consulted before the presented certificates", func(t *testing.T) {
-		checker, err := newCRLChecker(certs.ServerCRL, certs.ServerCA)
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: padded})
-		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
-
-	t.Run("self-signed padding that no CRL applies to costs nothing", func(t *testing.T) {
-		// The padding carries names that no CRL comes from, so it
-		// is not worth a signature check, and the check spends the
-		// same on the chain with and without it.
-		checker, err := newCRLChecker(certs.ServerCRL, certs.ServerCA)
-		require.NoError(t, err)
-		valid := loadOneCert(t, certs.ServerCert)
-		alone := checker.newCheck([]*x509.Certificate{valid}, nil)
-		require.NoError(t, alone.run())
-		selfSignedPadded := checker.newCheck(append([]*x509.Certificate{valid}, selfSignedCACerts(t, nil, 200)...), nil)
-		require.NoError(t, selfSignedPadded.run())
-		require.Equal(t, alone.signatureChecks, selfSignedPadded.signatureChecks)
-		require.Positive(t, alone.signatureChecks)
-	})
-
-	// manyCRLs holds as many CRLs from the leaf's issuer as the
-	// budget allows, each for a distribution point of its own, as
-	// partitioned CRLs are.
-	manyCRLs := partitionedCRLs(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", maxSignatureChecks)
-
-	t.Run("the CRLs of a configured issuer cost no signature checks per connection", func(t *testing.T) {
-		// They are validated once, when the checker is built, so
-		// the connection only spends the check that finds the
-		// leaf's issuer.
-		checker, err := newCRLChecker(manyCRLs, certs.ServerCA)
-		require.NoError(t, err)
-
-		check := checker.newCheck([]*x509.Certificate{loadOneCert(t, certs.ServerCert)}, nil)
-		require.NoError(t, check.run())
-		require.Equal(t, 1, check.signatureChecks)
-	})
-
-	t.Run("the CRLs of an issuer that is only presented count against the signature checks", func(t *testing.T) {
-		checker, err := newCRLChecker(manyCRLs, "")
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, certs.ServerCert), loadOneCert(t, certs.ServerCA)}})
-		require.ErrorContains(t, err, fmt.Sprintf("exceeded the %d signature checks allowed per connection", maxSignatureChecks))
-	})
-}
-
 // TestCRLCheckerIssuersSharingASubject checks that a CRL from a CA is
 // not held against the certificates of another CA that carries the
 // same subject with a different key, as a re-keyed CA and its
-// predecessor do.
+// predecessor do: the CRL's authority key identifier names the key
+// that signed it.
 func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 	root := t.TempDir()
 	tlstest.CreateCA(root)
@@ -811,8 +549,10 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 	tlstest.CreateIntermediateCA(root, tlstest.CA, "02", "new-ca", "Shared CA")
 	tlstest.CreateSignedCert(root, "old-ca", "03", "old-leaf", "old.example.com")
 	tlstest.CreateCRL(root, "new-ca")
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
 	oldCA := loadOneCert(t, path.Join(root, "old-ca-cert.pem"))
 	newCA := loadOneCert(t, path.Join(root, "new-ca-cert.pem"))
+	oldLeaf := loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))
 	require.Equal(t, oldCA.RawSubject, newCA.RawSubject)
 	require.NotEqual(t, oldCA.PublicKey, newCA.PublicKey)
 
@@ -826,7 +566,7 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 	checker, err := newCRLChecker(path.Join(root, "new-ca-crl.pem"), bundle)
 	require.NoError(t, err)
 
-	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))}})
+	err = checker.check([][]*x509.Certificate{{oldLeaf, oldCA, rootCert}})
 	require.NoError(t, err)
 
 	t.Run("the CRLs of both CAs apply, each to the certificates of its own", func(t *testing.T) {
@@ -847,78 +587,17 @@ func TestCRLCheckerIssuersSharingASubject(t *testing.T) {
 		checker, err := newCRLChecker(bothCRLs, bundle)
 		require.NoError(t, err)
 
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{loadOneCert(t, path.Join(root, "old-leaf-cert.pem"))}})
+		err = checker.check([][]*x509.Certificate{{oldLeaf, oldCA, rootCert}})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName=old.example.com")
-	})
-}
-
-// crlWithIssuerName writes a CRL signed by the CA whose certificate
-// and key files are given, revoking the given serial number, but with
-// the issuer's common name written as commonName with the given ASN.1
-// string tag rather than as the CA certificate's subject has it, as a
-// CRL produced by another tool than the certificate can be.
-func crlWithIssuerName(t *testing.T, caCert, caKey string, serial *big.Int, commonName string, tag int, nextUpdate time.Time) string {
-	t.Helper()
-	ca := loadOneCert(t, caCert)
-	keyPair, err := tls.LoadX509KeyPair(caCert, caKey)
-	require.NoError(t, err)
-	renamed := *ca
-	renamed.RawSubject = encodedCommonName(t, commonName, tag)
-	require.NotEqual(t, ca.RawSubject, renamed.RawSubject)
-
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:     big.NewInt(1),
-		ThisUpdate: nextUpdate.Add(-2 * time.Hour),
-		NextUpdate: nextUpdate,
-		RevokedCertificateEntries: []x509.RevocationListEntry{{
-			SerialNumber:   serial,
-			RevocationTime: nextUpdate.Add(-2 * time.Hour),
-		}},
-	}, &renamed, keyPair.PrivateKey.(crypto.Signer))
-	require.NoError(t, err)
-	file := path.Join(t.TempDir(), "renamed-crl.pem")
-	require.NoError(t, os.WriteFile(file, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der}), 0o600))
-	return file
-}
-
-// TestCRLCheckerIssuerNameEncoding checks that a CRL whose issuer name
-// is encoded differently from the subject of the CA certificate is
-// still bound to that CA by its signature, as it was before the
-// issuer names were compared.
-func TestCRLCheckerIssuerNameEncoding(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
-	intermediate := loadOneCert(t, certs.ServerCA)
-	crl := crlWithIssuerName(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", revokedLeaf.SerialNumber, intermediate.Subject.CommonName, asn1.TagUTF8String, time.Now().Add(time.Hour))
-
-	t.Run("with the issuer configured", func(t *testing.T) {
-		checker, err := newCRLChecker(crl, certs.ServerCA)
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
-		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
-
-	t.Run("with the issuer presented", func(t *testing.T) {
-		checker, err := newCRLChecker(crl, "")
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf, intermediate}})
-		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
-
-	t.Run("with the issuer missing, the check fails closed rather than silently", func(t *testing.T) {
-		checker, err := newCRLChecker(crl, "")
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
-		require.ErrorContains(t, err, "no certificate is available for its issuer")
+		newLeaf := loadOneCert(t, path.Join(root, "new-leaf-cert.pem"))
+		err = checker.check([][]*x509.Certificate{{newLeaf, newCA, rootCert}})
+		require.ErrorContains(t, err, "Certificate revoked: CommonName=new.example.com")
 	})
 }
 
 // TestNewCRLCheckerDeltaCRL checks that a delta CRL is refused: the
-// checker evaluates each CRL on its own, and a delta CRL's entries
-// only make sense together with the base CRL it amends, an entry that
+// checker applies each CRL on its own, and a delta CRL's entries only
+// make sense together with the base CRL it amends, an entry that
 // takes a certificate off hold included.
 func TestNewCRLCheckerDeltaCRL(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
@@ -934,10 +613,8 @@ func TestNewCRLCheckerDeltaCRL(t *testing.T) {
 		ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 27}, Critical: true, Value: baseNumber}},
 	}, ca, keyPair.PrivateKey.(crypto.Signer))
 	require.NoError(t, err)
-	file := path.Join(t.TempDir(), "delta-crl.pem")
-	require.NoError(t, os.WriteFile(file, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der}), 0o600))
 
-	_, err = newCRLChecker(file, certs.ServerCA)
+	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
 	require.ErrorContains(t, err, "delta CRLs are not supported")
 }
 
@@ -952,8 +629,10 @@ func crlFile(t *testing.T, der []byte) string {
 // TestCRLCheckerCRLThatCannotBeValidated checks that a CRL from the
 // issuer that cannot be validated fails closed rather than passing for
 // the CRL of another CA under the same name: one signed with an
-// algorithm that Go cannot verify, and one that names the issuer's
-// certificate as its authority while its signature does not verify.
+// algorithm that Go cannot verify is refused when it is loaded, and
+// one whose signature does not verify is refused when its issuer is
+// configured, and rejects the connection when its issuer is only in
+// the chain.
 func TestCRLCheckerCRLThatCannotBeValidated(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 	ca := loadOneCert(t, certs.ServerCA)
@@ -961,21 +640,25 @@ func TestCRLCheckerCRLThatCannotBeValidated(t *testing.T) {
 	require.NoError(t, err)
 	leaf := loadOneCert(t, certs.ServerCert)
 	template := &x509.RevocationList{Number: big.NewInt(1), ThisUpdate: time.Now().Add(-time.Hour), NextUpdate: time.Now().Add(time.Hour)}
-
 	validDER, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
 	require.NoError(t, err)
-	valid, err := x509.ParseRevocationList(validDER)
-	require.NoError(t, err)
 
-	// The signature algorithm is rewritten, inside and outside the
-	// signed part, to an identifier that Go does not know.
-	unknownAlgorithm := slices.Clone(valid.RawSignatureAlgorithm)
-	unknownAlgorithm[len(unknownAlgorithm)-1] = 0x09
-	unsupportedDER := bytes.ReplaceAll(validDER, valid.RawSignatureAlgorithm, unknownAlgorithm)
-	require.Equal(t, 2, bytes.Count(validDER, valid.RawSignatureAlgorithm))
-	unsupported, err := x509.ParseRevocationList(unsupportedDER)
-	require.NoError(t, err)
-	require.Equal(t, x509.UnknownSignatureAlgorithm, unsupported.SignatureAlgorithm)
+	t.Run("a CRL signed with an unsupported algorithm is refused", func(t *testing.T) {
+		// The signature algorithm, ecdsa-with-SHA256, is rewritten,
+		// inside and outside the signed part, to an identifier that
+		// Go does not know.
+		ecdsaWithSHA256 := mustMarshal(t, pkix.AlgorithmIdentifier{Algorithm: asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}})
+		require.Equal(t, 2, bytes.Count(validDER, ecdsaWithSHA256))
+		unknownAlgorithm := slices.Clone(ecdsaWithSHA256)
+		unknownAlgorithm[len(unknownAlgorithm)-1] = 0x09
+		unsupportedDER := bytes.ReplaceAll(validDER, ecdsaWithSHA256, unknownAlgorithm)
+		unsupported, err := x509.ParseRevocationList(unsupportedDER)
+		require.NoError(t, err)
+		require.Equal(t, x509.UnknownSignatureAlgorithm, unsupported.SignatureAlgorithm)
+
+		_, err = newCRLChecker(crlFile(t, unsupportedDER), "")
+		require.ErrorContains(t, err, "cannot be validated")
+	})
 
 	corruptDER := slices.Clone(validDER)
 	corruptDER[len(corruptDER)-1] ^= 0xff
@@ -983,31 +666,18 @@ func TestCRLCheckerCRLThatCannotBeValidated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ca.SubjectKeyId, corrupt.AuthorityKeyId)
 
-	for _, tc := range []struct {
-		name string
-		der  []byte
-		want string
-	}{
-		{"unsupported signature algorithm", unsupportedDER, "cannot be validated"},
-		{"corrupt signature", corruptDER, "its signature does not verify"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			file := crlFile(t, tc.der)
+	t.Run("a CRL whose signature does not verify is refused when its issuer is configured", func(t *testing.T) {
+		_, err := newCRLChecker(crlFile(t, corruptDER), certs.ServerCA)
+		require.ErrorContains(t, err, "its signature does not verify")
+	})
 
-			t.Run("with the issuer configured, the checker is refused", func(t *testing.T) {
-				_, err := newCRLChecker(file, certs.ServerCA)
-				require.ErrorContains(t, err, tc.want)
-			})
+	t.Run("a CRL whose signature does not verify rejects the connection when its issuer is only in the chain", func(t *testing.T) {
+		checker, err := newCRLChecker(crlFile(t, corruptDER), "")
+		require.NoError(t, err)
 
-			t.Run("with the issuer presented, the connection is rejected", func(t *testing.T) {
-				checker, err := newCRLChecker(file, "")
-				require.NoError(t, err)
-
-				err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, ca}})
-				require.ErrorContains(t, err, tc.want)
-			})
-		})
-	}
+		err = checker.check([][]*x509.Certificate{{leaf, ca}})
+		require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName="+certs.ServerName+": the CRL from issuer "+ca.Subject.CommonName+" cannot be validated: its signature does not verify")
+	})
 }
 
 // TestNewCRLCheckerIndirectCRL checks that an indirect CRL is refused:
@@ -1044,6 +714,7 @@ func TestCRLCheckerNewestCompleteCRL(t *testing.T) {
 	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
 	require.NoError(t, err)
 	leaf := loadOneCert(t, certs.ServerCert)
+	chain := [][]*x509.Certificate{{leaf, ca}}
 	completeCRL := func(number int64, issued time.Time, serials ...*big.Int) []byte {
 		template := &x509.RevocationList{Number: big.NewInt(number), ThisUpdate: issued, NextUpdate: issued.Add(24 * time.Hour)}
 		for _, serial := range serials {
@@ -1053,46 +724,93 @@ func TestCRLCheckerNewestCompleteCRL(t *testing.T) {
 		require.NoError(t, err)
 		return der
 	}
-	crlsFile := func(crls ...[]byte) string {
-		var content []byte
-		for _, der := range crls {
-			content = append(content, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der})...)
-		}
-		file := path.Join(t.TempDir(), "crls.pem")
-		require.NoError(t, os.WriteFile(file, content, 0o600))
-		return file
-	}
 	older := time.Now().Add(-2 * time.Hour)
 	newer := time.Now().Add(-time.Hour)
 	holdThenReleased := []struct {
 		name string
 		file string
 	}{
-		{"older first", crlsFile(completeCRL(1, older, leaf.SerialNumber), completeCRL(2, newer))},
-		{"newer first", crlsFile(completeCRL(2, newer), completeCRL(1, older, leaf.SerialNumber))},
+		{"older first", crlsFile(t, completeCRL(1, older, leaf.SerialNumber), completeCRL(2, newer))},
+		{"newer first", crlsFile(t, completeCRL(2, newer), completeCRL(1, older, leaf.SerialNumber))},
 	}
 	for _, tc := range holdThenReleased {
 		t.Run("a certificate the newest CRL dropped is not revoked, "+tc.name, func(t *testing.T) {
 			checker, err := newCRLChecker(tc.file, certs.ServerCA)
 			require.NoError(t, err)
-			require.NoError(t, checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}))
+			require.NoError(t, checker.check(chain))
 		})
 	}
 
 	t.Run("a certificate the newest CRL lists is revoked", func(t *testing.T) {
-		checker, err := newCRLChecker(crlsFile(completeCRL(1, older), completeCRL(2, newer, leaf.SerialNumber)), certs.ServerCA)
+		checker, err := newCRLChecker(crlsFile(t, completeCRL(1, older), completeCRL(2, newer, leaf.SerialNumber)), certs.ServerCA)
 		require.NoError(t, err)
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
+		err = checker.check(chain)
 		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
 	})
 }
 
-// TestCRLCheckerWrapperCannotOverrideConfiguredIssuer checks that when
-// the configured issuer certificate is not allowed to sign CRLs while
-// its key signed the configured CRL, which fails closed, a peer cannot
-// lift that by presenting a wrapper certificate that carries the
-// issuer's key and subject along with the CRL signing key usage.
-func TestCRLCheckerWrapperCannotOverrideConfiguredIssuer(t *testing.T) {
+// crlsFile writes the DER encoded CRLs to one PEM file and returns
+// its path.
+func crlsFile(t *testing.T, crls ...[]byte) string {
+	t.Helper()
+	var content []byte
+	for _, der := range crls {
+		content = append(content, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der})...)
+	}
+	file := path.Join(t.TempDir(), "crls.pem")
+	require.NoError(t, os.WriteFile(file, content, 0o600))
+	return file
+}
+
+// TestCRLCheckerPartitionedCRLs checks that the CRLs of one issuer
+// that its issuing distribution point partitions, one per
+// distribution point, each apply, and that a newer one supersedes
+// the older one of its own partition alone.
+func TestCRLCheckerPartitionedCRLs(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	leaf := loadOneCert(t, certs.ServerCert)
+	chain := [][]*x509.Certificate{{leaf, ca}}
+	partition := func(number int64, distributionPoint int, serials ...*big.Int) []byte {
+		uri := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 6, Bytes: fmt.Appendf(nil, "http://crl.example.com/%d", distributionPoint)})
+		fullName := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: uri})
+		scope := mustMarshal(t, struct{ DistributionPoint asn1.RawValue }{asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: fullName}})
+		template := &x509.RevocationList{
+			Number:          big.NewInt(number),
+			ThisUpdate:      time.Now().Add(-time.Duration(number) * time.Hour),
+			NextUpdate:      time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: scope}},
+		}
+		for _, serial := range serials {
+			template.RevokedCertificateEntries = append(template.RevokedCertificateEntries, x509.RevocationListEntry{SerialNumber: serial, RevocationTime: template.ThisUpdate})
+		}
+		der, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		return der
+	}
+
+	t.Run("every partition applies", func(t *testing.T) {
+		checker, err := newCRLChecker(crlsFile(t, partition(1, 0), partition(1, 1, leaf.SerialNumber)), certs.ServerCA)
+		require.NoError(t, err)
+		err = checker.check(chain)
+		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
+	})
+
+	t.Run("a newer partition supersedes the older one of its own distribution point alone", func(t *testing.T) {
+		checker, err := newCRLChecker(crlsFile(t, partition(1, 0, leaf.SerialNumber), partition(2, 0), partition(1, 1, big.NewInt(42))), certs.ServerCA)
+		require.NoError(t, err)
+		require.NoError(t, checker.check(chain))
+	})
+}
+
+// TestCRLCheckerCAThatMayNotSignCRLs checks that a CRL that the key
+// of a CA certificate signed while the certificate is not allowed to
+// sign CRLs, for want of the cRLSign key usage, fails closed: the
+// configuration is refused when the CA is configured, and the
+// connection is rejected when the CA is only in the chain.
+func TestCRLCheckerCAThatMayNotSignCRLs(t *testing.T) {
 	// The CA may sign certificates but not CRLs; a copy of it that
 	// may is what signs the CRL, with the same key.
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -1110,22 +828,9 @@ func TestCRLCheckerWrapperCannotOverrideConfiguredIssuer(t *testing.T) {
 	require.NoError(t, err)
 	ca, err := x509.ParseCertificate(caDER)
 	require.NoError(t, err)
-	dir := t.TempDir()
-	caFile := path.Join(dir, "ca-cert.pem")
+	caFile := path.Join(t.TempDir(), "ca-cert.pem")
 	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw}), 0o600))
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "leaf.example.com"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}, ca, &leafKey.PublicKey, caKey)
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(leafDER)
-	require.NoError(t, err)
+	leaf := signedLeaf(t, ca, caKey, 2, "leaf.example.com")
 
 	crlSigner := *ca
 	crlSigner.KeyUsage |= x509.KeyUsageCRLSign
@@ -1135,20 +840,40 @@ func TestCRLCheckerWrapperCannotOverrideConfiguredIssuer(t *testing.T) {
 		NextUpdate: time.Now().Add(time.Hour),
 	}, &crlSigner, caKey)
 	require.NoError(t, err)
-	checker, err := newCRLChecker(crlFile(t, crlDER), caFile)
+	crl := crlFile(t, crlDER)
+	notAllowed := "the CRL from issuer No CRL Signing CA cannot be validated: the certificate of that issuer is not allowed to sign CRLs"
+
+	t.Run("with the CA configured, the configuration is refused", func(t *testing.T) {
+		_, err := newCRLChecker(crl, caFile)
+		require.ErrorContains(t, err, notAllowed)
+	})
+
+	t.Run("with the CA only in the chain, the connection is rejected", func(t *testing.T) {
+		checker, err := newCRLChecker(crl, "")
+		require.NoError(t, err)
+
+		err = checker.check([][]*x509.Certificate{{leaf, ca}})
+		require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName=leaf.example.com: "+notAllowed)
+	})
+}
+
+// signedLeaf returns an end-entity certificate with the given serial
+// number and common name, issued by ca with its key.
+func signedLeaf(t *testing.T, ca *x509.Certificate, caKey *ecdsa.PrivateKey, serial int64, commonName string) *x509.Certificate {
+	t.Helper()
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-
-	orphaned := "none of the certificates found for that issuer may sign CRLs"
-	t.Run("the configured issuer fails closed on its own", func(t *testing.T) {
-		err := checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
-		require.ErrorContains(t, err, orphaned)
-	})
-
-	t.Run("a presented wrapper allowed to sign CRLs does not lift it", func(t *testing.T) {
-		wrapper := forgedIssuerWithKeyUsage(t, ca, x509.KeyUsageCertSign|x509.KeyUsageCRLSign)
-		err := checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, wrapper}})
-		require.ErrorContains(t, err, orphaned)
-	})
+	der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(serial),
+		Subject:      pkix.Name{CommonName: commonName},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}, ca, &leafKey.PublicKey, caKey)
+	require.NoError(t, err)
+	leaf, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return leaf
 }
 
 // TestNewCRLCheckerCriticalExtensions checks that a CRL is refused
@@ -1161,12 +886,7 @@ func TestNewCRLCheckerCriticalExtensions(t *testing.T) {
 	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
 	require.NoError(t, err)
 	unknown := asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 99999, 1}
-	flag, err := asn1.Marshal(true)
-	require.NoError(t, err)
-	attributeCertsOnly, err := asn1.Marshal(struct {
-		OnlyContainsAttributeCerts bool `asn1:"tag:5,optional"`
-	}{OnlyContainsAttributeCerts: true})
-	require.NoError(t, err)
+	flag := mustMarshal(t, true)
 	crlWith := func(extensions []pkix.Extension, entryExtensions []pkix.Extension) string {
 		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
 			Number:                    big.NewInt(1),
@@ -1186,8 +906,7 @@ func TestNewCRLCheckerCriticalExtensions(t *testing.T) {
 	}{
 		{"an unknown critical extension", crlWith([]pkix.Extension{{Id: unknown, Critical: true, Value: flag}}, nil), "critical extension 1.3.6.1.4.1.99999.1"},
 		{"an unknown critical entry extension", crlWith(nil, []pkix.Extension{{Id: unknown, Critical: true, Value: flag}}), "critical extension 1.3.6.1.4.1.99999.1"},
-		{"a scope limited to attribute certificates", crlWith([]pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: attributeCertsOnly}}, nil), "attribute certificates"},
-		{"an issuing distribution point followed by trailing data", crlWith([]pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: append(slices.Clone(attributeCertsOnly[:0]), append(mustMarshal(t, struct{}{}), 0x00)...)}}, nil), "cannot be parsed"},
+		{"an issuing distribution point followed by trailing data", crlWith([]pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: append(mustMarshal(t, struct{}{}), 0x00)}}, nil), "cannot be parsed"},
 	} {
 		t.Run(tc.name+" is refused", func(t *testing.T) {
 			_, err := newCRLChecker(tc.file, certs.ServerCA)
@@ -1201,22 +920,58 @@ func TestNewCRLCheckerCriticalExtensions(t *testing.T) {
 	})
 }
 
-// TestNewCRLCheckerUndecodableName checks that a CRL whose issuer name
-// holds a T.61 string with characters beyond ASCII is refused, since
-// such a name cannot be compared with its other encodings, while one
-// within ASCII is accepted.
-func TestNewCRLCheckerUndecodableName(t *testing.T) {
+// TestNewCRLCheckerPartialCRL checks that a CRL that its issuing
+// distribution point limits to part of what its issuer revoked is
+// refused, as grpc-go refuses it, since the checker applies every CRL
+// as the complete list: one limited to end-entity certificates, to CA
+// certificates, to both, which RFC 5280 forbids, to attribute
+// certificates, or to some revocation reasons. One that names a
+// distribution point without limiting the CRL otherwise is accepted.
+func TestNewCRLCheckerPartialCRL(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	intermediate := loadOneCert(t, certs.ServerCA)
-	intermediateKey := strings.TrimSuffix(certs.ServerCA, "-cert.pem") + "-key.pem"
-
-	ascii := crlWithIssuerName(t, certs.ServerCA, intermediateKey, big.NewInt(1), intermediate.Subject.CommonName, asn1.TagT61String, time.Now().Add(time.Hour))
-	_, err := newCRLChecker(ascii, certs.ServerCA)
+	ca := loadOneCert(t, certs.ServerCA)
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
 	require.NoError(t, err)
+	scopedCRL := func(scope any) string {
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:          big.NewInt(1),
+			ThisUpdate:      time.Now().Add(-time.Hour),
+			NextUpdate:      time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: mustMarshal(t, scope)}},
+		}, ca, keyPair.PrivateKey.(crypto.Signer))
+		require.NoError(t, err)
+		return crlFile(t, der)
+	}
+	type scope struct {
+		OnlyContainsUserCerts      bool           `asn1:"tag:1,optional"`
+		OnlyContainsCACerts        bool           `asn1:"tag:2,optional"`
+		OnlySomeReasons            asn1.BitString `asn1:"tag:3,optional"`
+		OnlyContainsAttributeCerts bool           `asn1:"tag:5,optional"`
+	}
 
-	beyondASCII := crlWithIssuerName(t, certs.ServerCA, intermediateKey, big.NewInt(1), "Jos\u00e9", asn1.TagT61String, time.Now().Add(time.Hour))
-	_, err = newCRLChecker(beyondASCII, certs.ServerCA)
-	require.ErrorContains(t, err, "T.61 string with characters beyond ASCII")
+	for _, tc := range []struct {
+		name  string
+		scope scope
+		want  string
+	}{
+		{"end-entity certificates", scope{OnlyContainsUserCerts: true}, "limited to end-entity certificates"},
+		{"CA certificates", scope{OnlyContainsCACerts: true}, "limited to CA certificates"},
+		{"both end-entity and CA certificates", scope{OnlyContainsUserCerts: true, OnlyContainsCACerts: true}, "limited to"},
+		{"attribute certificates", scope{OnlyContainsAttributeCerts: true}, "limited to attribute certificates"},
+		{"some revocation reasons", scope{OnlySomeReasons: asn1.BitString{Bytes: []byte{0x40}, BitLength: 2}}, "limited to some revocation reasons"},
+	} {
+		t.Run("a CRL limited to "+tc.name+" is refused", func(t *testing.T) {
+			_, err := newCRLChecker(scopedCRL(tc.scope), certs.ServerCA)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+
+	t.Run("a CRL that names its distribution point is accepted", func(t *testing.T) {
+		uri := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 6, Bytes: []byte("http://crl.example.com/ca.crl")})
+		fullName := mustMarshal(t, asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: uri})
+		_, err := newCRLChecker(scopedCRL(struct{ DistributionPoint asn1.RawValue }{asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: fullName}}), certs.ServerCA)
+		require.NoError(t, err)
+	})
 }
 
 // TestNewCRLCheckerFutureCRL checks that a CRL whose thisUpdate lies
@@ -1238,45 +993,6 @@ func TestNewCRLCheckerFutureCRL(t *testing.T) {
 
 	_, err = newCRLChecker(crlIssuedAt(time.Now().Add(time.Minute)), certs.ServerCA)
 	require.NoError(t, err, "a CRL issued within the clock skew allowance is accepted")
-}
-
-// TestCRLCheckerUndecodablePeerIssuerName checks that a presented
-// certificate whose issuer name holds a T.61 string with characters
-// beyond ASCII fails the check rather than slipping past the CRL of
-// its issuer for want of a comparable name, as a configured name
-// with such a string is refused.
-func TestCRLCheckerUndecodablePeerIssuerName(t *testing.T) {
-	rootCA, rootKey := selfSignedCA(t, 1, "Jos\u00e9 Root CA", nil)
-
-	// The leaf names its issuer in T.61, Latin-1 style, where the
-	// root's subject is a UTF8String.
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	renamedRoot := *rootCA
-	renamedRoot.RawSubject = encodedCommonName(t, "Jos\xe9 Root CA", asn1.TagT61String)
-	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "leaf.example.com"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}, &renamedRoot, &leafKey.PublicKey, rootKey)
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(leafDER)
-	require.NoError(t, err)
-
-	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:                    big.NewInt(1),
-		ThisUpdate:                time.Now().Add(-time.Hour),
-		NextUpdate:                time.Now().Add(time.Hour),
-		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: leaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
-	}, rootCA, rootKey)
-	require.NoError(t, err)
-	checker, err := newCRLChecker(crlFile(t, crlDER), "")
-	require.NoError(t, err)
-
-	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, rootCA}})
-	require.ErrorContains(t, err, "cannot check the revocation of certificate CommonName=leaf.example.com: the name holds a T.61 string with characters beyond ASCII")
 }
 
 // TestCRLCheckerAlternateVerifiedChain checks that a peer whose
@@ -1306,19 +1022,7 @@ func TestCRLCheckerAlternateVerifiedChain(t *testing.T) {
 	}
 	crossA := crossSigned(10, rootA, rootAKey)
 	crossB := crossSigned(20, rootB, rootBKey)
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: "leaf.example.com"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}, crossA, &leafKey.PublicKey, crossKey)
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(leafDER)
-	require.NoError(t, err)
+	leaf := signedLeaf(t, crossA, crossKey, 3, "leaf.example.com")
 
 	// Root A revokes its cross-signed certificate; root B has not.
 	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
@@ -1334,77 +1038,23 @@ func TestCRLCheckerAlternateVerifiedChain(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("the chain through the other root carries the peer", func(t *testing.T) {
-		err := checker.check([]*x509.Certificate{leaf}, [][]*x509.Certificate{{leaf, crossA, rootA}, {leaf, crossB, rootB}})
+		err := checker.check([][]*x509.Certificate{{leaf, crossA, rootA}, {leaf, crossB, rootB}})
 		require.NoError(t, err)
 	})
 
 	t.Run("the peer fails when the only chain holds the revoked certificate", func(t *testing.T) {
-		err := checker.check([]*x509.Certificate{leaf}, [][]*x509.Certificate{{leaf, crossA, rootA}})
+		err := checker.check([][]*x509.Certificate{{leaf, crossA, rootA}})
 		require.ErrorContains(t, err, "Certificate revoked: CommonName=Cross-signed CA")
 	})
 }
 
-// TestCRLCheckerScopedCRL checks that a CRL scoped by its issuing
-// distribution point to CA certificates alone is not held against an
-// end-entity certificate, neither as a CRL that requires the issuer
-// to be found nor as a list to look the certificate up in, and the
-// other way around for one scoped to end-entity certificates.
-func TestCRLCheckerScopedCRL(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	ca := loadOneCert(t, certs.ServerCA)
-	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
-	require.NoError(t, err)
-	leaf := loadOneCert(t, certs.ServerCert)
-	scopedCRL := func(scope any, serials ...*big.Int) string {
-		scopeDER, err := asn1.Marshal(scope)
-		require.NoError(t, err)
-		template := &x509.RevocationList{
-			Number:          big.NewInt(1),
-			ThisUpdate:      time.Now().Add(-time.Hour),
-			NextUpdate:      time.Now().Add(time.Hour),
-			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: scopeDER}},
-		}
-		for _, serial := range serials {
-			template.RevokedCertificateEntries = append(template.RevokedCertificateEntries, x509.RevocationListEntry{SerialNumber: serial, RevocationTime: time.Now().Add(-time.Hour)})
-		}
-		der, err := x509.CreateRevocationList(rand.Reader, template, ca, keyPair.PrivateKey.(crypto.Signer))
-		require.NoError(t, err)
-		return crlFile(t, der)
-	}
-	caCertsOnly := struct {
-		OnlyContainsCACerts bool `asn1:"tag:2,optional"`
-	}{OnlyContainsCACerts: true}
-	userCertsOnly := struct {
-		OnlyContainsUserCerts bool `asn1:"tag:1,optional"`
-	}{OnlyContainsUserCerts: true}
-
-	t.Run("a CA-only CRL does not make a leaf presented alone need its issuer", func(t *testing.T) {
-		checker, err := newCRLChecker(scopedCRL(caCertsOnly), "")
-		require.NoError(t, err)
-		require.NoError(t, checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}))
-	})
-
-	t.Run("a CA-only CRL that lists a leaf's serial number does not revoke the leaf", func(t *testing.T) {
-		checker, err := newCRLChecker(scopedCRL(caCertsOnly, leaf.SerialNumber), certs.ServerCA)
-		require.NoError(t, err)
-		require.NoError(t, checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}))
-	})
-
-	t.Run("a user-only CRL that lists a leaf's serial number revokes the leaf", func(t *testing.T) {
-		checker, err := newCRLChecker(scopedCRL(userCertsOnly, leaf.SerialNumber), certs.ServerCA)
-		require.NoError(t, err)
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}})
-		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.ServerName)
-	})
-}
-
-// TestCRLCheckerChainLocalIssuers checks that a certificate of one
-// verified chain cannot serve as the issuer of a certificate in
-// another: with a CA certificate that may not sign CRLs in one chain
-// and one carrying the same key and name that may in another, the
-// first chain fails on the CRL signed by that key, whatever the
-// second one holds, and the second fails on its own revocation.
-func TestCRLCheckerChainLocalIssuers(t *testing.T) {
+// TestCRLCheckerIssuerOfEachChain checks that each chain is checked
+// with its own certificates as the issuers: with a CA certificate
+// that may not sign CRLs in one chain and one carrying the same key
+// and name that may in another, the first chain fails on the CRL
+// signed by that key, whatever the second one holds, and the second
+// fails on its own revocation.
+func TestCRLCheckerIssuerOfEachChain(t *testing.T) {
 	rootA, rootAKey := selfSignedCA(t, 1, "Root A", nil)
 	rootB, rootBKey := selfSignedCA(t, 2, "Root B", nil)
 	crossKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -1426,19 +1076,8 @@ func TestCRLCheckerChainLocalIssuers(t *testing.T) {
 	}
 	crossA := crossSigned(10, x509.KeyUsageCertSign, rootA, rootAKey)
 	crossB := crossSigned(20, x509.KeyUsageCertSign|x509.KeyUsageCRLSign, rootB, rootBKey)
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: "leaf.example.com"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}, crossB, &leafKey.PublicKey, crossKey)
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(leafDER)
-	require.NoError(t, err)
+	require.Equal(t, crossA.SubjectKeyId, crossB.SubjectKeyId)
+	leaf := signedLeaf(t, crossB, crossKey, 3, "leaf.example.com")
 
 	// The cross-signed key signs a CRL, and root B revokes its
 	// cross-signed certificate.
@@ -1451,35 +1090,66 @@ func TestCRLCheckerChainLocalIssuers(t *testing.T) {
 		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: crossB.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
 	}, rootB, rootBKey)
 	require.NoError(t, err)
-	crls := path.Join(t.TempDir(), "crls.pem")
-	require.NoError(t, os.WriteFile(crls, append(pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crossCRL}), pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: rootBCRL})...), 0o600))
 	roots := path.Join(t.TempDir(), "roots.pem")
 	require.NoError(t, os.WriteFile(roots, append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootA.Raw}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootB.Raw})...), 0o600))
-	checker, err := newCRLChecker(crls, roots)
+	checker, err := newCRLChecker(crlsFile(t, crossCRL, rootBCRL), roots)
 	require.NoError(t, err)
 
-	err = checker.check([]*x509.Certificate{leaf}, [][]*x509.Certificate{{leaf, crossA, rootA}, {leaf, crossB, rootB}})
-	require.ErrorContains(t, err, "none of the certificates found for that issuer may sign CRLs")
+	notAllowed := "cannot check the revocation of certificate CommonName=leaf.example.com: the CRL from issuer Cross-signed CA cannot be validated: the certificate of that issuer is not allowed to sign CRLs"
+	err = checker.check([][]*x509.Certificate{{leaf, crossA, rootA}})
+	require.ErrorContains(t, err, notAllowed)
+	err = checker.check([][]*x509.Certificate{{leaf, crossB, rootB}})
+	require.ErrorContains(t, err, "Certificate revoked: CommonName=Cross-signed CA")
+	err = checker.check([][]*x509.Certificate{{leaf, crossA, rootA}, {leaf, crossB, rootB}})
+	require.ErrorContains(t, err, notAllowed)
 }
 
-// TestNewCRLCheckerNoAuthorityKeyIdentifier checks that a CRL without
-// an authority key identifier is refused, since without one a CRL
-// whose signature does not verify cannot be told from another CA's.
-func TestNewCRLCheckerNoAuthorityKeyIdentifier(t *testing.T) {
+// TestCRLCheckerCRLWithoutAuthorityKeyIdentifier checks that a CRL
+// without an authority key identifier, as OpenSSL writes them unless
+// told otherwise, is accepted and applied, and that such a CRL under
+// the issuer's name that the issuer does not validate is refused,
+// since nothing then tells it from a CRL of the issuer's that has
+// gone bad, while one whose identifier names another key is passed
+// over as another CA's.
+func TestCRLCheckerCRLWithoutAuthorityKeyIdentifier(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 	ca := loadOneCert(t, certs.ServerCA)
 	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
 	require.NoError(t, err)
+	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
+	chain := [][]*x509.Certificate{{revokedLeaf, ca}}
 	// Go will not create a CRL without one, so this one is put
 	// together by hand: a bare list with no extension at all.
-	der := crlWithoutExtensions(t, ca, keyPair.PrivateKey.(*ecdsa.PrivateKey))
+	der := crlWithoutExtensions(t, ca, keyPair.PrivateKey.(*ecdsa.PrivateKey), revokedLeaf.SerialNumber)
 	crl, err := x509.ParseRevocationList(der)
 	require.NoError(t, err)
 	require.Empty(t, crl.AuthorityKeyId)
-	require.NoError(t, crl.CheckSignatureFrom(ca))
 
-	_, err = newCRLChecker(crlFile(t, der), certs.ServerCA)
-	require.ErrorContains(t, err, "carries no authority key identifier")
+	checker, err := newCRLChecker(crlFile(t, der), certs.ServerCA)
+	require.NoError(t, err)
+	err = checker.check(chain)
+	require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
+
+	// Another CA under the same name, with a key of its own.
+	other, otherKey := selfSignedCA(t, 1, "", ca.RawSubject)
+
+	t.Run("such a CRL that the issuer does not validate is refused", func(t *testing.T) {
+		_, err := newCRLChecker(crlFile(t, crlWithoutExtensions(t, other, otherKey)), certs.ServerCA)
+		require.ErrorContains(t, err, "the CRL from issuer "+ca.Subject.CommonName+" cannot be validated: its signature does not verify")
+	})
+
+	t.Run("a CRL whose authority key identifier names another key is passed over", func(t *testing.T) {
+		otherDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:                    big.NewInt(1),
+			ThisUpdate:                time.Now().Add(-time.Hour),
+			NextUpdate:                time.Now().Add(time.Hour),
+			RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: revokedLeaf.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+		}, other, otherKey)
+		require.NoError(t, err)
+		checker, err := newCRLChecker(crlFile(t, otherDER), certs.ServerCA)
+		require.NoError(t, err)
+		require.NoError(t, checker.check(chain))
+	})
 }
 
 // TestNewCRLCheckerEmptyCRLFile checks that a CRL file that holds no
@@ -1491,45 +1161,6 @@ func TestNewCRLCheckerEmptyCRLFile(t *testing.T) {
 	require.ErrorContains(t, err, "no CRL found in file")
 }
 
-// TestCRLCheckerIssuerNameMatching checks that a CRL whose issuer name
-// differs from the subject of the CA certificate only in case and in
-// insignificant whitespace, which X.509 treats as the same name, is
-// still bound to that CA, while a CRL from a differently named CA is
-// still not held against the CA's certificates.
-func TestCRLCheckerIssuerNameMatching(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	revokedLeaf := loadOneCert(t, certs.RevokedServerCert)
-	intermediate := loadOneCert(t, certs.ServerCA)
-	intermediateKey := strings.TrimSuffix(certs.ServerCA, "-cert.pem") + "-key.pem"
-	sameName := "  " + strings.ToUpper(intermediate.Subject.CommonName) + "  "
-	crl := crlWithIssuerName(t, certs.ServerCA, intermediateKey, revokedLeaf.SerialNumber, sameName, asn1.TagPrintableString, time.Now().Add(time.Hour))
-
-	t.Run("with the issuer configured", func(t *testing.T) {
-		checker, err := newCRLChecker(crl, certs.ServerCA)
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
-		require.ErrorContains(t, err, "Certificate revoked: CommonName="+certs.RevokedServerName)
-	})
-
-	t.Run("with the issuer missing, the check fails closed rather than silently", func(t *testing.T) {
-		checker, err := newCRLChecker(crl, "")
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
-		require.ErrorContains(t, err, "no certificate is available for its issuer")
-	})
-
-	t.Run("a differently named issuer's CRL still does not apply", func(t *testing.T) {
-		otherName := crlWithIssuerName(t, certs.ServerCA, intermediateKey, revokedLeaf.SerialNumber, intermediate.Subject.CommonName+" Other", asn1.TagPrintableString, time.Now().Add(time.Hour))
-		checker, err := newCRLChecker(otherName, "")
-		require.NoError(t, err)
-
-		err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{revokedLeaf}})
-		require.NoError(t, err)
-	})
-}
-
 // TestCertIsRevokedWarnsPerExpiredCRL checks that each expired CRL gets
 // its own throttled warning, so that one stale CRL that is consulted
 // often does not hide another one that also needs updating.
@@ -1538,14 +1169,8 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 	cert := loadOneCert(t, certs.ServerCert)
 	expired := time.Now().Add(-time.Hour)
 	var crls []*x509.RevocationList
-	for _, ca := range []struct{ cert, name string }{
-		{certs.ServerCA, "Expired Servers CA"},
-		{certs.ClientCA, "Expired Clients CA"},
-	} {
-		file := crlWithIssuerName(t, ca.cert, strings.TrimSuffix(ca.cert, "-cert.pem")+"-key.pem", big.NewInt(1), ca.name, asn1.TagPrintableString, expired)
-		loaded, err := loadCRLSet(file)
-		require.NoError(t, err)
-		crls = append(crls, loaded...)
+	for _, ca := range []string{certs.ServerCA, certs.ClientCA} {
+		crls = append(crls, loadOneCRL(t, crlDueAt(t, ca, 1, expired)))
 	}
 
 	checker, err := newCRLCheckerFrom(crls, nil)
@@ -1560,19 +1185,9 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 	}
 
 	t.Run("CRLs of one issuer due at the same time are told apart by their number", func(t *testing.T) {
-		ca := loadOneCert(t, certs.ServerCA)
-		keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
-		require.NoError(t, err)
 		var keys []string
 		for number := int64(1); number <= 2; number++ {
-			der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-				Number:     big.NewInt(number),
-				ThisUpdate: expired.Add(-2 * time.Hour),
-				NextUpdate: expired,
-			}, ca, keyPair.PrivateKey.(crypto.Signer))
-			require.NoError(t, err)
-			crl, err := x509.ParseRevocationList(der)
-			require.NoError(t, err)
+			crl := loadOneCRL(t, crlDueAt(t, certs.ServerCA, number, expired))
 			checker, err := newCRLCheckerFrom([]*x509.RevocationList{crl}, nil)
 			require.NoError(t, err)
 			require.False(t, checker.isRevoked(cert, crl))
@@ -1588,7 +1203,7 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 		warn := log.Warn
 		log.Warn = func(string, ...slog.Attr) { warnings.Add(1) }
 		t.Cleanup(func() { log.Warn = warn })
-		crl := loadOneCRL(t, crlWithIssuerName(t, certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", big.NewInt(7), "Expired At Once CA", asn1.TagPrintableString, expired))
+		crl := loadOneCRL(t, crlDueAt(t, certs.ServerCA, 7, expired))
 		checker, err := newCRLCheckerFrom([]*x509.RevocationList{crl}, nil)
 		require.NoError(t, err)
 
@@ -1623,83 +1238,21 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 	})
 }
 
-// TestNameKey pins which distinguished names the CRL matching treats
-// as the same: the X.509 matching rules make attribute values compare
-// without regard to case or insignificant whitespace and the
-// attributes of an RDN compare as a set, while delimiter characters
-// inside a value must not make distinct names collide.
-func TestNameKey(t *testing.T) {
-	commonName := asn1.ObjectIdentifier{2, 5, 4, 3}
-	organization := asn1.ObjectIdentifier{2, 5, 4, 10}
-	attribute := func(oid asn1.ObjectIdentifier, value string) pkix.AttributeTypeAndValue {
-		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagPrintableString, Bytes: []byte(value)}}
-	}
-	utf8Attribute := func(oid asn1.ObjectIdentifier, value string) pkix.AttributeTypeAndValue {
-		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagUTF8String, Bytes: []byte(value)}}
-	}
-	encodedAttribute := func(oid asn1.ObjectIdentifier, tag int, value []byte) pkix.AttributeTypeAndValue {
-		return pkix.AttributeTypeAndValue{Type: oid, Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: tag, Bytes: value}}
-	}
-	name := func(rdns ...pkix.RelativeDistinguishedNameSET) []byte {
-		raw, err := asn1.Marshal(pkix.RDNSequence(rdns))
-		require.NoError(t, err)
-		return raw
-	}
-	rdn := func(attributes ...pkix.AttributeTypeAndValue) pkix.RelativeDistinguishedNameSET { return attributes }
-
-	same := []struct {
-		name string
-		a, b []byte
-	}{
-		{"case", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "EXAMPLE ca")))},
-		{"whitespace", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "  Example   CA ")))},
-		{"attribute order within an RDN", name(rdn(attribute(commonName, "Bob"), attribute(commonName, "amy"))), name(rdn(attribute(commonName, "AMY"), attribute(commonName, "bob")))},
-		{"Unicode normalization", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(utf8Attribute(commonName, "Jose\u0301")))},
-		{"case folding beyond ASCII", name(rdn(utf8Attribute(commonName, "Stra\u00dfe"))), name(rdn(utf8Attribute(commonName, "STRASSE")))},
-		{"UniversalString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, 28, utf32BigEndian("Jos\u00e9"))))},
-		{"BMPString and UTF8String", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagBMPString, utf16BigEndian("Jos\u00e9"))))},
-		{"T61String and UTF8String, within ASCII", name(rdn(utf8Attribute(commonName, "Example CA"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Example CA"))))},
-		{"a character mapped to nothing", name(rdn(utf8Attribute(commonName, "Exam\u00adple CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
-		{"a character mapped to space", name(rdn(utf8Attribute(commonName, "Example\u00a0CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
-		{"a control character mapped to nothing", name(rdn(utf8Attribute(commonName, "Example\u0001 CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
-		{"a zero width non-joiner mapped to nothing", name(rdn(utf8Attribute(commonName, "Exam\u200cple CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
-		{"a bidirectional format character mapped to nothing", name(rdn(utf8Attribute(commonName, "\u202aExample CA"))), name(rdn(utf8Attribute(commonName, "Example CA")))},
-	}
-	key := func(t *testing.T, raw []byte) string {
-		t.Helper()
-		rendered, _ := nameKey(raw)
-		return rendered
-	}
-	for _, tc := range same {
-		t.Run("same "+tc.name, func(t *testing.T) {
-			require.Equal(t, key(t, tc.a), key(t, tc.b))
-		})
-	}
-
-	different := []struct {
-		name string
-		a, b []byte
-	}{
-		{"values", name(rdn(attribute(commonName, "Example CA"))), name(rdn(attribute(commonName, "Example CA 2")))},
-		{"attribute types", name(rdn(attribute(commonName, "Example"))), name(rdn(attribute(organization, "Example")))},
-		{"RDN order", name(rdn(attribute(commonName, "a")), rdn(attribute(organization, "b"))), name(rdn(attribute(organization, "b")), rdn(attribute(commonName, "a")))},
-		{"one attribute holding delimiters versus two attributes", name(rdn(attribute(commonName, "a+2.5.4.3=b"))), name(rdn(attribute(commonName, "a"), attribute(commonName, "b")))},
-		{"one RDN versus two", name(rdn(attribute(commonName, "a"), attribute(organization, "b"))), name(rdn(attribute(commonName, "a")), rdn(attribute(organization, "b")))},
-		{"T61String beyond ASCII and its UTF8String reading", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Jos\u00e9"))))},
-		{"T61String beyond ASCII and its Latin-1 reading", name(rdn(utf8Attribute(commonName, "Jos\u00e9"))), name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte{'J', 'o', 's', 0xe9})))},
-	}
-	for _, tc := range different {
-		t.Run("different "+tc.name, func(t *testing.T) {
-			require.NotEqual(t, key(t, tc.a), key(t, tc.b))
-		})
-	}
-
-	t.Run("a T61String beyond ASCII is reported as undecodable", func(t *testing.T) {
-		_, err := nameKey(name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte{'J', 'o', 's', 0xe9}))))
-		require.ErrorIs(t, err, errUndecodableName)
-		_, err = nameKey(name(rdn(encodedAttribute(commonName, asn1.TagT61String, []byte("Jose")))))
-		require.NoError(t, err)
-	})
+// crlDueAt writes an empty CRL with the given number, due at
+// nextUpdate, signed by the CA whose certificate file is given, whose
+// key file sits next to it, and returns its path.
+func crlDueAt(t *testing.T, caCert string, number int64, nextUpdate time.Time) string {
+	t.Helper()
+	ca := loadOneCert(t, caCert)
+	keyPair, err := tls.LoadX509KeyPair(caCert, strings.TrimSuffix(caCert, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:     big.NewInt(number),
+		ThisUpdate: nextUpdate.Add(-2 * time.Hour),
+		NextUpdate: nextUpdate,
+	}, ca, keyPair.PrivateKey.(crypto.Signer))
+	require.NoError(t, err)
+	return crlFile(t, der)
 }
 
 // loadOneCRL loads the CRL file and returns its only CRL.
@@ -1711,126 +1264,6 @@ func loadOneCRL(t *testing.T, file string) *x509.RevocationList {
 	return crls[0]
 }
 
-// encodedCommonName encodes a distinguished name made of the given
-// common name alone, written with the given ASN.1 string tag.
-func encodedCommonName(t *testing.T, commonName string, tag int) []byte {
-	t.Helper()
-	raw, err := asn1.Marshal(pkix.RDNSequence{{pkix.AttributeTypeAndValue{
-		Type:  asn1.ObjectIdentifier{2, 5, 4, 3},
-		Value: asn1.RawValue{Class: asn1.ClassUniversal, Tag: tag, Bytes: []byte(commonName)},
-	}}})
-	require.NoError(t, err)
-	return raw
-}
-
-// TestCRLCheckerIssuerLookupNameEncoding checks that a certificate
-// whose issuer name is encoded differently from the subject of the
-// presented certificate that issued it still finds its issuer, so that
-// the issuer's CRL is held against it: names are matched under the
-// X.509 rules for the lookup too, with the signature as the binding.
-func TestCRLCheckerIssuerLookupNameEncoding(t *testing.T) {
-	rootCA, rootKey := selfSignedCA(t, 1, "Root CA", nil)
-
-	// The intermediate names its issuer as a UTF8String where the
-	// root's subject is a PrintableString.
-	intermediateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	renamedRoot := *rootCA
-	renamedRoot.RawSubject = encodedCommonName(t, rootCA.Subject.CommonName, asn1.TagUTF8String)
-	require.NotEqual(t, rootCA.RawSubject, renamedRoot.RawSubject)
-	intermediateDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber:          big.NewInt(2),
-		Subject:               pkix.Name{CommonName: "Intermediate CA"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-	}, &renamedRoot, &intermediateKey.PublicKey, rootKey)
-	require.NoError(t, err)
-	intermediate, err := x509.ParseCertificate(intermediateDER)
-	require.NoError(t, err)
-	require.NotEqual(t, rootCA.RawSubject, intermediate.RawIssuer)
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: "leaf.example.com"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}, intermediate, &leafKey.PublicKey, intermediateKey)
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(leafDER)
-	require.NoError(t, err)
-
-	crlDER, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:                    big.NewInt(1),
-		ThisUpdate:                time.Now().Add(-time.Hour),
-		NextUpdate:                time.Now().Add(time.Hour),
-		RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: intermediate.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
-	}, rootCA, rootKey)
-	require.NoError(t, err)
-	crlFile := path.Join(t.TempDir(), "root-crl.pem")
-	require.NoError(t, os.WriteFile(crlFile, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlDER}), 0o600))
-
-	// No CA is configured: the issuers are found among the presented
-	// certificates, as in required mode.
-	checker, err := newCRLChecker(crlFile, "")
-	require.NoError(t, err)
-	err = checker.verifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf, intermediate, rootCA}})
-	require.ErrorContains(t, err, "Certificate revoked: CommonName=Intermediate CA")
-}
-
-// utf32BigEndian encodes text as a UniversalString's bytes.
-func utf32BigEndian(text string) []byte {
-	var encoded []byte
-	for _, r := range text {
-		encoded = append(encoded, byte(r>>24), byte(r>>16), byte(r>>8), byte(r))
-	}
-	return encoded
-}
-
-// utf16BigEndian encodes text as a BMPString's bytes.
-func utf16BigEndian(text string) []byte {
-	var encoded []byte
-	for _, unit := range utf16.Encode([]rune(text)) {
-		encoded = append(encoded, byte(unit>>8), byte(unit))
-	}
-	return encoded
-}
-
-// partitionedCRLs writes a file holding n complete CRLs from the given
-// CA, each scoped to a distribution point of its own by its issuing
-// distribution point extension, and returns its path.
-func partitionedCRLs(t *testing.T, caCert, caKey string, n int) string {
-	t.Helper()
-	ca := loadOneCert(t, caCert)
-	keyPair, err := tls.LoadX509KeyPair(caCert, caKey)
-	require.NoError(t, err)
-	var content []byte
-	for i := range n {
-		uri, err := asn1.Marshal(asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 6, Bytes: fmt.Appendf(nil, "http://crl.example.com/%d", i)})
-		require.NoError(t, err)
-		fullName, err := asn1.Marshal(asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: uri})
-		require.NoError(t, err)
-		distributionPoint, err := asn1.Marshal(struct{ DistributionPoint asn1.RawValue }{asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: fullName}})
-		require.NoError(t, err)
-		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-			Number:          big.NewInt(int64(i + 1)),
-			ThisUpdate:      time.Now().Add(-time.Hour),
-			NextUpdate:      time.Now().Add(time.Hour),
-			ExtraExtensions: []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: distributionPoint}},
-		}, ca, keyPair.PrivateKey.(crypto.Signer))
-		require.NoError(t, err)
-		content = append(content, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der})...)
-	}
-	file := path.Join(t.TempDir(), "partitioned-crls.pem")
-	require.NoError(t, os.WriteFile(file, content, 0o600))
-	return file
-}
-
 // mustMarshal DER encodes v.
 func mustMarshal(t *testing.T, v any) []byte {
 	t.Helper()
@@ -1840,24 +1273,34 @@ func mustMarshal(t *testing.T, v any) []byte {
 }
 
 // crlWithoutExtensions DER encodes and signs, with the given CA and
-// its key, a CRL that carries no extension at all, which Go's own
-// constructor cannot produce: it always writes the authority key
-// identifier.
-func crlWithoutExtensions(t *testing.T, ca *x509.Certificate, key *ecdsa.PrivateKey) []byte {
+// its key, a CRL revoking the given serial numbers that carries no
+// extension at all, which Go's own constructor cannot produce: it
+// always writes the authority key identifier.
+func crlWithoutExtensions(t *testing.T, ca *x509.Certificate, key *ecdsa.PrivateKey, serials ...*big.Int) []byte {
 	t.Helper()
+	type revokedCertificate struct {
+		SerialNumber   *big.Int
+		RevocationTime time.Time
+	}
+	var revoked []revokedCertificate
+	for _, serial := range serials {
+		revoked = append(revoked, revokedCertificate{SerialNumber: serial, RevocationTime: time.Now().Add(-time.Hour).UTC().Truncate(time.Second)})
+	}
 	ecdsaWithSHA256 := pkix.AlgorithmIdentifier{Algorithm: asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}}
 	tbs, err := asn1.Marshal(struct {
-		Version    int
-		Signature  pkix.AlgorithmIdentifier
-		Issuer     asn1.RawValue
-		ThisUpdate time.Time
-		NextUpdate time.Time
+		Version             int
+		Signature           pkix.AlgorithmIdentifier
+		Issuer              asn1.RawValue
+		ThisUpdate          time.Time
+		NextUpdate          time.Time
+		RevokedCertificates []revokedCertificate `asn1:"optional"`
 	}{
-		Version:    1,
-		Signature:  ecdsaWithSHA256,
-		Issuer:     asn1.RawValue{FullBytes: ca.RawSubject},
-		ThisUpdate: time.Now().Add(-time.Hour).UTC().Truncate(time.Second),
-		NextUpdate: time.Now().Add(time.Hour).UTC().Truncate(time.Second),
+		Version:             1,
+		Signature:           ecdsaWithSHA256,
+		Issuer:              asn1.RawValue{FullBytes: ca.RawSubject},
+		ThisUpdate:          time.Now().Add(-time.Hour).UTC().Truncate(time.Second),
+		NextUpdate:          time.Now().Add(time.Hour).UTC().Truncate(time.Second),
+		RevokedCertificates: revoked,
 	})
 	require.NoError(t, err)
 	digest := sha256.Sum256(tbs)
