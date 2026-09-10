@@ -54,6 +54,12 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		args = append(args, convertedExpr)
 	}
 
+	// A qualified call names a stored function, whatever the name: MySQL's to
+	// resolve and evaluate.
+	if fn.Qualifier.NotEmpty() {
+		return nil, translateExprNotSupported(fn)
+	}
+
 	method := fn.Name.Lowered()
 	call := CallExpr{Arguments: args, Method: method}
 

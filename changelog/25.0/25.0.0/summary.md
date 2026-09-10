@@ -36,6 +36,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [A qualified function call is a stored-function call](#vtgate-qualified-function-call)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -380,6 +381,10 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
+#### <a id="vtgate-qualified-function-call"/>A qualified function call is a stored-function call</a>
+
+A function call qualified with a schema name, such as `db.last_insert_id()` or `db.udf_aggr(col)`, names a stored function in that schema, whatever the name, and MySQL resolves and evaluates it. VTGate used to treat such a call like the unqualified built-in or aggregate UDF of the same name: the normalizer replaced `db.last_insert_id()`, `db.found_rows()` and `db.row_count()` with the session's own values, the evalengine computed `db.abs(-1)` itself, and a qualified call by the name of an aggregate UDF registered in the VSchema made the planner fail. Qualified calls are now always sent to MySQL as written.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

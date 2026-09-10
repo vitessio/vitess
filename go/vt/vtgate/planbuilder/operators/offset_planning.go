@@ -66,7 +66,7 @@ func mustFetchFromInput(ctx *plancontext.PlanningContext, e sqlparser.SQLNode) b
 	case *sqlparser.ColName, sqlparser.AggrFunc:
 		return true
 	case *sqlparser.FuncExpr:
-		return fun.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
+		return fun.Qualifier.IsEmpty() && fun.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
 	default:
 		return false
 	}
