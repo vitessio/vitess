@@ -319,41 +319,53 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 			}
 		}
 	}
-	// The configured issuer of each configured certificate, matched
-	// by name and signature as a chain is.
-	parents := make(map[*x509.Certificate]*x509.Certificate, len(issuers))
+	// The configured issuers of each configured certificate, matched
+	// by name and signature as a chain is: several when one key was
+	// certified more than once, as in a cross-signing rollover.
+	parents := make(map[*x509.Certificate][]*x509.Certificate, len(issuers))
 	for _, cert := range issuers {
 		for _, parent := range issuers {
 			if !cert.Equal(parent) && bytes.Equal(cert.RawIssuer, parent.RawSubject) && cert.CheckSignatureFrom(parent) == nil {
-				parents[cert] = parent
-				break
+				parents[cert] = append(parents[cert], parent)
 			}
 		}
 	}
 	for _, cert := range issuers {
-		parent, issued := parents[cert]
-		if _, done := checker.revokedAnchors[string(cert.Raw)]; done || !issued {
+		if _, done := checker.revokedAnchors[string(cert.Raw)]; done {
 			continue
 		}
-		for _, crl := range checker.configured[string(parent.Raw)] {
-			if checker.isRevoked(cert, crl) {
-				checker.revokedAnchors[string(cert.Raw)] = cert.Subject.CommonName
-				warnRevokedAnchor(cert, cert.Subject.CommonName)
-				break
+	listed:
+		for _, parent := range parents[cert] {
+			for _, crl := range checker.configured[string(parent.Raw)] {
+				if checker.isRevoked(cert, crl) {
+					checker.revokedAnchors[string(cert.Raw)] = cert.Subject.CommonName
+					warnRevokedAnchor(cert, cert.Subject.CommonName)
+					break listed
+				}
 			}
 		}
 	}
-	// A configured certificate issued under a revoked one is one no
-	// chain may end at either, however many configured certificates
-	// lie between them.
+	// A configured certificate whose every configured issuer is
+	// revoked is one no chain may end at either, however many
+	// configured certificates lie between it and the revoked one; a
+	// clean configured issuer carries it, as a chain through that
+	// issuer would carry the peer, and the order of the CA file
+	// decides nothing.
 	for changed := true; changed; {
 		changed = false
 		for _, cert := range issuers {
-			parent, issued := parents[cert]
-			if _, done := checker.revokedAnchors[string(cert.Raw)]; done || !issued {
+			if _, done := checker.revokedAnchors[string(cert.Raw)]; done || len(parents[cert]) == 0 {
 				continue
 			}
-			if revoked, found := checker.revokedAnchors[string(parent.Raw)]; found {
+			revoked, allRevoked := "", true
+			for _, parent := range parents[cert] {
+				var found bool
+				if revoked, found = checker.revokedAnchors[string(parent.Raw)]; !found {
+					allRevoked = false
+					break
+				}
+			}
+			if allRevoked {
 				checker.revokedAnchors[string(cert.Raw)] = revoked
 				warnRevokedAnchor(cert, revoked)
 				changed = true

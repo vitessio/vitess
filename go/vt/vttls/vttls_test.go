@@ -1375,6 +1375,77 @@ func TestCRLCheckerAlternateVerifiedChain(t *testing.T) {
 	})
 }
 
+// TestCRLCheckerAnchorWithSeveralConfiguredIssuers checks that a
+// configured anchor whose key was certified twice, under two
+// configured roots as in a cross-signing rollover, is revoked by
+// descent only when every one of its configured issuers is, as a
+// chain through the clean one would carry the peer, and that the
+// order of the CA file decides nothing.
+func TestCRLCheckerAnchorWithSeveralConfiguredIssuers(t *testing.T) {
+	rootA, rootAKey := selfSignedCA(t, 1, "Root A", nil)
+	rootB, rootBKey := selfSignedCA(t, 2, "Root B", nil)
+	crossKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	certify := func(serial int64, commonName string, parent *x509.Certificate, parentKey *ecdsa.PrivateKey, key *ecdsa.PrivateKey) *x509.Certificate {
+		der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(serial),
+			Subject:               pkix.Name{CommonName: commonName},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}, parent, &key.PublicKey, parentKey)
+		require.NoError(t, err)
+		cert, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+		return cert
+	}
+	crossA := certify(10, "Cross-signed CA", rootA, rootAKey, crossKey)
+	crossB := certify(20, "Cross-signed CA", rootB, rootBKey, crossKey)
+	anchorKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	anchor := certify(30, "Anchor CA", crossA, crossKey, anchorKey)
+	leaf := signedLeaf(t, anchor, anchorKey, 40, "leaf.example.com")
+	revoking := func(root *x509.Certificate, rootKey *ecdsa.PrivateKey, cross *x509.Certificate) []byte {
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:                    big.NewInt(1),
+			ThisUpdate:                time.Now().Add(-time.Hour),
+			NextUpdate:                time.Now().Add(time.Hour),
+			RevokedCertificateEntries: []x509.RevocationListEntry{{SerialNumber: cross.SerialNumber, RevocationTime: time.Now().Add(-time.Hour)}},
+		}, root, rootKey)
+		require.NoError(t, err)
+		return der
+	}
+	bundle := func(certs ...*x509.Certificate) string {
+		var content []byte
+		for _, cert := range certs {
+			content = append(content, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})...)
+		}
+		file := path.Join(t.TempDir(), "bundle.pem")
+		require.NoError(t, os.WriteFile(file, content, 0o600))
+		return file
+	}
+	orders := map[string]string{
+		"revoked issuer first": bundle(rootA, rootB, crossA, crossB, anchor),
+		"clean issuer first":   bundle(rootA, rootB, crossB, crossA, anchor),
+	}
+
+	for name, ca := range orders {
+		t.Run("with one configured issuer revoked, the anchor stands, "+name, func(t *testing.T) {
+			checker, err := newCRLChecker(crlsFile(t, revoking(rootA, rootAKey, crossA)), ca)
+			require.NoError(t, err)
+			require.NoError(t, checker.check([][]*x509.Certificate{{leaf, anchor}}))
+		})
+		t.Run("with every configured issuer revoked, the anchor falls, "+name, func(t *testing.T) {
+			checker, err := newCRLChecker(crlsFile(t, revoking(rootA, rootAKey, crossA), revoking(rootB, rootBKey, crossB)), ca)
+			require.NoError(t, err)
+			err = checker.check([][]*x509.Certificate{{leaf, anchor}})
+			require.ErrorContains(t, err, "Certificate revoked: CommonName=Cross-signed CA")
+		})
+	}
+}
+
 // TestCRLCheckerIssuerOfEachChain checks that each chain is checked
 // with its own certificates as the issuers: with a CA certificate
 // that may not sign CRLs in one chain and one carrying the same key
