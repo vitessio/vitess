@@ -133,3 +133,7 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int, bool) {
 func (Charset_euckr) MaxWidth() int {
 	return 2
 }
+
+func (Charset_euckr) MinWidth() int {
+	return 1
+}

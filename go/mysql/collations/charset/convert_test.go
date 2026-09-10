@@ -41,6 +41,10 @@ func (c *testCharset1) MaxWidth() int {
 	return 1
 }
 
+func (c *testCharset1) MinWidth() int {
+	return 1
+}
+
 func (c *testCharset1) EncodeRune([]byte, rune) int {
 	return 0
 }
@@ -67,6 +71,10 @@ func (c *testCharset2) IsSuperset(other Charset) bool {
 }
 
 func (c *testCharset2) MaxWidth() int {
+	return 1
+}
+
+func (c *testCharset2) MinWidth() int {
 	return 1
 }
 

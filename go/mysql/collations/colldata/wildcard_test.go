@@ -17,9 +17,12 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
@@ -357,6 +360,207 @@ func TestWildcardMatches(t *testing.T) {
 
 	testWildcardMatches(t, "utf8mb4_0900_bin", '?', '*', '\\', wildcardTestCases)
 	testWildcardMatches(t, "utf8mb4_0900_as_cs", '?', '*', '\\', wildcardTestCases)
+}
+
+func TestWildcardManyMetacharAsTrailByte(t *testing.T) {
+	// The custom match-many metacharacter 0x5F is a valid sjis trail
+	// byte, so the pattern 81 5F is one literal character and not a
+	// prefix pattern. The prefix shortcut in the byte pre-scan must
+	// leave it to the full parser.
+	coll := testcollation(t, "sjis_japanese_ci")
+	pat := coll.Wildcard([]byte("\x81\x5f"), '#', '_', 0)
+	require.True(t, pat.Match([]byte("\x81\x5f")))
+	require.False(t, pat.Match([]byte("\x81\x40")))
+	require.False(t, pat.Match([]byte("\x81\x5f\x40")))
+
+	// A negative match-many rune is not a character and can never mark a
+	// wildcard; byte conversion would wrap -95 to the valid single-byte
+	// character 0xA1, so the pattern is a two-character literal.
+	pat = coll.Wildcard([]byte("\x61\xa1"), 0, -95, 0)
+	require.True(t, pat.Match([]byte("\x61\xa1")))
+	require.False(t, pat.Match([]byte("abc")))
+	require.False(t, pat.Match([]byte("\x61")))
+}
+
+func TestWildcardTrailingManyFastPath(t *testing.T) {
+	// A pattern with a single trailing match-many builds a prefix
+	// fastMatcher. The strip must remove the full encoded width of the
+	// metacharacter, which is two bytes for utf16.
+	coll := testcollation(t, "utf8mb4_general_ci")
+	m := coll.Wildcard([]byte("abc%"), 0, 0, 0)
+	fm, ok := m.(*fastMatcher)
+	require.True(t, ok)
+	require.True(t, fm.isPrefix)
+	require.Equal(t, []byte("abc"), fm.pattern)
+	require.True(t, m.Match([]byte("abcdef")))
+	require.False(t, m.Match([]byte("abd")))
+
+	coll = testcollation(t, "utf16_bin")
+	m = coll.Wildcard([]byte("\x00a\x00b\x00%"), 0, 0, 0)
+	fm, ok = m.(*fastMatcher)
+	require.True(t, ok)
+	require.True(t, fm.isPrefix)
+	require.Equal(t, []byte("\x00a\x00b"), fm.pattern)
+	require.True(t, m.Match([]byte("\x00a\x00b\x00c")))
+	require.False(t, m.Match([]byte("\x00a\x00c")))
+}
+
+func TestWildcardMatcherCachedSize(t *testing.T) {
+	// A wildcard matcher is retained by cached plans. Its reported size
+	// must cover only matcher-owned memory and never the shared
+	// collation or charset data; sizegen walks non-empty interface
+	// fields, so such a field can pull the collation singletons in.
+	collations := []string{
+		"utf8mb4_0900_ai_ci", "utf8mb4_0900_bin", "utf8mb4_general_ci",
+		"utf8mb4_bin", "utf8mb4_swedish_ci", "latin1_swedish_ci",
+		"sjis_japanese_ci", "utf16_unicode_ci",
+	}
+	for _, collName := range collations {
+		coll := testcollation(t, collName)
+		for _, pat := range []string{"hello", "he%o", "%hello%", "abc%"} {
+			m := coll.Wildcard([]byte(pat), 0, 0, 0)
+			sized, ok := m.(interface{ CachedSize(alloc bool) int64 })
+			if !ok {
+				continue
+			}
+			size := sized.CachedSize(true)
+			require.LessOrEqualf(t, size, int64(1024), "%s wildcard %q reports %d bytes", collName, pat, size)
+		}
+	}
+}
+
+func TestWildcardPatternSpareCapacity(t *testing.T) {
+	// The parsers reserve one token per pattern byte to keep the parse
+	// a single pass. Multibyte characters then leave spare capacity,
+	// and the matcher must not retain a large spare in the plan cache.
+	t.Run("multibyte", func(t *testing.T) {
+		coll := testcollation(t, "eucjpms_japanese_ci")
+		chunk := bytes.Repeat([]byte("\x8f\xa2\xaf"), 1024)
+		pat := append(append(append([]byte{}, chunk...), '%'), chunk...)
+		m := coll.Wildcard(pat, 0, 0, 0)
+		mb, ok := m.(*multibyteWildcard)
+		require.True(t, ok)
+		require.Less(t, cap(mb.pattern)-len(mb.pattern), 128)
+	})
+	t.Run("unicode", func(t *testing.T) {
+		coll := testcollation(t, "utf8mb4_general_ci")
+		chunk := bytes.Repeat([]byte("あ"), 1024)
+		pat := append(append(append([]byte{}, chunk...), '%'), chunk...)
+		m := coll.Wildcard(pat, 0, 0, 0)
+		uw, ok := m.(*unicodeWildcard)
+		require.True(t, ok)
+		require.Less(t, cap(uw.pattern)-len(uw.pattern), 256)
+	})
+}
+
+func TestWildcardEightbitFastPath(t *testing.T) {
+	// The literal and the prefix fast paths return before the token
+	// slice exists, so a construction allocates only the matcher and
+	// the collate callback.
+	coll := testcollation(t, "latin1_swedish_ci")
+	for _, tc := range []struct {
+		pat    string
+		prefix bool
+	}{
+		{"hello", false},
+		{"hello%", true},
+	} {
+		m := coll.Wildcard([]byte(tc.pat), 0, 0, 0)
+		fm, ok := m.(*fastMatcher)
+		require.True(t, ok)
+		require.Equal(t, tc.prefix, fm.isPrefix)
+		require.True(t, m.Match([]byte("hello")))
+		require.False(t, m.Match([]byte("hellx")))
+		pat := []byte(tc.pat)
+		allocs := testing.AllocsPerRun(100, func() {
+			_ = coll.Wildcard(pat, 0, 0, 0)
+		})
+		require.LessOrEqualf(t, allocs, 2.0, "pattern %q allocates %v times", tc.pat, allocs)
+	}
+}
+
+func TestWildcardCollapsedRunAllocation(t *testing.T) {
+	// A pattern that is mostly match-many characters collapses to a
+	// handful of tokens, so the construction must not reserve one token
+	// per pattern byte: a large bound LIKE pattern would then allocate a
+	// multiple of its own size.
+	pat := bytes.Repeat([]byte{'%'}, 1024*1024)
+	for _, collName := range []string{"sjis_japanese_ci", "utf8mb4_0900_ai_ci", "latin1_swedish_ci"} {
+		coll := testcollation(t, collName)
+		var ms runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&ms)
+		before := ms.TotalAlloc
+		m := coll.Wildcard(pat, 0, 0, 0)
+		runtime.ReadMemStats(&ms)
+		require.NotNil(t, m)
+		require.Lessf(t, ms.TotalAlloc-before, uint64(256*1024), "%s: construction allocated %d bytes", collName, ms.TotalAlloc-before)
+	}
+
+	// The reservation reduction must not fire when the match-many byte is
+	// not its own marker, or the parser grows the token slice step by
+	// step. A fixed-width charset can hold the byte inside an unrelated
+	// character: the utf16 bytes 25 25 are the literal U+2525. A rune
+	// shared with match-one classifies every occurrence as match-one.
+	utf16Coll := testcollation(t, "utf16_unicode_ci")
+	utf16Pat := bytes.Repeat([]byte{0x25, 0x25}, 512*1024)
+	allocs := testing.AllocsPerRun(3, func() {
+		_ = utf16Coll.Wildcard(utf16Pat, 0, 0, 0)
+	})
+	require.LessOrEqualf(t, allocs, 8.0, "utf16 literal pattern construction allocates %v times", allocs)
+
+	aliasPat := bytes.Repeat([]byte{'_'}, 1024*1024)
+	for _, collName := range []string{"sjis_japanese_ci", "utf8mb4_0900_ai_ci", "latin1_swedish_ci"} {
+		coll := testcollation(t, collName)
+		allocs := testing.AllocsPerRun(3, func() {
+			_ = coll.Wildcard(aliasPat, '_', '_', 0)
+		})
+		require.LessOrEqualf(t, allocs, 8.0, "%s: aliased metacharacter construction allocates %v times", collName, allocs)
+	}
+
+	// A fixed-width charset decodes at most one character per MinWidth
+	// bytes, so the token reservation must divide by the character width:
+	// one token per pattern byte holds twice the needed capacity for
+	// utf16 and four times for utf32, and the spare-capacity trim then
+	// copies the tokens a second time.
+	for _, tc := range []struct {
+		collName string
+		width    int
+	}{
+		{"utf16_unicode_ci", 2},
+		{"utf32_unicode_ci", 4},
+	} {
+		coll := testcollation(t, tc.collName)
+		encodeASCII := func(ch byte) []byte {
+			c := make([]byte, tc.width)
+			c[tc.width-1] = ch
+			return c
+		}
+		widePat := bytes.Repeat(encodeASCII('a'), (512*1024)/tc.width)
+		widePat = append(widePat, encodeASCII('%')...)
+		widePat = append(widePat, bytes.Repeat(encodeASCII('b'), (512*1024)/tc.width)...)
+		var ms runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&ms)
+		before := ms.TotalAlloc
+		m := coll.Wildcard(widePat, 0, 0, 0)
+		runtime.ReadMemStats(&ms)
+		require.NotNil(t, m)
+		limit := uint64(4*len(widePat)/tc.width + 256*1024)
+		require.Lessf(t, ms.TotalAlloc-before, limit, "%s: construction allocated %d bytes", tc.collName, ms.TotalAlloc-before)
+	}
+
+	// A negative match-many rune never marks a wildcard, but its byte
+	// conversion wraps to 'a', so every pattern byte would count as a
+	// collapsible wildcard while the parser appends every rune literally.
+	negPat := bytes.Repeat([]byte{'a'}, 1024*1024)
+	for _, collName := range []string{"sjis_japanese_ci", "utf8mb4_0900_ai_ci"} {
+		coll := testcollation(t, collName)
+		allocs := testing.AllocsPerRun(3, func() {
+			_ = coll.Wildcard(negPat, 0, -159, 0)
+		})
+		require.LessOrEqualf(t, allocs, 8.0, "%s: negative metacharacter construction allocates %v times", collName, allocs)
+	}
 }
 
 func BenchmarkWildcardMatching(b *testing.B) {

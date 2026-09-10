@@ -135,3 +135,7 @@ func (Charset_gb2312) DecodeRune(src []byte) (rune, int, bool) {
 func (Charset_gb2312) MaxWidth() int {
 	return 2
 }
+
+func (Charset_gb2312) MinWidth() int {
+	return 1
+}

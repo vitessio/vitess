@@ -117,3 +117,7 @@ func (c *Charset) Convert(dst, src []byte, srcCharset charset.Charset) ([]byte, 
 func (c *Charset) MaxWidth() int {
 	return 1
 }
+
+func (c *Charset) MinWidth() int {
+	return 1
+}

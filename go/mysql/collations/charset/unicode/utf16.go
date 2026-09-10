@@ -95,6 +95,10 @@ func (Charset_utf16be) MaxWidth() int {
 	return 4
 }
 
+func (Charset_utf16be) MinWidth() int {
+	return 2
+}
+
 type Charset_utf16le struct{}
 
 func (Charset_utf16le) Name() string {
@@ -157,6 +161,10 @@ func (Charset_utf16le) MaxWidth() int {
 	return 4
 }
 
+func (Charset_utf16le) MinWidth() int {
+	return 2
+}
+
 type Charset_ucs2 struct{}
 
 func (Charset_ucs2) Name() string {
@@ -213,5 +221,9 @@ func (Charset_ucs2) Length(src []byte) int {
 }
 
 func (Charset_ucs2) MaxWidth() int {
+	return 2
+}
+
+func (Charset_ucs2) MinWidth() int {
 	return 2
 }
