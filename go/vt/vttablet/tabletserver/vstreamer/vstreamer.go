@@ -1255,10 +1255,9 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				}
 				rowChange.Before = sqltypes.RowToProto3(beforeValues)
 				if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && beforePartial {
-					rowChange.BeforeDataColumns = &binlogdatapb.RowChange_Bitmap{
-						Count: int64(rows.IdentifyColumns.Count()),
-						Cols:  rows.IdentifyColumns.Bits(),
-					}
+					// The bitmap must describe the columns as emitted, so project it
+					// through the plan the same way the values were.
+					rowChange.BeforeDataColumns = plan.mapBitmap(&rows.IdentifyColumns)
 				}
 			}
 		}
@@ -1271,10 +1270,9 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				rowChange.After = sqltypes.RowToProto3(afterValues)
 				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
 					(row.JSONPartialValues.Count() > 0) {
-					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
-						Count: int64(rows.DataColumns.Count()),
-						Cols:  rows.DataColumns.Bits(),
-					}
+					// The bitmap must describe the columns as emitted, so project it
+					// through the plan the same way the values were.
+					rowChange.DataColumns = plan.mapBitmap(&rows.DataColumns)
 				}
 				if row.JSONPartialValues.Count() > 0 {
 					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{

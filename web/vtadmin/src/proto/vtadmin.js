@@ -115866,6 +115866,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {query.Row.$Properties|null} [after] RowChange after
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [data_columns] RowChange data_columns
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [json_partial_values] RowChange json_partial_values
+         * @property {binlogdata.RowChange.Bitmap.$Properties|null} [before_data_columns] RowChange before_data_columns
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -115930,6 +115931,14 @@ export const binlogdata = $root.binlogdata = (() => {
         RowChange.prototype.json_partial_values = null;
 
         /**
+         * RowChange before_data_columns.
+         * @member {binlogdata.RowChange.Bitmap.$Properties|null|undefined} before_data_columns
+         * @memberof binlogdata.RowChange
+         * @instance
+         */
+        RowChange.prototype.before_data_columns = null;
+
+        /**
          * Creates a new RowChange instance using the specified properties.
          * @function create
          * @memberof binlogdata.RowChange
@@ -115969,6 +115978,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.binlogdata.RowChange.Bitmap.encode(message.data_columns, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.json_partial_values != null && $Object.hasOwnProperty.call(message, "json_partial_values"))
                 $root.binlogdata.RowChange.Bitmap.encode(message.json_partial_values, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns"))
+                $root.binlogdata.RowChange.Bitmap.encode(message.before_data_columns, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -116040,6 +116051,12 @@ export const binlogdata = $root.binlogdata = (() => {
                         message.json_partial_values = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.json_partial_values);
                         continue;
                     }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.before_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_data_columns);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -116103,6 +116120,11 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (error)
                     return "json_partial_values." + error;
             }
+            if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns")) {
+                let error = $root.binlogdata.RowChange.Bitmap.verify(message.before_data_columns, _depth + 1);
+                if (error)
+                    return "before_data_columns." + error;
+            }
             return null;
         };
 
@@ -116144,6 +116166,11 @@ export const binlogdata = $root.binlogdata = (() => {
                     throw $TypeError(".binlogdata.RowChange.json_partial_values: object expected");
                 message.json_partial_values = $root.binlogdata.RowChange.Bitmap.fromObject(object.json_partial_values, _depth + 1);
             }
+            if (object.before_data_columns != null) {
+                if (!$util.isObject(object.before_data_columns))
+                    throw $TypeError(".binlogdata.RowChange.before_data_columns: object expected");
+                message.before_data_columns = $root.binlogdata.RowChange.Bitmap.fromObject(object.before_data_columns, _depth + 1);
+            }
             return message;
         };
 
@@ -116169,6 +116196,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.after = null;
                 object.data_columns = null;
                 object.json_partial_values = null;
+                object.before_data_columns = null;
             }
             if (message.before != null && $Object.hasOwnProperty.call(message, "before"))
                 object.before = $root.query.Row.toObject(message.before, options, _depth + 1);
@@ -116178,6 +116206,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.data_columns = $root.binlogdata.RowChange.Bitmap.toObject(message.data_columns, options, _depth + 1);
             if (message.json_partial_values != null && $Object.hasOwnProperty.call(message, "json_partial_values"))
                 object.json_partial_values = $root.binlogdata.RowChange.Bitmap.toObject(message.json_partial_values, options, _depth + 1);
+            if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns"))
+                object.before_data_columns = $root.binlogdata.RowChange.Bitmap.toObject(message.before_data_columns, options, _depth + 1);
             return object;
         };
 

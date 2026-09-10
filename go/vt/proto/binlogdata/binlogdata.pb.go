@@ -1331,7 +1331,9 @@ type RowChange struct {
 	Before *query.Row             `protobuf:"bytes,1,opt,name=before,proto3" json:"before,omitempty"`
 	After  *query.Row             `protobuf:"bytes,2,opt,name=after,proto3" json:"after,omitempty"`
 	// DataColumns is a bitmap of all columns: bit is set if column is
-	// present in the after image.
+	// present in the after image. The bits are in the order of the
+	// columns emitted by the stream, i.e. after the filter's projection,
+	// which is the same order as the values in the after image.
 	DataColumns *RowChange_Bitmap `protobuf:"bytes,3,opt,name=data_columns,json=dataColumns,proto3" json:"data_columns,omitempty"`
 	// JsonPartialValues is a bitmap of any JSON columns, where the bit
 	// is set if the value in the AFTER image is a partial JSON value
@@ -1345,7 +1347,8 @@ type RowChange struct {
 	// present in the before image. It is only set when the before image is
 	// partial, i.e. when binlog_row_image=NOBLOB omitted BLOB/TEXT columns
 	// that are not part of the primary key, so that consumers can tell an
-	// omitted column apart from a NULL value.
+	// omitted column apart from a NULL value. Like data_columns, the bits
+	// are in the order of the columns emitted by the stream.
 	BeforeDataColumns *RowChange_Bitmap `protobuf:"bytes,5,opt,name=before_data_columns,json=beforeDataColumns,proto3" json:"before_data_columns,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
