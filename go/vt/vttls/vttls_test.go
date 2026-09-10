@@ -1694,6 +1694,43 @@ func TestNewCRLCheckerSameKeyUnderAnotherName(t *testing.T) {
 	require.ErrorContains(t, err, "Certificate revoked: CommonName=leaf.example.com")
 }
 
+// TestNewCRLCheckerIssuerNameEncodingWithoutCRLSign checks that a
+// configured CA certificate that is not allowed to sign CRLs does not
+// hide a differently encoded CRL that its key signed: the CRL is told
+// by the key, whatever the certificate's key usage says.
+func TestNewCRLCheckerIssuerNameEncodingWithoutCRLSign(t *testing.T) {
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	caTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "No CRL Signing CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+	ca, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+	caFile := path.Join(t.TempDir(), "ca-cert.pem")
+	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw}), 0o600))
+	signer := *ca
+	signer.KeyUsage |= x509.KeyUsageCRLSign
+	signer.RawSubject = utf8CommonName(t, ca.Subject.CommonName)
+	require.NotEqual(t, ca.RawSubject, signer.RawSubject)
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:     big.NewInt(1),
+		ThisUpdate: time.Now().Add(-time.Hour),
+		NextUpdate: time.Now().Add(time.Hour),
+	}, &signer, caKey)
+	require.NoError(t, err)
+
+	_, err = newCRLChecker(crlFile(t, der), caFile)
+	require.ErrorContains(t, err, "the CRL from issuer No CRL Signing CA is signed by the configured CA certificate No CRL Signing CA, but its issuer name is encoded differently from that certificate's subject")
+}
+
 // utf8CommonName encodes a distinguished name made of the given
 // common name alone, written as a UTF8String.
 func utf8CommonName(t *testing.T, commonName string) []byte {

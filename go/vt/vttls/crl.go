@@ -299,22 +299,24 @@ func newCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate)
 		}
 		checker.configured[string(issuer.Raw)] = issuerCRLs
 	}
-	// A CRL that a configured certificate validates while its issuer
-	// name is the certificate's subject in another encoding is read
-	// under nothing, whatever else applies it: a CRL that another
-	// tool than the CA's wrote, or one written against the
-	// certificate that a renewal with the same key replaced, whose
-	// certificates the CRL then misses. Such a CRL is told by its
-	// signature, once here, and refused rather than left unapplied.
-	// A CRL under another name altogether is another certificate's
-	// of the same key, as a cross-certificate is, and is bound to it
-	// when a chain carries it.
+	// A CRL that a configured certificate's key signed while the
+	// CRL's issuer name is the certificate's subject in another
+	// encoding is read under nothing, whatever else applies it: a
+	// CRL that another tool than the CA's wrote, or one written
+	// against the certificate that a renewal with the same key
+	// replaced, whose certificates the CRL then misses. Such a CRL
+	// is told by its signature, once here, by the key alone so that
+	// a certificate not allowed to sign CRLs cannot hide it, and
+	// refused rather than left unapplied. A CRL under another name
+	// altogether is another certificate's of the same key, as a
+	// cross-certificate is, and is bound to it when a chain carries
+	// it.
 	for _, crl := range crls {
 		for _, issuer := range issuers {
 			if bytes.Equal(crl.RawIssuer, issuer.RawSubject) || crl.Issuer.String() != issuer.Subject.String() {
 				continue
 			}
-			if crl.CheckSignatureFrom(issuer) == nil {
+			if issuer.CheckSignature(crl.SignatureAlgorithm, crl.RawTBSRevocationList, crl.Signature) == nil {
 				return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRL from issuer %s is signed by the configured CA certificate %s, but its issuer name is encoded differently from that certificate's subject, so it would not be applied: re-issue the CRL with the certificate's subject as its issuer", crl.Issuer.CommonName, issuer.Subject.CommonName)
 			}
 		}
