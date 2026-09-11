@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -149,6 +150,18 @@ type QueryEngine struct {
 	isOpen atomic.Bool
 	env    tabletenv.Env
 	se     *schema.Engine
+
+	// publishMysqlWaitTimeout, when set, receives mysqld's
+	// @@global.wait_timeout for the temp-table idle timeout's auto mode. It
+	// is set once at TabletServer construction, before the engine can open,
+	// and fed when the query service opens and on the schema-reload cadence.
+	publishMysqlWaitTimeout func(time.Duration)
+
+	// mysqlWaitTimeoutRefreshInFlight guards the background wait_timeout
+	// read: a trigger that finds one already running is dropped — the
+	// running read publishes the same freshest-available value, and the
+	// next schema reload retriggers anyway.
+	mysqlWaitTimeoutRefreshInFlight atomic.Bool
 
 	// mu protects the following fields.
 	schemaMu sync.Mutex
@@ -387,7 +400,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, []planbuilder.PlanType{plan.PlanID}, plan.TableNames()...)
 	plan.buildAuthorized()
 	if sqlparser.CachePlan(statement) {
 		return plan, nil
@@ -426,13 +439,31 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 		return nil, err
 	}
 
-	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
+	splan, err := planbuilder.BuildStreaming(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
 
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
+	// Rules keyed on a statement's pre-v25 streaming plan type keep matching
+	// it here on the streaming path: the deprecated SelectStream name for
+	// SELECT, UNION, EXPLAIN, and SHOW, and OtherRead for ANALYZE (which
+	// plans as Select today). To be removed in v26 along with the
+	// SelectStream plan name.
+	ruleIDs := []planbuilder.PlanType{plan.PlanID}
+	legacyID, hasLegacyID := planbuilder.LegacyStreamRulePlan(statement)
+	if hasLegacyID {
+		ruleIDs = append(ruleIDs, legacyID)
+	}
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.TableNames()...)
+	// The OtherRead plan name is not deprecated, so an ANALYZE rule match
+	// through it cannot be flagged when the rules file is loaded; warn when the
+	// legacy plan type is the sole reason a rule applied. (SelectStream rules
+	// are flagged at rule-load time, so the warning is only for ANALYZE.)
+	if _, isAnalyze := statement.(*sqlparser.Analyze); isAnalyze &&
+		qe.queryRuleSources.PlanMatchesExclusively(sql, []planbuilder.PlanType{plan.PlanID}, legacyID, plan.TableNames()...) {
+		warnAnalyzeLegacyRuleMatch(sql)
+	}
 	plan.buildAuthorized()
 
 	if sqlparser.CachePlan(statement) {
@@ -466,6 +497,20 @@ func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.Lo
 	return plan, err
 }
 
+// analyzeLegacyRuleMatchOnce limits the ANALYZE legacy-rule warning to one
+// line per process: the same statement can be re-planned on every schema
+// change or cache eviction, and the warning is equally actionable however
+// often it fires.
+var analyzeLegacyRuleMatchOnce sync.Once
+
+func warnAnalyzeLegacyRuleMatch(sql string) {
+	analyzeLegacyRuleMatchOnce.Do(func() {
+		log.Warn("a query rule matched a streamed ANALYZE statement only through its pre-v25 streaming plan type OtherRead; "+
+			"this compatibility matching will be removed in v26, key the rule on the Select plan or a Query pattern to keep matching streamed ANALYZE",
+			slog.String("query", sql))
+	})
+}
+
 // gets key used to cache stream query plan
 func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
 	return "__STREAM__" + sql
@@ -486,7 +531,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
-	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, []planbuilder.PlanType{plan.PlanID}, plan.TableName().String())
 	plan.buildAuthorized()
 	return plan, nil
 }
@@ -551,7 +596,6 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 
 func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
 	qe.schemaMu.Lock()
-	defer qe.schemaMu.Unlock()
 
 	if len(altered) != 0 || len(dropped) != 0 {
 		qe.epoch++
@@ -561,6 +605,82 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 		tables: tables,
 		epoch:  qe.epoch,
 	})
+	qe.schemaMu.Unlock()
+
+	// Piggyback on the schema-reload cadence (the notifier also runs when it
+	// is registered at query-service open): mirror mysqld's wait_timeout for
+	// the temp-table idle timeout's auto mode, so a runtime SET GLOBAL
+	// converges without a tablet restart. The notifier runs under the schema
+	// engine's locks, so it only triggers the read — the read itself runs in
+	// the background. Startup deliberately gets the same treatment: auto
+	// mode is off (zero) until the first read lands moments later, which the
+	// timer selection tolerates by design, and a slow mysqld then cannot
+	// delay query-service open.
+	qe.triggerMysqlWaitTimeoutRefresh()
+}
+
+// mysqlWaitTimeoutQueryTimeout bounds the @@global.wait_timeout read so a
+// wedged mysqld cannot pin the refresh's in-flight guard — and with it all
+// future refreshes — indefinitely.
+const mysqlWaitTimeoutQueryTimeout = 30 * time.Second
+
+// triggerMysqlWaitTimeoutRefresh starts one background refresh of the
+// wait_timeout mirror, dropping the trigger if a refresh is already
+// running; see mysqlWaitTimeoutRefreshInFlight.
+func (qe *QueryEngine) triggerMysqlWaitTimeoutRefresh() {
+	if qe.publishMysqlWaitTimeout == nil || qe.env.Config().TempTableIdleTimeout >= 0 {
+		return
+	}
+	if !qe.mysqlWaitTimeoutRefreshInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer qe.mysqlWaitTimeoutRefreshInFlight.Store(false)
+		qe.refreshMysqlWaitTimeout()
+	}()
+}
+
+// refreshMysqlWaitTimeout mirrors mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode. A failed read logs a warning and
+// retains the last successfully read value: a transient read error must not
+// snap existing temp-table connections back to the much shorter pre-feature
+// timer (auto mode simply stays off until the first successful read, since
+// the cached value starts at zero).
+func (qe *QueryEngine) refreshMysqlWaitTimeout() {
+	if qe.publishMysqlWaitTimeout == nil || qe.env.Config().TempTableIdleTimeout >= 0 {
+		return
+	}
+	waitTimeout, err := qe.readMysqlWaitTimeout()
+	if err != nil {
+		log.Warn("failed to read @@global.wait_timeout; the temp-table idle timeout keeps the last successfully read value",
+			slog.Any("error", err))
+		return
+	}
+	qe.publishMysqlWaitTimeout(waitTimeout)
+}
+
+// readMysqlWaitTimeout reads @@global.wait_timeout (seconds) from mysqld via
+// the schema engine's dba pool.
+func (qe *QueryEngine) readMysqlWaitTimeout() (time.Duration, error) {
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mysqlWaitTimeoutQueryTimeout)
+	defer cancel()
+	conn, err := qe.se.GetConnection(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Recycle()
+	qr, err := conn.Conn.Exec(ctx, "select @@global.wait_timeout", 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for @@global.wait_timeout: %d rows", len(qr.Rows))
+	}
+	seconds, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil {
+		return 0, vterrors.Wrap(err, "failed to parse @@global.wait_timeout")
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 // QueryPlanCacheCap returns the capacity of the query cache.
@@ -605,7 +725,7 @@ func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, ta
 	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
 	// So we check if it is positive and add that too.
 	switch plan.PlanID {
-	case planbuilder.PlanSelect, planbuilder.PlanSelectStream, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
 		qe.queryRowsReturned.Add(keys, rowsReturned)
 		if rowsAffected > 0 {
 			qe.queryRowsAffected.Add(keys, rowsAffected)

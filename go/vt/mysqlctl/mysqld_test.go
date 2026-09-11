@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -352,30 +353,37 @@ func TestGetVersionString(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGetVersionComment(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
+// TestExecCmdWithContext verifies that execCmdWithContext is actually bound to its
+// context, so the mysqld --version fallback of GetVersionString can no longer
+// outlive a caller's deadline (e.g. holding the TabletManager action lock).
+func TestExecCmdWithContext(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep binary not available")
+	}
 
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	t.Run("cancelled context returns promptly", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // already cancelled
 
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+		require.Error(t, err, "a cancelled context must not run the command to completion")
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed rather than sleep for 60s")
+	})
 
-	ctx := t.Context()
-	_, err := testMysqld.GetVersionComment(ctx)
-	require.ErrorContains(t, err, "unexpected result length")
+	t.Run("expired deadline kills a long-running command", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
 
-	ver := "test_version"
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	str, err := testMysqld.GetVersionComment(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, ver, str)
+		require.Error(t, err)
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed at the deadline, not run for 60s")
+	})
 }
 
 func TestHostMetrics(t *testing.T) {
@@ -428,4 +436,111 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	env, err := buildLdPaths()
 	require.NoError(t, err)
 	assert.Contains(t, env, "TZ=Europe/Berlin")
+}
+
+// TestMysqlbinlogEnvironForcesUTC verifies that the environment used for
+// mysqlbinlog forces TZ=UTC so that the UTC-formatted --stop-datetime is
+// interpreted as UTC regardless of the host time zone. It also verifies that
+// the shared base environment is not mutated. Regression test for #20373.
+func TestMysqlbinlogEnvironForcesUTC(t *testing.T) {
+	base := []string{"LD_LIBRARY_PATH=/opt/mysql/lib", "LD_PRELOAD="}
+	baseCopy := append([]string(nil), base...)
+
+	got := mysqlbinlogEnviron(base)
+
+	require.Contains(t, got, "TZ=UTC")
+	// every entry from the base environment is preserved
+	for _, e := range baseCopy {
+		require.Contains(t, got, e)
+	}
+	// the shared base environment is left untouched (it is reused by the mysql
+	// command that applies the mysqlbinlog output)
+	require.Equal(t, baseCopy, base)
+}
+
+// TestMysqlbinlogEnvironOverridesExistingTZ verifies that a pre-existing TZ
+// entry in the base environment (e.g. from os.Environ() via buildLdPaths())
+// is replaced, not duplicated, so mysqlbinlog can't end up seeing two TZ
+// values.
+func TestMysqlbinlogEnvironOverridesExistingTZ(t *testing.T) {
+	base := []string{"LD_LIBRARY_PATH=/opt/mysql/lib", "TZ=Europe/Berlin"}
+	baseCopy := append([]string(nil), base...)
+
+	got := mysqlbinlogEnviron(base)
+
+	count := 0
+	for _, e := range got {
+		if strings.HasPrefix(e, "TZ=") {
+			count++
+		}
+	}
+	require.Equal(t, 1, count, "expected exactly one TZ entry, got %v", got)
+	require.Contains(t, got, "TZ=UTC")
+	require.NotContains(t, got, "TZ=Europe/Berlin")
+	require.Equal(t, baseCopy, base)
+}
+
+// TestMysqladminAbortedWaiting verifies detection of the mysqladmin output
+// emitted when its --shutdown-timeout expires while mysqld is still
+// shutting down cleanly, which must not be treated as a shutdown failure.
+func TestMysqladminAbortedWaiting(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{
+			name: "aborted waiting on pid file",
+			output: `mysqladmin: connect to server at 'localhost' failed
+error: 'Can't connect to local MySQL server through socket '/vt/socket/mysql.sock' (2)'
+Check that mysqld is running and that the socket: '/vt/socket/mysql.sock' exists!
+Warning;  Aborted waiting on pid file: '/vt/vtdataroot/vt_0000000101/mysql.pid' after 3600 seconds`,
+			want: true,
+		},
+		{
+			name: "access denied",
+			output: `mysqladmin: connect to server at 'localhost' failed
+error: 'Access denied for user 'vt_dba'@'localhost' (using password: NO)'`,
+			want: false,
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, mysqladminAbortedWaiting(tt.output))
+		})
+	}
+}
+
+// TestBoundShutdownWaitContext pins the contract that surfaced in review of
+// the mysqladmin aborted-wait handling: the pid/socket file wait must run to
+// a caller-supplied deadline (e.g. the remaining --builtinbackup-mysqld-timeout
+// budget) and must never be shortened to the grace period; only callers with
+// no deadline get the grace bound.
+func TestBoundShutdownWaitContext(t *testing.T) {
+	t.Run("caller deadline is preserved", func(t *testing.T) {
+		parent, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+		defer cancel()
+		parentDeadline, ok := parent.Deadline()
+		require.True(t, ok)
+
+		bounded, boundedCancel := boundShutdownWaitContext(parent)
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.Equal(t, parentDeadline, deadline)
+	})
+
+	t.Run("no deadline gets the grace bound", func(t *testing.T) {
+		before := time.Now()
+		bounded, boundedCancel := boundShutdownWaitContext(t.Context())
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.WithinDuration(t, before.Add(MysqldShutdownGracePeriod), deadline, 5*time.Second)
+	})
 }

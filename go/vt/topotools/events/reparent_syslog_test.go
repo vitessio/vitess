@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	base "vitess.io/vitess/go/vt/events"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -46,8 +45,8 @@ func TestReparentSyslog(t *testing.T) {
 				Uid:  54321,
 			},
 		},
-		ExternalID:    "123-456-789",
-		StatusUpdater: base.StatusUpdater{Status: "status"},
+		ExternalID: "123-456-789",
+		Status:     "status",
 	}
 	gotSev, gotMsg := tc.Syslog()
 

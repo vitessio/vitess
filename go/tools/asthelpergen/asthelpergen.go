@@ -429,6 +429,8 @@ var noQualifier = func(*types.Package) string { return "" }
 // printableTypeName returns a string that can be used as a valid golang identifier
 func printableTypeName(t types.Type) string {
 	switch t := t.(type) {
+	case *types.Alias:
+		return printableTypeName(types.Unalias(t))
 	case *types.Pointer:
 		return "RefOf" + printableTypeName(t.Elem())
 	case *types.Slice:

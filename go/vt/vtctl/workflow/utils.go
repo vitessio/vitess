@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
@@ -858,12 +859,12 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 		}
 		tenantId = vrOptions.TenantId
 	case querypb.Type_VARCHAR:
-		tenantId = fmt.Sprintf("'%s'", vrOptions.TenantId)
+		tenantId = sqltypes.EncodeStringSQL(vrOptions.TenantId)
 	default:
 		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
 	}
 
-	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", tenantColumnName, tenantId))
+	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", sqlescape.EscapeID(tenantColumnName), tenantId))
 	if err != nil {
 		return nil, err
 	}

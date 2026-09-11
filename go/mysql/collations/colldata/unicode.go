@@ -54,10 +54,10 @@ func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool
 	cs := c.charset
 
 	for len(left) > 0 && len(right) > 0 {
-		l, lWidth := cs.DecodeRune(left)
-		r, rWidth := cs.DecodeRune(right)
+		l, lWidth, lOK := cs.DecodeRune(left)
+		r, rWidth, rOK := cs.DecodeRune(right)
 
-		if (l == charset.RuneError && lWidth < 3) || (r == charset.RuneError && rWidth < 3) {
+		if !lOK || !rOK {
 			return bytes.Compare(left, right)
 		}
 
@@ -85,8 +85,8 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 
 	if numCodepoints == 0 || numCodepoints == PadToMax {
 		for {
-			r, width := cs.DecodeRune(src)
-			if r == charset.RuneError && width < 3 {
+			r, width, ok := cs.DecodeRune(src)
+			if !ok {
 				break
 			}
 
@@ -105,8 +105,8 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 		}
 	} else {
 		for numCodepoints > 0 {
-			r, width := cs.DecodeRune(src)
-			if r == charset.RuneError && width < 3 {
+			r, width, ok := cs.DecodeRune(src)
+			if !ok {
 				break
 			}
 
@@ -135,8 +135,8 @@ func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, n
 	}
 
 	for left > 0 {
-		r, width := cs.DecodeRune(src)
-		if r == charset.RuneError && width < 3 {
+		r, width, ok := cs.DecodeRune(src)
+		if !ok {
 			break
 		}
 		src = src[width:]
@@ -201,8 +201,8 @@ func (c *Collation_unicode_bin) weightStringBMP(dst, src []byte, numCodepoints i
 	cs := c.charset
 	if numCodepoints == 0 || numCodepoints == PadToMax {
 		for {
-			r, width := cs.DecodeRune(src)
-			if r == charset.RuneError && width < 3 {
+			r, width, ok := cs.DecodeRune(src)
+			if !ok {
 				break
 			}
 			src = src[width:]
@@ -219,8 +219,8 @@ func (c *Collation_unicode_bin) weightStringBMP(dst, src []byte, numCodepoints i
 		}
 	} else {
 		for numCodepoints > 0 {
-			r, width := cs.DecodeRune(src)
-			if r == charset.RuneError && width < 3 {
+			r, width, ok := cs.DecodeRune(src)
+			if !ok {
 				break
 			}
 			src = src[width:]
@@ -240,8 +240,8 @@ func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoin
 	cs := c.charset
 	if numCodepoints == 0 || numCodepoints == PadToMax {
 		for {
-			r, width := cs.DecodeRune(src)
-			if r == charset.RuneError && width < 3 {
+			r, width, ok := cs.DecodeRune(src)
+			if !ok {
 				break
 			}
 
@@ -265,8 +265,8 @@ func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoin
 		}
 	} else {
 		for numCodepoints > 0 {
-			r, width := cs.DecodeRune(src)
-			if r == charset.RuneError && width < 3 {
+			r, width, ok := cs.DecodeRune(src)
+			if !ok {
 				break
 			}
 
@@ -300,8 +300,8 @@ func (c *Collation_unicode_bin) hashUnicode(hasher *vthash.Hasher, src []byte, n
 		left = math.MaxInt32
 	}
 	for left > 0 {
-		r, width := cs.DecodeRune(src)
-		if r == charset.RuneError && width < 3 {
+		r, width, ok := cs.DecodeRune(src)
+		if !ok {
 			break
 		}
 		src = src[width:]
@@ -325,8 +325,8 @@ func (c *Collation_unicode_bin) hashBMP(hasher *vthash.Hasher, src []byte, numCo
 		left = math.MaxInt32
 	}
 	for left > 0 {
-		r, width := cs.DecodeRune(src)
-		if r == charset.RuneError && width < 3 {
+		r, width, ok := cs.DecodeRune(src)
+		if !ok {
 			break
 		}
 		src = src[width:]

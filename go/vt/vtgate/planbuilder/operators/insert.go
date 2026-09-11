@@ -425,9 +425,11 @@ func insertSelectPlan(
 		binaryOperator: newBinaryOp(newLockAndComment(selOp, nil, sqlparser.ShareModeLock), routeOp),
 	}
 
-	// When the table you are streaming data from and table you are inserting from are same.
-	// Then due to locking of the index range on the table we might not be able to insert into the table.
-	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
+	// When the table we are inserting into also appears in the select, the
+	// streamed select holds shared locks (it runs with "lock in share mode")
+	// on ranges the insert writes to, which can block or deadlock the insert.
+	// This flag makes us read the full select result first, so the locks are
+	// released before the rows are inserted.
 	insertTbl := insOp.tableTarget()
 	selTables := TablesUsed(selOp)
 	if slices.Contains(selTables, insertTbl) {

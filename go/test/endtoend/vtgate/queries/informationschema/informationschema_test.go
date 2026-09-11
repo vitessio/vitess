@@ -305,6 +305,43 @@ WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
 	)
 }
 
+// TestInformationSchemaWithInPredicate reproduces
+// https://github.com/vitessio/vitess/issues/20878.
+func TestInformationSchemaWithInPredicate(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
+	}
+	mcmp, closer := start(t)
+	defer closer()
+
+	eq := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name = 't1'")
+	in := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in (database()) and table_name in ('t1')")
+	require.NotEmpty(t, eq.Rows)
+	require.Equal(t, eq.Rows, in.Rows)
+
+	// the issue's literal repro
+	inLit := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks') and table_name = 't1'")
+	require.Equal(t, eq.Rows, inLit.Rows)
+
+	_, err := mcmp.VtConn.ExecuteFetch("select table_name from information_schema.tables where table_schema in ('ks', 'other')", 100, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "VT12001")
+
+	inDup := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks', 'ks', null) and table_name = 't1'")
+	require.Equal(t, eq.Rows, inDup.Rows)
+	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'ks' and table_schema in (null, null)")
+
+	// a list containing database() is left for the tablet to evaluate, like = database()
+	inDB := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in (database(), 'ks') and table_name = 't1'")
+	require.Equal(t, eq.Rows, inDB.Rows)
+	inDBSys := utils.Exec(t, mcmp.VtConn, "select table_schema from information_schema.tables where table_schema in (database(), 'information_schema') and table_name in ('t1', 'TABLES')")
+	require.Len(t, inDBSys.Rows, 2)
+
+	// multi-value table_name IN stays a plain filter
+	multiName := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name in ('t1', 't7_xxhash')")
+	require.Len(t, multiName.Rows, 2)
+}
+
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
 	// This test checks that we can run queries like this, where the RHS is a single shard query
 	mcmp, closer := start(t)

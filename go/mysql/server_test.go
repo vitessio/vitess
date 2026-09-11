@@ -81,6 +81,7 @@ type testHandler struct {
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
+	activity int
 }
 
 func (th *testHandler) LastConn() *Conn {
@@ -117,6 +118,18 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.lastConn = c
+}
+
+func (th *testHandler) ConnActivity(c *Conn) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.activity++
+}
+
+func (th *testHandler) Activity() int {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.activity
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -349,6 +362,55 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
+}
+
+// TestConnectionWithProxyProtocol covers the MySQL listener with proxy protocol
+// support enabled: connections that open with a PROXY protocol header must have
+// their advertised source address honored, and connections without a header must
+// still complete the regular MySQL handshake, since deployments may mix proxied
+// and direct traffic (e.g. load balancer traffic alongside direct health checks).
+func TestConnectionWithProxyProtocol(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	t.Cleanup(authServer.close)
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, true, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	t.Cleanup(func() { cleanupListener(ctx, l, params) })
+
+	t.Run("with PROXY header", func(t *testing.T) {
+		conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		require.NoError(t, err, "net.Dial failed")
+		t.Cleanup(func() { conn.Close() })
+
+		_, err = conn.Write([]byte("PROXY TCP4 10.9.8.7 127.0.0.1 1234 5678\r\n"))
+		require.NoError(t, err, "writing PROXY header failed")
+
+		c := newConn(conn, 0, 0)
+		require.NoError(t, c.clientHandshake(params, ConnectionAttributes{}), "handshake after a PROXY header should succeed")
+		require.Equal(t, "10.9.8.7:1234", th.LastConn().RemoteAddr().String(), "server should report the source address from the PROXY header")
+		c.Close()
+	})
+
+	t.Run("without PROXY header", func(t *testing.T) {
+		c, err := Connect(ctx, params)
+		require.NoError(t, err, "a connection without a PROXY header should complete the regular MySQL handshake")
+		c.Close()
+	})
 }
 
 func TestConnectionWithSourceHost(t *testing.T) {
@@ -1517,6 +1579,19 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.NoError(t, err)
+	// A ping is connection activity: the observing handler must be notified
+	// so it can propagate the liveness signal (vtgate refreshes temp-table
+	// reserved connections on it).
+	require.Equal(t, 1, th.Activity(), "the handler must observe a served ping")
+
+	// A locally answered non-ping command is activity too: COM_SET_OPTION
+	// never reaches the handler's own methods, but MySQL counts it against
+	// the idle wait like any other command.
+	conn.sequence = 0
+	require.NoError(t, conn.writeComSetOption(0))
+	_, err = conn.ReadPacket()
+	require.NoError(t, err)
+	require.Equal(t, 2, th.Activity(), "the handler must observe a locally answered COM_SET_OPTION")
 
 	l.Shutdown()
 
@@ -1526,6 +1601,11 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+	// The observer fires at command dispatch, before the command is handled
+	// and whatever its outcome — a ping refused because the listener is
+	// shutting down still notifies (the connection is going away with the
+	// server, so a spurious refresh is harmless).
+	require.Equal(t, 3, th.Activity(), "activity fires at dispatch, even for a shutdown-refused ping")
 	sqlErr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "Wrong error type: %T", err)
 
@@ -1590,7 +1670,7 @@ func TestServerFlush(t *testing.T) {
 	flds, err := c.Fields()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 20*time.Millisecond; duration < mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (mysqlServerFlushDelay).String(), want.String())
+		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), mysqlServerFlushDelay.String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name:    "result",

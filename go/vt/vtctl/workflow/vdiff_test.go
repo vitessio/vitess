@@ -754,3 +754,79 @@ func TestVDiffDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestVDiffShow(t *testing.T) {
+	ctx := t.Context()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	uuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	t.Cleanup(env.close)
+
+	env.tmc.strict = true
+	action := string(vdiff.ShowAction)
+
+	expectedShowRequest := func(noSamples bool) *tabletmanagerdatapb.VDiffRequest {
+		return &tabletmanagerdatapb.VDiffRequest{
+			Keyspace:  targetKeyspace.KeyspaceName,
+			Workflow:  workflow,
+			Action:    action,
+			ActionArg: uuid,
+			Options: &tabletmanagerdatapb.VDiffOptions{
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+					NoSamples: noSamples,
+				},
+			},
+		}
+	}
+	bothTargets := func(noSamples bool) map[*topodatapb.Tablet]*vdiffRequestResponse {
+		return map[*topodatapb.Tablet]*vdiffRequestResponse{
+			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]:               {req: expectedShowRequest(noSamples)},
+			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {req: expectedShowRequest(noSamples)},
+		}
+	}
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffShowRequest
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse
+	}{
+		{
+			name: "default forwards no_samples=false",
+			req: &vtctldatapb.VDiffShowRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Arg:            uuid,
+			},
+			expectedVDiffRequests: bothTargets(false),
+		},
+		{
+			name: "no_samples forwards no_samples=true",
+			req: &vtctldatapb.VDiffShowRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Arg:            uuid,
+				NoSamples:      true,
+			},
+			expectedVDiffRequests: bothTargets(true),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffShow(ctx, tt.req)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}

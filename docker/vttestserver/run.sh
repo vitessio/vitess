@@ -33,16 +33,16 @@ rm -vf "$VTDATAROOT"/"$tablet_dir"/{mysql.sock,mysql.sock.lock}
 /vt/bin/vttestserver \
 	--port "$PORT" \
 	--keyspaces "$KEYSPACES" \
-	--num_shards "$NUM_SHARDS" \
-	--mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" \
+	--num-shards "$NUM_SHARDS" \
+	--mysql-bind-host "${MYSQL_BIND_HOST:-127.0.0.1}" \
 	--vtcombo-bind-host "${VTCOMBO_BIND_HOST:-127.0.0.1}" \
 	--mysql-server-version "${MYSQL_SERVER_VERSION:-$1}" \
 	--charset "${CHARSET:-utf8mb4}" \
-	--foreign_key_mode "${FOREIGN_KEY_MODE:-allow}" \
-	--enable_online_ddl="${ENABLE_ONLINE_DDL:-true}" \
-	--enable_direct_ddl="${ENABLE_DIRECT_DDL:-true}" \
+	--foreign-key-mode "${FOREIGN_KEY_MODE:-allow}" \
+	--enable-online-ddl="${ENABLE_ONLINE_DDL:-true}" \
+	--enable-direct-ddl="${ENABLE_DIRECT_DDL:-true}" \
 	--planner-version="${PLANNER_VERSION:-gen4}" \
-	--vschema_ddl_authorized_users=% \
-	--tablet_refresh_interval "${TABLET_REFRESH_INTERVAL:-10s}" \
-	--schema_dir="/vt/schema/"
+	--vschema-ddl-authorized-users=% \
+	--tablet-refresh-interval "${TABLET_REFRESH_INTERVAL:-10s}" \
+	--schema-dir="/vt/schema/"
 

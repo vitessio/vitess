@@ -55,7 +55,7 @@ func init() {
 	addCommand("Shards", command{
 		name:   "EmergencyReparentShard",
 		method: commandEmergencyReparentShard,
-		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--wait_replicas_timeout=<duration>] [--ignore_replicas=<tablet alias list>] [--prevent_cross_cell_promotion=<true/false>]",
+		params: "--keyspace_shard=<keyspace/shard> [--new-primary=<tablet alias>] [--allow-split-brain-promotion] [--wait_replicas_timeout=<duration>] [--ignore_replicas=<tablet alias list>] [--prevent_cross_cell_promotion=<true/false>]",
 		help:   "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
 	})
 	addCommand("Shards", command{
@@ -169,7 +169,9 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
-	newPrimary := subFlags.String("new_primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
+	newPrimary := subFlags.String("new-primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
+	subFlags.StringVar(newPrimary, "new_primary", "", "alias for --new-primary")
+	allowSplitBrainPromotion := subFlags.Bool("allow-split-brain-promotion", false, "requires --new-primary; allows promoting it when divergent GTID histories (split brain) are detected. This is a lossy recovery: transactions that exist only on the other leading candidates are discarded")
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 	waitForAllTablets := subFlags.Bool("wait_for_all_tablets", false, "should ERS wait for all the tablets to respond. Useful when all the tablets are reachable")
@@ -180,12 +182,16 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *newPrimary != "" {
-			return errors.New("cannot use legacy syntax and flag --new_primary for action EmergencyReparentShard at the same time")
+			return errors.New("cannot use legacy syntax and flag --new-primary for action EmergencyReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
 		return errors.New("action EmergencyReparentShard requires --keyspace_shard=<keyspace/shard>")
+	}
+
+	if *allowSplitBrainPromotion && *newPrimary == "" {
+		return errors.New("--allow-split-brain-promotion requires --new-primary")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
@@ -199,9 +205,9 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 			return err
 		}
 	}
-
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, reparentutil.EmergencyReparentOptions{
 		NewPrimaryAlias:           tabletAlias,
+		AllowSplitBrainPromotion:  *allowSplitBrainPromotion,
 		WaitAllTablets:            *waitForAllTablets,
 		WaitReplicasTimeout:       *waitReplicasTimeout,
 		IgnoreReplicas:            topoproto.ParseTabletSet(*ignoreReplicasList),

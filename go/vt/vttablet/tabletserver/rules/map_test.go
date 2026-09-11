@@ -138,12 +138,12 @@ func TestMapFilterByPlan(t *testing.T) {
 	qri.SetRules(customQueryRules, otherRules)
 
 	// Test filter by denylist rule
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", []planbuilder.PlanType{planbuilder.PlanSelect}, "bannedtable2")
 	assert.Len(t, qrs.rules, 1, "Select from bannedtable")
 	assert.Truef(t, strings.HasPrefix(qrs.rules[0].Name, "denied_table"), "Select from bannedtable query matches rule '%s', but we expect rule with prefix 'denied_table'", qrs.rules[0].Name)
 
 	// Test filter by custom rule
-	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanSelect, "t_customer")
+	qrs = qri.FilterByPlan("select cid from t_customer limit 10", []planbuilder.PlanType{planbuilder.PlanSelect}, "t_customer")
 	assert.Len(t, qrs.rules, 1, "Select from t_customer")
 	assert.Truef(t, strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar"), "Select from t_customer matches rule '%s', but we expect rule with prefix 'customrule_ban_bindvar'", qrs.rules[0].Name)
 
@@ -153,7 +153,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", []planbuilder.PlanType{planbuilder.PlanSelect}, "bannedtable2")
 	assert.Lenf(t, qrs.rules, 2, "Insert into bannedtable2 matches rules: %v", qrs.rules)
 }
 

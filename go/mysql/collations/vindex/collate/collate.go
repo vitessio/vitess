@@ -8,7 +8,7 @@
 
 // Package collate contains types for comparing and sorting Unicode strings
 // according to a given collation order.
-package collate // import "vitess.io/vitess/go/mysql/collations/vindex/collate"
+package collate
 
 import (
 	"hash"

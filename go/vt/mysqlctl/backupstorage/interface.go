@@ -66,13 +66,25 @@ type BackupHandle interface {
 	// characters and hyphens.
 	// It should be thread safe, it is possible to call AddFile in
 	// multiple go routines once a backup has been started.
-	// The context is valid for the duration of the writes, until the
-	// WriteCloser is closed.
+	// The context is valid until Wait() returns, even for async backends.
 	// filesize should not be treated as an exact value but rather
 	// as an approximate value.
 	// A filesize of -1 should be treated as a special value indicating that
 	// the file size is unknown.
 	AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error)
+
+	// Wait blocks until all pending asynchronous AddFile operations complete.
+	// It does not finalize the backup; AddFile may still be called after Wait.
+	// Errors from async operations are available via Error()/GetFailedFiles().
+	// Idempotent and safe to call multiple times.
+	//
+	// The backup engine calls Wait() to drain in-flight uploads and inspect
+	// errors before deciding whether to proceed or abort. The top-level caller
+	// (not the engine) is responsible for calling EndBackup() to finalize, or
+	// AbortBackup() to discard. Storage implementations should not place
+	// upload-completion logic in EndBackup(); all async work must resolve by
+	// the time Wait() returns.
+	Wait()
 
 	// EndBackup stops and closes a backup. The contents should be kept.
 	// Only works for read-write backups (created by StartBackup).

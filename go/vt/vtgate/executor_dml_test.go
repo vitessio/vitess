@@ -3060,6 +3060,42 @@ func TestInsertSelectFromTable(t *testing.T) {
 	}
 }
 
+// TestStreamingInsertSelectFromTable runs an insert-select whose select
+// scatters over the streaming path. The select delivers its rows in multiple
+// chunks, and no chunk's insert may claim the session's autocommit approval:
+// the approval can be claimed only once per statement, so the first chunk
+// would run as an autocommit and mark the session 'autocommitted', and the
+// next chunk's insert would then open a shard transaction and fail with
+// VT13001 ("unexpected 'autocommitted' state in transaction"). All chunks
+// must run in the transaction the executor opened for the autocommit session.
+// The target table deliberately has no sequence and no owned lookup vindex:
+// those execute their own statements in between, which takes the approval
+// away before any chunk can claim it and hides the bug.
+func TestStreamingInsertSelectFromTable(t *testing.T) {
+	// The scatter select keeps streaming from the other shards while each
+	// chunk's insert executes, so the sandbox conns record queries from
+	// concurrent goroutines and need locking around their Queries field.
+	var sbc1 *sandboxconn.SandboxConn
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		conn.RequireQueriesLocking()
+		if ks == KsTestSharded && shard == "-20" {
+			sbc1 = conn
+		}
+	})
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+
+	err := executor.StreamExecute(ctx, nil, "TestStreamingInsertSelect", session, "insert into user_extra(user_id, extra_id) select c1, c2 from music", nil, false, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Every chunk's insert ran inside the transaction opened for the
+	// autocommit session, committed once at the end.
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1 commits")
+	assert.False(t, session.GetInTransaction())
+}
+
 func TestInsertReference(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
