@@ -246,14 +246,29 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func scanAll(tkn *Tokenizer) []int {
+	var ids []int
+	for {
+		id, _ := tkn.Scan()
+		if id == 0 || id == LEX_ERROR {
+			return ids
+		}
+		ids = append(ids, id)
+	}
+}
+
 // The function-name rule reads its context from the input, not from the
 // tokens Lex handed to the parser, so Tokenizer.Scan callers see the same
-// stream the parser does: a name directly after '.' is an identifier, and a
-// dot separated from the name by whitespace or a comment does not qualify it.
+// stream the parser does: a name directly after '.' is an identifier under
+// either reading, and a dot separated from the name by whitespace or a
+// comment does not qualify it. Away from '(' a name is an identifier
+// without IGNORE_SPACE and the keyword with it, except an aggregate before a
+// detached '(', which stays the keyword in this release.
 func TestFuncCallKeywordAfterDot(t *testing.T) {
 	testcases := []struct {
-		in  string
-		ids []int
+		in             string
+		ids            []int
+		ignoreSpaceIDs []int // when different from ids
 	}{{
 		in:  "db.cast(1)",
 		ids: []int{ID, '.', ID, '(', INTEGRAL, ')'},
@@ -270,23 +285,153 @@ func TestFuncCallKeywordAfterDot(t *testing.T) {
 		in:  "cast(1)",
 		ids: []int{CAST, '(', INTEGRAL, ')'},
 	}, {
-		in:  "cast (1)",
-		ids: []int{ID, '(', INTEGRAL, ')'},
+		in:             "cast (1)",
+		ids:            []int{ID, '(', INTEGRAL, ')'},
+		ignoreSpaceIDs: []int{CAST, '(', INTEGRAL, ')'},
+	}, {
+		in:  "sum (1)",
+		ids: []int{SUM, '(', INTEGRAL, ')'},
+	}, {
+		in:  "db.cast (1)",
+		ids: []int{ID, '.', ID, '(', INTEGRAL, ')'},
+	}, {
+		in:  "db.sum (1)",
+		ids: []int{ID, '.', ID, '(', INTEGRAL, ')'},
+	}, {
+		// an aggregate name stays the keyword, which the grammar reads as
+		// an identifier where one is expected, since it is non-reserved
+		in:             "cast, sum from t",
+		ids:            []int{ID, ',', SUM, FROM, ID},
+		ignoreSpaceIDs: []int{ID, ',', ID, FROM, ID},
+	}, {
+		in:  "now from t",
+		ids: []int{ID, FROM, ID},
+	}, {
+		in:  "t.now from t",
+		ids: []int{ID, '.', ID, FROM, ID},
 	}}
 
 	parser := NewTestParser()
+	ignoreSpaceParser := newIgnoreSpaceTestParser(t)
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			tkn := parser.NewStringTokenizer(tcase.in)
-			var ids []int
-			for {
-				id, _ := tkn.Scan()
-				if id == 0 || id == LEX_ERROR {
-					break
-				}
-				ids = append(ids, id)
+			assert.Equal(t, tcase.ids, scanAll(parser.NewStringTokenizer(tcase.in)), "without IGNORE_SPACE")
+			ignoreSpaceIDs := tcase.ignoreSpaceIDs
+			if ignoreSpaceIDs == nil {
+				ignoreSpaceIDs = tcase.ids
 			}
-			require.Equal(t, tcase.ids, ids)
+			assert.Equal(t, ignoreSpaceIDs, scanAll(ignoreSpaceParser.NewStringTokenizer(tcase.in)), "with IGNORE_SPACE")
+		})
+	}
+}
+
+// An aggregate on the whitespace-sensitive list is the keyword with or
+// without whitespace before '(', and the parser reports the calls whose
+// parenthesis whitespace, or a comment, separated from the name, unless its
+// sql_mode has IGNORE_SPACE: those keep a meaning that MySQL's default
+// reading changes. The report comes from the grammar's aggregate rules, so
+// it sees the token stream the parser sees, comments of every kind and
+// MySQL versioned comments included, and does not fire for a name in an
+// identifier position.
+func TestSpacedAggrCalls(t *testing.T) {
+	testcases := []struct {
+		in     string
+		spaced []string
+		err    string
+	}{{
+		in:     "select sum (x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum\t(x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum\n(x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum\r\n  (x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum/*c*/(x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum /* c */ /* d */ (x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum -- c\n(x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum # c\n(x) from t",
+		spaced: []string{"sum"},
+	}, {
+		// a versioned comment the server version satisfies is read as SQL,
+		// so the call is an aggregate call with a detached parenthesis
+		in:     "select count /*!50000 (id) */ from t",
+		spaced: []string{"count"},
+	}, {
+		in:     "select sum /*!50000 */ (x) from t",
+		spaced: []string{"sum"},
+	}, {
+		// one the server version does not satisfy is skipped whole
+		in: "select /*!99999 sum */ (x) from t",
+	}, {
+		in:     "select SUM (x) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum (a) + sum (b) from t",
+		spaced: []string{"sum"},
+	}, {
+		in:     "select sum (a), count (b), sum (c) from t",
+		spaced: []string{"sum", "count"},
+	}, {
+		// attached: not spaced
+		in: "select sum(x) from t",
+	}, {
+		// in an identifier position the name means the same under either
+		// reading, whatever follows it, so nothing is reported
+		in: "select sum from t",
+	}, {
+		in: "select sum /* c */ from t",
+	}, {
+		in: "insert into count (a) values (1)",
+	}, {
+		in: "create table max (id int, key sum (id))",
+	}, {
+		in: "call count (1)",
+	}, {
+		// -- without a following blank is not a comment
+		in: "select sum --(x) from t",
+	}, {
+		// an unterminated comment is an error, as anywhere
+		in:  "select sum /* c (x) from t",
+		err: "syntax error",
+	}, {
+		// a qualified name is a stored-function call under either reading
+		in: "select db.sum (x) from t",
+	}, {
+		// a quoted name is an identifier
+		in: "select `sum` (x) from t",
+	}, {
+		// names off the aggregate list are not reported
+		in: "select now (), abs (x), if (a, b, c), left (a, 1) from t",
+	}}
+
+	parser := NewTestParser()
+	ignoreSpaceParser := newIgnoreSpaceTestParser(t)
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			_, _, spaced, err := parser.ParseWithSpacedAggrCalls(tcase.in)
+			if tcase.err != "" {
+				require.ErrorContains(t, err, tcase.err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tcase.spaced, spaced)
+
+			// a parser whose sql_mode has IGNORE_SPACE reports nothing:
+			// under its mode the reading is MySQL's
+			_, _, ignoreSpaceSpaced, err := ignoreSpaceParser.ParseWithSpacedAggrCalls(tcase.in)
+			require.NoError(t, err)
+			assert.Empty(t, ignoreSpaceSpaced)
 		})
 	}
 }

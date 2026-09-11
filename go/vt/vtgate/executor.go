@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -89,6 +90,7 @@ var (
 	commitUnresolved = stats.NewCounter("CommitUnresolved", "Atomic Commit failed to conclude after commit decision is made")
 
 	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	spacedAggrCallLogger   = logutil.NewThrottledLogger("SpacedAggrCall", 1*time.Minute)
 
 	errorTransform errorTransformer = nullErrorTransformer{}
 )
@@ -1365,7 +1367,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	stmt, reservedVars, spacedAggrCalls, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1441,11 +1443,11 @@ func (e *Executor) getCachedOrBuildPlan(
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
-			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, !ignoreCache)
 		})
 		return plan, cached, stmt, err
 	}
-	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, !ignoreCache)
 	return plan, false, stmt, err
 }
 
@@ -1498,6 +1500,8 @@ func (e *Executor) buildStatement(
 	bindVarNeeds *sqlparser.BindVarNeeds,
 	qh sqlparser.QueryHints,
 	paramsCount uint16,
+	spacedAggrCalls []string,
+	countSpacedAggrCalls bool,
 ) (*engine.Plan, error) {
 	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
 	if err != nil {
@@ -1506,10 +1510,81 @@ func (e *Executor) buildStatement(
 
 	plan.ParamsCount = paramsCount
 	plan.Warnings = vcursor.GetAndEmptyWarnings()
+	// a plan that executes another statement's plan (EXECUTE) carries that
+	// plan's warnings already
+	plan.SpacedAggrCallWarnings = append(plan.SpacedAggrCallWarnings, e.spacedAggrCallWarnings(query, spacedAggrCalls, countSpacedAggrCalls)...)
 	plan.QueryHints = qh
 
 	err = e.checkThatPlanIsValid(stmt, plan)
 	return plan, err
+}
+
+// spacedAggrCallWarnings builds the warnings for the aggregate names the
+// query separates from their parenthesis with whitespace or a comment (see
+// sqlparser.Tokenizer.SpacedAggrCalls). When count is set, which it is for
+// every build but the re-planning of a prepared statement, it also counts
+// the query once and logs it, so that operators can find the queries whose
+// meaning the next major release changes. The logged query is redacted, and
+// so printed in its normalized form, with the parentheses attached.
+func (e *Executor) spacedAggrCallWarnings(query string, names []string, count bool) []*querypb.QueryWarning {
+	if len(names) == 0 {
+		return nil
+	}
+	if count {
+		warnings.Add("SpacedAggrCall", 1)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(query)
+		if err != nil {
+			piiSafeSQL = "<unredactable>"
+		}
+		spacedAggrCallLogger.Warningf("query separates an aggregate name from its parenthesis, which the next major release reads as a stored-function call: names=%s normalized_query=%q", strings.Join(names, ","), piiSafeSQL)
+	}
+	result := make([]*querypb.QueryWarning, 0, len(names))
+	for _, name := range names {
+		result = append(result, &querypb.QueryWarning{
+			Code: uint32(sqlerror.ERWarnDeprecatedSyntax),
+			Message: fmt.Sprintf("'%s' is separated from its parenthesis by whitespace or a comment and is read as the aggregate %s(), as it is under sql_mode=IGNORE_SPACE; "+
+				"the next major release will read it as a call of a stored function named %s, as MySQL does without IGNORE_SPACE. "+
+				"Write %s( with nothing in between, or set IGNORE_SPACE in sql_mode to keep the current reading", name, name, name, name),
+		})
+	}
+	return result
+}
+
+// sessionSQLModeHas reports whether the session's sql_mode, as a SET on the
+// session stored it, includes mode. A session that never set sql_mode runs
+// under the backend's, which carries no lexer mode (see
+// sqlmode.WithoutLexerModes).
+func (e *Executor) sessionSQLModeHas(session *econtext.SafeSession, mode sqlmode.Mode) bool {
+	var stored string
+	session.GetSystemVariables(func(name, value string) {
+		if name == sysvars.SQLMode.Name {
+			stored = value
+		}
+	})
+	if stored == "" {
+		return false
+	}
+	expr, err := e.env.Parser().ParseExpr(stored)
+	if err != nil {
+		return false
+	}
+	// a binary value is stored with its introducer, _binary'...'
+	if introducer, ok := expr.(*sqlparser.IntroducerExpr); ok {
+		expr = introducer.Expr
+	}
+	lit, ok := expr.(*sqlparser.Literal)
+	if !ok {
+		return false
+	}
+	value, err := sqlparser.LiteralToValue(lit)
+	if err != nil {
+		return false
+	}
+	current, err := sqlmode.FromValue(value)
+	if err != nil {
+		return false
+	}
+	return current.Expand()&mode != 0
 }
 
 func (e *Executor) debugCacheEntries() (items map[string]*engine.Plan) {
@@ -1843,15 +1918,18 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 	return fields, countArguments(stmt), true
 }
 
-func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
-	stmt, reserved, err := parser.Parse2(query)
+// parseAndValidateQuery parses the query and also returns the aggregate
+// names it separates from their parenthesis (see
+// sqlparser.Tokenizer.SpacedAggrCalls), for the plan to warn about.
+func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, []string, error) {
+	stmt, reserved, spacedAggrCalls, err := parser.ParseWithSpacedAggrCalls(query)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(stmt) && !isValidPayloadSize(query) {
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
+		return nil, nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
 	}
-	return stmt, sqlparser.NewReservedVars("vtg", reserved), nil
+	return stmt, sqlparser.NewReservedVars("vtg", reserved), spacedAggrCalls, nil
 }
 
 // ExecuteMultiShard implements the IExecutor interface

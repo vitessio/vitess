@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -142,6 +143,11 @@ func (e *Executor) newExecute(
 		// Add any warnings that the planner wants to add.
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
+		}
+		if len(plan.SpacedAggrCallWarnings) > 0 && !e.sessionSQLModeHas(safeSession, sqlmode.IgnoreSpace) {
+			for _, warning := range plan.SpacedAggrCallWarnings {
+				safeSession.RecordWarning(warning)
+			}
 		}
 
 		// set the overall query timeout if it is not already set

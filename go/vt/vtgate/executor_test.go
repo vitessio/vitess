@@ -3683,3 +3683,107 @@ func TestExecutorShowShards(t *testing.T) {
 		})
 	}
 }
+
+// An aggregate name separated from its parenthesis by whitespace or a
+// comment is read as the aggregate, as before, and warns: the next major
+// release reads it as a stored-function call. The warning is a protocol
+// warning on the session, replayed on every execution of the cached plan,
+// counted once per plan, and withheld from a session whose sql_mode has
+// IGNORE_SPACE, under which the reading is MySQL's too.
+func TestExecutorSpacedAggrCallWarning(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	counter := func() int64 { return warnings.Counts()["SpacedAggrCall"] }
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		session := &vtgatepb.Session{TargetString: "@primary"}
+		if sqlMode != "" {
+			session.SystemVariables = map[string]string{"sql_mode": sqlMode}
+		}
+		return econtext.NewSafeSession(session)
+	}
+
+	session := newSession("")
+	before := counter()
+	_, err := executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.Warnings, 1)
+	warning := session.Warnings[0]
+	assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, warning.Code)
+	assert.Contains(t, warning.Message, "'sum' is separated from its parenthesis by whitespace or a comment and is read as the aggregate sum()")
+	assert.Contains(t, warning.Message, "set IGNORE_SPACE in sql_mode")
+	assert.Equal(t, before+1, counter(), "counted once per plan")
+
+	// the warning is visible through SHOW WARNINGS
+	qr, err := executorExecSession(ctx, executor, session, "show warnings", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	assert.Equal(t, "Warning", qr.Rows[0][0].ToString())
+	assert.Equal(t, "1287", qr.Rows[0][1].ToString())
+	assert.Equal(t, warning.Message, qr.Rows[0][2].ToString())
+
+	// a cache hit replays the warning, and does not count again
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.Warnings, 1)
+	assert.Equal(t, before+1, counter(), "not counted on a cache hit")
+
+	// one warning per aggregate name; a spaced non-aggregate is a
+	// stored-function call, MySQL's to judge, and warns about nothing
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "select count (id), sum (id), now (), substr (name, 1) from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.Warnings, 2)
+	assert.Contains(t, session.Warnings[0].Message, "'count'")
+	assert.Contains(t, session.Warnings[1].Message, "'sum'")
+
+	// a session whose sql_mode has IGNORE_SPACE gets no warning from the same
+	// cached plan, whether the mode is alone, among others, or set numerically
+	for _, sqlMode := range []string{"'IGNORE_SPACE'", "'STRICT_TRANS_TABLES,IGNORE_SPACE'", "8"} {
+		session = newSession(sqlMode)
+		_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+		require.NoError(t, err, sqlMode)
+		assert.Empty(t, session.Warnings, sqlMode)
+	}
+
+	// a session sql_mode without IGNORE_SPACE does not withhold it
+	session = newSession("'STRICT_TRANS_TABLES'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.Warnings, 1)
+
+	// a binary-typed stored value carries its introducer, and an empty mode
+	// withholds nothing
+	session = newSession("_binary'IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, session.Warnings)
+	session = newSession("''")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.Warnings, 1)
+
+	// the attached form warns about nothing
+	before = counter()
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "select sum(id), `count`(id) from main1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, session.Warnings)
+	assert.Equal(t, before, counter())
+
+	// a statement prepared with PREPARE ... FROM warns when executed, since
+	// EXECUTE runs the prepared statement's plan; the prepared statement is
+	// counted once although its plan is built more than once
+	before = counter()
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "prepare stmt from 'select sum (id) from main1 where id = ?'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "set @id = 1", nil)
+	require.NoError(t, err)
+	for range 2 {
+		_, err = executorExecSession(ctx, executor, session, "execute stmt using @id", nil)
+		require.NoError(t, err)
+		require.Len(t, session.Warnings, 1)
+		assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, session.Warnings[0].Code)
+	}
+	assert.Equal(t, before+1, counter(), "counted once for the prepared statement")
+}

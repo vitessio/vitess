@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -37,6 +38,10 @@ type Tokenizer struct {
 	LastError           error
 	ParseTrees          []Statement
 	BindVars            map[string]struct{}
+	// SpacedAggrCalls lists the aggregates that whitespace or a comment
+	// separated from their '(' while the sql_mode lacks IGNORE_SPACE (see
+	// mysqlAggrFuncCallKeywords), lowercased, in order of first appearance.
+	SpacedAggrCalls []string
 
 	lastTokenType      int
 	lastToken          string
@@ -394,16 +399,71 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
-		if isFuncCallKeyword(keywordID) && (tkn.cur() != '(' || (start > 0 && tkn.buf[start-1] == '.')) {
-			// MySQL lexes these names as the keyword only directly before
-			// '(', and a qualified name is always an identifier: db.cast(1)
-			// calls the stored function cast in db. The context is read from
-			// the input so that Scan callers see the parser's stream.
-			return ID, keywordName
+		if isFuncCallKeyword(keywordID) {
+			// The context is read from the input so that Scan callers see
+			// the parser's stream.
+			if start > 0 && tkn.buf[start-1] == '.' {
+				// A qualified name is always an identifier, with or without
+				// IGNORE_SPACE: db.cast(1) calls the stored function cast in db.
+				return ID, keywordName
+			}
+			if tkn.cur() != '(' {
+				if tkn.ignoreSpace() {
+					// Under IGNORE_SPACE MySQL's lexer skips the whitespace
+					// after the name before deciding whether '(' follows.
+					if tkn.parenFollowsWhitespace() {
+						return keywordID, keywordName
+					}
+					return ID, keywordName
+				}
+				// Without IGNORE_SPACE MySQL lexes the name as the keyword
+				// only directly before '(', except that this release keeps
+				// the aggregates keywords, see mysqlAggrFuncCallKeywords.
+				if isAggrFuncCallKeyword(keywordID) {
+					return keywordID, keywordName
+				}
+				return ID, keywordName
+			}
 		}
 		return keywordID, keywordName
 	}
 	return ID, keywordName
+}
+
+// ignoreSpace reports whether the tokenizer's sql_mode has IGNORE_SPACE.
+func (tkn *Tokenizer) ignoreSpace() bool {
+	return tkn.parser != nil && tkn.parser.sqlMode&sqlmode.IgnoreSpace != 0
+}
+
+// parenFollowsWhitespace reports whether the next character after any
+// whitespace is '('.
+func (tkn *Tokenizer) parenFollowsWhitespace() bool {
+	pos := tkn.Pos
+	for pos < len(tkn.buf) {
+		switch tkn.buf[pos] {
+		case ' ', '\n', '\r', '\t':
+			pos++
+		default:
+			return tkn.buf[pos] == '('
+		}
+	}
+	return false
+}
+
+// recordSpacedAggrCall is called by the grammar's aggregate rules: it adds
+// the name to SpacedAggrCalls, once, when the parenthesis did not directly
+// follow the name and the sql_mode lacks IGNORE_SPACE.
+func (tkn *Tokenizer) recordSpacedAggrCall(name string, nameLoc, parenLoc location) {
+	if parenLoc.start == nameLoc.end || tkn.ignoreSpace() {
+		return
+	}
+	name = strings.ToLower(name)
+	for _, seen := range tkn.SpacedAggrCalls {
+		if seen == name {
+			return
+		}
+	}
+	tkn.SpacedAggrCalls = append(tkn.SpacedAggrCalls, name)
 }
 
 // scanHex scans a hex numeral; assumes x' or X' has already been scanned

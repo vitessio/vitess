@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -75,11 +76,18 @@ func yyParsePooled(yylex yyLexer) int {
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
+	stmt, bindVars, _, err := p.ParseWithSpacedAggrCalls(sql)
+	return stmt, bindVars, err
+}
+
+// ParseWithSpacedAggrCalls parses like Parse2 and also returns the
+// Tokenizer's SpacedAggrCalls.
+func (p *Parser) ParseWithSpacedAggrCalls(sql string) (Statement, BindVars, []string, error) {
 	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
+				return nil, nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
 			}
 			log.Warn(fmt.Sprintf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError))
 			switch x := tokenizer.partialDDL.(type) {
@@ -89,15 +97,15 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 				x.SetFullyParsed(false)
 			}
 			tokenizer.ParseTrees = []Statement{tokenizer.partialDDL}
-			return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+			return tokenizer.ParseTrees[0], tokenizer.BindVars, tokenizer.SpacedAggrCalls, nil
 		}
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+		return nil, nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	err := checkParseTreesError(tokenizer)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+	return tokenizer.ParseTrees[0], tokenizer.BindVars, tokenizer.SpacedAggrCalls, nil
 }
 
 // ParseMultiple parses the SQL in full and returns a list of Statements, which
@@ -370,12 +378,24 @@ type Options struct {
 	MySQLServerVersion string
 	TruncateUILen      int
 	TruncateErrLen     int
+	// SQLMode is the sql_mode the parser reads SQL under. Of the lexer
+	// modes (sqlmode.LexerModes) the parser honors IGNORE_SPACE: with it,
+	// the function names MySQL lexes as a keyword only directly before '('
+	// (mysqlFuncCallKeywords) are keywords before '(' after whitespace as
+	// well, so `count (*)` is the built-in; without it, `count (*)` is a
+	// call of a stored function named count, as MySQL reads it by default,
+	// except for the aggregates this release keeps
+	// (mysqlAggrFuncCallKeywords). A name no '(' follows is an identifier
+	// either way. Zero is MySQL's default sql_mode, which has no
+	// IGNORE_SPACE.
+	SQLMode sqlmode.Mode
 }
 
 type Parser struct {
 	version        string
 	truncateUILen  int
 	truncateErrLen int
+	sqlMode        sqlmode.Mode
 }
 
 func New(opts Options) (*Parser, error) {
@@ -390,6 +410,7 @@ func New(opts Options) (*Parser, error) {
 		version:        convVersion,
 		truncateUILen:  opts.TruncateUILen,
 		truncateErrLen: opts.TruncateErrLen,
+		sqlMode:        opts.SQLMode.Expand(),
 	}, nil
 }
 
@@ -403,4 +424,9 @@ func NewTestParser() *Parser {
 		truncateUILen:  512,
 		truncateErrLen: 0,
 	}
+}
+
+// SQLMode returns the sql_mode the parser reads SQL under.
+func (p *Parser) SQLMode() sqlmode.Mode {
+	return p.sqlMode
 }

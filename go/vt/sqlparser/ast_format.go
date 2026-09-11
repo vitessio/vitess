@@ -1881,8 +1881,9 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// Function names are not back-quoted for matching a reserved word, only
 	// for containing illegal characters, except the names MySQL lexes as a
 	// keyword only directly before '(' (IsFuncCallKeywordName): a generic call
-	// by one of those is MySQL's stored-function path, and printed bare the
-	// name would re-lex as the built-in.
+	// by one of those came quoted, or with whitespace before the parenthesis
+	// under MySQL's reading, and is MySQL's stored-function path; printed bare
+	// the name would re-lex as the built-in.
 	funcName := node.Name.String()
 
 	if containEscapableChars(funcName, NoAt) || IsFuncCallKeywordName(funcName) {

@@ -64,6 +64,7 @@ func TestTranslateSimplification(t *testing.T) {
 		{"curdate ()", err("not supported"), err("not supported")},
 		{"now ()", err("not supported"), err("not supported")},
 		{"`now`()", err("not supported"), err("not supported")},
+		{"`curdate`()", err("not supported"), err("not supported")},
 		{"1.0e0 + (1 + 1) * 8.0e0", ok("1 + (1 + 1) * 8"), ok("17")},
 		{"'pokemon' LIKE 'poke%'", ok("'pokemon' like 'poke%'"), ok("1")},
 		{

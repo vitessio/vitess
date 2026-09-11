@@ -6820,22 +6820,27 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb '*' closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &CountStar{OverClause: $5}
   }
 | COUNT openb distinct_opt expression_list closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Count{Distinct:$3, Args:$4, OverClause: $6}
   }
 | MAX openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Max{Distinct:$3, Arg:$4, OverClause: $6}
   }
 | MIN openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Min{Distinct:$3, Arg:$4, OverClause: $6}
   }
 | SUM openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Sum{Distinct:$3, Arg:$4, OverClause: $6}
   }
 | AVG openb distinct_opt expression closeb over_clause_opt
@@ -6844,46 +6849,57 @@ UTC_DATE func_paren_opt
   }
 | BIT_AND openb expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &BitAnd{Arg:$3, OverClause: $5}
   }
 | BIT_OR openb expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &BitOr{Arg:$3, OverClause: $5}
   }
 | BIT_XOR openb expression closeb over_clause_opt
    {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &BitXor{Arg:$3, OverClause: $5}
    }
 | STD openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Std{Arg:$3, OverClause: $5}
     }
 | STDDEV openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &StdDev{Arg:$3, OverClause: $5}
     }
 | STDDEV_POP openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &StdPop{Arg:$3, OverClause: $5}
     }
 | STDDEV_SAMP openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &StdSamp{Arg:$3, OverClause: $5}
     }
 | VAR_POP openb expression closeb over_clause_opt
      {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &VarPop{Arg:$3, OverClause: $5}
      }
 | VAR_SAMP openb expression closeb over_clause_opt
      {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &VarSamp{Arg:$3, OverClause: $5}
      }
 | VARIANCE openb expression closeb over_clause_opt
      {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Variance{Arg:$3, OverClause: $5}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | ANY_VALUE openb expression closeb
@@ -6920,14 +6936,17 @@ UTC_DATE func_paren_opt
   }
 | JSON_ARRAYAGG openb expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &JSONArrayAgg{Expr: $3, OverClause: $5}
   }
 | ST_COLLECT openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &STCollect{Distinct: $3, Arg: $4, OverClause: $6}
   }
 | JSON_OBJECTAGG openb expression ',' expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &JSONObjectAgg{Key: $3, Value: $5, OverClause: $7}
   }
 | LTRIM openb expression closeb

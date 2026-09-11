@@ -47,6 +47,9 @@ type (
 	planResult struct {
 		primitive engine.Primitive
 		tables    []string
+		// spacedAggrCallWarnings carries an inner plan's warnings of that
+		// kind, for a plan that executes another statement's plan (EXECUTE).
+		spacedAggrCallWarnings []*querypb.QueryWarning
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
@@ -115,11 +118,15 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 
 	var primitive engine.Primitive
 	var tablesUsed []string
+	var spacedAggrCallWarnings []*querypb.QueryWarning
 	if planResult != nil {
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
+		spacedAggrCallWarnings = planResult.spacedAggrCallWarnings
 	}
-	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
+	plan := engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed)
+	plan.SpacedAggrCallWarnings = spacedAggrCallWarnings
+	return plan, nil
 }
 
 func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {

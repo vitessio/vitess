@@ -74,7 +74,10 @@ const removedModes Mode = 0x1003FF00
 // always serialized in vtgate's canonical, default-lexer format, so a session's lexer
 // modes are stripped from the sql_mode transported to backends. That split is what allows
 // supporting these modes for incoming queries without backend query serialization ever
-// having to account for them.
+// having to account for them. IGNORE_SPACE is the one lexer mode the Vitess parser can
+// read SQL under (sqlparser.Options.SQLMode), so it is accepted (see unsupportedModes).
+// Vitess-formatted SQL is unaffected by it on the backend: every identifier that matches a
+// keyword is quoted and every function call has its parenthesis attached.
 const LexerModes = RealAsFloat | PipesAsConcat | AnsiQuotes | IgnoreSpace | Ansi | NoBackslashEscapes | HighNotPrecedence
 
 // WithoutLexerModes returns the mode with all LexerModes removed — the value safe to send
@@ -265,26 +268,26 @@ func (m Mode) String() string {
 	return buf.String()
 }
 
-// unsupportedModes are the modes rejected by Validate, reported in this order. This is the
-// same set as LexerModes; ANSI is listed first so that the combination mode is reported
-// under its own name rather than that of one of its members.
+// unsupportedModes are the modes rejected by Validate, reported in this order. This is
+// LexerModes without IGNORE_SPACE, which the Vitess parser can read SQL under; ANSI is
+// listed first so that the combination mode is reported under its own name rather than
+// that of one of its members.
 var unsupportedModes = []Mode{
 	Ansi,
 	AnsiQuotes,
 	NoBackslashEscapes,
 	PipesAsConcat,
 	RealAsFloat,
-	IgnoreSpace,
 	HighNotPrecedence,
 }
 
 // Validate parses and validates an sql_mode assignment value the way MySQL does, and
-// additionally rejects the modes that change how SQL text is interpreted (LexerModes) —
-// the Vitess parser either does not support them or does not honor them. It returns the
-// expanded mode, whose String form is the canonical value MySQL would report back for
-// @@sql_mode. Both vtgate (SET statements, the --sql-mode flag) and vttablet (settings,
-// SET_VAR hints, SET statements from older vtgates or direct clients) validate with this,
-// so the same value fails with the same error at either layer.
+// additionally rejects the modes that change how SQL text is interpreted (LexerModes) and
+// that the Vitess parser does not honor. It returns the expanded mode, whose String form
+// is the canonical value MySQL would report back for @@sql_mode. Both vtgate (SET
+// statements, the --sql-mode flag) and vttablet (settings, SET_VAR hints, SET statements
+// from older vtgates or direct clients) validate with this, so the same value fails with
+// the same error at either layer.
 func Validate(value sqltypes.Value) (Mode, error) {
 	mode, err := FromValue(value)
 	if err != nil {

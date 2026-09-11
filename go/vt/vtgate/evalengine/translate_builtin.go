@@ -48,9 +48,9 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	// A qualified call names a stored function, whatever the name. So does a
 	// generic call by a name MySQL lexes as a keyword only directly before
 	// '(': the parser gives the built-in a node of its own, and a FuncExpr by
-	// that name came with whitespace before the parenthesis or quoted (see
-	// sqlparser.IsFuncCallKeywordName). Both are MySQL's to resolve and
-	// evaluate.
+	// that name came quoted, or with whitespace before the parenthesis under
+	// MySQL's reading (see sqlparser.IsFuncCallKeywordName). Both are MySQL's
+	// to resolve and evaluate.
 	if fn.Qualifier.NotEmpty() || sqlparser.IsFuncCallKeywordName(fn.Name.String()) {
 		return nil, translateExprNotSupported(fn)
 	}

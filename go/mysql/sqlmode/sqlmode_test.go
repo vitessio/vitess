@@ -190,7 +190,10 @@ func TestValidate(t *testing.T) {
 		{value: sqltypes.NewVarChar("STRICT_TRANS_TABLES,ANSI_QUOTES"), expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported"},
 		{value: sqltypes.NewVarChar("PIPES_AS_CONCAT"), expectedErr: "setting the PIPES_AS_CONCAT sql_mode is unsupported"},
 		{value: sqltypes.NewVarChar("REAL_AS_FLOAT"), expectedErr: "setting the REAL_AS_FLOAT sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("IGNORE_SPACE"), expectedErr: "setting the IGNORE_SPACE sql_mode is unsupported"},
+		// IGNORE_SPACE is the one lexer mode the parser honors, and is accepted
+		{value: sqltypes.NewVarChar("IGNORE_SPACE"), expected: "IGNORE_SPACE"},
+		{value: sqltypes.NewVarChar("STRICT_TRANS_TABLES,IGNORE_SPACE"), expected: "IGNORE_SPACE,STRICT_TRANS_TABLES"},
+		{value: sqltypes.NewInt64(1 << 3), expected: "IGNORE_SPACE"},
 		{value: sqltypes.NewVarChar("HIGH_NOT_PRECEDENCE"), expectedErr: "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported"},
 		// invalid values fail with MySQL's own error messages
 		{value: sqltypes.NewVarChar("BOGUS"), expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'"},
@@ -211,12 +214,15 @@ func TestValidate(t *testing.T) {
 
 func TestUnsupportedModesAreTheLexerModes(t *testing.T) {
 	// the rejected modes and the lexer modes stripped from backend transports must stay in
-	// sync: both describe "modes that change how SQL text is interpreted"
+	// sync: both describe "modes that change how SQL text is interpreted", except
+	// IGNORE_SPACE, which the parser honors and which is therefore stripped but not
+	// rejected
 	var combined Mode
 	for _, m := range unsupportedModes {
 		combined |= m
 	}
-	assert.Equal(t, LexerModes, combined)
+	assert.Equal(t, LexerModes&^IgnoreSpace, combined)
+	assert.Equal(t, StrictTransTables, (StrictTransTables | IgnoreSpace).WithoutLexerModes())
 }
 
 func TestNeutralizeSessionQuery(t *testing.T) {
