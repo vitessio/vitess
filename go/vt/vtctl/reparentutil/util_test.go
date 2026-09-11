@@ -2246,157 +2246,6 @@ func TestFindCurrentPrimary(t *testing.T) {
 	}
 }
 
-func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
-	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	mysqlGTID1 := replication.Mysql56GTID{
-		Server:   sid1,
-		Sequence: 9,
-	}
-	mysqlGTID2 := replication.Mysql56GTID{
-		Server:   sid1,
-		Sequence: 10,
-	}
-	mysqlGTID3 := replication.Mysql56GTID{
-		Server:   sid1,
-		Sequence: 11,
-	}
-
-	positionMostAdvanced := &RelayLogPositions{
-		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-	}
-	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
-	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
-	positionMostAdvanced.Combined.GTIDSet = positionMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
-	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
-	positionMostAdvanced.Executed.GTIDSet = positionMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID2)
-
-	positionAlmostMostAdvanced := &RelayLogPositions{
-		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-	}
-	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID1)
-	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID2)
-	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
-	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
-
-	positionIntermediate1 := &RelayLogPositions{
-		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-	}
-	positionIntermediate1.Combined.GTIDSet = positionIntermediate1.Combined.GTIDSet.AddGTID(mysqlGTID1)
-	positionIntermediate1.Executed.GTIDSet = positionIntermediate1.Executed.GTIDSet.AddGTID(mysqlGTID1)
-
-	positionIntermediate2 := &RelayLogPositions{
-		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
-	}
-	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID1)
-	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
-	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID2)
-
-	tests := []struct {
-		name            string
-		validCandidates map[string]*RelayLogPositions
-		tabletMap       map[string]*topo.TabletInfo
-		tabletRes       []*topodatapb.Tablet
-	}{
-		{
-			name: "test conversion",
-			validCandidates: map[string]*RelayLogPositions{
-				"zone1-0000000100": positionMostAdvanced,
-				"zone1-0000000101": positionIntermediate1,
-				"zone1-0000000102": positionIntermediate2,
-				"zone1-0000000103": positionAlmostMostAdvanced,
-			},
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-						Hostname: "primary-elect",
-					},
-				},
-				"zone1-0000000101": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  101,
-						},
-					},
-				},
-				"zone1-0000000102": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  102,
-						},
-						Hostname: "requires force start",
-					},
-				},
-				"zone1-0000000103": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  103,
-						},
-						Hostname: "2nd primary-elect",
-					},
-				},
-				"zone1-0000000404": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  404,
-						},
-						Hostname: "ignored tablet",
-					},
-				},
-			},
-			tabletRes: []*topodatapb.Tablet{
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
-					},
-					Hostname: "primary-elect",
-				}, {
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  103,
-					},
-					Hostname: "2nd primary-elect",
-				}, {
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  101,
-					},
-				}, {
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  102,
-					},
-					Hostname: "requires force start",
-				},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			tabletRes, posRes, err := getValidCandidatesAndPositionsAsList(test.validCandidates, test.tabletMap)
-			require.NoError(t, err)
-			assert.ElementsMatch(t, test.tabletRes, tabletRes)
-			assert.Len(t, posRes, len(tabletRes))
-			for i, tablet := range tabletRes {
-				assert.Equal(t, test.validCandidates[topoproto.TabletAliasString(tablet.Alias)], posRes[i])
-			}
-		})
-	}
-}
-
 func TestWaitForCatchUp(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -2514,103 +2363,15 @@ func TestWaitForCatchUp(t *testing.T) {
 	}
 }
 
-func TestRestrictValidCandidates(t *testing.T) {
-	tests := []struct {
-		name            string
-		validCandidates map[string]*RelayLogPositions
-		tabletMap       map[string]*topo.TabletInfo
-		result          map[string]*RelayLogPositions
-	}{
-		{
-			name: "remove invalid tablets",
-			validCandidates: map[string]*RelayLogPositions{
-				"zone1-0000000100": {},
-				"zone1-0000000101": {},
-				"zone1-0000000102": {},
-				"zone1-0000000103": {},
-				"zone1-0000000104": {},
-				"zone1-0000000105": {},
-			},
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-						Type: topodatapb.TabletType_PRIMARY,
-					},
-				},
-				"zone1-0000000101": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  101,
-						},
-						Type: topodatapb.TabletType_RDONLY,
-					},
-				},
-				"zone1-0000000102": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  102,
-						},
-						Type: topodatapb.TabletType_RESTORE,
-					},
-				},
-				"zone1-0000000103": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  103,
-						},
-						Type: topodatapb.TabletType_DRAINED,
-					},
-				},
-				"zone1-0000000104": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  104,
-						},
-						Type: topodatapb.TabletType_SPARE,
-					},
-				},
-				"zone1-0000000105": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  103,
-						},
-						Type: topodatapb.TabletType_BACKUP,
-					},
-				},
-			},
-			result: map[string]*RelayLogPositions{
-				"zone1-0000000100": {},
-				"zone1-0000000101": {},
-				"zone1-0000000104": {},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
-			require.NoError(t, err)
-			assert.Equal(t, res, test.result)
-		})
-	}
-}
-
 func Test_findCandidate(t *testing.T) {
 	tests := []struct {
-		name               string
-		intermediateSource *topodatapb.Tablet
-		possibleCandidates []*topodatapb.Tablet
-		versionMap         map[string]mysqlctl.ServerVersion
-		candidate          *topodatapb.Tablet
+		name                      string
+		intermediateSource        *topodatapb.Tablet
+		possibleCandidates        []*topodatapb.Tablet
+		versionMap                map[string]mysqlctl.ServerVersion
+		flavorMap                 map[string]mysqlctl.MySQLFlavor
+		candidate                 *topodatapb.Tablet
+		candidateFromPossibleList bool
 	}{
 		{
 			name:      "empty possible candidates list",
@@ -2647,6 +2408,7 @@ func Test_findCandidate(t *testing.T) {
 					Uid:  103,
 				},
 			},
+			candidateFromPossibleList: true,
 		}, {
 			name: "intermediate source not in possible candidates list",
 			intermediateSource: &topodatapb.Tablet{
@@ -2771,90 +2533,122 @@ func Test_findCandidate(t *testing.T) {
 					Uid:  101,
 				},
 			},
+		}, {
+			name: "mixed flavor families prefer intermediate source",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 10, Minor: 6, Patch: 16},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			flavorMap: map[string]mysqlctl.MySQLFlavor{
+				"zone1-0000000100": mysqlctl.FlavorMariaDB,
+				"zone1-0000000101": mysqlctl.FlavorMySQL,
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			candidateFromPossibleList: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := findCandidate(tt.intermediateSource, tt.possibleCandidates, tt.versionMap)
+			possibleCandidates := make([]*ersCandidate, 0, len(tt.possibleCandidates))
+			for _, tablet := range tt.possibleCandidates {
+				candidate := &ersCandidate{info: &topo.TabletInfo{Tablet: tablet}}
+				alias := topoproto.TabletAliasString(tablet.Alias)
+				if version, ok := tt.versionMap[alias]; ok {
+					candidate.mysqlVersion = version
+					candidate.mysqlFlavor = mysqlctl.FlavorMySQL
+					if flavor, ok := tt.flavorMap[alias]; ok {
+						candidate.mysqlFlavor = flavor
+					}
+					candidate.hasMySQLVersion = true
+				}
+				possibleCandidates = append(possibleCandidates, candidate)
+			}
+
+			var intermediateSource *ersCandidate
+			if tt.intermediateSource != nil {
+				intermediateSource = &ersCandidate{info: &topo.TabletInfo{Tablet: tt.intermediateSource}}
+				alias := topoproto.TabletAliasString(tt.intermediateSource.Alias)
+				if version, ok := tt.versionMap[alias]; ok {
+					intermediateSource.mysqlVersion = version
+					intermediateSource.mysqlFlavor = mysqlctl.FlavorMySQL
+					if flavor, ok := tt.flavorMap[alias]; ok {
+						intermediateSource.mysqlFlavor = flavor
+					}
+					intermediateSource.hasMySQLVersion = true
+				}
+			}
+
+			res := findCandidate(intermediateSource, possibleCandidates)
 			if tt.candidate == nil {
 				require.Nil(t, res)
 			} else {
 				require.NotNil(t, res)
-				require.Equal(t, topoproto.TabletAliasString(tt.candidate.Alias), topoproto.TabletAliasString(res.Alias))
+				require.Equal(t, topoproto.TabletAliasString(tt.candidate.Alias), res.alias())
+				if tt.candidateFromPossibleList {
+					require.Same(t, findERSCandidateByAlias(possibleCandidates, tt.candidate.Alias), res)
+				}
 			}
 		})
 	}
 }
 
 func Test_getTabletsWithPromotionRules(t *testing.T) {
-	var (
-		primaryTablet = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "zone-1",
-				Uid:  1,
-			},
-			Type: topodatapb.TabletType_PRIMARY,
+	candidate := func(cell string, uid uint32, tabletType topodatapb.TabletType) *ersCandidate {
+		return &ersCandidate{
+			info: &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+				Type:  tabletType,
+			}},
 		}
-		replicaTablet = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "zone-1",
-				Uid:  2,
-			},
-			Type: topodatapb.TabletType_REPLICA,
-		}
-		rdonlyTablet = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "zone-1",
-				Uid:  3,
-			},
-			Type: topodatapb.TabletType_RDONLY,
-		}
-		replicaCrossCellTablet = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "zone-2",
-				Uid:  2,
-			},
-			Type: topodatapb.TabletType_REPLICA,
-		}
-		rdonlyCrossCellTablet = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "zone-2",
-				Uid:  3,
-			},
-			Type: topodatapb.TabletType_RDONLY,
-		}
-	)
-	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	}
+	primaryCandidate := candidate("zone-1", 1, topodatapb.TabletType_PRIMARY)
+	replicaCandidate := candidate("zone-1", 2, topodatapb.TabletType_REPLICA)
+	rdonlyCandidate := candidate("zone-1", 3, topodatapb.TabletType_RDONLY)
+	replicaCrossCellCandidate := candidate("zone-2", 2, topodatapb.TabletType_REPLICA)
+	rdonlyCrossCellCandidate := candidate("zone-2", 3, topodatapb.TabletType_RDONLY)
+	allCandidates := []*ersCandidate{primaryCandidate, replicaCandidate, rdonlyCandidate, replicaCrossCellCandidate, rdonlyCrossCellCandidate}
 	tests := []struct {
-		name            string
-		tablets         []*topodatapb.Tablet
-		rule            promotionrule.CandidatePromotionRule
-		filteredTablets []*topodatapb.Tablet
+		name               string
+		candidates         []*ersCandidate
+		rule               promotionrule.CandidatePromotionRule
+		filteredCandidates []*ersCandidate
 	}{
 		{
-			name:            "filter candidates with Neutral promotion rule",
-			tablets:         allTablets,
-			rule:            promotionrule.Neutral,
-			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+			name:               "filter candidates with Neutral promotion rule",
+			candidates:         allCandidates,
+			rule:               promotionrule.Neutral,
+			filteredCandidates: []*ersCandidate{primaryCandidate, replicaCandidate, replicaCrossCellCandidate},
 		},
 		{
-			name:            "filter candidates with MustNot promotion rule",
-			tablets:         allTablets,
-			rule:            promotionrule.MustNot,
-			filteredTablets: []*topodatapb.Tablet{rdonlyTablet, rdonlyCrossCellTablet},
+			name:               "filter candidates with MustNot promotion rule",
+			candidates:         allCandidates,
+			rule:               promotionrule.MustNot,
+			filteredCandidates: []*ersCandidate{rdonlyCandidate, rdonlyCrossCellCandidate},
 		},
 		{
-			name:            "filter candidates with Must promotion rule",
-			tablets:         allTablets,
-			rule:            promotionrule.Must,
-			filteredTablets: nil,
+			name:       "filter candidates with Must promotion rule",
+			candidates: allCandidates,
+			rule:       promotionrule.Must,
 		},
 	}
-	durability, _ := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
-			require.Equal(t, tt.filteredTablets, res)
+			res := getTabletsWithPromotionRules(durability, tt.candidates, tt.rule)
+			require.Equal(t, tt.filteredCandidates, res)
+			for i := range res {
+				require.Same(t, tt.filteredCandidates[i], res[i])
+			}
 		})
 	}
 }
