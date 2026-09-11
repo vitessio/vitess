@@ -1253,7 +1253,7 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats *logstats.LogStats,
 	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
-	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, spacedAggrCallWarnings []*querypb.QueryWarning, err error,
+	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, spacedAggrCalls []sqlparser.SpacedAggrCall, err error,
 ) {
 	if e.VSchema() == nil {
 		return nil, nil, nil, nil, vterrors.VT13001("vschema not initialized")
@@ -1274,16 +1274,16 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		var spacedAggrCalls []string
-		plan, logStats.CachedPlan, stmt, spacedAggrCalls, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		var parsed []sqlparser.SpacedAggrCall
+		plan, logStats.CachedPlan, stmt, parsed, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
 			// The baseline plan failed to build, try to build an optimized plan
 			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
 		}
-		// a prepared plan carries its own warnings, since it is executed
-		// again without its text being parsed again
+		// a prepared plan carries its own, since it is executed again without
+		// its text being parsed again
 		if !preparedPlan {
-			spacedAggrCallWarnings = buildSpacedAggrCallWarnings(spacedAggrCalls)
+			spacedAggrCalls = parsed
 		}
 	}
 	if err != nil {
@@ -1309,7 +1309,7 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return plan, vcursor, stmt, spacedAggrCallWarnings, nil
+	return plan, vcursor, stmt, spacedAggrCalls, nil
 }
 
 func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
@@ -1372,7 +1372,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	parameterize bool,
 	planKey engine.PlanKey,
 	ignoreCache bool,
-) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, spacedAggrCalls []string, err error) {
+) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, spacedAggrCalls []sqlparser.SpacedAggrCall, err error) {
 	stmt, reservedVars, spacedAggrCalls, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, false, nil, nil, err
@@ -1506,7 +1506,7 @@ func (e *Executor) buildStatement(
 	bindVarNeeds *sqlparser.BindVarNeeds,
 	qh sqlparser.QueryHints,
 	paramsCount uint16,
-	spacedAggrCalls []string,
+	spacedAggrCalls []sqlparser.SpacedAggrCall,
 	preparedPlan bool,
 	countSpacedAggrCalls bool,
 ) (*engine.Plan, error) {
@@ -1527,7 +1527,7 @@ func (e *Executor) buildStatement(
 	// executes another statement's plan (EXECUTE) carries that plan's
 	// already.
 	if preparedPlan {
-		plan.SpacedAggrCallWarnings = append(plan.SpacedAggrCallWarnings, buildSpacedAggrCallWarnings(spacedAggrCalls)...)
+		plan.SpacedAggrCalls = append(plan.SpacedAggrCalls, spacedAggrCalls...)
 	}
 	plan.QueryHints = qh
 
@@ -1544,8 +1544,8 @@ func (e *Executor) buildStatement(
 // session skips the plan cache, or a prepared statement's re-planning, is
 // not counted again. The logged query is redacted, and so printed in its
 // normalized form, with the parentheses attached.
-func (e *Executor) countSpacedAggrCalls(query string, names []string) {
-	if len(names) == 0 {
+func (e *Executor) countSpacedAggrCalls(query string, calls []sqlparser.SpacedAggrCall) {
+	if len(calls) == 0 {
 		return
 	}
 	warnings.Add("SpacedAggrCall", 1)
@@ -1553,26 +1553,31 @@ func (e *Executor) countSpacedAggrCalls(query string, names []string) {
 	if err != nil {
 		piiSafeSQL = "<unredactable>"
 	}
+	names := make([]string, 0, len(calls))
+	for _, call := range calls {
+		names = append(names, call.Name)
+	}
 	spacedAggrCallLogger.Warningf("query separates an aggregate name from its parenthesis, which the next major release reads as a stored-function call: names=%s normalized_query=%q", strings.Join(names, ","), piiSafeSQL)
 }
 
-// buildSpacedAggrCallWarnings builds the warnings for the aggregate names a
-// query separates from their parenthesis with whitespace or a comment (see
-// sqlparser.Tokenizer.SpacedAggrCalls).
-func buildSpacedAggrCallWarnings(names []string) []*querypb.QueryWarning {
-	if len(names) == 0 {
-		return nil
+// spacedAggrCallWarning is the warning for an aggregate a query separates
+// from its parenthesis (see sqlparser.Tokenizer.SpacedAggrCalls). Whitespace
+// is what sql_mode=IGNORE_SPACE permits, so that reading is offered as the
+// way to keep the call; a comment is a stored-function call to MySQL under
+// either mode, so only attaching the parenthesis keeps that one.
+func spacedAggrCallWarning(call sqlparser.SpacedAggrCall) *querypb.QueryWarning {
+	name := call.Name
+	var message string
+	if call.Comment {
+		message = fmt.Sprintf("'%s' is separated from its parenthesis by a comment and is read as the aggregate %s(); "+
+			"MySQL reads it as a call of a stored function named %s, with or without sql_mode=IGNORE_SPACE, and so will the next major release. "+
+			"Write %s( with nothing in between", name, name, name, name)
+	} else {
+		message = fmt.Sprintf("'%s' is separated from its parenthesis by whitespace and is read as the aggregate %s(), as it is under sql_mode=IGNORE_SPACE; "+
+			"the next major release will read it as a call of a stored function named %s, as MySQL does without IGNORE_SPACE. "+
+			"Write %s( with nothing in between, or set IGNORE_SPACE in sql_mode to keep the current reading", name, name, name, name)
 	}
-	result := make([]*querypb.QueryWarning, 0, len(names))
-	for _, name := range names {
-		result = append(result, &querypb.QueryWarning{
-			Code: uint32(sqlerror.ERWarnDeprecatedSyntax),
-			Message: fmt.Sprintf("'%s' is separated from its parenthesis by whitespace or a comment and is read as the aggregate %s(), as it is under sql_mode=IGNORE_SPACE; "+
-				"the next major release will read it as a call of a stored function named %s, as MySQL does without IGNORE_SPACE. "+
-				"Write %s( with nothing in between, or set IGNORE_SPACE in sql_mode to keep the current reading", name, name, name, name),
-		})
-	}
-	return result
+	return &querypb.QueryWarning{Code: uint32(sqlerror.ERWarnDeprecatedSyntax), Message: message}
 }
 
 // sessionSQLModeHas reports whether the session's sql_mode, as a SET on the
@@ -1953,7 +1958,7 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 // parseAndValidateQuery parses the query and also returns the aggregate
 // names it separates from their parenthesis (see
 // sqlparser.Tokenizer.SpacedAggrCalls), for the plan to warn about.
-func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, []string, error) {
+func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, []sqlparser.SpacedAggrCall, error) {
 	stmt, reserved, spacedAggrCalls, err := parser.ParseWithSpacedAggrCalls(query)
 	if err != nil {
 		return nil, nil, nil, err

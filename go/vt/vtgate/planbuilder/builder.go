@@ -47,9 +47,9 @@ type (
 	planResult struct {
 		primitive engine.Primitive
 		tables    []string
-		// spacedAggrCallWarnings carries an inner plan's warnings of that
-		// kind, for a plan that executes another statement's plan (EXECUTE).
-		spacedAggrCallWarnings []*querypb.QueryWarning
+		// spacedAggrCalls carries an inner plan's spaced aggregate calls,
+		// for a plan that executes another statement's plan (EXECUTE).
+		spacedAggrCalls []sqlparser.SpacedAggrCall
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
@@ -118,14 +118,14 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 
 	var primitive engine.Primitive
 	var tablesUsed []string
-	var spacedAggrCallWarnings []*querypb.QueryWarning
+	var spacedAggrCalls []sqlparser.SpacedAggrCall
 	if planResult != nil {
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
-		spacedAggrCallWarnings = planResult.spacedAggrCallWarnings
+		spacedAggrCalls = planResult.spacedAggrCalls
 	}
 	plan := engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed)
-	plan.SpacedAggrCallWarnings = spacedAggrCallWarnings
+	plan.SpacedAggrCalls = spacedAggrCalls
 	return plan, nil
 }
 

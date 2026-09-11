@@ -3710,7 +3710,7 @@ func TestExecutorSpacedAggrCallWarning(t *testing.T) {
 	require.Len(t, session.Warnings, 1)
 	warning := session.Warnings[0]
 	assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, warning.Code)
-	assert.Contains(t, warning.Message, "'sum' is separated from its parenthesis by whitespace or a comment and is read as the aggregate sum()")
+	assert.Contains(t, warning.Message, "'sum' is separated from its parenthesis by whitespace and is read as the aggregate sum()")
 	assert.Contains(t, warning.Message, "set IGNORE_SPACE in sql_mode")
 	assert.Equal(t, before+1, counter(), "counted once per plan")
 
@@ -3751,6 +3751,18 @@ func TestExecutorSpacedAggrCallWarning(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
 	require.NoError(t, err)
 	assert.Len(t, session.Warnings, 1)
+
+	// a comment between the name and the parenthesis is warned about under
+	// either mode, with its own text: IGNORE_SPACE skips whitespace, not
+	// comments, so only attaching the parenthesis keeps that call
+	for _, sqlMode := range []string{"", "'IGNORE_SPACE'"} {
+		session = newSession(sqlMode)
+		_, err = executorExecSession(ctx, executor, session, "select count/*c*/(id) from main1", nil)
+		require.NoError(t, err, sqlMode)
+		require.Len(t, session.Warnings, 1, sqlMode)
+		assert.Contains(t, session.Warnings[0].Message, "'count' is separated from its parenthesis by a comment", sqlMode)
+		assert.NotContains(t, session.Warnings[0].Message, "set IGNORE_SPACE", sqlMode)
+	}
 
 	// the stored sql_mode is parsed once and memoized on the session; a
 	// changed value is parsed again

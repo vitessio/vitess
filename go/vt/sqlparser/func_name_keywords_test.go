@@ -204,43 +204,52 @@ func TestFuncNamesWithoutIgnoreSpace(t *testing.T) {
 // during a rolling upgrade (see mysqlAggrFuncCallKeywords). It is reported,
 // since the next major release reads it as MySQL does.
 func TestSpacedAggrCallsWithoutIgnoreSpace(t *testing.T) {
+	spaced := func(names ...string) []SpacedAggrCall {
+		calls := make([]SpacedAggrCall, 0, len(names))
+		for _, name := range names {
+			calls = append(calls, SpacedAggrCall{Name: name})
+		}
+		return calls
+	}
 	testcases := []struct {
 		input  string
 		output string
-		spaced []string
+		spaced []SpacedAggrCall
 	}{{
 		input:  "select count (1), sum (x), max (x), min (x) from t",
 		output: "select count(1), sum(x), max(x), min(x) from t",
-		spaced: []string{"count", "sum", "max", "min"},
+		spaced: spaced("count", "sum", "max", "min"),
 	}, {
 		input:  "select std (x), stddev (x), stddev_pop (x), stddev_samp (x), variance (x), var_pop (x), var_samp (x) from t",
 		output: "select std(x), stddev(x), stddev_pop(x), stddev_samp(x), variance(x), var_pop(x), var_samp(x) from t",
-		spaced: []string{"std", "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp"},
+		spaced: spaced("std", "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp"),
 	}, {
 		input:  "select bit_and (x), bit_or (x), bit_xor (x), json_arrayagg (a), json_objectagg (a, b), st_collect (g) from t",
 		output: "select bit_and(x), bit_or(x), bit_xor(x), json_arrayagg(a), json_objectagg(a, b), st_collect(g) from t",
-		spaced: []string{"bit_and", "bit_or", "bit_xor", "json_arrayagg", "json_objectagg", "st_collect"},
+		spaced: spaced("bit_and", "bit_or", "bit_xor", "json_arrayagg", "json_objectagg", "st_collect"),
 	}, {
 		// the aggregate's own argument syntax is available with the whitespace
 		input:  "select count (*), count (distinct a), group_concat (distinct a order by a separator ',') from t",
 		output: "select count(*), count(distinct a), group_concat(distinct a order by a asc separator ',') from t",
-		spaced: []string{"count", "group_concat"},
+		spaced: spaced("count", "group_concat"),
 	}, {
-		// a comment before the parenthesis is whitespace too
+		// a comment before the parenthesis keeps the aggregate too, and marks
+		// the call: MySQL reads it as a stored-function call under
+		// IGNORE_SPACE as well
 		input:  "select count/*c*/(*), sum /* c */ (x), max -- c\n(x) from t",
 		output: "select count(*), sum(x), max(x) from t",
-		spaced: []string{"count", "sum", "max"},
+		spaced: []SpacedAggrCall{{Name: "count", Comment: true}, {Name: "sum", Comment: true}, {Name: "max", Comment: true}},
 	}, {
 		// each name is reported once, lowercased, in order of first appearance
 		input:  "select SUM (a), Sum (b), count (c), sum(d) from t",
 		output: "select sum(a), sum(b), count(c), sum(d) from t",
-		spaced: []string{"sum", "count"},
+		spaced: spaced("sum", "count"),
 	}, {
 		// a spaced non-aggregate on the list is a stored-function call, as in
 		// MySQL, and is not reported
 		input:  "select sum (x), now (), substr (a, 1) from t",
 		output: "select sum(x), `now`(), `substr`(a, 1) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
 		// a bare aggregate name is a column, as in MySQL, and is not reported
 		input:  "select sum, count from t where max = 1",
@@ -264,11 +273,14 @@ func TestSpacedAggrCallsWithoutIgnoreSpace(t *testing.T) {
 // With IGNORE_SPACE in its sql_mode, the parser follows MySQL's IGNORE_SPACE
 // reading: the name is the keyword when '(' follows it, directly or after
 // whitespace, and an identifier otherwise, so whitespace before the
-// parenthesis is permitted and nothing is reported.
+// parenthesis is permitted and nothing is reported. An aggregate a comment
+// separates from its parenthesis is kept the aggregate under this reading
+// too in this release, and reported as such.
 func TestFuncNamesWithIgnoreSpace(t *testing.T) {
 	testcases := []struct {
 		input  string
 		output string
+		spaced []SpacedAggrCall
 	}{{
 		input:  "select now (), sum (x), count (*), cast (1 as char) from t",
 		output: "select now(), sum(x), count(*), cast(1 as char) from t",
@@ -277,9 +289,11 @@ func TestFuncNamesWithIgnoreSpace(t *testing.T) {
 		output: "select count(*), session_user(), substr(a, 1) from t",
 	}, {
 		// MySQL's lexer skips whitespace, not comments, before deciding
-		// whether '(' follows
-		input:  "select count/*c*/(1), sum /* c */ (x) from t",
-		output: "select `count`(1), `sum`(x) from t",
+		// whether '(' follows: a non-aggregate is then a stored-function
+		// call, an aggregate is kept and reported
+		input:  "select now/*c*/(), count/*c*/(1), sum /* c */ (x) from t",
+		output: "select `now`(), count(1), sum(x) from t",
+		spaced: []SpacedAggrCall{{Name: "count", Comment: true}, {Name: "sum", Comment: true}},
 	}, {
 		// with no parenthesis following, the name is an identifier, as
 		// without IGNORE_SPACE
@@ -306,7 +320,7 @@ func TestFuncNamesWithIgnoreSpace(t *testing.T) {
 			tree, _, spaced, err := parser.ParseWithSpacedAggrCalls(tcase.input)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.output, String(tree))
-			assert.Empty(t, spaced)
+			assert.Equal(t, tcase.spaced, spaced)
 		})
 	}
 
@@ -377,7 +391,7 @@ func TestParserSQLMode(t *testing.T) {
 			if tcase.ignoreSpace {
 				assert.Empty(t, spaced)
 			} else {
-				assert.Equal(t, []string{"sum"}, spaced)
+				assert.Equal(t, []SpacedAggrCall{{Name: "sum"}}, spaced)
 			}
 
 			// a spaced non-aggregate is the built-in with IGNORE_SPACE and a
@@ -412,7 +426,7 @@ func TestParse2MatchesParseWithSpacedAggrCalls(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, String(stmt), String(stmt2))
 	assert.Equal(t, bindVars, bindVars2)
-	assert.Equal(t, []string{"sum"}, spaced)
+	assert.Equal(t, []SpacedAggrCall{{Name: "sum"}}, spaced)
 }
 
 // Every name MySQL lexes as a keyword only directly before '('
@@ -482,7 +496,7 @@ func TestFuncCallKeywords(t *testing.T) {
 				stmt, _, spaced, err = parser.ParseWithSpacedAggrCalls(spacedForm)
 				require.NoError(t, err, spacedForm)
 				assert.Equal(t, String(keywordStmt), String(stmt), spacedForm)
-				assert.Equal(t, []string{name}, spaced, spacedForm)
+				assert.Equal(t, []SpacedAggrCall{{Name: name}}, spaced, spacedForm)
 			} else {
 				// without IGNORE_SPACE, a spaced non-aggregate is an identifier
 				// and the call takes the generic argument syntax whatever the

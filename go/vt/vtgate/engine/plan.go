@@ -46,20 +46,19 @@ type (
 		Instructions Primitive               // Instructions define how the query is executed.
 		BindVarNeeds *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
 		Warnings     []*querypb.QueryWarning // Warnings accumulates any warnings generated for this plan.
-		// SpacedAggrCallWarnings are the warnings of the text this plan
-		// executes without that text being parsed again: a prepared
-		// statement's own, or the executed statement's for an EXECUTE plan.
-		// They are replayed on every execution like Warnings, unless the
-		// session's sql_mode has IGNORE_SPACE (see
-		// sqlparser.Tokenizer.SpacedAggrCalls). A plan built for a statement
-		// that is parsed on every execution carries none, since its key is
-		// the normalized text, which spellings with and without the
-		// whitespace share.
-		SpacedAggrCallWarnings []*querypb.QueryWarning
-		TablesUsed             []string             // TablesUsed enumerates the tables this query accesses.
-		QueryHints             sqlparser.QueryHints // QueryHints stores any SET_VAR hints that influenced plan generation.
-		ParamsCount            uint16               // ParamsCount is the total number of bind parameters (?) in the query.
-		Optimized              atomic.Bool          // Prepared queries need to be optimized before the first execution
+		// SpacedAggrCalls are the aggregates the text this plan executes
+		// without parsing it again separates from their parenthesis: a
+		// prepared statement's own, or the executed statement's for an
+		// EXECUTE plan. Each is warned about on every execution, like
+		// Warnings (see sqlparser.Tokenizer.SpacedAggrCalls). A plan built
+		// for a statement that is parsed on every execution carries none,
+		// since its key is the normalized text, which spellings with and
+		// without the whitespace share.
+		SpacedAggrCalls []sqlparser.SpacedAggrCall
+		TablesUsed      []string             // TablesUsed enumerates the tables this query accesses.
+		QueryHints      sqlparser.QueryHints // QueryHints stores any SET_VAR hints that influenced plan generation.
+		ParamsCount     uint16               // ParamsCount is the total number of bind parameters (?) in the query.
+		Optimized       atomic.Bool          // Prepared queries need to be optimized before the first execution
 
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.

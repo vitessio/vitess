@@ -82,7 +82,7 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 
 // ParseWithSpacedAggrCalls parses like Parse2 and also returns the
 // Tokenizer's SpacedAggrCalls.
-func (p *Parser) ParseWithSpacedAggrCalls(sql string) (Statement, BindVars, []string, error) {
+func (p *Parser) ParseWithSpacedAggrCalls(sql string) (Statement, BindVars, []SpacedAggrCall, error) {
 	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
 		if tokenizer.partialDDL != nil {

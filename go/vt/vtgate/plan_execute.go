@@ -120,8 +120,8 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		var spacedAggrCallWarnings []*querypb.QueryWarning
-		plan, vcursor, stmt, spacedAggrCallWarnings, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
+		var spacedAggrCalls []sqlparser.SpacedAggrCall
+		plan, vcursor, stmt, spacedAggrCalls, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -145,15 +145,19 @@ func (e *Executor) newExecute(
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
 		}
-		// a prepared plan, or an EXECUTE plan, carries the warnings of the
-		// text it executes without parsing; any other statement's come from
-		// this execution's parse
-		if (len(plan.SpacedAggrCallWarnings) > 0 || len(spacedAggrCallWarnings) > 0) && !e.sessionSQLModeHas(safeSession, sqlmode.IgnoreSpace) {
-			for _, warning := range plan.SpacedAggrCallWarnings {
-				safeSession.RecordWarning(warning)
-			}
-			for _, warning := range spacedAggrCallWarnings {
-				safeSession.RecordWarning(warning)
+		// a prepared plan, or an EXECUTE plan, carries the spaced aggregate
+		// calls of the text it executes without parsing; any other
+		// statement's come from this execution's parse. A session whose
+		// sql_mode has IGNORE_SPACE is not warned about whitespace, which the
+		// mode permits; a comment is warned about under either mode.
+		if len(plan.SpacedAggrCalls) > 0 || len(spacedAggrCalls) > 0 {
+			ignoreSpace := e.sessionSQLModeHas(safeSession, sqlmode.IgnoreSpace)
+			for _, calls := range [][]sqlparser.SpacedAggrCall{plan.SpacedAggrCalls, spacedAggrCalls} {
+				for _, call := range calls {
+					if call.Comment || !ignoreSpace {
+						safeSession.RecordWarning(spacedAggrCallWarning(call))
+					}
+				}
 			}
 		}
 

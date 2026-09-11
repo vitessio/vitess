@@ -61,8 +61,8 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 			Params: eStmt.Arguments,
 			Input:  plan.Instructions,
 		},
-		tables:                 plan.TablesUsed,
-		spacedAggrCallWarnings: plan.SpacedAggrCallWarnings,
+		tables:          plan.TablesUsed,
+		spacedAggrCalls: plan.SpacedAggrCalls,
 	}, nil
 }
 

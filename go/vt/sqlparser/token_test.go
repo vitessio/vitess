@@ -262,8 +262,8 @@ func scanAll(tkn *Tokenizer) []int {
 // stream the parser does: a name directly after '.' is an identifier under
 // either reading, and a dot separated from the name by whitespace or a
 // comment does not qualify it. Away from '(' a name is an identifier
-// without IGNORE_SPACE and the keyword with it, except an aggregate before a
-// detached '(', which stays the keyword in this release.
+// without IGNORE_SPACE and the keyword with it, except an aggregate, which
+// stays the keyword under either reading in this release.
 func TestFuncCallKeywordAfterDot(t *testing.T) {
 	testcases := []struct {
 		in             string
@@ -298,11 +298,11 @@ func TestFuncCallKeywordAfterDot(t *testing.T) {
 		in:  "db.sum (1)",
 		ids: []int{ID, '.', ID, '(', INTEGRAL, ')'},
 	}, {
-		// an aggregate name stays the keyword, which the grammar reads as
-		// an identifier where one is expected, since it is non-reserved
-		in:             "cast, sum from t",
-		ids:            []int{ID, ',', SUM, FROM, ID},
-		ignoreSpaceIDs: []int{ID, ',', ID, FROM, ID},
+		// an aggregate name stays the keyword under either reading, which
+		// the grammar reads as an identifier where one is expected, since it
+		// is non-reserved
+		in:  "cast, sum from t",
+		ids: []int{ID, ',', SUM, FROM, ID},
 	}, {
 		in:  "now from t",
 		ids: []int{ID, FROM, ID},
@@ -334,54 +334,75 @@ func TestFuncCallKeywordAfterDot(t *testing.T) {
 // MySQL versioned comments included, and does not fire for a name in an
 // identifier position.
 func TestSpacedAggrCalls(t *testing.T) {
+	spaced := func(names ...string) []SpacedAggrCall {
+		calls := make([]SpacedAggrCall, 0, len(names))
+		for _, name := range names {
+			calls = append(calls, SpacedAggrCall{Name: name})
+		}
+		return calls
+	}
+	commented := func(names ...string) []SpacedAggrCall {
+		calls := spaced(names...)
+		for i := range calls {
+			calls[i].Comment = true
+		}
+		return calls
+	}
 	testcases := []struct {
 		in     string
-		spaced []string
+		spaced []SpacedAggrCall
 		err    string
 	}{{
 		in:     "select sum (x) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
 		in:     "select sum\t(x) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
 		in:     "select sum\n(x) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
 		in:     "select sum\r\n  (x) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
+		// a comment marks the call: MySQL reads it as a stored-function call
+		// under IGNORE_SPACE as well, so it is reported under either reading
 		in:     "select sum/*c*/(x) from t",
-		spaced: []string{"sum"},
+		spaced: commented("sum"),
 	}, {
 		in:     "select sum /* c */ /* d */ (x) from t",
-		spaced: []string{"sum"},
+		spaced: commented("sum"),
 	}, {
 		in:     "select sum -- c\n(x) from t",
-		spaced: []string{"sum"},
+		spaced: commented("sum"),
 	}, {
 		in:     "select sum # c\n(x) from t",
-		spaced: []string{"sum"},
+		spaced: commented("sum"),
 	}, {
 		// a versioned comment the server version satisfies is read as SQL,
 		// so the call is an aggregate call with a detached parenthesis
 		in:     "select count /*!50000 (id) */ from t",
-		spaced: []string{"count"},
+		spaced: commented("count"),
 	}, {
 		in:     "select sum /*!50000 */ (x) from t",
-		spaced: []string{"sum"},
+		spaced: commented("sum"),
 	}, {
 		// one the server version does not satisfy is skipped whole
 		in: "select /*!99999 sum */ (x) from t",
 	}, {
 		in:     "select SUM (x) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
 		in:     "select sum (a) + sum (b) from t",
-		spaced: []string{"sum"},
+		spaced: spaced("sum"),
 	}, {
 		in:     "select sum (a), count (b), sum (c) from t",
-		spaced: []string{"sum", "count"},
+		spaced: spaced("sum", "count"),
+	}, {
+		// a name separated by whitespace once and by a comment once is
+		// reported once, marked
+		in:     "select sum (a), sum/*c*/(b) from t",
+		spaced: commented("sum"),
 	}, {
 		// attached: not spaced
 		in: "select sum(x) from t",
@@ -419,19 +440,25 @@ func TestSpacedAggrCalls(t *testing.T) {
 	ignoreSpaceParser := newIgnoreSpaceTestParser(t)
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			_, _, spaced, err := parser.ParseWithSpacedAggrCalls(tcase.in)
+			_, _, got, err := parser.ParseWithSpacedAggrCalls(tcase.in)
 			if tcase.err != "" {
 				require.ErrorContains(t, err, tcase.err)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tcase.spaced, spaced)
+			assert.Equal(t, tcase.spaced, got)
 
-			// a parser whose sql_mode has IGNORE_SPACE reports nothing:
-			// under its mode the reading is MySQL's
-			_, _, ignoreSpaceSpaced, err := ignoreSpaceParser.ParseWithSpacedAggrCalls(tcase.in)
+			// a parser whose sql_mode has IGNORE_SPACE reports the calls a
+			// comment separates only: whitespace is the mode's own reading
+			var want []SpacedAggrCall
+			for _, call := range tcase.spaced {
+				if call.Comment {
+					want = append(want, call)
+				}
+			}
+			_, _, got, err = ignoreSpaceParser.ParseWithSpacedAggrCalls(tcase.in)
 			require.NoError(t, err)
-			assert.Empty(t, ignoreSpaceSpaced)
+			assert.Equal(t, want, got)
 		})
 	}
 }

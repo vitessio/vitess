@@ -4781,6 +4781,19 @@ func (cached *SingleStatement) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *SpacedAggrCall) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	return size
+}
+
 func (cached *StarExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

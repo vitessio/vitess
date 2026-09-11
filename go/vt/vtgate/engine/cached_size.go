@@ -857,11 +857,11 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field SpacedAggrCallWarnings []*vitess.io/vitess/go/vt/proto/query.QueryWarning
+	// field SpacedAggrCalls []vitess.io/vitess/go/vt/sqlparser.SpacedAggrCall
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.SpacedAggrCallWarnings)) * int64(8))
-		for _, elem := range cached.SpacedAggrCallWarnings {
-			size += elem.CachedSize(true)
+		size += hack.RuntimeAllocSize(int64(cap(cached.SpacedAggrCalls)) * int64(24))
+		for _, elem := range cached.SpacedAggrCalls {
+			size += elem.CachedSize(false)
 		}
 	}
 	// field TablesUsed []string
