@@ -270,7 +270,7 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 	}
 	return &Route{
 		unaryOperator: newUnaryOp(aj),
-		MergedWith:    []*Route{op2},
+		MergedWith:    append([]*Route{op2}, op1.MergedWith...),
 		Routing:       r,
 		Conditions:    conditions,
 	}

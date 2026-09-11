@@ -736,6 +736,10 @@
     },
     "main_2": {
       "tables": {
+        "sharded_sales_ref": {
+          "type": "reference",
+          "source": "user.sales"
+        },
         "unsharded_tab": {
           "columns": [
             {
