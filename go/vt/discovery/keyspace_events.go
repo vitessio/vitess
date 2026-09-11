@@ -512,7 +512,9 @@ func (mts MoveTablesState) String() string {
 //     the switch previously depended on some unrelated routing rule existing
 //     in the cluster; with none, the old any-rules-exist gate exited early
 //     too. Closing that window entirely would mean scanning shard records for
-//     every keyspace on every update, which is what this gate exists to avoid.
+//     every keyspace on every update, which is what this gate exists to avoid;
+//     https://github.com/vitessio/vitess/issues/21076 tracks giving vtgate a
+//     direct signal so the state no longer has to be inferred from the rules.
 //
 //   - A completed shard-by-shard migration leaves its source-keyspace shard
 //     routing rules in place indefinitely, so that source keyspace keeps
