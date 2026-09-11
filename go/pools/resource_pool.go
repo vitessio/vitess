@@ -268,6 +268,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 	rp.available.Add(1)
 }
 
+//nolint:contextcheck,nolintlint // Replacement resources must not inherit the context of the caller returning them.
 func (rp *ResourcePool) reopenResource(wrapper *resourceWrapper) {
 	if r, err := rp.factory(context.TODO()); err == nil {
 		wrapper.resource = r

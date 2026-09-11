@@ -315,6 +315,8 @@ func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnP
 // Close shuts down the pool. No connections will be returned from ConnPool.Get after calling this,
 // but calling ConnPool.Put is still allowed. This function will not return until all of the pool's
 // connections have been returned or the default PoolCloseTimeout has elapsed
+//
+//nolint:contextcheck,nolintlint // The no-context API owns its bounded shutdown timeout.
 func (pool *ConnPool[C]) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
 	defer cancel()
@@ -357,6 +359,7 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	return err
 }
 
+//nolint:contextcheck,nolintlint // Reopening is pool maintenance and uses a bounded pool-owned context.
 func (pool *ConnPool[C]) reopen() {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
@@ -892,6 +895,7 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	return nil
 }
 
+//nolint:contextcheck,nolintlint // Idle replacements use the pool lifetime so request cancellation cannot stop pool maintenance.
 func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	timeout := pool.IdleTimeout()
 	if timeout == 0 {

@@ -436,24 +436,30 @@ func sessionTokenToSession(sessionToken string) (*vtgatepb.Session, error) {
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
+	return c.begin(context.Background())
+}
+
+func (c *conn) begin(ctx context.Context) (driver.Tx, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// if we're loading from an existing session, we need to avoid starting a new transaction
 	if c.cfg.SessionToken != "" {
 		return c, nil
 	}
 
-	if _, err := c.Exec("begin", nil); err != nil {
+	if _, err := c.ExecContext(ctx, "begin", nil); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (c *conn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	// We don't use the context. The function signature accepts the context
-	// to signal to the driver that it's allowed to call Rollback on Cancel.
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if opts.Isolation != driver.IsolationLevel(0) || opts.ReadOnly {
 		return nil, errIsolationUnsupported
 	}
-	return c.Begin()
+	return c.begin(ctx)
 }
 
 func (c *conn) Commit() error {

@@ -61,6 +61,7 @@
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
     - **[General](#minor-changes-general)**
+        - [Administrative operations now honor caller cancellation](#general-context-cancellation)
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -665,6 +666,10 @@ The upgrade changes how `--compression-level` is interpreted for the lz4 engine.
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 ### <a id="minor-changes-general"/>General</a>
+
+#### <a id="general-context-cancellation"/>Administrative operations now honor caller cancellation</a>
+
+Several control-plane operations now stop when their caller disconnects or its deadline expires. This includes VTAdmin requests and discovery, MySQL hooks, binlog streamer connection setup, S3 backup-storage initialization, database transaction startup, and workflow progress queries. Lifecycle maintenance and recovery work that must finish remains detached from caller cancellation.
 
 #### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
 

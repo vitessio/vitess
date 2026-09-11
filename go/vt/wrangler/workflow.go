@@ -609,7 +609,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 
 // GetCopyProgress returns the progress of all tables being copied in the workflow
 func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
-	ctx := context.Background()
+	ctx := vrw.ctx
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
@@ -717,10 +717,10 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tablesStr)
 	for source := range sourcePrimaries {
 		ti, err := vrw.wr.ts.GetTablet(ctx, source)
-		tablet := ti.Tablet
 		if err != nil {
 			return nil, err
 		}
+		tablet := ti.Tablet
 		if err := getTableMetrics(tablet, query, &sourceRowCounts, &sourceTableSizes); err != nil {
 			return nil, err
 		}

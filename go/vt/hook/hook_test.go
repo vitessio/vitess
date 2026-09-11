@@ -112,6 +112,87 @@ func TestExecuteOptional(t *testing.T) {
 	}
 }
 
+func newCancelableHook(t *testing.T) (*Hook, string) {
+	t.Helper()
+	vtroot, err := vtenv.VtRoot()
+	require.NoError(t, err)
+
+	hookFile, err := os.CreateTemp(path.Join(vtroot, "vthook"), "cancel-hook-*")
+	require.NoError(t, err)
+	hookPath := hookFile.Name()
+	t.Cleanup(func() {
+		require.NoError(t, os.Remove(hookPath))
+	})
+	_, err = hookFile.WriteString("#!/bin/sh\nprintf started > \"$1\"\nexec sleep 30\n")
+	require.NoError(t, err)
+	require.NoError(t, hookFile.Chmod(0o755))
+	require.NoError(t, hookFile.Close())
+
+	startedPath := path.Join(t.TempDir(), "started")
+	return NewHook(path.Base(hookPath), []string{startedPath}), startedPath
+}
+
+func TestExecuteOptionalContext(t *testing.T) {
+	hook, startedPath := newCancelableHook(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- hook.ExecuteOptionalContext(ctx)
+	}()
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(startedPath)
+		return err == nil
+	}, 30*time.Second, 10*time.Millisecond)
+	cancel()
+
+	var hookErr error
+	require.Eventually(t, func() bool {
+		select {
+		case hookErr = <-errCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+	assert.ErrorIs(t, hookErr, context.Canceled)
+}
+
+func TestExecuteContextCanceled(t *testing.T) {
+	hook, startedPath := newCancelableHook(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	resultCh := make(chan *HookResult, 1)
+	go func() {
+		resultCh <- hook.ExecuteContext(ctx)
+	}()
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(startedPath)
+		return err == nil
+	}, 30*time.Second, 10*time.Millisecond)
+	cancel()
+
+	var result *HookResult
+	require.Eventually(t, func() bool {
+		select {
+		case result = <-resultCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+	assert.Equal(t, HOOK_TIMEOUT_ERROR, result.ExitStatus)
+}
+
+func TestExecuteContextCanceledWithMissingHook(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	hr := NewSimpleHook("nonexistent-hook").ExecuteContext(ctx)
+	assert.Equal(t, HOOK_DOES_NOT_EXIST, hr.ExitStatus)
+	assert.Contains(t, hr.Stderr, "missing hook")
+}
+
 func TestNewHook(t *testing.T) {
 	h := NewHook("test-hook", []string{"arg1", "arg2"})
 	assert.Equal(t, "test-hook", h.Name)

@@ -17,12 +17,31 @@ limitations under the License.
 package http
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestAdaptPropagatesRequestCancellation(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	request = request.WithContext(ctx)
+
+	var handlerErr error
+	handler := NewAPI(nil, Options{}).Adapt(func(ctx context.Context, _ Request, _ *API) *JSONResponse {
+		handlerErr = ctx.Err()
+		return NewJSONResponse(nil, nil)
+	})
+
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	require.ErrorIs(t, handlerErr, context.Canceled)
+}
 
 func TestDeprecateQueryParam(t *testing.T) {
 	t.Parallel()
