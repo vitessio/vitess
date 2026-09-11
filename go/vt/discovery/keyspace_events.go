@@ -483,7 +483,9 @@ func (mts MoveTablesState) String() string {
 
 // rulesReferenceKeyspace reports whether any routing rule in the SrvVSchema
 // references the given keyspace: as the keyspace qualifier of a table routing
-// rule's from-table or to-tables, or as an endpoint of a shard routing rule.
+// rule's from-table or to-tables, as an endpoint of a shard routing rule, or
+// as the source of a primary keyspace routing rule, which is how a
+// multi-tenant migration routes writes away from its source keyspace.
 //
 // This is safe to use as a MoveTables gate because the traffic switcher always
 // writes keyspace-qualified rule variants naming both the source and the
@@ -501,8 +503,7 @@ func (mts MoveTablesState) String() string {
 //     a workflow previously depended on some unrelated routing rule existing
 //     in the cluster (with none, the old any-rules-exist gate exited early
 //     too), and with --no-routing-rules the operator has taken over routing
-//     anyway. The same holds for multi-tenant migrations, which use keyspace
-//     routing rules and no denied tables, so the scan would find nothing.
+//     anyway.
 //
 //   - A completed shard-by-shard migration leaves its source-keyspace shard
 //     routing rules in place indefinitely, so that source keyspace keeps
@@ -523,6 +524,24 @@ func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 	}
 	for _, rule := range vs.GetShardRoutingRules().GetRules() {
 		if rule.GetFromKeyspace() == keyspace || rule.GetToKeyspace() == keyspace {
+			return true
+		}
+	}
+	return keyspaceRoutedAway(vs, keyspace)
+}
+
+// keyspaceRoutedAway reports whether a primary keyspace routing rule sends the
+// given keyspace's writes to another keyspace, which is what SwitchWrites does
+// for a multi-tenant migration: it points the source keyspace's primary rule at
+// the target and leaves the denied tables it added on the source shards in
+// place. Only the rule for primaries is considered, and only where the keyspace
+// is the source: the target of such a rule has no denied tables of its own to
+// find, so admitting it would reintroduce the shard scan this gate exists to
+// avoid. Rules for the other tablet types carry an @replica or @rdonly suffix
+// in their from-keyspace and so never match here.
+func keyspaceRoutedAway(vs *vschemapb.SrvVSchema, keyspace string) bool {
+	for _, rule := range vs.GetKeyspaceRoutingRules().GetRules() {
+		if rule.GetFromKeyspace() == keyspace && rule.GetToKeyspace() != keyspace {
 			return true
 		}
 	}
@@ -619,6 +638,14 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 			log.Info(fmt.Sprintf("onSrvKeyspace::  keyspace %s writes have been switched for table %s, rule %v", kss.keyspace, oneDeniedTable, r[0]))
 		}
 	}
+	// A multi-tenant migration routes whole keyspaces rather than tables, so it
+	// writes no table rule for the denied table found above to match against.
+	// Its writes are switched once the source keyspace's primary rule points at
+	// the target.
+	if mtState.State != MoveTablesSwitched && keyspaceRoutedAway(vs, kss.keyspace) {
+		mtState.State = MoveTablesSwitched
+		log.Info(fmt.Sprintf("onSrvKeyspace:: keyspace %s writes have been switched by a keyspace routing rule", kss.keyspace))
+	}
 	log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
 
 	return mtState, nil
@@ -689,7 +716,8 @@ func (kss *keyspaceState) isServing() bool {
 }
 
 // onSrvVSchema is called from a Watcher in the topo server whenever the SrvVSchema is updated by Vitess.
-// For the purposes here, we are interested in updates to the RoutingRules or ShardRoutingRules.
+// For the purposes here, we are interested in updates to the RoutingRules,
+// ShardRoutingRules or KeyspaceRoutingRules.
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard
 // record is modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
