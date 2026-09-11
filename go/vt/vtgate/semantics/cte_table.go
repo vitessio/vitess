@@ -129,10 +129,18 @@ func (cte *CTETable) dependencies(colName string, org originable) (dependencies,
 }
 
 func (cte *CTETable) getExprFor(s string) (sqlparser.Expr, error) {
-	for _, se := range cte.Query.GetColumns() {
+	selectExprs := cte.Query.GetColumns()
+	useDeclared := len(cte.Columns) == len(selectExprs)
+	for i, se := range selectExprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.VT09015()
+		}
+		if useDeclared {
+			if cte.Columns[i].EqualString(s) {
+				return ae.Expr, nil
+			}
+			continue
 		}
 		if ae.ColumnName() == s {
 			return ae.Expr, nil
