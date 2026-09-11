@@ -1572,7 +1572,8 @@ func logSpacedAggrCalls(parser *sqlparser.Parser, query string, calls []sqlparse
 	for _, call := range calls {
 		names = append(names, call.Name)
 	}
-	spacedAggrCallLogger.Warningf("query separates an aggregate name from its parenthesis, which the next major release reads as a stored-function call: names=%s normalized_query=%q", strings.Join(names, ","), piiSafeSQL)
+	spacedAggrCallLogger.Warn("query separates an aggregate name from its parenthesis, which the next major release reads as a stored-function call",
+		slog.String("names", strings.Join(names, ",")), slog.String("normalized_query", piiSafeSQL))
 }
 
 // spacedAggrCallWarning is the warning for an aggregate a query separates

@@ -285,9 +285,9 @@ var unsupportedModes = []Mode{
 // additionally rejects the modes that change how SQL text is interpreted (LexerModes) and
 // that the Vitess parser does not honor. It returns the expanded mode, whose String form
 // is the canonical value MySQL would report back for @@sql_mode. Both vtgate (SET
-// statements, the --sql-mode flag) and vttablet (settings, SET_VAR hints, SET statements
-// from older vtgates or direct clients) validate with this, so the same value fails with
-// the same error at either layer.
+// statements) and vttablet (settings, SET_VAR hints, SET statements from older vtgates
+// or direct clients) validate with this, so the same value fails with the same error at
+// either layer.
 func Validate(value sqltypes.Value) (Mode, error) {
 	mode, err := FromValue(value)
 	if err != nil {

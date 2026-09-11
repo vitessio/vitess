@@ -61,6 +61,12 @@ func (tl *ThrottledLogger) GetLastLogTime() time.Time {
 }
 
 func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
+	tl.emit(logF, 3, fmt.Sprintf(tl.name+": "+format, v...))
+}
+
+// emit logs msg with attrs if not throttled. depth is the number of frames
+// between the call site to report and emit's own.
+func (tl *ThrottledLogger) emit(logF logFunc, depth int, msg string, attrs ...slog.Attr) {
 	now := time.Now()
 
 	tl.mu.Lock()
@@ -69,7 +75,7 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
 	logWaitTime := tl.maxInterval - now.Sub(tl.lastlogTime)
 	if logWaitTime < 0 {
 		tl.lastlogTime = now
-		logF(2, fmt.Sprintf(tl.name+": "+format, v...))
+		logF(depth, msg, attrs...)
 		return
 	}
 
@@ -103,4 +109,19 @@ func (tl *ThrottledLogger) Warningf(format string, v ...any) {
 // Errorf logs an error if not throttled.
 func (tl *ThrottledLogger) Errorf(format string, v ...any) {
 	tl.log(errorDepth, format, v...)
+}
+
+// Info logs msg with attrs at info level if not throttled.
+func (tl *ThrottledLogger) Info(msg string, attrs ...slog.Attr) {
+	tl.emit(infoDepth, 2, tl.name+": "+msg, attrs...)
+}
+
+// Warn logs msg with attrs at warning level if not throttled.
+func (tl *ThrottledLogger) Warn(msg string, attrs ...slog.Attr) {
+	tl.emit(warnDepth, 2, tl.name+": "+msg, attrs...)
+}
+
+// Error logs msg with attrs at error level if not throttled.
+func (tl *ThrottledLogger) Error(msg string, attrs ...slog.Attr) {
+	tl.emit(errorDepth, 2, tl.name+": "+msg, attrs...)
 }
