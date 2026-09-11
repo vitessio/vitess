@@ -926,6 +926,92 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			wantType:     MoveTablesRegular,
 			wantState:    MoveTablesSwitching,
 		},
+		{
+			// Stale shard routing rules of some other keyspace -- a completed
+			// shard-by-shard migration leaves its source's rules in place --
+			// must not capture a multi-tenant source mid-switch as
+			// shard-by-shard, which would report it switched while its writes
+			// are still denied. The classification is scoped to rules naming
+			// this keyspace, and the keyspace route decides first.
+			name: "multi-tenant MoveTables while switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			name: "multi-tenant MoveTables after switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// A stale rule of this very keyspace, left by an earlier completed
+			// shard-by-shard migration of it, would otherwise hold a switched
+			// multi-tenant source at Switching indefinitely: the rule's key
+			// matches a denied shard. The keyspace route takes precedence.
+			name: "multi-tenant MoveTables after switching writes with stale shard rules of this keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "oldtarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The same scoping protects a regular MoveTables: another
+			// keyspace's stale shard rules used to turn it into ShardByShard
+			// and skip the table-rule check that reports it switched.
+			name: "regular MoveTables after switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -649,8 +649,43 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 		return mtState, nil
 	}
 
-	// Check if a shard by shard migration is in progress and if so detect if it has been switched.
-	isPartialTables := vs.GetShardRoutingRules() != nil && len(vs.GetShardRoutingRules().GetRules()) > 0
+	// A primary keyspace routing rule naming this keyspace as its source
+	// decides first. It is what a multi-tenant migration writes, that
+	// migration is validated as exclusive with a shard-by-shard one and writes
+	// no table rule, and the classifications below would otherwise capture
+	// it: a stale shard routing rule left by a completed shard-by-shard
+	// migration -- of this keyspace or of any other -- would report a
+	// multi-tenant source as shard-by-shard, releasing buffering while its
+	// writes are still denied, or holding it after they have switched. Writes
+	// are switched once the rule points somewhere else; while it still points
+	// at the keyspace itself the denied tables are in place but the route has
+	// not moved. A manual route (ApplyKeyspaceRoutingRules) on a keyspace that
+	// is also under a table or shard-by-shard migration is classified here too,
+	// see the limits on rulesReferenceKeyspace.
+	if to, routed := primaryKeyspaceRoute(vs, kss.keyspace); routed {
+		mtState.Typ = MoveTablesRegular
+		mtState.State = MoveTablesSwitching
+		if to != kss.keyspace {
+			mtState.State = MoveTablesSwitched
+			log.Info("MoveTables writes switched by a keyspace routing rule",
+				slog.String("keyspace", kss.keyspace), slog.String("routedTo", to))
+		}
+		log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
+		return mtState, nil
+	}
+
+	// Check if a shard by shard migration of this keyspace is in progress and
+	// if so detect if it has been switched. Only shard routing rules naming
+	// this keyspace as their source count: a rule for another keyspace, stale
+	// or not, says nothing about this one, and every keyspace on every vtgate
+	// sees the whole cluster's rules here.
+	isPartialTables := false
+	for _, rule := range vs.GetShardRoutingRules().GetRules() {
+		if rule.GetFromKeyspace() == kss.keyspace {
+			isPartialTables = true
+			break
+		}
+	}
 
 	if isPartialTables {
 		srr := topotools.GetShardRoutingRulesMap(vs.GetShardRoutingRules())
@@ -680,17 +715,6 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 			mtState.State = MoveTablesSwitched
 			log.Info(fmt.Sprintf("onSrvKeyspace::  keyspace %s writes have been switched for table %s, rule %v", kss.keyspace, oneDeniedTable, r[0]))
 		}
-	}
-	// A multi-tenant migration routes whole keyspaces rather than tables, so it
-	// writes no table rule for the denied table found above to match against.
-	// Its writes are switched once the source keyspace's primary rule points
-	// somewhere else; while it still points at the keyspace itself the denied
-	// tables are in place but the route has not moved, which is the Switching
-	// the state was initialized to above.
-	if to, routed := primaryKeyspaceRoute(vs, kss.keyspace); routed && to != kss.keyspace {
-		mtState.State = MoveTablesSwitched
-		log.Info("MoveTables writes switched by a keyspace routing rule",
-			slog.String("keyspace", kss.keyspace), slog.String("routedTo", to))
 	}
 	log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
 
