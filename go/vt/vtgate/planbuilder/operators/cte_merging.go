@@ -17,11 +17,20 @@ limitations under the License.
 package operators
 
 import (
+	"io"
+	"slices"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
+	if pushedIntoDerivedTable(ctx, in) {
+		return in, NoRewrite
+	}
+
 	op := tryMergeCTE(ctx, in.Seed(), in.Term(), in)
 	if op == nil {
 		return in, NoRewrite
@@ -30,9 +39,26 @@ func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator
 	return op, Rewrote("Merged CTE")
 }
 
+// pushedIntoDerivedTable reports whether a recursion predicate was rewritten into
+// a derived table of the term, where its original columns are out of scope. Its
+// current form then reads columns, but none from the tables its original reads.
+func pushedIntoDerivedTable(ctx *plancontext.PlanningContext, in *RecurseCTE) bool {
+	for _, pred := range in.Predicates {
+		jp, ok := pred.RightExpr.(*predicates.JoinPredicate)
+		if !ok || nothingNeedsFetching(ctx, jp.Current()) {
+			continue
+		}
+		tables := ctx.SemTable.DirectDeps(pred.Original).Remove(in.LeftID)
+		if !ctx.SemTable.DirectDeps(jp.Current()).IsOverlapping(tables) {
+			return true
+		}
+	}
+	return false
+}
+
 func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *RecurseCTE) *Route {
 	seedRoute, termRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, seed, term)
-	if seedRoute == nil {
+	if seedRoute == nil || routesOnRecursion(routingB, in) {
 		return nil
 	}
 
@@ -52,6 +78,32 @@ func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *Recu
 	default:
 		return nil
 	}
+}
+
+// routesOnRecursion reports whether r routes on an argument that only the
+// RecurseCTE binds, which a merged route would leave unbound
+func routesOnRecursion(r Routing, in *RecurseCTE) bool {
+	tr, ok := r.(*ShardedRouting)
+	if !ok {
+		return false
+	}
+	found := false
+	for _, expr := range tr.VindexExpressions() {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			arg, ok := node.(*sqlparser.Argument)
+			if !ok {
+				return true, nil
+			}
+			for _, pred := range in.Predicates {
+				if slices.ContainsFunc(pred.LeftExprs, func(bve plancontext.BindVarExpr) bool { return bve.Name == arg.Name }) {
+					found = true
+					return false, io.EOF
+				}
+			}
+			return true, nil
+		}, expr)
+	}
+	return found
 }
 
 func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in *RecurseCTE) *Route {
