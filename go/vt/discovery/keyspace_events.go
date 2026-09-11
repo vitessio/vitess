@@ -499,11 +499,20 @@ func (mts MoveTablesState) String() string {
 // Two deliberate limits of this gate:
 //
 //   - A workflow created with --no-routing-rules writes no rules at all, so
-//     its keyspaces exit early here. That is not a regression: detecting such
-//     a workflow previously depended on some unrelated routing rule existing
-//     in the cluster (with none, the old any-rules-exist gate exited early
-//     too), and with --no-routing-rules the operator has taken over routing
-//     anyway.
+//     its keyspaces exit early here while setupInitialDeniedTables still
+//     denies the tables on the target shards. That window is bounded by the
+//     first traffic switch: --no-routing-rules is a create-time request field
+//     that is never persisted on the workflow, and the traffic switcher never
+//     consults it, so changeWriteRoute writes the ordinary table routing rules
+//     naming both keyspaces at SwitchWrites, and the gate reports the workflow
+//     from then on — which is where the state is needed, since that is when
+//     denied tables move to the source and start failing live writes. Until
+//     then the flag means Vitess routes nothing to those target tables, so
+//     there is no traffic of its own to buffer. Detecting the workflow before
+//     the switch previously depended on some unrelated routing rule existing
+//     in the cluster; with none, the old any-rules-exist gate exited early
+//     too. Closing that window entirely would mean scanning shard records for
+//     every keyspace on every update, which is what this gate exists to avoid.
 //
 //   - A completed shard-by-shard migration leaves its source-keyspace shard
 //     routing rules in place indefinitely, so that source keyspace keeps

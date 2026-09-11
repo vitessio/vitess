@@ -732,6 +732,11 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		wantNoScan bool
 	}{
 		{
+			// Also the shape of a --no-routing-rules workflow between Create
+			// and its first traffic switch: setupInitialDeniedTables has
+			// denied the tables on the target shards, but no rule names the
+			// keyspace. It is deliberately not reported, and must not cost a
+			// scan; the case below pins that the switch itself is detected.
 			name:         "no routing rules",
 			vs:           &vschemapb.SrvVSchema{},
 			deniedShards: shards,
@@ -789,6 +794,10 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		{
 			// After SwitchWrites the rules point at the target keyspace; the
 			// source keyspace is still referenced by the qualified from-table.
+			// This is also what bounds the --no-routing-rules window: that
+			// flag is create-time only and the traffic switcher never consults
+			// it, so a workflow created with it reaches exactly this rule
+			// shape at SwitchWrites and is reported from then on.
 			name: "regular MoveTables after switching writes",
 			vs: &vschemapb.SrvVSchema{
 				RoutingRules: &vschemapb.RoutingRules{
