@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -205,18 +207,28 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	var specifiedKS string
-	for idx, tableSchema := range rp.SysTableTableSchema {
+	names := make([]string, 0, len(rp.SysTableTableSchema))
+	for _, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
-		ks := result.Value(vcursor.ConnCollation()).ToString()
-		switch {
-		case idx == 0:
-			specifiedKS = ks
-		case specifiedKS != ks:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		ks, err := schemaName(result, vcursor.ConnCollation())
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, ks)
+	}
+	// A predicate naming no schema ("") makes the query match nothing;
+	// otherwise all predicates must name the same schema.
+	var specifiedKS string
+	if !slices.Contains(names, "") {
+		for _, ks := range names {
+			if specifiedKS == "" {
+				specifiedKS = ks
+			} else if ks != specifiedKS {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+			}
 		}
 	}
 
@@ -228,9 +240,21 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		if err != nil {
 			return nil, err
 		}
-		tabName := val.Value(vcursor.ConnCollation()).ToString()
+		var tabName string
+		if tuple := val.TupleValues(); tuple != nil {
+			// Write the dedicated tblBvName, never the client's (possibly
+			// shared) list. Only a one-element list routes.
+			if len(tuple) != 1 {
+				bindVars[tblBvName] = tupleBindVariable(tuple)
+				continue
+			}
+			tabName = tuple[0].ToString()
+			bindVars[tblBvName] = tupleOfOneBindVariable(tabName)
+		} else {
+			tabName = val.Value(vcursor.ConnCollation()).ToString()
+			bindVars[tblBvName] = sqltypes.StringBindVariable(tabName)
+		}
 		tableNames[tblBvName] = tabName
-		bindVars[tblBvName] = sqltypes.StringBindVariable(tabName)
 	}
 
 	// if the table_schema is system schema, route to default keyspace.
@@ -281,29 +305,78 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 		if err != nil {
 			return nil, err
 		}
-
-		if routedTable != nil {
-			// if we were able to find information about this table, let's use it
-
-			// check if the query is send to single keyspace.
-			if routedKs == nil {
-				routedKs = routedTable.Keyspace
-			}
-			if routedKs.Name != routedTable.Keyspace.Name {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot send the query to multiple keyspace due to different table_name: %s, %s", routedKs.Name, routedTable.Keyspace.Name)
-			}
-
-			shards, _, err := vcursor.ResolveDestinations(ctx, routedTable.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
-			bindVars[tblBvName] = sqltypes.StringBindVariable(routedTable.Name.String())
-			if tableSchema != "" {
-				setReplaceSchemaName(bindVars)
-			}
-			return shards, err
+		if routedTable == nil {
+			// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
+			setSysTableNameBindVar(bindVars, tblBvName, tableName)
+			continue
 		}
-		// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
-		bindVars[tblBvName] = sqltypes.StringBindVariable(tableName)
+		// check if the query is send to single keyspace.
+		if routedKs == nil {
+			routedKs = routedTable.Keyspace
+		}
+		if routedKs.Name != routedTable.Keyspace.Name {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot send the query to multiple keyspace due to different table_name: %s, %s", routedKs.Name, routedTable.Keyspace.Name)
+		}
+		setSysTableNameBindVar(bindVars, tblBvName, routedTable.Name.String())
 	}
-	return nil, nil
+	if routedKs == nil {
+		return nil, nil
+	}
+	shards, _, err := vcursor.ResolveDestinations(ctx, routedKs.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
+	if tableSchema != "" {
+		setReplaceSchemaName(bindVars)
+	}
+	return shards, err
+}
+
+// setSysTableNameBindVar keeps the TUPLE shape an `in ::name` predicate expects.
+func setSysTableNameBindVar(bindVars map[string]*querypb.BindVariable, name, value string) {
+	if bv, ok := bindVars[name]; ok && bv.Type == querypb.Type_TUPLE {
+		bindVars[name] = tupleOfOneBindVariable(value)
+		return
+	}
+	bindVars[name] = sqltypes.StringBindVariable(value)
+}
+
+// tupleOfOneBindVariable builds a one-element TUPLE bind variable.
+func tupleOfOneBindVariable(value string) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: querypb.Type_VARCHAR, Value: []byte(value)}},
+	}
+}
+
+// tupleBindVariable builds a TUPLE bind variable holding the given values.
+func tupleBindVariable(values []sqltypes.Value) *querypb.BindVariable {
+	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+	for _, value := range values {
+		bv.Values = append(bv.Values, sqltypes.ValueToProto(value))
+	}
+	return bv
+}
+
+// schemaName returns the one schema name a predicate admits, skipping NULL list
+// elements (an all-NULL list yields "", matching nothing like `= NULL`). A list
+// naming several schemas is rejected: predicates may be on different schema
+// columns, so no other predicate can narrow it.
+func schemaName(result evalengine.EvalResult, coll collations.ID) (string, error) {
+	tuple := result.TupleValues()
+	if tuple == nil {
+		return result.Value(coll).ToString(), nil
+	}
+	var name string
+	found := false
+	for _, val := range tuple {
+		if val.IsNull() {
+			continue
+		}
+		if s := val.ToString(); !found {
+			name, found = s, true
+		} else if s != name {
+			return "", vterrors.VT12001("IN list with more than one distinct schema name in an information_schema query")
+		}
+	}
+	return name, nil
 }
 
 func (rp *RoutingParameters) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
