@@ -46,6 +46,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
@@ -3750,6 +3751,34 @@ func TestExecutorSpacedAggrCallWarning(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
 	require.NoError(t, err)
 	assert.Len(t, session.Warnings, 1)
+
+	// the stored sql_mode is parsed once and memoized on the session; a
+	// changed value is parsed again
+	session = newSession("'IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, session.Warnings)
+	memo, ok := session.SQLModeMemo("'IGNORE_SPACE'")
+	require.True(t, ok)
+	assert.Equal(t, sqlmode.IgnoreSpace, memo)
+	session.SetSystemVariable("sql_mode", "'STRICT_TRANS_TABLES'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.Warnings, 1)
+	memo, ok = session.SQLModeMemo("'STRICT_TRANS_TABLES'")
+	require.True(t, ok)
+	assert.Equal(t, sqlmode.StrictTransTables, memo)
+
+	// a query that skips the plan cache is built for every execution: its
+	// warning reaches the client each time, and it is counted once at most
+	before = counter()
+	session = newSession("")
+	for range 2 {
+		_, err = executorExecSession(ctx, executor, session, "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ sum (id) from main1", nil)
+		require.NoError(t, err)
+		require.Len(t, session.Warnings, 1)
+	}
+	assert.Equal(t, before, counter(), "a plan built for every execution is not counted")
 
 	// a binary-typed stored value carries its introducer, and an empty mode
 	// withholds nothing

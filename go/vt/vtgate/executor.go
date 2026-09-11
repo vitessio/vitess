@@ -1443,11 +1443,11 @@ func (e *Executor) getCachedOrBuildPlan(
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
-			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, !ignoreCache)
+			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, true)
 		})
 		return plan, cached, stmt, err
 	}
-	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, !ignoreCache)
+	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, false)
 	return plan, false, stmt, err
 }
 
@@ -1521,11 +1521,14 @@ func (e *Executor) buildStatement(
 
 // spacedAggrCallWarnings builds the warnings for the aggregate names the
 // query separates from their parenthesis with whitespace or a comment (see
-// sqlparser.Tokenizer.SpacedAggrCalls). When count is set, which it is for
-// every build but the re-planning of a prepared statement, it also counts
-// the query once and logs it, so that operators can find the queries whose
-// meaning the next major release changes. The logged query is redacted, and
-// so printed in its normalized form, with the parentheses attached.
+// sqlparser.Tokenizer.SpacedAggrCalls). When count is set, which it is when
+// the plan is built for the plan cache, it also counts the query once and
+// logs it, so that operators can find the queries whose meaning the next
+// major release changes. A plan built for every execution, because the query
+// or the session skips the plan cache, or a prepared statement's re-planning,
+// is not counted or logged again; its warnings still reach the client. The
+// logged query is redacted, and so printed in its normalized form, with the
+// parentheses attached.
 func (e *Executor) spacedAggrCallWarnings(query string, names []string, count bool) []*querypb.QueryWarning {
 	if len(names) == 0 {
 		return nil
@@ -1553,20 +1556,27 @@ func (e *Executor) spacedAggrCallWarnings(query string, names []string, count bo
 // sessionSQLModeHas reports whether the session's sql_mode, as a SET on the
 // session stored it, includes mode. A session that never set sql_mode runs
 // under the backend's, which carries no lexer mode (see
-// sqlmode.WithoutLexerModes).
+// sqlmode.WithoutLexerModes). The stored expression is parsed once per value
+// and memoized on the session.
 func (e *Executor) sessionSQLModeHas(session *econtext.SafeSession, mode sqlmode.Mode) bool {
-	var stored string
-	session.GetSystemVariables(func(name, value string) {
-		if name == sysvars.SQLMode.Name {
-			stored = value
-		}
-	})
+	stored := session.StoredSQLMode()
 	if stored == "" {
 		return false
 	}
+	current, ok := session.SQLModeMemo(stored)
+	if !ok {
+		current = e.parseStoredSQLMode(stored)
+		session.MemoSQLMode(stored, current)
+	}
+	return current&mode != 0
+}
+
+// parseStoredSQLMode returns the expanded sql_mode the stored expression
+// denotes, or zero when it is not a literal mode value.
+func (e *Executor) parseStoredSQLMode(stored string) sqlmode.Mode {
 	expr, err := e.env.Parser().ParseExpr(stored)
 	if err != nil {
-		return false
+		return 0
 	}
 	// a binary value is stored with its introducer, _binary'...'
 	if introducer, ok := expr.(*sqlparser.IntroducerExpr); ok {
@@ -1574,17 +1584,17 @@ func (e *Executor) sessionSQLModeHas(session *econtext.SafeSession, mode sqlmode
 	}
 	lit, ok := expr.(*sqlparser.Literal)
 	if !ok {
-		return false
+		return 0
 	}
 	value, err := sqlparser.LiteralToValue(lit)
 	if err != nil {
-		return false
+		return 0
 	}
 	current, err := sqlmode.FromValue(value)
 	if err != nil {
-		return false
+		return 0
 	}
-	return current.Expand()&mode != 0
+	return current.Expand()
 }
 
 func (e *Executor) debugCacheEntries() (items map[string]*engine.Plan) {

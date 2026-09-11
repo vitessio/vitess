@@ -27,6 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,6 +71,14 @@ type (
 		// This causes all queries to route to the specified tablet until cleared.
 		// Note: This is stored in the Go wrapper, not in the protobuf Session.
 		targetTabletAlias *topodatapb.TabletAlias
+
+		// sqlModeMemo holds the sql_mode parsed from the expression a SET
+		// stored on the session, keyed by that expression, so that a
+		// changed or reset value is parsed again.
+		sqlModeMemo struct {
+			stored string
+			mode   sqlmode.Mode
+		}
 
 		*vtgatepb.Session
 	}
@@ -697,6 +706,33 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+// StoredSQLMode returns the sql_mode expression a SET stored on the session,
+// or "" when none did.
+func (session *SafeSession) StoredSQLMode() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.SystemVariables[sysvars.SQLMode.Name]
+}
+
+// SQLModeMemo returns the sql_mode memoized for the stored expression, and
+// whether that expression is the one memoized.
+func (session *SafeSession) SQLModeMemo(stored string) (sqlmode.Mode, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if stored == "" || session.sqlModeMemo.stored != stored {
+		return 0, false
+	}
+	return session.sqlModeMemo.mode, true
+}
+
+// MemoSQLMode memoizes the sql_mode parsed from the stored expression.
+func (session *SafeSession) MemoSQLMode(stored string, mode sqlmode.Mode) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.sqlModeMemo.stored = stored
+	session.sqlModeMemo.mode = mode
 }
 
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
