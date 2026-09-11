@@ -906,6 +906,15 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
+		// A well-formed Before image carries one length per field (-1 for an
+		// omitted value). A shorter one would make MakeRowTrusted return a
+		// row that vals[pkIndex] indexes out of range, and a longer one would
+		// make MakeRowTrusted itself index fields out of range.
+		if len(rowDelete.Before.Lengths) != len(tp.Fields) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-delete change for table %s has a malformed Before image (%d values, expected %d)",
+				tp.TargetName, len(rowDelete.Before.Lengths), len(tp.Fields))
+		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {

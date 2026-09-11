@@ -1319,6 +1319,47 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
 	})
 
+	t.Run("short Before image returns an error instead of panicking", func(t *testing.T) {
+		// A Before image with fewer values than the table has fields used to
+		// make vals[pkIndex] index out of range once the PK column sat past
+		// the short row's end.
+		tp := newTablePlan()
+		tp.PKIndices = []bool{false, true}
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(1),
+			}),
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (1 values, expected 2)")
+		require.ErrorContains(t, err, "table t")
+		require.Empty(t, executed)
+	})
+
+	t.Run("long Before image returns an error instead of panicking", func(t *testing.T) {
+		// A Before image with more values than the table has fields used to
+		// make MakeRowTrusted itself index fields out of range.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(1),
+				sqltypes.NewVarChar("a"),
+				sqltypes.NewVarChar("extra"),
+			}),
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (3 values, expected 2)")
+		require.Empty(t, executed)
+	})
+
 	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
 		// A change with no Before image (an insert) riding in a bulk-delete
 		// event used to panic with a nil pointer dereference in MakeRowTrusted,
