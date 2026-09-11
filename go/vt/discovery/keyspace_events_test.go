@@ -812,6 +812,31 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			wantState:    MoveTablesSwitched,
 		},
 		{
+			// The switched rule set again, with a primary keyspace routing rule
+			// an operator applied by hand that routes the source keyspace to
+			// itself. A self route changes no routing (findRoutedKeyspace returns
+			// the keyspace unchanged and the table rules still apply) and an
+			// ordinary SwitchWrites never touches it, so it must not stop the
+			// table rules from reporting the writes as switched.
+			name: "regular MoveTables after switching writes with a manual self-routing keyspace rule",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
 			// A shard routing rule keyed by this keyspace exists for a denied
 			// shard (-80), so the keyspace is referenced, the scan runs, and
 			// getMoveTablesStatus reports Switching for that combination.

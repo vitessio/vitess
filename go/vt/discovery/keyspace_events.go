@@ -652,24 +652,29 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	// A primary keyspace routing rule naming this keyspace as its source
 	// decides first. It is what a multi-tenant migration writes, that
 	// migration is validated as exclusive with a shard-by-shard one and writes
-	// no table rule, and the classifications below would otherwise capture
-	// it: a stale shard routing rule left by a completed shard-by-shard
-	// migration -- of this keyspace or of any other -- would report a
-	// multi-tenant source as shard-by-shard, releasing buffering while its
-	// writes are still denied, or holding it after they have switched. Writes
-	// are switched once the rule points somewhere else; while it still points
-	// at the keyspace itself the denied tables are in place but the route has
-	// not moved. A manual route (ApplyKeyspaceRoutingRules) on a keyspace that
-	// is also under a table or shard-by-shard migration is classified here too,
-	// see the limits on rulesReferenceKeyspace.
-	if to, routed := primaryKeyspaceRoute(vs, kss.keyspace); routed {
+	// no table rule, and the shard-by-shard classification below would
+	// otherwise capture it: a stale shard routing rule left by a completed
+	// shard-by-shard migration of this keyspace would report a multi-tenant
+	// source as shard-by-shard, releasing buffering while its writes are
+	// still denied, or holding it after they have switched. Writes are
+	// switched once the rule points somewhere else. While it still points at
+	// the keyspace itself the route has not moved, but that decides nothing
+	// on its own: a self route is a no-op for routing (findRoutedKeyspace
+	// returns the keyspace unchanged and FindRoutedTable goes on to the table
+	// rules), and an operator can hold one by hand (ApplyKeyspaceRoutingRules)
+	// on a keyspace that is also the source of an ordinary MoveTables, whose
+	// SwitchWrites moves the table rules and leaves the self route alone. So a
+	// self route only rules out the shard-by-shard classification; the
+	// table-rule classification below still decides whether writes have
+	// switched, and with no table rule for a denied table -- the multi-tenant
+	// case -- reports them as not. See the limits on rulesReferenceKeyspace
+	// for what a manual route costs.
+	to, routed := primaryKeyspaceRoute(vs, kss.keyspace)
+	if routed && to != kss.keyspace {
 		mtState.Typ = MoveTablesRegular
-		mtState.State = MoveTablesSwitching
-		if to != kss.keyspace {
-			mtState.State = MoveTablesSwitched
-			log.Info("MoveTables writes switched by a keyspace routing rule",
-				slog.String("keyspace", kss.keyspace), slog.String("routedTo", to))
-		}
+		mtState.State = MoveTablesSwitched
+		log.Info("MoveTables writes switched by a keyspace routing rule",
+			slog.String("keyspace", kss.keyspace), slog.String("routedTo", to))
 		log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
 		return mtState, nil
 	}
@@ -678,12 +683,15 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	// if so detect if it has been switched. Only shard routing rules naming
 	// this keyspace as their source count: a rule for another keyspace, stale
 	// or not, says nothing about this one, and every keyspace on every vtgate
-	// sees the whole cluster's rules here.
+	// sees the whole cluster's rules here. A keyspace routing rule on this
+	// keyspace rules it out entirely, see above.
 	isPartialTables := false
-	for _, rule := range vs.GetShardRoutingRules().GetRules() {
-		if rule.GetFromKeyspace() == kss.keyspace {
-			isPartialTables = true
-			break
+	if !routed {
+		for _, rule := range vs.GetShardRoutingRules().GetRules() {
+			if rule.GetFromKeyspace() == kss.keyspace {
+				isPartialTables = true
+				break
+			}
 		}
 	}
 
