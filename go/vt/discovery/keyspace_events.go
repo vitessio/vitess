@@ -497,7 +497,7 @@ func (mts MoveTablesState) String() string {
 // the denied tables together. A keyspace not referenced by any rule therefore
 // cannot be part of an in-progress MoveTables.
 //
-// Three deliberate limits of this gate:
+// Four deliberate limits of this gate:
 //
 //   - A workflow created with --no-routing-rules writes no rules at all, so
 //     its keyspaces exit early here while setupInitialDeniedTables still
@@ -532,6 +532,20 @@ func (mts MoveTablesState) String() string {
 //     which used to go undetected entirely, currently requires.
 //     https://github.com/vitessio/vitess/issues/21076 tracks a direct signal
 //     that would remove the need to infer this from the rules at all.
+//
+//   - A shard-by-shard SwitchWrites denies the tables on the source
+//     (stopSourceWrites) before it rewrites the shard routing rules
+//     (changeWriteRoute), and until it does the only rule naming the source
+//     is the Create-time target.shard -> source, which references it as a
+//     to-keyspace. A SrvVSchema update landing in that window reports no
+//     migration for the source. Nothing is released by that: onSrvVSchema
+//     only re-checks consistency for a reported migration, and the
+//     any-rules-exist gate this replaces classified the same window as
+//     switched, since the source.shard rule does not exist yet. Admitting
+//     to-keyspaces would close it by scanning the source of every in-flight
+//     shard-by-shard migration from Create to SwitchWrites;
+//     https://github.com/vitessio/vitess/issues/21076 tracks the direct
+//     signal that would close it for free.
 func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 	prefix := keyspace + "."
 	for _, rule := range vs.GetRoutingRules().GetRules() {
@@ -548,12 +562,13 @@ func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 		// Only the rule's source: createDefaultShardRoutingRules writes
 		// target.shard -> source at Create, when a partial migration has no
 		// denied tables anywhere (setupInitialDeniedTables skips it), and
-		// changeWriteRoute replaces that with source.shard -> target as it
-		// denies the tables on the source. A reverse switch restores the
-		// first shape while moving the denied tables to the target, which is
-		// then that shape's source. So the keyspace holding denied tables is
-		// always a from-keyspace, and one referenced only as a to-keyspace
-		// has nothing for the scan to find.
+		// changeWriteRoute replaces that with source.shard -> target at
+		// SwitchWrites, after stopSourceWrites has denied the tables on the
+		// source. A reverse switch restores the first shape with the
+		// keyspaces swapped. So outside of SwitchWrites itself the keyspace
+		// holding denied tables is a from-keyspace, and one referenced only
+		// as a to-keyspace has nothing for the scan to find; the window
+		// inside SwitchWrites is the fourth limit above.
 		if rule.GetFromKeyspace() == keyspace {
 			return true
 		}
