@@ -840,7 +840,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(224)
+		size += int64(240)
 	}
 	// field Original string
 	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
@@ -854,6 +854,13 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Warnings)) * int64(8))
 		for _, elem := range cached.Warnings {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field SpacedAggrCallWarnings []*vitess.io/vitess/go/vt/proto/query.QueryWarning
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.SpacedAggrCallWarnings)) * int64(8))
+		for _, elem := range cached.SpacedAggrCallWarnings {
 			size += elem.CachedSize(true)
 		}
 	}

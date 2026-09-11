@@ -3674,7 +3674,7 @@ func (cached *Parser) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field version string
 	size += hack.RuntimeAllocSize(int64(len(cached.version)))
