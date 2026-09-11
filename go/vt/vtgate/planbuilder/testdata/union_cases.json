@@ -3310,5 +3310,50 @@
         "Query": "select c from (select 1 as c from dual where 1 != 1 union all select 2 from dual where 2 != 2) as sub"
       }
     }
+  },
+  {
+    "comment": "a derived table column list renames the UNION columns, so the offset cannot be resolved and the predicate stays above the UNION",
+    "query": "select * from (select uuid() from user union all select uuid() from user) sub(c) where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select uuid() from user union all select uuid() from user) sub(c) where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select uuid() from `user` where 1 != 1 union all select uuid() from `user` where 1 != 1) as sub(c) where 1 != 1",
+        "Query": "select c from (select uuid() from `user` union all select uuid() from `user`) as sub(c) where c != c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a branch narrower than the first one has nothing to inspect at that offset, so the predicate stays above the UNION",
+    "query": "select * from (select id, foo from user union all select * from user_extra) sub where foo = 'x'",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select id, foo from user union all select * from user_extra) sub where foo = 'x'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, foo from (select id, foo from `user` where 1 != 1 union all select * from user_extra where 1 != 1) as sub where 1 != 1",
+        "Query": "select id, foo from (select id, foo from `user` union all select * from user_extra) as sub where foo = 'x'"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

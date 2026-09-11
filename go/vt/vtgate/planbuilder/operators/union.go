@@ -137,25 +137,39 @@ func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 			return true, nil
 		}
 		idx, ok := offsets[col.Name.Lowered()]
-		if !ok {
-			// Not a column of the UNION - predicatePerSource panics on it, so leave the
-			// reporting there.
-			return true, nil
-		}
-		for i := range u.Sources {
-			for _, sel := range u.allSelectsFor(i) {
-				ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
-				// A leaf we cannot look inside counts as unsafe. Nothing reaches that today:
-				// NEXT VALUE does not parse inside a UNION branch, and * is expanded earlier.
-				if !ok || projectsVolatile(ctx, ae.Expr) {
-					safe = false
-					return false, io.EOF
-				}
-			}
+		// !ok is a column the UNION does not project, which a column list on the derived
+		// table produces: `sub(c)` renames them and the offsets no longer resolve.
+		if !ok || !u.canSubstituteAt(ctx, idx) {
+			safe = false
+			return false, io.EOF
 		}
 		return true, nil
 	}, expr)
 	return safe
+}
+
+// canSubstituteAt reports whether every leaf branch projects something at idx that substitution can
+// duplicate. A leaf the guard cannot inspect counts as unsafe.
+func (u *Union) canSubstituteAt(ctx *plancontext.PlanningContext, idx int) bool {
+	for i := range u.Sources {
+		for _, stmt := range u.allSelectsFor(i) {
+			// GetAllSelects also yields *ValuesStatement, which has no projection to inspect.
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return false
+			}
+			cols := sel.GetColumns()
+			// A branch narrower than the first one, which an unexpanded * can produce.
+			if idx >= len(cols) {
+				return false
+			}
+			ae, ok := cols[idx].(*sqlparser.AliasedExpr)
+			if !ok || projectsVolatile(ctx, ae.Expr) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // projectsVolatile reports whether a branch of the UNION projects a volatile expression, resolving
@@ -228,21 +242,15 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 	return exprPerSource
 }
 
-// allSelectsFor returns every leaf SELECT behind a source, where GetSelectFor returns only the
+// allSelectsFor returns every leaf statement behind a source, where GetSelectFor returns only the
 // first. `a union all b union all c` parses left-associatively, so source 0 of the outer UNION is
 // itself a union over a and b, and looking at the first SELECT alone would not see b.
-func (u *Union) allSelectsFor(source int) []*sqlparser.Select {
+func (u *Union) allSelectsFor(source int) []sqlparser.TableStatement {
 	src := u.Sources[source]
 	for {
 		switch op := src.(type) {
 		case *Horizon:
-			var sels []*sqlparser.Select
-			for _, stmt := range sqlparser.GetAllSelects(op.Query) {
-				if sel, ok := stmt.(*sqlparser.Select); ok {
-					sels = append(sels, sel)
-				}
-			}
-			return sels
+			return sqlparser.GetAllSelects(op.Query)
 		case *Route:
 			src = op.Source
 		default:
