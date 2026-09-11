@@ -1,0 +1,977 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vstreamclient
+
+import (
+	"context"
+	"errors"
+	"io"
+	"strings"
+	"testing"
+	"testing/synctest"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+)
+
+type stateExecuteResponse struct {
+	result *sqltypes.Result
+	err    error
+}
+
+type stateTestVTGateImpl struct {
+	testVTGateImpl
+	responses []stateExecuteResponse
+	queries   []string
+	bindVars  []map[string]*querypb.BindVariable
+
+	// rowImage overrides the binlog_row_image probe answer; empty means FULL.
+	// rowImageErr makes the probe fail, exercising the warn-and-continue path.
+	rowImage    string
+	rowImageErr bool
+
+	// vstreamErr makes VStream fail, exercising Run's failed-stream-setup path.
+	// vstreamBlocks makes VStream block until the context is canceled, exercising the
+	// startup-watchdog path for a hung stream setup.
+	vstreamErr    error
+	vstreamBlocks bool
+	recvBlocks    bool
+}
+
+func (t *stateTestVTGateImpl) VStream(ctx context.Context, _ topodatapb.TabletType, _ *binlogdatapb.VGtid, _ *binlogdatapb.Filter, _ *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+	if t.vstreamBlocks {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if t.vstreamErr != nil {
+		return nil, t.vstreamErr
+	}
+	if t.recvBlocks {
+		return &testVStreamReader{recvFn: func() ([]*binlogdatapb.VEvent, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}}, nil
+	}
+	return t.reader, nil
+}
+
+func (t *stateTestVTGateImpl) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
+	// answered non-positionally so the vschema probe doesn't disturb the positional response
+	// queues or query-index assertions; all fake keyspaces report unsharded
+	if query == "SHOW VSCHEMA KEYSPACES" {
+		return session, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("Keyspace|Sharded|Foreign Key|Comment", "varchar|varchar|varchar|varchar"),
+			"ks|false|unmanaged|",
+			"stateks|false|unmanaged|",
+		), nil
+	}
+
+	// answered non-positionally so the per-keyspace row-image probe doesn't disturb the
+	// positional response queues or query-index assertions
+	if strings.Contains(query, "binlog_row_image") {
+		if t.rowImageErr {
+			return session, nil, errors.New("binlog_row_image probe failed")
+		}
+		rowImage := t.rowImage
+		if rowImage == "" {
+			rowImage = "FULL"
+		}
+		return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_row_image", "varchar"), rowImage), nil
+	}
+
+	t.queries = append(t.queries, query)
+	t.bindVars = append(t.bindVars, bindVars)
+
+	if len(t.responses) == 0 {
+		return session, &sqltypes.Result{RowsAffected: 1}, nil
+	}
+
+	response := t.responses[0]
+	t.responses = t.responses[1:]
+	return session, response.result, response.err
+}
+
+func (t *stateTestVTGateImpl) BinlogDumpGTID(context.Context, string, string, topodatapb.TabletType, *topodatapb.TabletAlias, string, uint64, string, uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
+	return nil, errors.New("unexpected BinlogDumpGTID call")
+}
+
+func newStateTestSession(t *testing.T, responses ...stateExecuteResponse) (*vtgateconn.VTGateSession, *stateTestVTGateImpl) {
+	t.Helper()
+
+	impl := &stateTestVTGateImpl{responses: responses}
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+		return impl, nil
+	}, "")
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	return conn.Session("", nil), impl
+}
+
+func newStateTestConn(t *testing.T, responses ...stateExecuteResponse) (*vtgateconn.VTGateConn, *stateTestVTGateImpl) {
+	t.Helper()
+
+	impl := &stateTestVTGateImpl{responses: responses}
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+		return impl, nil
+	}, "")
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	return conn, impl
+}
+
+func stateRowResult(latestVGtid, tableConfig, copyCompleted sqltypes.Value) *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "latest_vgtid", Type: querypb.Type_JSON},
+			{Name: "table_config", Type: querypb.Type_JSON},
+			{Name: "copy_completed", Type: querypb.Type_VARCHAR},
+			{Name: "owner_token", Type: querypb.Type_VARBINARY},
+		},
+		Rows: [][]sqltypes.Value{{latestVGtid, tableConfig, copyCompleted, sqltypes.NewVarBinary("previous-owner")}},
+	}
+}
+
+func TestNewVGtid_DeduplicatesKeyspaces(t *testing.T) {
+	tables := map[string]*TableConfig{
+		"t1": {Keyspace: "ks1", Table: "table_a"},
+		"t2": {Keyspace: "ks1", Table: "table_b"},
+		"t3": {Keyspace: "ks2", Table: "table_c"},
+	}
+	shardsByKeyspace := map[string][]string{
+		"ks1": {"-80", "80-"},
+		"ks2": {"0"},
+	}
+
+	vgtid, err := newVGtid(tables, shardsByKeyspace)
+	require.NoError(t, err)
+	require.NotNil(t, vgtid)
+
+	counts := make(map[string]int)
+	for _, shardGtid := range vgtid.ShardGtids {
+		counts[shardGtid.Keyspace]++
+	}
+
+	assert.Equal(t, 2, counts["ks1"])
+	assert.Equal(t, 1, counts["ks2"])
+	assert.Len(t, vgtid.ShardGtids, 3)
+}
+
+func TestNewVGtid_MissingKeyspaceErrors(t *testing.T) {
+	tables := map[string]*TableConfig{
+		"t1": {Keyspace: "missing", Table: "table_a"},
+	}
+
+	_, err := newVGtid(tables, map[string][]string{"ks1": {"0"}})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "keyspace missing not found")
+}
+
+func TestGetLatestVGtid_MalformedStoredJSONErrors(t *testing.T) {
+	session, _ := newStateTestSession(t, stateExecuteResponse{result: stateRowResult(
+		sqltypes.NewVarBinary("not-json"),
+		sqltypes.NewVarBinary(`{"t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewInt64(1),
+	)})
+
+	_, _, _, _, _, err := getLatestVGtid(t.Context(), session, "stream", "ks", "state")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "failed to unmarshal latest_vgtid")
+}
+
+func TestGetLatestVGtid_MalformedCopyCompletedErrors(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	session, _ := newStateTestSession(t, stateExecuteResponse{result: stateRowResult(
+		sqltypes.NewVarBinary(string(vgtidJSON)),
+		sqltypes.NewVarBinary(`{"t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewVarBinary("not-a-bool"),
+	)})
+
+	_, _, _, _, _, err = getLatestVGtid(t.Context(), session, "stream", "ks", "state")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "failed to convert copy_completed to bool")
+}
+
+func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t where id < 10"}}`),
+			sqltypes.NewInt64(1),
+		))...,
+	)
+
+	_, err = New(t.Context(), "stream", conn, []TableConfig{{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t where id >= 10",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}}, WithStateTable("stateks", "state"))
+	require.Error(t, err)
+	require.ErrorContains(t, err, "provided tables do not match stored tables")
+	require.ErrorContains(t, err, "query changed")
+
+	// a failed constructor must not have fenced the running client: no insert or update may
+	// have touched the owner token
+	for _, query := range impl.queries {
+		if strings.HasPrefix(query, "update ") || strings.HasPrefix(query, "insert ") {
+			assert.NotContains(t, query, "owner_token")
+		}
+	}
+}
+
+func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(1),
+		))...,
+	)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}}, WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+	queriesAfterTakeover := len(impl.queries)
+
+	// an idle stream after resume has no buffered rows and an unchanged vgtid, so a flush
+	// (e.g. triggered by a heartbeat after minFlushDuration) must not rewrite the checkpoint:
+	// MySQL reports RowsAffected=0 for a no-op update, which updateLatestVGtid treats as an error
+	err = v.flush(t.Context(), false)
+	require.NoError(t, err)
+	assert.Len(t, impl.queries, queriesAfterTakeover)
+}
+
+func newStateTestTableConfig() TableConfig {
+	return TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}
+}
+
+// shardsAndStateTableResponses queues the responses New consumes before any state mutation:
+// SHOW VITESS_SHARDS, the create-table DDL, and the state row select. Later writes (claim,
+// insert, update) fall through to the fake's default RowsAffected=1 response.
+func shardsAndStateTableResponses(stateRow *sqltypes.Result) []stateExecuteResponse {
+	responses := []stateExecuteResponse{
+		{result: &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}, {sqltypes.NewVarBinary("stateks/0")}},
+		}},
+		{result: &sqltypes.Result{RowsAffected: 1}}, // create state table
+	}
+
+	if stateRow == nil {
+		stateRow = &sqltypes.Result{}
+	}
+	return append(responses, stateExecuteResponse{result: stateRow})
+}
+
+func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+
+	explicit := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: testConcretePosition}},
+	}
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
+	require.NoError(t, err)
+
+	// New itself must not write state; the takeover happens on Run
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+
+	// the caller provided a starting point and no state row exists, so a single insert persists
+	// the explicit vgtid together with copy_completed, and no copy phase runs, now or on restart
+	require.Len(t, impl.queries, 4)
+	assert.Contains(t, impl.queries[3], "insert into `stateks`.`state`")
+	assert.Equal(t, []byte("1"), impl.bindVars[3]["copy_completed"].Value)
+
+	expectedVGtidJSON, err := protojson.Marshal(explicit)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[3]["latest_vgtid"].Value))
+
+	// the client stores a clone of the caller-owned vgtid
+	assert.NotSame(t, explicit, v.latestVgtid)
+	assert.True(t, proto.Equal(explicit, v.latestVgtid))
+	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
+}
+
+func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
+	storedVGtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// the stored table config does not match the provided one; an ordinary resume would fail
+	// validation, but an explicit starting vgtid overwrites stored state instead
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(stateRowResult(
+		sqltypes.NewVarBinary(string(storedVGtidJSON)),
+		sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t where id < 10"}}`),
+		sqltypes.NewInt64(1),
+	))...)
+
+	explicit := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: testConcretePosition}},
+	}
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
+	require.NoError(t, err)
+
+	// New itself must not write state; the takeover happens on Run
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+
+	// the row exists, so the explicit position lands via a single compare-and-swap update that
+	// claims ownership and persists the position atomically
+	require.Len(t, impl.queries, 4)
+	assert.Contains(t, impl.queries[3], "update `stateks`.`state`")
+	assert.Contains(t, impl.queries[3], "set owner_token = :owner_token")
+	assert.Contains(t, impl.queries[3], "owner_token <=> :observed_owner_token")
+	assert.Equal(t, []byte("previous-owner"), impl.bindVars[3]["observed_owner_token"].Value)
+	assert.Equal(t, []byte("1"), impl.bindVars[3]["copy_completed"].Value)
+	expectedVGtidJSON, err := protojson.Marshal(explicit)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[3]["latest_vgtid"].Value))
+	assert.True(t, proto.Equal(explicit, v.latestVgtid))
+}
+
+func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
+	storedVGtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// stored state exists but copy_completed is false, so the copy must restart from the
+	// beginning instead of resuming from the stored vgtid
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(stateRowResult(
+		sqltypes.NewVarBinary(string(storedVGtidJSON)),
+		sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewInt64(0),
+	))...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	// New itself must not write state; the takeover happens on Run
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+
+	// the row exists, so the fresh copy position lands via a single compare-and-swap update
+	// that claims ownership atomically, and copy_completed is explicitly reset so a crash
+	// mid-copy is never mistaken for completed state
+	require.Len(t, impl.queries, 4)
+	assert.Contains(t, impl.queries[3], "update `stateks`.`state`")
+	assert.Contains(t, impl.queries[3], "set owner_token = :owner_token")
+	assert.Contains(t, impl.queries[3], "owner_token <=> :observed_owner_token")
+	assert.Equal(t, []byte("0"), impl.bindVars[3]["copy_completed"].Value)
+
+	freshVGtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: ""}},
+	}
+	expectedVGtidJSON, err := protojson.Marshal(freshVGtid)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[3]["latest_vgtid"].Value))
+
+	require.Len(t, v.latestVgtid.ShardGtids, 1)
+	assert.Empty(t, v.latestVgtid.ShardGtids[0].Gtid)
+	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
+}
+
+func resumableStateRow(t *testing.T) *sqltypes.Result {
+	t.Helper()
+
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	return stateRowResult(
+		sqltypes.NewVarBinary(string(vgtidJSON)),
+		sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewInt64(1),
+	)
+}
+
+func TestTakeStateOwnership_FencedWhenClaimLosesRace(t *testing.T) {
+	// the claim CAS affects zero rows: another client rotated the owner token between this
+	// client's state read and its takeover
+	conn, _ := newStateTestConn(t, append(
+		shardsAndStateTableResponses(resumableStateRow(t)),
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}},
+	)...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.takeStateOwnership(t.Context())
+	require.ErrorIs(t, err, ErrFenced)
+}
+
+func TestTakeStateOwnership_FencedWhenPersistLosesRace(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// copy-restart path: the CAS persist affects zero rows because the observed owner changed
+	conn, _ := newStateTestConn(t, append(
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(0),
+		)),
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}},
+	)...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.takeStateOwnership(t.Context())
+	require.ErrorIs(t, err, ErrFenced)
+}
+
+func TestTakeStateOwnership_FencedOnConcurrentBootstrapInsert(t *testing.T) {
+	// bootstrap path: a concurrent initializer inserted the row first, so the plain insert
+	// fails with a duplicate key, which maps to ErrFenced
+	conn, _ := newStateTestConn(t, append(
+		shardsAndStateTableResponses(nil),
+		stateExecuteResponse{err: errors.New("Duplicate entry 'stream' for key 'PRIMARY' (errno 1062) (sqlstate 23000)")},
+	)...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.takeStateOwnership(t.Context())
+	require.ErrorIs(t, err, ErrFenced)
+}
+
+func TestTakeStateOwnership_TwoConstructorsOnlyOneWins(t *testing.T) {
+	// two constructors read the same state (and thus the same observed owner token); only the
+	// first compare-and-swap can match, and the loser must fail with ErrFenced
+	impl := &stateTestVTGateImpl{responses: []stateExecuteResponse{
+		// constructor A: shards, create table, state row
+		shardsAndStateTableResponses(resumableStateRow(t))[0],
+		shardsAndStateTableResponses(resumableStateRow(t))[1],
+		shardsAndStateTableResponses(resumableStateRow(t))[2],
+		// constructor B: shards, create table, state row
+		shardsAndStateTableResponses(resumableStateRow(t))[0],
+		shardsAndStateTableResponses(resumableStateRow(t))[1],
+		shardsAndStateTableResponses(resumableStateRow(t))[2],
+		// A's claim CAS matches, B's does not
+		{result: &sqltypes.Result{RowsAffected: 1}},
+		{result: &sqltypes.Result{RowsAffected: 0}},
+	}}
+
+	dial := func() *vtgateconn.VTGateConn {
+		conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+			return impl, nil
+		}, "")
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		return conn
+	}
+
+	clientA, err := New(t.Context(), "stream", dial(), []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+	clientB, err := New(t.Context(), "stream", dial(), []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	require.NoError(t, clientA.takeStateOwnership(t.Context()))
+	require.ErrorIs(t, clientB.takeStateOwnership(t.Context()), ErrFenced)
+}
+
+func TestRun_FailedStreamSetupDoesNotFenceIncumbent(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(1),
+		))...,
+	)
+	impl.vstreamErr = errors.New("vstream unavailable")
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.Run(t.Context())
+	require.ErrorContains(t, err, "failed to create vstream")
+
+	// a Run that could not establish its stream must not have taken ownership: the incumbent
+	// consumer keeps checkpointing undisturbed
+	require.Len(t, impl.queries, 3)
+	for _, query := range impl.queries {
+		if strings.HasPrefix(query, "update ") || strings.HasPrefix(query, "insert ") {
+			assert.NotContains(t, query, "owner_token")
+		}
+	}
+}
+
+func TestRun_FailedFirstReceiveDoesNotFenceIncumbent(t *testing.T) {
+	rejected := errors.New("stream rejected")
+	for _, tt := range []struct {
+		name    string
+		recvErr error
+		wantErr error
+	}{
+		{name: "server rejection", recvErr: rejected, wantErr: rejected},
+		{name: "EOF", recvErr: io.EOF, wantErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+			impl.reader = &testVStreamReader{err: tt.recvErr}
+			v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"))
+			require.NoError(t, err)
+			queriesBeforeRun := len(impl.queries)
+
+			err = v.Run(t.Context())
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Len(t, impl.queries, queriesBeforeRun)
+			assert.True(t, v.stats.LastFlushedAt.IsZero())
+		})
+	}
+}
+
+func TestRun_FirstReceiveStartupTimeoutDoesNotFenceIncumbent(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+		impl.recvBlocks = true
+		v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"))
+		require.NoError(t, err)
+		queriesBeforeRun := len(impl.queries)
+		v.cfg.startupTimeout = 30 * time.Second
+
+		err = v.Run(t.Context())
+		require.ErrorIs(t, err, ErrStartupTimeout)
+		assert.Len(t, impl.queries, queriesBeforeRun)
+		assert.True(t, v.stats.LastFlushedAt.IsZero())
+	})
+}
+
+func TestRun_ClaimsAfterFirstBatchAndProcessesIt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+		processed := errors.New("first batch processed")
+		var v *VStreamClient
+		var firstReceivedAt time.Time
+		var hookCalls int
+		v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"),
+			WithEventFunc(func(context.Context, *binlogdatapb.VEvent) error {
+				hookCalls++
+				assert.Len(t, impl.queries, 4)
+				assert.False(t, v.stats.LastFlushedAt.Before(firstReceivedAt))
+				return processed
+			}, binlogdatapb.VEventType_HEARTBEAT))
+		require.NoError(t, err)
+		impl.reader = &testVStreamReader{recvFn: func() ([]*binlogdatapb.VEvent, error) {
+			require.Len(t, impl.queries, 3)
+			time.Sleep(2 * time.Second)
+			firstReceivedAt = time.Now()
+			return []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_HEARTBEAT}}, nil
+		}}
+
+		err = v.Run(t.Context())
+		require.ErrorIs(t, err, processed)
+		assert.Equal(t, 1, hookCalls)
+	})
+}
+
+func TestRun_BlockedStreamSetupSurfacesStartupTimeout(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+	impl.vstreamBlocks = true
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	// shrink the watchdog windows so the test completes quickly; the effective startup timeout
+	// is floored at the liveness window (1s here)
+	v.cfg.startupTimeout = 50 * time.Millisecond
+	v.cfg.heartbeatTimeoutMultiplier = 1
+	v.cfg.gracefulShutdownWaitDur = time.Millisecond
+
+	// the watchdog must cover a hung stream setup, and Run must surface the startup cause
+	// instead of the generic transport error
+	err = v.Run(t.Context())
+	require.ErrorIs(t, err, ErrStartupTimeout)
+
+	// a Run that never established its stream must not have taken ownership
+	require.Len(t, impl.queries, 3)
+}
+
+func TestNew_ClaimsStateOwnershipAfterValidatingState(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(1),
+		))...,
+	)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	// the ownership claim must run after state is read and validated (and only once Run has
+	// established the stream), so a constructor that fails validation, is abandoned, or cannot
+	// open its stream can never fence a healthy running client
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+	require.Len(t, impl.queries, 4)
+	assert.Contains(t, impl.queries[2], "select latest_vgtid")
+	assert.Contains(t, impl.queries[3], "set owner_token = :owner_token")
+	claimToken := impl.bindVars[3]["owner_token"].Value
+	assert.NotEmpty(t, claimToken)
+
+	// checkpoint writes must carry the same token the client claimed with
+	v.latestVgtid = &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+	err = v.flush(t.Context(), false)
+	require.NoError(t, err)
+
+	lastIdx := len(impl.queries) - 1
+	assert.Contains(t, impl.queries[lastIdx], "owner_token = :owner_token")
+	assert.Equal(t, claimToken, impl.bindVars[lastIdx]["owner_token"].Value)
+}
+
+func TestNew_RejectsNonFullBinlogRowImage(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+	impl.rowImage = "NOBLOB"
+
+	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.ErrorContains(t, err, "requires FULL")
+}
+
+func TestNew_UnqueryableBinlogRowImageFailsClosed(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+	impl.rowImageErr = true
+
+	// an unverifiable shard must fail closed: a shard we cannot probe could be running NOBLOB,
+	// which silently corrupts delete before-images
+	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.ErrorContains(t, err, "could not verify binlog_row_image")
+}
+
+func TestNew_SkipRowImageCheckBypassesProbe(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+	impl.rowImageErr = true
+
+	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"), WithSkipRowImageCheck())
+	require.NoError(t, err)
+}
+
+func TestNew_NilTableConfigEntryReportsStructuredError(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// a null entry is valid JSON; it must surface as a state-validation error, not a panic
+	conn, _ := newStateTestConn(
+		t,
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":null}`),
+			sqltypes.NewInt64(1),
+		))...,
+	)
+
+	_, err = New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.ErrorContains(t, err, "provided tables do not match stored tables")
+}
+
+func TestHandleEvents_HeartbeatMidTransactionDefersFlush(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	flushed := 0
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 10,
+		FlushFn: func(_ context.Context, rows []Row, _ FlushMeta) error {
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "buffered"}},
+	}
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		stats:   VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables:  map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	// with TransactionChunkSize enabled, a heartbeat can arrive between a BEGIN and its COMMIT;
+	// flushing there would expose uncommitted rows and checkpoint a transaction prefix
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	assert.Zero(t, flushed)
+	assert.Empty(t, impl.queries)
+
+	// the terminating COMMIT flushes the buffered rows and checkpoints
+	err = v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_COMMIT},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, flushed)
+	require.Len(t, impl.queries, 1)
+
+	// once the transaction has terminated, heartbeats flush again as usual
+	v.latestVgtid = &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/3"}},
+	}
+	v.stats.LastFlushedAt = time.Now().Add(-2 * time.Second)
+	err = v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	assert.Len(t, impl.queries, 2)
+}
+
+func TestHandleEvents_RollbackTerminatesTransactionState(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	flushed := 0
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 10,
+		FlushFn: func(_ context.Context, rows []Row, _ FlushMeta) error {
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "buffered"}},
+	}
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		stats:   VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables:  map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	// ROLLBACK must terminate the transaction state; if it didn't, every heartbeat flush after
+	// BEGIN/ROLLBACK would stay suppressed on an idle stream
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_ROLLBACK},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, flushed)
+	require.Len(t, impl.queries, 1)
+}
+
+func TestHandleEvents_RollbackFlushesDuringShutdown(t *testing.T) {
+	session, impl := newStateTestSession(t)
+	flushed := 0
+	table := &TableConfig{
+		Keyspace: "ks", Table: "t", MaxRowsPerFlush: 10,
+		FlushFn: func(_ context.Context, rows []Row, meta FlushMeta) error {
+			assert.Equal(t, FlushReasonGracefulShutdown, meta.FlushReason)
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "previously committed"}},
+	}
+	v := &VStreamClient{
+		cfg:     clientConfig{name: "stream", vgtidStateKeyspace: "ks", vgtidStateTable: "state", minFlushDuration: time.Hour},
+		session: session, stats: VStreamStats{LastFlushedAt: time.Now()},
+		tables:      map[string]*TableConfig{"ks.t": table},
+		latestVgtid: &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: testConcretePosition}}},
+	}
+	setLifecycleState(v, true, true, true, nil)
+
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}, {Type: binlogdatapb.VEventType_ROLLBACK}})
+	require.NoError(t, err)
+	assert.Equal(t, 1, flushed)
+	assert.Len(t, impl.queries, 1)
+	assert.Empty(t, table.currentBatch)
+	shouldExit, err := v.shouldExitRun(t.Context())
+	require.NoError(t, err)
+	assert.True(t, shouldExit)
+}
+
+func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
+
+	err := updateLatestVGtid(t.Context(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, false)
+	require.ErrorIs(t, err, ErrFenced)
+	require.Len(t, impl.queries, 1)
+	assert.NotContains(t, impl.queries[0], "copy_completed = true")
+	assert.Contains(t, impl.queries[0], "owner_token = :owner_token")
+	assert.Equal(t, []byte("token-a"), impl.bindVars[0]["owner_token"].Value)
+}
+
+func TestHandleEvents_FinalCopyCompletedPersistsCheckpointAndCopyCompletedTogether(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	}
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+		},
+		session:     session,
+		latestVgtid: vgtid,
+		tables:      map[string]*TableConfig{},
+	}
+
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COPY_COMPLETED}})
+	require.NoError(t, err)
+	require.Len(t, impl.queries, 1)
+	assert.True(t, strings.Contains(impl.queries[0], "latest_vgtid = :latest_vgtid") && strings.Contains(impl.queries[0], "copy_completed = true"))
+	assert.Same(t, vgtid, v.lastFlushedVgtid)
+	expectedVGtidJSON, err := protojson.Marshal(vgtid)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[0]["latest_vgtid"].Value))
+}
+
+func TestHandleEvents_HeartbeatCheckpointsLatestVGtidWithoutRows(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		tables:  map[string]*TableConfig{},
+		stats:   VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	require.Len(t, impl.queries, 1)
+	assert.Contains(t, impl.queries[0], "update ks.state set latest_vgtid = :latest_vgtid")
+	assert.Same(t, vgtid, v.lastFlushedVgtid)
+	expectedVGtidJSON, err := protojson.Marshal(vgtid)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[0]["latest_vgtid"].Value))
+}
+
+func TestUpdateLatestVGtid_CopyCompletedMissingStateRowErrors(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
+
+	err := updateLatestVGtid(t.Context(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, true)
+	require.ErrorIs(t, err, ErrFenced)
+	require.Len(t, impl.queries, 1)
+	assert.Contains(t, impl.queries[0], "copy_completed = true")
+	assert.Contains(t, impl.queries[0], "owner_token = :owner_token")
+}
