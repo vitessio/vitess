@@ -47324,6 +47324,9 @@ export namespace binlogdata {
         /** RowChange json_partial_values. */
         json_partial_values?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
+        /** RowChange before_data_columns. */
+        before_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
+
         /**
          * Creates a new RowChange instance using the specified properties.
          * @param [properties] Properties to set
@@ -47419,6 +47422,9 @@ export namespace binlogdata {
 
             /** RowChange json_partial_values */
             json_partial_values?: (binlogdata.RowChange.Bitmap.$Properties|null);
+
+            /** RowChange before_data_columns */
+            before_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

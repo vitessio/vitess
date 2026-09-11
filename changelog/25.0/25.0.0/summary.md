@@ -23,6 +23,7 @@
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
+        - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -222,6 +223,14 @@ Online DDL now creates its vreplication streams with a per-workflow configuratio
 As part of this change, vreplication terminal errors are now classified in their error message as either unrecoverable (retrying cannot fix them) or retries-exhausted (the retry window expired on an otherwise recoverable error), making it clear to operators why a stream stopped.
 
 See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
+
+#### <a id="vstream-before-data-columns"/>VStream: `before_data_columns` bitmap for partial before images</a>
+
+When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that are not part of the primary key from the before image of UPDATE and DELETE row events, whether or not they changed. The vstreamer already signaled this for the after image via `RowChange.data_columns`, but the before image carried no such information, so VStream consumers could not tell an omitted column apart from a `NULL`.
+
+`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
+
+See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
