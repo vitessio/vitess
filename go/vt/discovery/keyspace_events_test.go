@@ -705,6 +705,20 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		}
 	}
 
+	// unscannedKss is a keyspaceState for the same keyspace whose only shard
+	// was never created in the topo, so any attempt to read shard records
+	// fails. The cases that must exit the gate early run against it too: the
+	// point of the gate is avoiding the fleet-wide topo reads, so a gate that
+	// fell through has to surface here as an error rather than only as a
+	// different MoveTables state.
+	unscannedKss := &keyspaceState{
+		kew:      kss.kew,
+		keyspace: keyspace,
+		shards: map[string]*shardState{
+			"c0-": {target: &querypb.Target{Keyspace: keyspace, Shard: "c0-"}},
+		},
+	}
+
 	testCases := []struct {
 		name string
 		vs   *vschemapb.SrvVSchema
@@ -713,6 +727,9 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		deniedShards []string
 		wantType     MoveTablesType
 		wantState    MoveTablesStatus
+		// wantNoScan marks a case that must exit the gate before reading any
+		// shard record.
+		wantNoScan bool
 	}{
 		{
 			name:         "no routing rules",
@@ -720,6 +737,7 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			deniedShards: shards,
 			wantType:     MoveTablesNone,
 			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
 		},
 		{
 			name: "table routing rules referencing only unrelated keyspaces",
@@ -734,6 +752,7 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			deniedShards: shards,
 			wantType:     MoveTablesNone,
 			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
 		},
 		{
 			name: "shard routing rules referencing only unrelated keyspaces",
@@ -747,6 +766,7 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			deniedShards: shards,
 			wantType:     MoveTablesNone,
 			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
 		},
 		{
 			// The rule set MoveTables creates while writes still route to the
@@ -870,6 +890,7 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			deniedShards: nil,
 			wantType:     MoveTablesNone,
 			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
 		},
 	}
 
@@ -882,6 +903,15 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			require.NotNil(t, state)
 			require.Equal(t, tc.wantType, state.Typ, "unexpected MoveTables type %s", state)
 			require.Equal(t, tc.wantState, state.State, "unexpected MoveTables state %s", state)
+
+			if tc.wantNoScan {
+				// Reading a shard record here fails, so this only succeeds if
+				// the gate returned before the scan.
+				state, err := unscannedKss.getMoveTablesStatus(tc.vs)
+				require.NoError(t, err, "the gate read shard records for a keyspace no routing rule references")
+				require.NotNil(t, state)
+				require.Equal(t, MoveTablesNone, state.Typ, "unexpected MoveTables type %s", state)
+			}
 		})
 	}
 }
