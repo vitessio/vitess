@@ -528,3 +528,24 @@ func TestFuncCallKeywords(t *testing.T) {
 		assert.Contains(t, mysqlFuncCallKeywords, name)
 	}
 }
+
+// WithSQLMode gives a parser for another sql_mode, and the parser itself when
+// the honored modes are the same.
+func TestParserWithSQLMode(t *testing.T) {
+	parser := NewTestParser()
+	assert.Same(t, parser, parser.WithSQLMode(0))
+	assert.Same(t, parser, parser.WithSQLMode(sqlmode.StrictTransTables), "a runtime mode does not change the reading")
+
+	ignoreSpace := parser.WithSQLMode(sqlmode.IgnoreSpace | sqlmode.StrictTransTables)
+	require.NotSame(t, parser, ignoreSpace)
+	assert.Equal(t, sqlmode.IgnoreSpace|sqlmode.StrictTransTables, ignoreSpace.SQLMode())
+	assert.Zero(t, parser.SQLMode(), "the parser is left as it was")
+	assert.Same(t, ignoreSpace, ignoreSpace.WithSQLMode(sqlmode.Ansi), "ANSI expands to a mode with IGNORE_SPACE")
+
+	stmt, err := ignoreSpace.Parse("select now () from t")
+	require.NoError(t, err)
+	assert.Equal(t, "select now() from t", String(stmt))
+	stmt, err = parser.Parse("select now () from t")
+	require.NoError(t, err)
+	assert.Equal(t, "select `now`() from t", String(stmt))
+}

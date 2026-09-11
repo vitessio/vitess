@@ -18,6 +18,7 @@ package engine
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -77,6 +79,7 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+		SQLMode         sqlmode.Mode          // SQLMode holds the lexer modes the statement was read under (sqlparser.HonoredSQLModes), which change what the same text means.
 	}
 )
 
@@ -264,13 +267,16 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, SQLMode: %q", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.SQLMode.String())
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+	var sqlMode [8]byte
+	binary.LittleEndian.PutUint64(sqlMode[:], uint64(pk.SQLMode))
+	_, _ = hasher.Write(sqlMode[:])
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)

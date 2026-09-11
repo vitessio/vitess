@@ -430,3 +430,20 @@ func NewTestParser() *Parser {
 func (p *Parser) SQLMode() sqlmode.Mode {
 	return p.sqlMode
 }
+
+// HonoredSQLModes are the lexer modes the parser reads SQL under: of
+// sqlmode.LexerModes, IGNORE_SPACE only (see Options.SQLMode).
+const HonoredSQLModes = sqlmode.IgnoreSpace
+
+// WithSQLMode returns a parser that reads SQL under mode: p itself when mode
+// has the same honored modes (HonoredSQLModes) as p's, since the reading is
+// then the same, and otherwise a copy of p under mode.
+func (p *Parser) WithSQLMode(mode sqlmode.Mode) *Parser {
+	mode = mode.Expand()
+	if mode&HonoredSQLModes == p.sqlMode&HonoredSQLModes {
+		return p
+	}
+	clone := *p
+	clone.sqlMode = mode
+	return &clone
+}

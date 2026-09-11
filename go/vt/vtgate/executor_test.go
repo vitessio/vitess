@@ -105,23 +105,23 @@ func TestPlanKey(t *testing.T) {
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, SQLMode: \"\"",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -135,7 +135,7 @@ func TestPlanKey(t *testing.T) {
 			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
 			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
 			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg, nil)
-			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
+			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment, e.env.Parser())
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
 	}
@@ -1685,7 +1685,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := buildPlanKey(t.Context(), vc, sql, "")
+		h := buildPlanKey(t.Context(), vc, sql, "", e.env.Parser())
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	assert.NotNilf(t, plan, "plan not found for query: %s", sql)
@@ -3853,4 +3853,64 @@ func TestExecutorSpacedAggrCallWarningSharedPlan(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A session's SQL is read under the session's sql_mode: with IGNORE_SPACE, the
+// whitespace-sensitive function names are keywords before a parenthesis that
+// follows whitespace, as in MySQL under that mode, and the two readings do
+// not share a cached plan.
+func TestExecutorSessionIgnoreSpace(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		session := &vtgatepb.Session{TargetString: "@primary"}
+		if sqlMode != "" {
+			session.SystemVariables = map[string]string{"sql_mode": sqlMode}
+		}
+		return econtext.NewSafeSession(session)
+	}
+	// the query sent to the tablet carries the session's sql_mode as a
+	// SET_VAR hint, so the statement body is what is compared
+	lastQuery := func() string {
+		require.NotEmpty(t, sbclookup.Queries)
+		return sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	}
+
+	// under the mode, the spaced calls are the built-ins
+	session := newSession("'IGNORE_SPACE'")
+	_, err := executorExecSession(ctx, executor, session, "select now (), cast (id as char), sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " now(), cast(id as char), sum(id) from main1")
+	assert.Empty(t, session.Warnings, "whitespace is the mode's own reading")
+
+	// without it, MySQL's default reading: a stored-function call, and a
+	// syntax error where the built-in's own argument syntax follows
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "select now () from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " `now`() from main1")
+	_, err = executorExecSession(ctx, executor, session, "select cast (id as char) from main1", nil)
+	require.ErrorContains(t, err, "syntax error")
+
+	// the readings do not share a plan: the same text again, under the mode
+	session = newSession("'STRICT_TRANS_TABLES,IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "select now () from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " now() from main1")
+
+	// a comment between an aggregate and its parenthesis is kept the
+	// aggregate under the mode too, and warned about
+	_, err = executorExecSession(ctx, executor, session, "select count/*c*/(id) from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " count(id) from main1")
+	require.Len(t, session.Warnings, 1)
+	assert.Contains(t, session.Warnings[0].Message, "by a comment")
+
+	// a prepared statement is read under the session's mode as well
+	session = newSession("'IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "prepare stmt from 'select now () from main1'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "execute stmt", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " now() from main1")
+	assert.Empty(t, session.Warnings)
 }

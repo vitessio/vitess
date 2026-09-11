@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -147,17 +146,12 @@ func (e *Executor) newExecute(
 		}
 		// a prepared plan, or an EXECUTE plan, carries the spaced aggregate
 		// calls of the text it executes without parsing; any other
-		// statement's come from this execution's parse. A session whose
-		// sql_mode has IGNORE_SPACE is not warned about whitespace, which the
-		// mode permits; a comment is warned about under either mode.
-		if len(plan.SpacedAggrCalls) > 0 || len(spacedAggrCalls) > 0 {
-			ignoreSpace := e.sessionSQLModeHas(safeSession, sqlmode.IgnoreSpace)
-			for _, calls := range [][]sqlparser.SpacedAggrCall{plan.SpacedAggrCalls, spacedAggrCalls} {
-				for _, call := range calls {
-					if call.Comment || !ignoreSpace {
-						safeSession.RecordWarning(spacedAggrCallWarning(call))
-					}
-				}
+		// statement's come from this execution's parse. Both were read under
+		// the session's sql_mode, so a session with IGNORE_SPACE has none
+		// that whitespace alone separates.
+		for _, calls := range [][]sqlparser.SpacedAggrCall{plan.SpacedAggrCalls, spacedAggrCalls} {
+			for _, call := range calls {
+				safeSession.RecordWarning(spacedAggrCallWarning(call))
 			}
 		}
 
