@@ -497,7 +497,7 @@ func (mts MoveTablesState) String() string {
 // the denied tables together. A keyspace not referenced by any rule therefore
 // cannot be part of an in-progress MoveTables.
 //
-// Two deliberate limits of this gate:
+// Three deliberate limits of this gate:
 //
 //   - A workflow created with --no-routing-rules writes no rules at all, so
 //     its keyspaces exit early here while setupInitialDeniedTables still
@@ -522,6 +522,16 @@ func (mts MoveTablesState) String() string {
 //     falling through to the shard-record scan on every SrvVSchema update
 //     until the rules are cleaned up. The scan stays scoped to that one
 //     keyspace, which is the point of this gate.
+//
+//   - A keyspace routing rule applied by hand (ApplyKeyspaceRoutingRules) is
+//     indistinguishable from one a multi-tenant migration wrote, so a keyspace
+//     that is the source of a manual primary route is scanned on every
+//     SrvVSchema update as if it might be mid-migration; with no denied tables
+//     the scan finds nothing and reports no migration. The cost is scoped to
+//     such source keyspaces and is what recognizing a multi-tenant cutover,
+//     which used to go undetected entirely, currently requires.
+//     https://github.com/vitessio/vitess/issues/21076 tracks a direct signal
+//     that would remove the need to infer this from the rules at all.
 func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 	prefix := keyspace + "."
 	for _, rule := range vs.GetRoutingRules().GetRules() {
@@ -554,11 +564,15 @@ func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 
 // primaryKeyspaceRoute returns the keyspace a primary keyspace routing rule
 // sends the given keyspace's writes to, and whether such a rule exists. A
-// multi-tenant migration is the only thing that writes these: setupInitialRoutingRules
-// creates them at Create as self routes, source -> source for each tablet
-// type, changeWriteRoute repoints the primary one at the target during
-// SwitchWrites, and deleteKeyspaceRoutingRules removes them at Complete
-// together with the source's denied tables. The self route matters as much as
+// multi-tenant migration writes these through a known lifecycle:
+// setupInitialRoutingRules creates them at Create as self routes, source ->
+// source for each tablet type, changeWriteRoute repoints the primary one at
+// the target during SwitchWrites, and deleteKeyspaceRoutingRules removes them
+// at Complete together with the source's denied tables. They are not exclusive
+// to it, though: ApplyKeyspaceRoutingRules lets an operator write the same
+// records by hand, and nothing in a rule says which of the two produced it, so
+// the gate cannot tell a migration's rule from a manual route (see the third
+// limit on rulesReferenceKeyspace). The self route matters as much as
 // the repointed one: stopSourceWrites denies the tables on the source before
 // changeWriteRoute runs, so between the two the source has denied tables while
 // its rule still points at itself, and a SrvVSchema update landing in that
