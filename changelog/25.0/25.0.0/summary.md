@@ -37,6 +37,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [Fewer topology reads while detecting MoveTables traffic switches](#vtgate-movetables-scoped-rules-check)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -415,6 +416,14 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
+#### <a id="vtgate-movetables-scoped-rules-check"/>Fewer topology reads while detecting MoveTables traffic switches</a>
+
+To keep buffering requests through a MoveTables cutover, each VTGate tracks whether a keyspace is in a table migration and whether its writes have been switched. It previously decided whether to look by asking only whether *any* routing rule existed anywhere in the cluster, and when one did it read every shard record of the keyspace from the global topology server — on every `SrvVSchema` update, for every keyspace, on every VTGate. A single unrelated routing rule, including one left behind by a finished workflow, was therefore enough to turn each `SrvVSchema` write into a cluster-wide burst of topology reads. That check is now scoped to routing rules that actually reference the keyspace, so an unrelated rule no longer causes any reads.
+
+Multi-tenant migrations are recognized as part of this. They route whole keyspaces through keyspace routing rules rather than per-table rules, so the scoped check now also matches the source keyspace's primary keyspace routing rule, and reports the migration as switched once that rule points at the target. Previously VTGate did not detect a multi-tenant traffic switch at all: requests buffered during the cutover were held until the buffering timeout expired rather than being released as soon as writes had switched.
+
+One case is deliberately not detected. A workflow created with `--no-routing-rules` writes no routing rules, so between `MoveTables Create` and its first traffic switch nothing identifies the keyspace and VTGate does not report the migration. The window closes at the traffic switch, which writes ordinary routing rules regardless of that flag, and until then the flag means Vitess routes nothing to the migration's target tables. Detecting it earlier would require reading every keyspace's shard records on every update again, which is the cost this change removes; [#21076](https://github.com/vitessio/vitess/issues/21076) tracks giving VTGate a direct signal instead.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
