@@ -1255,7 +1255,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				}
 				rowChange.Before = sqltypes.RowToProto3(beforeValues)
 				if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && beforePartial {
-					// The bitmap must describe the columns as emitted, so project it
+					// The bitmap describes the columns as emitted, so project it
 					// through the plan the same way the values were.
 					rowChange.BeforeDataColumns = plan.mapBitmap(&rows.IdentifyColumns)
 				}
@@ -1270,9 +1270,14 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				rowChange.After = sqltypes.RowToProto3(afterValues)
 				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
 					(row.JSONPartialValues.Count() > 0) {
-					// The bitmap must describe the columns as emitted, so project it
-					// through the plan the same way the values were.
-					rowChange.DataColumns = plan.mapBitmap(&rows.DataColumns)
+					// DataColumns is intentionally left in the source table's column
+					// order: existing vplayers (and possibly other consumers) depend
+					// on that layout, and changing it would break replication between
+					// mixed-version tablets. See #21075 for a projected variant.
+					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
+						Count: int64(rows.DataColumns.Count()),
+						Cols:  rows.DataColumns.Bits(),
+					}
 				}
 				if row.JSONPartialValues.Count() > 0 {
 					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{

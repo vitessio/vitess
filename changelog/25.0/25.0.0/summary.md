@@ -226,7 +226,7 @@ See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
 When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that are not part of the primary key from the before image of UPDATE and DELETE row events, whether or not they changed. The vstreamer already signaled this for the after image via `RowChange.data_columns`, but the before image carried no such information, so VStream consumers could not tell an omitted column apart from a `NULL`.
 
-`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image. Like `data_columns`, the bitmap describes the columns as emitted by the stream's filter (after projection), not the source table's column order. The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
+`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
 
