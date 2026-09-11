@@ -848,9 +848,10 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		{
 			// The create-time shape of a shard-by-shard migration
 			// (createDefaultShardRoutingRules): rules are keyed by the target
-			// keyspace and route back to the source, so the source keyspace is
-			// referenced only as a rule's to-keyspace. The gate must still run
-			// the scan for it.
+			// keyspace and route back to the source, and setupInitialDeniedTables
+			// is skipped for a partial migration, so the source has no denied
+			// tables for a scan to find. It is referenced only as a rule's
+			// to-keyspace and must exit the gate without reading its shards.
 			name: "shard-by-shard MoveTables create-time reverse rules",
 			vs: &vschemapb.SrvVSchema{
 				ShardRoutingRules: &vschemapb.ShardRoutingRules{
@@ -860,9 +861,10 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 					},
 				},
 			},
-			deniedShards: shards,
-			wantType:     MoveTablesShardByShard,
-			wantState:    MoveTablesSwitched,
+			deniedShards: nil,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
 		},
 		{
 			// A multi-tenant migration routes whole keyspaces and writes no
@@ -1026,6 +1028,9 @@ func TestRulesReferenceKeyspace(t *testing.T) {
 			want: true,
 		},
 		{
+			// The keyspace a shard rule routes to never holds denied tables:
+			// at Create the partial migration has none, and after a switch
+			// they sit on the rule's source. Admitting it would only scan.
 			name: "keyspace is the target of a shard routing rule",
 			vs: &vschemapb.SrvVSchema{
 				ShardRoutingRules: &vschemapb.ShardRoutingRules{
@@ -1034,7 +1039,7 @@ func TestRulesReferenceKeyspace(t *testing.T) {
 					},
 				},
 			},
-			want: true,
+			want: false,
 		},
 		{
 			name: "shard routing rule between unrelated keyspaces",

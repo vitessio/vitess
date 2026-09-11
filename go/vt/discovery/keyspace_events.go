@@ -484,7 +484,7 @@ func (mts MoveTablesState) String() string {
 
 // rulesReferenceKeyspace reports whether any routing rule in the SrvVSchema
 // references the given keyspace: as the keyspace qualifier of a table routing
-// rule's from-table or to-tables, as an endpoint of a shard routing rule, or
+// rule's from-table or to-tables, as the source of a shard routing rule, or
 // as the source of a primary keyspace routing rule, which is how a
 // multi-tenant migration routes writes away from its source keyspace.
 //
@@ -535,7 +535,16 @@ func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 		}
 	}
 	for _, rule := range vs.GetShardRoutingRules().GetRules() {
-		if rule.GetFromKeyspace() == keyspace || rule.GetToKeyspace() == keyspace {
+		// Only the rule's source: createDefaultShardRoutingRules writes
+		// target.shard -> source at Create, when a partial migration has no
+		// denied tables anywhere (setupInitialDeniedTables skips it), and
+		// changeWriteRoute replaces that with source.shard -> target as it
+		// denies the tables on the source. A reverse switch restores the
+		// first shape while moving the denied tables to the target, which is
+		// then that shape's source. So the keyspace holding denied tables is
+		// always a from-keyspace, and one referenced only as a to-keyspace
+		// has nothing for the scan to find.
+		if rule.GetFromKeyspace() == keyspace {
 			return true
 		}
 	}
