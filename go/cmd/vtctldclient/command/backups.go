@@ -231,6 +231,11 @@ type backupResponseStream interface {
 type backupJSONOutput struct {
 	// Status is the terminal outcome: "USABLE", "EMPTY", or "UNKNOWN".
 	Status string `json:"status"`
+	// BackupName identifies the backup that was created. It is surfaced as a
+	// typed field so callers that only need to identify the backup do not have
+	// to parse the manifest -- and because some engines do not record a name in
+	// their MANIFEST at all. Empty for an empty backup.
+	BackupName string `json:"backup_name"`
 	// Manifest is the backup's MANIFEST as raw JSON, or null for an empty backup
 	// or when talking to an older server that does not return it.
 	Manifest json.RawMessage `json:"manifest"`
@@ -265,8 +270,9 @@ func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
 // the terminal status. It never calls exit, so it is safe to unit test.
 func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errOut io.Writer) (tabletmanagerdatapb.BackupResponse_Status, error) {
 	var (
-		manifest string
-		status   = tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+		manifest   string
+		backupName string
+		status     = tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
 	)
 
 	for {
@@ -284,11 +290,14 @@ func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errO
 			if resp.Manifest != "" {
 				manifest = resp.Manifest
 			}
+			if resp.BackupName != "" {
+				backupName = resp.BackupName
+			}
 			if resp.Status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
 				status = resp.Status
 			}
 		case io.EOF:
-			if perr := printBackupResult(out, errOut, outputJSON, manifest, status); perr != nil {
+			if perr := printBackupResult(out, errOut, outputJSON, manifest, backupName, status); perr != nil {
 				return status, perr
 			}
 			return status, nil
@@ -302,7 +311,7 @@ func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errO
 // is emitted only in --json mode; in the default (text) mode nothing is printed
 // here, so the command's output stays identical to prior releases (progress is
 // already streamed as log events).
-func printBackupResult(out, errOut io.Writer, outputJSON bool, manifest string, status tabletmanagerdatapb.BackupResponse_Status) error {
+func printBackupResult(out, errOut io.Writer, outputJSON bool, manifest, backupName string, status tabletmanagerdatapb.BackupResponse_Status) error {
 	if !outputJSON {
 		return nil
 	}
@@ -319,8 +328,9 @@ func printBackupResult(out, errOut io.Writer, outputJSON bool, manifest string, 
 		fmt.Fprintf(errOut, "warning: backup MANIFEST is not valid JSON; reporting status only\n")
 	}
 	data, err := json.MarshalIndent(backupJSONOutput{
-		Status:   backupStatusString(status),
-		Manifest: raw,
+		Status:     backupStatusString(status),
+		BackupName: backupName,
+		Manifest:   raw,
 	}, "", "  ")
 	if err != nil {
 		return err

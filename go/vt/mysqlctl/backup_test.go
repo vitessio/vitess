@@ -56,7 +56,7 @@ const mysqlShutdownTimeout = 1 * time.Minute
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	_, backupErr := Backup(env.ctx, env.backupParams)
 	require.NoError(t, backupErr, env.logger.Events)
 
 	require.Len(t, env.backupEngine.ExecuteBackupCalls, 1)
@@ -79,7 +79,7 @@ func TestBackupNoStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 	env.setStats(nil)
 
-	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	_, backupErr := Backup(env.ctx, env.backupParams)
 	require.NoError(t, backupErr, env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
@@ -92,7 +92,7 @@ func TestBackupNoStats(t *testing.T) {
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	_, backupErr := Backup(env.ctx, env.backupParams)
 	require.NoError(t, backupErr, env.logger.Events)
 
 	require.Len(t, env.backupStorage.WithParamsCalls, 1)
@@ -115,7 +115,7 @@ func TestBackupEmitsStats(t *testing.T) {
 	// Force ExecuteBackup to take time so we can test stats emission.
 	env.backupEngine.ExecuteBackupDuration = 1001 * time.Millisecond
 
-	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	_, backupErr := Backup(env.ctx, env.backupParams)
 	require.NoError(t, backupErr, env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedBackupDurationS.Get())
@@ -157,15 +157,32 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 		}
 	}
 
+	t.Run("engine-reported manifest is used without reading storage", func(t *testing.T) {
+		env := createFakeBackupRestoreEnv(t)
+		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
+		env.backupEngine.ExecuteBackupManifest = manifestJSON
+		// Deliberately offer a *different* manifest through storage: if the
+		// storage fallback ran, the assertions below would catch it.
+		backupHandleNamed(env, `{"BackupName":"from-storage"}`, nil)
+
+		outcome, err := Backup(env.ctx, env.backupParams)
+		require.NoError(t, err, env.logger.Events)
+		assert.Equal(t, BackupUsable, outcome.Result)
+		assert.Equal(t, manifestJSON, outcome.Manifest, "the engine's manifest should be used verbatim")
+		assert.NotEmpty(t, outcome.Name, "a usable backup reports the name it was stored under")
+		assert.Empty(t, env.backupStorage.ListBackupsCalls,
+			"the engine reported its manifest, so no storage round-trip should happen")
+	})
+
 	t.Run("usable backup returns the persisted manifest", func(t *testing.T) {
 		env := createFakeBackupRestoreEnv(t)
 		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
 		backupHandleNamed(env, manifestJSON, nil)
 
-		manifest, result, err := Backup(env.ctx, env.backupParams)
+		outcome, err := Backup(env.ctx, env.backupParams)
 		require.NoError(t, err, env.logger.Events)
-		assert.Equal(t, BackupUsable, result)
-		assert.Equal(t, manifestJSON, manifest, "the raw MANIFEST bytes should be returned verbatim")
+		assert.Equal(t, BackupUsable, outcome.Result)
+		assert.Equal(t, manifestJSON, outcome.Manifest, "the raw MANIFEST bytes should be returned verbatim")
 	})
 
 	t.Run("empty incremental returns no manifest", func(t *testing.T) {
@@ -173,10 +190,11 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupEmpty, nil}
 		backupHandleNamed(env, manifestJSON, nil)
 
-		manifest, result, err := Backup(env.ctx, env.backupParams)
+		outcome, err := Backup(env.ctx, env.backupParams)
 		require.NoError(t, err, env.logger.Events)
-		assert.Equal(t, BackupEmpty, result)
-		assert.Empty(t, manifest, "an empty backup persists no manifest")
+		assert.Equal(t, BackupEmpty, outcome.Result)
+		assert.Empty(t, outcome.Manifest, "an empty backup persists no manifest")
+		assert.Empty(t, outcome.Name, "an empty backup has no name")
 	})
 
 	t.Run("manifest read failure does not fail the backup", func(t *testing.T) {
@@ -184,10 +202,10 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
 		backupHandleNamed(env, "", errors.New("storage unavailable"))
 
-		manifest, result, err := Backup(env.ctx, env.backupParams)
+		outcome, err := Backup(env.ctx, env.backupParams)
 		require.NoError(t, err, "the backup succeeded; reading its manifest back is best-effort")
-		assert.Equal(t, BackupUsable, result)
-		assert.Empty(t, manifest)
+		assert.Equal(t, BackupUsable, outcome.Result)
+		assert.Empty(t, outcome.Manifest)
 	})
 }
 
@@ -195,7 +213,7 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	_, backupErr := Backup(env.ctx, env.backupParams)
 	require.NoError(t, backupErr, env.logger.Events)
 
 	require.Len(t, env.backupStorage.WithParamsCalls, 1)

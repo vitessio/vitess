@@ -569,6 +569,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 				Event:       tmResp.Event,
 				Manifest:    tmResp.Manifest,
 				Status:      tmResp.Status,
+				BackupName:  tmResp.BackupName,
 			}
 			if err := stream.Send(resp); err != nil {
 				logger.Errorf("failed to send stream response %+v: %v", resp, err)

@@ -2482,7 +2482,11 @@ type BackupResponse struct {
 	// leave it at STATUS_UNSPECIFIED. Older servers that do not populate this
 	// field will always leave it at STATUS_UNSPECIFIED and callers must treat
 	// that as "unknown / unchanged behaviour".
-	Status        tabletmanagerdata.BackupResponse_Status `protobuf:"varint,6,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
+	Status tabletmanagerdata.BackupResponse_Status `protobuf:"varint,6,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
+	// BackupName identifies the backup that was created, and is also its
+	// directory in backup storage. It is only populated on the terminal message
+	// when Status is USABLE.
+	BackupName    string `protobuf:"bytes,7,opt,name=backup_name,json=backupName,proto3" json:"backup_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2557,6 +2561,13 @@ func (x *BackupResponse) GetStatus() tabletmanagerdata.BackupResponse_Status {
 		return x.Status
 	}
 	return tabletmanagerdata.BackupResponse_Status(0)
+}
+
+func (x *BackupResponse) GetBackupName() string {
+	if x != nil {
+		return x.BackupName
+	}
+	return ""
 }
 
 type BackupShardRequest struct {
@@ -17755,14 +17766,16 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\rbackup_engine\x18\x06 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
 	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSqlB\x10\n" +
-	"\x0e_backup_engine\"\x80\x02\n" +
+	"\x0e_backup_engine\"\xa1\x02\n" +
 	"\x0eBackupResponse\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x03 \x01(\tR\x05shard\x12$\n" +
 	"\x05event\x18\x04 \x01(\v2\x0e.logutil.EventR\x05event\x12\x1a\n" +
 	"\bmanifest\x18\x05 \x01(\tR\bmanifest\x12@\n" +
-	"\x06status\x18\x06 \x01(\x0e2(.tabletmanagerdata.BackupResponse.StatusR\x06status\"\xef\x02\n" +
+	"\x06status\x18\x06 \x01(\x0e2(.tabletmanagerdata.BackupResponse.StatusR\x06status\x12\x1f\n" +
+	"\vbackup_name\x18\a \x01(\tR\n" +
+	"backupName\"\xef\x02\n" +
 	"\x12BackupShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12#\n" +

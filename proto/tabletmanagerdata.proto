@@ -628,6 +628,13 @@ message BackupResponse {
   // Status classifies the terminal outcome of the backup. See the Status
   // enum for details. Empty (STATUS_UNSPECIFIED) on log-event messages.
   Status status = 3;
+
+  // BackupName identifies the backup that was created, and is also its
+  // directory in backup storage. It is only populated on the terminal message
+  // when Status is USABLE. Callers that only need to identify the backup can
+  // read this instead of parsing the manifest, which is also the only option
+  // for engines that do not record a name in their MANIFEST.
+  string backup_name = 4;
 }
 
 message RestoreFromBackupRequest {

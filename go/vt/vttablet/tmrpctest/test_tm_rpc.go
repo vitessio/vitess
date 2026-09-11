@@ -1467,10 +1467,11 @@ var (
 	testBackupAllowPrimary      = false
 	testBackupCalled            = false
 	testBackupManifest          = "{\"BackupName\":\"test-backup\"}"
+	testBackupName              = "test-backup"
 	testRestoreFromBackupCalled = false
 )
 
-func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (string, mysqlctl.BackupResult, error) {
+func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (mysqlctl.BackupOutcome, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
@@ -1478,7 +1479,11 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 	compare(fra.t, "Backup args", request.AllowPrimary, testBackupAllowPrimary)
 	logStuff(logger, 10)
 	testBackupCalled = true
-	return testBackupManifest, mysqlctl.BackupUsable, nil
+	return mysqlctl.BackupOutcome{
+		Name:     testBackupName,
+		Manifest: testBackupManifest,
+		Result:   mysqlctl.BackupUsable,
+	}, nil
 }
 
 func (fra *fakeRPCTM) IsBackupRunning() bool {
@@ -1507,6 +1512,7 @@ func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupS
 	}
 	compare(t, "Backup manifest", term.Manifest, testBackupManifest)
 	compare(t, "Backup status", term.Status, tabletmanagerdatapb.BackupResponse_USABLE)
+	compare(t, "Backup name", term.BackupName, testBackupName)
 	// The terminal message must carry a non-nil Event: older vtctld/vtctldclient
 	// peers dereference Event unconditionally, so a nil Event would panic them
 	// during a mixed-version rolling upgrade or downgrade.

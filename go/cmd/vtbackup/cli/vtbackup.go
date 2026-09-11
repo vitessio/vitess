@@ -463,7 +463,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// Now we're ready to take the backup.
 		phase.Set(phaseNameInitialBackup, int64(1))
 		defer phase.Set(phaseNameInitialBackup, int64(0))
-		if _, _, err := mysqlctl.Backup(shutdownCtx, backupParams); err != nil {
+		if _, err := mysqlctl.Backup(shutdownCtx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		deprecatedDurationByPhase.Set("InitialBackup", int64(time.Since(backupParams.BackupTime).Seconds()))
@@ -666,7 +666,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	phase.Set(phaseNameTakeNewBackup, int64(1))
 	defer phase.Set(phaseNameTakeNewBackup, int64(0))
 
-	if _, _, err := mysqlctl.Backup(ctx, *backupParams); err != nil {
+	if _, err := mysqlctl.Backup(ctx, *backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
 

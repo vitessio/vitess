@@ -5456,7 +5456,13 @@ type BackupResponse struct {
 	Manifest string `protobuf:"bytes,2,opt,name=manifest,proto3" json:"manifest,omitempty"`
 	// Status classifies the terminal outcome of the backup. See the Status
 	// enum for details. Empty (STATUS_UNSPECIFIED) on log-event messages.
-	Status        BackupResponse_Status `protobuf:"varint,3,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
+	Status BackupResponse_Status `protobuf:"varint,3,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
+	// BackupName identifies the backup that was created, and is also its
+	// directory in backup storage. It is only populated on the terminal message
+	// when Status is USABLE. Callers that only need to identify the backup can
+	// read this instead of parsing the manifest, which is also the only option
+	// for engines that do not record a name in their MANIFEST.
+	BackupName    string `protobuf:"bytes,4,opt,name=backup_name,json=backupName,proto3" json:"backup_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5510,6 +5516,13 @@ func (x *BackupResponse) GetStatus() BackupResponse_Status {
 		return x.Status
 	}
 	return BackupResponse_STATUS_UNSPECIFIED
+}
+
+func (x *BackupResponse) GetBackupName() string {
+	if x != nil {
+		return x.BackupName
+	}
+	return ""
 }
 
 type RestoreFromBackupRequest struct {
@@ -8974,11 +8987,13 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\ftablet_types\x18\x02 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12*\n" +
 	"\atimeout\x18\x03 \x01(\v2\x10.vttime.DurationR\atimeout\x12\"\n" +
 	"\rfail_on_error\x18\x04 \x01(\bR\vfailOnErrorB\x10\n" +
-	"\x0e_backup_engine\"\xcd\x01\n" +
+	"\x0e_backup_engine\"\xee\x01\n" +
 	"\x0eBackupResponse\x12$\n" +
 	"\x05event\x18\x01 \x01(\v2\x0e.logutil.EventR\x05event\x12\x1a\n" +
 	"\bmanifest\x18\x02 \x01(\tR\bmanifest\x12@\n" +
-	"\x06status\x18\x03 \x01(\x0e2(.tabletmanagerdata.BackupResponse.StatusR\x06status\"7\n" +
+	"\x06status\x18\x03 \x01(\x0e2(.tabletmanagerdata.BackupResponse.StatusR\x06status\x12\x1f\n" +
+	"\vbackup_name\x18\x04 \x01(\tR\n" +
+	"backupName\"7\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\n" +
 	"\n" +

@@ -167,7 +167,7 @@ type RPCTM interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (manifest string, result mysqlctl.BackupResult, err error)
+	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (mysqlctl.BackupOutcome, error)
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error
 

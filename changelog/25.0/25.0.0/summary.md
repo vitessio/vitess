@@ -159,7 +159,11 @@ The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupS
 
 The wire protocol is backward and forward compatible: the new `BackupResponse.manifest` and `BackupResponse.status` proto fields are additive, and an older server that never sets them leaves `status` at `STATUS_UNSPECIFIED`, which callers treat as "unknown / unchanged behaviour".
 
-**Impact**: This is a source-level change for Go code only. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM` must update the `Backup` signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
+`mysqlctl.Backup` likewise now returns `(mysqlctl.BackupOutcome, error)` instead of a bare `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
+
+The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, which lets `mysqlctl.Backup` skip reading the manifest back from storage (a `ListBackups` plus a `GET`, since the write handle returned by `StartBackup` cannot be read from). All in-tree engines do this; engines that do not simply fall back to the storage read, so out-of-tree engines keep working unchanged.
+
+**Impact**: This is a source-level change for Go code only. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
 
 See [#XXXXX](https://github.com/vitessio/vitess/pull/XXXXX) for details.
 
@@ -635,7 +639,7 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream:
 
-- With the new `--json`/`-j` flag, a JSON object with the backup's outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`) and its MANIFEST is written to stdout, while log events go to stderr, so the output can be parsed by tooling.
+- With the new `--json`/`-j` flag, a JSON object with the backup's outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`), the backup's name, and its MANIFEST is written to stdout, while log events go to stderr, so the output can be parsed by tooling. `backup_name` is a typed field, so callers that only need to identify the backup do not have to parse the manifest -- which also covers engines that do not record a name inside their MANIFEST.
 - Without `--json`, no MANIFEST is printed; progress streams as log events as before, followed by a final `backup completed` line.
 - An incremental backup that finds no new data to back up (an "empty" backup) completes successfully. In `--json` mode it reports status `EMPTY` and exits with **code 2** so scripts can skip follow-up work by checking `$?`. Without `--json`, an empty backup behaves as before and exits `0`, so existing automation is unaffected.
 

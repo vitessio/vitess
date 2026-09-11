@@ -1349,8 +1349,12 @@ func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backup
 	backups = waitForNumBackups(t, numBackups+1)
 	require.NotEmpty(t, backups)
 
-	// The mysqlshell engine does not populate BackupName in its MANIFEST, so only the
-	// engines that do can be tied back to the backup that landed in storage.
+	// backup_name is a typed field populated by the tablet for every engine, so it
+	// always identifies the backup that landed in storage.
+	require.Equalf(t, backups[len(backups)-1], result.BackupName, "output: %v", output)
+
+	// The mysqlshell engine does not populate BackupName inside its MANIFEST, so only
+	// the engines that do can be tied back through the manifest itself.
 	if currentSetupType != MySQLShell {
 		require.NotEmptyf(t, result.Manifest.BackupName, "output: %v", output)
 		require.Equalf(t, backups[len(backups)-1], result.Manifest.BackupName, "output: %v", output)
@@ -1485,8 +1489,9 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 // stdout when the backup stream completes. Manifest is the backup's MANIFEST inlined
 // verbatim, and is nil for an empty (no-op) incremental backup.
 type backupJSONOutput struct {
-	Status   string                   `json:"status"`
-	Manifest *mysqlctl.BackupManifest `json:"manifest"`
+	Status     string                   `json:"status"`
+	BackupName string                   `json:"backup_name"`
+	Manifest   *mysqlctl.BackupManifest `json:"manifest"`
 }
 
 // parseBackupJSONOutput extracts the JSON object printed by "vtctldclient Backup --json".

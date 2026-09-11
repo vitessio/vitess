@@ -696,7 +696,7 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	manifest, result, err := s.tm.Backup(ctx, logger, request)
+	outcome, err := s.tm.Backup(ctx, logger, request)
 	if err != nil {
 		return err
 	}
@@ -710,16 +710,17 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	// Event would panic them during a mixed-version rolling upgrade or downgrade.
 	// A populated Event keeps the terminal message safe for those peers, which log
 	// it as an ordinary line and ignore the unknown manifest/status fields.
-	status := backupResultToStatus(result)
+	status := backupResultToStatus(outcome.Result)
 	// Build the completion event through logutil so it carries the same
 	// Time/Level/File/Line shape as every other event on this stream; a
 	// hand-built event would render with an empty "file:line]" prefix.
 	completion := logutil.NewMemoryLogger()
 	completion.Infof("backup completed: %s", status)
 	if sendErr := stream.Send(&tabletmanagerdatapb.BackupResponse{
-		Event:    completion.Events[0],
-		Manifest: manifest,
-		Status:   status,
+		Event:      completion.Events[0],
+		Manifest:   outcome.Manifest,
+		Status:     status,
+		BackupName: outcome.Name,
 	}); sendErr != nil {
 		// The backup itself already succeeded and is persisted, so failing to
 		// deliver this last message must not turn it into a reported failure.

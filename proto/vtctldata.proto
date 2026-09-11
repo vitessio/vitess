@@ -496,6 +496,11 @@ message BackupResponse {
   // field will always leave it at STATUS_UNSPECIFIED and callers must treat
   // that as "unknown / unchanged behaviour".
   tabletmanagerdata.BackupResponse.Status status = 6;
+
+  // BackupName identifies the backup that was created, and is also its
+  // directory in backup storage. It is only populated on the terminal message
+  // when Status is USABLE.
+  string backup_name = 7;
 }
 
 message BackupShardRequest {
