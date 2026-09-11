@@ -102,6 +102,62 @@ func TestTracker(t *testing.T) {
 	require.True(t, initialSchemaInserted)
 }
 
+func TestTrackerRetriesStartupPosition(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const (
+		startupGTID  = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3"
+		startupQuery = "select pos from _vt.schema_version order by id desc limit 1"
+	)
+
+	// Fail the initial startup-position lookup.
+	db.RejectQueryPattern(startupQuery, "transient startup position failure")
+
+	vs := &fakeVstreamer{
+		done:   make(chan struct{}),
+		events: [][]*binlogdatapb.VEvent{{}},
+	}
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerStartupRetryTest")
+	tracker := NewTracker(env, vs, se)
+	initialErrors := env.Stats().ErrorCounters.Counts()["INTERNAL"]
+
+	var waitCalls int
+	var waitDuration time.Duration
+	tracker.wait = func(ctx context.Context, d time.Duration) bool {
+		waitCalls++
+		waitDuration = d
+
+		// Make the second startup-position lookup succeed.
+		db.RemoveQueryPattern(startupQuery)
+		db.AddQuery(startupQuery, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("pos", "varchar"),
+			startupGTID,
+		))
+		return waitWithContext(ctx, 0)
+	}
+
+	tracker.Open()
+
+	select {
+	case <-vs.done:
+	case <-time.After(time.Second):
+		tracker.Close()
+		require.FailNow(t, "VStream was not called after the startup-position failure")
+	}
+
+	tracker.Close()
+	finalErrors := env.Stats().ErrorCounters.Counts()["INTERNAL"]
+	require.Equal(t, initialErrors+1, finalErrors)
+
+	require.Equal(t, 1, waitCalls)
+	require.Equal(t, 5*time.Second, waitDuration)
+	require.Equal(t, []string{startupGTID}, vs.getStartPositions())
+}
+
 func TestTrackerRetriesAfterFailedSchemaSave(t *testing.T) {
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()

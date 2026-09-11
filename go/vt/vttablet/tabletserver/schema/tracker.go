@@ -121,10 +121,19 @@ func (tr *Tracker) Enable(enabled bool) {
 func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
-	startupGTID, err := tr.startupPosition(ctx)
-	if err != nil {
+	var startupGTID string
+	for {
+		var err error
+		startupGTID, err = tr.startupPosition(ctx)
+		if err == nil {
+			break
+		}
+
+		tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 		log.Error(fmt.Sprintf("error getting the schema tracker's startup position: %v", err))
-		return
+		if !tr.wait(ctx, 5*time.Second) {
+			return
+		}
 	}
 
 	filter := &binlogdatapb.Filter{
