@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -82,6 +83,10 @@ func (h *Horizon) IsMergeable(ctx *plancontext.PlanningContext) bool {
 }
 
 func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	if _, isJP := expr.(*predicates.JoinPredicate); isJP && (h.Query.GetLimit() != nil || ctx.ContainsWindowFunc(h.Query)) {
+		// filtering below a limit or a window function would change the rows they see
+		return newFilter(h, expr)
+	}
 	if _, isUNion := h.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
 		h.Source = h.Source.AddPredicate(ctx, expr)
@@ -95,11 +100,19 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		panic(err)
 	}
 
-	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if ctx.ContainsAggr(newExpr) {
+	inner := expr
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		// rewriting a join predicate also rewrites its tracked expression, which
+		// must keep the outer form if the predicate stays above the derived table
+		inner = jp.Current()
+	}
+	newExpr := semantics.RewriteDerivedTableExpression(inner, tableInfo)
+	// a predicate that reads no column of the derived table stays above it, where
+	// a merging recursive CTE can restore its original form
+	if ctx.ContainsAggr(newExpr) || nothingNeedsFetching(ctx, newExpr) {
 		return newFilter(h, expr)
 	}
-	h.Source = h.Source.AddPredicate(ctx, newExpr)
+	h.Source = h.Source.AddPredicate(ctx, semantics.RewriteDerivedTableExpression(expr, tableInfo))
 	return h
 }
 

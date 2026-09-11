@@ -44,9 +44,6 @@ type RecurseCTE struct {
 	// It's filled in at offset planning time
 	Vars map[string]int
 
-	// MyTableID is the id of the CTE
-	MyTableInfo *semantics.CTETable
-
 	// Horizon is stored here until we either expand it or push it under a route
 	Horizon *Horizon
 
@@ -96,31 +93,12 @@ func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Ex
 }
 
 func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr *sqlparser.AliasedExpr) int {
-	r.makeSureWeHaveTableInfo(ctx)
-	e := semantics.RewriteDerivedTableExpression(expr.Expr, r.MyTableInfo)
-	offset := r.Seed().FindCol(ctx, e, false)
+	offset := r.columnOffset(ctx, expr.Expr)
 	if offset == -1 {
-		panic(vterrors.VT13001("CTE column not found"))
+		// the seed may project an equal expression, but the term rows can hold other values there
+		panic(vterrors.VT12001("expression over recursive CTE columns: " + sqlparser.String(expr.Expr)))
 	}
 	return offset
-}
-
-func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
-	if r.MyTableInfo == nil {
-		for _, table := range ctx.SemTable.Tables {
-			cte, ok := table.(*semantics.CTETable)
-			if !ok {
-				continue
-			}
-			if cte.CTE == r.Def {
-				r.MyTableInfo = cte
-				break
-			}
-		}
-		if r.MyTableInfo == nil {
-			panic(vterrors.VT13001("CTE not found"))
-		}
-	}
 }
 
 func (r *RecurseCTE) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
@@ -132,10 +110,31 @@ func (r *RecurseCTE) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	return seed
 }
 
-func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	r.makeSureWeHaveTableInfo(ctx)
-	expr = semantics.RewriteDerivedTableExpression(expr, r.MyTableInfo)
-	return r.Seed().FindCol(ctx, expr, underRoute)
+func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
+	return r.columnOffset(ctx, expr)
+}
+
+// columnOffset resolves a column of the CTE by its position, since distinct
+// columns can share the same seed expression
+func (r *RecurseCTE) columnOffset(ctx *plancontext.PlanningContext, expr sqlparser.Expr) int {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return -1
+	}
+	if len(r.Def.Columns) > 0 {
+		for offset, column := range r.Def.Columns {
+			if col.Name.Equal(column) {
+				return offset
+			}
+		}
+		return -1
+	}
+	for offset, column := range r.Seed().GetColumns(ctx) {
+		if col.Name.EqualString(column.ColumnName()) {
+			return offset
+		}
+	}
+	return -1
 }
 
 func (r *RecurseCTE) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
@@ -178,6 +177,15 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			_, found := r.Vars[lhsExpr.Name]
 			if found {
 				continue
+			}
+
+			// a declared column list renames every output column of the CTE, so
+			// its names are matched positionally against the seed columns first
+			for offset, column := range r.Def.Columns {
+				if lhsExpr.Expr.Name.Equal(column) {
+					r.Vars[lhsExpr.Name] = offset
+					continue outer
+				}
 			}
 
 			for offset, column := range columns {

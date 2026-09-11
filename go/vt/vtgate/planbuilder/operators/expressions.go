@@ -35,6 +35,10 @@ func breakExpressionInLHSandRHS(
 			return
 		}
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
+		if deps.IsEmpty() {
+			// a column with a literal value reads no table but still belongs to its own
+			deps = ctx.SemTable.DirectDeps(nodeExpr)
+		}
 		if !deps.IsSolvedBy(lhs) {
 			return
 		}
