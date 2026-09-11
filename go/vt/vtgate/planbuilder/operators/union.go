@@ -120,10 +120,13 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 		predicate := expr
 
 		if jp, ok := predicate.(*predicates.JoinPredicate); ok {
-			// Create a new JoinPredicate for each source to keep tracking working
-			// We can't use `*JoinPredicate.Clone` here as that would update the tracker and overwrite
-			// the expression for the original predicate
-			predicate = ctx.PredTracker.NewJoinPredicate(jp.Current())
+			// Each source needs its own copy, since the column references below are rewritten to
+			// that source's expressions. We can't use `*JoinPredicate.Clone` here as that would
+			// update the tracker and overwrite the expression for the original predicate. The copy
+			// is registered against the original so that skipping the original skips it too -
+			// otherwise a join that later merges into a single route leaves these copies behind,
+			// referencing join bind variables that nothing binds.
+			predicate = ctx.PredTracker.NewDerivedJoinPredicate(jp.ID, jp.Current())
 		}
 
 		predicate = sqlparser.CopyOnRewrite(predicate, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
