@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -538,25 +539,33 @@ func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
 			return true
 		}
 	}
-	return keyspaceRoutedAway(vs, keyspace)
+	_, routed := primaryKeyspaceRoute(vs, keyspace)
+	return routed
 }
 
-// keyspaceRoutedAway reports whether a primary keyspace routing rule sends the
-// given keyspace's writes to another keyspace, which is what SwitchWrites does
-// for a multi-tenant migration: it points the source keyspace's primary rule at
-// the target and leaves the denied tables it added on the source shards in
-// place. Only the rule for primaries is considered, and only where the keyspace
-// is the source: the target of such a rule has no denied tables of its own to
-// find, so admitting it would reintroduce the shard scan this gate exists to
-// avoid. Rules for the other tablet types carry an @replica or @rdonly suffix
-// in their from-keyspace and so never match here.
-func keyspaceRoutedAway(vs *vschemapb.SrvVSchema, keyspace string) bool {
+// primaryKeyspaceRoute returns the keyspace a primary keyspace routing rule
+// sends the given keyspace's writes to, and whether such a rule exists. A
+// multi-tenant migration is the only thing that writes these: setupInitialRoutingRules
+// creates them at Create as self routes, source -> source for each tablet
+// type, changeWriteRoute repoints the primary one at the target during
+// SwitchWrites, and deleteKeyspaceRoutingRules removes them at Complete
+// together with the source's denied tables. The self route matters as much as
+// the repointed one: stopSourceWrites denies the tables on the source before
+// changeWriteRoute runs, so between the two the source has denied tables while
+// its rule still points at itself, and a SrvVSchema update landing in that
+// window must not conclude that nothing is going on.
+//
+// Only the rule for primaries is matched, and only where the keyspace is the
+// rule's source. Every writer keys these rules by the source keyspace, with an
+// @replica or @rdonly suffix for the other tablet types, so the migration's
+// target is never a from-keyspace and never becomes scannable through this.
+func primaryKeyspaceRoute(vs *vschemapb.SrvVSchema, keyspace string) (string, bool) {
 	for _, rule := range vs.GetKeyspaceRoutingRules().GetRules() {
-		if rule.GetFromKeyspace() == keyspace && rule.GetToKeyspace() != keyspace {
-			return true
+		if rule.GetFromKeyspace() == keyspace {
+			return rule.GetToKeyspace(), true
 		}
 	}
-	return false
+	return "", false
 }
 
 func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTablesState, error) {
@@ -651,11 +660,14 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	}
 	// A multi-tenant migration routes whole keyspaces rather than tables, so it
 	// writes no table rule for the denied table found above to match against.
-	// Its writes are switched once the source keyspace's primary rule points at
-	// the target.
-	if mtState.State != MoveTablesSwitched && keyspaceRoutedAway(vs, kss.keyspace) {
+	// Its writes are switched once the source keyspace's primary rule points
+	// somewhere else; while it still points at the keyspace itself the denied
+	// tables are in place but the route has not moved, which is the Switching
+	// the state was initialized to above.
+	if to, routed := primaryKeyspaceRoute(vs, kss.keyspace); routed && to != kss.keyspace {
 		mtState.State = MoveTablesSwitched
-		log.Info(fmt.Sprintf("onSrvKeyspace:: keyspace %s writes have been switched by a keyspace routing rule", kss.keyspace))
+		log.Info("MoveTables writes switched by a keyspace routing rule",
+			slog.String("keyspace", kss.keyspace), slog.String("routedTo", to))
 	}
 	log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
 

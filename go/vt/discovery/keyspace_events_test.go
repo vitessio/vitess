@@ -876,6 +876,8 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
 					Rules: []*vschemapb.KeyspaceRoutingRule{
 						{FromKeyspace: "source", ToKeyspace: "target"},
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
 					},
 				},
 			},
@@ -884,22 +886,43 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			wantState:    MoveTablesSwitched,
 		},
 		{
-			// The rules a multi-tenant migration starts with route the target
-			// back to the source, so the source is only ever a to-keyspace and
-			// its writes have not been switched. It has no denied tables yet
-			// either, which is what the scan finds.
-			name: "multi-tenant MoveTables before switching writes",
+			// What setupInitialRoutingRules actually writes at Create: a self
+			// route for every tablet type. The denied tables are on the target
+			// at this point, so the scan finds none here and reports nothing.
+			name: "multi-tenant MoveTables at create",
 			vs: &vschemapb.SrvVSchema{
 				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
 					Rules: []*vschemapb.KeyspaceRoutingRule{
-						{FromKeyspace: "target", ToKeyspace: "source"},
+						{FromKeyspace: "source", ToKeyspace: "source"},
+						{FromKeyspace: "source@replica", ToKeyspace: "source"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "source"},
 					},
 				},
 			},
 			deniedShards: nil,
 			wantType:     MoveTablesNone,
 			wantState:    MoveTablesUnknown,
-			wantNoScan:   true,
+		},
+		{
+			// The window inside SwitchWrites: stopSourceWrites has denied the
+			// tables on the source, but changeWriteRoute has not repointed the
+			// rule yet, so it still routes the keyspace to itself. A
+			// SrvVSchema update landing here must report the migration as
+			// switching rather than concluding nothing is going on, or vtgate
+			// stops buffering while the source is already refusing writes.
+			name: "multi-tenant MoveTables while switching writes",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
 		},
 	}
 
@@ -1023,6 +1046,21 @@ func TestRulesReferenceKeyspace(t *testing.T) {
 				},
 			},
 			want: false,
+		},
+		{
+			// The self route setupInitialRoutingRules writes at Create. It has
+			// to be admitted too: stopSourceWrites denies the source's tables
+			// before changeWriteRoute repoints this rule, so the window in
+			// between has denied tables while the rule still points here.
+			name: "keyspace is the source of a self-routing primary keyspace rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			want: true,
 		},
 		{
 			// A multi-tenant SwitchWrites points the source keyspace's primary
