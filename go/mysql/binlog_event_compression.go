@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -58,6 +59,10 @@ const (
 	// Length of the binlog event header for internal events within
 	// the transaction payload.
 	headerLen = binlogEventLenOffset + eventLenBytes
+
+	// eventChunkSize is how much of an event body must actually arrive before its
+	// declared length is used to size the final buffer.
+	eventChunkSize = 1 << 20
 )
 
 var (
@@ -247,6 +252,12 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	header := make([]byte, headerLen)
+	// Bytes of the declared payload not yet read. uncompressedSize is not verified
+	// against the decoded stream, so 0 means "unknown" and the check is skipped.
+	remaining := int64(-1)
+	if tp.uncompressedSize > 0 && tp.uncompressedSize <= math.MaxInt64 {
+		remaining = int64(tp.uncompressedSize)
+	}
 	tp.iterator = func() (ble BinlogEvent, err error) {
 		bytesRead, err := io.ReadFull(tp.reader, header)
 		if err != nil {
@@ -260,6 +271,53 @@ func (tp *TransactionPayload) decode() error {
 				headerLen, bytesRead)
 		}
 		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
+		if eventLen < headerLen {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"binlog event length of %d is smaller than the event header", eventLen)
+		}
+		// eventLen is a four byte field from the payload, so it must not size an
+		// allocation unbounded. An absolute ceiling is wrong -- the recorded fixture
+		// large_compressed_trx_payload.bin legitimately declares 173,120,239 bytes --
+		// and uncompressedSize is not verified against the stream, so it is not a
+		// bound on its own either. Bound by the declared bytes not yet consumed, and
+		// reserve no more than eventChunkSize until that much has actually arrived.
+		if remaining >= 0 && eventLen-headerLen > remaining {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"binlog event length of %d exceeds the %d bytes left in the transaction payload",
+				eventLen, remaining+headerLen)
+		}
+		if eventLen-headerLen > eventChunkSize {
+			// Grow geometrically and never past what has arrived, so the reservation
+			// stays within a factor of two of the bytes actually decoded. Reading one
+			// fixed chunk and then committing to eventLen only postpones the
+			// allocation.
+			buf := make([]byte, headerLen, headerLen+eventChunkSize)
+			copy(buf, header)
+			for int64(len(buf)) < eventLen {
+				if len(buf) == cap(buf) {
+					next := min(int64(cap(buf))*2, eventLen)
+					grown := make([]byte, len(buf), next)
+					copy(grown, buf)
+					buf = grown
+				}
+				want := min(int64(cap(buf)), eventLen)
+				at := len(buf)
+				buf = buf[:want]
+				n, err := io.ReadFull(tp.reader, buf[at:])
+				if err != nil {
+					if err == io.EOF || err == io.ErrUnexpectedEOF {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"binlog event claims a length of %d but only %d bytes of it arrived",
+							eventLen, int64(at-headerLen)+int64(n))
+					}
+					return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
+				}
+			}
+			if remaining >= 0 {
+				remaining -= eventLen - headerLen
+			}
+			return NewMysql56BinlogEvent(buf), nil
+		}
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
@@ -267,8 +325,12 @@ func (tp *TransactionPayload) decode() error {
 			return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
 		}
 		if int64(bytesRead+headerLen) != eventLen {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"expected binlog event length of %d but only read %d bytes",
 				eventLen, bytesRead)
+		}
+		if remaining >= 0 {
+			remaining -= int64(bytesRead)
 		}
 		return NewMysql56BinlogEvent(eventData), nil
 	}

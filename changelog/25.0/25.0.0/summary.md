@@ -23,6 +23,7 @@
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
+        - [Malformed compressed transaction payloads are rejected before allocating](#vreplication-transaction-payload-length-bounds)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -221,6 +222,16 @@ Online DDL now creates its vreplication streams with a per-workflow configuratio
 As part of this change, vreplication terminal errors are now classified in their error message as either unrecoverable (retrying cannot fix them) or retries-exhausted (the retry window expired on an otherwise recoverable error), making it clear to operators why a stream stopped.
 
 See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
+
+#### <a id="vreplication-transaction-payload-length-bounds"/>Malformed compressed transaction payloads are rejected before allocating</a>
+
+When reading a compressed transaction payload (`binlog_transaction_compression=ON`), the internal event length and the interval count in a MySQL 5.6 GTID set are both taken from the payload itself. Both are now bounded before they size an allocation, so a malformed payload is rejected rather than first reserving memory proportional to the value it claims.
+
+**Behavior change:** a payload whose event length exceeds the bytes remaining in the decompressed stream now fails with `INVALID_ARGUMENT` naming both figures. Previously the same payload was also rejected, but only after the claimed length had been allocated, so the observable difference is the error message and the point of failure — not whether the payload is accepted. Well-formed payloads are unaffected, and no flag or configuration changes.
+
+**Impact:** operators parsing malformed or truncated binlog payloads will see the new `INVALID_ARGUMENT` text in place of the previous internal length-mismatch error. Anything matching on that error string should be updated.
+
+See [#20932](https://github.com/vitessio/vitess/pull/20932) and [#20933](https://github.com/vitessio/vitess/pull/20933) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
