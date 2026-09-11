@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/hex"
+	"strings"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -176,13 +177,48 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	return buf.ParsedQuery()
 }
 
+// targetDataColumns maps the DataColumns bitmap of a row event, whose bits are
+// indexed by the columns streamed from the source (tp.Fields), onto the target
+// table's column expressions (tpb.colExprs) so that bit i of the result says
+// whether colExprs[i] can be generated from the row event. A target column is
+// present when every source column that its expression references is present.
+// Expressions that reference no streamed column, such as constants in a
+// Materialize filter, always have a value and are marked as present.
+func (tp *TablePlan) targetDataColumns(dataColumns *binlogdatapb.RowChange_Bitmap) *binlogdatapb.RowChange_Bitmap {
+	fieldIndexes := make(map[string]int, len(tp.Fields))
+	for i, field := range tp.Fields {
+		fieldIndexes[strings.ToLower(field.Name)] = i
+	}
+	colExprs := tp.TablePlanBuilder.colExprs
+	target := &binlogdatapb.RowChange_Bitmap{
+		Count: int64(len(colExprs)),
+		Cols:  make([]byte, (len(colExprs)+7)/8),
+	}
+	for i, cexpr := range colExprs {
+		present := true
+		for ref := range cexpr.references {
+			idx, ok := fieldIndexes[strings.ToLower(ref)]
+			if !ok {
+				// Not a streamed column, so the bitmap has nothing to say about it.
+				continue
+			}
+			if int64(idx) >= dataColumns.Count || !isBitSet(dataColumns.Cols, idx) {
+				present = false
+				break
+			}
+		}
+		setBit(target.Cols, i, present)
+	}
+	return target
+}
+
 func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := hex.EncodeToString(dataColumns.Cols)
 	ins, ok := tp.PartialInserts[key]
 	if ok {
 		return ins, nil
 	}
-	ins = tp.TablePlanBuilder.createPartialInsertQuery(dataColumns)
+	ins = tp.TablePlanBuilder.createPartialInsertQuery(tp.targetDataColumns(dataColumns))
 	if ins == nil {
 		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tp.TargetName)
 	}
@@ -197,7 +233,7 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_B
 	if ok {
 		return upd, nil
 	}
-	upd = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
+	upd = tp.TablePlanBuilder.createPartialUpdateQuery(tp.targetDataColumns(dataColumns))
 	if upd == nil {
 		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial update query for "+tp.TargetName)
 	}
