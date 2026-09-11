@@ -46,9 +46,15 @@ type (
 		Instructions Primitive               // Instructions define how the query is executed.
 		BindVarNeeds *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
 		Warnings     []*querypb.QueryWarning // Warnings accumulates any warnings generated for this plan.
-		// SpacedAggrCallWarnings are replayed on every execution like Warnings,
-		// unless the session's sql_mode has IGNORE_SPACE (see
-		// sqlparser.Tokenizer.SpacedAggrCalls).
+		// SpacedAggrCallWarnings are the warnings of the text this plan
+		// executes without that text being parsed again: a prepared
+		// statement's own, or the executed statement's for an EXECUTE plan.
+		// They are replayed on every execution like Warnings, unless the
+		// session's sql_mode has IGNORE_SPACE (see
+		// sqlparser.Tokenizer.SpacedAggrCalls). A plan built for a statement
+		// that is parsed on every execution carries none, since its key is
+		// the normalized text, which spellings with and without the
+		// whitespace share.
 		SpacedAggrCallWarnings []*querypb.QueryWarning
 		TablesUsed             []string             // TablesUsed enumerates the tables this query accesses.
 		QueryHints             sqlparser.QueryHints // QueryHints stores any SET_VAR hints that influenced plan generation.

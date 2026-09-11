@@ -120,7 +120,8 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
+		var spacedAggrCallWarnings []*querypb.QueryWarning
+		plan, vcursor, stmt, spacedAggrCallWarnings, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -144,8 +145,14 @@ func (e *Executor) newExecute(
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
 		}
-		if len(plan.SpacedAggrCallWarnings) > 0 && !e.sessionSQLModeHas(safeSession, sqlmode.IgnoreSpace) {
+		// a prepared plan, or an EXECUTE plan, carries the warnings of the
+		// text it executes without parsing; any other statement's come from
+		// this execution's parse
+		if (len(plan.SpacedAggrCallWarnings) > 0 || len(spacedAggrCallWarnings) > 0) && !e.sessionSQLModeHas(safeSession, sqlmode.IgnoreSpace) {
 			for _, warning := range plan.SpacedAggrCallWarnings {
+				safeSession.RecordWarning(warning)
+			}
+			for _, warning := range spacedAggrCallWarnings {
 				safeSession.RecordWarning(warning)
 			}
 		}

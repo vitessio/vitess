@@ -1253,10 +1253,10 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats *logstats.LogStats,
 	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
-	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error,
+	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, spacedAggrCallWarnings []*querypb.QueryWarning, err error,
 ) {
 	if e.VSchema() == nil {
-		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
+		return nil, nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
@@ -1274,19 +1274,25 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		var spacedAggrCalls []string
+		plan, logStats.CachedPlan, stmt, spacedAggrCalls, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
 			// The baseline plan failed to build, try to build an optimized plan
 			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
 		}
+		// a prepared plan carries its own warnings, since it is executed
+		// again without its text being parsed again
+		if !preparedPlan {
+			spacedAggrCallWarnings = buildSpacedAggrCallWarnings(spacedAggrCalls)
+		}
 	}
 	if err != nil {
-		return nil, nil, stmt, err
+		return nil, nil, stmt, nil, err
 	}
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
 		vcursor.SetBindVars(bindVars)
-		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		optimizedPlan, _, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
 			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
 				sp.Baseline = plan.Instructions
@@ -1303,7 +1309,7 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return plan, vcursor, stmt, nil
+	return plan, vcursor, stmt, spacedAggrCallWarnings, nil
 }
 
 func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
@@ -1322,7 +1328,7 @@ func (e *Executor) tryOptimizedPlan(
 	prevErr error,
 ) (*engine.Plan, error) {
 	vcursor.SetBindVars(bindVars)
-	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	sPlan, _, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
 	if err == nil {
 		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
 			sp.BaselineErr = prevErr
@@ -1366,10 +1372,10 @@ func (e *Executor) getCachedOrBuildPlan(
 	parameterize bool,
 	planKey engine.PlanKey,
 	ignoreCache bool,
-) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
+) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, spacedAggrCalls []string, err error) {
 	stmt, reservedVars, spacedAggrCalls, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, nil, err
 	}
 
 	preparedPlan := planKey.Query != ""
@@ -1385,7 +1391,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		// statement with NULL field types.
 		switch stmt.(type) {
 		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+			return nil, false, nil, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 		}
 	}
 
@@ -1397,7 +1403,7 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	qh, err := sqlparser.BuildQueryHints(stmt)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, nil, err
 	}
 
 	if qh.ForeignKeyChecks == nil {
@@ -1428,7 +1434,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		vcursor,
 	)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, nil, err
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
@@ -1443,12 +1449,12 @@ func (e *Executor) getCachedOrBuildPlan(
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
-			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, true)
+			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, preparedPlan, true)
 		})
-		return plan, cached, stmt, err
+		return plan, cached, stmt, spacedAggrCalls, err
 	}
-	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, false)
-	return plan, false, stmt, err
+	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, spacedAggrCalls, preparedPlan, false)
+	return plan, false, stmt, spacedAggrCalls, err
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
@@ -1501,6 +1507,7 @@ func (e *Executor) buildStatement(
 	qh sqlparser.QueryHints,
 	paramsCount uint16,
 	spacedAggrCalls []string,
+	preparedPlan bool,
 	countSpacedAggrCalls bool,
 ) (*engine.Plan, error) {
 	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
@@ -1510,36 +1517,51 @@ func (e *Executor) buildStatement(
 
 	plan.ParamsCount = paramsCount
 	plan.Warnings = vcursor.GetAndEmptyWarnings()
-	// a plan that executes another statement's plan (EXECUTE) carries that
-	// plan's warnings already
-	plan.SpacedAggrCallWarnings = append(plan.SpacedAggrCallWarnings, e.spacedAggrCallWarnings(query, spacedAggrCalls, countSpacedAggrCalls)...)
+	if countSpacedAggrCalls {
+		e.countSpacedAggrCalls(query, spacedAggrCalls)
+	}
+	// A plan is keyed by its normalized text, which two spellings of the
+	// same query share, so the warnings of a statement that is parsed again
+	// on every execution come from that execution's parse. A prepared plan
+	// is executed without its text, so it carries its own; a plan that
+	// executes another statement's plan (EXECUTE) carries that plan's
+	// already.
+	if preparedPlan {
+		plan.SpacedAggrCallWarnings = append(plan.SpacedAggrCallWarnings, buildSpacedAggrCallWarnings(spacedAggrCalls)...)
+	}
 	plan.QueryHints = qh
 
 	err = e.checkThatPlanIsValid(stmt, plan)
 	return plan, err
 }
 
-// spacedAggrCallWarnings builds the warnings for the aggregate names the
+// countSpacedAggrCalls counts and logs a query that separates the named
+// aggregates from their parenthesis with whitespace or a comment (see
+// sqlparser.Tokenizer.SpacedAggrCalls), so that operators can find the
+// queries whose meaning the next major release changes. It is called when
+// the plan is built for the plan cache, so a query is counted once per
+// cached plan; a plan built for every execution, because the query or the
+// session skips the plan cache, or a prepared statement's re-planning, is
+// not counted again. The logged query is redacted, and so printed in its
+// normalized form, with the parentheses attached.
+func (e *Executor) countSpacedAggrCalls(query string, names []string) {
+	if len(names) == 0 {
+		return
+	}
+	warnings.Add("SpacedAggrCall", 1)
+	piiSafeSQL, err := e.env.Parser().RedactSQLQuery(query)
+	if err != nil {
+		piiSafeSQL = "<unredactable>"
+	}
+	spacedAggrCallLogger.Warningf("query separates an aggregate name from its parenthesis, which the next major release reads as a stored-function call: names=%s normalized_query=%q", strings.Join(names, ","), piiSafeSQL)
+}
+
+// buildSpacedAggrCallWarnings builds the warnings for the aggregate names a
 // query separates from their parenthesis with whitespace or a comment (see
-// sqlparser.Tokenizer.SpacedAggrCalls). When count is set, which it is when
-// the plan is built for the plan cache, it also counts the query once and
-// logs it, so that operators can find the queries whose meaning the next
-// major release changes. A plan built for every execution, because the query
-// or the session skips the plan cache, or a prepared statement's re-planning,
-// is not counted or logged again; its warnings still reach the client. The
-// logged query is redacted, and so printed in its normalized form, with the
-// parentheses attached.
-func (e *Executor) spacedAggrCallWarnings(query string, names []string, count bool) []*querypb.QueryWarning {
+// sqlparser.Tokenizer.SpacedAggrCalls).
+func buildSpacedAggrCallWarnings(names []string) []*querypb.QueryWarning {
 	if len(names) == 0 {
 		return nil
-	}
-	if count {
-		warnings.Add("SpacedAggrCall", 1)
-		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(query)
-		if err != nil {
-			piiSafeSQL = "<unredactable>"
-		}
-		spacedAggrCallLogger.Warningf("query separates an aggregate name from its parenthesis, which the next major release reads as a stored-function call: names=%s normalized_query=%q", strings.Join(names, ","), piiSafeSQL)
 	}
 	result := make([]*querypb.QueryWarning, 0, len(names))
 	for _, name := range names {
@@ -1868,7 +1890,7 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	plan, vcursor, stmt, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -2077,7 +2099,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
+	plan, _, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
 	}

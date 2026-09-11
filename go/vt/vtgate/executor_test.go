@@ -1696,7 +1696,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, session *econ
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 	session.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats, true)
+	plan, _, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats, true)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1852,7 +1852,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 
-			plan, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+			plan, _, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
@@ -3815,4 +3815,30 @@ func TestExecutorSpacedAggrCallWarning(t *testing.T) {
 		assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, session.Warnings[0].Code)
 	}
 	assert.Equal(t, before+1, counter(), "counted once for the prepared statement")
+}
+
+// The spaced and the attached spelling of a query share a cached plan, since
+// the plan is keyed by the normalized text; the warning follows the spelling
+// executed, whichever populated the cache.
+func TestExecutorSpacedAggrCallWarningSharedPlan(t *testing.T) {
+	spaced, attached := "select sum (id) from main1", "select sum(id) from main1"
+	for name, order := range map[string][]string{
+		"spaced first":   {spaced, attached, spaced},
+		"attached first": {attached, spaced, attached},
+	} {
+		t.Run(name, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			for _, query := range order {
+				session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+				_, err := executorExecSession(ctx, executor, session, query, nil)
+				require.NoError(t, err)
+				if query == spaced {
+					require.Len(t, session.Warnings, 1, query)
+					assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, session.Warnings[0].Code)
+				} else {
+					assert.Empty(t, session.Warnings, query)
+				}
+			}
+		})
+	}
 }
