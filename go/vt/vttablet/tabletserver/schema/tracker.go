@@ -128,6 +128,9 @@ func (tr *Tracker) process(ctx context.Context) {
 		if err == nil {
 			break
 		}
+		if ctx.Err() != nil {
+			return
+		}
 
 		tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 		log.Error(fmt.Sprintf("error getting the schema tracker's startup position: %v", err))
