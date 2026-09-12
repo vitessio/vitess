@@ -57,6 +57,7 @@ type Metrics struct {
 	idleClosed           atomic.Int64
 	diffSetting          atomic.Int64
 	resetSetting         atomic.Int64
+	discardedAfterCall   atomic.Int64
 	waiterCapRejected    atomic.Int64
 }
 
@@ -90,6 +91,17 @@ func (m *Metrics) DiffSettingCount() int64 {
 
 func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
+}
+
+// DiscardedAfterCallCount is the number of connections closed instead of
+// returned to the pool because a CALL ran on them.
+func (m *Metrics) DiscardedAfterCallCount() int64 {
+	return m.discardedAfterCall.Load()
+}
+
+// RecordDiscardedAfterCall counts a connection discarded after a CALL.
+func (m *Metrics) RecordDiscardedAfterCall() {
+	m.discardedAfterCall.Add(1)
 }
 
 func (m *Metrics) WaiterCapRejected() int64 {
@@ -1060,5 +1072,8 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	})
 	stats.NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", func() int64 {
 		return pool.Metrics.ResetSettingCount()
+	})
+	stats.NewCounterFunc(name+"DiscardedAfterCall", "Number of connections closed instead of returned to the pool because a CALL ran on them", func() int64 {
+		return pool.Metrics.DiscardedAfterCallCount()
 	})
 }

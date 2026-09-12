@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,6 +110,8 @@ type DB struct {
 	queryCalled map[string]int
 	// querylog keeps track of all called queries
 	querylog []string
+	// queryConnIDs records, per logged query, the id of the connection it ran on.
+	queryConnIDs map[string][]uint32
 
 	// This next set of fields is used when ordering of the queries matters.
 
@@ -187,6 +190,7 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 		data:                     make(map[string]*ExpectedResult),
 		rejectedData:             make(map[string]error),
 		queryCalled:              make(map[string]int),
+		queryConnIDs:             make(map[string][]uint32),
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
@@ -417,6 +421,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	db.mu.Lock()
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
+	db.queryConnIDs[key] = append(db.queryConnIDs[key], c.ConnectionID)
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose.Load() {
 		defer db.mu.Unlock()
@@ -701,6 +706,24 @@ func (db *DB) GetQueryCalledNum(query string) int {
 	return num
 }
 
+// IsConnectionOpen reports whether the server still holds the connection with
+// the given id.
+func (db *DB) IsConnectionOpen(id uint32) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	_, ok := db.connections[id]
+	return ok
+}
+
+// QueryConnIDs returns the ids of the connections the given query ran on, one
+// per execution in order, so a test can tell whether two queries shared a
+// connection.
+func (db *DB) QueryConnIDs(query string) []uint32 {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return slices.Clone(db.queryConnIDs[strings.ToLower(query)])
+}
+
 // QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
 	db.mu.Lock()
@@ -713,6 +736,7 @@ func (db *DB) ResetQueryLog() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.querylog = nil
+	db.queryConnIDs = make(map[string][]uint32)
 }
 
 // EnableConnFail makes connection to this fake DB fail.

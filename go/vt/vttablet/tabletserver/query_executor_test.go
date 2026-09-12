@@ -2666,6 +2666,164 @@ func (m mockTxThrottler) Throttle(priority int, workload string) (result bool) {
 	return m.throttle
 }
 
+// TestExecCallProcDiscardsConn pins the fix for vitessio/vitess#21046: a CALL on
+// a pooled connection may leave session state behind (a SET SESSION or a
+// temporary table inside the procedure body is invisible to the tablet's
+// statement classification), so the connection is closed after the CALL rather
+// than returned to the pool — on success, after a statement error, and after
+// draining a multi-resultset — and the CALL's own outcome is what the caller
+// sees.
+func TestExecCallProcDiscardsConn(t *testing.T) {
+	ctx := t.Context()
+	query := "call test_proc()"
+	newExecutor := func(t *testing.T) (*fakesqldb.DB, *TabletServer) {
+		db := setUpQueryExecutorTest(t)
+		t.Cleanup(db.Close)
+		tsv := newTestTabletServer(ctx, noFlags, db)
+		t.Cleanup(tsv.StopService)
+		return db, tsv
+	}
+	// The MySQL connection the CALL ran on must be gone from the server's side
+	// afterwards, so no later borrower can ever be handed it.
+	callConnDiscarded := func(t *testing.T, db *fakesqldb.DB, tsv *TabletServer) {
+		t.Helper()
+		callConns := db.QueryConnIDs(query)
+		require.Len(t, callConns, 1, "the CALL must have run once")
+		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
+			30*time.Second, 10*time.Millisecond, "the connection a CALL ran on must be closed, not returned to the pool")
+		assert.EqualValues(t, 1, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "the discarded connection must be counted")
+	}
+
+	t.Run("success", func(t *testing.T) {
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		qre := newTestQueryExecutor(ctx, tsv, query, 0)
+		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("statement error", func(t *testing.T) {
+		// A procedure that dirtied the session and then failed (a SIGNAL, a
+		// typo'd name) leaves the same residue as one that succeeded, and the
+		// caller sees the procedure's error.
+		db, tsv := newExecutor(t)
+		db.AddRejectedQuery(query, errors.New("procedure failed"))
+		qre := newTestQueryExecutor(ctx, tsv, query, 0)
+
+		_, err := qre.Execute()
+		require.ErrorContains(t, err, "procedure failed")
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("a CALL that never reached MySQL keeps its connection", func(t *testing.T) {
+		// A missing bind variable fails the CALL before any statement is sent,
+		// so the connection's session is untouched and must not be discarded:
+		// malformed requests must not churn connections.
+		db, tsv := newExecutor(t)
+		// Warm exactly one pool connection; an idle pool hands the most recently
+		// returned connection out first, so the same id afterwards proves the
+		// CALL did not cost it.
+		const next = "select 1 from dual limit 10001"
+		db.AddQuery(next, &sqltypes.Result{})
+		_, err := newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
+		require.NoError(t, err)
+		warmConns := db.QueryConnIDs(next)
+		require.Len(t, warmConns, 1)
+
+		qre := newTestQueryExecutor(ctx, tsv, "call test_proc(:missing)", 0)
+		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+		_, err = qre.Execute()
+		require.ErrorContains(t, err, "missing bind var")
+		assert.Empty(t, db.QueryConnIDs(query), "nothing must have reached MySQL")
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "a CALL that was never sent must not cost the connection")
+
+		_, err = newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
+		require.NoError(t, err)
+		afterConns := db.QueryConnIDs(next)
+		require.Len(t, afterConns, 2)
+		assert.Equal(t, warmConns[0], afterConns[1], "the connection must still be the one the pool had")
+	})
+	t.Run("a timed-out CALL is discarded and counted", func(t *testing.T) {
+		// A query timeout kills only the query on a pooled connection, leaving
+		// it open — so the CALL policy is what discards it, and that is counted.
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		db.SetBeforeFunc(query, func() { time.Sleep(1 * time.Second) })
+		db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+		execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+		qre := newTestQueryExecutor(execCtx, tsv, query, 0)
+
+		_, err := qre.Execute()
+		require.Error(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("an appdebug connection is not counted as a discard", func(t *testing.T) {
+		// The appdebug caller gets a standalone connection that Recycle closes
+		// after every query regardless of the CALL policy: no pool member is
+		// lost, so nothing must be counted against the pool.
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		debugParams, err := tsv.config.DB.AppDebugWithDB().MysqlParams()
+		require.NoError(t, err)
+		debugUser := debugParams.Uname
+		require.NotEmpty(t, debugUser)
+		debugCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("p", "c", "sc"), callerid.NewImmediateCallerID(debugUser))
+		qre := newTestQueryExecutor(debugCtx, tsv, query, 0)
+
+		_, err = qre.Execute()
+		require.NoError(t, err)
+		require.Len(t, db.QueryConnIDs(query), 1)
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "an appdebug connection is never a pool member, so it must not count as a discard")
+	})
+	t.Run("streaming discard is attributed to the streaming pool", func(t *testing.T) {
+		db, tsv := newExecutor(t)
+		db.AddQuery(query, &sqltypes.Result{})
+		qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+		err := qre.Stream(func(*sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+		callConns := db.QueryConnIDs(query)
+		require.Len(t, callConns, 1)
+		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
+			30*time.Second, 10*time.Millisecond, "the streaming connection a CALL ran on must be closed")
+		assert.EqualValues(t, 1, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "the discard must be counted on the streaming pool")
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "and not on the OLTP pool")
+
+		// A streaming CALL that fails with the procedure's own error also
+		// costs its connection, and that discard must be counted like the
+		// buffered path counts it.
+		db.AddRejectedQuery(query, errors.New("procedure failed"))
+		err = newTestQueryExecutorStreaming(ctx, tsv, query, 0).Stream(func(*sqltypes.Result) error { return nil })
+		require.ErrorContains(t, err, "procedure failed")
+		assert.EqualValues(t, 2, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "a failed streaming CALL's discard must be counted too")
+	})
+}
+
+// TestExecProcKeepsReservedConn pins the scope of the post-CALL discard: on a
+// reserved or transaction connection the session belongs to the caller, and
+// closing it would destroy that caller's own SETs and temporary tables.
+func TestExecProcKeepsReservedConn(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	query := "call test_proc()"
+	db.AddQuery(query, &sqltypes.Result{})
+
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+	qre := newTestQueryExecutor(ctx, tsv, query, conn.ReservedID())
+	_, err = qre.execProc(conn)
+	require.NoError(t, err)
+	assert.False(t, conn.IsClosed(), "a CALL on a reserved connection must keep the caller's own session")
+	assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount())
+}
+
 // TestExecProcClosesConnOnError verifies that a failed CALL on a reserved
 // connection closes that connection. A stored procedure can start a
 // transaction that Vitess does not track; since a reserved-connection timeout
