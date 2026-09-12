@@ -372,6 +372,22 @@ type Merger struct {
 	count int        // number of active (non-exhausted) streams
 }
 
+// NewMerger creates a merger with room for the expected number of streams.
+// The capacity avoids slice growth while the caller primes the merge tree.
+func NewMerger(compare Comparison, streams int) *Merger {
+	return &Merger{
+		Compare: compare,
+		keys:    make([]mergeRow, 0, mergeTreeCapacity(streams)),
+	}
+}
+
+func mergeTreeCapacity(streams int) int {
+	if streams <= 0 {
+		return 0
+	}
+	return 1 << bits.Len(uint(streams-1))
+}
+
 func (m *Merger) Len() int {
 	return m.count
 }
@@ -390,7 +406,7 @@ func (m *Merger) Init() {
 	}
 
 	// Round up to next power of 2
-	m.cap = 1 << bits.Len(uint(n-1))
+	m.cap = mergeTreeCapacity(n)
 
 	// Pad keys to capacity; padding entries are sentinel (source < 0)
 	m.keys = slices.Grow(m.keys, m.cap-n)

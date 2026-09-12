@@ -42,6 +42,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
+// mergeMinRowsPerRun is the largest average run size with no consistent merge
+// latency win. A full sort handles these small results without a merge tree.
+const mergeMinRowsPerRun = 4
+
 // WarmingReadsBaseWeight is the base semaphore weight for a warming read.
 // The actual weight is WarmingReadsBaseWeight + priority, where priority 0
 // (highest priority) gets the lowest weight and is least likely to be shed.
@@ -102,6 +106,9 @@ type Route struct {
 
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
+
+	// ShardResultIsSorted is set by the planner when Query orders every shard result by OrderBy.
+	ShardResultIsSorted bool
 
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
@@ -182,7 +189,20 @@ func (route *Route) executeShards(
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+	var (
+		result     *sqltypes.Result
+		resultRuns []*sqltypes.Result
+		errs       []error
+	)
+	if route.ShardResultIsSorted && len(route.OrderBy) > 0 && len(rss) > 1 {
+		if executor, ok := vcursor.(resultRunExecutor); ok {
+			result, resultRuns, errs = executor.ExecuteMultiShardWithResultRuns(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+		} else {
+			result, errs = vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+		}
+	} else {
+		result, errs = vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+	}
 
 	route.executeWarmingReplicaRead(ctx, vcursor, bindVars, queries)
 
@@ -201,10 +221,19 @@ func (route *Route) executeShards(
 	}
 
 	if len(route.OrderBy) > 0 && len(rss) > 1 {
+		merged := false
 		var err error
-		result, err = route.sort(result)
-		if err != nil {
-			return nil, err
+		if route.ShardResultIsSorted && len(resultRuns) == len(rss) {
+			result, merged, err = route.mergeResultRuns(result, resultRuns)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !merged {
+			result, err = route.sort(result)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -379,6 +408,93 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 
 	err := route.OrderBy.SortResult(out)
 	return out, err
+}
+
+// mergeResultRuns materializes sorted shard result runs into the combined result.
+func (route *Route) mergeResultRuns(in *sqltypes.Result, runs []*sqltypes.Result) (out *sqltypes.Result, merged bool, err error) {
+	if in == nil || len(runs) == 0 {
+		return in, false, nil
+	}
+
+	rows := 0
+	active := 0
+	for _, run := range runs {
+		if run != nil && len(run.Rows) > 0 {
+			active++
+			rows += len(run.Rows)
+		}
+	}
+	if rows != len(in.Rows) {
+		return in, false, nil
+	}
+	if active > 1 && rows <= active*mergeMinRowsPerRun {
+		return in, false, nil
+	}
+
+	out = in.ShallowCopy()
+	defer evalengine.PanicHandler(&err)
+	route.OrderBy.ApplyTinyWeights(out)
+	if active <= 1 {
+		return out, true, nil
+	}
+	ordered := true
+	havePrevious := false
+	var previous sqltypes.Row
+	for _, run := range runs {
+		if run == nil || len(run.Rows) == 0 {
+			continue
+		}
+		if havePrevious && route.OrderBy.Compare(previous, run.Rows[0]) > 0 {
+			ordered = false
+			break
+		}
+		previous = run.Rows[len(run.Rows)-1]
+		havePrevious = true
+	}
+	if ordered {
+		// Runs follow shard order, while in.Rows follows response completion
+		// order. Rebuild the row slice even though no comparisons remain.
+		position := 0
+		for _, run := range runs {
+			if run != nil {
+				position += copy(out.Rows[position:], run.Rows)
+			}
+		}
+		return out, true, nil
+	}
+
+	merge := evalengine.NewMerger(route.OrderBy, active)
+	positions := make([]int, len(runs))
+	for source, run := range runs {
+		if run == nil || len(run.Rows) == 0 {
+			continue
+		}
+		merge.Push(run.Rows[0], source)
+		positions[source] = 1
+	}
+	merge.Init()
+
+	for output := 0; output < len(out.Rows); output++ {
+		row, source := merge.Peek()
+		out.Rows[output] = row
+		next := positions[source]
+		if next == len(runs[source].Rows) {
+			merge.Pop()
+			if merge.Len() == 1 {
+				// The last run is already sorted. Copy its remaining tail
+				// without one heap repair for every row.
+				row, source = merge.Peek()
+				out.Rows[output+1] = row
+				copy(out.Rows[output+2:], runs[source].Rows[positions[source]:])
+				break
+			}
+			continue
+		}
+		merge.ReplaceMin(runs[source].Rows[next], source)
+		positions[source] = next + 1
+	}
+
+	return out, true, nil
 }
 
 func (route *Route) description() PrimitiveDescription {
