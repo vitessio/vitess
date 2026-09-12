@@ -17,6 +17,8 @@ limitations under the License.
 package cache
 
 import (
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -169,4 +171,98 @@ func TestLRUIsEvicted(t *testing.T) {
 
 	m := cache.Misses()
 	assert.EqualValues(t, 1, m)
+}
+
+func TestZeroCapacityEvictsImmediately(t *testing.T) {
+	cache := NewLRUCache[*CacheValue](0)
+	cache.Set("key", &CacheValue{1})
+
+	assert.Zero(t, cache.Len())
+	assert.Zero(t, cache.UsedCapacity())
+	assert.EqualValues(t, 1, cache.Evictions())
+
+	_, ok := cache.Get("key")
+	assert.False(t, ok)
+}
+
+func TestNegativeCapacityDoesNotPanic(t *testing.T) {
+	cache := NewLRUCache[*CacheValue](-1)
+	assert.NotPanics(t, func() { cache.Set("key", &CacheValue{1}) })
+	assert.Zero(t, cache.Len())
+
+	cache = NewLRUCache[*CacheValue](10)
+	cache.Set("key1", &CacheValue{1})
+	cache.Set("key2", &CacheValue{1})
+	assert.NotPanics(t, func() { cache.SetCapacity(-1) })
+	assert.Zero(t, cache.Len())
+	assert.EqualValues(t, 2, cache.Evictions())
+}
+
+// Fails under -race if UsedCapacity stops holding the lock.
+func TestUsedCapacityConcurrentWithSet(t *testing.T) {
+	cache := NewLRUCache[*CacheValue](64)
+	value := &CacheValue{1}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range 10000 {
+			cache.Set(strconv.Itoa(i), value)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 10000 {
+			_ = cache.UsedCapacity()
+		}
+	}()
+	wg.Wait()
+
+	assert.EqualValues(t, cache.Len(), cache.UsedCapacity())
+	assert.EqualValues(t, 64, cache.Len())
+}
+
+func BenchmarkLRUCacheGetHit(b *testing.B) {
+	const n = 1024
+	cache := NewLRUCache[*CacheValue](n)
+	keys := make([]string, n)
+	for i := range keys {
+		keys[i] = strconv.Itoa(i)
+		cache.Set(keys[i], &CacheValue{1})
+	}
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		cache.Get(keys[i%n])
+		i++
+	}
+}
+
+func BenchmarkLRUCacheSetExisting(b *testing.B) {
+	const n = 1024
+	cache := NewLRUCache[*CacheValue](n)
+	value := &CacheValue{1}
+	keys := make([]string, n)
+	for i := range keys {
+		keys[i] = strconv.Itoa(i)
+		cache.Set(keys[i], value)
+	}
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		cache.Set(keys[i%n], value)
+		i++
+	}
+}
+
+func BenchmarkLRUCacheSetNewEvict(b *testing.B) {
+	cache := NewLRUCache[*CacheValue](1024)
+	value := &CacheValue{1}
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		cache.Set(strconv.Itoa(i), value)
+		i++
+	}
 }
