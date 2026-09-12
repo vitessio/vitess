@@ -163,7 +163,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	originalLogger := params.Logger
 	if BackupLogToStorage() {
 		var err error
-		backupLogFile, err = os.CreateTemp("", "backup-log-*.txt")
+		backupLogFile, err = os.CreateTemp("", fmt.Sprintf("vtbackup-%s-*.log", bh.Name()))
 		if err != nil {
 			params.Logger.Warningf("Failed to create backup log file, continuing without separate log: %v", err)
 		} else {
@@ -196,28 +196,18 @@ func Backup(ctx context.Context, params BackupParams) error {
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 
-	// Upload backup log to storage before finalizing. Close the file and
-	// restore the original logger first so subsequent log lines don't write
-	// to the temp file. For usable backups, the log is uploaded and cleaned
-	// up only if the upload fully succeeds. For unusable backups, AbortBackup
-	// removes the storage directory anyway, so we keep the local log file
-	// for debugging instead.
+	// Close the backup log file and restore the original logger so
+	// subsequent log lines don't write to the temp file.
 	if backupLogFile != nil {
 		backupLogFile.Close()
 		logger = originalLogger
-		switch backupResult {
-		case BackupUsable:
-			if uploadBackupLog(ctx, logger, backupLogFile.Name(), bh) {
-				os.Remove(backupLogFile.Name())
-			} else {
-				logger.Infof("Backup log retained locally at %s", backupLogFile.Name())
-			}
-		case BackupUnusable:
-			uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
-			logger.Infof("Backup log retained locally at %s", backupLogFile.Name())
-		case BackupEmpty:
-			os.Remove(backupLogFile.Name())
-		}
+	}
+
+	// For usable backups, upload the log to storage before EndBackup.
+	// For unusable/empty backups, skip the upload: AbortBackup removes the
+	// storage directory, so only the local copy is useful for debugging.
+	if backupLogFile != nil && backupResult == BackupUsable {
+		uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
 	}
 
 	var finishErr error
@@ -232,6 +222,21 @@ func Backup(ctx context.Context, params BackupParams) error {
 		finishErr = bh.AbortBackup(ctx)
 	case BackupUsable:
 		finishErr = bh.EndBackup(ctx)
+	}
+
+	// Clean up the local backup log file. For usable backups, EndBackup
+	// has confirmed all async uploads (including BACKUP.log) landed in
+	// storage, so the local copy is safe to remove. For unusable backups,
+	// retain locally since the storage copy was not attempted.
+	if backupLogFile != nil {
+		switch {
+		case backupResult == BackupUsable && finishErr == nil:
+			os.Remove(backupLogFile.Name())
+		case backupResult == BackupEmpty:
+			os.Remove(backupLogFile.Name())
+		default:
+			logger.Infof("Backup log retained at %s", backupLogFile.Name())
+		}
 	}
 	if err != nil {
 		if finishErr != nil {
@@ -251,39 +256,38 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 const backupLogFileName = "BACKUP.log"
 
-func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) bool {
+func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) {
 	f, err := os.Open(logFilePath)
 	if err != nil {
 		logger.Warningf("Failed to open backup log file for upload: %v", err)
-		return false
+		return
 	}
 	defer f.Close()
 
 	fi, err := f.Stat()
 	if err != nil {
 		logger.Warningf("Failed to stat backup log file: %v", err)
-		return false
+		return
 	}
 
 	wc, err := bh.AddFile(ctx, backupLogFileName, fi.Size())
 	if err != nil {
 		logger.Warningf("Failed to add backup log file to storage: %v", err)
-		return false
+		return
 	}
 
 	if _, err := io.Copy(wc, f); err != nil {
 		wc.Close()
-		logger.Warningf("Failed to upload backup log file: %v", err)
-		return false
+		logger.Warningf("Failed to copy backup log to storage: %v", err)
+		return
 	}
 
 	if err := wc.Close(); err != nil {
 		logger.Warningf("Failed to finalize backup log upload: %v", err)
-		return false
+		return
 	}
 
 	logger.Infof("Backup log uploaded to storage as %s", backupLogFileName)
-	return true
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

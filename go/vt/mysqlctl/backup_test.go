@@ -772,6 +772,10 @@ func TestBackupWithLogToStorage(t *testing.T) {
 	backupLogToStorage = true
 	t.Cleanup(func() { backupLogToStorage = previousValue })
 
+	env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{
+		Res: BackupUsable,
+	}
+
 	var uploaded bytes.Buffer
 	startBackupHandle := env.backupStorage.StartBackupReturn.BackupHandle.(*FakeBackupHandle)
 	startBackupHandle.AddFileReturnF = func(filename string) FakeBackupHandleAddFileReturn {
