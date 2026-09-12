@@ -157,6 +157,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 	params.Logger.Infof("Starting backup %v", bh.Name())
 
+	// If backup-log-to-storage is enabled, tee logs to a temporary file that
+	// will be uploaded alongside the backup data.
+	var backupLogFile *os.File
+	if BackupLogToStorage() {
+		var err error
+		backupLogFile, err = os.CreateTemp("", "backup-log-*.txt")
+		if err != nil {
+			params.Logger.Warningf("Failed to create backup log file, continuing without separate log: %v", err)
+		} else {
+			fileLogger := logutil.NewWriterLogger(backupLogFile)
+			params.Logger = logutil.NewTeeLogger(params.Logger, fileLogger)
+		}
+	}
+
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
@@ -180,6 +194,24 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// Take the backup, and either AbortBackup or EndBackup.
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
+
+	// Upload backup log to storage before finalizing. For usable backups, the
+	// log is uploaded and then the temp file is cleaned up. For unusable
+	// backups, AbortBackup removes the storage directory anyway, so we keep the
+	// local log file for debugging instead.
+	if backupLogFile != nil {
+		switch backupResult {
+		case BackupUsable:
+			uploadBackupLog(ctx, logger, backupLogFile, bh)
+			os.Remove(backupLogFile.Name())
+		case BackupUnusable:
+			uploadBackupLog(ctx, logger, backupLogFile, bh)
+			logger.Infof("Backup log retained locally at %s", backupLogFile.Name())
+		case BackupEmpty:
+			os.Remove(backupLogFile.Name())
+		}
+	}
+
 	var finishErr error
 	switch backupResult {
 	case BackupUnusable:
@@ -207,6 +239,40 @@ func Backup(ctx context.Context, params BackupParams) error {
 	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
 	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
 	return finishErr
+}
+
+const backupLogFileName = "BACKUP.log"
+
+func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFile *os.File, bh backupstorage.BackupHandle) {
+	if err := logFile.Sync(); err != nil {
+		logger.Warningf("Failed to sync backup log file: %v", err)
+		return
+	}
+
+	fi, err := logFile.Stat()
+	if err != nil {
+		logger.Warningf("Failed to stat backup log file: %v", err)
+		return
+	}
+
+	if _, err := logFile.Seek(0, io.SeekStart); err != nil {
+		logger.Warningf("Failed to seek backup log file: %v", err)
+		return
+	}
+
+	wc, err := bh.AddFile(ctx, backupLogFileName, fi.Size())
+	if err != nil {
+		logger.Warningf("Failed to add backup log file to storage: %v", err)
+		return
+	}
+	defer wc.Close()
+
+	if _, err := io.Copy(wc, logFile); err != nil {
+		logger.Warningf("Failed to upload backup log file: %v", err)
+		return
+	}
+
+	logger.Infof("Backup log uploaded to storage as %s", backupLogFileName)
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

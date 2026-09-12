@@ -731,6 +731,66 @@ func TestScanLinesToLogger(t *testing.T) {
 	}
 }
 
+func TestUploadBackupLog(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "backup-log-*.txt")
+	require.NoError(t, err)
+
+	_, err = logFile.WriteString("line 1\nline 2\nline 3\n")
+	require.NoError(t, err)
+
+	var uploaded bytes.Buffer
+	bh := &FakeBackupHandle{
+		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
+			return FakeBackupHandleAddFileReturn{
+				WriteCloser: &nopWriteCloser{Writer: &uploaded},
+				Err:         nil,
+			}
+		},
+	}
+
+	uploadBackupLog(t.Context(), logger, logFile, bh)
+
+	require.Len(t, bh.AddFileCalls, 1)
+	assert.Equal(t, backupLogFileName, bh.AddFileCalls[0].Filename)
+	assert.Equal(t, "line 1\nline 2\nline 3\n", uploaded.String())
+}
+
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (nwc *nopWriteCloser) Close() error { return nil }
+
+func TestBackupWithLogToStorage(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+
+	previousValue := backupLogToStorage
+	backupLogToStorage = true
+	t.Cleanup(func() { backupLogToStorage = previousValue })
+
+	var uploaded bytes.Buffer
+	startBackupHandle := env.backupStorage.StartBackupReturn.BackupHandle.(*FakeBackupHandle)
+	startBackupHandle.AddFileReturnF = func(filename string) FakeBackupHandleAddFileReturn {
+		if filename == backupLogFileName {
+			return FakeBackupHandleAddFileReturn{
+				WriteCloser: &nopWriteCloser{Writer: &uploaded},
+				Err:         nil,
+			}
+		}
+		return FakeBackupHandleAddFileReturn{
+			WriteCloser: &nopWriteCloser{Writer: io.Discard},
+			Err:         nil,
+		}
+	}
+
+	require.NoError(t, Backup(env.ctx, env.backupParams))
+
+	// The backup log should have been uploaded with engine-specific log content.
+	assert.Contains(t, uploaded.String(), "Using backup engine")
+}
+
 func TestExecuteBackupInitSQL(t *testing.T) {
 	testCases := []struct {
 		name          string

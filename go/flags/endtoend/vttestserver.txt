@@ -7,6 +7,7 @@ Flags:
       --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app-pool-size int                                                Size of the connection pool for app connections (default 40)
       --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
+      --backup-log-to-storage                                            When set, backup and restore operations write engine-specific logs to a separate file and upload it to the backup storage directory alongside the backup data.
       --backup-storage-block-size int                                    if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
       --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
