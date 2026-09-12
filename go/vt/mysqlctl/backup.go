@@ -196,18 +196,15 @@ func Backup(ctx context.Context, params BackupParams) error {
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 
-	// Close the backup log file and restore the original logger so
-	// subsequent log lines don't write to the temp file.
-	if backupLogFile != nil {
+	// For usable backups, close the log file and restore the original
+	// logger before uploading (the upload reads the closed file by path).
+	// For unusable backups, keep the tee active so the failure error
+	// logged below is captured in the backup log file.
+	var backupLogUploaded bool
+	if backupLogFile != nil && backupResult == BackupUsable {
 		backupLogFile.Close()
 		logger = originalLogger
-	}
-
-	// For usable backups, upload the log to storage before EndBackup.
-	// For unusable/empty backups, skip the upload: AbortBackup removes the
-	// storage directory, so only the local copy is useful for debugging.
-	if backupLogFile != nil && backupResult == BackupUsable {
-		uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
+		backupLogUploaded = uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
 	}
 
 	var finishErr error
@@ -224,13 +221,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 		finishErr = bh.EndBackup(ctx)
 	}
 
-	// Clean up the local backup log file. For usable backups, EndBackup
-	// has confirmed all async uploads (including BACKUP.log) landed in
-	// storage, so the local copy is safe to remove. For unusable backups,
-	// retain locally since the storage copy was not attempted.
+	// Close the backup log file for unusable/empty results (usable was
+	// already closed above before upload). Restore the original logger.
+	if backupLogFile != nil && backupResult != BackupUsable {
+		backupLogFile.Close()
+		logger = originalLogger
+	}
+
+	// Clean up the local backup log file. For usable backups, remove
+	// only if both the upload and EndBackup succeeded (some backends
+	// like GCS finalize uploads in Close, not EndBackup). For unusable
+	// backups, retain locally since the upload was skipped.
 	if backupLogFile != nil {
 		switch {
-		case backupResult == BackupUsable && finishErr == nil:
+		case backupResult == BackupUsable && backupLogUploaded && finishErr == nil:
 			os.Remove(backupLogFile.Name())
 		case backupResult == BackupEmpty:
 			os.Remove(backupLogFile.Name())
@@ -256,38 +260,39 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 const backupLogFileName = "BACKUP.log"
 
-func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) {
+func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) bool {
 	f, err := os.Open(logFilePath)
 	if err != nil {
 		logger.Warningf("Failed to open backup log file for upload: %v", err)
-		return
+		return false
 	}
 	defer f.Close()
 
 	fi, err := f.Stat()
 	if err != nil {
 		logger.Warningf("Failed to stat backup log file: %v", err)
-		return
+		return false
 	}
 
 	wc, err := bh.AddFile(ctx, backupLogFileName, fi.Size())
 	if err != nil {
 		logger.Warningf("Failed to add backup log file to storage: %v", err)
-		return
+		return false
 	}
 
 	if _, err := io.Copy(wc, f); err != nil {
 		wc.Close()
 		logger.Warningf("Failed to copy backup log to storage: %v", err)
-		return
+		return false
 	}
 
 	if err := wc.Close(); err != nil {
 		logger.Warningf("Failed to finalize backup log upload: %v", err)
-		return
+		return false
 	}
 
 	logger.Infof("Backup log uploaded to storage as %s", backupLogFileName)
+	return true
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to
