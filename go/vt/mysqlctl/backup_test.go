@@ -750,7 +750,9 @@ func TestUploadBackupLog(t *testing.T) {
 		},
 	}
 
-	uploadBackupLog(t.Context(), logger, logFile, bh)
+	logFile.Close()
+
+	uploadBackupLog(t.Context(), logger, logFile.Name(), bh)
 
 	require.Len(t, bh.AddFileCalls, 1)
 	assert.Equal(t, backupLogFileName, bh.AddFileCalls[0].Filename)
