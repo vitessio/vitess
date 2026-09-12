@@ -60,6 +60,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [New `--backup-log-to-storage` flag for separate backup engine logs](#backup-log-to-storage)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -663,6 +664,20 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="backup-log-to-storage"/>New `--backup-log-to-storage` flag for separate backup engine logs</a>
+
+A new opt-in `--backup-log-to-storage` flag (default `false`) has been added to `vttablet`, `vtctld`, `vtbackup`, `vtcombo`, and `vttestserver`. When enabled, a backup writes the backup engine's log output to a separate file and uploads it to the backup storage directory as `BACKUP.log`, alongside the backup data. Operators can then inspect the backup engine output for a specific backup without searching the full `vttablet` log.
+
+How the log is handled depends on the backup's result:
+
+- On a successful backup, the log is uploaded and the local temporary file is removed.
+- On a failed (unusable) backup, the log is uploaded best-effort and the local file is retained, with its path logged, because the storage directory is cleaned up on abort.
+- On an empty backup, no log is uploaded.
+
+When the flag is left unset (the default), behavior is unchanged.
+
+See [#21079](https://github.com/vitessio/vitess/pull/21079) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
