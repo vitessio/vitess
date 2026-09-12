@@ -744,7 +744,7 @@ func TestUploadBackupLog(t *testing.T) {
 	bh := &FakeBackupHandle{
 		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
 			return FakeBackupHandleAddFileReturn{
-				WriteCloser: &nopWriteCloser{Writer: &uploaded},
+				WriteCloser: &writerAsWriteCloser{Writer: &uploaded},
 				Err:         nil,
 			}
 		},
@@ -759,11 +759,11 @@ func TestUploadBackupLog(t *testing.T) {
 	assert.Equal(t, "line 1\nline 2\nline 3\n", uploaded.String())
 }
 
-type nopWriteCloser struct {
+type writerAsWriteCloser struct {
 	io.Writer
 }
 
-func (nwc *nopWriteCloser) Close() error { return nil }
+func (w *writerAsWriteCloser) Close() error { return nil }
 
 func TestBackupWithLogToStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
@@ -777,12 +777,12 @@ func TestBackupWithLogToStorage(t *testing.T) {
 	startBackupHandle.AddFileReturnF = func(filename string) FakeBackupHandleAddFileReturn {
 		if filename == backupLogFileName {
 			return FakeBackupHandleAddFileReturn{
-				WriteCloser: &nopWriteCloser{Writer: &uploaded},
+				WriteCloser: &writerAsWriteCloser{Writer: &uploaded},
 				Err:         nil,
 			}
 		}
 		return FakeBackupHandleAddFileReturn{
-			WriteCloser: &nopWriteCloser{Writer: io.Discard},
+			WriteCloser: &writerAsWriteCloser{Writer: io.Discard},
 			Err:         nil,
 		}
 	}
