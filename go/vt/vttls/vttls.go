@@ -19,6 +19,7 @@ package vttls
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"strings"
 	"sync"
@@ -133,47 +134,93 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		config.ServerName = name
 	}
 
+	var checker *crlChecker
+	if crl != "" {
+		var err error
+		checker, err = newCRLChecker(crl, ca)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// The modes that build the peer's chain themselves verify it
+	// against the configured CA, or the system roots without one,
+	// resolved once here rather than on every handshake.
+	var roots *x509.CertPool
+	if mode == VerifyCA || (checker != nil && (mode == Preferred || mode == Required)) {
+		var err error
+		if roots, err = peerChainRoots(config.RootCAs); err != nil {
+			return nil, err
+		}
+	}
+
 	switch mode {
 	case Disabled:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "can't create config for disabled mode")
 	case Preferred, Required:
 		config.InsecureSkipVerify = true
+		if checker != nil {
+			config.VerifyConnection = func(cs tls.ConnectionState) error {
+				// Go verifies nothing in these modes, so the chain
+				// that the CRLs are held against is built here, to
+				// the configured CA or the system roots, as verify_ca
+				// does. A peer whose chain cannot be built is
+				// rejected: its certificates cannot be checked, and
+				// the ones it presents are its own to choose.
+				chains, err := verifyPeerChain(roots, cs)
+				if err != nil {
+					return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "cannot check the revocation of the peer's certificates against the configured CRL, since no chain to a trusted CA could be built for them: %v", err)
+				}
+				return checker.check(chains)
+			}
+		}
 	case VerifyCA:
 		config.InsecureSkipVerify = true
 		config.VerifyConnection = func(cs tls.ConnectionState) error {
-			caRoots := config.RootCAs
-			if caRoots == nil {
-				var err error
-				caRoots, err = x509.SystemCertPool()
-				if err != nil {
-					return err
-				}
+			// The chains built here are handed to the CRL check,
+			// since Go builds none of its own in this mode.
+			chains, err := verifyPeerChain(roots, cs)
+			if err != nil {
+				return err
 			}
-			opts := x509.VerifyOptions{
-				Roots:         caRoots,
-				Intermediates: x509.NewCertPool(),
+			if checker == nil {
+				return nil
 			}
-			for _, cert := range cs.PeerCertificates[1:] {
-				opts.Intermediates.AddCert(cert)
-			}
-			_, err := cs.PeerCertificates[0].Verify(opts)
-			return err
+			return checker.check(chains)
 		}
 	case VerifyIdentity:
-		// Nothing to do here, default config is the strictest and correct.
+		// Go's own verification is the strictest and correct.
+		if checker != nil {
+			config.VerifyConnection = checker.verifyConnection
+		}
 	default:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid mode: %s", mode)
 	}
 
-	if crl != "" {
-		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
-		if err != nil {
-			return nil, err
-		}
-		config.VerifyPeerCertificate = crlFunc
-	}
-
 	return config, nil
+}
+
+// peerChainRoots returns what the peer's chain is verified against
+// in the modes that build it themselves: the configured CA when
+// there is one, and the system roots otherwise.
+func peerChainRoots(configured *x509.CertPool) (*x509.CertPool, error) {
+	if configured != nil {
+		return configured, nil
+	}
+	return x509.SystemCertPool()
+}
+
+// verifyPeerChain verifies the certificate chain the peer presented
+// against roots and returns the chains it built.
+func verifyPeerChain(roots *x509.CertPool, cs tls.ConnectionState) ([][]*x509.Certificate, error) {
+	opts := x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: x509.NewCertPool(),
+	}
+	for _, cert := range cs.PeerCertificates[1:] {
+		opts.Intermediates.AddCert(cert)
+	}
+	return cs.PeerCertificates[0].Verify(opts)
 }
 
 // ServerConfig returns the TLS config to use for a server to
@@ -210,11 +257,16 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 	}
 
 	if crl != "" {
-		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if ca == "" {
+			// Without a CA no client certificate is requested, so
+			// there would be nothing to check the CRL against.
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "a CRL is configured without a CA: no client certificate is requested without one, so the CRL could not apply")
+		}
+		checker, err := newCRLChecker(crl, ca)
 		if err != nil {
 			return nil, err
 		}
-		config.VerifyPeerCertificate = crlFunc
+		config.VerifyConnection = checker.verifyConnection
 	}
 
 	return config, nil
@@ -254,6 +306,65 @@ func doLoadx509CertPool(ca string) error {
 	}
 
 	certPools.Store(ca, cp)
+
+	return nil
+}
+
+var caCertificates = sync.Map{}
+
+// loadx509Certificates returns the certificates in the PEM file ca,
+// parsed once per path like loadx509CertPool does.
+func loadx509Certificates(ca string) ([]*x509.Certificate, error) {
+	identifier := tlsCertificatesIdentifier("ca-certificates", ca)
+	once, _ := onceByKeys.LoadOrStore(identifier, &sync.Once{})
+
+	var err error
+	once.(*sync.Once).Do(func() {
+		err = doLoadx509Certificates(ca)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result, ok := caCertificates.Load(ca)
+
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded x509 certificates for ca: %s", ca)
+	}
+
+	return result.([]*x509.Certificate), nil
+}
+
+// doLoadx509Certificates parses the certificates in the PEM file ca,
+// skipping the blocks that are not parsable certificates just like
+// x509.CertPool.AppendCertsFromPEM does.
+func doLoadx509Certificates(ca string) error {
+	b, err := os.ReadFile(ca)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
+	}
+
+	var certificates []*x509.Certificate
+	for len(b) > 0 {
+		var block *pem.Block
+		block, b = pem.Decode(b)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			continue
+		}
+		certificate, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+		certificates = append(certificates, certificate)
+	}
+	if len(certificates) == 0 {
+		return vterrors.Errorf(vtrpc.Code_UNKNOWN, "no certificates found in ca file: %s", ca)
+	}
+
+	caCertificates.Store(ca, certificates)
 
 	return nil
 }
