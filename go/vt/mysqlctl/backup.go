@@ -198,16 +198,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	// Upload backup log to storage before finalizing. Close the file and
 	// restore the original logger first so subsequent log lines don't write
-	// to the temp file. For usable backups, the log is uploaded and cleaned up.
-	// For unusable backups, AbortBackup removes the storage directory anyway,
-	// so we keep the local log file for debugging instead.
+	// to the temp file. For usable backups, the log is uploaded and cleaned
+	// up only if the upload fully succeeds. For unusable backups, AbortBackup
+	// removes the storage directory anyway, so we keep the local log file
+	// for debugging instead.
 	if backupLogFile != nil {
 		backupLogFile.Close()
 		logger = originalLogger
 		switch backupResult {
 		case BackupUsable:
-			uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
-			os.Remove(backupLogFile.Name())
+			if uploadBackupLog(ctx, logger, backupLogFile.Name(), bh) {
+				os.Remove(backupLogFile.Name())
+			} else {
+				logger.Infof("Backup log retained locally at %s", backupLogFile.Name())
+			}
 		case BackupUnusable:
 			uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
 			logger.Infof("Backup log retained locally at %s", backupLogFile.Name())
@@ -247,33 +251,39 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 const backupLogFileName = "BACKUP.log"
 
-func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) {
+func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) bool {
 	f, err := os.Open(logFilePath)
 	if err != nil {
 		logger.Warningf("Failed to open backup log file for upload: %v", err)
-		return
+		return false
 	}
 	defer f.Close()
 
 	fi, err := f.Stat()
 	if err != nil {
 		logger.Warningf("Failed to stat backup log file: %v", err)
-		return
+		return false
 	}
 
 	wc, err := bh.AddFile(ctx, backupLogFileName, fi.Size())
 	if err != nil {
 		logger.Warningf("Failed to add backup log file to storage: %v", err)
-		return
+		return false
 	}
-	defer wc.Close()
 
 	if _, err := io.Copy(wc, f); err != nil {
+		wc.Close()
 		logger.Warningf("Failed to upload backup log file: %v", err)
-		return
+		return false
+	}
+
+	if err := wc.Close(); err != nil {
+		logger.Warningf("Failed to finalize backup log upload: %v", err)
+		return false
 	}
 
 	logger.Infof("Backup log uploaded to storage as %s", backupLogFileName)
+	return true
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to
