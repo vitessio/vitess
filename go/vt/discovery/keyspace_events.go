@@ -688,9 +688,8 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	if routed && to != kss.keyspace {
 		mtState.Typ = MoveTablesRegular
 		mtState.State = MoveTablesSwitched
-		log.Info("MoveTables writes switched by a keyspace routing rule",
-			slog.String("keyspace", kss.keyspace), slog.String("routedTo", to))
-		log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
+		log.Info("getMoveTablesStatus: MoveTables writes switched by a keyspace routing rule",
+			slog.String("keyspace", kss.keyspace), slog.String("routedTo", to), slog.String("state", mtState.String()))
 		return mtState, nil
 	}
 
