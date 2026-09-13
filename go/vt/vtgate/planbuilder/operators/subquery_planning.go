@@ -645,17 +645,39 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 }
 
 func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions ...engine.Condition) *Route {
+	// A subquery that is not a top level predicate cannot be used for routing, so the merged route
+	// keeps the outer routing. Either way this is asked before the rewrites below run.
+	routing := r
+	if !s.subq.TopLevel {
+		routing = outer.Routing
+	}
+	// The subquery's rows are consumed by its predicate instead of returned, so a wider route
+	// cannot duplicate them into the result: each outer row lives on one shard and asks the
+	// question there. What they still need is the route to run when the routing they contributed
+	// finds no destination, and only a single-shard route can find none. A merge that keeps the
+	// outer routing has taken nothing from them: a destination it does not find is one where
+	// there was no outer row to ask the question.
+	preserved, canMerge := referenceRowsInvariant(routing, false, outer)
+	if inner.PreservesReferenceRows && routing != outer.Routing && routing.OpCode().IsSingleShard() {
+		preserved = true
+	}
+	if !canMerge {
+		debugNoRewrite("subquery merge blocked: %s routing would widen a route that has to stay single-shard", routing.OpCode().String())
+		return nil
+	}
+
 	allCond := append(outer.Conditions, inner.Conditions...)
 	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
-			unaryOperator: newUnaryOp(outer.Source),
-			MergedWith:    mergedWith(inner, outer),
-			Routing:       outer.Routing,
-			Ordering:      outer.Ordering,
-			ResultColumns: outer.ResultColumns,
-			Conditions:    allCond,
+			unaryOperator:          newUnaryOp(outer.Source),
+			MergedWith:             mergedWith(inner, outer),
+			Routing:                outer.Routing,
+			Ordering:               outer.Ordering,
+			ResultColumns:          outer.ResultColumns,
+			Conditions:             allCond,
+			PreservesReferenceRows: preserved,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -669,12 +691,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		src = s.rewriteASTExpression(ctx, inner)
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(src),
-		MergedWith:    mergedWith(inner, outer),
-		Routing:       r,
-		Ordering:      s.outer.Ordering,
-		ResultColumns: s.outer.ResultColumns,
-		Conditions:    allCond,
+		unaryOperator:          newUnaryOp(src),
+		MergedWith:             mergedWith(inner, outer),
+		Routing:                r,
+		Ordering:               s.outer.Ordering,
+		ResultColumns:          s.outer.ResultColumns,
+		Conditions:             allCond,
+		PreservesReferenceRows: preserved,
 	}
 }
 
