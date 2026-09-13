@@ -2510,5 +2510,27 @@
         "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)"
       }
     }
+  },
+  {
+    "comment": "Recursive CTE whose seed selects * from a table without authoritative columns",
+    "query": "WITH RECURSIVE x AS (SELECT * FROM user_metadata UNION ALL SELECT user_id + 1, email, address, md5, non_planable FROM x WHERE user_id < 10) SELECT user_id FROM x",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE x AS (SELECT * FROM user_metadata UNION ALL SELECT user_id + 1, email, address, md5, non_planable FROM x WHERE user_id < 10) SELECT user_id FROM x",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive x as (select * from user_metadata where 1 != 1 union all select user_id + 1, email, address, md5, non_planable from x where 1 != 1) select user_id from x where 1 != 1",
+        "Query": "with recursive x as (select * from user_metadata union all select user_id + 1, email, address, md5, non_planable from x where user_id < 10) select user_id from x"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    }
   }
 ]
