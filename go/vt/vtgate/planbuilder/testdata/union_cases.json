@@ -455,6 +455,687 @@
     }
   },
   {
+    "comment": "none routing merged with dual: any shard in the none side's keyspace serves the dual rows",
+    "query": "select id from user where id in (null) union select 1 from dual",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id in (null) union select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select 1 from dual where 1 != 1",
+        "Query": "select id from `user` where id in (null) union select 1 from dual"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "dual merged with a none routing on the right: any shard in the none side's keyspace serves the dual rows",
+    "query": "select 1 from dual union select id from user where id in (null)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select 1 from dual union select id from user where id in (null)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from dual where 1 != 1 union select id from `user` where 1 != 1",
+        "Query": "select 1 from dual union select id from `user` where id in (null)"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "none routings from different keyspaces stay unmerged; the dual leg merges into one none side's keyspace",
+    "query": "select oid from ordering.order_event where oid in (null) union select id from user where id in (null) union select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select oid from ordering.order_event where oid in (null) union select id from user where id in (null) union select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "ordering",
+                  "Sharded": true
+                },
+                "FieldQuery": "select oid, weight_string(oid) from order_event where 1 != 1 union select 1, weight_string(1) from dual where 1 != 1",
+                "Query": "select oid, weight_string(oid) from order_event where oid in (null) union select 1, weight_string(1) from dual"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user` where id in (null)) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "ordering.order_event",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a none routing only merges with a sharded routing in its own keyspace",
+    "query": "select oid from ordering.order_event where oid in (null) union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select oid from ordering.order_event where oid in (null) union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "ordering",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as oid, weight_string(dt.c0) from (select oid from order_event where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as oid, weight_string(dt.c0) from (select distinct oid from order_event where oid in (null)) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "ordering.order_event",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a none routing only merges with an unsharded routing in its own keyspace",
+    "query": "select oid from ordering.order_event where oid in (null) union select col from unsharded",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select oid from ordering.order_event where oid in (null) union select col from unsharded",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "ordering",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as oid, weight_string(dt.c0) from (select oid from order_event where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as oid, weight_string(dt.c0) from (select distinct oid from order_event where oid in (null)) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as col, weight_string(dt.c0) from (select col from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as col, weight_string(dt.c0) from (select distinct col from unsharded) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "ordering.order_event"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a none routing merges with a sharded routing in the same keyspace",
+    "query": "select id from user where id in (null) union select id from user_extra",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id in (null) union select id from user_extra",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from user_extra where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` where id in (null) union select id, weight_string(id) from user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "union all keeps cross-keyspace none legs unmerged while the dual leg merges in order",
+    "query": "select oid from ordering.order_event where oid in (null) union all select id from user where id in (null) union all select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select oid from ordering.order_event where oid in (null) union all select id from user where id in (null) union all select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "None",
+            "Keyspace": {
+              "Name": "ordering",
+              "Sharded": true
+            },
+            "FieldQuery": "select oid from order_event where 1 != 1",
+            "Query": "select oid from order_event where oid in (null)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1 union all select 1 from dual where 1 != 1",
+            "Query": "select id from `user` where id in (null) union all select 1 from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "ordering.order_event",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a dual-derived none routing that absorbed a real table only merges into that table's keyspace",
+    "query": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as col, weight_string(dt.c0) from (select u.col from unsharded as u, (select 1 from dual where 1 != 1) as x where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as col, weight_string(dt.c0) from (select distinct u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a dual-derived none routing that absorbed a real table merges with a branch in that table's keyspace",
+    "query": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select col2 from unsharded_auto",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select col2 from unsharded_auto",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select u.col from unsharded as u, (select 1 from dual where 1 != 1) as x where 1 != 1 union select col2 from unsharded_auto where 1 != 1",
+        "Query": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select col2 from unsharded_auto"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_auto"
+      ]
+    }
+  },
+  {
+    "comment": "none routings from different keyspaces stay unmerged: no single keyspace could resolve the merged field query",
+    "query": "select id from user where id in (null) union select oid from ordering.order_event where oid in (null)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id in (null) union select oid from ordering.order_event where oid in (null)",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user` where id in (null)) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "ordering",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as oid, weight_string(dt.c0) from (select oid from order_event where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as oid, weight_string(dt.c0) from (select distinct oid from order_event where oid in (null)) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "ordering.order_event",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a none routing over a rewritten information_schema branch must not adopt the dual side: only a DBA route binds :__vtschemaname",
+    "query": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0: utf8mb3_general_ci"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and 0"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from dual where 1 != 1",
+                "Query": "select distinct 1 from dual"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "the information_schema guard also applies when the other side lands on the inferred keyspace",
+    "query": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select col from unsharded",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select col from unsharded",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as `table_name`, weight_string(dt.c0) from (select `table_name` from information_schema.`tables` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `table_name`, weight_string(dt.c0) from (select distinct `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and 0) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as col, weight_string(dt.c0) from (select col from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as col, weight_string(dt.c0) from (select distinct col from unsharded) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "a degraded information_schema branch stays separate from a sharded side",
+    "query": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as `table_name`, weight_string(dt.c0) from (select `table_name` from information_schema.`tables` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `table_name`, weight_string(dt.c0) from (select distinct `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and 0) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a degraded information_schema branch stays separate from a live DBA route",
+    "query": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select table_name from information_schema.columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema = 'user' and 1 = 2 union select table_name from information_schema.columns",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0: utf8mb3_general_ci"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and 0"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select `table_name` from information_schema.`columns` where 1 != 1",
+                "Query": "select distinct `table_name` from information_schema.`columns`"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a reference-degraded none routing keeps its canonical keyspace and declines a cross-keyspace merge",
+    "query": "select id from ambiguous_ref_with_source where id in (null) union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ambiguous_ref_with_source where id in (null) union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from ambiguous_ref_with_source where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from ambiguous_ref_with_source where id in (null)) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.ambiguous_ref_with_source",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "differing physical reference names must not merge: the none side's table does not exist in the other keyspace",
+    "query": "select id from source_of_ref where id in (null) union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from source_of_ref where id in (null) union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from source_of_ref where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from source_of_ref where id in (null)) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.source_of_ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a reference-degraded none routing whose keyspace matches the other side still merges",
+    "query": "select id from ref_with_source where id in (null) union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ref_with_source where id in (null) union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from ref_with_source where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+            "Query": "select id, weight_string(id) from ref_with_source where id in (null) union select id, weight_string(id) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "union with the same target shard because of vindex",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
     "plan": {
@@ -2125,5 +2806,112 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "statically false dual branch merges into the other side's keyspace",
+    "query": "select 42 from dual where false union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 42 from dual where false union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 42 from dual where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select 42 from dual where 0 union select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "statically false dual branch on the right merges into the other side's keyspace",
+    "query": "select id from user union select 42 from dual where false",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union select 42 from dual where false",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1 union select 42 from dual where 1 != 1",
+            "Query": "select id from `user` union select 42 from dual where 0"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a none routing over a sharded table stays separate from a live DBA route",
+    "query": "select id from user where id in (null) union select table_name from information_schema.tables",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id in (null) union select table_name from information_schema.tables",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "None",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user` where id in (null)) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as `table_name`, weight_string(dt.c0) from (select `table_name` from information_schema.`tables` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `table_name`, weight_string(dt.c0) from (select distinct `table_name` from information_schema.`tables`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
