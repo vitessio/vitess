@@ -46,8 +46,8 @@ type PlanningContext struct {
 	VerifyAllFKs bool
 
 	// MergedSubqueries tracks subqueries that have been merged into routes,
-	// keyed by their arg name.
-	MergedSubqueries map[string]*sqlparser.Subquery
+	// keyed by their placeholder expression node.
+	MergedSubqueries map[sqlparser.Expr]*sqlparser.Subquery
 
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
@@ -106,7 +106,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		VSchema:           vschema,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
-		MergedSubqueries:  map[string]*sqlparser.Subquery{},
+		MergedSubqueries:  map[sqlparser.Expr]*sqlparser.Subquery{},
 		Statement:         stmt,
 		PredTracker:       predicates.NewTracker(),
 	}, nil
