@@ -849,6 +849,9 @@ func (nz *normalizer) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 	}
 
 	if sel.GroupBy == nil && sel.SelectExprs.AllAggregation() {
+		if sel.Limit != nil {
+			return
+		}
 		// Replace EXISTS with a boolean true if guaranteed to be non-empty.
 		cursor.Replace(BoolVal(true))
 		return
