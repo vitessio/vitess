@@ -141,6 +141,10 @@ func (Charset_ujis) MaxWidth() int {
 	return 3
 }
 
+func (Charset_ujis) MinWidth() int {
+	return 1
+}
+
 type Charset_eucjpms struct{}
 
 func (Charset_eucjpms) Name() string {
@@ -175,4 +179,8 @@ func (Charset_eucjpms) DecodeRune(src []byte) (rune, int, bool) {
 
 func (Charset_eucjpms) MaxWidth() int {
 	return 3
+}
+
+func (Charset_eucjpms) MinWidth() int {
+	return 1
 }
