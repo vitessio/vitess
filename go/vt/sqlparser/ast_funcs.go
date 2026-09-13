@@ -2459,6 +2459,62 @@ func formatAddress(address string) string {
 	return buf.String()
 }
 
+// IsVolatile reports whether a node cannot be duplicated without changing the meaning of the
+// query, either because it can evaluate differently each time or because evaluating it has a side
+// effect. NOW() and friends are absent on purpose: MySQL evaluates them once per statement, so
+// duplicating them is safe. SYSDATE() is evaluated at the point it runs, so it is not.
+//
+// Reading session state is safe to duplicate unless the same statement can move it, so
+// CONNECTION_ID(), FOUND_ROWS() and ROW_COUNT() are absent while LAST_INSERT_ID() and MariaDB's
+// LASTVAL() stay - a sibling LAST_INSERT_ID(expr) or NEXTVAL() moves those.
+//
+// Several of these functions have a dedicated AST node rather than being a *FuncExpr, so this
+// matches on node type as well as on name.
+func IsVolatile(node SQLNode) bool {
+	switch node := node.(type) {
+	case *CurTimeFuncExpr:
+		return node.Name.EqualString("sysdate")
+	case *FuncExpr:
+		switch node.Name.Lowered() {
+		case "uuid", "uuid_short", "rand", "random_bytes",
+			"last_insert_id", "benchmark", "sleep",
+			"load_file", "master_pos_wait", "source_pos_wait",
+			// MariaDB. Its sequence functions have no dedicated node - Nextval is
+			// Vitess's own `select next value from seq`, not MariaDB's NEXTVAL(seq).
+			"uuid_v4", "uuid_v7", "sys_guid", "master_gtid_wait", "rownum",
+			"nextval", "lastval", "setval":
+			return true
+		}
+	case *LockingFunc:
+		// Even the read-only IS_*_LOCK() pair can answer differently on a second call.
+		return true
+	case *GTIDFuncExpr:
+		// Only the wait variants are volatile, GTID_SUBSET() and GTID_SUBTRACT() are pure.
+		switch node.Type {
+		case WaitForExecutedGTIDSetType, WaitUntilSQLThreadAfterGTIDSType:
+			return true
+		}
+	case *AssignmentExpr:
+		return true
+	}
+	return false
+}
+
+// ContainsVolatile returns true if the expression contains a node that IsVolatile reports on.
+// Pushing a predicate into a UNION rewrites a column reference into the expression the branch
+// projects, so `col <> col` over `select uuid()` would otherwise become `uuid() <> uuid()`.
+func ContainsVolatile(e SQLNode) bool {
+	found := false
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		if IsVolatile(node) {
+			found = true
+			return false, io.EOF
+		}
+		return true, nil
+	}, e)
+	return found
+}
+
 // ContainsAggregation returns true if the expression contains aggregation
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false

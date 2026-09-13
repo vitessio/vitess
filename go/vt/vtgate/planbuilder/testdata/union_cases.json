@@ -266,7 +266,7 @@
     }
   },
   {
-    "comment": "union operations in derived table, without star expression (FROM)¡",
+    "comment": "union operations in derived table, without star expression (FROM)\u00a1",
     "query": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
     "plan": {
       "Type": "Scatter",
@@ -2909,5 +2909,406 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a predicate is not pushed into UNION branches that project a volatile expression, since pushing duplicates it",
+    "query": "select * from (select uuid() as c from dual union all select uuid() from dual) sub where c <> c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select uuid() as c from dual union all select uuid() from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select c from (select uuid() as c from dual where 1 != 1 union all select uuid() from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select uuid() as c from dual union all select uuid() from dual) as sub where c != c"
+      }
+    }
+  },
+  {
+    "comment": "the predicate is held back to a vtgate filter when the UNION does not merge into a single route",
+    "query": "select * from (select uuid() as c from user where id = 1 union all select uuid() from user where id = 2) sub where c <> c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select uuid() as c from user where id = 1 union all select uuid() from user where id = 2) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "c != c",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select uuid() as c from `user` where 1 != 1",
+                "Query": "select uuid() as c from `user` where id = 1",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select uuid() from `user` where 1 != 1",
+                "Query": "select uuid() from `user` where id = 2",
+                "Values": [
+                  "2"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the same for rand()",
+    "query": "select * from (select rand() as c from dual union all select rand() from dual) sub where c < 0.5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select rand() as c from dual union all select rand() from dual) sub where c < 0.5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select c from (select rand() as c from dual where 1 != 1 union all select rand() from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select rand() as c from dual union all select rand() from dual) as sub where c < 0.5"
+      }
+    }
+  },
+  {
+    "comment": "a middle branch is found too - three-or-more-way unions nest to the left, so the first SELECT of a source does not show them all",
+    "query": "select * from (select 0 as c from dual union all select rand() from dual union all select 0 from dual) sub where c > 0.5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select 0 as c from dual union all select rand() from dual union all select 0 from dual) sub where c > 0.5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select c from (select 0 as c from dual where 1 != 1 union all select rand() from dual where 1 != 1 union all select 0 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select 0 as c from dual union all select rand() from dual union all select 0 from dual) as sub where c > 0.5"
+      }
+    }
+  },
+  {
+    "comment": "a volatile projection one derived table deeper is found too",
+    "query": "select * from (select c from (select uuid() as c from user) x union all select 'z' from dual) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select c from (select uuid() as c from user) x union all select 'z' from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select c from (select uuid() as c from `user` where 1 != 1) as x where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select c from (select uuid() as c from `user`) as x union all select 'z' from dual) as sub where c != c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sysdate() is evaluated where it runs rather than once per statement, so it is not pushed",
+    "query": "select * from (select sysdate() as c from user union all select sysdate() from user) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select sysdate() as c from user union all select sysdate() from user) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select sysdate() as c from `user` where 1 != 1 union all select sysdate() from `user` where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select sysdate() as c from `user` union all select sysdate() from `user`) as sub where c != c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a subquery projection is unnested before the guard runs, so its volatile expression is still found",
+    "query": "select * from (select (select uuid() from dual) as c from user union all select 'z' from dual) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select (select uuid() from dual) as c from user union all select 'z' from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select uuid() as c from `user` where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select uuid() as c from `user` union all select 'z' from dual) as sub where c != c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the same holds for a distinct UNION, where the predicate ends up above the deduplication",
+    "query": "select * from (select uuid() as c from user union select uuid() from user) sub where c <> c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select uuid() as c from user union select uuid() from user) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "c != c",
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "0: utf8mb3_general_ci"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select uuid() as c from `user` where 1 != 1 union select uuid() from `user` where 1 != 1",
+                "Query": "select uuid() as c from `user` union select uuid() from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a UNION nested in a branch is caught at the inner boundary, so the outer push is still safe",
+    "query": "select * from (select c from (select uuid() as c from user union all select uuid() from user) y union all select 'z' from dual) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select c from (select uuid() as c from user union all select uuid() from user) y union all select 'z' from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select c from (select uuid() as c from `user` where 1 != 1 union all select uuid() from `user` where 1 != 1) as y where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select c from (select uuid() as c from `user` union all select uuid() from `user`) as y where c != c union all select 'z' from dual where 'z' != 'z') as sub"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a correlated subquery in a branch does not stop the predicate being held back above the UNION",
+    "query": "select * from (select (select col from user u2 where u2.id = user.id) as c, uuid() as d from user union all select 'z', uuid() from user) sub where d <> d",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select (select col from user u2 where u2.id = user.id) as c, uuid() as d from user union all select 'z', uuid() from user) sub where d <> d",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c, d from (select (select col from `user` as u2 where 1 != 1) as c, uuid() as d from `user` where 1 != 1 union all select 'z', uuid() from `user` where 1 != 1) as sub where 1 != 1",
+        "Query": "select c, d from (select (select col from `user` as u2 where u2.id = `user`.id) as c, uuid() as d from `user` union all select 'z', uuid() from `user`) as sub where d != d"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "only the half that substitutes a volatile projection stays above the UNION; the vindex predicate is still pushed into both branches",
+    "query": "select * from (select uuid() as c, id as d from user union all select uuid(), id from user) sub where c <> c and d = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select uuid() as c, id as d from user union all select uuid(), id from user) sub where c <> c and d = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c, d from (select uuid() as c, id as d from `user` where 1 != 1 union all select uuid(), id from `user` where 1 != 1) as sub where 1 != 1",
+        "Query": "select c, d from (select uuid() as c, id as d from `user` where id = 5 union all select uuid(), id from `user` where id = 5) as sub where c != c",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a volatile predicate that substitutes nothing is evaluated once per row either way, so it is still pushed",
+    "query": "select * from (select id as c from user union all select col from unsharded) sub where rand() < 0.5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select id as c from user union all select col from unsharded) sub where rand() < 0.5",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id as c from `user` where 1 != 1",
+            "Query": "select id as c from `user` where rand() < 0.5"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select col from unsharded where 1 != 1",
+            "Query": "select col from unsharded where rand() < 0.5"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "now() is evaluated once per statement, so it is still safe to push",
+    "query": "select * from (select now() as c from dual union all select now() from dual) sub where c > '2020-01-01'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select now() as c from dual union all select now() from dual) sub where c > '2020-01-01'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select c from (select now() as c from dual where 1 != 1 union all select now() from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select now() as c from dual where now() > '2020-01-01' union all select now() from dual where now() > '2020-01-01') as sub"
+      }
+    }
+  },
+  {
+    "comment": "connection_id() is stable for the connection, so it is still pushed",
+    "query": "select * from (select connection_id() as c from user where id = 1 union all select connection_id() from user where id = 2) u where c = connection_id()",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select connection_id() as c from user where id = 1 union all select connection_id() from user where id = 2) u where c = connection_id()",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select connection_id() as c from `user` where 1 != 1",
+            "Query": "select connection_id() as c from `user` where id = 1 and connection_id() = connection_id()",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select connection_id() from `user` where 1 != 1",
+            "Query": "select connection_id() from `user` where id = 2 and connection_id() = connection_id()",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a deterministic branch expression is still pushed",
+    "query": "select * from (select 1 as c from dual union all select 2 from dual) sub where c <> c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select 1 as c from dual union all select 2 from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select c from (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select 1 as c from dual where 1 != 1 union all select 2 from dual where 2 != 2) as sub"
+      }
+    }
   }
 ]
