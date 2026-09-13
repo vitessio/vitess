@@ -404,7 +404,10 @@ func (call *builtinJSONDepth) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (call *builtinJSONDepth) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(call)
+	if c.typeEnv == nil {
+		return ctype{}, c.unsupported(call)
+	}
+	return c.typeOnlyCall(call.Arguments, 0, ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable})
 }
 
 func (call *builtinJSONLength) eval(env *ExpressionEnv) (eval, error) {
@@ -446,7 +449,10 @@ func (call *builtinJSONLength) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (call *builtinJSONLength) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(call)
+	if c.typeEnv == nil {
+		return ctype{}, c.unsupported(call)
+	}
+	return c.typeOnlyCall(call.Arguments, 0, ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable})
 }
 
 func (call *builtinJSONContainsPath) eval(env *ExpressionEnv) (eval, error) {
@@ -494,10 +500,16 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 	}
 
 	if !call.Arguments[1].constant() {
+		if c.typeEnv != nil {
+			return c.typeOnlyCall(call.Arguments, 1, ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable})
+		}
 		return ctype{}, c.unsupported(call)
 	}
 
 	if !slice.All(call.Arguments[2:], func(expr IR) bool { return expr.constant() }) {
+		if c.typeEnv != nil {
+			return c.typeOnlyCall(call.Arguments, 1, ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable})
+		}
 		return ctype{}, c.unsupported(call)
 	}
 
