@@ -157,5 +157,12 @@ func evalToIR(simplified eval) IR {
 		}
 		return te
 	}
+	if j, ok := simplified.(*evalJSON); ok {
+		// The literal is shared by every evaluation of the translated
+		// expression: resolve the document's lazy number classification
+		// now, while this goroutine still owns it, so that concurrent
+		// evaluations only ever read the shared value.
+		j.ResolveNumberTypes()
+	}
 	return &Literal{inner: simplified}
 }
