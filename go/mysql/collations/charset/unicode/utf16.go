@@ -65,26 +65,26 @@ func (Charset_utf16be) EncodeRune(dst []byte, r rune) int {
 	}
 }
 
-func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
+func (Charset_utf16be) DecodeRune(b []byte) (rune, int, bool) {
 	if len(b) < 2 {
-		return utf8.RuneError, len(b)
+		return utf8.RuneError, len(b), false
 	}
 
 	r1 := uint16(b[1]) | uint16(b[0])<<8
 	if r1 < surr1 || surr3 <= r1 {
-		return rune(r1), 2
+		return rune(r1), 2, true
 	}
 
 	if len(b) < 4 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 2, false
 	}
 
 	r2 := uint16(b[3]) | uint16(b[2])<<8
 	if surr1 <= r1 && r1 < surr2 && surr2 <= r2 && r2 < surr3 {
-		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
+		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4, true
 	}
 
-	return utf8.RuneError, 1
+	return utf8.RuneError, 2, false
 }
 
 func (Charset_utf16be) SupportsSupplementaryChars() bool {
@@ -127,26 +127,26 @@ func (Charset_utf16le) EncodeRune(dst []byte, r rune) int {
 	}
 }
 
-func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
+func (Charset_utf16le) DecodeRune(b []byte) (rune, int, bool) {
 	if len(b) < 2 {
-		return utf8.RuneError, len(b)
+		return utf8.RuneError, len(b), false
 	}
 
 	r1 := uint16(b[0]) | uint16(b[1])<<8
 	if r1 < surr1 || surr3 <= r1 {
-		return rune(r1), 2
+		return rune(r1), 2, true
 	}
 
 	if len(b) < 4 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 2, false
 	}
 
 	r2 := uint16(b[2]) | uint16(b[3])<<8
 	if surr1 <= r1 && r1 < surr2 && surr2 <= r2 && r2 < surr3 {
-		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
+		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4, true
 	}
 
-	return utf8.RuneError, 1
+	return utf8.RuneError, 2, false
 }
 
 func (Charset_utf16le) SupportsSupplementaryChars() bool {
@@ -183,11 +183,21 @@ func (Charset_ucs2) EncodeRune(dst []byte, r rune) int {
 	return -1
 }
 
-func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
+func (Charset_ucs2) DecodeRune(p []byte) (rune, int, bool) {
 	if len(p) < 2 {
-		return utf8.RuneError, len(p)
+		return utf8.RuneError, len(p), false
 	}
-	return rune(p[0])<<8 | rune(p[1]), 2
+	r := rune(p[0])<<8 | rune(p[1])
+	if surr1 <= r && r < surr3 {
+		// The decoder rejects a lone surrogate. This is more strict than
+		// MySQL, and it is intentional. MySQL accepts a lone surrogate as
+		// ucs2 data, and a later conversion to a different character set
+		// fails. The utf16 and utf32 decoders reject lone surrogates in
+		// MySQL and in Vitess. This check makes sure that a conversion
+		// cannot write U+FFFD and show no error.
+		return utf8.RuneError, 2, false
+	}
+	return r, 2, true
 }
 
 func (Charset_ucs2) SupportsSupplementaryChars() bool {

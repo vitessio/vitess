@@ -142,6 +142,11 @@ func (c *CollationLegacy) WeightsEqual(left, right rune) bool {
 	if left == right {
 		return true
 	}
+	// The weight table does not extend past maxCodepoint, and MySQL's
+	// wildcard matching treats such codepoints as equal only to themselves.
+	if left > c.maxCodepoint || right > c.maxCodepoint {
+		return false
+	}
 	return equalWeightsLegacy(c.table, left, right)
 }
 

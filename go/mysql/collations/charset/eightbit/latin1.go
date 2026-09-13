@@ -216,11 +216,11 @@ func (Charset_latin1) EncodeRune(dst []byte, r rune) int {
 	return -1
 }
 
-func (Charset_latin1) DecodeRune(src []byte) (rune, int) {
+func (Charset_latin1) DecodeRune(src []byte) (rune, int, bool) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
-	return rune(tounicode_latin1[src[0]]), 1
+	return rune(tounicode_latin1[src[0]]), 1, true
 }
 
 func (Charset_latin1) Length(src []byte) int {

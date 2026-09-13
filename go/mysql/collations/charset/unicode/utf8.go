@@ -137,40 +137,39 @@ func (Charset_utf8mb3) EncodeRune(p []byte, r rune) int {
 	}
 }
 
-func (Charset_utf8mb3) DecodeRune(p []byte) (rune, int) {
+func (Charset_utf8mb3) DecodeRune(p []byte) (rune, int, bool) {
 	n := len(p)
 	if n < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
 	p0 := p[0]
 	x := first[p0]
 	if x >= as {
-		// The following code simulates an additional check for x == xx and
-		// handling the ASCII and invalid cases accordingly. This mask-and-or
-		// approach prevents an additional branch.
-		mask := rune(x) << 31 >> 31 // Create 0x0000 or 0xFFFF.
-		return rune(p[0])&^mask | utf8.RuneError&mask, 1
+		if x == xx {
+			return utf8.RuneError, 1, false
+		}
+		return rune(p[0]), 1, true
 	}
 	sz := int(x & 7)
 	accept := acceptRanges[x>>4]
 	if n < sz {
-		return utf8.RuneError, 1
+		return utf8.RuneError, 1, false
 	}
 	b1 := p[1]
 	if b1 < accept.lo || accept.hi < b1 {
-		return utf8.RuneError, 1
+		return utf8.RuneError, 1, false
 	}
 	if sz <= 2 { // <= instead of == to help the compiler eliminate some bounds checks
-		return rune(p0&mask2)<<6 | rune(b1&maskx), 2
+		return rune(p0&mask2)<<6 | rune(b1&maskx), 2, true
 	}
 	b2 := p[2]
 	if b2 < locb || hicb < b2 {
-		return utf8.RuneError, 1
+		return utf8.RuneError, 1, false
 	}
 	if sz <= 3 {
-		return rune(p0&mask3)<<12 | rune(b1&maskx)<<6 | rune(b2&maskx), 3
+		return rune(p0&mask3)<<12 | rune(b1&maskx)<<6 | rune(b2&maskx), 3, true
 	}
-	return utf8.RuneError, 1
+	return utf8.RuneError, 1, false
 }
 
 func (Charset_utf8mb3) SupportsSupplementaryChars() bool {
@@ -204,8 +203,12 @@ func (Charset_utf8mb4) EncodeRune(p []byte, r rune) int {
 	return utf8.EncodeRune(p, r)
 }
 
-func (Charset_utf8mb4) DecodeRune(p []byte) (rune, int) {
-	return utf8.DecodeRune(p)
+func (Charset_utf8mb4) DecodeRune(p []byte) (rune, int, bool) {
+	r, width := utf8.DecodeRune(p)
+	if r == utf8.RuneError && width <= 1 {
+		return r, width, false
+	}
+	return r, width, true
 }
 
 func (Charset_utf8mb4) SupportsSupplementaryChars() bool {
