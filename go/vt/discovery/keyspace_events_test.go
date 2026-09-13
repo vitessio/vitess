@@ -952,6 +952,30 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			wantState:    MoveTablesSwitching,
 		},
 		{
+			// The same in-flight shape with the rules listed the other way
+			// round, tablet-type routes first: buildKeyspaceRoutingRules emits
+			// the rules from a map, so nothing fixes their order, and
+			// primaryKeyspaceRoute takes the first rule whose source is the
+			// keyspace. That is only right because the workflow package keys
+			// the replica and rdonly routes as source@replica and source@rdonly
+			// (tabletTypeSuffixes), which never equal the keyspace; this pins
+			// the exact match so a prefix match or a split on "@" cannot pick
+			// up the target of a switched read route instead.
+			name: "multi-tenant MoveTables while switching writes with the tablet-type rules listed first",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
 			// Stale shard routing rules of some other keyspace -- a completed
 			// shard-by-shard migration leaves its source's rules in place --
 			// must not capture a multi-tenant source mid-switch as
