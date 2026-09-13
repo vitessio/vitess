@@ -157,21 +157,6 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 	params.Logger.Infof("Starting backup %v", bh.Name())
 
-	// If backup-log-to-storage is enabled, tee logs to a temporary file that
-	// will be uploaded alongside the backup data.
-	var backupLogFile *os.File
-	originalLogger := params.Logger
-	if BackupLogToStorage() {
-		var err error
-		backupLogFile, err = os.CreateTemp("", fmt.Sprintf("vtbackup-%s-*.log", bh.Name()))
-		if err != nil {
-			params.Logger.Warningf("Failed to create backup log file, continuing without separate log: %v", err)
-		} else {
-			fileLogger := logutil.NewWriterLogger(backupLogFile)
-			params.Logger = logutil.NewTeeLogger(params.Logger, fileLogger)
-		}
-	}
-
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
@@ -190,6 +175,22 @@ func Backup(ctx context.Context, params BackupParams) error {
 		}
 	}
 
+	// If backup-log-to-storage is enabled, tee logs to a temporary file that
+	// will be uploaded alongside the backup data. Created after engine
+	// validation so early-return errors don't leak the temp file.
+	var backupLogFile *os.File
+	originalLogger := params.Logger
+	if BackupLogToStorage() {
+		var err error
+		backupLogFile, err = os.CreateTemp("", fmt.Sprintf("vtbackup-%s-*.log", bh.Name()))
+		if err != nil {
+			params.Logger.Warningf("Failed to create backup log file, continuing without separate log: %v", err)
+		} else {
+			fileLogger := logutil.NewWriterLogger(backupLogFile)
+			params.Logger = logutil.NewTeeLogger(params.Logger, fileLogger)
+		}
+	}
+
 	params.Logger.Infof("Using backup engine %q", be.Name())
 
 	// Take the backup, and either AbortBackup or EndBackup.
@@ -202,9 +203,13 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// logged below is captured in the backup log file.
 	var backupLogUploaded bool
 	if backupLogFile != nil && backupResult == BackupUsable {
-		backupLogFile.Close()
+		closeErr := backupLogFile.Close()
 		logger = originalLogger
-		backupLogUploaded = uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
+		if closeErr != nil {
+			logger.Warningf("Failed to close backup log file, skipping upload: %v", closeErr)
+		} else {
+			backupLogUploaded = uploadBackupLog(ctx, logger, backupLogFile.Name(), bh)
+		}
 	}
 
 	var finishErr error
@@ -224,7 +229,9 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// Close the backup log file for unusable/empty results (usable was
 	// already closed above before upload). Restore the original logger.
 	if backupLogFile != nil && backupResult != BackupUsable {
-		backupLogFile.Close()
+		if err := backupLogFile.Close(); err != nil {
+			logger.Warningf("Failed to close backup log file: %v", err)
+		}
 		logger = originalLogger
 	}
 
@@ -258,7 +265,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	return finishErr
 }
 
-const backupLogFileName = "BACKUP.log"
+const backupLogFileName = "BACKUP-log"
 
 func uploadBackupLog(ctx context.Context, logger logutil.Logger, logFilePath string, bh backupstorage.BackupHandle) bool {
 	f, err := os.Open(logFilePath)

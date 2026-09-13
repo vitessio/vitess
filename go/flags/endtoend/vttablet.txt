@@ -50,7 +50,7 @@ Flags:
       --azblob-backup-parallelism int                                    Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob-backup-buffer-size). (default 1)
       --azblob-backup-storage-root string                                Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
       --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
-      --backup-log-to-storage                                            When set, backup and restore operations write engine-specific logs to a separate file and upload it to the backup storage directory alongside the backup data.
+      --backup-log-to-storage                                            When set, backup operations write engine-specific logs to a separate file and upload it to the backup storage directory alongside the backup data.
       --backup-storage-block-size int                                    if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
       --backup-storage-implementation string                             Which backup storage implementation to use for creating and restoring backups.
