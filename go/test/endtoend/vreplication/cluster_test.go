@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -226,39 +227,70 @@ func getDBTypeVersionInUse() (string, error) {
 	return dbTypeMajorVersion, nil
 }
 
-// downloadDBTypeVersion downloads a recent major version release build for the specified
-// DB type.
+// dbArtifact is a prebuilt database release the tests can download.
+type dbArtifact struct {
+	url  string
+	file string
+}
+
+// errNoDBTypeVersionArtifact is wrapped by dbTypeVersionArtifact when the
+// requested database version exists but has no prebuilt release for the
+// platform the tests run on, so callers can skip instead of fail.
+var errNoDBTypeVersionArtifact = errors.New("no prebuilt database release")
+
+// dbTypeVersionArtifact returns the prebuilt release of the given database type
+// and major version for the given platform.
+func dbTypeVersionArtifact(dbType, majorVersion, goos, goarch string) (dbArtifact, error) {
+	dbType = strings.ToLower(dbType)
+	dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
+	platform := fmt.Sprintf("%s/%s", goos, goarch)
+	noArtifact := fmt.Errorf("%w of %s for %s", errNoDBTypeVersionArtifact, dbTypeMajorVersion, platform)
+
+	knownVersion := (dbType == "mysql" && (majorVersion == "5.7" || majorVersion == "8.0")) ||
+		(dbType == "mariadb" && majorVersion == "10.10")
+	if !knownVersion {
+		return dbArtifact{}, fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
+	}
+	if goos != "linux" {
+		return dbArtifact{}, noArtifact
+	}
+
+	var url, file string
+	switch {
+	case dbType == "mysql" && majorVersion == "5.7" && goarch == "amd64":
+		file = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + file
+	case dbType == "mysql" && majorVersion == "8.0" && goarch == "amd64":
+		file = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + file
+	case dbType == "mysql" && majorVersion == "8.0" && goarch == "arm64":
+		// Oracle publishes neither a minimal build nor 8.0.28 for aarch64, so
+		// arm64 uses the current 8.0 release's full tarball.
+		file = "mysql-8.0.46-linux-glibc2.28-aarch64.tar.xz"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + file
+	case dbType == "mariadb" && majorVersion == "10.10" && goarch == "amd64":
+		file = "mariadb-10.10.3-linux-systemd-x86_64.tar.gz"
+		url = "https://github.com/vitessio/vitess-resources/releases/download/v5.0/" + file
+	default:
+		// MySQL 5.7 never shipped a Linux aarch64 build, and neither the
+		// vitess-resources mirror nor MariaDB publish an aarch64 10.10 tarball.
+		return dbArtifact{}, noArtifact
+	}
+	return dbArtifact{url: url, file: file}, nil
+}
+
+// downloadDBTypeVersion downloads a prebuilt database release.
 // If the file already exists, it will not download it again.
 // The artifact will be downloaded and extracted in the specified path. So e.g. if you
-// pass /tmp as the path and 5.7 as the majorVersion, mysqld will be installed in:
-// /tmp/mysql-5.7/bin/mysqld
-// You should then call setVtMySQLRoot() and setDBFlavor() to ensure that this new
+// specify path as /tmp/mysql-8.0 then the resulting mysqld binary would be
+// /tmp/mysql-8.0/bin/mysqld. You can then set VT_MYSQL_ROOT to /tmp/mysql-8.0 and that
 // binary is used by mysqlctl along with the correct flavor specific config file.
-func downloadDBTypeVersion(dbType string, majorVersion string, path string) error {
+func downloadDBTypeVersion(artifact dbArtifact, path string) error {
 	client := http.Client{
 		Timeout: 10 * time.Minute,
 	}
-	var url, file, versionFile string
-	dbType = strings.ToLower(dbType)
-
-	// This currently only supports x86_64 linux
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return fmt.Errorf("downloadDBTypeVersion() only supports x86_64 linux, current test environment is %s %s", runtime.GOARCH, runtime.GOOS)
-	}
-
-	if dbType == "mysql" && majorVersion == "5.7" {
-		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"
-		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + versionFile
-	} else if dbType == "mysql" && majorVersion == "8.0" {
-		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
-		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
-	} else if dbType == "mariadb" && majorVersion == "10.10" {
-		versionFile = "mariadb-10.10.3-linux-systemd-x86_64.tar.gz"
-		url = "https://github.com/vitessio/vitess-resources/releases/download/v5.0/" + versionFile
-	} else {
-		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
-	}
-	file = fmt.Sprintf("%s/%s", path, versionFile)
+	url := artifact.url
+	file := fmt.Sprintf("%s/%s", path, artifact.file)
 	// Let's not download the file again if we already have it
 	if _, err := os.Stat(file); err == nil {
 		return nil
@@ -949,13 +981,18 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 		t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
 		return func() {}
 	}
+	artifact, err := dbTypeVersionArtifact(dbType, majorVersion, runtime.GOOS, runtime.GOARCH)
+	if errors.Is(err, errNoDBTypeVersionArtifact) {
+		t.Skipf("Skipping: %v", err)
+	}
+	require.NoError(t, err)
 	path := "/tmp/" + dbTypeMajorVersion
 	// Set the root path and create it if needed
 	if err := setVtMySQLRoot(path); err != nil {
 		require.FailNowf(t, "Could not set VT_MYSQL_ROOT", "Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
 	}
 	// Download and extract the version artifact if needed
-	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
+	if err := downloadDBTypeVersion(artifact, path); err != nil {
 		require.FailNowf(t, "Could not download", "Could not download %s, error: %v", majorVersion, err)
 	}
 	return func() {

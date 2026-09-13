@@ -17,13 +17,17 @@ limitations under the License.
 package vault
 
 import (
+	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,8 +38,7 @@ import (
 
 const (
 	vaultExecutableName = "vault"
-	vaultDownloadSource = "https://vitess-operator.storage.googleapis.com/install/vault"
-	vaultDownloadSize   = 132738840
+	vaultVersion        = "1.6.1"
 	vaultDirName        = "vault"
 	vaultConfigFileName = "vault.hcl"
 	vaultCertFileName   = "vault-cert.pem"
@@ -43,6 +46,33 @@ const (
 	vaultKeyFileName    = "vault-key.pem"
 	vaultSetupScript    = "vault-setup.sh"
 )
+
+// vaultReleaseChecksums holds the sha256 of each Vault release zip we can run,
+// keyed by GOOS/GOARCH, taken from
+// https://releases.hashicorp.com/vault/1.6.1/vault_1.6.1_SHA256SUMS
+var vaultReleaseChecksums = map[string]string{
+	"linux/amd64": "75cd2b8c5527577c0da1105e11fba3c31f4112514a910c4f7ec527c9a8bf42d1",
+	"linux/arm64": "09e9fc0a69350d49a5db90c51b19a2a63b1da060eeeed700109fb43e544ba947",
+}
+
+// vaultReleaseArtifact is the Vault release zip for one platform.
+type vaultReleaseArtifact struct {
+	url    string
+	sha256 string
+}
+
+// vaultRelease returns the Vault release zip for the given platform.
+func vaultRelease(goos, goarch string) (vaultReleaseArtifact, error) {
+	platform := fmt.Sprintf("%s/%s", goos, goarch)
+	sum, ok := vaultReleaseChecksums[platform]
+	if !ok {
+		return vaultReleaseArtifact{}, fmt.Errorf("no Vault %s release known for %s", vaultVersion, platform)
+	}
+	return vaultReleaseArtifact{
+		url:    fmt.Sprintf("https://releases.hashicorp.com/vault/%s/vault_%s_%s_%s.zip", vaultVersion, vaultVersion, goos, goarch),
+		sha256: sum,
+	}, nil
+}
 
 // Server : Basic parameters for the running the Vault server
 type Server struct {
@@ -60,10 +90,15 @@ type Server struct {
 func (vs *Server) start() error {
 	// Download and unpack vault binary
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
-	fileStat, err := os.Stat(vs.execPath)
-	if err != nil || fileStat.Size() != vaultDownloadSize {
-		log.Warn(fmt.Sprintf("Downloading Vault binary to: %v", vs.execPath))
-		err := downloadExecFile(vs.execPath, vaultDownloadSource)
+	_, err := os.Stat(vs.execPath)
+	if err != nil {
+		release, err := vaultRelease(runtime.GOOS, runtime.GOARCH)
+		if err != nil {
+			log.Error(fmt.Sprint(err))
+			return err
+		}
+		log.Warn(fmt.Sprintf("Downloading Vault binary from %s to: %v", release.url, vs.execPath))
+		err = downloadVault(vs.execPath, release)
 		if err != nil {
 			log.Error(fmt.Sprint(err))
 			return err
@@ -146,24 +181,64 @@ func (vs *Server) stop() error {
 	}
 }
 
-// Download file from url to path; making it executable
-func downloadExecFile(path string, url string) error {
-	resp, err := http.Get(url)
+// downloadVault downloads the Vault release zip, verifies its checksum and
+// extracts the executable to execPath. The executable only appears at execPath
+// once it is complete, so a partial download is never mistaken for a binary.
+func downloadVault(execPath string, release vaultReleaseArtifact) error {
+	resp, err := http.Get(release.url)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("downloading %s: unexpected status %s", release.url, resp.Status)
+	}
 
-	err = os.WriteFile(path, []byte(""), 0o700)
+	dir := path.Dir(execPath)
+	zipFile, err := os.CreateTemp(dir, vaultExecutableName+"-*.zip")
 	if err != nil {
 		return err
 	}
-	out, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	defer os.Remove(zipFile.Name())
+	hash := sha256.New()
+	_, err = io.Copy(io.MultiWriter(zipFile, hash), resp.Body)
+	zipFile.Close()
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	if got := hex.EncodeToString(hash.Sum(nil)); got != release.sha256 {
+		return fmt.Errorf("checksum mismatch for %s: got %s, want %s", release.url, got, release.sha256)
+	}
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	zipReader, err := zip.OpenReader(zipFile.Name())
+	if err != nil {
+		return err
+	}
+	defer zipReader.Close()
+	for _, file := range zipReader.File {
+		if file.Name != vaultExecutableName {
+			continue
+		}
+		in, err := file.Open()
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.CreateTemp(dir, vaultExecutableName+"-*")
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(out, in)
+		out.Close()
+		if err != nil {
+			os.Remove(out.Name())
+			return err
+		}
+		if err := os.Chmod(out.Name(), 0o700); err != nil {
+			os.Remove(out.Name())
+			return err
+		}
+		return os.Rename(out.Name(), execPath)
+	}
+	return fmt.Errorf("%s does not contain a %s executable", release.url, vaultExecutableName)
 }

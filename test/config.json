@@ -2256,6 +2256,25 @@
         "binlog-compression"
       ]
     },
+    "vreplication_db_type_version_artifact": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestDBTypeVersionArtifact"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_basic",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "multi_vstreams_keyspace_reshard": {
       "File": "unused.go",
       "Packages": [
