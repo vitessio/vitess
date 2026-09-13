@@ -5533,7 +5533,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
-	s41 timestamp default now,
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -5594,12 +5594,13 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			// test now with and without ()
+			// test now() variants; bare now (without parens) is an
+			// identifier, like in MySQL
 			input: `create table t (
-	time1 timestamp default now,
+	time1 timestamp default now(),
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now on update now,
+	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,

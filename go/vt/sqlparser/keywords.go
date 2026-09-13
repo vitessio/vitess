@@ -608,6 +608,7 @@ var keywords = []keyword{
 	{"sequence", SEQUENCE},
 	{"serializable", SERIALIZABLE},
 	{"session", SESSION},
+	{"session_user", SESSION_USER},
 	{"set", SET},
 	{"share", SHARE},
 	{"shared", SHARED},
@@ -665,6 +666,7 @@ var keywords = []keyword{
 	{"st_aswkb", ST_AsBinary},
 	{"st_aswkt", ST_AsText},
 	{"st_centroid", ST_Centroid},
+	{"st_collect", ST_COLLECT},
 	{"st_dimension", ST_Dimension},
 	{"st_endpoint", ST_EndPoint},
 	{"st_envelope", ST_Envelope},
@@ -727,6 +729,7 @@ var keywords = []keyword{
 	{"sum", SUM},
 	{"sysdate", SYSDATE},
 	{"system", UNUSED},
+	{"system_user", SYSTEM_USER},
 	{"table", TABLE},
 	{"table_name", TABLE_NAME},
 	{"tables", TABLES},
@@ -829,6 +832,119 @@ var keywords = []keyword{
 	{"year", YEAR},
 	{"year_month", YEAR_MONTH},
 	{"zerofill", ZEROFILL},
+}
+
+// mysqlFuncCallKeywords lists the function names that MySQL's lexer treats as
+// a keyword only when '(' follows the name directly. Anywhere else the name is
+// an ordinary identifier, so `name (` with whitespace before the parenthesis
+// is a generic call, MySQL's stored-function path, and a bare `name` is a
+// column. Under sql_mode=IGNORE_SPACE the whitespace is permitted: the name
+// is the keyword when '(' follows it after whitespace too, so that a table
+// named after one of the functions must be quoted where '(' follows it. The
+// list is the one under "Function Name
+// Parsing and Resolution" in the MySQL reference manual, plus json_arrayagg,
+// json_objectagg and st_collect, which MySQL 8.0 treats the same way. Every
+// name must be a keyword of the grammar whose call form parses into a node
+// other than FuncExpr, so that a FuncExpr by one of these names always stands
+// for the stored-function call (see FuncExpr.Format).
+//
+// This lexer follows MySQL under either reading of the parser's sql_mode
+// (Options.SQLMode), with the one exception of mysqlAggrFuncCallKeywords. A
+// qualified name is an identifier under either reading.
+var mysqlFuncCallKeywords = []string{
+	"adddate", "bit_and", "bit_or", "bit_xor", "cast", "count", "curdate", "curtime",
+	"date_add", "date_sub", "extract", "group_concat", "json_arrayagg", "json_objectagg",
+	"max", "mid", "min", "now", "position", "session_user", "st_collect", "std", "stddev",
+	"stddev_pop", "stddev_samp", "subdate", "substr", "substring", "sum", "sysdate",
+	"system_user", "trim", "variance", "var_pop", "var_samp",
+}
+
+// mysqlAggrFuncCallKeywords lists the aggregates among mysqlFuncCallKeywords.
+// Without IGNORE_SPACE, MySQL reads `sum (x)` as a stored-function call. On
+// a scatter query that call would return one row per shard rather than the
+// total, silently, from a VTGate whose tablets still run a release that
+// prints a quoted `sum`(x) bare, so that MySQL runs the built-in. The lexer
+// therefore keeps these names keywords for one release, whatever the mode:
+// they are non-reserved, so the grammar still reads a bare one as an
+// identifier, and its aggregate rules report a call whose parenthesis is
+// detached (Tokenizer.SpacedAggrCalls) so that VTGate can warn. The next
+// major release reads them as MySQL does. Every other name on the list
+// already does: read as MySQL reads it, a detached call is one MySQL rejects
+// unless the stored function exists, or one an older tablet computes as the
+// built-in, which is what it returned before.
+var mysqlAggrFuncCallKeywords = []string{
+	"bit_and", "bit_or", "bit_xor", "count", "group_concat", "json_arrayagg", "json_objectagg",
+	"max", "min", "st_collect", "std", "stddev", "stddev_pop", "stddev_samp", "sum",
+	"variance", "var_pop", "var_samp",
+}
+
+// tokenSet is a set of token ids with constant-time membership, for the lexer.
+type tokenSet struct {
+	lo  int
+	has []bool
+}
+
+func (ts tokenSet) contains(id int) bool {
+	i := id - ts.lo
+	return i >= 0 && i < len(ts.has) && ts.has[i]
+}
+
+func newTokenSet(ids []int) tokenSet {
+	lo, hi := ids[0], ids[0]
+	for _, id := range ids {
+		lo, hi = min(lo, id), max(hi, id)
+	}
+	ts := tokenSet{lo: lo, has: make([]bool, hi-lo+1)}
+	for _, id := range ids {
+		ts.has[id-lo] = true
+	}
+	return ts
+}
+
+// funcCallKeywordTokens and aggrFuncCallKeywordTokens hold the tokens of the
+// mysqlFuncCallKeywords and mysqlAggrFuncCallKeywords names.
+var (
+	funcCallKeywordTokens     = buildKeywordTokens(mysqlFuncCallKeywords)
+	aggrFuncCallKeywordTokens = buildKeywordTokens(mysqlAggrFuncCallKeywords)
+)
+
+func buildKeywordTokens(names []string) tokenSet {
+	ids := make(map[string]int, len(keywords))
+	for _, kw := range keywords {
+		ids[kw.name] = kw.id
+	}
+	tokens := make([]int, 0, len(names))
+	for _, name := range names {
+		id, ok := ids[name]
+		if !ok {
+			panic(fmt.Sprintf("sqlparser: %s is listed as a function-name keyword but is not a keyword", name))
+		}
+		tokens = append(tokens, id)
+	}
+	return newTokenSet(tokens)
+}
+
+// isFuncCallKeyword reports whether the token is the keyword of one of the
+// mysqlFuncCallKeywords names.
+func isFuncCallKeyword(id int) bool {
+	return funcCallKeywordTokens.contains(id)
+}
+
+// isAggrFuncCallKeyword reports whether the token is the keyword of one of
+// the mysqlAggrFuncCallKeywords names.
+func isAggrFuncCallKeyword(id int) bool {
+	return aggrFuncCallKeywordTokens.contains(id)
+}
+
+// IsFuncCallKeywordName reports whether name is one of the function names
+// that MySQL treats as a keyword only directly before '('
+// (mysqlFuncCallKeywords). The keyword form of such a name parses into a node
+// of its own, so a generic FuncExpr by that name came quoted or qualified:
+// it is a call of a stored function by that name, MySQL's to resolve, and
+// serializes with the name quoted.
+func IsFuncCallKeywordName(name string) bool {
+	id, ok := keywordLookupTable.LookupString(name)
+	return ok && isFuncCallKeyword(id)
 }
 
 // keywordStrings contains the reverse mapping of token to keyword strings

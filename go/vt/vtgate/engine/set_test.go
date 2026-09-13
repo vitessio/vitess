@@ -739,6 +739,8 @@ func TestSetTable(t *testing.T) {
 			"|ansi",
 		)},
 	}, {
+		// IGNORE_SPACE is the one lexer mode the parser honors, so the session
+		// may set it
 		testName:     "sql_mode set to IGNORE_SPACE",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
@@ -752,10 +754,30 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'IGNORE_SPACE' new {} false false`,
+			"SysVar set with (sql_mode,'IGNORE_SPACE')",
+			"SET_VAR can be used",
 		},
-		expectedError: "setting the IGNORE_SPACE sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|IGNORE_SPACE",
+		)},
+	}, {
+		testName:     "sql_mode set to HIGH_NOT_PRECEDENCE",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'HIGH_NOT_PRECEDENCE'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'HIGH_NOT_PRECEDENCE' new {} false false`,
+		},
+		expectedError: "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|HIGH_NOT_PRECEDENCE",
 		)},
 	}, {
 		testName:     "sql_mode set to an unknown mode name",

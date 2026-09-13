@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -306,4 +307,26 @@ func TestShardSessionSnapshots(t *testing.T) {
 	session.ShardSessions[0].TransactionId = 999
 	assert.EqualValues(t, 20, snapshots[0].TransactionID,
 		"a snapshot must not observe later in-place updates of the live shard session")
+}
+
+func TestSafeSessionSQLModeMemo(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	assert.Empty(t, session.StoredSQLMode())
+	_, ok := session.SQLModeMemo("")
+	assert.False(t, ok, "nothing is memoized for a session without sql_mode")
+
+	session.SetSystemVariable("sql_mode", "'IGNORE_SPACE'")
+	assert.Equal(t, "'IGNORE_SPACE'", session.StoredSQLMode())
+	_, ok = session.SQLModeMemo("'IGNORE_SPACE'")
+	assert.False(t, ok, "not memoized until parsed")
+
+	session.MemoSQLMode("'IGNORE_SPACE'", sqlmode.IgnoreSpace)
+	mode, ok := session.SQLModeMemo("'IGNORE_SPACE'")
+	require.True(t, ok)
+	assert.Equal(t, sqlmode.IgnoreSpace, mode)
+
+	// a different stored expression misses the memo
+	session.SetSystemVariable("sql_mode", "'STRICT_TRANS_TABLES'")
+	_, ok = session.SQLModeMemo(session.StoredSQLMode())
+	assert.False(t, ok)
 }

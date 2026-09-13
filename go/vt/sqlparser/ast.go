@@ -2840,7 +2840,12 @@ type (
 		As   *ConvertType
 	}
 
-	// FuncExpr represents a function call.
+	// FuncExpr represents a generic function call: a call by an identifier,
+	// whether a native function such as abs() or concat(), a user-defined or
+	// stored function, or a qualified call. The built-ins that MySQL lexes as
+	// a keyword only directly before '(' (IsFuncCallKeywordName) have nodes of
+	// their own; a FuncExpr by one of those names is MySQL's stored-function
+	// path and serializes with the name quoted.
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
@@ -2947,6 +2952,18 @@ type (
 		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
+	// BuiltinFuncExpr is the keyword form of a built-in function with regular
+	// argument syntax that MySQL parses through a grammar rule of its own
+	// (curdate, current_date, utc_date, session_user, system_user), as
+	// opposed to a FuncExpr, which
+	// is a call by an identifier. It prints bare, since the bare name re-lexes
+	// as the keyword; the same name arriving quoted, qualified or with
+	// whitespace before the parenthesis is a FuncExpr and prints quoted.
+	BuiltinFuncExpr struct {
+		Name  IdentifierCI
+		Exprs []Expr
+	}
+
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
 	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
 	JSONPrettyExpr struct {
@@ -3003,6 +3020,16 @@ type (
 		Alias   IdentifierCS
 		Filter  Expr
 		Columns []*JtColumnDefinition
+	}
+
+	// STCollect is the ST_Collect aggregation: the geometries of a group
+	// collected into one geometry collection. It takes one argument, may be
+	// DISTINCT, and may be used as a window function.
+	// https://dev.mysql.com/doc/refman/8.4/en/spatial-aggregate-functions.html
+	STCollect struct {
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	// JSONArrayAgg is an aggregation expression that creates a JSON Array.
@@ -3666,6 +3693,7 @@ func (*TimestampDiffExpr) IsExpr()                  {}
 func (*ExtractFuncExpr) IsExpr()                    {}
 func (*WeightStringFuncExpr) IsExpr()               {}
 func (*CurTimeFuncExpr) IsExpr()                    {}
+func (*BuiltinFuncExpr) IsExpr()                    {}
 func (*CaseExpr) IsExpr()                           {}
 func (*ValuesFuncExpr) IsExpr()                     {}
 func (*CastExpr) IsExpr()                           {}
@@ -3694,6 +3722,7 @@ func (*JSONSearchExpr) IsExpr()                     {}
 func (*JSONValueExpr) IsExpr()                      {}
 func (*JSONArrayExpr) IsExpr()                      {}
 func (*JSONArrayAgg) IsExpr()                       {}
+func (*STCollect) IsExpr()                          {}
 func (*JSONObjectExpr) IsExpr()                     {}
 func (*JSONObjectAgg) IsExpr()                      {}
 func (*JSONQuoteExpr) IsExpr()                      {}
@@ -3764,6 +3793,7 @@ func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
+func (*BuiltinFuncExpr) iCallable()                    {}
 func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
 func (*TrimFuncExpr) iCallable()                       {}
@@ -3833,6 +3863,7 @@ func (*GeoJSONFromGeomExpr) iCallable()                {}
 func (*GeomFromGeoJSONExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
+func (*STCollect) iCallable() {}
 func (*Min) iCallable()       {}
 func (*Max) iCallable()       {}
 func (*Avg) iCallable()       {}
@@ -3858,6 +3889,7 @@ func (varS *VarSamp) GetArg() Expr              { return varS.Arg }
 func (variance *Variance) GetArg() Expr         { return variance.Arg }
 func (av *AnyValue) GetArg() Expr               { return av.Arg }
 func (jaa *JSONArrayAgg) GetArg() Expr          { return jaa.Expr }
+func (stc *STCollect) GetArg() Expr             { return stc.Arg }
 func (joa *JSONObjectAgg) GetArg() Expr         { return joa.Key }
 func (*ArgumentLessWindowExpr) GetArg() Expr    { return nil }
 func (node *FirstOrLastValueExpr) GetArg() Expr { return node.Expr }
@@ -3884,6 +3916,7 @@ func (varS *VarSamp) GetArgs() []Expr              { return []Expr{varS.Arg} }
 func (variance *Variance) GetArgs() []Expr         { return []Expr{variance.Arg} }
 func (av *AnyValue) GetArgs() []Expr               { return []Expr{av.Arg} }
 func (jaa *JSONArrayAgg) GetArgs() []Expr          { return []Expr{jaa.Expr} }
+func (stc *STCollect) GetArgs() []Expr             { return []Expr{stc.Arg} }
 func (joa *JSONObjectAgg) GetArgs() []Expr         { return []Expr{joa.Key, joa.Value} }
 
 func (min *Min) SetArg(expr Expr)                   { min.Arg = expr }
@@ -3905,6 +3938,7 @@ func (varS *VarSamp) SetArg(expr Expr)              { varS.Arg = expr }
 func (variance *Variance) SetArg(expr Expr)         { variance.Arg = expr }
 func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
 func (jaa *JSONArrayAgg) SetArg(expr Expr)          { jaa.Expr = expr }
+func (stc *STCollect) SetArg(expr Expr)             { stc.Arg = expr }
 func (joa *JSONObjectAgg) SetArg(expr Expr)         { joa.Key = expr }
 
 func (min *Min) SetArgs(exprs []Expr) error      { return setFuncArgs(min, exprs, "MIN") }
@@ -3927,6 +3961,8 @@ func (variance *Variance) SetArgs(exprs []Expr) error {
 func (av *AnyValue) SetArgs(exprs []Expr) error      { return setFuncArgs(av, exprs, "ANY_VALUE") }
 func (jaa *JSONArrayAgg) SetArgs(exprs []Expr) error { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
 
+func (stc *STCollect) SetArgs(exprs []Expr) error { return setFuncArgs(stc, exprs, "ST_COLLECT") }
+
 func (joa *JSONObjectAgg) SetArgs(exprs []Expr) error {
 	if len(exprs) != 2 {
 		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")
@@ -3947,6 +3983,7 @@ func (grpConcat *GroupConcatExpr) SetArgs(exprs []Expr) error {
 }
 
 func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
+func (stc *STCollect) IsDistinct() bool             { return stc.Distinct }
 func (min *Min) IsDistinct() bool                   { return min.Distinct }
 func (max *Max) IsDistinct() bool                   { return max.Distinct }
 func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
@@ -3954,6 +3991,7 @@ func (count *Count) IsDistinct() bool               { return count.Distinct }
 func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
 
 func (sum *Sum) SetDistinct(distinct bool)                   { sum.Distinct = distinct }
+func (stc *STCollect) SetDistinct(distinct bool)             { stc.Distinct = distinct }
 func (min *Min) SetDistinct(distinct bool)                   { min.Distinct = distinct }
 func (max *Max) SetDistinct(distinct bool)                   { max.Distinct = distinct }
 func (avg *Avg) SetDistinct(distinct bool)                   { avg.Distinct = distinct }
@@ -3979,6 +4017,7 @@ func (*VarSamp) AggrName() string         { return "var_samp" }
 func (*Variance) AggrName() string        { return "variance" }
 func (*AnyValue) AggrName() string        { return "any_value" }
 func (*JSONArrayAgg) AggrName() string    { return "json_arrayagg" }
+func (*STCollect) AggrName() string       { return "st_collect" }
 func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
 
 func (node *Count) GetOverClause() *OverClause                  { return node.OverClause }
@@ -4003,6 +4042,7 @@ func (node *NtileExpr) GetOverClause() *OverClause              { return node.Ov
 func (node *NTHValueExpr) GetOverClause() *OverClause           { return node.OverClause }
 func (node *LagLeadExpr) GetOverClause() *OverClause            { return node.OverClause }
 func (node *JSONArrayAgg) GetOverClause() *OverClause           { return node.OverClause }
+func (node *STCollect) GetOverClause() *OverClause              { return node.OverClause }
 func (node *JSONObjectAgg) GetOverClause() *OverClause          { return node.OverClause }
 
 func (node *Count) WindowFuncName() string         { return node.AggrName() }
@@ -4022,6 +4062,7 @@ func (node *VarPop) WindowFuncName() string        { return node.AggrName() }
 func (node *VarSamp) WindowFuncName() string       { return node.AggrName() }
 func (node *Variance) WindowFuncName() string      { return node.AggrName() }
 func (node *JSONArrayAgg) WindowFuncName() string  { return node.AggrName() }
+func (node *STCollect) WindowFuncName() string     { return node.AggrName() }
 func (node *JSONObjectAgg) WindowFuncName() string { return node.AggrName() }
 
 func (node *ArgumentLessWindowExpr) WindowFuncName() string {

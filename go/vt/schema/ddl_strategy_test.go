@@ -378,8 +378,8 @@ func TestParseDDLStrategy(t *testing.T) {
 			expectError:      "setting the ANSI_QUOTES sql_mode is unsupported",
 		},
 		{
-			strategyVariable: "online --session-variable sql_mode=IGNORE_SPACE",
-			expectError:      "setting the IGNORE_SPACE sql_mode is unsupported",
+			strategyVariable: "online --session-variable sql_mode=HIGH_NOT_PRECEDENCE",
+			expectError:      "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported",
 		},
 		{
 			strategyVariable: "direct --session-variable",

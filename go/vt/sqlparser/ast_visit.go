@@ -84,6 +84,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfBitXor(in, f)
 	case BoolVal:
 		return VisitBoolVal(in, f)
+	case *BuiltinFuncExpr:
+		return VisitRefOfBuiltinFuncExpr(in, f)
 	case *CallProc:
 		return VisitRefOfCallProc(in, f)
 	case *CaseExpr:
@@ -462,6 +464,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRowAlias(in, f)
 	case *SRollback:
 		return VisitRefOfSRollback(in, f)
+	case *STCollect:
+		return VisitRefOfSTCollect(in, f)
 	case *Savepoint:
 		return VisitRefOfSavepoint(in, f)
 	case *Select:
@@ -1083,6 +1087,24 @@ func VisitRefOfBitXor(in *BitXor, f Visit) error {
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+func VisitRefOfBuiltinFuncExpr(in *BuiltinFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -4037,6 +4059,22 @@ func VisitRefOfSRollback(in *SRollback, f Visit) error {
 	return nil
 }
 
+func VisitRefOfSTCollect(in *STCollect, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfSavepoint(in *Savepoint, f Visit) error {
 	if in == nil {
 		return nil
@@ -5290,6 +5328,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfMax(in, f)
 	case *Min:
 		return VisitRefOfMin(in, f)
+	case *STCollect:
+		return VisitRefOfSTCollect(in, f)
 	case *Std:
 		return VisitRefOfStd(in, f)
 	case *StdDev:
@@ -5382,6 +5422,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
+	case *BuiltinFuncExpr:
+		return VisitRefOfBuiltinFuncExpr(in, f)
 	case *CharExpr:
 		return VisitRefOfCharExpr(in, f)
 	case *ConvertExpr:
@@ -5518,6 +5560,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfRegexpReplaceExpr(in, f)
 	case *RegexpSubstrExpr:
 		return VisitRefOfRegexpSubstrExpr(in, f)
+	case *STCollect:
+		return VisitRefOfSTCollect(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
@@ -5701,6 +5745,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfBitXor(in, f)
 	case BoolVal:
 		return VisitBoolVal(in, f)
+	case *BuiltinFuncExpr:
+		return VisitRefOfBuiltinFuncExpr(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
 	case *CastExpr:
@@ -5873,6 +5919,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfRegexpReplaceExpr(in, f)
 	case *RegexpSubstrExpr:
 		return VisitRefOfRegexpSubstrExpr(in, f)
+	case *STCollect:
+		return VisitRefOfSTCollect(in, f)
 	case *Std:
 		return VisitRefOfStd(in, f)
 	case *StdDev:
@@ -6247,6 +6295,8 @@ func VisitWindowFunc(in WindowFunc, f Visit) error {
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NtileExpr:
 		return VisitRefOfNtileExpr(in, f)
+	case *STCollect:
+		return VisitRefOfSTCollect(in, f)
 	case *Std:
 		return VisitRefOfStd(in, f)
 	case *StdDev:
