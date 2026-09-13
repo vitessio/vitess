@@ -7408,5 +7408,27 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "a qualified call names a stored function, not the aggregate UDF of the same name",
+    "query": "select db.udf_aggr(col2) from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select db.udf_aggr(col2) from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select db.udf_aggr(col2) from `user` where 1 != 1",
+        "Query": "select db.udf_aggr(col2) from `user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

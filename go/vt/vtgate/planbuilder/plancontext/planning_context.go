@@ -269,7 +269,7 @@ func (ctx *PlanningContext) IsAggr(e sqlparser.SQLNode) bool {
 	case sqlparser.AggrFunc:
 		return true
 	case *sqlparser.FuncExpr:
-		return node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
+		return node.Qualifier.IsEmpty() && node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
 	}
 
 	return false

@@ -772,6 +772,9 @@ func (nz *normalizer) udvRewrite(cursor *Cursor, node *Variable) {
 
 // funcRewrite replaces certain function expressions with bind variables.
 func (nz *normalizer) funcRewrite(cursor *Cursor, node *FuncExpr) {
+	if !node.Qualifier.IsEmpty() {
+		return
+	}
 	lowered := node.Name.Lowered()
 	if lowered == "last_insert_id" && len(node.Exprs) > 0 {
 		// Do not rewrite LAST_INSERT_ID() when it has arguments.

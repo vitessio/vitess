@@ -74,7 +74,7 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 			}
 		}
 	case *sqlparser.FuncExpr:
-		if node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
+		if node.Qualifier.IsEmpty() && node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
 			etc.lastInsertIdWithArgument = true
 		}
 	}
