@@ -17,9 +17,12 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -35,6 +38,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -130,6 +134,7 @@ func TestPrimaryStatusIncludesServerVersion(t *testing.T) {
 
 	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysqlDaemon.Version = "Ver 8.0.35"
+	expireMySQLVersionCache(tm)
 
 	status, err := tm.PrimaryStatus(ctx)
 	require.NoError(t, err)
@@ -144,6 +149,7 @@ func TestReplicationStatusIncludesServerVersion(t *testing.T) {
 
 	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysqlDaemon.Version = "Ver 8.0.35"
+	expireMySQLVersionCache(tm)
 
 	status, err := tm.ReplicationStatus(ctx)
 	require.NoError(t, err)
@@ -222,6 +228,7 @@ func TestDemotePrimaryIncludesServerVersion(t *testing.T) {
 
 	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysqlDaemon.Version = "Ver 8.0.35"
+	expireMySQLVersionCache(tm)
 	fakeMysqlDaemon.DB().SetNeverFail(true)
 
 	tm.SemiSyncMonitor.Open()
@@ -1446,6 +1453,12 @@ type countingVersionDaemon struct {
 	delay time.Duration
 }
 
+func expireMySQLVersionCache(tm *TabletManager) {
+	tm.mysqlVersion.mu.Lock()
+	tm.mysqlVersion.fetchedAt = time.Time{}
+	tm.mysqlVersion.mu.Unlock()
+}
+
 func (d *countingVersionDaemon) GetVersionString(ctx context.Context) (string, error) {
 	d.calls.Add(1)
 	if d.delay > 0 {
@@ -1483,10 +1496,7 @@ func TestGetMySQLVersionStringCache(t *testing.T) {
 		tm := &TabletManager{MysqlDaemon: daemon}
 
 		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
-		// Expire the cache by backdating the fetch time beyond the TTL.
-		tm.mysqlVersion.mu.Lock()
-		tm.mysqlVersion.fetchedAt = time.Now().Add(-2 * mysqlVersionCacheTTL)
-		tm.mysqlVersion.mu.Unlock()
+		expireMySQLVersionCache(tm)
 
 		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
 		require.EqualValues(t, 2, daemon.calls.Load(), "should re-query mysqld after the TTL expires")
@@ -1533,6 +1543,56 @@ func TestGetMySQLVersionStringCache(t *testing.T) {
 		require.LessOrEqual(t, daemon.calls.Load(), int64(goroutines))
 		require.GreaterOrEqual(t, daemon.calls.Load(), int64(1))
 	})
+}
+
+func TestMariaDBDeprecationWarning(t *testing.T) {
+	tests := []struct {
+		name             string
+		version          string
+		unmanaged        bool
+		expectedWarnings int
+	}{
+		{
+			name:             "managed MariaDB warns once",
+			version:          "Ver 10.10.2-MariaDB",
+			expectedWarnings: 1,
+		},
+		{
+			name:      "unmanaged MariaDB does not warn",
+			version:   "Ver 10.10.2-MariaDB",
+			unmanaged: true,
+		},
+		{
+			name:    "managed MySQL does not warn",
+			version: "Ver 8.0.35",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logBuffer bytes.Buffer
+			oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuffer, nil)))
+			t.Cleanup(func() {
+				log.SwapLogger(oldLogger)
+			})
+
+			daemon := &countingVersionDaemon{
+				FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+				version:         tt.version,
+			}
+			tm := &TabletManager{
+				MysqlDaemon: daemon,
+				unmanaged:   tt.unmanaged,
+			}
+
+			require.Equal(t, tt.version, tm.getMySQLVersionStringBounded(t.Context()))
+			require.Equal(t, tt.version, tm.getMySQLVersionString(t.Context()))
+			expireMySQLVersionCache(tm)
+			require.Equal(t, tt.version, tm.getMySQLVersionString(t.Context()))
+
+			assert.Equal(t, tt.expectedWarnings, strings.Count(logBuffer.String(), "MariaDB support for managed tablets is deprecated"))
+		})
+	}
 }
 
 func TestGetMySQLVersionStringBounded(t *testing.T) {

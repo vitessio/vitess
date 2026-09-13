@@ -246,6 +246,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot get replication position on current primary %v; current primary must be healthy to perform PlannedReparent", currentPrimary.AliasString())
 	}
+	warnIfMariaDBVersion(pr.logger, "", currentPrimary.AliasString(), snapshotPos)
 
 	// Next, we wait for the primary-elect to catch up to that snapshot point.
 	// If it can catch up within WaitReplicasTimeout, we can be fairly
@@ -280,6 +281,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
+	warnIfMariaDBVersion(pr.logger, primaryStatus.ServerVersion, currentPrimary.AliasString(), primaryStatus.Position)
 
 	// Wait for the primary-elect to catch up to the position we demoted the
 	// current primary at. If it fails to catch up within WaitReplicasTimeout,
@@ -431,6 +433,7 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 					rec.RecordError(vterrors.Wrapf(psErr, "cannot get primary status of non-replicating tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
 					return
 				}
+				warnIfMariaDBVersion(pr.logger, primaryStatus.ServerVersion, alias, primaryStatus.Position)
 				pos, decErr := replication.DecodePosition(primaryStatus.Position)
 				if decErr != nil {
 					rec.RecordError(vterrors.Wrapf(decErr, "cannot decode replication position (%v) for tablet %v", primaryStatus.Position, alias))
@@ -442,6 +445,8 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 				mu.Unlock()
 				return
 			}
+
+			warnIfMariaDBVersion(pr.logger, status.ServerVersion, alias, status.Position, status.RelayLogPosition)
 
 			// The elect is promoted here via InitPrimary, which does NOT apply the
 			// relay log: any received-but-unapplied transactions the elect holds are
@@ -616,6 +621,7 @@ func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context
 	if err != nil {
 		return "", vterrors.Wrapf(err, "failed to get replication position of current primary %v", topoproto.TabletAliasString(primaryElect.Alias))
 	}
+	warnIfMariaDBVersion(pr.logger, "", topoproto.TabletAliasString(primaryElect.Alias), reparentJournalPosition)
 
 	return reparentJournalPosition, nil
 }
@@ -685,6 +691,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 
 				return
 			}
+			warnIfMariaDBVersion(pr.logger, primaryStatus.ServerVersion, alias, primaryStatus.Position)
 
 			pos, err := replication.DecodePosition(primaryStatus.Position)
 			if err != nil {

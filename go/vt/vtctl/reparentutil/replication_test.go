@@ -1936,6 +1936,41 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	}
 }
 
+func TestStopReplicationAndBuildStatusMapsWarnsForMariaDB(t *testing.T) {
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	aliasString := topoproto.TabletAliasString(alias)
+	tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+		stopReplicationAndGetStatusResults: map[string]*struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Err        error
+		}{
+			aliasString: {
+				StopStatus: &replicationdatapb.StopReplicationStatus{
+					Before: &replicationdatapb.Status{
+						Position: "MariaDB/0-1-5",
+					},
+					After: &replicationdatapb.Status{Position: "MariaDB/0-1-5"},
+				},
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		aliasString: {
+			Tablet: &topodatapb.Tablet{
+				Alias: alias,
+				Type:  topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	logger := logutil.NewMemoryLogger()
+
+	_, err = stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, 30*time.Second, sets.New[string](), nil, durability, true, logger)
+	require.NoError(t, err)
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+}
+
 func TestReplicaWasRunning(t *testing.T) {
 	t.Parallel()
 
