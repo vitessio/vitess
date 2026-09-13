@@ -116,15 +116,23 @@ type (
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {
+	if nr, ok := r.(*NoneRouting); ok {
+		// a none routing stays none no matter what further predicates say, and
+		// returning it as-is keeps its inferred-keyspace marker intact.
+		return nr
+	}
+
 	ks := r.Keyspace()
+	inferred := false
 	if ks == nil {
 		var err error
 		ks, err = ctx.VSchema.AnyKeyspace()
 		if err != nil {
 			panic(err)
 		}
+		inferred = true
 	}
-	nr := &NoneRouting{keyspace: ks}
+	nr := &NoneRouting{keyspace: ks, inferredKeyspace: inferred}
 
 	expr := in
 	// If we have a JoinPredicate, let's get the inner expression

@@ -322,6 +322,355 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	return join, Rewrote("logical join to applyJoin ")
 }
 
+<<<<<<< HEAD
+||||||| parent of 39bcd63d47 (vtgate: fix None routing handling when merging unions (#20629))
+// checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
+// and if cross-keyspace joins are denied for any involved keyspace. Fast path for direct
+// Route/Route comparisons (no allocations), falls back to collecting all keyspaces from
+// both operator trees to handle composite operators spanning multiple keyspaces.
+//
+// Panics via checkCrossKeyspacePair if the operation is denied — this follows the
+// planner convention of using panics for control flow on planning errors.
+func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
+	// Fast path: both sides are direct *Route — two type assertions + pointer comparison, no allocations.
+	if lRoute, ok := lhs.(*Route); ok {
+		if rRoute, ok := rhs.(*Route); ok {
+			lhsKs := lRoute.Routing.Keyspace()
+			rhsKs := rRoute.Routing.Keyspace()
+			if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+				return
+			}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+			return
+		}
+	}
+
+	lhsKeyspaces := operatorKeyspaces(lhs)
+	rhsKeyspaces := operatorKeyspaces(rhs)
+	if len(lhsKeyspaces) == 0 || len(rhsKeyspaces) == 0 {
+		return
+	}
+
+	checked := make(map[[2]string]struct{})
+	for _, lhsKs := range lhsKeyspaces {
+		for _, rhsKs := range rhsKeyspaces {
+			if lhsKs == rhsKs {
+				continue
+			}
+			pair := [2]string{lhsKs.Name, rhsKs.Name}
+			if _, ok := checked[pair]; ok {
+				continue
+			}
+			checked[pair] = struct{}{}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+		}
+	}
+}
+
+// checkCrossKeyspacePair checks a single cross-keyspace pair and panics if denied,
+// unless an alternate route or the ALLOW_CROSS_KEYSPACE_READS directive allows it.
+func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
+	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
+		return
+	}
+
+	if sqlparser.AllowCrossKeyspaceReadsDirective(ctx.Statement) {
+		return
+	}
+
+	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
+		allowed, err := ctx.VSchema.AllowCrossKeyspaceReads(ks.Name)
+		if err != nil {
+			panic(err)
+		}
+		if !allowed {
+			panic(vterrors.VT12001(
+				fmt.Sprintf("cross-keyspace %s between keyspaces %q and %q (use /*vt+ ALLOW_CROSS_KEYSPACE_READS */ to override)", opType, lhsKs.Name, rhsKs.Name),
+			))
+		}
+	}
+}
+
+// hasAlternateInKeyspace checks if op is a direct *Route with an AnyShardRouting alternate
+// in the given keyspace. Only checks direct routes because mergeJoinInputs (via operatorsToRoutes)
+// only uses alternates for direct *Route operators — wrapped routes won't be merged.
+func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
+	route, ok := op.(*Route)
+	if !ok {
+		return false
+	}
+	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+		return false
+	}
+	ref, ok := route.Routing.(*AnyShardRouting)
+	if !ok {
+		return false
+	}
+	return ref.AlternateInKeyspace(ks) != nil
+}
+
+// operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
+// walking routes and their inputs. Returns nil for nil operators or those with no keyspaces.
+// Uses slice-based dedup with pointer equality (Vitess shares keyspace objects by pointer within
+// a planning context) instead of a map since the number of distinct keyspaces is very small.
+func operatorKeyspaces(op Operator) []*vindexes.Keyspace {
+	var result []*vindexes.Keyspace
+	collectOperatorKeyspaces(op, &result)
+	return result
+}
+
+func collectOperatorKeyspaces(op Operator, result *[]*vindexes.Keyspace) {
+	if op == nil {
+		return
+	}
+	if route, ok := op.(*Route); ok {
+		addOperatorKeyspace(result, route.Routing.Keyspace())
+		return
+	}
+	for _, input := range op.Inputs() {
+		collectOperatorKeyspaces(input, result)
+	}
+}
+
+func addOperatorKeyspace(result *[]*vindexes.Keyspace, ks *vindexes.Keyspace) {
+	if ks == nil {
+		return
+	}
+	if slices.Contains(*result, ks) {
+		return
+	}
+	*result = append(*result, ks)
+}
+
+=======
+// checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
+// and if cross-keyspace joins are denied for any involved keyspace. Fast path for direct
+// Route/Route comparisons (no allocations unless an inferred none routing
+// needs its real tables checked), falls back to collecting all keyspaces from
+// both operator trees to handle composite operators spanning multiple keyspaces.
+//
+// Panics via checkCrossKeyspacePair if the operation is denied — this follows the
+// planner convention of using panics for control flow on planning errors.
+func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
+	// Fast path: both sides are direct *Route — two type assertions + pointer comparison, no allocations.
+	if lRoute, ok := lhs.(*Route); ok {
+		if rRoute, ok := rhs.(*Route); ok {
+			lhsKs := crossKeyspaceAccountable(lRoute)
+			rhsKs := crossKeyspaceAccountable(rRoute)
+			if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+				return
+			}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+			return
+		}
+	}
+
+	lhsKeyspaces := operatorKeyspaces(lhs)
+	rhsKeyspaces := operatorKeyspaces(rhs)
+	if len(lhsKeyspaces) == 0 || len(rhsKeyspaces) == 0 {
+		return
+	}
+
+	checked := make(map[[2]string]struct{})
+	for _, lhsKs := range lhsKeyspaces {
+		for _, rhsKs := range rhsKeyspaces {
+			if lhsKs == rhsKs {
+				continue
+			}
+			pair := [2]string{lhsKs.Name, rhsKs.Name}
+			if _, ok := checked[pair]; ok {
+				continue
+			}
+			checked[pair] = struct{}{}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+		}
+	}
+}
+
+// checkCrossKeyspacePair checks a single cross-keyspace pair and panics if denied,
+// unless an alternate route or the ALLOW_CROSS_KEYSPACE_READS directive allows it.
+func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
+	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
+		return
+	}
+
+	if sqlparser.AllowCrossKeyspaceReadsDirective(ctx.Statement) {
+		return
+	}
+
+	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
+		allowed, err := ctx.VSchema.AllowCrossKeyspaceReads(ks.Name)
+		if err != nil {
+			panic(err)
+		}
+		if !allowed {
+			panic(vterrors.VT12001(
+				fmt.Sprintf("cross-keyspace %s between keyspaces %q and %q (use /*vt+ ALLOW_CROSS_KEYSPACE_READS */ to override)", opType, lhsKs.Name, rhsKs.Name),
+			))
+		}
+	}
+}
+
+// hasAlternateInKeyspace checks if op is a direct *Route whose tables also live
+// in the given keyspace: through an AnyShardRouting alternate, or — for a route
+// degraded to NoneRouting, where the alternates were discarded — by checking
+// every real table's reference-copy placements in the vschema. Only checks
+// direct routes because mergeJoinInputs (via operatorsToRoutes) only uses
+// alternates for direct *Route operators — wrapped routes won't be merged.
+func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
+	route, ok := op.(*Route)
+	if !ok {
+		return false
+	}
+	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+		return false
+	}
+	switch routing := route.Routing.(type) {
+	case *AnyShardRouting:
+		return routing.AlternateInKeyspace(ks) != nil
+	case *NoneRouting:
+		return allRealTablesHaveCopyIn(ctx, route.Source, ks)
+	}
+	return false
+}
+
+// allRealTablesHaveCopyIn reports whether the operator tree has at least one
+// real table and every one of them also lives in ks: as the table's own
+// keyspace, through a reference copy recorded in ReferencedBy, or as the
+// source of a reference table. This only makes a cross-keyspace exemption
+// safe; it does not make the query text runnable in ks, since physical table
+// names can differ between keyspaces.
+func allRealTablesHaveCopyIn(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
+	if op == nil {
+		return false
+	}
+	found := false
+	covered := true
+	_ = Visit(op, func(this Operator) error {
+		tbl, isTable := this.(*Table)
+		if !isTable || tbl.VTable == nil {
+			return nil
+		}
+		if tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			// information_schema is present on every shard
+			return nil
+		}
+		found = true
+		if tableHasCopyIn(ctx, tbl.VTable, ks) {
+			return nil
+		}
+		covered = false
+		return io.EOF
+	})
+	return found && covered
+}
+
+func tableHasCopyIn(ctx *plancontext.PlanningContext, vt *vindexes.BaseTable, ks *vindexes.Keyspace) bool {
+	if vt.Keyspace == ks {
+		return true
+	}
+	if _, referenced := vt.ReferencedBy[ks.Name]; referenced {
+		return true
+	}
+	if vt.Source == nil {
+		return false
+	}
+	if qualifier := vt.Source.Qualifier.String(); qualifier != "" {
+		return qualifier == ks.Name
+	}
+	// an unqualified source declaration resolves through the vschema
+	src, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vt.Source.TableName)
+	return err == nil && src != nil && src.Keyspace == ks
+}
+
+// crossKeyspaceAccountable returns the keyspace the route genuinely reads
+// from. A none routing with an inferred keyspace (information_schema, dual)
+// reads from no keyspace — unless a merge absorbed real tables under it, in
+// which case the placeholder keyspace is where those tables live.
+func crossKeyspaceAccountable(route *Route) *vindexes.Keyspace {
+	nr, ok := route.Routing.(*NoneRouting)
+	if !ok || !nr.inferredKeyspace {
+		return route.Routing.Keyspace()
+	}
+	if len(realTableKeyspaces(route.Source)) == 0 {
+		return nil
+	}
+	return nr.keyspace
+}
+
+// operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
+// walking routes and their inputs. Returns nil for nil operators or those with no keyspaces.
+// Uses slice-based dedup with pointer equality (Vitess shares keyspace objects by pointer within
+// a planning context) instead of a map since the number of distinct keyspaces is very small.
+func operatorKeyspaces(op Operator) []*vindexes.Keyspace {
+	var result []*vindexes.Keyspace
+	collectOperatorKeyspaces(op, &result)
+	return result
+}
+
+func collectOperatorKeyspaces(op Operator, result *[]*vindexes.Keyspace) {
+	if op == nil {
+		return
+	}
+	if route, ok := op.(*Route); ok {
+		addOperatorKeyspace(result, crossKeyspaceAccountable(route))
+		return
+	}
+	for _, input := range op.Inputs() {
+		collectOperatorKeyspaces(input, result)
+	}
+}
+
+func addOperatorKeyspace(result *[]*vindexes.Keyspace, ks *vindexes.Keyspace) {
+	if ks == nil {
+		return
+	}
+	if slices.Contains(*result, ks) {
+		return
+	}
+	*result = append(*result, ks)
+}
+
+// realTableKeyspaces collects the distinct keyspaces of the real tables under
+// op. Virtual tables (dual, recursive CTE references) have no vschema table
+// behind them, and information_schema tables only get a synthetic VTable in an
+// arbitrary keyspace (createInfSchemaRoute), so neither contributes anything.
+// Unlike operatorKeyspaces, this reflects where the referenced tables actually
+// live rather than where a routing points.
+func realTableKeyspaces(op Operator) []*vindexes.Keyspace {
+	if op == nil {
+		return nil
+	}
+	var result []*vindexes.Keyspace
+	_ = Visit(op, func(this Operator) error {
+		tbl, ok := this.(*Table)
+		if !ok || tbl.VTable == nil {
+			return nil
+		}
+		if tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			return nil
+		}
+		addOperatorKeyspace(&result, tbl.VTable.Keyspace)
+		return nil
+	})
+	return result
+}
+
+// hasInfoSchemaTables reports whether any table under op reads from
+// information_schema.
+func hasInfoSchemaTables(op Operator) bool {
+	var found bool
+	_ = Visit(op, func(this Operator) error {
+		if tbl, ok := this.(*Table); ok && tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			found = true
+			return io.EOF
+		}
+		return nil
+	})
+	return found
+}
+
+>>>>>>> 39bcd63d47 (vtgate: fix None routing handling when merging unions (#20629))
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {
 	aRoute, ok := a.(*Route)
 	if !ok {
