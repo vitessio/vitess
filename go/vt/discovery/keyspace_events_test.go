@@ -413,7 +413,6 @@ func TestWaitForConsistentKeyspaces(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-
 		})
 	}
 }
@@ -646,12 +645,6 @@ func TestOnHealthCheck(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
-type fakeTopoServer struct {
-}
-||||||| parent of 99e5357f48 (vtgate: only scan shard records for MoveTables state when routing rules reference the keyspace (#20464))
-type fakeTopoServer struct{}
-=======
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
 // (memorytopo) *topo.Server, so code under test can read global topo records
 // such as the Shard records getMoveTablesStatus fetches.
@@ -1273,7 +1266,6 @@ func TestRulesReferenceKeyspace(t *testing.T) {
 }
 
 type fakeTopoServer struct{}
->>>>>>> 99e5357f48 (vtgate: only scan shard records for MoveTables state when routing rules reference the keyspace (#20464))
 
 // GetTopoServer returns the full topo.Server instance.
 func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
