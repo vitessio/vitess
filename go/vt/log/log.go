@@ -65,6 +65,30 @@ func SwapLogger(newLogger *slog.Logger) *slog.Logger {
 	return logger.Swap(newLogger)
 }
 
+// WrapLogger atomically replaces the structured logger with the result of calling
+// wrap on the currently installed one, and returns the logger that was replaced
+// along with the one that is now installed. No log record can slip through between
+// reading the current logger and installing the wrapper.
+//
+// wrap must be free of side effects: it is called again if another goroutine
+// installs a logger concurrently. Its argument is nil if no logger is installed.
+func WrapLogger(wrap func(current *slog.Logger) *slog.Logger) (previous, installed *slog.Logger) {
+	for {
+		previous = logger.Load()
+		installed = wrap(previous)
+		if logger.CompareAndSwap(previous, installed) {
+			return previous, installed
+		}
+	}
+}
+
+// CompareAndSwapLogger installs newLogger only if oldLogger is the one currently
+// installed, and reports whether it did. It lets a caller give up its own logger
+// without clobbering one that another caller installed on top of it.
+func CompareAndSwapLogger(oldLogger, newLogger *slog.Logger) bool {
+	return logger.CompareAndSwap(oldLogger, newLogger)
+}
+
 // log is a helper that logs with glog or slog depending on the configured flags.
 func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	if !structured.Load() {

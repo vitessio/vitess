@@ -36,8 +36,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -2482,10 +2481,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	// Capture the vstream warning log. Otherwise we need to re-implement the vstream error
 	// handling in SandboxConn's implementation and then we're not actually testing the
 	// production code.
-	logger := logutil.NewMemoryLogger()
-	log.Warn = func(msg string, _ ...slog.Attr) {
-		logger.Warningf("%s", msg)
-	}
+	logger := logtest.Capture(t, slog.LevelWarn)
 
 	cell := "aa"
 	ks := "TestVStream"
