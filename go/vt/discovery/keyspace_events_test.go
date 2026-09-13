@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"encoding/hex"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/faketopo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -644,8 +646,634 @@ func TestOnHealthCheck(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 type fakeTopoServer struct {
 }
+||||||| parent of 99e5357f48 (vtgate: only scan shard records for MoveTables state when routing rules reference the keyspace (#20464))
+type fakeTopoServer struct{}
+=======
+// realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
+// (memorytopo) *topo.Server, so code under test can read global topo records
+// such as the Shard records getMoveTablesStatus fetches.
+type realTopoBackedServer struct {
+	fakeTopoServer
+	ts *topo.Server
+}
+
+func (f *realTopoBackedServer) GetTopoServer() (*topo.Server, error) {
+	return f.ts, nil
+}
+
+// TestGetMoveTablesStatusScopedToKeyspace verifies that getMoveTablesStatus
+// only reports a MoveTables workflow for a keyspace when the routing rules
+// actually reference that keyspace. Routing rules for unrelated keyspaces must
+// not produce a MoveTables state — nor trigger the shard-record scan behind
+// it. A single stray routing rule anywhere in the cluster used to make every
+// keyspaceState on every vtgate fetch every one of its keyspace's shard
+// records from the global topo server on each SrvVSchema update.
+func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	const keyspace = "source"
+	shards := []string{"-80", "80-"}
+
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+	for _, shard := range shards {
+		require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	}
+
+	// setDeniedTables marks table t1 as denied on the PRIMARY of the given
+	// shards, and clears the denial on all others.
+	setDeniedTables := func(t *testing.T, deniedShards ...string) {
+		t.Helper()
+		for _, shard := range shards {
+			_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+				si.TabletControls = nil
+				if slices.Contains(deniedShards, shard) {
+					si.TabletControls = []*topodatapb.Shard_TabletControl{{
+						TabletType:   topodatapb.TabletType_PRIMARY,
+						DeniedTables: []string{"t1"},
+					}}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+		}
+	}
+
+	kss := &keyspaceState{
+		kew:      &KeyspaceEventWatcher{ts: &realTopoBackedServer{ts: ts}},
+		keyspace: keyspace,
+		shards:   make(map[string]*shardState),
+	}
+	for _, shard := range shards {
+		kss.shards[shard] = &shardState{
+			target: &querypb.Target{Keyspace: keyspace, Shard: shard},
+		}
+	}
+
+	// unscannedKss is a keyspaceState for the same keyspace whose only shard
+	// was never created in the topo, so any attempt to read shard records
+	// fails. The cases that must exit the gate early run against it too: the
+	// point of the gate is avoiding the fleet-wide topo reads, so a gate that
+	// fell through has to surface here as an error rather than only as a
+	// different MoveTables state.
+	unscannedKss := &keyspaceState{
+		kew:      kss.kew,
+		keyspace: keyspace,
+		shards: map[string]*shardState{
+			"c0-": {target: &querypb.Target{Keyspace: keyspace, Shard: "c0-"}},
+		},
+	}
+
+	testCases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		// deniedShards is which of the keyspace's shards have denied tables
+		// set when getMoveTablesStatus runs.
+		deniedShards []string
+		wantType     MoveTablesType
+		wantState    MoveTablesStatus
+		// wantNoScan marks a case that must exit the gate before reading any
+		// shard record.
+		wantNoScan bool
+	}{
+		{
+			// Also the shape of a --no-routing-rules workflow between Create
+			// and its first traffic switch: setupInitialDeniedTables has
+			// denied the tables on the target shards, but no rule names the
+			// keyspace. It is deliberately not reported, and must not cost a
+			// scan; the case below pins that the switch itself is detected.
+			name:         "no routing rules",
+			vs:           &vschemapb.SrvVSchema{},
+			deniedShards: shards,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			name: "table routing rules referencing only unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "other.t1", ToTables: []string{"othertarget.t1"}},
+						{FromTable: "t1", ToTables: []string{"othertarget.t1"}},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			name: "shard routing rules referencing only unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			// The rule set MoveTables creates while writes still route to the
+			// source: unqualified and keyspace-qualified rules all point at
+			// the source keyspace.
+			name: "regular MoveTables before switching writes",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"source.t1"}},
+						{FromTable: "target.t1", ToTables: []string{"source.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"source.t1"}},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// After SwitchWrites the rules point at the target keyspace; the
+			// source keyspace is still referenced by the qualified from-table.
+			// This is also what bounds the --no-routing-rules window: that
+			// flag is create-time only and the traffic switcher never consults
+			// it, so a workflow created with it reaches exactly this rule
+			// shape at SwitchWrites and is reported from then on.
+			name: "regular MoveTables after switching writes",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The switched rule set again, with a primary keyspace routing rule
+			// an operator applied by hand that routes the source keyspace to
+			// itself. A self route changes no routing (findRoutedKeyspace returns
+			// the keyspace unchanged and the table rules still apply) and an
+			// ordinary SwitchWrites never touches it, so it must not stop the
+			// table rules from reporting the writes as switched.
+			name: "regular MoveTables after switching writes with a manual self-routing keyspace rule",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// A shard routing rule keyed by this keyspace exists for a denied
+			// shard (-80), so the keyspace is referenced, the scan runs, and
+			// getMoveTablesStatus reports Switching for that combination.
+			name: "shard-by-shard MoveTables with a rule for a denied shard",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesShardByShard,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// The only denied shard (-80) has no rule keyed by this keyspace —
+			// the remaining rule is for 80-, which is not denied — so
+			// getMoveTablesStatus reports Switched. That 80- rule is also what
+			// keeps the keyspace referenced: the gate sees any rule naming the
+			// keyspace, not just rules for its denied shards.
+			name: "shard-by-shard MoveTables with no rule for the denied shard",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target", Shard: "80-"},
+					},
+				},
+			},
+			deniedShards: []string{"-80"},
+			wantType:     MoveTablesShardByShard,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The create-time shape of a shard-by-shard migration
+			// (createDefaultShardRoutingRules): rules are keyed by the target
+			// keyspace and route back to the source, and setupInitialDeniedTables
+			// is skipped for a partial migration, so the source has no denied
+			// tables for a scan to find. It is referenced only as a rule's
+			// to-keyspace and must exit the gate without reading its shards.
+			name: "shard-by-shard MoveTables create-time reverse rules",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "target", ToKeyspace: "source", Shard: "-80"},
+						{FromKeyspace: "target", ToKeyspace: "source", Shard: "80-"},
+					},
+				},
+			},
+			deniedShards: nil,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			// A multi-tenant migration routes whole keyspaces and writes no
+			// table rule, but stopSourceWrites still denies the tables on the
+			// source shards. Once SwitchWrites points the source's primary
+			// rule at the target, writes are switched: without recognizing
+			// that rule the keyspace exits the gate as MoveTablesNone and
+			// vtgate keeps buffering until the failover timeout.
+			name: "multi-tenant MoveTables after switching writes",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// What setupInitialRoutingRules actually writes at Create: a self
+			// route for every tablet type. The denied tables are on the target
+			// at this point, so the scan finds none here and reports nothing.
+			name: "multi-tenant MoveTables at create",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+						{FromKeyspace: "source@replica", ToKeyspace: "source"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: nil,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+		},
+		{
+			// The window inside SwitchWrites: stopSourceWrites has denied the
+			// tables on the source, but changeWriteRoute has not repointed the
+			// rule yet, so it still routes the keyspace to itself. A
+			// SrvVSchema update landing here must report the migration as
+			// switching rather than concluding nothing is going on, or vtgate
+			// stops buffering while the source is already refusing writes.
+			name: "multi-tenant MoveTables while switching writes",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// The same in-flight shape with the rules listed the other way
+			// round, tablet-type routes first: buildKeyspaceRoutingRules emits
+			// the rules from a map, so nothing fixes their order, and
+			// primaryKeyspaceRoute takes the first rule whose source is the
+			// keyspace. That is only right because the workflow package keys
+			// the replica and rdonly routes as source@replica and source@rdonly
+			// (tabletTypeSuffixes), which never equal the keyspace; this pins
+			// the exact match so a prefix match or a split on "@" cannot pick
+			// up the target of a switched read route instead.
+			name: "multi-tenant MoveTables while switching writes with the tablet-type rules listed first",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// Stale shard routing rules of some other keyspace -- a completed
+			// shard-by-shard migration leaves its source's rules in place --
+			// must not capture a multi-tenant source mid-switch as
+			// shard-by-shard, which would report it switched while its writes
+			// are still denied. The classification is scoped to rules naming
+			// this keyspace, and the keyspace route decides first.
+			name: "multi-tenant MoveTables while switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			name: "multi-tenant MoveTables after switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// A stale rule of this very keyspace, left by an earlier completed
+			// shard-by-shard migration of it, would otherwise hold a switched
+			// multi-tenant source at Switching indefinitely: the rule's key
+			// matches a denied shard. The keyspace route takes precedence.
+			name: "multi-tenant MoveTables after switching writes with stale shard rules of this keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "oldtarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The same scoping protects a regular MoveTables: another
+			// keyspace's stale shard rules used to turn it into ShardByShard
+			// and skip the table-rule check that reports it switched.
+			name: "regular MoveTables after switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setDeniedTables(t, tc.deniedShards...)
+
+			state, err := kss.getMoveTablesStatus(tc.vs)
+			require.NoError(t, err)
+			require.NotNil(t, state)
+			require.Equal(t, tc.wantType, state.Typ, "unexpected MoveTables type %s", state)
+			require.Equal(t, tc.wantState, state.State, "unexpected MoveTables state %s", state)
+
+			if tc.wantNoScan {
+				// Reading a shard record here fails, so this only succeeds if
+				// the gate returned before the scan.
+				state, err := unscannedKss.getMoveTablesStatus(tc.vs)
+				require.NoError(t, err, "the gate read shard records for a keyspace no routing rule references")
+				require.NotNil(t, state)
+				require.Equal(t, MoveTablesNone, state.Typ, "unexpected MoveTables type %s", state)
+			}
+		})
+	}
+}
+
+func TestRulesReferenceKeyspace(t *testing.T) {
+	testCases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		want bool
+	}{
+		{
+			name: "empty vschema",
+			vs:   &vschemapb.SrvVSchema{},
+			want: false,
+		},
+		{
+			name: "keyspace referenced by a to-table",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"source.t1"}},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "keyspace referenced by a qualified from-table",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "keyspace referenced by a from-table with a tablet type suffix",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source.t1@replica", ToTables: []string{"target.t1"}},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "keyspace name is a prefix of the referenced keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source2.t1", ToTables: []string{"source2ndtarget.t1"}},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "unqualified table named like the keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source", ToTables: []string{"other.source"}},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "keyspace is the source of a shard routing rule",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target", Shard: "-80"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			// The keyspace a shard rule routes to never holds denied tables:
+			// at Create the partial migration has none, and after a switch
+			// they sit on the rule's source. Admitting it would only scan.
+			name: "keyspace is the target of a shard routing rule",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "source", Shard: "-80"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "shard routing rule between unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			// The self route setupInitialRoutingRules writes at Create. It has
+			// to be admitted too: stopSourceWrites denies the source's tables
+			// before changeWriteRoute repoints this rule, so the window in
+			// between has denied tables while the rule still points here.
+			name: "keyspace is the source of a self-routing primary keyspace rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			// A multi-tenant SwitchWrites points the source keyspace's primary
+			// rule at the target, and the source keeps the denied tables that
+			// stopSourceWrites added, so the source must still be scanned.
+			name: "keyspace is the source of a primary keyspace routing rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			// The target of that rule has no denied tables of its own, so
+			// admitting it would reintroduce the scan this gate avoids.
+			name: "keyspace is the target of a primary keyspace routing rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "source"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			// Only the primary rule matters: the ones for the other tablet
+			// types carry a suffix in their from-keyspace.
+			name: "keyspace is the source of a replica keyspace routing rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "keyspace routing rule between unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget"},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, rulesReferenceKeyspace(tc.vs, "source"))
+		})
+	}
+}
+
+type fakeTopoServer struct{}
+>>>>>>> 99e5357f48 (vtgate: only scan shard records for MoveTables state when routing rules reference the keyspace (#20464))
 
 // GetTopoServer returns the full topo.Server instance.
 func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
