@@ -37,6 +37,8 @@ func precedenceFor(in IR) sqlparser.Precendence {
 		}
 	case *NotExpr:
 		return sqlparser.P13
+	case *BetweenExpr:
+		return sqlparser.P12
 	case *ComparisonExpr:
 		return sqlparser.P11
 	case *IsExpr:
@@ -127,13 +129,27 @@ func (l *Literal) format(buf *sqlparser.TrackedBuffer) {
 			if i > 0 {
 				buf.WriteString(", ")
 			}
-			evalToSQLValue(val).EncodeSQLStringBuilder(buf.Builder)
+			formatEvalLiteral(buf, val)
 		}
 		buf.WriteByte(')')
 
 	default:
-		evalToSQLValue(l.inner).EncodeSQLStringBuilder(buf.Builder)
+		formatEvalLiteral(buf, l.inner)
 	}
+}
+
+// formatEvalLiteral formats e as a SQL literal. JSON values are wrapped in
+// CAST(... AS JSON) to keep their document semantics.
+func formatEvalLiteral(buf *sqlparser.TrackedBuffer, e eval) {
+	if _, ok := e.(*evalJSON); ok {
+		buf.WriteLiteral("cast(")
+		evalToSQLValue(e).EncodeSQLStringBuilder(buf.Builder)
+		buf.WriteLiteral(" as ")
+		buf.WriteLiteral("json")
+		buf.WriteByte(')')
+		return
+	}
+	evalToSQLValue(e).EncodeSQLStringBuilder(buf.Builder)
 }
 
 func (bv *BindVariable) Format(buf *sqlparser.TrackedBuffer) {
@@ -202,6 +218,20 @@ func (c *InExpr) format(buf *sqlparser.TrackedBuffer) {
 		op = "not in"
 	}
 	formatBinary(buf, c, c.Left, op, c.Right)
+}
+
+func (b *BetweenExpr) format(buf *sqlparser.TrackedBuffer) {
+	// BETWEEN is ternary and non-associative: no operand position may drop
+	// the parentheses of an equal-precedence child.
+	formatExpr(buf, b, b.Left, false)
+	if b.Negate {
+		buf.WriteLiteral(" not between ")
+	} else {
+		buf.WriteLiteral(" between ")
+	}
+	formatExpr(buf, b, b.From, false)
+	buf.WriteLiteral(" and ")
+	formatExpr(buf, b, b.To, false)
 }
 
 func (tuple TupleExpr) format(buf *sqlparser.TrackedBuffer) {

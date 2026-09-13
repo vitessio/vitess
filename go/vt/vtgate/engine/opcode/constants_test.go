@@ -52,6 +52,10 @@ func TestType(t *testing.T) {
 		{AggregateCount, sqltypes.Int32, sqltypes.Int64},
 		{AggregateCountStar, sqltypes.Int64, sqltypes.Int64},
 		{AggregateGtid, sqltypes.VarChar, sqltypes.VarChar},
+		{AggregateJSONArrayAgg, sqltypes.Int64, sqltypes.TypeJSON},
+		{AggregateJSONObjectAgg, sqltypes.VarChar, sqltypes.TypeJSON},
+		{AggregateJSONArrayMerge, sqltypes.VarChar, sqltypes.TypeJSON},
+		{AggregateJSONObjectMerge, sqltypes.Unknown, sqltypes.TypeJSON},
 	}
 
 	for _, tc := range tt {
@@ -130,6 +134,10 @@ func TestAggregateOpcode_MarshalJSON(t *testing.T) {
 		{AggregateGroupConcat, "\"group_concat\""},
 		{AggregateAnyValue, "\"any_value\""},
 		{AggregateAvg, "\"avg\""},
+		{AggregateJSONArrayAgg, "\"json_arrayagg\""},
+		{AggregateJSONObjectAgg, "\"json_objectagg\""},
+		{AggregateJSONArrayMerge, "\"json_arrayagg_merge\""},
+		{AggregateJSONObjectMerge, "\"json_objectagg_merge\""},
 		{999, "\"ERROR\""},
 	}
 
