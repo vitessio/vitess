@@ -220,7 +220,7 @@ func TestUsedCapacityConcurrentWithSet(t *testing.T) {
 	wg.Wait()
 
 	assert.EqualValues(t, cache.Len(), cache.UsedCapacity())
-	assert.EqualValues(t, 64, cache.Len())
+	assert.Equal(t, 64, cache.Len())
 }
 
 func BenchmarkLRUCacheGetHit(b *testing.B) {
