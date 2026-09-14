@@ -406,6 +406,51 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "real1",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// A later sibling is not visible in an earlier body, so the
+		// reference there is the real table.
+		input: "with a as (select * from b), b as (select * from real1) select * from a",
+		output: []Permission{{
+			TableName: "b",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A nested WITH inside a CTE's own body does not make the outer CTE
+		// visible to itself either.
+		input: "with a as (with b as (select * from a) select * from b) select * from a",
+		output: []Permission{{
+			TableName: "a",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// The self-reference is closed on INSERT ... SELECT as well.
+		input: "insert into real2 with real1 as (select * from real1) select * from real1",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// And on a WITH declared by a derived table or an IN subquery.
+		input: "select * from (with t as (select * from t) select * from t) as d",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "select * from real2 where id in (with t as (select id from t) select id from t)",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {
