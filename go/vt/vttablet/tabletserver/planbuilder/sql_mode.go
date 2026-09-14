@@ -175,7 +175,7 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 			verify = true
 			continue
 		}
-		if _, err := sqlmode.Validate(value); err != nil {
+		if _, err := sqlmode.Validate(value, 0); err != nil {
 			return false, err
 		}
 	}

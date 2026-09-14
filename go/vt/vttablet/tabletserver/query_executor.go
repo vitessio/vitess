@@ -1422,7 +1422,7 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 		qre.undoSQLModeSet(conn, prev, err)
 		return nil, err
 	}
-	vErr := func() error { _, err := sqlmode.Validate(applied); return err }()
+	vErr := func() error { _, err := sqlmode.Validate(applied, 0); return err }()
 	if vErr == nil {
 		return result, nil
 	}

@@ -279,20 +279,21 @@ var unsupportedModes = []Mode{
 }
 
 // Validate parses and validates an sql_mode assignment value the way MySQL does, and
-// additionally rejects the modes that change how SQL text is interpreted (LexerModes) —
-// the Vitess parser either does not support them or does not honor them. It returns the
-// expanded mode, whose String form is the canonical value MySQL would report back for
-// @@sql_mode. Both vtgate (SET statements, the --sql-mode flag) and vttablet (settings,
-// SET_VAR hints, SET statements from older vtgates or direct clients) validate with this,
-// so the same value fails with the same error at either layer.
-func Validate(value sqltypes.Value) (Mode, error) {
+// additionally rejects the modes that change how SQL text is interpreted (LexerModes),
+// except those in honored: the lexer modes the caller reads SQL under (some of
+// sqlparser.HonoredSQLModes, or 0 for a caller that reads SQL under none of them). It
+// returns the expanded mode, whose String form is the canonical value MySQL would report
+// back for @@sql_mode. Both vtgate (SET statements, the --sql-mode flag) and vttablet
+// (settings, SET_VAR hints, SET statements from older vtgates or direct clients)
+// validate with this, so the same value fails with the same error at either layer.
+func Validate(value sqltypes.Value, honored Mode) (Mode, error) {
 	mode, err := FromValue(value)
 	if err != nil {
 		return 0, err
 	}
 	expanded := mode.Expand()
 	for _, unsupported := range unsupportedModes {
-		if expanded&unsupported != 0 {
+		if expanded&unsupported&^honored != 0 {
 			return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", unsupported)
 		}
 	}

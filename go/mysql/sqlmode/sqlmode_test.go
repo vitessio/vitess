@@ -198,7 +198,7 @@ func TestValidate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.value.String(), func(t *testing.T) {
-			mode, err := Validate(tt.value)
+			mode, err := Validate(tt.value, 0)
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				return
@@ -207,6 +207,26 @@ func TestValidate(t *testing.T) {
 			assert.Equal(t, tt.expected, mode.String())
 		})
 	}
+}
+
+// A lexer mode the caller honors passes validation; the others are still rejected, the
+// ANSI combination included, which is a mode of its own and stays rejected until a
+// caller honors it as such, whatever it honors of its members.
+func TestValidateHonored(t *testing.T) {
+	mode, err := Validate(sqltypes.NewVarChar("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"), PipesAsConcat)
+	require.NoError(t, err)
+	assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", mode.String())
+
+	mode, err = Validate(sqltypes.NewInt64(int64(PipesAsConcat|AnsiQuotes)), PipesAsConcat|AnsiQuotes)
+	require.NoError(t, err)
+	assert.Equal(t, "PIPES_AS_CONCAT,ANSI_QUOTES", mode.String())
+
+	_, err = Validate(sqltypes.NewVarChar("PIPES_AS_CONCAT,ANSI_QUOTES"), PipesAsConcat)
+	require.EqualError(t, err, "setting the ANSI_QUOTES sql_mode is unsupported")
+	_, err = Validate(sqltypes.NewVarChar("ANSI"), PipesAsConcat|AnsiQuotes|IgnoreSpace|RealAsFloat)
+	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+	_, err = Validate(sqltypes.NewVarChar("BOGUS"), LexerModes)
+	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
 }
 
 func TestUnsupportedModesAreTheLexerModes(t *testing.T) {
