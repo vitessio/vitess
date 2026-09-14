@@ -1024,7 +1024,26 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 		}
 	}
-	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
+
+	changeSource := status.SourceHost != host || status.SourcePort != port
+	if !changeSource && heartbeatInterval != 0 {
+		// Refuse a heartbeat-only change without the current configuration.
+		// An unnecessary source change can delete acknowledged transactions in relay logs.
+		configuration, err := tm.MysqlDaemon.ReplicationConfiguration(ctx)
+		if err != nil {
+			return vterrors.Wrap(err, "read replication configuration")
+		}
+
+		if configuration == nil {
+			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication configuration is unavailable")
+		}
+
+		// Compare with the same rule VTOrc uses to detect a misconfigured
+		// heartbeat, otherwise VTOrc could request a repair that is a no-op here.
+		changeSource = !replication.HeartbeatIntervalsEqual(configuration.HeartbeatInterval, heartbeatInterval)
+	}
+
+	if changeSource {
 		// This handles both changing the address and starting replication.
 		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
 			return err

@@ -965,6 +965,88 @@ func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializati
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
 
+// TestSetReplicationSourceConfiguration checks source changes and relay-log-safe restarts.
+func TestSetReplicationSourceConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		host       string
+		port       int32
+		heartbeat  float64
+		configured float64
+		missing    bool
+		readError  bool
+		running    bool
+		noForce    bool
+		change     bool
+		wantError  string
+	}{
+		{name: "equal", heartbeat: 30, configured: 30},
+		{name: "equal_running", heartbeat: 30, configured: 30, running: true},
+		{name: "equal_stays_stopped", heartbeat: 30, configured: 30, noForce: true},
+		{name: "zero", configured: 15, readError: true},
+		{name: "different", heartbeat: 30, configured: 15, change: true},
+		{name: "rounded_equal_below", heartbeat: 30, configured: 29.75},
+		{name: "rounded_equal_above", heartbeat: 30, configured: 30.249},
+		{name: "rounded_different_below", heartbeat: 30, configured: 29.749, change: true},
+		{name: "rounded_different_above", heartbeat: 30, configured: 30.25, change: true},
+		{name: "host_changed", host: "old-primary", heartbeat: 30, configured: 30, readError: true, change: true},
+		{name: "port_changed", port: 3307, heartbeat: 30, configured: 30, readError: true, change: true},
+		{name: "host_changed_zero", host: "old-primary", readError: true, change: true},
+		{name: "port_changed_zero", port: 3307, readError: true, change: true},
+		{name: "read_error", heartbeat: 30, readError: true, wantError: "read replication configuration: configuration unavailable"},
+		{name: "missing_configuration", heartbeat: 30, missing: true, wantError: "replication configuration is unavailable"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(ts.Close)
+			_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+			require.NoError(t, err)
+
+			parent := newTestTablet(t, 200, "ks", "0", nil)
+			parent.Type = topodatapb.TabletType_PRIMARY
+			parent.MysqlHostname = "mysql-primary"
+			parent.MysqlPort = 3306
+			require.NoError(t, ts.CreateTablet(ctx, parent))
+
+			daemon := newTestMysqlDaemon(t, 1)
+			daemon.CurrentSourceHost = parent.MysqlHostname
+			daemon.CurrentSourcePort = parent.MysqlPort
+			daemon.Replicating = tt.running
+			if tt.host != "" {
+				daemon.CurrentSourceHost = tt.host
+			}
+			if tt.port != 0 {
+				daemon.CurrentSourcePort = tt.port
+			}
+			if !tt.missing {
+				daemon.ReplicationConfigurationResult = &replicationdatapb.Configuration{HeartbeatInterval: tt.configured, ReplicaNetTimeout: 60}
+			}
+			if tt.readError {
+				daemon.ReplicationConfigurationError = errors.New("configuration unavailable")
+			}
+
+			daemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+			if tt.change {
+				daemon.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+			} else if tt.wantError == "" && !tt.noForce {
+				daemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+			}
+
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, ts)
+			tm.tmc = newFakeTMClient()
+			err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", !tt.noForce, false, tt.heartbeat)
+			if tt.wantError != "" {
+				require.ErrorContains(t, err, tt.wantError)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, !tt.noForce, daemon.Replicating)
+			}
+			assert.NoError(t, daemon.CheckSuperQueryList())
+		})
+	}
+}
+
 func TestSetReplicationSourceRecovery(t *testing.T) {
 	t.Run("InitReplica recovers from start replication error", func(t *testing.T) {
 		ctx := t.Context()

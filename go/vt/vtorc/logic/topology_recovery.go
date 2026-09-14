@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -1518,7 +1519,7 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return true, topologyRecovery, err
 	}
 
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), replication.HeartbeatIntervalForNetTimeout(analysisEntry.ReplicaNetTimeout))
 	return true, topologyRecovery, err
 }
 
@@ -1608,7 +1609,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 
 		// Point the tablet's replication at the current primary. This also changes the tablet's type
 		// to REPLICA and attempts to update the topology.
-		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
+		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, replication.HeartbeatIntervalForNetTimeout(analysisEntry.ReplicaNetTimeout)); err != nil {
 			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
 			return
 		}
