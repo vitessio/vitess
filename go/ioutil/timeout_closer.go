@@ -18,9 +18,18 @@ package ioutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"time"
 )
+
+// ErrCloseAbandoned is returned by TimeoutCloser.Close, wrapped together
+// with the context error, when the wrapped Close has not returned by the
+// time the timeout expires or the context is canceled. The wrapped Close
+// is still running at that point and may still be using whatever it was
+// closing, so the caller must not treat those resources as released.
+var ErrCloseAbandoned = errors.New("close abandoned, the wrapped Close has not returned")
 
 // TimeoutCloser is an io.Closer that has a timeout for executing the Close() function.
 type TimeoutCloser struct {
@@ -54,6 +63,6 @@ func (c *TimeoutCloser) Close() error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("%w: %w", ErrCloseAbandoned, ctx.Err())
 	}
 }

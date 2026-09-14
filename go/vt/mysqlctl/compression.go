@@ -69,24 +69,18 @@ var (
 
 type (
 	// writeCloserOnly hides every method of the wrapped writer except
-	// Write and Close, and closes the wrapped writer at most once. The
-	// lz4 writer's ReadFrom only accepts a writer with nothing written
-	// to it yet, while io.Copy and io.CopyN select the destination's
-	// ReadFrom whenever the source has no visible WriteTo; repeated
-	// copies into one compressor — the striped xtrabackup backup
-	// round-robins io.CopyN over its destination writers — would then
-	// fail after the first copy. Hiding the method keeps every copy on
-	// the plain Write path. A second Close on the lz4 writer, which the
-	// builtin backup engine issues when it retries a failed close,
-	// blocks forever in concurrent mode: the goroutine that orders the
-	// compressed blocks exits during the first Close, and the second
-	// one waits on it. Every Close after the first returns the recorded
-	// result of the first instead.
-	writeCloserOnly struct {
-		io.WriteCloser
-		closeOnce sync.Once
-		closeErr  error
-	}
+	// Write and Close. The lz4 writer's ReadFrom only accepts a writer
+	// with nothing written to it yet, while io.Copy and io.CopyN select
+	// the destination's ReadFrom whenever the source has no visible
+	// WriteTo; repeated copies into one compressor — the striped
+	// xtrabackup backup round-robins io.CopyN over its destination
+	// writers — would then fail after the first copy. Hiding the method
+	// keeps every copy on the plain Write path. The lz4 writer must not
+	// be closed twice: in concurrent mode the goroutine that orders the
+	// compressed blocks exits during the first Close, and a second Close
+	// blocks forever waiting on it. The backup engines close each
+	// compressor exactly once.
+	writeCloserOnly struct{ io.WriteCloser }
 	// readCloserOnly hides every method of the wrapped reader except
 	// Read and Close. The lz4 reader's WriteTo accepts a reader that is
 	// already mid-stream but discards the bytes still buffered from the
@@ -95,13 +89,6 @@ type (
 	// plain Read path.
 	readCloserOnly struct{ io.ReadCloser }
 )
-
-func (w *writeCloserOnly) Close() error {
-	w.closeOnce.Do(func() {
-		w.closeErr = w.WriteCloser.Close()
-	})
-	return w.closeErr
-}
 
 func init() {
 	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver"} {
@@ -334,7 +321,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		); err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
 		}
-		compressor = &writeCloserOnly{WriteCloser: lz4Writer}
+		compressor = writeCloserOnly{lz4Writer}
 	case ZstdCompressor:
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(compressionLevel)))
 		if err != nil {
