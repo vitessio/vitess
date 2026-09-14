@@ -63,6 +63,10 @@ func TestSetSysVarSingle(t *testing.T) {
 		expr:     "@@sql_mode",
 		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
 	}, {
+		name:     "sql_mode", // a lexer mode vtgate parses under itself; the tablet is sent the value without it
+		expr:     "'pipes_as_concat,no_zero_date'",
+		expected: []string{`[[VARCHAR("PIPES_AS_CONCAT,NO_ZERO_DATE")]]`},
+	}, {
 		name:     "SQL_SAFE_UPDATES", // use reserved conn
 		expr:     "1",
 		expected: []string{"[[INT64(1)]]"},
@@ -105,7 +109,58 @@ func TestSetSystemVariable(t *testing.T) {
 	utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00") INT64(7)]]`)
 
 	utils.Exec(t, conn, "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483")
-	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR(",STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO")]]`)
+	// the assigned value reads back in the canonical form MySQL reports: the empty
+	// list element dropped, names in MySQL's order
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_AUTO_VALUE_ON_ZERO,STRICT_ALL_TABLES")]]`)
+}
+
+// A session that sets PIPES_AS_CONCAT has its SQL read under the mode by
+// vtgate: || concatenates. The tablet is sent canonical SQL and the sql_mode
+// without the lexer mode, so the runtime modes set alongside still apply.
+func TestSetPipesAsConcat(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[INT64(0) INT64(1)]]`)
+
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT,NO_ZERO_DATE'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT,NO_ZERO_DATE")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[VARCHAR("ab") VARCHAR("10")]]`)
+	// the runtime mode set alongside applies on the tablet
+	utils.AssertMatches(t, conn, "select str_to_date('00/00/0000', '%m/%d/%Y')", `[[NULL]]`)
+
+	// a prepared statement is read under the mode as well
+	utils.Exec(t, conn, "prepare stmt from 'select ''a'' || ''b'''")
+	utils.AssertMatches(t, conn, "execute stmt", `[[VARCHAR("ab")]]`)
+
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[INT64(0) INT64(1)]]`)
+	utils.AssertMatches(t, conn, "select str_to_date('00/00/0000', '%m/%d/%Y')", `[[DATE("0000-00-00")]]`)
+
+	// setting the mode back off is a change of the session, whatever the tablet's
+	// connection ran under
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
+
+	// a session with open shard sessions sends them the mode
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "select id from test where id = 1")
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
+	utils.Exec(t, conn, "commit")
+
+	// so does a targeted session
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.Exec(t, conn, "use `"+keyspaceName+"`")
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {

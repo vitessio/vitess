@@ -238,8 +238,10 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		// The assignment is ignored, but an unsupported sql_mode is an error all the
 		// same: constants were rejected at plan time, and a non-constant value gets
 		// the same judgment here, once evaluated, so that the client does not go on
-		// believing it runs under a mode the Vitess parser cannot honor.
-		if _, _, err := sqlModeChangedValue(qr); err != nil {
+		// believing it runs under a mode the session does not run under. That holds
+		// for the lexer modes the parser honors too: the ignored assignment stores
+		// nothing, so the session would not be parsed under the mode either.
+		if _, _, err := sqlModeChangedValue(qr, 0, vcursor.Session()); err != nil {
 			return err
 		}
 	}
@@ -284,7 +286,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			if err != nil {
 				return err
 			}
-			_, value, err := sqlModeChangedValue(qr)
+			_, value, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, vcursor.Session())
 			if err != nil {
 				return err
 			}
@@ -356,7 +358,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if svs.Name == "sql_mode" {
 		// the judgment query always returns one row; the judgment decides whether
 		// the value changed, and a malformed result is an error rather than "no change"
-		changed, value, err = sqlModeChangedValue(qr)
+		changed, value, err = sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, vcursor.Session())
 		if err != nil {
 			return false, "", err
 		}
@@ -391,26 +393,40 @@ func sqlModeJudgmentQuery(expr string) string {
 
 // sqlModeChangedValue reports whether the sql_mode assignment changes the session's
 // current value, after validating the assigned value the way MySQL validates a SET (see
-// sqlmode.Validate). Validation runs before the change detection, so an invalid or
-// unsupported value is rejected even when the assignment would not change the value —
-// name lists, numeric bitmasks, and combination modes like ANSI included.
-func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
+// sqlmode.Validate), with honored the lexer modes the session may run under. Validation
+// runs before the change detection, so an invalid or unsupported value is rejected even
+// when the assignment would not change the value, name lists, numeric bitmasks, and
+// combination modes like ANSI included. The returned value is the canonical form MySQL
+// would report back for @@sql_mode, names uppercased, combination modes expanded, in
+// canonical order, so the session stores a value the parser and the transports can
+// decode regardless of how the assignment spelled it (e.g. as a numeric bitmask).
+//
+// The assignment is judged against the mode the session itself stores when it has one:
+// the shard the judgment ran on need not be in the session's mode, since a pooled
+// connection carries the backend's default and receives the session's value by hint
+// per statement. A session without a stored mode runs under the shard's, which the
+// judgment query read.
+func sqlModeChangedValue(qr *sqltypes.Result, honored sqlmode.Mode, session SessionActions) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 || len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
 		// the verification query selects exactly two columns of one row; anything else
 		// means the value cannot be judged, which must fail rather than pass as "no change"
 		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading sql_mode: %d fields, %d rows", len(qr.Fields), len(qr.Rows))
 	}
-	newMode, err := sqlmode.Validate(qr.Rows[0][1], 0)
+	newMode, err := sqlmode.Validate(qr.Rows[0][1], honored)
 	if err != nil {
 		return false, sqltypes.Value{}, err
+	}
+	canonical := sqltypes.NewVarChar(newMode.String())
+	if current, ok := session.StoredSQLMode(); ok {
+		return current != newMode, canonical, nil
 	}
 	orig, err := sqlmode.Parse(qr.Rows[0][0].ToString())
 	if err != nil {
 		// The backend reported a value these semantics cannot parse; treat the
 		// assignment as a change and let the backend judge it.
-		return true, qr.Rows[0][1], nil
+		return true, canonical, nil
 	}
-	return orig.Expand() != newMode, qr.Rows[0][1], nil
+	return orig.Expand() != newMode, canonical, nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)

@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -418,6 +419,12 @@ func (vc *VCursorImpl) ConnCollation() collations.ID {
 // Environment returns the vtenv associated with this session
 func (vc *VCursorImpl) Environment() *vtenv.Environment {
 	return vc.executor.Environment()
+}
+
+// Parser returns the parser that reads the session's SQL: the environment's,
+// under the sql_mode a SET stored on the session.
+func (vc *VCursorImpl) Parser() *sqlparser.Parser {
+	return vc.Environment().Parser().WithSQLMode(vc.SafeSession.SQLMode())
 }
 
 func (vc *VCursorImpl) TimeZone() *time.Location {
@@ -1114,6 +1121,12 @@ func (vc *VCursorImpl) SetUDV(key string, value any) error {
 	}
 	vc.SafeSession.SetUserDefinedVariable(key, bindValue)
 	return nil
+}
+
+// StoredSQLMode returns the sql_mode a SET stored on the session, expanded, and
+// whether one is stored.
+func (vc *VCursorImpl) StoredSQLMode() (sqlmode.Mode, bool) {
+	return vc.SafeSession.StoredSQLMode()
 }
 
 func (vc *VCursorImpl) SetSysVar(name string, expr string) {

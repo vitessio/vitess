@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -306,4 +307,48 @@ func TestShardSessionSnapshots(t *testing.T) {
 	session.ShardSessions[0].TransactionId = 999
 	assert.EqualValues(t, 20, snapshots[0].TransactionID,
 		"a snapshot must not observe later in-place updates of the live shard session")
+}
+
+// The session's sql_mode is the one a SET stored on it, expanded, decoded once
+// per stored value; a session without one, or with a value that is not a
+// literal mode list, has none.
+func TestSafeSessionSQLMode(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	assert.Equal(t, sqlmode.Mode(0), session.SQLMode())
+
+	session.SetSystemVariable("sql_mode", "'pipes_as_concat,STRICT_TRANS_TABLES'")
+	assert.Equal(t, sqlmode.PipesAsConcat|sqlmode.StrictTransTables, session.SQLMode())
+	assert.Equal(t, "'pipes_as_concat,STRICT_TRANS_TABLES'", session.sqlModeMemo.stored, "decoded once and memoized")
+
+	// a changed value is parsed again; a combination mode is expanded, a
+	// numeric value decoded, a binary value read past its introducer
+	session.SetSystemVariable("sql_mode", "'ANSI'")
+	assert.Equal(t, sqlmode.Ansi.Expand(), session.SQLMode())
+	session.SetSystemVariable("sql_mode", "2")
+	assert.Equal(t, sqlmode.PipesAsConcat, session.SQLMode())
+	session.SetSystemVariable("sql_mode", "_binary'PIPES_AS_CONCAT'")
+	assert.Equal(t, sqlmode.PipesAsConcat, session.SQLMode())
+
+	// an expression and an invalid value carry no mode, and count as none stored;
+	// a reset value is stored, and empty
+	session.SetSystemVariable("sql_mode", "concat(@@sql_mode, ',PIPES_AS_CONCAT')")
+	assert.Equal(t, sqlmode.Mode(0), session.SQLMode())
+	_, ok := session.StoredSQLMode()
+	assert.False(t, ok)
+	session.SetSystemVariable("sql_mode", "'BOGUS'")
+	_, ok = session.StoredSQLMode()
+	assert.False(t, ok)
+	session.SetSystemVariable("sql_mode", "''")
+	mode, ok := session.StoredSQLMode()
+	assert.True(t, ok)
+	assert.Equal(t, sqlmode.Mode(0), mode)
+	delete(session.SystemVariables, "sql_mode")
+	_, ok = session.StoredSQLMode()
+	assert.False(t, ok)
+
+	// the value is forwarded to the backends as stored, the mode included
+	session.SetSystemVariable("sql_mode", "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'")
+	forwarded := map[string]string{}
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", forwarded["sql_mode"])
 }

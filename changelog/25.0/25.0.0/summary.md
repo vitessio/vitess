@@ -37,6 +37,7 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
+        - [Sessions can set `PIPES_AS_CONCAT`](#vtgate-sql-mode-pipes-as-concat)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
@@ -408,6 +409,24 @@ VTGate already rejected `SET sql_mode = ...` statements that enable a mode the V
 
 **Impact**: Clients that issue `SET sql_mode` with an unsupported mode now receive an error, also when the `SET` is a no-op that matches the backend's existing `sql_mode`. Clients that set mode names the backend MySQL would itself reject receive an error as well. Such sessions were already unreliable, because VTGate parses queries without honoring these modes.
 
+`PIPES_AS_CONCAT` is the exception: VTGate parses queries under it as of this release, so it is accepted. See [the next section](#vtgate-sql-mode-pipes-as-concat).
+
+The session stores the canonical form MySQL would report back for `@@sql_mode`, names uppercased, combination modes expanded, in MySQL's order, however the assignment spelled the value, numeric bitmasks included. `SELECT @@sql_mode` after `SET sql_mode = 'no_zero_date'` reports `NO_ZERO_DATE`, as MySQL does.
+
+#### <a id="vtgate-sql-mode-pipes-as-concat"/>Sessions can set `PIPES_AS_CONCAT`</a>
+
+A session can now enable `PIPES_AS_CONCAT`, alone or with other modes: `SET sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'`. VTGate parses the session's SQL under the session's `sql_mode`, so `||` is the concatenation operator in that session, as in MySQL, and logical OR in a session without the mode. The mode is forwarded to the tablets with the rest of the session's `sql_mode`, as every other mode is, and the tablets parse under it as well (see [the VTTablet section](#vttablet-sql-mode-parsing)); a `||` read under the mode reaches MySQL as a `concat()` call, which means the same thing under any `sql_mode`. Plans are cached per reading, so the two readings of the same text never share a plan.
+
+Three details of the session's `sql_mode` handling changed with it:
+
+- The session stores the canonical form MySQL would report back for `@@sql_mode`, names uppercased, combination modes expanded, in MySQL's order, however the assignment spelled the value, numeric bitmasks included. `SELECT @@sql_mode` after `SET sql_mode = 'no_zero_date'` reports `NO_ZERO_DATE`, as MySQL does; it reports the session's own value whenever the session has set one, and the tablet's otherwise.
+- A `SET sql_mode` on a session that already stores a value is judged for change against that value, not against the connection the assignment was evaluated on. Setting the mode back to what the tablet's connection happens to run under is a change of the session and is applied.
+- With `--enable-system-settings=false`, where a `SET` of a system variable is checked and ignored, `PIPES_AS_CONCAT` is still rejected: the ignored assignment would not put the session under the mode either.
+
+A statement prepared with `PREPARE ... FROM` or over the binary protocol is read under the session's `sql_mode` at each execution. MySQL reads it under the mode at prepare time only; keeping the prepare-time reading across a later `SET sql_mode` is a follow-up. The other modes that change how SQL text is read (`ANSI_QUOTES`, `IGNORE_SPACE`, `REAL_AS_FLOAT`, `HIGH_NOT_PRECEDENCE`, `NO_BACKSLASH_ESCAPES`, and the `ANSI` combination) are still rejected, as described above.
+
+**Impact**: `SET sql_mode` values that include `PIPES_AS_CONCAT` succeed instead of failing with "setting the PIPES_AS_CONCAT sql_mode is unsupported". Nothing changes for sessions that do not set it. Both VTGate and VTTablet of this release handle the mode, so a rolling upgrade needs no particular order between them; a VTTablet of the previous release applies the forwarded mode to its MySQL session, where it is inert on the SQL VTGate sends. A gRPC client that carries a session with the mode from a VTGate of this release to one of the previous release gets the previous release's rejection from the tablets.
+
 #### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
 
 A new `VEXPLAIN MYSQLPLAN <query>` statement runs MySQL's `EXPLAIN FORMAT=JSON` against the shards a `SELECT` would target, **without executing the query itself**. It resolves each `Route`'s target shards from its vindex at resolution time and issues `EXPLAIN` against every resolved shard, attaching the per-shard MySQL plan to the VTGate plan tree keyed by shard, so per-shard plan and cost differences are visible.
@@ -482,7 +501,7 @@ The other modes that change how SQL text is read (`ANSI_QUOTES`, `IGNORE_SPACE`,
 
 A connection from the settings pool whose MySQL session changed behind its settings inside a transaction, by a `SET` statement that ran on it or by a different setting applied over the one it carried, is closed when the transaction ends, and the pool opens a replacement, instead of being reused under settings that no longer describe its session. Before this change such a connection went back to the pool with the change still in effect, and the next transaction with the same settings inherited it. From VTGate this affects a session that changes a system variable a `SET_VAR` hint cannot carry while it has an open transaction: every mid-transaction `SET` with `--enable-set-var=false` or a MySQL 5.7 backend, and the few variables the hint cannot carry on MySQL 8.0. Such a transaction pays one extra MySQL connection at commit, the cost a reserved connection already pays.
 
-**Impact**: This release's VTGate still rejects `SET sql_mode` values that include `PIPES_AS_CONCAT`, so the change is visible only to clients that talk to the query service directly. It is the tablet half of per-session `sql_mode` support: a later change lets VTGate accept the mode and forward it to the tablets. A client of the query service that sends a `SET` among the post-begin queries of a `BeginExecute` without connection settings or a reserved connection now receives "not allowed without reserved connection", as it does for the same `SET` sent as a query; the `SET` used to run on the transaction's connection and persist on it after the transaction. VTGate sends only savepoints as post-begin queries and is not affected.
+**Impact**: Clients that talk to the query service directly can set the mode in connection settings and `SET` statements. VTGate sessions can set it as well, and VTGate forwards it to the tablets (see [the VTGate section](#vtgate-sql-mode-pipes-as-concat)). A client of the query service that sends a `SET` among the post-begin queries of a `BeginExecute` without connection settings or a reserved connection now receives "not allowed without reserved connection", as it does for the same `SET` sent as a query; the `SET` used to run on the transaction's connection and persist on it after the transaction. VTGate sends only savepoints as post-begin queries and is not affected.
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 

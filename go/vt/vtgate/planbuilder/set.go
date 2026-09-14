@@ -177,11 +177,18 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 
 // validateSQLModePlan wraps sql_mode's planFunc with plan-time validation of constant
 // values: literals and constant expressions (e.g. CONCAT over literals) are evaluated and
-// validated the way MySQL validates a SET sql_mode, and modes the Vitess parser cannot
-// support are rejected (see sqlmode.Validate). Non-constant expressions are validated at
-// execution time, once their value is known.
+// validated the way MySQL validates a SET sql_mode, and the modes that change how SQL
+// text is read are rejected (see sqlmode.Validate) except those the parser honors, which
+// the session is then parsed under. With system settings disabled the assignment is
+// ignored and stores nothing, so the session would not be parsed under the mode either:
+// no lexer mode is honored then. Non-constant expressions are validated at execution
+// time, once their value is known.
 func validateSQLModePlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		honored := sqlparser.HonoredSQLModes
+		if !vschema.SysVarSetEnabled() {
+			honored = 0
+		}
 		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
 			Collation:   vschema.ConnCollation(),
 			Environment: vschema.Environment(),
@@ -189,7 +196,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 		if err == nil {
 			if lit, ok := evalExpr.(*evalengine.Literal); ok {
 				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
-					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation()), 0); err != nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation()), honored); err != nil {
 						return nil, err
 					}
 				}

@@ -69,6 +69,9 @@ type VSchema interface {
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
 	Environment() *vtenv.Environment
+	// Parser returns the parser that reads the session's SQL: the
+	// environment's, under the session's sql_mode.
+	Parser() *sqlparser.Parser
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
