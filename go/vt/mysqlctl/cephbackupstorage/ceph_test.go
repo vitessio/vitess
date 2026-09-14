@@ -174,9 +174,29 @@ func TestAbortBackupRemovesUploadedFiles(t *testing.T) {
 	bh, err := bs.StartBackup(ctx, "ks/0", "aborted")
 	require.NoError(t, err)
 	writeFile(t, bh.(*CephBackupHandle), "MANIFEST", "{}", sized("{}"))
+	bh.(*CephBackupHandle).Wait()
+	require.NotEmpty(t, fake.objects("ks"), "upload must have landed before abort")
 
 	require.NoError(t, bh.AbortBackup(ctx))
 	assert.Empty(t, fake.objects("ks"))
+}
+
+// TestFakeRejectsBadSignature guards that the fake's SigV4 verifier is live,
+// so a signing regression cannot slip past the unit tests.
+func TestFakeRejectsBadSignature(t *testing.T) {
+	fake := newFakeS3("access", "secret")
+	t.Cleanup(fake.close)
+	bs := NewFakeCephBackupStorage(FakeConfig{
+		AccessKey: "access",
+		SecretKey: "wrong",
+		EndPoint:  fake.endpoint(),
+	})
+
+	_, err := bs.StartBackup(t.Context(), "ks/0", "b")
+	require.ErrorContains(t, err, "Error checking whether bucket exists")
+	// The HeadBucket was received, verified and answered; nothing after it ran.
+	require.Len(t, fake.recorded(), 1)
+	assert.Equal(t, http.MethodHead, fake.recorded()[0].Method)
 }
 
 func TestReadOnlyAndReadWriteGuards(t *testing.T) {
