@@ -240,9 +240,9 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case *sqlparser.VStream:
 		return buildVStreamPlan(stmt, vschema)
 	case *sqlparser.PrepareStmt:
-		return prepareStmt(ctx, vschema, stmt)
+		return prepareStmt(stmt)
 	case *sqlparser.DeallocateStmt:
-		return dropPreparedStatement(vschema, stmt)
+		return dropPreparedStatement(stmt)
 	case *sqlparser.ExecuteStmt:
 		return buildExecuteStmtPlan(ctx, vschema, stmt)
 	case *sqlparser.CommentOnly:

@@ -176,7 +176,7 @@ func TestExecWithAbortedCtx(t *testing.T) {
 	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	cancel()
-	_, err = conn.Exec(ctx, "", 0, false)
+	_, err = conn.Exec(ctx, "", 0, false, false /* keepConnOnTimeout */)
 	require.Error(t, err)
 }
 
@@ -191,7 +191,7 @@ func TestExecWithDbconnClosed(t *testing.T) {
 	require.NoError(t, err)
 	conn.Close()
 
-	_, err = conn.Exec(ctx, "", 0, false)
+	_, err = conn.Exec(ctx, "", 0, false, false /* keepConnOnTimeout */)
 	require.EqualError(t, err, "connection was aborted")
 }
 
@@ -207,7 +207,7 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 	conn.txProps = &tx.Properties{Conclusion: "foobar"}
 	conn.Close()
 
-	_, err = conn.Exec(ctx, "", 0, false)
+	_, err = conn.Exec(ctx, "", 0, false, false /* keepConnOnTimeout */)
 	require.EqualError(t, err, "transaction was aborted: foobar")
 }
 

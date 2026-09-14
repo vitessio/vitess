@@ -29,6 +29,71 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// ReservedConnKeepAliveGoneField is the name of the single column a reserved-
+// connection keepalive touch (ExecuteRequest.reserved_conn_keep_alive) returns:
+// each row is a reserved id that no longer exists on the tablet. A caller uses
+// its presence to tell an up-to-date tablet (which honors the keepalive request
+// and returns this field) from one that predates it (which runs the query
+// normally and returns its own result instead).
+const ReservedConnKeepAliveGoneField = "gone_reserved_id"
+
+// ReservedConnKeepAliveMaxBatch is the largest number of reserved ids a single
+// keepalive touch may carry. The tablet rejects a larger request before
+// allocating (bounding a malformed or hostile call), so a caller with more than
+// this many reserved connections on one tablet must split them across several
+// touches rather than send one oversized batch.
+const ReservedConnKeepAliveMaxBatch = 1024
+
+// reservedConnKeepAliveKey carries a reserved-connection keepalive touch
+// through an Execute call. The signal deliberately travels as a request-level
+// field on the wire (ExecuteRequest.reserved_conn_keep_alive), never inside
+// ExecuteOptions: options round-trip through client sessions, and a vtgate
+// predating the feature preserves unknown proto fields when it relays a client
+// session's options to the tablet — a client could then turn its queries into
+// keepalive touches. Request fields are only ever populated by vtgate itself.
+// In-process callers and the gRPC client/server pair hand the signal over via
+// the context so the wide QueryService interface stays unchanged.
+type reservedConnKeepAliveKey struct{}
+
+// ContextWithReservedConnKeepAlive marks ctx as a reserved-connection
+// keepalive touch for the given reserved ids. The Execute it is passed to
+// refreshes those connections' tablet-side idle timers instead of executing
+// its query; the query still travels so a tablet predating the feature runs
+// it harmlessly on a pooled connection.
+func ContextWithReservedConnKeepAlive(ctx context.Context, ids []int64) context.Context {
+	return context.WithValue(ctx, reservedConnKeepAliveKey{}, ids)
+}
+
+// ReservedConnKeepAliveIDs returns the reserved ids to refresh when ctx marks
+// a keepalive touch, and whether it does.
+func ReservedConnKeepAliveIDs(ctx context.Context) ([]int64, bool) {
+	ids, ok := ctx.Value(reservedConnKeepAliveKey{}).([]int64)
+	return ids, ok
+}
+
+// reservedConnActivityRefreshKey marks an Execute as a background activity
+// refresh of an idle temp-table reserved connection. Unlike the keepalive
+// touch, the query executes normally on the reserved connection — the point
+// is to reset mysqld's wait_timeout clock — but the tablet locks the
+// connection under a purpose a concurrent client command briefly waits out
+// instead of failing with an in-use error. Travels request-level on the wire
+// (ExecuteRequest.reserved_conn_activity_refresh) for the same reason as the
+// keepalive: only vtgate itself can populate it.
+type reservedConnActivityRefreshKey struct{}
+
+// ContextWithReservedConnActivityRefresh marks ctx as a temp-table activity
+// refresh.
+func ContextWithReservedConnActivityRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reservedConnActivityRefreshKey{}, true)
+}
+
+// IsReservedConnActivityRefresh reports whether ctx marks a temp-table
+// activity refresh.
+func IsReservedConnActivityRefresh(ctx context.Context) bool {
+	is, _ := ctx.Value(reservedConnActivityRefreshKey{}).(bool)
+	return is
+}
+
 // Session represents the current session.
 type Session interface {
 	// GetSessionUUID returns the session's UUID.

@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/mysql"
@@ -66,7 +68,6 @@ func TestElectNewPrimary(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                    string
 		tmc                     *chooseNewPrimaryTestTMClient
@@ -78,7 +79,11 @@ func TestElectNewPrimary(t *testing.T) {
 		tolerableReplLag        time.Duration
 		allowCrossCellPromotion bool
 		expected                *topodatapb.TabletAlias
-		errContains             []string
+		// expectVersionWarning asserts whether ElectNewPrimary logs the warning that
+		// version-correct election could not be honored (it elected a more-advanced,
+		// higher-version candidate on a no-catch-up path).
+		expectVersionWarning bool
+		errContains          []string
 	}{
 		{
 			name: "found a replica",
@@ -814,6 +819,254 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
+			name: "lower MySQL version preferred when positions are equal",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
+			name: "same MySQL version falls through to position",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			errContains: nil,
+		},
+		{
+			name: "unknown MySQL version sorts last",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
+			name: "lower MySQL release wins even when slightly behind in position",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
 			// Buffer-pool tiebreaking must be skipped unless every VALID tablet has
 			// a value. A missing entry (e.g. a MariaDB replica that doesn't expose
 			// Innodb_buffer_pool_pages_data) used to be treated as a legitimate 0,
@@ -1273,6 +1526,156 @@ zone1-0000000101 matches the primary alias to avoid`,
 zone1-0000000100 is not a replica`,
 			},
 		},
+		{
+			// No clear current primary but the shard has had one before
+			// (PrimaryTermStartTime set): this is the no-clear-primary PRS path, which
+			// promotes without catching the elect up. zone1-101 is a newer MySQL version
+			// but is ahead on received (relay-log) position; zone1-102 is a lower version
+			// but behind. Election must be position-first here (electing the newer, more
+			// advanced 101) so a demoted replica's received-but-unapplied transactions
+			// cannot be discarded, and it must warn that version-correct election could
+			// not be honored.
+			name: "no clear primary: position wins over lower version and warns",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			// A primary existed before (PrimaryTermStartTime set) but none is currently
+			// present in the tablet map, so FindCurrentPrimary returns nil.
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryTermStartTime: &vttime.Time{Seconds: 100},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			expectVersionWarning: true,
+			errContains:          nil,
+		},
+		{
+			// Fresh initialization: no current primary and the shard has never had one
+			// (PrimaryTermStartTime nil). Nothing has ever replicated, so version-aware
+			// election is retained: the lower-version 102 is elected even though it is
+			// behind, and no version warning is logged. Same candidates as the
+			// no-clear-primary case above; only PrimaryTermStartTime differs.
+			name: "fresh init: version-aware election is retained, no warning",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo:            topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			expectVersionWarning: false,
+			errContains:          nil,
+		},
+		{
+			// Graceful path: a current primary is present, so the elect will be caught up
+			// to the old primary's position before promotion. Version-aware election is
+			// retained (lower-version 102 wins despite being behind) and no warning is
+			// logged. Same candidate versions/positions as the no-clear-primary case.
+			name: "graceful (current primary present): version-aware election is retained, no warning",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Type:  topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			expectVersionWarning: false,
+			errContains:          nil,
+		},
 	}
 
 	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
@@ -1281,6 +1684,7 @@ zone1-0000000100 is not a replica`,
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			logger := logutil.NewMemoryLogger()
 			options := &PlannedReparentOptions{
 				NewPrimaryAlias:         tt.newPrimaryAlias,
 				AvoidPrimaryAlias:       tt.avoidPrimaryAlias,
@@ -1299,6 +1703,15 @@ zone1-0000000100 is not a replica`,
 
 			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, actual)
+
+			var loggedVersionWarning bool
+			for _, e := range logger.Events {
+				if strings.Contains(e.Value, "could not honor version-correct election") {
+					loggedVersionWarning = true
+					break
+				}
+			}
+			assert.Equal(t, tt.expectVersionWarning, loggedVersionWarning, "version-correct-election warning presence")
 		})
 	}
 }
@@ -1317,6 +1730,7 @@ func TestFindPositionForTablet(t *testing.T) {
 		expectedErr            string
 		expectedTakingBackup   bool
 		expectedUnknownReplLag bool
+		expectedServerVersion  string
 	}{
 		{
 			name: "executed gtid set",
@@ -1389,6 +1803,68 @@ func TestFindPositionForTablet(t *testing.T) {
 			expectedLag:      0,
 			expectedPosition: "",
 		}, {
+			// A not-yet-replicating tablet (ERNotReplica) has an empty position but its
+			// MySQL version is still recovered from PrimaryStatus so version-aware
+			// election can consider it during an uninitialized-shard bootstrap.
+			name: "no replication status recovers version from PrimaryStatus",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{ServerVersion: "Ver 8.0.35"},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedLag:           0,
+			expectedPosition:      "",
+			expectedServerVersion: "Ver 8.0.35",
+		}, {
+			// When the tablet is not replicating and the best-effort PrimaryStatus
+			// fetch also fails, we fall back to an empty (unknown) version rather than
+			// failing — ElectNewPrimary treats it as unknown-version.
+			name: "no replication status falls back to unknown version when PrimaryStatus fails",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Error: assert.AnError},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedLag:           0,
+			expectedPosition:      "",
+			expectedServerVersion: "",
+		}, {
 			name: "relay log",
 			tmc: &testutil.TabletManagerClient{
 				ReplicationStatusResults: map[string]struct {
@@ -1458,12 +1934,38 @@ func TestFindPositionForTablet(t *testing.T) {
 			expectedLag:            0,
 			expectedPosition:       "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 			expectedUnknownReplLag: true,
+		}, {
+			name: "server version returned",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							ReplicationLagSeconds: 10,
+							ServerVersion:         "Ver 8.0.35",
+						},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedLag:           10 * time.Second,
+			expectedPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			expectedServerVersion: "Ver 8.0.35",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pos, lag, takingBackup, replUnknown, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
+			pos, lag, takingBackup, replUnknown, serverVersion, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
 			if test.expectedErr != "" {
 				require.EqualError(t, err, test.expectedErr)
 				return
@@ -1474,6 +1976,7 @@ func TestFindPositionForTablet(t *testing.T) {
 			require.Equal(t, test.expectedLag, lag)
 			require.Equal(t, test.expectedTakingBackup, takingBackup)
 			require.Equal(t, test.expectedUnknownReplLag, replUnknown)
+			require.Equal(t, test.expectedServerVersion, serverVersion)
 		})
 	}
 }
@@ -1634,14 +2137,111 @@ func TestFindCurrentPrimary(t *testing.T) {
 			},
 			expected: nil,
 		},
+		{
+			// Two stale PRIMARY records tied at an older term, plus one unique newer
+			// primary. Only a tie at the *latest* term makes the primary
+			// indeterminate; a tie below a unique maximum must not. The result must be
+			// the newer primary regardless of map iteration order (Go randomizes it),
+			// so election ordering and promotion-path dispatch — which call this
+			// separately — always agree.
+			name: "tied stale primaries below a unique latest term",
+			in: map[string]*topo.TabletInfo{
+				"stale-primary-1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+						Hostname: "stale-primary-tablet-1",
+					},
+				},
+				"stale-primary-2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+						Hostname: "stale-primary-tablet-2",
+					},
+				},
+				"true-primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						Hostname: "true-primary-tablet",
+					},
+				},
+			},
+			expected: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: alias,
+					Type:  topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+					Hostname: "true-primary-tablet",
+				},
+			},
+		},
+		{
+			// A genuine tie at the latest term (two at 1000) coexisting with a stale
+			// lower record (at 100). This must still return nil: the reset that clears
+			// a superseded tie when a newer term is found must not clear a legitimate
+			// tie at the maximum term itself, regardless of the order the newer term
+			// and the stale record are visited.
+			name: "tie at latest term with a stale lower record still returns nil",
+			in: map[string]*topo.TabletInfo{
+				"primary1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						Hostname: "primary-tablet-1",
+					},
+				},
+				"primary2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						Hostname: "primary-tablet-2",
+					},
+				},
+				"stale-primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+						Hostname: "stale-primary-tablet",
+					},
+				},
+			},
+			expected: nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := FindCurrentPrimary(tt.in, logger)
-			assert.Equal(t, tt.expected, actual)
+			// Run repeatedly: FindCurrentPrimary iterates a map (randomized order),
+			// so a single pass could pass by luck. The result must be stable across
+			// orders.
+			for range 50 {
+				actual := FindCurrentPrimary(tt.in, logger)
+				assert.Equal(t, tt.expected, actual)
+			}
 		})
 	}
 }
@@ -2009,6 +2609,7 @@ func Test_findCandidate(t *testing.T) {
 		name               string
 		intermediateSource *topodatapb.Tablet
 		possibleCandidates []*topodatapb.Tablet
+		versionMap         map[string]mysqlctl.ServerVersion
 		candidate          *topodatapb.Tablet
 	}{
 		{
@@ -2078,11 +2679,103 @@ func Test_findCandidate(t *testing.T) {
 					Uid:  101,
 				},
 			},
+		}, {
+			name: "lower version candidate preferred over intermediate source",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			name: "same version prefers intermediate source",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "unknown version intermediate source defers to known version candidate",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := findCandidate(tt.intermediateSource, tt.possibleCandidates)
+			res := findCandidate(tt.intermediateSource, tt.possibleCandidates, tt.versionMap)
 			if tt.candidate == nil {
 				require.Nil(t, res)
 			} else {

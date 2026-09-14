@@ -73,6 +73,8 @@ report
 /go/vt/vtgate/planbuilder/testdata/plan_test*
 /go/vt/vtgate/planbuilder/testdata/expected
 
+.superpowers/
+
 # mise files
 .mise.toml
 /errors/

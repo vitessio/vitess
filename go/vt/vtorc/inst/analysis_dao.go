@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -72,6 +73,10 @@ type clusterAnalysis struct {
 	shardWideProblem      *DetectionAnalysisProblem
 	totalTablets          int
 	primaryAlias          *topodatapb.TabletAlias
+	// shardPrimaryAlias is the last-known primary alias from vitess_shard.primary_alias.
+	// Unlike primaryAlias (which comes from live vitess_tablet rows), this is available
+	// even after the primary tablet has been deleted from the topology.
+	shardPrimaryAlias *topodatapb.TabletAlias
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
@@ -96,12 +101,14 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_tablet.info AS tablet_info,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
+		SHARD_OBSERVER_COLUMN AS shard_eligible_observers,
 		vitess_tablet.shard AS shard,
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
 		vitess_keyspace.disable_emergency_reparent AS keyspace_disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
+		vitess_shard.primary_alias AS shard_primary_alias,
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
@@ -300,6 +307,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
 		)
+		SHARD_OBSERVER_JOIN
 	WHERE
 		? IN ('', vitess_keyspace.keyspace)
 		AND ? IN ('', vitess_tablet.shard)
@@ -309,6 +317,34 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_tablet.tablet_type ASC,
 		vitess_tablet.primary_timestamp DESC
 	`
+	// shard_eligible_observers counts the shard's REPLICA/RDONLY tablets — the population that runs
+	// the shard-peer health monitor and is eligible to vote on a primary's liveness (see
+	// IsShardHealthObserverType). The quorum gate uses it as the expected observer count for both
+	// the unreachable-primary matcher and the InvalidPrimary cold-start upgrade, so the denominator
+	// always matches the voters. The count is computed unconditionally — NOT gated on
+	// --emergency-reparent-on-primary-tablet-unreachable — because that flag is dynamic and is
+	// re-read by the consumers later in the cycle: gating the query column too would let a flag
+	// flip mid-cycle evaluate the quorum with a baked-in denominator of 0, degenerating the
+	// strict-majority gate to the observed reporters only (exactly the minority view it exists to
+	// block). The count is precomputed once per (keyspace, shard) in the shard_observers derived
+	// table and joined in — one row per shard, so it adds a column without fanning out rows —
+	// rather than re-scanning vitess_tablet for every analyzed row. The tablet-type list is derived
+	// from the proto enum so it cannot drift from IsShardHealthObserverType.
+	shardObserverColumn := "IFNULL(MIN(shard_observers.observer_count), 0)"
+	shardObserverJoin := strings.Replace(`LEFT JOIN (
+		SELECT
+			keyspace,
+			shard,
+			COUNT(*) AS observer_count
+		FROM vitess_tablet
+		WHERE tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
+		GROUP BY keyspace, shard
+	) AS shard_observers ON (
+		shard_observers.keyspace = vitess_tablet.keyspace
+		AND shard_observers.shard = vitess_tablet.shard
+	)`, "SHARD_OBSERVER_TABLET_TYPES", shardObserverTabletTypeList(), 1)
+	query = strings.Replace(query, "SHARD_OBSERVER_COLUMN", shardObserverColumn, 1)
+	query = strings.Replace(query, "SHARD_OBSERVER_JOIN", shardObserverJoin, 1)
 
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
@@ -337,6 +373,14 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		}
 
 		a.TabletType = tablet.Type
+		// A graceful vttablet shutdown stamps TabletShutdownTime (tm_init.go Close). VTOrc treats
+		// such a tablet as intentionally taken down: it skips polling it (see ReadTopologyInstance),
+		// and the quorum path must likewise NOT fail it over, even though its shard peers correctly
+		// report its vttablet unreachable. The crash case this feature targets leaves no shutdown time.
+		// The stamp is a best-effort topo write at shutdown: if that write fails the record carries no
+		// shutdown time, so a graceful shutdown can be misread as a crash here. The window is narrow and
+		// correlates with topo being unavailable — in which case VTOrc's own topo access is also degraded.
+		a.IsTabletShutdown = tablet.TabletShutdownTime != nil
 		a.CurrentTabletType = topodatapb.TabletType(m.GetInt32("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
@@ -352,6 +396,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.ShardPrimaryTermTimestamp = m.GetTime("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
 		a.AnalyzedInstanceAlias = tablet.Alias
+		a.AnalyzedCell = tablet.Alias.GetCell()
 		a.AnalyzedInstancePrimaryAlias = primaryTablet.Alias
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
@@ -364,6 +409,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
 		a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
 		a.CountReplicas = m.GetUint("count_replicas")
+		a.ShardEligibleObservers = m.GetInt("shard_eligible_observers")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
@@ -417,6 +463,13 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				a.IsClusterPrimary = true
 				clusters[keyspaceShard].primaryAlias = a.AnalyzedInstanceAlias
 				clusters[keyspaceShard].primaryTimestamp = a.PrimaryTimeStamp
+			}
+			if shardPrimaryAliasStr := m.GetString("shard_primary_alias"); shardPrimaryAliasStr != "" {
+				if alias, err := topoproto.ParseTabletAlias(shardPrimaryAliasStr); err == nil {
+					clusters[keyspaceShard].shardPrimaryAlias = alias
+				} else {
+					log.Warn(fmt.Sprintf("failed to parse shard primary alias %q: %v", shardPrimaryAliasStr, err))
+				}
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
@@ -674,6 +727,70 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 			break
 		}
 	}
+	// An invalid primary is one VTOrc has never been able to reach (e.g. VTOrc started after the
+	// primary's vttablet was already down), so its instance data is unreliable and the quorum
+	// matcher is skipped for it. The shard-peer reports of the reachable replicas are independent
+	// of that: when quorum-confirmed ERS is enabled and a fresh quorum confirms the primary's
+	// vttablet down, upgrade the analysis so the recovery can run. With absent or stale quorum
+	// data the analysis stays InvalidPrimary (fail closed, no recovery). This runs after the
+	// DeadPrimary upgrade above so that the established analysis wins when all replicas have
+	// also stopped replicating (i.e. the MySQL is gone too).
+	for _, analysis := range result {
+		if analysis.Analysis != InvalidPrimary || !config.ERSOnTabletUnreachableEnabled() {
+			continue
+		}
+		// Fail closed for an intentionally shut down primary: a graceful vttablet shutdown stamps
+		// TabletShutdownTime and its shard peers will report the vttablet down, but the operator took
+		// it down deliberately, so it must not be failed over (only a crash should drive quorum ERS).
+		if analysis.IsTabletShutdown {
+			continue
+		}
+		// Do NOT use analysis.CountReplicas here: it is derived through a join on the primary's
+		// database_instance row, which is exactly what is missing for an InvalidPrimary (VTOrc has
+		// never reached the primary), so it collapses to 0 and would let a single fresh down report
+		// form a 1/1 quorum in a larger shard. ShardEligibleObservers is the shard's REPLICA/RDONLY
+		// count straight from topo, so it is the true expected observer population regardless of
+		// whether VTOrc ever reached the primary.
+		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, analysis.ShardEligibleObservers, time.Now())
+		if !quorum.Down {
+			continue
+		}
+		analysis.Analysis = PrimaryTabletUnreachableByQuorum
+		analysis.Description = GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum).Meta.Description
+		analysis.QuorumDetail = &quorum
+	}
+	// The quorum matcher records QuorumDetail as a side effect while matching, before the winning
+	// problem is chosen. Fold its tally into the description when the quorum analysis won, and drop it
+	// otherwise so it does not surface on a higher-priority analysis (e.g. DeadPrimary) that also matched.
+	for _, analysis := range result {
+		if analysis.QuorumDetail == nil {
+			continue
+		}
+		if analysis.Analysis == PrimaryTabletUnreachableByQuorum {
+			analysis.Description = fmt.Sprintf("%s [%s]", analysis.Description, analysis.QuorumDetail.Summary())
+		} else {
+			analysis.QuorumDetail = nil
+		}
+	}
+	// For PrimaryTabletDeleted, AnalyzedCell comes from a surviving replica row (the deleted
+	// primary has no vitess_tablet record). Override it with the cell recorded in
+	// vitess_shard.primary_alias so that the cell gate in --cells-no-recovery sees the
+	// deleted primary's actual cell, not whichever replica happened to appear first.
+	for _, analysis := range result {
+		if analysis.Analysis != PrimaryTabletDeleted {
+			continue
+		}
+		keyspaceShard := getKeyspaceShardName(analysis.AnalyzedKeyspace, analysis.AnalyzedShard)
+		if ca := clusters[keyspaceShard]; ca != nil {
+			if ca.shardPrimaryAlias != nil {
+				analysis.AnalyzedCell = ca.shardPrimaryAlias.GetCell()
+			} else {
+				log.Warn(fmt.Sprintf("PrimaryTabletDeleted: no primary alias recorded for shard %v/%v; AnalyzedCell cleared so --cells-no-recovery fails closed", analysis.AnalyzedKeyspace, analysis.AnalyzedShard))
+				analysis.AnalyzedCell = ""
+			}
+		}
+	}
+
 	return result
 }
 

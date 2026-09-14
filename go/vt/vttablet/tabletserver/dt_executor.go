@@ -28,6 +28,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -67,7 +68,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	defer dte.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	dte.logStats.TransactionID = transactionID
 
-	conn, err := dte.te.txPool.GetAndLock(transactionID, "for prepare")
+	conn, err := dte.te.txPool.GetAndLock(dte.ctx, transactionID, "for prepare")
 	if err != nil {
 		return err
 	}
@@ -96,7 +97,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// This could be due to ongoing cutover happening in vreplication workflow
 	// regarding OnlineDDL or MoveTables.
 	for _, query := range queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, []planbuilder.PlanType{planbuilder.PlanSelect}, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {
@@ -116,7 +117,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// If they are put in the prepared pool, then vreplication workflow waits.
 	// This check helps reject the prepare that came later.
 	for _, query := range queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, []planbuilder.PlanType{planbuilder.PlanSelect}, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {
@@ -243,7 +244,7 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.St
 	defer dte.te.env.Stats().QueryTimings.Record("START_COMMIT", time.Now())
 	dte.logStats.TransactionID = transactionID
 
-	conn, err := dte.te.txPool.GetAndLock(transactionID, "for 2pc commit")
+	conn, err := dte.te.txPool.GetAndLock(dte.ctx, transactionID, "for 2pc commit")
 	if err != nil {
 		return querypb.StartCommitState_Fail, err
 	}

@@ -52,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
@@ -4670,6 +4671,93 @@ func TestDeleteTablets(t *testing.T) {
 	}
 }
 
+// TestFillReparentResponseFromEvent exercises fillReparentResponseFromEvent,
+// including the nil-pointer guards on each output parameter.
+func TestFillReparentResponseFromEvent(t *testing.T) {
+	t.Parallel()
+
+	makeEv := func(keyspace, shard string, newPrimary *topodatapb.Tablet) *events.Reparent {
+		ev := &events.Reparent{}
+		ev.ShardInfo = *topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{}, nil)
+		ev.NewPrimary = newPrimary
+		return ev
+	}
+
+	t.Run("nil ev is a no-op", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		var pp *topodatapb.TabletAlias
+		fillReparentResponseFromEvent(&k, &s, &pp, nil)
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Nil(t, pp)
+	})
+
+	t.Run("nil keyspace pointer does not panic", func(t *testing.T) {
+		t.Parallel()
+		s := "-"
+		var pp *topodatapb.TabletAlias
+		assert.NotPanics(t, func() {
+			fillReparentResponseFromEvent(nil, &s, &pp, makeEv("ks", "-", nil))
+		})
+		assert.Equal(t, "-", s) // shard still written
+	})
+
+	t.Run("nil shard pointer does not panic", func(t *testing.T) {
+		t.Parallel()
+		k := "ks"
+		var pp *topodatapb.TabletAlias
+		assert.NotPanics(t, func() {
+			fillReparentResponseFromEvent(&k, nil, &pp, makeEv("ks", "-", nil))
+		})
+		assert.Equal(t, "ks", k) // keyspace still written
+	})
+
+	t.Run("nil promotedPrimary pointer does not panic", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+		assert.NotPanics(t, func() {
+			fillReparentResponseFromEvent(&k, &s, nil, makeEv("ks", "-", tablet))
+		})
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+	})
+
+	t.Run("populates all fields when ev is fully populated", func(t *testing.T) {
+		t.Parallel()
+		k, s := "default", "0"
+		var pp *topodatapb.TabletAlias
+		tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+		fillReparentResponseFromEvent(&k, &s, &pp, makeEv("ks", "-", tablet))
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Equal(t, tablet.Alias, pp)
+	})
+
+	t.Run("preserves defaults when ShardInfo is zero-valued", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		var pp *topodatapb.TabletAlias
+		fillReparentResponseFromEvent(&k, &s, &pp, &events.Reparent{}) // zero ShardInfo
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Nil(t, pp)
+	})
+
+	t.Run("zero ShardInfo early return skips promotedPrimary even if NewPrimary is set", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		var pp *topodatapb.TabletAlias
+		ev := &events.Reparent{}
+		ev.NewPrimary = &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+		fillReparentResponseFromEvent(&k, &s, &pp, ev)
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Nil(t, pp) // early return on nil Shard; NewPrimary not copied
+	})
+}
+
 func TestEmergencyReparentShard(t *testing.T) {
 	t.Parallel()
 
@@ -4866,6 +4954,57 @@ func TestEmergencyReparentShard(t *testing.T) {
 			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
+}
+
+// TestEmergencyReparentShardResponsePreservesReqOnEarlyFailure is a regression
+// test for the case where reparentShardLocked returns an error before populating
+// ev.ShardInfo. In that situation the response must still carry the keyspace/shard
+// from the request rather than empty strings.
+//
+// The test injects a topo Get error on the shard data path (after the shard lock
+// is acquired) so that GetShard fails before ev.ShardInfo is assigned. With the
+// unfixed code this produces resp.Keyspace == "" and resp.Shard == "".
+func TestEmergencyReparentShardResponsePreservesReqOnEarlyFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: &vttime.Time{
+			Seconds: 100,
+		},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	})
+
+	// Inject a failure on shard data reads after the shard is created. This causes
+	// reparentShardLocked to fail at GetShard before ev.ShardInfo = *shardInfo is
+	// reached, leaving ev.ShardInfo zero-valued while ev itself is non-nil.
+	factory.AddOperationError(memorytopo.Get, `.*shards/-/Shard$`, topo.NewError(topo.NoNode, "injected"))
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	resp, err := vtctld.EmergencyReparentShard(ctx, &vtctldatapb.EmergencyReparentShardRequest{
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	})
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	testutil.AssertEmergencyReparentShardResponsesEqual(t, &vtctldatapb.EmergencyReparentShardResponse{
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}, resp)
 }
 
 func TestExecuteFetchAsApp(t *testing.T) {
@@ -9011,6 +9150,46 @@ func TestPlannedReparentShard(t *testing.T) {
 			expectEventsToOccur: true,
 			expectedErr:         "global status vars failed",
 		},
+		{
+			// Regression test: when reparentShardLocked returns an error before populating
+			// ev.ShardInfo (e.g. the ExpectedPrimary check fires before ev.ShardInfo is
+			// assigned), the response must still carry the keyspace/shard from the request
+			// rather than empty strings.
+			name: "response preserves keyspace/shard when reparent fails before ShardInfo is populated",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				// ExpectedPrimary deliberately points to a non-existent tablet so that
+				// reparentShardLocked fails the expected-primary check before assigning
+				// ev.ShardInfo, leaving ev.ShardInfo zero-valued.
+				ExpectedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  999,
+				},
+			},
+			expected: &vtctldatapb.PlannedReparentShardResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expectEventsToOccur: false,
+			expectedErr:         "primary zone1-0000000100 is not equal to expected alias zone1-0000000999",
+		},
 	}
 
 	for _, tt := range tests {
@@ -9041,6 +9220,10 @@ func TestPlannedReparentShard(t *testing.T) {
 
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
+				if tt.expected != nil {
+					require.NotNil(t, resp)
+					testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+				}
 
 				return
 			}
@@ -11548,14 +11731,15 @@ func TestSetShardTabletControl(t *testing.T) {
 	ctx := t.Context()
 
 	type testcase struct {
-		name      string
-		ctx       context.Context
-		ts        *topo.Server
-		setup     func(*testing.T, *testcase)
-		teardown  func(*testing.T, *testcase)
-		req       *vtctldatapb.SetShardTabletControlRequest
-		expected  *vtctldatapb.SetShardTabletControlResponse
-		shouldErr bool
+		name       string
+		ctx        context.Context
+		ts         *topo.Server
+		setup      func(*testing.T, *testcase)
+		teardown   func(*testing.T, *testcase)
+		req        *vtctldatapb.SetShardTabletControlRequest
+		expected   *vtctldatapb.SetShardTabletControlResponse
+		rpcTimeout time.Duration
+		shouldErr  bool
 	}
 
 	tests := []*testcase{
@@ -11740,22 +11924,21 @@ func TestSetShardTabletControl(t *testing.T) {
 		{
 			name: "keyspace lock error",
 			setup: func(t *testing.T, tt *testcase) {
-				var cancel func()
-				tt.ctx, cancel = context.WithCancel(ctx)
+				tt.ctx = ctx
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
-				testutil.AddShards(tt.ctx, t, tt.ts, &vtctldatapb.Shard{
+				testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard:    &topodatapb.Shard{},
 				})
 
-				_, unlock, err := tt.ts.LockKeyspace(tt.ctx, "testkeyspace", "test lock")
+				_, unlock, err := tt.ts.LockKeyspace(ctx, "testkeyspace", "test lock")
 				require.NoError(t, err)
+
 				tt.teardown = func(t *testing.T, tt *testcase) {
 					var err error
 					unlock(&err)
 					require.NoError(t, err)
-					cancel()
 				}
 			},
 			req: &vtctldatapb.SetShardTabletControlRequest{
@@ -11764,7 +11947,13 @@ func TestSetShardTabletControl(t *testing.T) {
 				DeniedTables: []string{"t1"},
 				TabletType:   topodatapb.TabletType_REPLICA,
 			},
-			shouldErr: true,
+			// The RPC blocks trying to acquire the keyspace lock the setup
+			// already holds, so give it a short deadline instead of waiting
+			// out the default 45s topo.LockTimeout. The deadline is applied
+			// immediately around the RPC call, so it cannot expire during
+			// setup or server construction on a slow runner.
+			rpcTimeout: time.Second,
+			shouldErr:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -11779,7 +11968,13 @@ func TestSetShardTabletControl(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
-			resp, err := vtctld.SetShardTabletControl(tt.ctx, tt.req)
+			rpcCtx := tt.ctx
+			if tt.rpcTimeout > 0 {
+				var cancel context.CancelFunc
+				rpcCtx, cancel = context.WithTimeout(rpcCtx, tt.rpcTimeout)
+				defer cancel()
+			}
+			resp, err := vtctld.SetShardTabletControl(rpcCtx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

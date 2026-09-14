@@ -18,7 +18,9 @@ package blackbox
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"slices"
@@ -46,6 +48,7 @@ type StatSummary struct {
 	DestinationCloseStats int
 	DestinationOpenStats  int
 	DestinationWriteStats int
+	DestinationWriteBytes int
 	SourceCloseStats      int
 	SourceOpenStats       int
 	SourceReadStats       int
@@ -63,6 +66,9 @@ func GetStats(stats *backupstats.FakeStats) StatSummary {
 		case "Destination:Write":
 			if len(sr.TimedIncrementBytesCalls) > 0 {
 				ss.DestinationWriteStats++
+				for _, call := range sr.TimedIncrementBytesCalls {
+					ss.DestinationWriteBytes += call.Bytes
+				}
 			}
 		case "Source:Close":
 			ss.SourceCloseStats += len(sr.TimedIncrementCalls)
@@ -85,7 +91,7 @@ func AssertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogge
 	}
 }
 
-func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (backupRoot string, keyspace string, shard string, ts *topo.Server) {
+func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir, fileSize int) (backupRoot string, keyspace string, shard string, ts *topo.Server) {
 	// Set up local backup directory
 	id := strconv.FormatInt(time.Now().UnixNano(), 10)
 	backupRoot = "testdata/builtinbackup_test_" + id
@@ -94,10 +100,12 @@ func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (bac
 	dataDir := path.Join(backupRoot, "datadir")
 	// Add some files under data directory to force backup to execute semaphore acquire inside
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
+	totalFiles := dirs * filesPerDir
+	t.Logf("SetupCluster: creating %d files of %d bytes each (%d bytes total)", totalFiles, fileSize, totalFiles*fileSize)
 	for dirI := range dirs {
 		dirName := "test" + strconv.Itoa(dirI+1)
 		require.NoError(t, createBackupDir(dataDir, dirName))
-		require.NoError(t, createBackupFiles(path.Join(dataDir, dirName), filesPerDir, "ibd"))
+		require.NoError(t, createBackupFiles(path.Join(dataDir, dirName), filesPerDir, "ibd", fileSize))
 	}
 	t.Cleanup(func() {
 		require.NoError(t, os.RemoveAll(backupRoot))
@@ -181,16 +189,18 @@ func createBackupDir(root string, dirs ...string) error {
 	return nil
 }
 
-func createBackupFiles(root string, fileCount int, ext string) error {
+// createBackupFiles creates fileCount files of the given size (in bytes) filled with random data.
+func createBackupFiles(root string, fileCount int, ext string, size int) error {
 	for i := range fileCount {
 		f, err := os2.Create(path.Join(root, fmt.Sprintf("%d.%s", i, ext)))
 		if err != nil {
 			return err
 		}
-		if _, err := f.WriteString("hello, world!"); err != nil {
+		if _, err := io.CopyN(f, rand.Reader, int64(size)); err != nil {
+			f.Close()
 			return err
 		}
-		defer f.Close()
+		f.Close()
 	}
 
 	return nil

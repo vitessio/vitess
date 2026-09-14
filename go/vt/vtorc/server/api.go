@@ -20,10 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/viperutil/debug"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -46,6 +49,7 @@ const (
 	databaseStateAPI           = "/api/database-state"
 	configAPI                  = "/api/config"
 	healthAPI                  = "/debug/health"
+	shardQuorumAPI             = "/api/shard-tablet-health-quorum"
 
 	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
 	notAValidValueForSeconds              = "Invalid value for seconds"
@@ -62,6 +66,7 @@ var (
 		databaseStateAPI,
 		configAPI,
 		healthAPI,
+		shardQuorumAPI,
 	}
 )
 
@@ -90,6 +95,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		databaseStateAPIHandler(response)
 	case configAPI:
 		configAPIHandler(response)
+	case shardQuorumAPI:
+		shardQuorumAPIHandler(response)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -107,6 +114,8 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 	case detectionAnalysisAPI, configAPI:
 		return acl.MONITORING
 	case healthAPI, databaseStateAPI:
+		return acl.MONITORING
+	case shardQuorumAPI:
 		return acl.MONITORING
 	}
 	return acl.ADMIN
@@ -195,6 +204,36 @@ func configAPIHandler(response http.ResponseWriter) {
 		return
 	}
 	writePlainTextResponse(response, string(jsonOut), http.StatusOK)
+}
+
+// shardQuorumAPIHandler is the handler for the shardQuorumAPI endpoint. For each shard that
+// currently has shard-peer observer data it returns the computed quorum evaluation: the primary,
+// the verdict, the per-observer votes, and the thresholds. Read-only; best-effort per shard.
+func shardQuorumAPIHandler(response http.ResponseWriter) {
+	opts := inst.QuorumOptionsFromConfig()
+	observedShards := inst.ObservedShards()
+	now := time.Now()
+	results := make([]inst.QuorumResult, 0, len(observedShards))
+	for _, ks := range observedShards {
+		// Best-effort: if we can't resolve the shard's primary, still emit the shard with an
+		// empty primary (EvaluatePrimaryQuorum returns no observer votes without a primary).
+		primaryAlias, _, err := inst.ReadShardPrimaryInformation(ks.Keyspace, ks.Shard)
+		if err != nil {
+			primaryAlias = nil
+		}
+		// Source the expected observer count from topo exactly as the ERS analysis path does, so
+		// this endpoint's verdict matches the actionable recovery decision — a minority of fresh
+		// down reports must not read as Down in a larger shard. On a count error fall back to 0
+		// (the majority gate then uses only the observers actually seen) and log it.
+		expectedObservers, err := inst.ShardEligibleObserverCount(ks.Keyspace, ks.Shard)
+		if err != nil {
+			log.Warn("shard-tablet-health-quorum API: could not count eligible observers, using observed-only base",
+				slog.String("keyspace", ks.Keyspace), slog.String("shard", ks.Shard), slog.Any("error", err))
+			expectedObservers = 0
+		}
+		results = append(results, inst.EvaluatePrimaryQuorum(primaryAlias, ks.Keyspace, ks.Shard, expectedObservers, opts, now))
+	}
+	returnAsJSON(response, http.StatusOK, results)
 }
 
 // disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint

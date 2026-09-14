@@ -1487,7 +1487,7 @@ func (node *DropProcedure) GetTableSpec() *TableSpec {
 
 // GetFromTables implements the DDLStatement interface
 func (node *RenameTable) GetFromTables() TableNames {
-	var fromTables TableNames
+	fromTables := make(TableNames, 0, len(node.TablePairs))
 	for _, pair := range node.TablePairs {
 		fromTables = append(fromTables, pair.FromTable)
 	}
@@ -1777,7 +1777,7 @@ func (node *DropProcedure) GetParsedComments() *ParsedComments {
 
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
-	var toTables TableNames
+	toTables := make(TableNames, 0, len(node.TablePairs))
 	for _, pair := range node.TablePairs {
 		toTables = append(toTables, pair.ToTable)
 	}
@@ -3926,6 +3926,7 @@ func (variance *Variance) SetArgs(exprs []Expr) error {
 }
 func (av *AnyValue) SetArgs(exprs []Expr) error      { return setFuncArgs(av, exprs, "ANY_VALUE") }
 func (jaa *JSONArrayAgg) SetArgs(exprs []Expr) error { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
+
 func (joa *JSONObjectAgg) SetArgs(exprs []Expr) error {
 	if len(exprs) != 2 {
 		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")

@@ -4,15 +4,16 @@ runs:
   using: "composite"
   steps:
     - name: Build weekly cache key
+      id: cache-key
       shell: bash -e {0}
-      run: echo "PERCONA_RELEASE_CACHE_WEEK=$(date +%G-%V)" >> "$GITHUB_ENV"
+      run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
 
     - name: Cache percona-release package
       id: cache-percona-release
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: percona-release_latest.deb
-        key: percona-release_latest.deb.${{ env.PERCONA_RELEASE_CACHE_WEEK }}
+        key: percona-release_latest.deb.${{ steps.cache-key.outputs.week }}
 
     - name: Get Percona Apt Repo package (on cache miss)
       if: steps.cache-percona-release.outputs.cache-hit != 'true'

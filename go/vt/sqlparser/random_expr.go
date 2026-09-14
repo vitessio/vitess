@@ -428,7 +428,7 @@ func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 	}
 
 	size := rand.IntN(2) + 1
-	var whens []*When
+	whens := make([]*When, 0, size)
 	for range size {
 		var cond Expr
 		if exp == nil {

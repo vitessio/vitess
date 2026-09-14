@@ -104,7 +104,7 @@ Flags:
       --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
-      --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 5m10s)
+      --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 5m30s)
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server

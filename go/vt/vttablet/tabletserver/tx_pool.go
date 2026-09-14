@@ -18,12 +18,16 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/pools/smartconnpool"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -73,6 +77,11 @@ type (
 		logMu   sync.Mutex
 		lastLog time.Time
 		txStats *servenv.TimingsWrapper
+
+		// tempTableIdleKills counts connections the killer reclaimed because
+		// their temp-table idle timeout elapsed, separately from the existing
+		// kill stats so operators can see the feature working.
+		tempTableIdleKills *stats.Counter
 	}
 )
 
@@ -82,9 +91,11 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
 		env:     env,
 		scp:     NewStatefulConnPool(env),
-		ticks:   timer.NewTimer(txKillerTimeoutInterval(config)),
+		ticks:   timer.NewTimer(txKillerTimeoutInterval(config, 0)),
 		limiter: limiter,
 		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
+		tempTableIdleKills: env.Exporter().NewCounter("TempTableIdleTimeoutKills",
+			"Number of stateful connections reclaimed by the temp-table idle timer"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
@@ -94,6 +105,16 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", func() time.Duration {
 		return config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 	})
+	env.Exporter().NewGaugeFunc("TempTableUnmanagedConnections",
+		"Number of stateful connections holding temporary tables without vtgate keepalive coverage", axp.scp.tempTableUnmanaged.Load)
+	// The temp-table idle timeout replaces the transaction timeout for the
+	// connections it governs, so an explicit value below the transaction
+	// timeout reclaims them sooner than before this feature.
+	if timeout := config.TempTableIdleTimeout; timeout > 0 && timeout < config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP) {
+		log.Warn("--queryserver-config-temp-table-idle-timeout is below the transaction timeout: unmanaged temp-table reserved connections will be reclaimed sooner than the transaction timeout",
+			slog.Duration("temp_table_idle_timeout", timeout),
+			slog.Duration("transaction_timeout", config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)))
+	}
 	return axp
 }
 
@@ -101,15 +122,35 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	tp.scp.Open(appParams, dbaParams, appDebugParams)
-	if tp.ticks.Interval() > 0 {
-		tp.ticks.Start(func() { tp.transactionKiller() })
-	}
+	// Always start the killer goroutine: with a non-positive interval it
+	// parks dormant on its message channel, so a later auto-mode wait_timeout
+	// publish can wake it with SetMysqlWaitTimeout -> SetInterval. The old
+	// interval-gated start would leave the temp-table idle timeout with no
+	// reaper whenever both transaction timeouts are disabled.
+	tp.ticks.Start(func() { tp.transactionKiller() })
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
 	tp.ticks.Stop()
 	tp.scp.Close()
+}
+
+// SetMysqlWaitTimeout publishes mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode and retimes the connection killer: a
+// dormant timer (both transaction timeouts disabled) is woken, and a slower
+// one is tightened, so auto-governed connections always have a reaper.
+// The tick only ever shrinks here — a raised wait_timeout keeps the shorter
+// tick, which just checks a little more often than strictly needed.
+func (tp *TxPool) SetMysqlWaitTimeout(waitTimeout time.Duration) {
+	tp.scp.SetMysqlWaitTimeout(waitTimeout)
+	desired := txKillerTimeoutInterval(tp.env.Config(), waitTimeout)
+	if desired <= 0 {
+		return
+	}
+	if current := tp.ticks.Interval(); current <= 0 || desired < current {
+		tp.ticks.SetInterval(desired)
+	}
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
@@ -130,13 +171,20 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetElapsedTimeout(vterrors.TxKillerRollback) {
-		log.Warn(fmt.Sprintf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())))
+		// Capture the governing timeout before the kill mutates the
+		// connection's state (txComplete clears the transaction properties,
+		// which feed the timer selection).
+		elapsedTimeout := conn.effectiveTimeout()
+		log.Warn(fmt.Sprintf("killing transaction (exceeded timeout: %v): %s", elapsedTimeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())))
+		if conn.usesTempTableIdleTimeout() {
+			tp.tempTableIdleKills.Add(1)
+		}
 		switch {
 		case conn.IsTainted():
 			conn.Close()
 			tp.env.Stats().KillCounters.Add("ReservedConnection", 1)
 		case conn.IsInTransaction():
-			_, err := conn.Exec(context.Background(), "rollback", 1, false)
+			_, err := conn.Exec(context.Background(), "rollback", 1, false, false /* keepConnOnTimeout */)
 			if err != nil {
 				conn.Close()
 			}
@@ -149,7 +197,7 @@ func (tp *TxPool) transactionKiller() {
 		if conn.IsInTransaction() {
 			tp.txComplete(conn, tx.TxKill)
 		}
-		conn.Releasef("exceeded timeout: %v", conn.timeout)
+		conn.Releasef("exceeded timeout: %v", elapsedTimeout)
 	}
 }
 
@@ -169,14 +217,144 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 	}
 }
 
+// reservedKeepAlivePurpose is the purpose string KeepAliveReserved locks the
+// connection with. GetAndLock recognizes it to briefly wait out a keepalive
+// instead of failing the caller.
+const reservedKeepAlivePurpose = "for reserved connection keepalive"
+
+// reservedActivityRefreshPurpose is the purpose string a temp-table activity
+// refresh locks the reserved connection under while it runs its trivial
+// statement. Like a keepalive touch, a client command that collides with one
+// waits it out instead of failing with an in-use error; the hold normally
+// spans one statement round trip on the local mysqld, but if the statement
+// wedges, the refresh keeps the lock through its KILL QUERY and
+// connection-kill cleanup budgets — so the colliding caller waits under its
+// own context rather than against a fixed deadline (see GetAndLock).
+const reservedActivityRefreshPurpose = "for temp-table activity refresh"
+
+// briefHoldWaitBackstop bounds the brief-hold wait-out loop in GetAndLock for
+// callers whose context carries no deadline. It is a safety net against the
+// pathological combination of such a context with a holder that never
+// releases (which the holders' own bounded budgets should make impossible) —
+// not a tuning constant sized against those budgets.
+const briefHoldWaitBackstop = 30 * time.Second
+
 // GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
-func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
+//
+// A keepalive touch or a temp-table activity refresh holds the connection
+// only briefly — a touch for the microseconds of a CPU-only check, a refresh
+// for one trivial statement round trip that, on a stalled mysqld, can
+// stretch through the statement's KILL QUERY and connection-kill cleanup
+// budgets. Both release on a bounded schedule, so a caller that collides
+// with one retries until the holder lets go rather than failing the client's
+// command with an in-use error — waiting as long as its own context allows,
+// with a generous backstop for contexts without a deadline. Other holders
+// (real client work) still fail fast as before.
+func (tp *TxPool) GetAndLock(ctx context.Context, connID tx.ConnID, reason string) (*StatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
+	if isBriefHoldInUse(err) {
+		backstop := time.Now().Add(briefHoldWaitBackstop)
+		sleep := 100 * time.Microsecond
+		timer := time.NewTimer(sleep)
+		defer timer.Stop()
+		for err != nil && isBriefHoldInUse(err) && ctx.Err() == nil && time.Now().Before(backstop) {
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				// Return right away rather than after the backoff.
+			}
+			// Back off toward 10ms: a keepalive hold is gone within a retry
+			// or two, while a refresh stuck in kill cleanup can hold the
+			// lock for seconds — no point hammering the pool mutex.
+			if sleep < 10*time.Millisecond {
+				sleep *= 2
+			}
+			timer.Reset(sleep)
+			conn, err = tp.scp.GetAndLock(connID, reason)
+		}
+	}
 	if err != nil {
+		// A wait the caller's own context ended is not an ABORTED: vtgate
+		// marks a transaction for rollback on ABORTED shard errors, and a
+		// command that never acquired — let alone used — the connection must
+		// not force an otherwise untouched transaction to roll back over an
+		// internal keepalive or refresh outliving the caller's deadline. It
+		// returns the context's own code (CANCELED or DEADLINE_EXCEEDED)
+		// while still naming the holder, which a bare context error would
+		// hide. Every other failure — a real client holder, a vanished
+		// connection, a backstop-tripping wedged hold — keeps the ABORTED
+		// in-use shape it always had.
+		if ctxErr := ctx.Err(); ctxErr != nil && isBriefHoldInUse(err) {
+			return nil, vterrors.Errorf(vterrors.Code(ctxErr), "transaction %d: %v: %v", connID, ctxErr, err)
+		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
 	return conn, nil
+}
+
+// isBriefHoldInUse reports whether err is the pool's in-use error naming a
+// holder that is guaranteed to release the connection on a bounded schedule —
+// a keepalive touch or a temp-table activity refresh — so a colliding
+// foreground caller should wait it out for as long as its own deadline
+// allows. Any other holder (a real client query) fails fast as before.
+func isBriefHoldInUse(err error) bool {
+	if err == nil || !errors.Is(err, pools.ErrInUse) {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, reservedKeepAlivePurpose) ||
+		strings.Contains(msg, reservedActivityRefreshPurpose)
+}
+
+// KeepAliveReserved refreshes the idle timers of a reserved connection
+// without executing anything on it — in particular, nothing is sent to the
+// underlying MySQL connection, so mysqld's wait_timeout keeps counting only
+// real user traffic. A connection that is currently in use counts as alive:
+// its own activity refreshes the timers when it is unlocked. A connection
+// that no longer exists returns the same "transaction %d: ..." error shape
+// as GetAndLock so callers can recognize that it is gone.
+func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
+	conn, err := tp.scp.GetAndLock(reservedID, reservedKeepAlivePurpose)
+	if err != nil {
+		// The pool's in-use error means the connection is alive and busy —
+		// exactly what a keepalive wants to hear.
+		if errors.Is(err, pools.ErrInUse) {
+			return nil
+		}
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+	}
+	// The touch proves the vtgate keepalive contract covers this connection:
+	// beats vouch for it and, when they stop, it is reclaimed at the normal
+	// timeout — so it must keep the short timer instead of the temp-table
+	// idle timeout. Sticky by design.
+	conn.markKeepAliveManaged()
+	// On a platform without a real peer check (Windows), PeerCheck cannot tell a
+	// live connection from one mysqld already closed. Refreshing anyway would pin
+	// a dead connection in the pool forever, so instead return it without
+	// extending its expiry: an idle connection is then reclaimed by the normal
+	// tablet timeout, exactly as before this feature, rather than kept alive.
+	// unlock(false) returns the connection to the pool without refreshing its
+	// timers.
+	if !conn.dbConn.Conn.PeerCheckSupported() {
+		conn.unlock(false)
+		return nil
+	}
+	// Detect a peer-closed socket (e.g. mysqld reclaimed the connection at
+	// wait_timeout) with a non-blocking zero-byte read — nothing is sent,
+	// so mysqld's idle timers are unaffected. A dead connection must be
+	// released rather than refreshed: it occupies pool capacity, and
+	// keeping its expiry fresh would pin the zombie until the session's
+	// next command. The error carries the same "transaction %d: ended"
+	// shape as other gone-connection errors so callers stop beating it.
+	if err := conn.dbConn.Conn.PeerCheck(); err != nil {
+		conn.ReleaseString("reserved connection keepalive found it dead")
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: ended by the MySQL server (connection check: %v)", reservedID, err)
+	}
+	// Unlock refreshes the connection's timers for non-transactional
+	// connections, which is the whole point of the keepalive.
+	conn.Unlock()
+	return nil
 }
 
 // Commit commits the transaction on the connection.
@@ -191,7 +369,7 @@ func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (strin
 		return "", nil
 	}
 
-	if _, err := txConn.Exec(ctx, "commit", 1, false); err != nil {
+	if _, err := txConn.Exec(ctx, "commit", 1, false, false /* keepConnOnTimeout */); err != nil {
 		txConn.Close()
 		return "", err
 	}
@@ -219,7 +397,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 		return nil
 	}
 	defer tp.txComplete(txConn, tx.TxRollback)
-	if _, err := txConn.Exec(ctx, "rollback", 1, false); err != nil {
+	if _, err := txConn.Exec(ctx, "rollback", 1, false, false /* keepConnOnTimeout */); err != nil {
 		txConn.Close()
 		return err
 	}
@@ -237,9 +415,12 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	var conn *StatefulConnection
 	var err error
 	if reservedID != 0 {
-		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
+		// Use the TxPool wrapper (not tp.scp directly) so a BEGIN on a
+		// reserved connection that a keepalive touch is momentarily holding
+		// waits the touch out instead of failing with an in-use error.
+		conn, err = tp.GetAndLock(ctx, reservedID, "start transaction on reserve conn")
 		if err != nil {
-			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+			return nil, "", "", err
 		}
 		// Update conn timeout.
 		timeout := getTransactionTimeout(options, tp.env.Config(), options.GetWorkload())
@@ -462,9 +643,24 @@ func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) 
 	conn.CleanTxState()
 }
 
-func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
-	return smallerTimeout(
+// txKillerTimeoutInterval derives the killer's tick from the shortest enabled
+// timeout it enforces: the OLTP and OLAP transaction timeouts plus the
+// temp-table idle timeout — the explicit flag value, or in auto mode the
+// published mysqld wait_timeout (autoWaitTimeout, zero until the first
+// successful read). Without the temp-table term, disabling both transaction
+// timeouts would leave the timer dormant and the temp-table timeout with no
+// reaper at all.
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig, autoWaitTimeout time.Duration) time.Duration {
+	shortest := smallerTimeout(
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
-	) / 10
+	)
+	tempTableIdle := config.TempTableIdleTimeout
+	if tempTableIdle < 0 {
+		tempTableIdle = autoWaitTimeout
+	}
+	if tempTableIdle > 0 {
+		shortest = smallerTimeout(shortest, tempTableIdle)
+	}
+	return shortest / 10
 }

@@ -1,6 +1,6 @@
 version: "2"
 run:
-  go: "1.26"
+  go: "1.27"
 linters:
   default: none
   enable:
@@ -155,19 +155,14 @@ linters:
       - legacy
       - std-error-handling
     rules:
-      # prealloc is being enabled incrementally, package-by-package.
-      # These exclusions will be removed as packages are fixed.
-      # Unfortunately golangci-lint's regex is quite limited, so
-      # we must construct this big regex match for now.
+      # prealloc is enabled for all non-test code.
+      # Test code and test-only paths are permanently excluded.
       - linters:
           - prealloc
         path: _test\.go$
       - linters:
           - prealloc
-        path: ^go/(test|tools)/
-      - linters:
-          - prealloc
-        path: ^go/vt/(sqlparser|vtgate/planbuilder|vttablet)/
+        path: ^go/(test|tools|vt/vttablet/endtoend)/
       - linters:
           - errcheck
         path: ^go/vt/proto/

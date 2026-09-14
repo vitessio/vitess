@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand/v2"
 	"os/exec"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -457,12 +459,21 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
 		var keyspace vschemapb.Keyspace
-		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
-			assert.NoError(t, err)
-		}
+		require.NoError(t, protojson.Unmarshal([]byte(e.Value), &keyspace))
 
-		columnVindex := keyspace.Tables[expected.table].ColumnVindexes[0]
-		actualVindex := keyspace.Vindexes[expected.vindex]
+		// Look the table and vindex up before dereferencing them, so that a
+		// vschema missing either fails with a message naming what was missing
+		// instead of panicking on a nil map entry and taking down the whole
+		// test binary.
+		table, ok := keyspace.Tables[expected.table]
+		require.Truef(t, ok, "keyspace %s has no table %s in its vschema, found tables %v", expected.keyspace, expected.table, slices.Sorted(maps.Keys(keyspace.Tables)))
+		require.NotEmptyf(t, table.ColumnVindexes, "table %s.%s has no column vindexes", expected.keyspace, expected.table)
+		columnVindex := table.ColumnVindexes[0]
+		require.NotEmptyf(t, columnVindex.Columns, "column vindex %s on %s.%s has no columns", columnVindex.Name, expected.keyspace, expected.table)
+
+		actualVindex, ok := keyspace.Vindexes[expected.vindex]
+		require.Truef(t, ok, "keyspace %s has no vindex %s in its vschema, found vindexes %v", expected.keyspace, expected.vindex, slices.Sorted(maps.Keys(keyspace.Vindexes)))
+
 		assertEqual(t, actualVindex.Type, expected.vindexType, "Actual vindex type different from expected")
 		assertEqual(t, columnVindex.Name, expected.vindex, "Actual vindex name different from expected")
 		assertEqual(t, columnVindex.Columns[0], expected.column, "Actual vindex column different from expected")

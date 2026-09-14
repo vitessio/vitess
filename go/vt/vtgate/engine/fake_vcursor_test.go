@@ -84,6 +84,22 @@ func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
 	panic("implement me")
 }
 
+func (t *noopVCursor) StorePrepareData(name string, v *vtgatepb.PrepareData) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetPrepareData(name string) *vtgatepb.PrepareData {
+	panic("implement me")
+}
+
+func (t *noopVCursor) ClearPrepareData(name string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, error) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransaction() bool {
 	return t.inTx
 }
@@ -486,6 +502,7 @@ type loggingVCursor struct {
 	onMirrorClonesFn        func(context.Context) VCursor
 	onExecuteMultiShardFn   func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
+	onExecuteStandaloneFn   func(rs *srvtopo.ResolvedShard)
 	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
 	onResolveDestinationsFn func(context.Context)
 
@@ -659,11 +676,33 @@ func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primit
 	return res, f.multiShardErrs
 }
 
+func (f *loggingVCursor) ExecuteMultiShardPerShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	results := make([]*sqltypes.Result, len(rss))
+	for i, rs := range rss {
+		f.log = append(f.log, fmt.Sprintf("ExecuteMultiShardPerShard %s %v %s %s", queries[i].Sql, deprecatedPrintBindVars(queries[i].BindVariables), rs.Target.Keyspace, rs.Target.Shard))
+		res, err := f.nextResult()
+		if err != nil {
+			return nil, []error{err}
+		}
+		results[i] = res
+	}
+	return results, f.multiShardErrs
+}
+
 func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
 }
 
 func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, _ Primitive, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error) {
+	// The hook runs outside the lock so a test can block here to observe
+	// concurrent in-flight calls without serializing them on f.mu.
+	if f.onExecuteStandaloneFn != nil {
+		f.onExecuteStandaloneFn(rs)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ExecuteStandalone %s %v %s %s", query, deprecatedPrintBindVars(bindvars), rs.Target.Keyspace, rs.Target.Shard))
 	return f.nextResult()
 }
@@ -835,6 +874,19 @@ func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	}
 	assert.Equalf(t, want, f.log, "got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	utils.MustMatch(t, want, f.log, "")
+}
+
+// ExpectLogUnordered asserts that the log contains exactly the wanted entries,
+// regardless of order. Use it when work is fanned out concurrently and log lines
+// can therefore arrive in any order.
+func (f *loggingVCursor) ExpectLogUnordered(t *testing.T, want []string) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.log) == 0 && len(want) == 0 {
+		return
+	}
+	assert.ElementsMatchf(t, want, f.log, "got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {

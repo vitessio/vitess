@@ -62,7 +62,7 @@ func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 	if serverVersion == "" {
 		return false, ErrUnspecifiedServerVersion
 	}
-	versionPrefix := strings.Split(serverVersion, "-")[0]
+	versionPrefix, _, _ := strings.Cut(serverVersion, "-")
 	versionTokens := strings.Split(versionPrefix, ".")
 	for i, part := range parts {
 		if len(versionTokens) <= i {

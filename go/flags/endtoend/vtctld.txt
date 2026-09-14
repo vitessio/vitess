@@ -34,10 +34,12 @@ Flags:
       --backup-storage-implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --builtinbackup-file-chunk-size uint                               Size of each chunk (in bytes) when splitting large files for parallel backup/restore. (default 1073741824)
+      --builtinbackup-file-chunk-threshold uint                          Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
@@ -112,6 +114,8 @@ Flags:
       --s3-backup-aws-min-partsize int                                   Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3-backup-aws-region string                                      AWS region to use. (default "us-east-1")
       --s3-backup-aws-retries int                                        AWS request retries. (default -1)
+      --s3-backup-download-concurrency int                               Number of parallel goroutines for S3 downloads. Set > 1 to enable parallel byte-range GETs via the transfer manager (recommended: 2-10). (default 1)
+      --s3-backup-download-part-size int                                 Part size in bytes for parallel S3 downloads via transfer manager. (default 8388608)
       --s3-backup-force-path-style                                       force the s3 path style.
       --s3-backup-log-level string                                       determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
       --s3-backup-server-side-encryption string                          server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).

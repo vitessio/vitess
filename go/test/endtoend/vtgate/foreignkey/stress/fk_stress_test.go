@@ -123,6 +123,13 @@ func (w *WriteMetrics) Clear() {
 	w.deletesFKErrors = 0
 }
 
+func (w *WriteMetrics) Deletes() int64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.deletes
+}
+
 func (w *WriteMetrics) String() string {
 	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
@@ -158,7 +165,8 @@ var (
 	tableNames            = []string{parentTableName, childTableName, child2TableName, grandchildTableName, selfTableName, nofkTableName}
 	reverseTableNames     []string
 
-	seedOnce sync.Once
+	seedOnce        sync.Once
+	initGlobalsOnce sync.Once
 
 	referenceActionMap = map[sqlparser.ReferenceAction]string{
 		sqlparser.NoAction: "NO ACTION",
@@ -412,6 +420,10 @@ func queryTablet(t *testing.T, tablet *cluster.Vttablet, query string, expectErr
 }
 
 func tabletTestName(t *testing.T, tablet *cluster.Vttablet) string {
+	// A nil tablet must fail here: when the tablet globals are unset, a
+	// nil argument would otherwise match the first case below and
+	// mislabel the subtest.
+	require.NotNil(t, tablet)
 	switch tablet {
 	case primary:
 		return "primary"
@@ -501,27 +513,38 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 	}
 }
 
+// initTestGlobals wires the package globals (tablets, table orderings,
+// write metrics). Every root test must call it first: the test runner
+// reruns a failed root test with an exact -run filter, so a root test
+// cannot rely on another root test having run before it in the same
+// process.
+func initTestGlobals(t *testing.T) {
+	initGlobalsOnce.Do(func() {
+		shards = clusterInstance.Keyspaces[0].Shards
+		require.Len(t, shards, 1)
+		require.Len(t, shards[0].Vttablets, 3) // primary, no-fk replica, fk replica
+		primary = shards[0].Vttablets[0]
+		require.NotNil(t, primary)
+		replicaNoFK = shards[0].Vttablets[1]
+		require.NotNil(t, replicaNoFK)
+		require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
+		replicaFK = shards[0].Vttablets[2]
+		require.NotNil(t, replicaFK)
+		require.NotEqual(t, primary.Alias, replicaFK.Alias)
+		require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
+
+		reverseTableNames = slices.Clone(tableNames)
+		slices.Reverse(reverseTableNames)
+		require.ElementsMatch(t, tableNames, reverseTableNames)
+
+		for _, tableName := range tableNames {
+			writeMetrics[tableName] = &WriteMetrics{}
+		}
+	})
+}
+
 func TestInitialSetup(t *testing.T) {
-	shards = clusterInstance.Keyspaces[0].Shards
-	require.Len(t, shards, 1)
-	require.Len(t, shards[0].Vttablets, 3) // primary, no-fk replica, fk replica
-	primary = shards[0].Vttablets[0]
-	require.NotNil(t, primary)
-	replicaNoFK = shards[0].Vttablets[1]
-	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
-	replicaFK = shards[0].Vttablets[2]
-	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias, replicaFK.Alias)
-	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
-
-	reverseTableNames = slices.Clone(tableNames)
-	slices.Reverse(reverseTableNames)
-	require.ElementsMatch(t, tableNames, reverseTableNames)
-
-	for _, tableName := range tableNames {
-		writeMetrics[tableName] = &WriteMetrics{}
-	}
+	initTestGlobals(t)
 }
 
 type testCase struct {
@@ -646,6 +669,8 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 }
 
 func TestStressFK(t *testing.T) {
+	initTestGlobals(t)
+
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replicaNoFK)
 		validateReplicationIsHealthy(t, replicaFK)
@@ -1233,9 +1258,22 @@ func populateTables(t *testing.T, tcase *testCase) {
 					for range maxTableRows / 4 {
 						generateUpdate(t, tableName, conn)
 					}
-					for range maxTableRows / 4 {
+					// A delete only succeeds when the random id hits a row
+					// whose updates column is 1 and which no child row (or,
+					// for stress_self, the row itself) references. On
+					// stress_self most rows are self-referencing, so only a
+					// handful of the random attempts succeed, and a fixed
+					// attempt count can end the loop with zero successful
+					// deletes; testSelectTableMetrics requires at least one.
+					// The loop exits after the base attempt count once a
+					// delete has succeeded, or after maxTableRows attempts.
+					for i := range maxTableRows {
+						if i >= maxTableRows/4 && writeMetrics[tableName].Deletes() > 0 {
+							break
+						}
 						generateDelete(t, tableName, conn)
 					}
+					require.NotZerof(t, writeMetrics[tableName].Deletes(), "no successful delete on %s while seeding", tableName)
 				})
 				t.Run("creating seed", func(t *testing.T) {
 					// We create the seed table in the likeness of stress_parent, because that's the only table

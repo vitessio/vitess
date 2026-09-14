@@ -519,6 +519,88 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 	}
 }
 
+// TestFindBackupToRestoreSkipVersionCheck tests that FindBackupToRestore skips
+// the MySQL version compatibility check exactly when the engine that created the
+// backup reports ShouldSkipVersionCheck() == true.
+func TestFindBackupToRestoreSkipVersionCheck(t *testing.T) {
+	// 8.4.10 -> 8.0.36 is a downgrade, which is never version-compatible.
+	const (
+		backupVersion  = "mysqld  Ver 8.4.10"
+		restoreVersion = "mysqld  Ver 8.0.36"
+	)
+
+	testCases := []struct {
+		name string
+		// engineSkips is the value the backup's engine returns from
+		// ShouldSkipVersionCheck().
+		engineSkips bool
+		wantBackup  bool
+	}{
+		{
+			name:        "engine skips version check",
+			engineSkips: true,
+			wantBackup:  true,
+		},
+		{
+			name:        "engine enforces version check",
+			engineSkips: false,
+			wantBackup:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := createFakeBackupRestoreEnv(t)
+			env.mysqld.Version = restoreVersion
+			env.backupEngine.ShouldSkipVersionCheckReturn = tc.engineSkips
+			// look at all backups, regardless of when they were taken.
+			env.restoreParams.StartTime = time.Time{}
+
+			manifest := BackupManifest{
+				BackupTime:   FormatRFC3339(time.Now().Add(-1 * time.Hour)),
+				BackupMethod: fakeBackupEngineName,
+				Keyspace:     "test",
+				Shard:        "-",
+				MySQLVersion: backupVersion,
+				UpgradeSafe:  false,
+			}
+			manifestBytes, err := json.Marshal(manifest)
+			require.NoError(t, err)
+
+			bhs := []backupstorage.BackupHandle{
+				&FakeBackupHandle{
+					ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+						return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+					},
+				},
+			}
+
+			restorePath, err := FindBackupToRestore(env.ctx, env.restoreParams, bhs)
+			if tc.wantBackup {
+				require.NoError(t, err)
+				require.False(t, restorePath.IsEmpty())
+			} else {
+				require.ErrorIs(t, err, ErrNoCompleteBackup)
+			}
+		})
+	}
+}
+
+// TestMySQLShellEngineShouldSkipVersionCheck verifies that the mysql-shell engine
+// wires ShouldSkipVersionCheck() to the --mysql-shell-restore-skip-version-check flag.
+func TestMySQLShellEngineShouldSkipVersionCheck(t *testing.T) {
+	originalSkip := mysqlShellRestoreSkipVersionCheck
+	t.Cleanup(func() { mysqlShellRestoreSkipVersionCheck = originalSkip })
+
+	be := &MySQLShellBackupEngine{}
+
+	mysqlShellRestoreSkipVersionCheck = true
+	require.True(t, be.ShouldSkipVersionCheck())
+
+	mysqlShellRestoreSkipVersionCheck = false
+	require.False(t, be.ShouldSkipVersionCheck())
+}
+
 type forTest []FileEntry
 
 func (f forTest) Len() int           { return len(f) }

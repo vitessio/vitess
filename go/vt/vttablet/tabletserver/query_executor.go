@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -43,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -74,6 +77,11 @@ const (
 	resetLastIDQuery  = "select last_insert_id(18446744073709547416)"
 	resetLastIDValue  = 18446744073709547416
 	userLabelDisabled = "UserLabelDisabled"
+
+	// sessionWaitTimeoutProbeTimeout caps the best-effort probe of a reserved
+	// connection's @@session.wait_timeout, run before a temporary-table DDL
+	// until a capture succeeds; see captureSessionWaitTimeout.
+	sessionWaitTimeoutProbeTimeout = 5 * time.Second
 )
 
 var (
@@ -169,7 +177,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	if qre.connID != 0 {
 		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		// A temp-table activity refresh locks the connection under a purpose
+		// that colliding client commands briefly wait out (see
+		// TxPool.GetAndLock) instead of failing with an in-use error.
+		lockPurpose := "for query"
+		if queryservice.IsReservedConnActivityRefresh(qre.ctx) {
+			lockPurpose = reservedActivityRefreshPurpose
+		}
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, lockPurpose)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +204,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+	// SelectLockFunc reaches this pooled path only for the release functions
+	// (get_lock still requires a reserved connection): vtgate sends them as
+	// plain executes when the session holds no locks, and a pooled connection
+	// can hold no user-level lock, so they run like an ordinary select.
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -294,7 +313,14 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
 	case p.PlanSet:
-		return qre.txFetch(conn, false)
+		result, err := qre.execSet(conn)
+		if err == nil && setsWaitTimeout(qre.plan.FullStmt) {
+			// The SET changed the deadline mysqld enforces on this connection:
+			// re-capture it for the temp-table idle timeout.
+			conn.forgetSessionWaitTimeout()
+			qre.captureSessionWaitTimeout(conn)
+		}
+		return result, err
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
@@ -339,9 +365,86 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
+// streamAdminPlan runs the OnlineDDL and throttler admin plans for Stream(),
+// aligned with the Execute codepath: outside a transaction each plan runs its
+// dedicated executor, while inside a transaction txConnExec serves SHOW
+// VITESS_MIGRATIONS on the transaction's connection and rejects the rest as
+// unexpected. This alignment should be revisited on both execution paths —
+// ideally vtgate stops sending admin statements inside a transaction
+// altogether, the way it commits before DDL.
+func (qre *QueryExecutor) streamAdminPlan() (*sqltypes.Result, error) {
+	if qre.connID != 0 {
+		return qre.txConnStreamExec()
+	}
+	switch qre.plan.PlanID {
+	case p.PlanShowMigrations:
+		return qre.execShowMigrations(nil)
+	case p.PlanShowMigrationLogs:
+		return qre.execShowMigrationLogs()
+	case p.PlanShowThrottledApps:
+		return qre.execShowThrottledApps()
+	case p.PlanShowThrottlerStatus:
+		return qre.execShowThrottlerStatus()
+	case p.PlanAlterMigration:
+		return qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		return qre.execRevertMigration()
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
+}
+
+// txConnStreamExec runs the plan through txConnExec on the client's
+// transaction or reserved connection, mirroring how Execute dispatches
+// stateful plans, for streamed plans that run a dedicated executor rather
+// than the generic streaming SQL path.
+func (qre *QueryExecutor) txConnStreamExec() (*sqltypes.Result, error) {
+	conn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Unlock()
+	if qre.setting != nil {
+		applied, err := conn.ApplySetting(qre.ctx, qre.setting)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to execute system setting on the connection")
+		}
+		// If we have applied the settings on the connection, then we should record the query detail.
+		// This is required for redoing the transaction in case of a failure.
+		if applied {
+			conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
+		}
+	}
+	return qre.txConnExec(conn)
+}
+
+// planStreamsUnbounded reports whether a plan is exempt from the query
+// timeout on the streaming path. Transactionless streaming carries no query
+// timeout so OLAP reads can stream indefinitely; that exemption is only for
+// reads, including CALL, which can stream a procedure's result set and ran
+// without a timeout before state-changing plans were admitted to this path.
+func planStreamsUnbounded(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanSelectLockFunc, p.PlanShow,
+		p.PlanOtherRead, p.PlanCallProc, p.PlanShowMigrations, p.PlanShowMigrationLogs,
+		p.PlanShowThrottledApps, p.PlanShowThrottlerStatus:
+		return true
+	}
+	return false
+}
+
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback StreamCallback) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
+
+	// State-changing plans get the query timeout Execute would apply, since
+	// the streaming path's unbounded execution is only for OLAP reads. Inside
+	// a transaction this stacks with the transaction timeout applied by
+	// streamExecute, like Execute's own min(query, transaction) bound.
+	if !planStreamsUnbounded(qre.plan.PlanID) {
+		var cancel context.CancelFunc
+		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithOptions(qre.options), qre.options)
+		defer cancel()
+	}
 
 	defer func(start time.Time) {
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
@@ -353,8 +456,43 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	// inside streamDML, so its stats defer is registered before those checks and
 	// records per-table error stats for their rejections too, matching Execute.
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit, p.PlanLoad:
 		return qre.streamDML(callback)
+	}
+
+	// Record the per-table and per-plan stats that the DML path records in
+	// streamDML, so reads on the streaming path match Execute. Registered after
+	// the DML dispatch above so DML statements are not double-counted.
+	// rowsAffected is only known for dedicated-executor plans, which produce a
+	// single result; the generic streaming path leaves it 0 because a stream
+	// only carries rows, not the final OK packet's rows-affected count.
+	var totalRows int64
+	var rowsAffected uint64
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		mysqlTime := qre.logStats.MysqlResponseTime
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		errCode := vterrors.Code(err).String()
+		var errCount int64
+		if err != nil {
+			errCount = 1
+		}
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(rowsAffected), totalRows, errCount, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, rowsAffected, uint64(totalRows), uint64(errCount))
+		// Like Execute, only successful queries contribute a result-size
+		// sample; failed ones would skew the histogram toward empty results.
+		if err == nil {
+			qre.tsv.Stats().ResultHistogram.Add(totalRows)
+		}
+	}(time.Now())
+
+	// Wrap the callback to track total rows for the stats recorded above.
+	countingCallback := func(result *sqltypes.Result) error {
+		totalRows += int64(len(result.Rows))
+		return callback(result)
 	}
 
 	if err := qre.checkPermissions(); err != nil {
@@ -365,16 +503,112 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return reqThrottledErr
 	}
 
+	// Plans that don't use generic SQL execution run a dedicated executor and
+	// stream its single result, matching Execute(). Most carry a nil FullQuery,
+	// so they must not fall through to the generic SQL path below, which would
+	// send the Vitess-internal statement to MySQL; DDL falls through with real
+	// SQL but would skip execDDL's table-count limit, online-DDL detection,
+	// in-transaction guard, and schema reload.
+	var result *sqltypes.Result
+	handled := true
 	switch qre.plan.PlanID {
-	case p.PlanSelectStream:
+	case p.PlanNextval:
+		result, err = qre.execNextval()
+	case p.PlanDDL:
+		if qre.connID != 0 {
+			result, err = qre.txConnStreamExec()
+		} else {
+			result, err = qre.execDDL(nil)
+		}
+	case p.PlanSavepoint, p.PlanSRollback, p.PlanRelease:
+		if qre.connID != 0 {
+			result, err = qre.txConnStreamExec()
+		} else {
+			result, err = qre.execOther()
+		}
+	case p.PlanSet:
+		switch {
+		case qre.connID != 0:
+			result, err = qre.txConnStreamExec()
+		case qre.setting == nil:
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
+		default:
+			// The execution is not required as this setting will be applied when any other query type is executed.
+			result = &sqltypes.Result{}
+		}
+	case p.PlanUnlockTables:
+		if qre.connID != 0 {
+			result, err = qre.txConnStreamExec()
+		} else {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unlock tables should be executed with an existing connection")
+		}
+	case p.PlanShowMigrations, p.PlanShowMigrationLogs, p.PlanShowThrottledApps,
+		p.PlanShowThrottlerStatus, p.PlanAlterMigration, p.PlanRevertMigration:
+		result, err = qre.streamAdminPlan()
+	default:
+		handled = false
+	}
+	if handled {
+		if err != nil {
+			return err
+		}
+		// Execute() tolerates a dedicated executor returning a nil result on
+		// success, and the RPC layer serializes that as an empty result; the
+		// streaming path must deliver the same shape rather than dereference it.
+		if result == nil {
+			result = &sqltypes.Result{}
+		}
+		// The single result is fully in hand, so record the rows-affected
+		// stats and query-log fields that Execute records for these plans.
+		rowsAffected = result.RowsAffected
+		qre.logStats.RowsAffected = int(result.RowsAffected)
+		qre.logStats.Rows = result.Rows
+		// Honor the caller's field-metadata setting the way Execute does in
+		// tabletserver.execute; the generic streaming path applies it through
+		// execStreamSQL's IncludeFields argument.
+		result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(qre.options))
+		return qre.streamSingleResult(result, countingCallback)
+	}
+
+	// Only the plan types enumerated here run as generic streaming SQL below.
+	// Anything else must have been dispatched above, so reject it the way
+	// Execute rejects unknown plan types, rather than sending its raw SQL to
+	// MySQL with none of the semantics its executor provides.
+	switch qre.plan.PlanID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
+		// Same case list as txConnExec. Only PlanSelect and PlanSelectLockFunc
+		// can actually carry the BvReplaceSchemaName marker — SHOW statements
+		// can't contain bind variables and an impossible-WHERE query can't
+		// reference :__vtschemaname — so the other two are here only for
+		// consistency and should eventually be dropped from both execution
+		// paths.
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanCallProc:
+		// Plain SQL statements with no bind-variable rewriting.
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 	}
 
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
+	// Produce the SQL to send to MySQL. Templated plans (SELECT, SHOW, ...)
+	// carry a ParsedQuery that generateFinalSQL resolves with the bind
+	// variables. Plans without one (FLUSH, OPTIMIZE, ... — statements that
+	// can't carry bind variables and that Execute also sends verbatim via
+	// execOther) fall back to the client's original text. The comment-less
+	// form is the stream consolidator's dedup key, so identical queries
+	// consolidate regardless of their margin comments.
+	var sql string
+	var sqlWithoutComments string
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return err
+		}
+	} else {
+		sql = qre.query
+		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
@@ -383,15 +617,17 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, countingCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+					// isStateful is false by construction: this branch requires
+					// connID == 0, so the stream conn is never a reserved connection.
+					return qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -410,6 +646,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
 
+		totalRows += int64(len(result.Rows))
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}
@@ -424,19 +661,25 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	// close rather than attempt a drain-and-recover — while a clean stream runs
 	// the post-stream safety checks.
 	if qre.connID != 0 {
-		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {
 			return err
 		}
 		defer txConn.Unlock()
 		if qre.setting != nil {
-			if _, err := txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			applied, err := txConn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
 				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				txConn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
 			}
 		}
 
 		conn := txConn.UnderlyingDBConn()
-		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
@@ -469,7 +712,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 	defer dbConn.Recycle()
 
-	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
+	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			dbConn.Close()
@@ -496,6 +739,27 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	return err
 }
 
+// streamSingleResult delivers a fully-materialized result from a dedicated
+// executor over the streaming callback, splitting it into the fields-then-rows
+// packet sequence the StreamExecute contract expects. vtgate's scatter merge
+// only suppresses field-only packets, so a combined fields+rows packet from one
+// shard would re-emit fields midstream; sending fields first keeps result-set
+// plans (SHOW VITESS_MIGRATIONS, throttler SHOWs, NEXT VALUE, ...) conforming.
+// Results with no fields (OK-packet plans like SET and DDL) carry no result set
+// to split and pass through unchanged.
+func (qre *QueryExecutor) streamSingleResult(result *sqltypes.Result, callback StreamCallback) error {
+	if len(result.Fields) == 0 {
+		return callback(result)
+	}
+	if err := callback(&sqltypes.Result{Fields: result.Fields}); err != nil {
+		return err
+	}
+	if len(result.Rows) == 0 {
+		return nil
+	}
+	return callback(&sqltypes.Result{Rows: result.Rows, RowsAffected: result.RowsAffected})
+}
+
 // streamDML executes a DML statement on the streaming path. A DML produces a
 // single rows-affected result with no rows to stream, so it runs through the
 // same transactional machinery as Execute (an implicit autocommit transaction
@@ -504,13 +768,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	var reply *sqltypes.Result
 
-	// Apply the query timeout to autocommit DML, just like Execute does for a
-	// query without a transaction.
-	if qre.connID == 0 {
-		var cancel context.CancelFunc
-		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithTxAndOptions(0, qre.options), qre.options)
-		defer cancel()
-	}
+	// The query timeout is already applied by Stream, which dispatches every
+	// DML plan here.
 
 	// Record the per-table and per-plan query stats, just like Execute's deferred
 	// block. Stream's own defer already records QueryTimings, QueryTimingsByTabletType
@@ -554,25 +813,7 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		// Run the DML on the existing transaction or reserved connection, just
 		// like Execute's connID != 0 branch (e.g. a DML following Begin via
 		// BeginStreamExecute).
-		var conn *StatefulConnection
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
-		if err != nil {
-			return err
-		}
-		defer conn.Unlock()
-		if qre.setting != nil {
-			var applied bool
-			applied, err = conn.ApplySetting(qre.ctx, qre.setting)
-			if err != nil {
-				return vterrors.Wrap(err, "failed to execute system setting on the connection")
-			}
-			// If we have applied the settings on the connection, then we should record the query detail.
-			// This is required for redoing the transaction in case of a failure.
-			if applied {
-				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
-			}
-		}
-		reply, err = qre.txConnExec(conn)
+		reply, err = qre.txConnStreamExec()
 	case qre.plan.PlanID == p.PlanUpdateLimit || qre.plan.PlanID == p.PlanDeleteLimit:
 		reply, err = qre.execAsTransaction(qre.txConnExec)
 	default:
@@ -760,16 +1001,24 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		defer conn.Release(tx.ConnRelease)
 	}
 
-	// A DDL statement should commit the current transaction in the VTGate.
-	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
-	// DDL statement received by vttablet will be outside of a transaction.
-	if conn.txProps != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
-	}
-
 	isTemporaryTable := false
 	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
 		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+	// Only a CREATE gives the connection temp-table state to protect; a DROP
+	// is temporary DDL too but must not mark or probe (vtgate marks the
+	// session on CREATE only).
+	_, isCreate := qre.plan.FullStmt.(*sqlparser.CreateTable)
+	createsTemporaryTable := isTemporaryTable && isCreate
+
+	// A DDL statement should commit the current transaction in the VTGate.
+	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
+	// DDL statement received by vttablet will be outside of a transaction.
+	// Temporary-table DDL is the exception: MySQL gives it no implicit
+	// commit, and vtgate deliberately preserves the open transaction for it,
+	// so it runs on the transaction's connection like any other statement.
+	if conn.txProps != nil && !isTemporaryTable {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
 	}
 	if !isTemporaryTable {
 		// Temporary tables are limited to the session creating them. There is no need to Reload()
@@ -798,7 +1047,79 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			return nil, err
 		}
 	}
-	return qre.execStatefulConn(conn, sql, true)
+	if createsTemporaryTable {
+		// Capture before the DDL: keeping the connection through a probe
+		// failure is only best-effort, so the probe must precede the
+		// user-visible state change — a connection it costs then surfaces as
+		// this statement's error instead of silently undoing a DDL already
+		// reported successful.
+		qre.captureSessionWaitTimeout(conn)
+	}
+	result, err = qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+	if createsTemporaryTable {
+		// The session holds temporary-table state on this connection, so the
+		// temp-table idle timeout may govern its reclamation.
+		conn.markHoldsTempTables()
+	}
+	return result, nil
+}
+
+// setsWaitTimeout reports whether a SET statement assigns wait_timeout.
+func setsWaitTimeout(stmt sqlparser.Statement) bool {
+	set, ok := stmt.(*sqlparser.Set)
+	if !ok {
+		return false
+	}
+	for _, expr := range set.Exprs {
+		if expr.Var.Name.EqualString("wait_timeout") {
+			return true
+		}
+	}
+	return false
+}
+
+// captureSessionWaitTimeout records the connection's own
+// @@session.wait_timeout for the temp-table idle timeout's auto mode: it is
+// the deadline mysqld actually enforces on this connection, fixed when the
+// connection's thread started, unlike the pool's global mirror which follows
+// runtime SET GLOBAL changes. Best-effort: on a benign failure (probe error,
+// unusable value) the connection falls back to the global mirror until a
+// later temporary-table DDL's probe captures a value. The probe stops once a
+// capture succeeds, and runs BEFORE the temporary-table DDL that needs it:
+// preserving the connection through a probe timeout is itself only
+// best-effort (a KILL QUERY that fails or does not unblock the statement
+// escalates to killing the whole connection, and inside a transaction the
+// connection is always killed), so the probe precedes the user-visible state
+// change and any connection loss it causes surfaces as the DDL's own error
+// rather than silently undoing a statement already reported successful.
+// Because no user-visible state exists before the DDL, the probe runs under
+// the request's own context — a canceled or expired request sends nothing and
+// gives the reservation straight back — capped at the probe timeout so a
+// stuck mysqld cannot pin the connection to a long request deadline.
+func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
+	if qre.tsv.config.TempTableIdleTimeout >= 0 {
+		return
+	}
+	if conn.sessionWaitTimeout != 0 {
+		return
+	}
+	if qre.ctx.Err() != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(qre.ctx, sessionWaitTimeoutProbeTimeout)
+	defer cancel()
+	qr, err := conn.Exec(ctx, "select @@session.wait_timeout", 1, false, true /* keepConnOnTimeout */)
+	if err != nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return
+	}
+	seconds, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil || seconds <= 0 {
+		return
+	}
+	conn.captureSessionWaitTimeout(time.Duration(seconds) * time.Second)
 }
 
 // checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the
@@ -1017,6 +1338,71 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	return qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 }
 
+// execSet executes a SET statement on a dedicated transaction or reserved connection.
+// When the statement assigns sql_mode a value that could not be judged at plan time (a
+// non-constant expression), the applied value is read back and validated, so that such an
+// expression cannot put the connection into a mode the Vitess parser cannot honor (see
+// sqlmode.Validate). On violation the previous sql_mode is restored, so the assignment is
+// not applied, as it would not be in MySQL; only if the restore itself fails is the
+// connection closed rather than left running under an unsupported mode.
+func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, error) {
+	if !qre.plan.VerifySQLMode {
+		return qre.txFetch(conn, false)
+	}
+	prev, err := qre.readSQLMode(conn)
+	if err != nil {
+		return nil, err
+	}
+	result, err := qre.txFetch(conn, false)
+	if err != nil {
+		return nil, err
+	}
+	applied, err := qre.readSQLMode(conn)
+	if err != nil {
+		// The statement has already run, and without the read-back there is no telling
+		// what sql_mode the connection is in now — undo the statement rather than
+		// returning the connection in an unverified state.
+		qre.undoSQLModeSet(conn, prev, err)
+		return nil, err
+	}
+	vErr := func() error { _, err := sqlmode.Validate(applied); return err }()
+	if vErr == nil {
+		return result, nil
+	}
+	// This also fails an applied value that does not decode as MySQL 8.x modes at all:
+	// a constant with an unknown mode name is rejected at plan time, and an expression
+	// producing one must not fare better just because it cannot be judged.
+	qre.undoSQLModeSet(conn, prev, vErr)
+	return nil, vErr
+}
+
+// undoSQLModeSet restores the previous sql_mode after a failed SET, leaving the
+// connection as MySQL leaves it after a SET that fails validation: the assignment is not
+// applied, while any side effects of evaluating the assigned expression stand. sql_mode is
+// the statement's only assignment (see planbuilder.Plan.VerifySQLMode), so restoring it
+// undoes everything the statement applied. The connection is closed when the restore
+// itself fails, rather than being left running under an unsupported mode.
+func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes.Value, cause error) {
+	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
+	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
+		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",
+			slog.Any("cause", cause), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
+		conn.Close()
+	}
+}
+
+// readSQLMode reads the connection's current @@sql_mode.
+func (qre *QueryExecutor) readSQLMode(conn *StatefulConnection) (sqltypes.Value, error) {
+	qr, err := qre.execStatefulConn(conn, "select @@sql_mode", false)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading @@sql_mode: %v", qr.Rows)
+	}
+	return qr.Rows[0][0], nil
+}
+
 // txFetch fetches from a TxConnection.
 func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqltypes.Result, error) {
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
@@ -1158,6 +1544,21 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	}
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
+		// A stored procedure can start a transaction that Vitess does not
+		// track. A reserved-connection timeout now kills only the query (KILL
+		// QUERY) and leaves the connection open, so a procedure that had begun
+		// a transaction before failing would leave mysqld in a transaction
+		// while Vitess believes the connection is idle — and the keepalive
+		// would hold it (and its locks) open indefinitely. Close the connection
+		// on a CALL error so no untracked transaction survives — but only
+		// outside a Vitess-tracked transaction: inside one, a query timeout
+		// still kills the whole connection (ExecOnce insideTxn), so the hazard
+		// does not exist, and closing here on a benign statement error (a
+		// SIGNAL from the procedure, a typo'd name) would destroy the client's
+		// open transaction, which MySQL itself leaves usable.
+		if !conn.IsInTransaction() {
+			conn.Close()
+		}
 		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {
@@ -1409,6 +1810,40 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	return exec, nil
 }
 
+// planKeepsConnOnTimeout reports whether a timed-out statement of this plan
+// type may keep its stateful connection (KILL QUERY only) instead of losing it.
+// Only reads and DML qualify: a killed read leaves nothing behind, and InnoDB
+// rolls a killed DML statement back atomically. Everything else — SET (whose
+// session-scope assignments apply left-to-right and are not rolled back by a
+// kill), lock functions (a lock can be granted just as the kill lands), CALL,
+// DDL, admin statements — can leave session or server state the session never
+// recorded, so a timeout kills the whole connection, exactly as it always did,
+// and the session self-heals by re-reserving and re-applying its settings.
+func planKeepsConnOnTimeout(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanSelectNoLimit, p.PlanShow,
+		p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage,
+		p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return true
+	}
+	return false
+}
+
+// keepsConnOnTimeout is the per-query timeout decision: a safe plan may keep
+// its connection unless the statement carries state a kill does not roll
+// back. A last_insert_id(expr) assignment survives KILL QUERY on the
+// connection even when the statement's row changes roll back, and the error
+// return skips the post-exec fetch that reports the new value to the vtgate
+// session. DML containing a mutating lock function (plan.KillsConnOnTimeout)
+// has the same shape: the rows roll back but the lock grant or release can
+// race the kill. Keeping such a connection would leave it holding state the
+// session never recorded, so it is closed instead.
+func (qre *QueryExecutor) keepsConnOnTimeout() bool {
+	return planKeepsConnOnTimeout(qre.plan.PlanID) &&
+		!qre.plan.KillsConnOnTimeout &&
+		!qre.options.GetFetchLastInsertId()
+}
+
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
@@ -1425,7 +1860,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields)
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields, qre.keepsConnOnTimeout())
 	if err != nil {
 		return nil, err
 	}
@@ -1478,7 +1913,7 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, insideTxn bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1506,13 +1941,23 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	}
 
 	var err error
-	if isTransaction {
+	if isStateful {
 		err = qre.tsv.statefulql.Add(qd)
 		if err != nil {
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		// Same timeout decision as the buffered path (see execStatefulConn):
+		// only a statement whose interruption leaves no session state behind
+		// may keep the connection on a mid-statement deadline. A streaming SET
+		// or admin statement that times out must lose the whole connection, or
+		// its half-applied session state would survive on a connection the
+		// temp-table keepalive then pins alive.
+		if insideTxn || !qre.keepsConnOnTimeout() {
+			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		} else {
+			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		}
 	} else {
 		err = qre.tsv.olapql.Add(qd)
 		if err != nil {
@@ -1605,7 +2050,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			tableName := row[0].ToString()
@@ -1631,8 +2076,11 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		var udfs []*querypb.UDFInfo
+		if len(result.Rows) > 0 {
+			udfs = make([]*querypb.UDFInfo, 0, len(result.Rows))
+		}
 		for _, row := range result.Rows {
 			aggr := strings.EqualFold(row[2].ToString(), "aggregate")
 			udf := &querypb.UDFInfo{

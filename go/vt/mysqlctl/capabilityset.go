@@ -27,7 +27,42 @@ const (
 	FlavorMySQL   MySQLFlavor = "mysql"
 	FlavorPercona MySQLFlavor = "percona"
 	FlavorMariaDB MySQLFlavor = "mariadb"
+	// FlavorUnknown is used when the flavor could not be determined, e.g. because
+	// the version string was empty or failed to parse. It is a deliberate sentinel
+	// distinct from the values ParseVersionString returns.
+	FlavorUnknown MySQLFlavor = "unknown"
 )
+
+// FlavorFamily groups flavors that share a version lineage and replication
+// compatibility, so their version numbers can be meaningfully compared.
+type FlavorFamily string
+
+const (
+	// FlavorFamilyMySQL covers MySQL and Percona Server, which share the same
+	// version numbering and binlog format and replicate bidirectionally at
+	// matching versions.
+	FlavorFamilyMySQL FlavorFamily = "mysql"
+	// FlavorFamilyMariaDB covers MariaDB, which has its own version lineage
+	// (10.x/11.x) and is not version-comparable with the MySQL family.
+	FlavorFamilyMariaDB FlavorFamily = "mariadb"
+	// FlavorFamilyUnknown covers flavors whose family could not be determined.
+	FlavorFamilyUnknown FlavorFamily = "unknown"
+)
+
+// ReplicationFamily returns the compatibility family of the flavor. Flavors in
+// the same family use the same version lineage, so their versions can be
+// compared to reason about replication compatibility; flavors in different
+// families cannot be meaningfully compared by version number.
+func (f MySQLFlavor) ReplicationFamily() FlavorFamily {
+	switch f {
+	case FlavorMySQL, FlavorPercona:
+		return FlavorFamilyMySQL
+	case FlavorMariaDB:
+		return FlavorFamilyMariaDB
+	default:
+		return FlavorFamilyUnknown
+	}
+}
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type capabilitySet struct {

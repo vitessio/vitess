@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -154,4 +155,43 @@ func TestAutoDetect(t *testing.T) {
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.NoError(t, err)
+}
+
+// TestShutdownWithTinyWaitTime shuts mysqld down with a wait-time below one
+// second, which makes the mysqladmin invoked by mysqlctl run with
+// --shutdown-timeout=0 and give up waiting immediately, reporting "Aborted
+// waiting on pid file" while mysqld is still exiting. The shutdown must
+// still succeed: the SHUTDOWN command was already delivered, and mysqlctl
+// keeps waiting on the pid/socket files instead of failing. This exercises
+// mysqladminAbortedWaiting's match of the literal mysqladmin message
+// against the real mysqladmin binary of the MySQL version this suite runs.
+func TestShutdownWithTinyWaitTime(t *testing.T) {
+	// Restore mysqld for any tests that follow, registered before the
+	// shutdown is issued so a failed assertion below cannot leave the
+	// shared fixture down.
+	t.Cleanup(func() {
+		out, err := exec.Command(replicaTablet.MysqlctlProcess.Binary,
+			"--tablet-uid", strconv.Itoa(replicaTablet.TabletUID),
+			"--mysql-port", strconv.Itoa(replicaTablet.MysqlctlProcess.MySQLPort),
+			"--log-format", "text",
+			"start",
+		).CombinedOutput()
+		require.NoError(t, err, "mysqlctl start failed, output: %s", out)
+	})
+
+	out, err := exec.Command(replicaTablet.MysqlctlProcess.Binary,
+		"--tablet-uid", strconv.Itoa(replicaTablet.TabletUID),
+		"--log-format", "text",
+		"shutdown",
+		"--wait-time", "500ms",
+	).CombinedOutput()
+	require.NoError(t, err, "mysqlctl shutdown failed, output: %s", out)
+	// The warning proves the mysqladmin aborted-wait branch actually ran,
+	// i.e. mysqladmin emitted the "Aborted waiting on pid file" message this
+	// MySQL version and the shutdown succeeded via the pid/socket file wait.
+	// This assumes mysqld cannot remove its pid file before mysqladmin's
+	// first check, ~1ms after the SHUTDOWN statement is acknowledged; a
+	// clean InnoDB shutdown takes orders of magnitude longer than that.
+	require.Contains(t, string(out), "mysqladmin gave up waiting for mysqld to stop",
+		"expected the mysqladmin aborted-wait fallback to be exercised, output: %s", out)
 }

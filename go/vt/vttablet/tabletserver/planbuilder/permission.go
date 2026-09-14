@@ -223,6 +223,9 @@ func gatherCTEs(with *sqlparser.With) []sqlparser.IdentifierCS {
 		return nil
 	}
 	var ctes []sqlparser.IdentifierCS
+	if len(with.CTEs) > 0 {
+		ctes = make([]sqlparser.IdentifierCS, 0, len(with.CTEs))
+	}
 	for _, cte := range with.CTEs {
 		ctes = append(ctes, cte.ID)
 	}

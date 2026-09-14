@@ -318,7 +318,7 @@ func TestCachedConnClient(t *testing.T) {
 					longestDials <- longestDial
 					return
 				case <-time.After(jitter):
-					jitter = time.Millisecond * (time.Duration(rand.IntN(11) + 50))
+					jitter = time.Millisecond * time.Duration(rand.IntN(11)+50)
 					attempts++
 
 					tablet := tablets[rand.IntN(len(tablets))]
@@ -340,7 +340,10 @@ func TestCachedConnClient(t *testing.T) {
 		})
 	}
 
-	time.Sleep(time.Minute)
+	// 10s of load at ~55ms/dial per goroutine still yields well over a
+	// thousand dial attempts, enough for the error-ratio assertion below
+	// to stay meaningful while cutting most of this test's wall-clock time.
+	time.Sleep(10 * time.Second)
 	testCancel()
 	wg.Wait()
 	close(longestDials)

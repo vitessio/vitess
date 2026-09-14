@@ -87,9 +87,14 @@ func Dial(opts ...grpc.DialOption) vtgateconn.DialerFunc {
 			return nil, err
 		}
 
-		opts = append(opts, opt)
+		// This dialer is shared and invoked concurrently for every new
+		// connection, so the captured opts must not be mutated: appending to
+		// it grows the slice on every dial and races between goroutines.
+		allOpts := make([]grpc.DialOption, 0, len(opts)+1)
+		allOpts = append(allOpts, opts...)
+		allOpts = append(allOpts, opt)
 
-		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(failFast), opts...)
+		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(failFast), allOpts...)
 		if err != nil {
 			return nil, err
 		}

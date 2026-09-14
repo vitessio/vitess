@@ -28,22 +28,19 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeUnion(stmt *sqlparser.Union, noRowslimit bool) *Plan {
-	if noRowslimit {
-		return &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
+func analyzeUnion(stmt *sqlparser.Union) *Plan {
+	plan := &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
+	if mutating, acquiring := lockFuncs(stmt); mutating {
+		plan.PlanID = PlanSelectLockFunc
+		plan.NeedsReservedConn = acquiring
 	}
-	return &Plan{PlanID: PlanSelect, FullQuery: GenerateLimitQuery(stmt)}
+	return plan
 }
 
-func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table, noRowsLimit bool) (plan *Plan, err error) {
-	plan = &Plan{}
-
-	if noRowsLimit {
-		plan.PlanID = PlanSelectNoLimit
-		plan.FullQuery = GenerateFullQuery(sel)
-	} else {
-		plan.PlanID = PlanSelect
-		plan.FullQuery = GenerateLimitQuery(sel)
+func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
+	plan = &Plan{
+		PlanID:    PlanSelect,
+		FullQuery: GenerateFullQuery(sel),
 	}
 
 	plan.Table = lookupTables(sel.From, tables)
@@ -73,9 +70,9 @@ func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[str
 		plan.FullQuery = nil
 	}
 
-	if hasLockFunc(sel) {
+	if mutating, acquiring := lockFuncs(sel); mutating {
 		plan.PlanID = PlanSelectLockFunc
-		plan.NeedsReservedConn = true
+		plan.NeedsReservedConn = acquiring
 	}
 	return plan, nil
 }
@@ -189,12 +186,18 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 	})
 }
 
-func analyzeSet(set *sqlparser.Set) (plan *Plan) {
+func analyzeSet(set *sqlparser.Set) (*Plan, error) {
+	verify, err := validateSetStatementSQLMode(set)
+	if err != nil {
+		return nil, err
+	}
 	return &Plan{
 		PlanID:            PlanSet,
 		FullQuery:         GenerateFullQuery(set),
+		FullStmt:          set,
 		NeedsReservedConn: true,
-	}
+		VerifySQLMode:     verify,
+	}, nil
 }
 
 func lookupTables(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) (singleTable *schema.Table) {
@@ -240,7 +243,13 @@ func analyzeDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	if stmt.IsFullyParsed() {
 		fullQuery = GenerateFullQuery(stmt)
 	}
-	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
+	// Only creating a temporary table needs a reserved connection to live on.
+	// Dropping one does not: a session holding the table is routed to its
+	// reserved connection by vtgate, and a session without one has no
+	// temporary table to drop, so MySQL's own answer (a no-op for IF EXISTS,
+	// an unknown-table error otherwise) is right on any connection.
+	_, isCreate := stmt.(*sqlparser.CreateTable)
+	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary() && isCreate}, nil
 }
 
 func analyzeFlush(stmt *sqlparser.Flush, tables map[string]*schema.Table) (*Plan, error) {

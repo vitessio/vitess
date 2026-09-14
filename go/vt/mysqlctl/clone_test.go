@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -521,6 +522,9 @@ type mockDonorHandler struct {
 func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	// Respond to donor validation queries
 	switch {
+	case strings.EqualFold(query, sqlmode.NeutralizeSessionQuery):
+		// every connection Vitess creates starts by neutralizing its sql_mode
+		return callback(&sqltypes.Result{})
 	case strings.Contains(query, "SELECT @@version"):
 		result := sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("@@version", "varchar"),
@@ -703,6 +707,59 @@ func TestCloneFromDonor(t *testing.T) {
 			name:            "success with clone-from-tablet",
 			cloneFromTablet: "cell1-100",
 			wantErr:         false,
+		},
+		{
+			name:            "disables super_read_only before clone",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// The recipient booted read-only (e.g. super-read-only in my.cnf,
+				// restored at the end of init_db.sql). CLONE INSTANCE is a write
+				// statement that super_read_only blocks for every user, so
+				// ExecuteClone must disable it before cloning.
+				env.mysqld.SuperReadOnly.Store(true)
+				env.mysqld.ReadOnly = true
+				env.mysqld.ExecuteSuperQueryListCallback = func() {
+					// Fires for SET GLOBAL clone_valid_donor_list and for the
+					// CLONE command: super_read_only must already be off.
+					assert.False(t, env.mysqld.SuperReadOnly.Load(), "super_read_only must be disabled before CLONE runs")
+				}
+			},
+			wantErr: false,
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// super_read_only is restored to its original (boot) value once the
+				// clone finishes and mysqld restarts, re-applying the configured
+				// value from my.cnf.
+				assert.True(t, env.mysqld.SuperReadOnly.Load())
+			},
+		},
+		{
+			name:            "restores super_read_only when donor list set fails",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				env.mysqld.SuperReadOnly.Store(true)
+				env.mysqld.ReadOnly = true
+				donorListQuery := fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort)
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{}
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					donorListQuery: assert.AnError,
+				}
+			},
+			wantErr:         true,
+			wantErrContains: "failed to set clone_valid_donor_list",
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				assert.True(t, env.mysqld.SuperReadOnly.Load(), "super_read_only must be restored when the clone aborts before mysqld restarts")
+			},
+		},
+		{
+			name:            "fails when super_read_only cannot be disabled",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				env.mysqld.SetSuperReadOnlyError = assert.AnError
+				// Neither the donor-list SET nor the CLONE command may execute.
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{}
+			},
+			wantErr:         true,
+			wantErrContains: "failed to disable super_read_only before clone",
 		},
 		{
 			name:            "ERRestartServerFailed triggers manual restart and succeeds",

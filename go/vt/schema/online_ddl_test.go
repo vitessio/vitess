@@ -310,11 +310,13 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"drop database t":                               {notDDL: true},
 		"truncate table t":                              {isError: true},
 		"rename table t to t1":                          {isError: true},
-		"alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)":                                                                                      {isError: true, expectErrorText: "syntax error"},
-		"alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)":                                                                                     {isError: true, expectErrorText: "foreign key constraints are not supported"},
-		"alter table corder rename as something_else":                                                                                                                                {isError: true, expectErrorText: "RENAME is not supported in online DDL"},
-		"CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, error_column NO_SUCH_TYPE NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB": {isError: true, expectErrorText: "near"},
+		"alter table corder rename as something_else":   {isError: true, expectErrorText: "RENAME is not supported in online DDL"},
 	}
+	// These queries are long enough that keeping them in the aligned map literal
+	// above makes it unreadable.
+	tests["alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)"] = expect{isError: true, expectErrorText: "syntax error"}
+	tests["alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)"] = expect{isError: true, expectErrorText: "foreign key constraints are not supported"}
+	tests["CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, error_column NO_SUCH_TYPE NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"] = expect{isError: true, expectErrorText: "near"}
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	parser := sqlparser.NewTestParser()
 	for query, expect := range tests {

@@ -164,6 +164,10 @@ type (
 
 		GetExecutionMetrics() *Metrics
 
+		// PlanPrepareStatement plans the given statement text on behalf of a
+		// SQL-level PREPARE or EXECUTE statement.
+		PlanPrepareStatement(ctx context.Context, query string) (*Plan, error)
+
 		// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
 		// was actually executed. Per-query state set by PlanSwitcher when it
 		// picks a branch.
@@ -182,6 +186,16 @@ type (
 
 		SetUDV(key string, value any) error
 		GetUDV(key string) *querypb.BindVariable
+
+		// StorePrepareData registers a SQL-level prepared statement in the
+		// session under the given name.
+		StorePrepareData(name string, v *vtgatepb.PrepareData)
+		// GetPrepareData returns the prepared statement registered in the
+		// session under the given name, or nil if there is none.
+		GetPrepareData(name string) *vtgatepb.PrepareData
+		// ClearPrepareData removes the named prepared statement from the
+		// session.
+		ClearPrepareData(name string)
 
 		SetSysVar(name string, expr string)
 
@@ -282,6 +296,17 @@ type (
 		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
 		description() PrimitiveDescription
+	}
+
+	// MultiShardPerShardExecutor is an optional interface a VCursor may implement
+	// to run one read query per shard and get each shard's result back separately
+	// (rather than merged, as ExecuteMultiShard returns them). VEXPLAIN MYSQLPLAN
+	// type-asserts to this interface to run EXPLAIN FORMAT=JSON against every
+	// resolved shard and attribute each plan to its shard. Its shard queries are
+	// counted in the normal ShardQueries stats. It is kept separate from VCursor so
+	// that adding it does not break out-of-tree VCursor implementations.
+	MultiShardPerShardExecutor interface {
+		ExecuteMultiShardPerShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error)
 	}
 
 	// noInputs default implementation for Primitives that are leaves

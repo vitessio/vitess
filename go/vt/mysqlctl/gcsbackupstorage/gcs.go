@@ -89,6 +89,9 @@ func (bh *GCSBackupHandle) AddFile(ctx context.Context, filename string, filesiz
 	return bh.client.Bucket(bucket).Object(object).NewWriter(ctx), nil
 }
 
+// Wait implements BackupHandle.
+func (bh *GCSBackupHandle) Wait() {}
+
 // EndBackup implements BackupHandle.
 func (bh *GCSBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {

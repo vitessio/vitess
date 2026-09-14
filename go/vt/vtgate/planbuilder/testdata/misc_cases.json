@@ -3,71 +3,90 @@
     "comment": "prepare statement with select",
     "query": "prepare prep from 'select * from user where id = ?'",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Local",
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'select * from user where id = ?'",
       "Instructions": {
-        "OperatorType": "Rows"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "Query": "select * from user where id = ?"
+      }
     }
   },
   {
     "comment": "prepare statement with delete",
     "query": "prepare prep from 'delete from user where id between ? and ?'",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Local",
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'delete from user where id between ? and ?'",
       "Instructions": {
-        "OperatorType": "Rows"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "Query": "delete from user where id between ? and ?"
+      }
     }
   },
   {
     "comment": "prepare statement with drop",
     "query": "prepare prep from 'drop table user'",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Local",
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'drop table user'",
       "Instructions": {
-        "OperatorType": "Rows"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "Query": "drop table user"
+      }
     }
   },
   {
     "comment": "prepare statement with user defined variable",
     "query": "prepare prep from @prep_stmt",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Local",
       "QueryType": "PREPARE",
       "Original": "prepare prep from @prep_stmt",
       "Instructions": {
-        "OperatorType": "Rows"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "UserDefinedVariable": "prep_stmt"
+      }
     }
   },
   {
     "comment": "prepare statement with invalid query",
     "query": "prepare prep from 'wrong query syntax'",
-    "plan": "syntax error at position 6 near 'wrong'"
+    "plan": {
+      "Type": "Local",
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'wrong query syntax'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "Query": "wrong query syntax"
+      }
+    }
+  },
+  {
+    "comment": "prepare statement from a positional parameter is a syntax error, like in MySQL",
+    "query": "prepare prep from ?",
+    "plan": "syntax error at position 20 near ':v1'"
   },
   {
     "comment": "prepare statement with non existing variable",
     "query": "prepare prep from @foo",
-    "plan": "VT03024: 'foo' user defined variable does not exists"
+    "plan": {
+      "Type": "Local",
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from @foo",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "UserDefinedVariable": "foo"
+      }
+    }
   },
   {
     "comment": "execute one param statement",
@@ -185,11 +204,13 @@
     "comment": "prepare a dual query",
     "query": "prepare prep_dual from 'select 1+?, 10/?'",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Local",
       "QueryType": "PREPARE",
       "Original": "prepare prep_dual from 'select 1+?, 10/?'",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "PREPARE",
+        "Name": "prep_dual",
+        "Query": "select 1+?, 10/?"
       }
     }
   },
@@ -197,17 +218,26 @@
     "comment": "drop prepare",
     "query": "drop prepare prep_no_param",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Local",
       "QueryType": "DEALLOCATE_PREPARE",
       "Original": "drop prepare prep_no_param",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "DEALLOCATE",
+        "Name": "prep_no_param"
       }
     }
   },
   {
     "comment": "drop prepare that does not exists",
     "query": "drop prepare prep_not_exist",
-    "plan": "VT09011: Unknown prepared statement handler (prep_not_exist) given to DEALLOCATE PREPARE"
+    "plan": {
+      "Type": "Local",
+      "QueryType": "DEALLOCATE_PREPARE",
+      "Original": "drop prepare prep_not_exist",
+      "Instructions": {
+        "OperatorType": "DEALLOCATE",
+        "Name": "prep_not_exist"
+      }
+    }
   }
 ]

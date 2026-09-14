@@ -39,32 +39,31 @@ echo "> Starting vttablet for server $mysql_host:$mysql_port"
 echo "  - Tablet alias is $alias"
 echo "  - Tablet listens on http://$hostname:$port"
 # shellcheck disable=SC2086
-#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vttablet \
  $TOPOLOGY_FLAGS \
  -log_dir $VTDATAROOT/tmp \
- -log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
+ -log-queries-to-file $VTDATAROOT/tmp/$tablet_logfile \
  -tablet-path $alias \
- -tablet_hostname "$hostname" \
- -init_db_name_override "$keyspace" \
- -init_keyspace $keyspace \
- -init_shard $shard \
- -init_tablet_type $tablet_type \
- -health_check_interval 5s \
- -enable_replication_reporter \
- -backup_storage_implementation file \
- -file_backup_storage_root $VTDATAROOT/backups \
+ -tablet-hostname "$hostname" \
+ -init-db-name-override "$keyspace" \
+ -init-keyspace $keyspace \
+ -init-shard $shard \
+ -init-tablet-type $tablet_type \
+ -health-check-interval 5s \
+ -enable-replication-reporter \
+ -backup-storage-implementation file \
+ -file-backup-storage-root $VTDATAROOT/backups \
  -port $port \
- -grpc_port $grpc_port \
- -db_host $mysql_host \
- -db_port $mysql_port \
- -db_app_user $TOPOLOGY_USER \
- -db_app_password $TOPOLOGY_PASSWORD \
- -db_dba_user $TOPOLOGY_USER \
- -db_dba_password $TOPOLOGY_PASSWORD \
- -mycnf_mysql_port $mysql_port \
- -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
- -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
+ -grpc-port $grpc_port \
+ -db-host $mysql_host \
+ -db-port $mysql_port \
+ -db-app-user $TOPOLOGY_USER \
+ -db-app-password $TOPOLOGY_PASSWORD \
+ -db-dba-user $TOPOLOGY_USER \
+ -db-dba-password $TOPOLOGY_PASSWORD \
+ -mycnf-mysql-port $mysql_port \
+ -service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
+ -pid-file $VTDATAROOT/$tablet_dir/vttablet.pid \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

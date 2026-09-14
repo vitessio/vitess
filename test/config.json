@@ -191,9 +191,7 @@
       "Manual": false,
       "Shard": "21",
       "Tags": [],
-      "Needs": [
-        "minio"
-      ]
+      "Needs": []
     },
     "backup_s3": {
       "File": "unused.go",
@@ -209,7 +207,7 @@
       "Shard": "21",
       "Tags": [],
       "Needs": [
-        "minio"
+        "microceph"
       ]
     },
     "backup_only": {
@@ -403,7 +401,8 @@
     "mysqlctl": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/mysqlctl"
+        "vitess.io/vitess/go/test/endtoend/mysqlctl",
+        "vitess.io/vitess/go/test/endtoend/mysqlctl/crashsafeshutdown"
       ],
       "Args": [],
       "Command": [],
@@ -1172,6 +1171,18 @@
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/utils/mysqlvsvitess"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_queries",
+      "Tags": [],
+      "Needs": []
+    },
+    "mysql_utils": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/utils"
       ],
       "Args": [],
       "Command": [],
@@ -2413,6 +2424,21 @@
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtorc",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "memory-check"
+      ]
+    },
+    "vtorc_tablet_health": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtorc/tablethealth"
       ],
       "Args": [],
       "Command": [],

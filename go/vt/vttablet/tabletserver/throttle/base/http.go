@@ -60,7 +60,6 @@ func SetupHTTPClient(httpTimeout time.Duration) *http.Client {
 		DialContext: (&net.Dialer{
 			Timeout:   httpTimeout,
 			KeepAlive: httpTimeout,
-			DualStack: true,
 		}).DialContext,
 		ResponseHeaderTimeout: httpTimeout,
 	}

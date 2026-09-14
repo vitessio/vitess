@@ -67,7 +67,7 @@ func printContraction1(g *codegen.Generator, wa *weightarray, incont []uca.Contr
 		g.P("b", depth-1, " := b", depth-2, "[width", depth-1, ":]")
 	}
 	if depth > 0 {
-		g.P("cp", depth, ", width", depth, " := cs.DecodeRune(b", depth-1, ")")
+		g.P("cp", depth, ", width", depth, ", _ := cs.DecodeRune(b", depth-1, ")")
 	}
 
 	g.P("switch cp", depth, " {")

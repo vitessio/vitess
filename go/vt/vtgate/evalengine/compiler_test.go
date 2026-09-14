@@ -63,7 +63,8 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	track := &Tracker{}
-	track.tbl = tablewriter.NewTable(&track.buf,
+	track.tbl = tablewriter.NewTable(
+		&track.buf,
 		tablewriter.WithAlignment(tw.Alignment{
 			tw.AlignLeft,
 			tw.AlignRight,
@@ -201,6 +202,36 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(2)",
 		},
 		{
+			// A NULL string operand must collapse both LOCATE operands before outer
+			// expressions consume the result.
+			expression: "null <=> locate('foo', column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			// A leftover operand would make IFNULL overflow the VM stack.
+			expression: "ifnull(locate('foo', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL position must collapse all three LOCATE operands.
+			expression: "ifnull(locate('foo', 'foobar', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL length must collapse all three SUBSTRING operands.
+			expression: "null <=> substring('abc', 1, column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			expression: "ifnull(substring('abc', 1, column0), 'x')",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `VARCHAR("x")`,
+		},
+		{
 			expression: "1 + column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(2)",
@@ -219,6 +250,39 @@ func TestCompilerSingle(t *testing.T) {
 			expression: "(128 - column0) * 3",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(381)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(2.5)},
+			result:     "FLOAT64(2)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(3.5)},
+			result:     "FLOAT64(4)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(-2.5)},
+			result:     "FLOAT64(-2)",
+		},
+		{
+			expression: "ROUND(column0, 2)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(0.125)},
+			result:     "FLOAT64(0.12)",
+		},
+		{
+			expression: "ROUND(column0, -1)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(25)},
+			result:     "FLOAT64(20)",
+		},
+		{
+			expression: "ROUND(2.5)",
+			result:     "DECIMAL(3)",
+		},
+		{
+			expression: "ROUND(-2.5)",
+			result:     "DECIMAL(-3)",
 		},
 		{
 			expression: "1.0e0 < column0",

@@ -52,18 +52,7 @@ func TestAPIEndpoints(t *testing.T) {
 	assert.NotNil(t, primary, "should have elected a primary")
 
 	// find the replica and rdonly tablet
-	var replica, rdonly *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		// we know we have only two replica type tablets, so the one not the primary must be the replica
-		if tablet.Alias != primary.Alias && tablet.Type == "replica" {
-			replica = tablet
-		}
-		if tablet.Type == "rdonly" {
-			rdonly = tablet
-		}
-	}
-	assert.NotNil(t, replica, "could not find replica tablet")
-	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+	replica, rdonly := utils.FindReplicaAndRdonly(t, shard0, primary)
 
 	// check that the replication is setup correctly before we set read-only
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)

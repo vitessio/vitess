@@ -73,6 +73,13 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "describe select * from t",
 		output: nil,
 	}, {
+		// EXPLAIN carries no table permissions, so its per-table ACL is never
+		// checked. This is the shape VEXPLAIN MYSQLPLAN issues against every
+		// resolved shard; the empty result documents that those EXPLAINs are not
+		// ACL-checked on the explained table (see the 25.0 summary).
+		input:  "explain format = json select * from t",
+		output: nil,
+	}, {
 		input: "create table t",
 		output: []Permission{{
 			TableName: "t",

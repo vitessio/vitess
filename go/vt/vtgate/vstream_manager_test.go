@@ -2576,7 +2576,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				source.SetStreamHealthResponse(tc.hcRes)
 			}
 
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 5*time.Second)
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Second)
 			defer vstreamCancel()
 
 			// SandboxConn's VStream implementation always waits for the context to timeout.
@@ -2586,7 +2586,12 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 
 			if tc.wantErr != "" {
 				require.Error(t, err)
-				require.Contains(t, logger.String(), tc.wantErr)
+				// The message is logged by the health-check handling goroutine,
+				// which may not have run yet when VStream returns on context
+				// expiry, so poll for it.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					assert.Contains(c, logger.String(), tc.wantErr)
+				}, 30*time.Second, 10*time.Millisecond)
 			} else {
 				// Otherwise we simply expect the context to timeout
 				require.Error(t, err)

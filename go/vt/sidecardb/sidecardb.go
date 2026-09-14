@@ -171,7 +171,7 @@ func loadSchemaDefinitions(parser *sqlparser.Parser) {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected path value of %s specified for sidecar schema table; expected structure is <module>[/<submodule>]/<tablename>.sql", dir)
 			}
 
-			name := strings.Split(fname, ".")[0]
+			name, _, _ := strings.Cut(fname, ".")
 			schema, err := schemaLocation.ReadFile(path)
 			if err != nil {
 				panic(err)

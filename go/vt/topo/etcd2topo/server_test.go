@@ -19,6 +19,7 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -177,6 +178,26 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	})
 
 	return clientAddr, &certs
+}
+
+// TestNewServerAgainstUnreachableEtcd ensures a topo server cannot be
+// constructed against an etcd address nobody is listening on: the error must
+// surface at construction time, so a misconfigured or unreachable topo
+// address is reported at startup rather than as timeouts on later topo
+// operations.
+func TestNewServerAgainstUnreachableEtcd(t *testing.T) {
+	// Reserve a port and close the listener again, so nothing is listening
+	// at the address.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	require.NoError(t, listener.Close())
+
+	s, err := NewServer("http://"+addr, "/vitess")
+	if s != nil {
+		s.Close()
+	}
+	require.Error(t, err, "NewServer should fail when no etcd is reachable at the given address")
 }
 
 func TestEtcd2TLS(t *testing.T) {

@@ -36,6 +36,10 @@ type Arena struct {
 	aSet     []evalSet
 }
 
+// reset returns every value the arena has handed out, to be handed out again by
+// the next evaluation. The constructors below are what make an entry safe to
+// reuse, so each one has to set or clear every field of the type it returns and
+// not only the fields it takes an argument for.
 func (a *Arena) reset() {
 	a.aInt64 = a.aInt64[:0]
 	a.aUint64 = a.aUint64[:0]
@@ -106,6 +110,7 @@ func (a *Arena) newEvalInt64(i int64) *evalInt64 {
 	}
 	val := &a.aInt64[len(a.aInt64)-1]
 	val.i = i
+	val.bitLiteral = false
 	return val
 }
 
@@ -138,7 +143,9 @@ func (a *Arena) newEvalBytesEmpty() *evalBytes {
 	} else {
 		a.aBytes = append(a.aBytes, evalBytes{})
 	}
-	return &a.aBytes[len(a.aBytes)-1]
+	b := &a.aBytes[len(a.aBytes)-1]
+	b.flag = 0
+	return b
 }
 
 func (a *Arena) newEvalBinary(raw []byte) *evalBytes {

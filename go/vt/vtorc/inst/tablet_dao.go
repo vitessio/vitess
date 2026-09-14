@@ -93,6 +93,30 @@ func ReadTabletCountsByCell() (map[string]int64, error) {
 	return tabletCounts, err
 }
 
+// ShardEligibleObserverCount returns the number of REPLICA/RDONLY tablets in the shard from VTOrc's
+// topo view (vitess_tablet) — the expected observer population the quorum majority gate uses as its
+// base. It mirrors the shard_eligible_observers count the analysis query feeds the ERS matcher, so a
+// caller without an analysis row (the read-only /api/shard-tablet-health-quorum endpoint) can present the same
+// actionable verdict instead of falling back to the observers it happens to have seen. The
+// tablet-type filter is built from shardObserverTabletTypeList so it cannot drift from
+// IsShardHealthObserverType.
+func ShardEligibleObserverCount(keyspace, shard string) (int, error) {
+	query := `SELECT
+		COUNT(*) AS observer_count
+	FROM
+		vitess_tablet
+	WHERE
+		keyspace = ?
+		AND shard = ?
+		AND tablet_type IN (` + shardObserverTabletTypeList() + `)`
+	var count int
+	err := db.QueryVTOrc(query, sqlutils.Args(keyspace, shard), func(row sqlutils.RowMap) error {
+		count = row.GetInt("observer_count")
+		return nil
+	})
+	return count, err
+}
+
 // SaveTablet saves the tablet record against the instanceKey.
 func SaveTablet(tablet *topodatapb.Tablet) error {
 	tabletp, err := prototext.Marshal(tablet)

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS vdiff_table
     `vdiff_id`      bigint(20)     NOT NULL,
     `table_name`    varbinary(128) NOT NULL,
     `state`         varbinary(64)           DEFAULT NULL,
-    `lastpk`        varbinary(2000)         DEFAULT NULL,
+    `lastpk`        mediumblob              DEFAULT NULL,
     `table_rows`    bigint(20)     NOT NULL DEFAULT '0',
     `rows_compared` bigint(20)     NOT NULL DEFAULT '0',
     `mismatch`      tinyint(1)     NOT NULL DEFAULT '0',

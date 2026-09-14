@@ -46,6 +46,13 @@ var inputJSONPrimitives = []string{
 	`'foobar'`, `'foo\nbar'`, `'a'`, `JSON_OBJECT()`,
 }
 
+// inputJSONBinaryValues are JSON-able values that MySQL stores as opaque
+// binary values inside a JSON document. They are only valid in value
+// position: MySQL rejects binary-charset strings as JSON object keys.
+var inputJSONBinaryValues = []string{
+	`CAST('foo' AS BINARY)`, `b'1010'`,
+}
+
 var inputBitwise = []string{
 	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13", "1.5", "-1.5", "'1.5'", "'-1.5'",
 	"0.0e0", "1.0e0", "255.0", "1.5e0", "-1.5e0", "1.1e0", "-1e0", "-255e0", "7e0", "9e0", "13e0",

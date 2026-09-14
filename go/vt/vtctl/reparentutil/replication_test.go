@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -68,6 +69,7 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 		expected          []string
 		expectedGTIDBased bool
 		shouldErr         bool
+		errContains       string
 	}{
 		{
 			name: "success",
@@ -110,6 +112,30 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			shouldErr:         false,
 		},
 		{
+			name:      "GTID-based primary only",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+				},
+			},
+			expected:          []string{"p1"},
+			expectedGTIDBased: true,
+			shouldErr:         false,
+		},
+		{
+			name:      "non-GTID-based primary only",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "FilePos/mysql-bin.0001:10",
+				},
+			},
+			expected:          []string{"p1"},
+			expectedGTIDBased: false,
+			shouldErr:         false,
+		},
+		{
 			name: "mixed replication modes",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
@@ -125,8 +151,66 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
+		},
+		{
+			name: "GTID-based primary with non-GTID-based replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "FilePos/mysql-bin.0001:10",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+				},
+			},
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
+		},
+		{
+			name: "empty GTID-based primary with non-GTID-based replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "FilePos/mysql-bin.0001:10",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "MySQL56/",
+				},
+			},
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
+		},
+		{
+			name: "non-GTID-based primary with GTID-based replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "FilePos/mysql-bin.0001:10",
+				},
+			},
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
 		},
 		{
 			name: "tablet without relay log position",
@@ -162,7 +246,12 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  []string{"r1", "r2"},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "FilePos/mysql-bin.0001:100",
+				},
+			},
+			expected:  []string{"r1", "r2", "p1"},
 			shouldErr: false,
 		},
 		{
@@ -192,7 +281,10 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			actual, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.Equal(t, tt.expectedGTIDBased, isGTIDBased)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+				}
 				return
 			}
 
@@ -205,6 +297,227 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, keys)
 		})
 	}
+}
+
+// TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized verifies that a
+// PrimaryStatus candidate has its Executed position initialized to its executed
+// position, not left as the zero position. A demoted/former primary applies no
+// relay log, so its executed position is authoritative. If Executed were left
+// zero, RelayLogPositions.AtLeast would rank an equally-advanced replica (whose
+// Executed is reconciled up after its relay-log wait) strictly ahead of the
+// former primary, so ERS would never reach the promotion-rule/version
+// tiebreakers for that primary.
+func TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized(t *testing.T) {
+	t.Parallel()
+
+	const gtid = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+				RelayLogPosition: gtid,
+				Position:         gtid,
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: gtid},
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, isGTIDBased)
+
+	primary := positionMap["p1"]
+	require.NotNil(t, primary)
+
+	executed, err := replication.DecodePosition(gtid)
+	require.NoError(t, err)
+	assert.True(t, primary.Executed.Equal(executed),
+		"primary candidate Executed must be initialized to its executed position, got %v", primary.Executed)
+
+	// The former primary and an equally-advanced replica must compare equal, so
+	// election falls through to the promotion-rule/version tiebreakers rather
+	// than treating the primary as behind.
+	replica := positionMap["r1"]
+	require.NotNil(t, replica)
+	assert.True(t, primary.AtLeast(replica),
+		"former primary must be at least as advanced as an equally-advanced replica")
+	assert.True(t, replica.AtLeast(primary),
+		"equally-advanced replica must be at least as advanced as the former primary")
+}
+
+// TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID verifies that on
+// a non-GTID (file-position) shard, a former primary's Executed position is left
+// zero, matching how replicas are stored (their executed position lives in
+// Combined, Executed zero). This preserves the prior non-GTID position ordering:
+// initializing the primary's Executed would make it strictly dominate an
+// equally-advanced replica on the executed tiebreak, changing who leads. Version-
+// aware election is GTID-only, so the former primary must not be reordered here.
+func TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID(t *testing.T) {
+	t.Parallel()
+
+	const filePos = "FilePos/mysql-bin.0001:100"
+
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				RelayLogPosition: filePos,
+				Position:         filePos,
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: filePos},
+		},
+	)
+	require.NoError(t, err)
+	require.False(t, isGTIDBased)
+
+	primary := positionMap["p1"]
+	require.NotNil(t, primary)
+
+	executed, err := replication.DecodePosition(filePos)
+	require.NoError(t, err)
+	assert.True(t, primary.Combined.Equal(executed),
+		"primary candidate Combined must hold its executed position, got %v", primary.Combined)
+	assert.True(t, primary.Executed.IsZero(),
+		"primary candidate Executed must stay zero on a non-GTID shard, got %v", primary.Executed)
+}
+
+// TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus verifies that GTID/
+// non-GTID detection inspects the primary status map, not just the replica status
+// map. When every reachable candidate is a former primary (empty statusMap), the
+// flavor must still be classified from the primary positions, and a shard mixing
+// GTID and non-GTID positions across the two maps must be rejected.
+func TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus(t *testing.T) {
+	t.Parallel()
+
+	const (
+		gtid    = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+		filePos = "FilePos/mysql-bin.0001:100"
+	)
+
+	tests := []struct {
+		name          string
+		statusMap     map[string]*replicationdatapb.StopReplicationStatus
+		primaryMap    map[string]*replicationdatapb.PrimaryStatus
+		wantGTIDBased bool
+		wantErr       string
+	}{
+		{
+			name:          "primary-only MySQL56 is detected as GTID-based",
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: gtid}},
+			wantGTIDBased: true,
+		},
+		{
+			name:          "primary-only FilePos is detected as non-GTID-based",
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: filePos}},
+			wantGTIDBased: false,
+		},
+		{
+			name: "GTID replica mixed with FilePos former primary is rejected",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},
+			},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: filePos}},
+			wantErr:    "mix of GTID-based and non GTID-based",
+		},
+		{
+			// A former primary whose executed position decodes to no GTID set at all
+			// (empty "") is flavor-agnostic and must not be counted as non-GTID;
+			// otherwise it would falsely trip the mixed-mode guard against the GTID
+			// replicas.
+			name: "GTID replica with a zero-position former primary stays GTID-based",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},
+			},
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: ""}},
+			wantGTIDBased: true,
+		},
+		{
+			// A former primary reporting a typed-but-empty MySQL56 position
+			// ("MySQL56/") still identifies the flavor, so combined with a non-GTID
+			// (FilePos) replica it must trip the mixed-mode guard. This pins the
+			// GTIDSet == nil skip: an IsZero() skip would instead drop the former
+			// primary (a typed-empty position is IsZero) and no mix would be detected.
+			// The FilePos replica's RelayLogPosition is non-zero, so the empty-relay-log
+			// recorder does not fire first — the mixed-mode error is what surfaces.
+			name: "typed-empty MySQL56 former primary trips mixed-mode against FilePos replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: filePos, Position: filePos}},
+			},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: "MySQL56/"}},
+			wantErr:    "mix of GTID-based and non GTID-based",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryMap)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantGTIDBased, isGTIDBased)
+
+			// The former primary's Executed position is initialized only on a
+			// GTID-based shard (see TestFindPositionsOfAllCandidates_PrimaryExecuted*).
+			primary := positionMap["p1"]
+			require.NotNil(t, primary)
+			executed, decErr := replication.DecodePosition(tt.primaryMap["p1"].Position)
+			require.NoError(t, decErr)
+			assert.True(t, primary.Combined.Equal(executed), "primary Combined must hold its executed position")
+			if tt.wantGTIDBased {
+				assert.True(t, primary.Executed.Equal(executed), "primary Executed must be initialized on a GTID-based shard")
+			} else {
+				assert.True(t, primary.Executed.IsZero(), "primary Executed must stay zero on a non-GTID shard")
+			}
+		})
+	}
+}
+
+// TestFindPositionsOfAllCandidates_EmptyMysqlGTIDReplicaStaysGTIDBased pins that a
+// MySQL/Percona replica with GTID enabled but no transactions yet is classified as
+// GTID-based, not non-GTID. The status is produced by the real MySQL flavor parser
+// (ParseMysqlReplicationStatus), so it reflects exactly what a fresh 8.0 replica
+// reports: an empty Executed_Gtid_Set and Retrieved_Gtid_Set decode to a typed-but-
+// empty Mysql56GTIDSet (encoded "MySQL56/"), whose GTIDSet is non-nil — so the
+// classifier keys on it as GTID-based. Because every relay-log position is empty,
+// the shard then fails closed on the empty-relay-log guard rather than falling
+// through to non-GTID handling; that UNAVAILABLE error is only reachable when the
+// shard was detected GTID-based.
+func TestFindPositionsOfAllCandidates_EmptyMysqlGTIDReplicaStaysGTIDBased(t *testing.T) {
+	t.Parallel()
+
+	// A real MySQL 8.0 replica, GTID on, zero transactions.
+	status, err := replication.ParseMysqlReplicationStatus(map[string]string{
+		"Using_Gtid":         "ON",
+		"Executed_Gtid_Set":  "",
+		"Retrieved_Gtid_Set": "",
+	}, true /* replicaTerminology */)
+	require.NoError(t, err)
+
+	// The parsed relay-log position is a typed-but-empty MySQL56 set, not nil, and
+	// encodes as "MySQL56/" — never the empty string that would classify as non-GTID.
+	require.NotNil(t, status.RelayLogPosition.GTIDSet)
+	assert.Equal(t, "MySQL56/", replication.EncodePosition(status.RelayLogPosition))
+	assert.True(t, hasMysql56GTIDSet(status.RelayLogPosition),
+		"an empty MySQL GTID relay position must still classify as GTID-based")
+
+	// Through the proto round-trip and the real classifier: detected GTID-based, so
+	// the all-empty relay logs fail closed instead of proceeding as non-GTID.
+	pb := replication.ReplicationStatusToProto(status)
+	_, _, err = FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: pb},
+			"r2": {After: pb},
+		},
+		nil,
+	)
+	require.Error(t, err, "a GTID-based shard with empty relay logs must fail closed")
+	assert.ErrorContains(t, err, "no relay log position")
 }
 
 // TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
@@ -314,6 +627,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		waitForAllTablets        bool
 		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
 		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		expectedMysqlVersions    map[string]mysqlctl.ServerVersion
 		expectedTakingBackup     map[string]bool
 		expectedTabletsReachable []*topodatapb.Tablet
 		shouldErr                bool
@@ -864,6 +1178,103 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				"zone1-0000000100": {
 					Position: "primary-position-100",
 				},
+			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			name:       "demoted primary reports MySQL version",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				demotePrimaryResults: map[string]*struct {
+					PrimaryStatus *replicationdatapb.PrimaryStatus
+					Err           error
+				}{
+					"zone1-0000000100": {
+						PrimaryStatus: &replicationdatapb.PrimaryStatus{
+							Position:      "primary-position-100",
+							ServerVersion: "Ver 8.0.35",
+						},
+					},
+				},
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5",
+								IoState:       int32(replication.ReplicationStateRunning),
+								SqlState:      int32(replication.ReplicationStateRunning),
+								ServerVersion: "Ver 8.0.35",
+							},
+							After: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			ignoredTablets: sets.New[string](),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5",
+						IoState:       int32(replication.ReplicationStateRunning),
+						SqlState:      int32(replication.ReplicationStateRunning),
+						ServerVersion: "Ver 8.0.35",
+					},
+					After: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+				},
+			},
+			expectedTakingBackup: map[string]bool{"zone1-0000000101": false},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000100": {
+					Position:      "primary-position-100",
+					ServerVersion: "Ver 8.0.35",
+				},
+			},
+			expectedMysqlVersions: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
 			},
 			expectedTabletsReachable: []*topodatapb.Tablet{{
 				Type: topodatapb.TabletType_REPLICA,
@@ -1518,6 +1929,9 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
 			assert.Equal(t, tt.expectedTakingBackup, res.tabletsBackupState)
+			if tt.expectedMysqlVersions != nil {
+				assert.Equal(t, tt.expectedMysqlVersions, res.mysqlVersions, "mysqlVersions mismatch")
+			}
 		})
 	}
 }
@@ -1861,4 +2275,284 @@ func TestRelayLogPositions_IsZero(t *testing.T) {
 	rlp.Combined = replication.Position{GTIDSet: gtidSet}
 	rlp.Executed = replication.Position{GTIDSet: gtidSet}
 	assert.False(t, rlp.IsZero())
+}
+
+// mustPosition parses a MySQL 5.6 GTID set spec into a replication.Position,
+// failing the test on malformed specs. An empty spec returns the zero Position.
+func mustPosition(t *testing.T, spec string) replication.Position {
+	t.Helper()
+	if spec == "" {
+		return replication.Position{}
+	}
+	gtidSet, err := replication.ParseMysql56GTIDSet(spec)
+	require.NoError(t, err)
+	return replication.Position{GTIDSet: gtidSet}
+}
+
+func TestHasDominantPosition(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{
+			name: "strict superset dominates",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: true,
+		},
+		{
+			name: "equal does not dominate",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			want: false,
+		},
+		{
+			name: "strict subset does not dominate",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			want: false,
+		},
+		{
+			name: "disjoint UUIDs are incomparable, no dominance",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: false,
+		},
+		{
+			name: "overlapping sets where neither contains the other, no dominance",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: false,
+		},
+		{
+			name: "non-zero dominates zero",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "",
+			want: true,
+		},
+		{
+			name: "zero does not dominate non-zero",
+			a:    "",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, hasDominantPosition(mustPosition(t, tt.a), mustPosition(t, tt.b)))
+		})
+	}
+}
+
+func TestHaveIncomparablePositions(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{
+			name: "disjoint UUIDs are incomparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: true,
+		},
+		{
+			name: "overlapping sets where neither contains the other are incomparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: true,
+		},
+		{
+			name: "superset and subset are comparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: false,
+		},
+		{
+			name: "equal positions are comparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			want: false,
+		},
+		{
+			name: "zero is comparable to everything",
+			a:    "",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, haveIncomparablePositions(mustPosition(t, tt.a), mustPosition(t, tt.b)))
+			// Incomparability is symmetric by definition; pin both directions.
+			assert.Equal(t, tt.want, haveIncomparablePositions(mustPosition(t, tt.b), mustPosition(t, tt.a)))
+		})
+	}
+}
+
+func TestHasUniformCombinedPosition(t *testing.T) {
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		want       bool
+	}{
+		{
+			name:       "empty map is vacuously uniform",
+			candidates: map[string]*RelayLogPositions{},
+			want:       true,
+		},
+		{
+			name: "single candidate is uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			want: true,
+		},
+		{
+			name: "all equal Combined is uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			want: true,
+		},
+		{
+			name: "differing Combined is not uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6")},
+			},
+			want: false,
+		},
+		{
+			name: "differing Executed at equal Combined is still uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+				},
+				"zone1-0000000101": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3"),
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, hasUniformCombinedPosition(tt.candidates))
+		})
+	}
+}
+
+func TestDescribeCombinedPositions(t *testing.T) {
+	candidates := map[string]*RelayLogPositions{
+		"zone2-0000000102": {
+			Combined: mustPosition(t, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-7"),
+		},
+		"zone1-0000000101": {
+			Combined: mustPosition(t, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-6"),
+		},
+		"zone1-0000000100": {
+			Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"),
+		},
+	}
+
+	assert.Equal(t,
+		"zone1-0000000100=3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5, zone1-0000000101=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-6, zone2-0000000102=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-7",
+		describeCombinedPositions(candidates),
+	)
+}
+
+func TestFilterToMostAdvancedCombined(t *testing.T) {
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		wantKept   []string
+	}{
+		{
+			name:       "empty map returned as-is",
+			candidates: map[string]*RelayLogPositions{},
+			wantKept:   []string{},
+		},
+		{
+			name: "single candidate kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			wantKept: []string{"zone1-0000000100"},
+		},
+		{
+			name: "strictly dominated candidate removed",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")},
+			},
+			wantKept: []string{"zone1-0000000100"},
+		},
+		{
+			name: "equal Combined all kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+		{
+			name: "incomparable maxima both kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")},
+				"zone1-0000000101": {Combined: mustPosition(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5")},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+		{
+			name: "three-way: dominated removed, incomparable maxima kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")},
+				"zone1-0000000102": {Combined: mustPosition(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5")},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000102"},
+		},
+		{
+			name: "Executed skew at equal Combined is ignored, all kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+				},
+				"zone1-0000000101": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3"),
+				},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterToMostAdvancedCombined(tt.candidates, logutil.NewMemoryLogger())
+
+			kept := make([]string, 0, len(result))
+			for alias := range result {
+				kept = append(kept, alias)
+			}
+			assert.ElementsMatch(t, tt.wantKept, kept)
+
+			// Survivors must share the caller's position structs (the reconcile
+			// step later mutates them through the returned map).
+			for alias, pos := range result {
+				assert.Same(t, tt.candidates[alias], pos)
+			}
+		})
+	}
 }
