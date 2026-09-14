@@ -52,10 +52,12 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		permissions = buildTableExprPermissions(node.Table, tableacl.WRITER, nil, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Update:
-		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, nil, permissions)
+		// A CTE joined into the statement is a read source, never a write
+		// target, so the statement's own CTE names carry no WRITER permission.
+		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, gatherCTEs(node.With), permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Delete:
-		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, nil, permissions)
+		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, gatherCTEs(node.With), permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case sqlparser.DDLStatement:
 		for _, t := range node.AffectedTables() {
@@ -215,8 +217,11 @@ func unionArmDeclaresCTEs(union *sqlparser.Union) bool {
 	return false
 }
 
-// gatherCTEs gathers the CTEs from the WITH clause.
+// gatherCTEs gathers the CTEs from the WITH clause, nil when there is none.
 func gatherCTEs(with *sqlparser.With) []sqlparser.IdentifierCS {
+	if with == nil {
+		return nil
+	}
 	var ctes []sqlparser.IdentifierCS
 	for _, cte := range with.CTEs {
 		ctes = append(ctes, cte.ID)

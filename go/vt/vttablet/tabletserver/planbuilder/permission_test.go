@@ -376,6 +376,36 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "real1",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// A CTE joined into a multi-table UPDATE is a read source, never a
+		// write target; it carries no WRITER permission of its own.
+		input: "with t as (select * from real1) update real2 join t on real2.id = t.id set real2.x = 8",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// Same for a multi-table DELETE, in both syntaxes.
+		input: "with t as (select * from real1) delete real2 from real2 join t on real2.id = t.id",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "with t as (select * from real1) delete from real2 using real2 join t on real2.id = t.id",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {
