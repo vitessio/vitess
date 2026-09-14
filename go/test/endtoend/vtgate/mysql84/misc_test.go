@@ -138,6 +138,26 @@ func TestSystemVariables(t *testing.T) {
 	}
 }
 
+// This cluster's vtgate runs with a MySQL 8 server version and SET_VAR enabled,
+// so the session's sql_mode travels to the tablets in the optimizer hint. A hint
+// does not change how MySQL reads the statement it is on, so the query must
+// reach MySQL as a concat() call for || to concatenate.
+func TestPipesAsConcatOverSetVar(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
+
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.AssertMatches(t, conn, "select a || a from (select 1 as a) as t", `[[VARCHAR("11")]]`)
+
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
+}
+
 func TestUseSystemAndUserVariables(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)

@@ -314,25 +314,25 @@ func TestShardSessionSnapshots(t *testing.T) {
 // literal mode list, has none.
 func TestSafeSessionSQLMode(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{})
-	assert.Equal(t, sqlmode.Mode(0), session.SQLMode())
+	assert.Equal(t, sqlmode.Mode(0), session.ParseSQLMode())
 
 	session.SetSystemVariable("sql_mode", "'pipes_as_concat,STRICT_TRANS_TABLES'")
-	assert.Equal(t, sqlmode.PipesAsConcat|sqlmode.StrictTransTables, session.SQLMode())
+	assert.Equal(t, sqlmode.PipesAsConcat|sqlmode.StrictTransTables, session.ParseSQLMode())
 	assert.Equal(t, "'pipes_as_concat,STRICT_TRANS_TABLES'", session.sqlModeMemo.stored, "decoded once and memoized")
 
 	// a changed value is parsed again; a combination mode is expanded, a
 	// numeric value decoded, a binary value read past its introducer
 	session.SetSystemVariable("sql_mode", "'ANSI'")
-	assert.Equal(t, sqlmode.Ansi.Expand(), session.SQLMode())
+	assert.Equal(t, sqlmode.Ansi.Expand(), session.ParseSQLMode())
 	session.SetSystemVariable("sql_mode", "2")
-	assert.Equal(t, sqlmode.PipesAsConcat, session.SQLMode())
+	assert.Equal(t, sqlmode.PipesAsConcat, session.ParseSQLMode())
 	session.SetSystemVariable("sql_mode", "_binary'PIPES_AS_CONCAT'")
-	assert.Equal(t, sqlmode.PipesAsConcat, session.SQLMode())
+	assert.Equal(t, sqlmode.PipesAsConcat, session.ParseSQLMode())
 
 	// an expression and an invalid value carry no mode, and count as none stored;
 	// a reset value is stored, and empty
 	session.SetSystemVariable("sql_mode", "concat(@@sql_mode, ',PIPES_AS_CONCAT')")
-	assert.Equal(t, sqlmode.Mode(0), session.SQLMode())
+	assert.Equal(t, sqlmode.Mode(0), session.ParseSQLMode())
 	_, ok := session.StoredSQLMode()
 	assert.False(t, ok)
 	session.SetSystemVariable("sql_mode", "'BOGUS'")

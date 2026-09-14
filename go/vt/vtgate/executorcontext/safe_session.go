@@ -710,12 +710,12 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-// SQLMode returns the session's sql_mode, expanded, as a SET stored it on the
-// session, or zero for a session that never set sql_mode: such a session runs
-// under the backend's, which carries no lexer mode (see
-// sqlmode.NeutralizeSessionQuery). A stored value that is not a literal mode
-// value counts as zero as well.
-func (session *SafeSession) SQLMode() sqlmode.Mode {
+// ParseSQLMode returns the sql_mode the session's SQL is parsed under: its
+// sql_mode, expanded, as a SET stored it on the session, or zero for a session
+// that never set sql_mode: such a session runs under the backend's, which
+// carries no lexer mode (see sqlmode.NeutralizeSessionQuery). A stored value
+// that is not a literal mode value counts as zero as well.
+func (session *SafeSession) ParseSQLMode() sqlmode.Mode {
 	mode, _ := session.StoredSQLMode()
 	return mode
 }

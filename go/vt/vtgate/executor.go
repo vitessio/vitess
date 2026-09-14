@@ -1850,7 +1850,7 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 // sessionParser returns the parser that reads the session's SQL: the
 // environment's, under the sql_mode a SET stored on the session.
 func (e *Executor) sessionParser(session *econtext.SafeSession) *sqlparser.Parser {
-	return e.env.Parser().WithSQLMode(session.SQLMode())
+	return e.env.Parser().WithSQLMode(session.ParseSQLMode())
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {

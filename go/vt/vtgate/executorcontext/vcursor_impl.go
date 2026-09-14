@@ -424,7 +424,7 @@ func (vc *VCursorImpl) Environment() *vtenv.Environment {
 // Parser returns the parser that reads the session's SQL: the environment's,
 // under the sql_mode a SET stored on the session.
 func (vc *VCursorImpl) Parser() *sqlparser.Parser {
-	return vc.Environment().Parser().WithSQLMode(vc.SafeSession.SQLMode())
+	return vc.Environment().Parser().WithSQLMode(vc.SafeSession.ParseSQLMode())
 }
 
 func (vc *VCursorImpl) TimeZone() *time.Location {

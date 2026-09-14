@@ -148,8 +148,10 @@ func TestExecutorSetPipesAsConcat(t *testing.T) {
 	assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", string(query.BindVariables["__vtsql_mode"].Value))
 	assert.Equal(t, "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
 
-	// setting the mode back to what the pooled connection runs under is judged
-	// against the session's own value, so it applies
+	// setting the mode back to what the pooled connection runs under stores
+	// that value, and the session's SQL is read without the mode from then on
+	// (that the assignment is judged against the session's own value rather
+	// than the connection's is pinned by the engine's set tests)
 	judgment("STRICT_TRANS_TABLES", sqltypes.NewVarChar("STRICT_TRANS_TABLES"))
 	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_TRANS_TABLES'", nil)
 	require.NoError(t, err)
