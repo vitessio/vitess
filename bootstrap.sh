@@ -186,8 +186,8 @@ install_zookeeper() {
 	local zk="zookeeper-$version"
 	local file="apache-${zk}-bin.tar.gz"
 
-	# SHA512 checksum for Zookeeper 3.9.5 from Apache archives.
-	local sha512="baa1c21dda4d57238fca751e4fa2bbf1daff9a28612b125e497dccd5c188ee6449e2f79947e474c2dd4d19992789d4d36b27b1ba2feb80c2b0c45e7df0e22aa8"
+	# SHA512 checksum for Zookeeper 3.9.6 from Apache archives.
+	local sha512="e999626df06de30dc8bb53bb51da9bb786b1658406adafc6b92f104d72ca25e869f70a57c83a726f8b9558cc0fb519fc20f201aa5d6da09884bc4be5fe6dd3b0"
 
 	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
 	"${VTROOT}/tools/wget-retry" -q "https://dlcdn.apache.org/zookeeper/${zk}/${file}" || \
