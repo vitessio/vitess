@@ -50,9 +50,7 @@ func TestWithSQLMode(t *testing.T) {
 
 // Under PIPES_AS_CONCAT || is the concatenation operator, binding tighter than
 // ^ and looser than the unary operators, as in MySQL. It parses into a
-// concat() call, so the AST and its serialization carry no mode. An unaliased
-// select expression containing a || is aliased with its input text, so that the
-// result column is named as written, as MySQL names it.
+// concat() call, so the AST and its serialization carry no mode.
 func TestPipesAsConcat(t *testing.T) {
 	def := NewTestParser()
 	pipes := def.WithSQLMode(sqlmode.PipesAsConcat)
@@ -61,21 +59,16 @@ func TestPipesAsConcat(t *testing.T) {
 		in     string
 		out    string
 	}{
-		{pipes, "select 'a' || 'b' from t", "select concat('a', 'b') as `'a' || 'b'` from t"},
-		{pipes, "select 'a' || 'b' || 'c' from t", "select concat(concat('a', 'b'), 'c') as `'a' || 'b' || 'c'` from t"},
+		{pipes, "select 'a' || 'b' from t", "select concat('a', 'b') from t"},
+		{pipes, "select 'a' || 'b' || 'c' from t", "select concat(concat('a', 'b'), 'c') from t"},
 		// || binds tighter than the comparison operators and LIKE
-		{pipes, "select a || b = c from t", "select concat(a, b) = c as `a || b = c` from t"},
-		{pipes, "select 'a%' like 'a!' || '%' escape '!' from t", "select 'a%' like concat('a!', '%') escape '!' as `'a%' like 'a!' || '%' escape '!'` from t"},
+		{pipes, "select a || b = c from t", "select concat(a, b) = c from t"},
+		{pipes, "select 'a%' like 'a!' || '%' escape '!' from t", "select 'a%' like concat('a!', '%') escape '!' from t"},
 		// tighter than ^, looser than the unary operators
-		{pipes, "select a ^ b || c from t", "select a ^ concat(b, c) as `a ^ b || c` from t"},
-		{pipes, "select -a || b from t", "select concat(-a, b) as `-a || b` from t"},
-		{pipes, "select a || -b from t", "select concat(a, -b) as `a || -b` from t"},
-		{pipes, "select a || b collate utf8mb4_bin from t", "select concat(a, b collate utf8mb4_bin) as `a || b collate utf8mb4_bin` from t"},
-		// the alias is the text as written, and an alias given is kept
-		{pipes, "select a||b, (a || b), a || b as c, 'x' from t", "select concat(a, b) as `a||b`, concat(a, b) as `(a || b)`, concat(a, b) as c, 'x' from t"},
-		// only select expressions are aliased
-		{pipes, "select a from t where a || b = c order by a || b", "select a from t where concat(a, b) = c order by concat(a, b) asc"},
-		{pipes, "select * from (select a || b from t) as d", "select * from (select concat(a, b) as `a || b` from t) as d"},
+		{pipes, "select a ^ b || c from t", "select a ^ concat(b, c) from t"},
+		{pipes, "select -a || b from t", "select concat(-a, b) from t"},
+		{pipes, "select a || -b from t", "select concat(a, -b) from t"},
+		{pipes, "select a || b collate utf8mb4_bin from t", "select concat(a, b collate utf8mb4_bin) from t"},
 		// the keyword form of OR is unchanged
 		{pipes, "select a or b from t", "select a or b from t"},
 		{pipes, "select * from t where a || b", "select * from t where concat(a, b)"},

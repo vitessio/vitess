@@ -50,12 +50,6 @@ type Tokenizer struct {
 	buf       string
 	parser    *Parser
 	currStart int // start position of current token (set in Scan after skipBlank)
-
-	// pipeConcatEnd is the end position of the last || read as concat under
-	// PIPES_AS_CONCAT, zero when none was. A select expression that starts
-	// before it contains one: when the grammar reduces the expression the
-	// lexer is at most one token ahead, never at a later expression's ||.
-	pipeConcatEnd int
 }
 
 // location tracks the byte-offset span [start, end) of a grammar symbol
@@ -259,7 +253,6 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				if tkn.cur() == '|' {
 					tkn.skip(1)
 					if tkn.pipesAsConcat() {
-						tkn.pipeConcatEnd = tkn.Pos
 						return PIPE_CONCAT, ""
 					}
 					return OR, ""

@@ -5681,13 +5681,7 @@ select_expression:
           ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
         }
       default:
-        tkn := yylex.(*Tokenizer)
-        ae.InputExpression = tkn.GetInputExpression(@1.start, @1.end)
-        if tkn.pipeConcatEnd > @1.start {
-          // a || read as concat() prints as such; the alias keeps the column
-          // named as written, as MySQL names it
-          ae.As = NewIdentifierCI(ae.InputExpression)
-        }
+        ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
       }
     }
     $$ = ae
