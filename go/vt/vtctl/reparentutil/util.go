@@ -57,12 +57,14 @@ const (
 	lostTopologyLockMsg = "lost topology lock, aborting"
 )
 
+// warnIfMariaDB keeps the serving-shard deprecation warning consistent across version and position detection.
 func warnIfMariaDB(logger logutil.Logger, flavor mysqlctl.MySQLFlavor, alias string) {
 	if flavor == mysqlctl.FlavorMariaDB {
 		logger.Warningf("MariaDB support for serving shards is deprecated and will become unsupported in v26.0.0; tablet %s uses MariaDB", alias)
 	}
 }
 
+// warnIfMariaDBVersion prefers the server version, then falls back to encoded positions when mixed-version RPCs do not provide it.
 func warnIfMariaDBVersion(logger logutil.Logger, version, alias string, encodedPositions ...string) {
 	flavor, _, err := mysqlctl.ParseVersionString(version)
 	if err == nil {

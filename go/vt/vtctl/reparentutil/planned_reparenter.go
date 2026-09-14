@@ -969,6 +969,7 @@ func (pr *PlannedReparenter) reparentTablets(
 
 			return vterrors.Wrapf(err, "failed PromoteReplica(primary=%v, ts=%v): %v", primaryElectAliasStr, reparentJournalTimestamp, err)
 		}
+		warnIfMariaDBVersion(pr.logger, "", primaryElectAliasStr, primaryPosition)
 		reparentJournalPosition = primaryPosition
 	}
 

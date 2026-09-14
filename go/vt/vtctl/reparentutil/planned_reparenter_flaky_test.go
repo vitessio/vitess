@@ -502,6 +502,84 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 	}
 }
 
+func TestPlannedReparenter_GracefulPromotionWarnsForMariaDBCandidate(t *testing.T) {
+	const (
+		currentPrimaryAlias = "zone1-0000000100"
+		primaryElectAlias   = "zone1-0000000200"
+		mysqlPosition       = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"
+		mariaDBPosition     = "MariaDB/0-1-10"
+	)
+	currentPrimary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:     topodatapb.TabletType_PRIMARY,
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}
+	primaryElect := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}
+	tmc := &testutil.TabletManagerClient{
+		GetGlobalStatusVarsResults: map[string]struct {
+			Statuses map[string]string
+			Error    error
+		}{
+			currentPrimaryAlias: {Statuses: map[string]string{}},
+			primaryElectAlias:   {Statuses: map[string]string{}},
+		},
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			currentPrimaryAlias: {Position: mysqlPosition},
+		},
+		DemotePrimaryResults: map[string]struct {
+			Status *replicationdatapb.PrimaryStatus
+			Error  error
+		}{
+			currentPrimaryAlias: {
+				Status: &replicationdatapb.PrimaryStatus{
+					Position:      mysqlPosition,
+					ServerVersion: "Ver 8.0.35",
+				},
+			},
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			primaryElectAlias: {mysqlPosition: nil},
+		},
+		PromoteReplicaResults: map[string]struct {
+			Result string
+			Error  error
+		}{
+			primaryElectAlias: {Result: mariaDBPosition},
+		},
+		SetReplicationSourceResults: map[string]error{
+			currentPrimaryAlias: nil,
+			primaryElectAlias:   nil,
+		},
+		PopulateReparentJournalResults: map[string]error{
+			primaryElectAlias: nil,
+		},
+	}
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary: true,
+	}, currentPrimary, primaryElect)
+	logger := logutil.NewMemoryLogger()
+	pr := NewPlannedReparenter(ts, tmc, logger)
+
+	_, err := pr.ReparentShard(ctx, "testkeyspace", "-", PlannedReparentOptions{
+		NewPrimaryAlias:     primaryElect.Alias,
+		WaitReplicasTimeout: 30 * time.Second,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+}
+
 func TestPlannedReparenter_InitialPromotionWarnsForMariaDB(t *testing.T) {
 	const alias = "zone1-0000000101"
 	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}

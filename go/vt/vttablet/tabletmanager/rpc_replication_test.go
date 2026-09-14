@@ -1453,6 +1453,7 @@ type countingVersionDaemon struct {
 	delay time.Duration
 }
 
+// expireMySQLVersionCache forces the next test lookup to use the daemon's current version.
 func expireMySQLVersionCache(tm *TabletManager) {
 	tm.mysqlVersion.mu.Lock()
 	tm.mysqlVersion.fetchedAt = time.Time{}
