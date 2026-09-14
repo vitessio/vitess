@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -245,14 +246,14 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 
 	found, err := bucketExists(ctx, c, bucket)
 	if err != nil {
-		log.Info(fmt.Sprintf("Error from BucketExists: %v, quitting", bucket))
+		log.Info("Error checking whether bucket exists", slog.String("bucket", bucket), slog.Any("error", err))
 		return nil, errors.New("Error checking whether bucket exists: " + bucket)
 	}
 	if !found {
 		log.Info(fmt.Sprintf("Bucket: %v doesn't exist, creating new bucket with the required name", bucket))
 		_, err = c.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)})
 		if err != nil {
-			log.Info(fmt.Sprintf("Error creating Bucket: %v, quitting", bucket))
+			log.Info("Error creating bucket", slog.String("bucket", bucket), slog.Any("error", err))
 			return nil, errors.New("Error creating new bucket: " + bucket)
 		}
 	}
@@ -384,6 +385,10 @@ func (bs *CephBackupStorage) client() (*s3.Client, error) {
 			// checksum there either. It matches what minio-go did, since
 			// Signature V2 never covered the payload.
 			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+			// Symmetric with the request side: nothing here writes checksums,
+			// so there is nothing to validate, and the SDK would otherwise
+			// warn on every download.
+			o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 			o.APIOptions = append(o.APIOptions, v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware)
 		})
 	}

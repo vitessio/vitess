@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -97,7 +98,7 @@ func (f *fakeS3) verifySigV4(r *http.Request) error {
 		return fmt.Errorf("not SigV4: %q", auth)
 	}
 	fields := map[string]string{}
-	for _, part := range strings.Split(strings.TrimPrefix(auth, algorithm+" "), ",") {
+	for part := range strings.SplitSeq(strings.TrimPrefix(auth, algorithm+" "), ",") {
 		k, v, ok := strings.Cut(strings.TrimSpace(part), "=")
 		if !ok {
 			return fmt.Errorf("malformed Authorization: %q", auth)
@@ -115,7 +116,7 @@ func (f *fakeS3) verifySigV4(r *http.Request) error {
 
 	signedHeaders := fields["SignedHeaders"]
 	var canonicalHeaders strings.Builder
-	for _, name := range strings.Split(signedHeaders, ";") {
+	for name := range strings.SplitSeq(signedHeaders, ";") {
 		var values []string
 		switch name {
 		case "host":
@@ -239,7 +240,7 @@ func (f *fakeS3) handle(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, http.StatusNotFound, "NoSuchKey", "The specified key does not exist")
 			return
 		}
-		w.Header().Set("Content-Length", fmt.Sprint(len(body)))
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	case r.Method == http.MethodDelete:

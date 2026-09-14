@@ -60,7 +60,7 @@ func sized(s string) int64 { return int64(len(s)) }
 // signedHeaders returns the header names a SigV4 Authorization header says
 // the signature covers.
 func signedHeaders(r *http.Request) []string {
-	for _, part := range strings.Split(r.Header.Get("Authorization"), ",") {
+	for part := range strings.SplitSeq(r.Header.Get("Authorization"), ",") {
 		if v, ok := strings.CutPrefix(strings.TrimSpace(part), "SignedHeaders="); ok {
 			return strings.Split(v, ";")
 		}
@@ -150,7 +150,9 @@ func TestRemoveBackupDeletesOnlyThatBackup(t *testing.T) {
 	bs, fake := newTestStorage(t)
 	dir := "ks/0"
 
-	for _, name := range []string{"keep", "remove"} {
+	// "remove" is a prefix of "remove-keep": only a "/"-terminated prefix
+	// tells them apart, so this pins that RemoveBackup lists with one.
+	for _, name := range []string{"remove", "remove-keep"} {
 		bh, err := bs.StartBackup(ctx, dir, name)
 		require.NoError(t, err)
 		writeFile(t, bh.(*CephBackupHandle), "MANIFEST", "{}", sized("{}"))
@@ -160,11 +162,11 @@ func TestRemoveBackupDeletesOnlyThatBackup(t *testing.T) {
 
 	require.NoError(t, bs.RemoveBackup(ctx, dir, "remove"))
 
-	assert.Equal(t, []string{"ks/0/keep/MANIFEST", "ks/0/keep/data/f1"}, fake.objects("ks"))
+	assert.Equal(t, []string{"ks/0/remove-keep/MANIFEST", "ks/0/remove-keep/data/f1"}, fake.objects("ks"))
 	handles, err := bs.ListBackups(ctx, dir)
 	require.NoError(t, err)
 	require.Len(t, handles, 1)
-	assert.Equal(t, "keep", handles[0].Name())
+	assert.Equal(t, "remove-keep", handles[0].Name())
 }
 
 func TestAbortBackupRemovesUploadedFiles(t *testing.T) {
