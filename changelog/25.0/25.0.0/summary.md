@@ -23,6 +23,7 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Table ACLs and CTE names](#vttablet-table-acl-cte-names)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -158,6 +159,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-table-acl-cte-names"/>Table ACLs and CTE names</a>
+
+VTTablet now derives the table permissions of a query the way MySQL resolves names in the presence of common table expressions:
+
+- A non-recursive CTE is not visible inside its own definition, so a table wrapped in a CTE of the same name requires READER on that table. Previously the reference was mistaken for the CTE and no permission was checked.
+- A union's leading CTEs are not visible inside its arms once an arm declares its own WITH, so references to their names there require the table's permission.
+- A `NEXT VALUE` statement requires WRITER on the sequence it allocates from, regardless of any WITH clause on the statement.
+- A CTE referenced from a subquery, a derived table or a union arm of the query that declares it, or joined into a multi-table UPDATE or DELETE, no longer requires a permission for the CTE's name. Previously such queries could be denied under strict table ACLs.
+
+This is a fix for [GHSA-mv22-c3rp-c6m4](https://github.com/vitessio/vitess/security/advisories/GHSA-mv22-c3rp-c6m4). See [#21091](https://github.com/vitessio/vitess/pull/21091) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 

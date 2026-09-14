@@ -94,10 +94,12 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 // there is the real table: a user with access reads it and a user without
 // access is denied (GHSA-mv22-c3rp-c6m4).
 //
-// vtgate rejects an unqualified self-reference inside a CTE body as
-// unsupported, but accepts the keyspace-qualified form and strips the
-// qualifier before sending the query to vttablet, so this is the shape
-// the tablet's ACL check actually sees.
+// vtgate rejects the bare unqualified self-reference inside a CTE body as
+// unsupported, but forwards it as written once the query block also names
+// another real table, and it always accepts the keyspace-qualified form,
+// stripping the qualifier before sending the query to vttablet. This
+// keyspace has a single table, so the qualified form is the shape that
+// reaches the tablet's ACL check here.
 func TestSelfNamedCTEDoesNotBypassACL(t *testing.T) {
 	ctx := t.Context()
 	query := "WITH test_table AS (SELECT id FROM ks.test_table) SELECT id FROM test_table"
