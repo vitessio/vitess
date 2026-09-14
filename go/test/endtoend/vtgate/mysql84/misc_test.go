@@ -158,6 +158,25 @@ func TestPipesAsConcatOverSetVar(t *testing.T) {
 	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
 }
 
+// ANSI_QUOTES travels the same way: a double-quoted token read as an identifier
+// reaches MySQL with backticks, which the hint-carrying connection reads the
+// same under any mode.
+func TestAnsiQuotesOverSetVar(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[VARCHAR("a")]]`)
+
+	utils.Exec(t, conn, "set sql_mode = 'ANSI_QUOTES'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("ANSI_QUOTES")]]`)
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[INT32(1)]]`)
+	utils.AssertMatches(t, conn, `select "t"."a" from (select 1 as "a") as "t"`, `[[INT32(1)]]`)
+
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[VARCHAR("a")]]`)
+}
+
 func TestUseSystemAndUserVariables(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)

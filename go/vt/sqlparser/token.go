@@ -180,7 +180,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			var tBytes string
 			if tkn.cur() == '`' {
 				tkn.skip(1)
-				tID, tBytes = tkn.scanLiteralIdentifier()
+				tID, tBytes = tkn.scanLiteralIdentifier('`')
 			} else if tkn.cur() == eofChar {
 				return LEX_ERROR, ""
 			} else {
@@ -353,10 +353,15 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					return NE, ""
 				}
 				return int(ch), ""
-			case '\'', '"':
+			case '\'':
+				return tkn.scanString(ch, STRING)
+			case '"':
+				if tkn.ansiQuotes() {
+					return tkn.scanLiteralIdentifier('"')
+				}
 				return tkn.scanString(ch, STRING)
 			case '`':
-				return tkn.scanLiteralIdentifier()
+				return tkn.scanLiteralIdentifier('`')
 			default:
 				return LEX_ERROR, string(byte(ch))
 			}
@@ -409,6 +414,12 @@ func (tkn *Tokenizer) pipesAsConcat() bool {
 	return tkn.parser != nil && tkn.parser.sqlMode&sqlmode.PipesAsConcat != 0
 }
 
+// ansiQuotes reports whether the tokenizer's sql_mode has ANSI_QUOTES, under which
+// a double-quoted token is an identifier rather than a string literal.
+func (tkn *Tokenizer) ansiQuotes() bool {
+	return tkn.parser != nil && tkn.parser.sqlMode&sqlmode.AnsiQuotes != 0
+}
+
 // scanHex scans a hex numeral; assumes x' or X' has already been scanned
 func (tkn *Tokenizer) scanHex() (int, string) {
 	start := tkn.Pos
@@ -436,27 +447,27 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 	return BIT_LITERAL, bit
 }
 
-// scanLiteralIdentifierSlow scans an identifier surrounded by backticks which may
-// contain escape sequences instead of it. This method is only called from
+// scanLiteralIdentifierSlow scans an identifier surrounded by the quote character
+// which may contain escape sequences instead of it. This method is only called from
 // scanLiteralIdentifier once the first escape sequence is found in the identifier.
 // The provided `buf` contains the contents of the identifier that have been scanned
 // so far.
-func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, string) {
-	backTickSeen := true
+func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder, quote uint16) (int, string) {
+	quoteSeen := true
 	for {
-		if backTickSeen {
-			if tkn.cur() != '`' {
+		if quoteSeen {
+			if tkn.cur() != quote {
 				break
 			}
-			backTickSeen = false
-			buf.WriteByte('`')
+			quoteSeen = false
+			buf.WriteByte(byte(quote))
 			tkn.skip(1)
 			continue
 		}
-		// The previous char was not a backtick.
+		// The previous char was not the quote character.
 		switch tkn.cur() {
-		case '`':
-			backTickSeen = true
+		case quote:
+			quoteSeen = true
 		case eofChar:
 			// Premature EOF.
 			return LEX_ERROR, buf.String()
@@ -469,15 +480,16 @@ func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, stri
 	return ID, buf.String()
 }
 
-// scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
-// is a simple literal, it'll be returned as a slice of the input buffer. If the identifier
+// scanLiteralIdentifier scans an identifier enclosed by the quote character, a
+// backtick or, under ANSI_QUOTES, a double quote. If the identifier is a simple
+// literal, it'll be returned as a slice of the input buffer. If the identifier
 // contains escape sequences, this function will fall back to scanLiteralIdentifierSlow
-func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
+func (tkn *Tokenizer) scanLiteralIdentifier(quote uint16) (int, string) {
 	start := tkn.Pos
 	for {
 		switch tkn.cur() {
-		case '`':
-			if tkn.peek(1) != '`' {
+		case quote:
+			if tkn.peek(1) != quote {
 				if tkn.Pos == start {
 					return LEX_ERROR, ""
 				}
@@ -488,7 +500,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 			var buf strings.Builder
 			buf.WriteString(tkn.buf[start:tkn.Pos])
 			tkn.skip(1)
-			return tkn.scanLiteralIdentifierSlow(&buf)
+			return tkn.scanLiteralIdentifierSlow(&buf, quote)
 		case eofChar:
 			// Premature EOF.
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]

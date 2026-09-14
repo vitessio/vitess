@@ -986,17 +986,17 @@ func TestSetTable(t *testing.T) {
 				Name:              "sql_mode",
 				Keyspace:          ks,
 				TargetDestination: key.DestinationAnyShard{},
-				Expr:              "'ANSI_QUOTES'",
+				Expr:              "'REAL_AS_FLOAT'",
 				Global:            true,
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES|ANSI_QUOTES",
+			"STRICT_TRANS_TABLES|REAL_AS_FLOAT",
 		)},
-		expectedError: "setting the ANSI_QUOTES sql_mode is unsupported",
+		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ANSI_QUOTES' new {} false false`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
 		},
 	}, {
 		// a judgment that cannot run cannot pass: unlike another ignored variable, an

@@ -446,8 +446,8 @@
   },
   {
     "comment": "sql_mode with a mode the parser does not support is rejected at plan time",
-    "query": "set sql_mode = 'ANSI_QUOTES'",
-    "plan": "setting the ANSI_QUOTES sql_mode is unsupported"
+    "query": "set sql_mode = 'REAL_AS_FLOAT'",
+    "plan": "setting the REAL_AS_FLOAT sql_mode is unsupported"
   },
   {
     "comment": "constant sql_mode expressions are folded and validated at plan time",

@@ -1853,6 +1853,14 @@ func (e *Executor) sessionParser(session *econtext.SafeSession) *sqlparser.Parse
 	return e.env.Parser().WithSQLMode(session.ParseSQLMode())
 }
 
+// ParserForSession is sessionParser for a session that is not wrapped yet: the
+// parser a batch is split with, so that its statement boundaries are found under
+// the session's sql_mode, where a double-quoted token ends differently under
+// ANSI_QUOTES.
+func (e *Executor) ParserForSession(session *vtgatepb.Session) *sqlparser.Parser {
+	return e.sessionParser(econtext.NewSafeSession(session))
+}
+
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
 	stmt, reserved, err := parser.Parse2(query)
 	if err != nil {

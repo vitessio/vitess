@@ -109,6 +109,34 @@ func TestExecutorSessionPipesAsConcat(t *testing.T) {
 // SET sql_mode accepts PIPES_AS_CONCAT, stores the canonical value, forwards it
 // to the tablets, and answers @@sql_mode from the session with it. A later
 // assignment is judged against the session's own value.
+// A session's SQL is read under ANSI_QUOTES the same way: a double-quoted token
+// is an identifier, and reaches the tablet with backticks where it needs them,
+// together with the session's sql_mode. Without the mode it is a string literal.
+func TestExecutorSessionAnsiQuotes(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	session := sessionWithSQLMode(KsTestUnsharded, "'ANSI_QUOTES'")
+	_, err := executorExecSession(ctx, executor, session, `select "id", "a""b" from main1`, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id, `a\"b` from main1", lastQuery(t, sbclookup).Sql)
+
+	session = sessionWithSQLMode(KsTestUnsharded, "")
+	_, err = executorExecSession(ctx, executor, session, `select "id", "a""b" from main1`, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select :vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */ from main1", lastQuery(t, sbclookup).Sql)
+
+	// a batch is split under the session's mode: a backslash before a double quote
+	// escapes it in a string, not in an identifier
+	parser := executor.ParserForSession(session.Session)
+	pieces, err := parser.SplitStatementToPieces(`select "a\"; select 1" from main1`)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`select "a\"; select 1" from main1`}, pieces)
+	parser = executor.ParserForSession(sessionWithSQLMode(KsTestUnsharded, "'ANSI_QUOTES'").Session)
+	pieces, err = parser.SplitStatementToPieces(`select "a\"; select 1" from main1`)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`select "a\"`, ` select 1" from main1`}, pieces)
+}
+
 func TestExecutorSetPipesAsConcat(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
@@ -171,8 +199,8 @@ func TestExecutorSetPipesAsConcat(t *testing.T) {
 	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ concat(id, id) from main1", lastQuery(t, sbclookup).Sql)
 
 	// the other lexer modes are still rejected, a constant at plan time
-	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES'", nil)
-	require.ErrorContains(t, err, "setting the ANSI_QUOTES sql_mode is unsupported")
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'PIPES_AS_CONCAT,REAL_AS_FLOAT'", nil)
+	require.ErrorContains(t, err, "setting the REAL_AS_FLOAT sql_mode is unsupported")
 	assert.Equal(t, "'PIPES_AS_CONCAT'", session.SystemVariables["sql_mode"], "the session keeps its value")
 
 	// a global assignment does not change the session: it is checked and ignored,
@@ -181,4 +209,13 @@ func TestExecutorSetPipesAsConcat(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "set global sql_mode = 'NO_ZERO_DATE'", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "'PIPES_AS_CONCAT'", session.SystemVariables["sql_mode"], "the session keeps its value")
+
+	// ANSI_QUOTES is honored alongside: the session's SQL is read under both
+	judgment("STRICT_TRANS_TABLES", sqltypes.NewVarChar("PIPES_AS_CONCAT,ANSI_QUOTES"))
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES'", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "'PIPES_AS_CONCAT,ANSI_QUOTES'", session.SystemVariables["sql_mode"])
+	_, err = executorExecSession(ctx, executor, session, `select "id" || id from main1`, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES') */ concat(id, id) from main1", lastQuery(t, sbclookup).Sql)
 }
