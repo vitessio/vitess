@@ -1,0 +1,66 @@
+name: 'Setup MicroCeph'
+description: 'Provision a single-node MicroCeph with an S3-compatible RGW for use in GitHub Actions workflows, and export AWS_* variables pointing at it'
+runs:
+  using: "composite"
+  steps:
+    - name: Install MicroCeph
+      shell: bash -e {0}
+      run: |
+        # Pin the Ceph release. The store's default track is squid (Ceph 19);
+        # latest/stable currently still points at reef (Ceph 18). Bumping this is
+        # a deliberate change, as the MinIO package version was before.
+        sudo snap install microceph --channel=squid/stable
+        # Hold the snap so an automatic refresh cannot restart Ceph mid-job.
+        sudo snap refresh --hold microceph
+
+    - name: Bootstrap a single-node cluster with loop-file OSDs
+      shell: bash -e {0}
+      run: |
+        sudo microceph cluster bootstrap
+        # Three OSDs are the minimum for a healthy cluster; loop files are
+        # sparse, so this costs little disk until objects are written.
+        sudo microceph disk add loop,4G,3
+
+    - name: Enable the RGW and create a user
+      shell: bash -e {0}
+      run: |
+        sudo microceph enable rgw --port 8080
+
+        # Per-job credentials. They never leave this runner and RGW only
+        # listens on localhost, but masking keeps credential-shaped strings
+        # out of public job logs all the same.
+        ACCESS_KEY=$(openssl rand -hex 16)
+        SECRET_KEY=$(openssl rand -hex 32)
+        echo "::add-mask::$ACCESS_KEY"
+        echo "::add-mask::$SECRET_KEY"
+
+        # The snap always ships microceph.radosgw-admin; the unprefixed name
+        # is a store-side alias that the MicroCeph tutorial relies on.
+        RGW_ADMIN=$(command -v radosgw-admin || echo microceph.radosgw-admin)
+        # user create echoes the keys back as JSON; keep them out of the log.
+        sudo "$RGW_ADMIN" user create --uid=vitess --display-name=vitess \
+          --access-key="$ACCESS_KEY" --secret-key="$SECRET_KEY" > /dev/null
+
+        # Wait for the gateway to answer. An anonymous request gets either an
+        # empty bucket listing (200) or AccessDenied (403); both mean it is up.
+        for i in $(seq 1 120); do
+          if curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|403)$'; then
+            break
+          fi
+          if [ "$i" -eq 120 ]; then
+            echo "RGW did not start listening on :8080 within 120s"
+            sudo microceph status
+            exit 1
+          fi
+          sleep 1
+        done
+
+        # The tests create AWS_BUCKET themselves (ensureBucket in
+        # go/test/endtoend/backup/s3); nothing here needs to.
+        {
+          echo "AWS_ENDPOINT=http://localhost:8080"
+          echo "AWS_ACCESS_KEY_ID=$ACCESS_KEY"
+          echo "AWS_SECRET_ACCESS_KEY=$SECRET_KEY"
+          echo "AWS_REGION=us-east-1"
+          echo "AWS_BUCKET=test-bucket"
+        } >> "$GITHUB_ENV"
