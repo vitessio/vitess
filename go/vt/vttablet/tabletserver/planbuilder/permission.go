@@ -121,14 +121,21 @@ func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Rol
 			}
 		case *sqlparser.With:
 			// The enclosing statement pushed this WITH's CTE names as the top
-			// scope so the consumer query can see them. A CTE body has a
-			// narrower view: a non-recursive CTE is not visible inside its own
-			// definition (there the name is the real base table), and later
-			// siblings are never visible. Walk each body with exactly the CTEs
-			// that are legal there, then drop this scope so the walker does not
-			// re-process the bodies with the consumer scope.
-			names := cteScopes[len(cteScopes)-1]
-			cteScopes = cteScopes[:len(cteScopes)-1]
+			// scope so the consumer query can see them; drop that scope so the
+			// walker does not process the bodies with the consumer's view. A
+			// CTE body has a narrower view: a non-recursive CTE is not visible
+			// inside its own definition (there the name is the real base
+			// table), and later siblings are never visible. Walk each body
+			// with exactly the CTEs that are legal there.
+			//
+			// Every statement that carries a WITH pushes a scope before the
+			// walker reaches it, so the stack is never empty here. If a new
+			// statement type ever breaks that invariant, the fallback errs
+			// toward reporting more permissions, never fewer.
+			if len(cteScopes) > 0 {
+				cteScopes = cteScopes[:len(cteScopes)-1]
+			}
+			names := gatherCTEs(node)
 			var outer []sqlparser.IdentifierCS
 			for _, cteScope := range cteScopes {
 				outer = append(outer, cteScope...)
