@@ -2889,6 +2889,79 @@ func TestInBandSetClosesTheConnectionOnRelease(t *testing.T) {
 	}
 }
 
+// A setting applied on a connection that already carries another one leaves the
+// old one's variables in effect without the new one describing them, so the
+// connection is closed when it is released rather than recycled under the new
+// setting: the next transaction with the new setting gets a fresh connection.
+func TestSettingSwitchClosesTheConnectionOnRelease(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`set .*sql_safe_updates.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	modeSettings := []string{"set sql_mode = 'PIPES_AS_CONCAT'"}
+	otherSettings := []string{"set sql_safe_updates = 1"}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, modeSettings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, int64(0), beginState.ReservedID)
+	// the other setting is applied on top: the session keeps the mode, and
+	// the connection is read under it, as the setting does not touch sql_mode
+	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	db.AddQuery(concatQuery, &sqltypes.Result{})
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, otherSettings, "select 'a' || 'b' from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+
+	// a transaction with the other setting gets a fresh connection, not the one
+	// whose session is still in the mode
+	db.ResetQueryLog()
+	beginState, _, err = tsv.ReserveBeginExecute(ctx, nil, &target, otherSettings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, db.QueryLog(), "sql_safe_updates = 1", "the setting must be applied on a fresh connection")
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+}
+
+// The pre-queries of a reservation of an existing transaction change its
+// connection's session behind the settings it carries: a later request that
+// brings those settings applies them again rather than skipping them.
+func TestReservationPreQueriesMakeTheConnectionSettingStale(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`set .*sql_safe_updates.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	settings := []string{"set sql_safe_updates = 1"}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	// get_lock forces a true reservation of the transaction's connection; its
+	// pre-queries run directly on it
+	reserveState, _, err := tsv.ReserveExecute(ctx, nil, &target, []string{"set sql_mode = 'PIPES_AS_CONCAT'"}, "select get_lock('l', 10) from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, beginState.TransactionID, reserveState.ReservedID)
+
+	db.ResetQueryLog()
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, db.QueryLog(), "sql_safe_updates = 1", "the settings must be applied again after the reservation's pre-queries")
+
+	err = tsv.Release(ctx, &target, beginState.TransactionID, reserveState.ReservedID)
+	require.NoError(t, err)
+}
+
 // A post-begin query runs on the transaction's connection under the same rule
 // as any other statement: a SET needs a reserved connection or settings that
 // carry it, so it cannot leave its change on a pooled connection.
