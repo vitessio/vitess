@@ -17,7 +17,11 @@ limitations under the License.
 package cephbackupstorage
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,17 +34,24 @@ import (
 // fakeS3 is an in-memory S3 server that implements the subset of the API the
 // ceph backup plugin uses: HeadBucket, CreateBucket, PutObject, GetObject,
 // DeleteObject and ListObjectsV2 (with an optional "/" delimiter). It is
-// path-style only: the bucket is the first path segment. It records every
+// path-style only: the bucket is the first path segment. It verifies each
+// request's AWS Signature V4 the way a gateway does, and records every
 // request so tests can assert on how the client talked to it.
 type fakeS3 struct {
-	mu       sync.Mutex
-	buckets  map[string]map[string][]byte // bucket -> key -> body
-	requests []*http.Request
-	server   *httptest.Server
+	accessKey string
+	secretKey string
+	mu        sync.Mutex
+	buckets   map[string]map[string][]byte // bucket -> key -> body
+	requests  []*http.Request
+	server    *httptest.Server
 }
 
-func newFakeS3() *fakeS3 {
-	f := &fakeS3{buckets: map[string]map[string][]byte{}}
+func newFakeS3(accessKey, secretKey string) *fakeS3 {
+	f := &fakeS3{
+		accessKey: accessKey,
+		secretKey: secretKey,
+		buckets:   map[string]map[string][]byte{},
+	}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
 	return f
 }
@@ -72,10 +83,108 @@ func (f *fakeS3) recorded() []*http.Request {
 	return append([]*http.Request(nil), f.requests...)
 }
 
+// verifySigV4 checks the request's AWS Signature V4 the way a gateway does:
+// it rebuilds the canonical request from what actually arrived on the wire
+// and compares signatures. A header the client signed but never sent, such
+// as a Content-Length on a body that went out chunked, therefore fails here
+// just as it would against Ceph RGW. The payload hash is taken from
+// x-amz-content-sha256 verbatim, so an unsigned payload verifies without
+// reading the body.
+func (f *fakeS3) verifySigV4(r *http.Request) error {
+	const algorithm = "AWS4-HMAC-SHA256"
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, algorithm+" ") {
+		return fmt.Errorf("not SigV4: %q", auth)
+	}
+	fields := map[string]string{}
+	for _, part := range strings.Split(strings.TrimPrefix(auth, algorithm+" "), ",") {
+		k, v, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			return fmt.Errorf("malformed Authorization: %q", auth)
+		}
+		fields[k] = v
+	}
+
+	// Credential=<accessKey>/<date>/<region>/s3/aws4_request
+	cred := strings.Split(fields["Credential"], "/")
+	if len(cred) != 5 || cred[0] != f.accessKey || cred[3] != "s3" || cred[4] != "aws4_request" {
+		return fmt.Errorf("unexpected credential %q", fields["Credential"])
+	}
+	date, region := cred[1], cred[2]
+	scope := strings.Join(cred[1:], "/")
+
+	signedHeaders := fields["SignedHeaders"]
+	var canonicalHeaders strings.Builder
+	for _, name := range strings.Split(signedHeaders, ";") {
+		var values []string
+		switch name {
+		case "host":
+			values = []string{r.Host}
+		case "content-length":
+			if r.Header.Get("Content-Length") == "" {
+				return errors.New("content-length signed but not sent")
+			}
+			values = r.Header.Values(name)
+		default:
+			values = r.Header.Values(name)
+		}
+		cleaned := make([]string, 0, len(values))
+		for _, v := range values {
+			cleaned = append(cleaned, strings.Join(strings.Fields(v), " "))
+		}
+		canonicalHeaders.WriteString(name + ":" + strings.Join(cleaned, ",") + "\n")
+	}
+
+	query := r.URL.Query()
+	for k := range query {
+		sort.Strings(query[k])
+	}
+	canonicalRequest := strings.Join([]string{
+		r.Method,
+		r.URL.EscapedPath(),
+		strings.ReplaceAll(query.Encode(), "+", "%20"),
+		canonicalHeaders.String(),
+		signedHeaders,
+		r.Header.Get("X-Amz-Content-Sha256"),
+	}, "\n")
+	stringToSign := strings.Join([]string{
+		algorithm,
+		r.Header.Get("X-Amz-Date"),
+		scope,
+		hex.EncodeToString(sha256Sum([]byte(canonicalRequest))),
+	}, "\n")
+
+	key := []byte("AWS4" + f.secretKey)
+	for _, part := range []string{date, region, "s3", "aws4_request"} {
+		key = hmacSHA256(key, []byte(part))
+	}
+	want := hex.EncodeToString(hmacSHA256(key, []byte(stringToSign)))
+	if want != fields["Signature"] {
+		return fmt.Errorf("signature mismatch for %s %s (SignedHeaders=%s)", r.Method, r.URL.RequestURI(), signedHeaders)
+	}
+	return nil
+}
+
+func sha256Sum(b []byte) []byte {
+	sum := sha256.Sum256(b)
+	return sum[:]
+}
+
+func hmacSHA256(key, data []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
 func (f *fakeS3) handle(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.requests = append(f.requests, r.Clone(r.Context()))
 	f.mu.Unlock()
+
+	if err := f.verifySigV4(r); err != nil {
+		writeS3Error(w, http.StatusForbidden, "SignatureDoesNotMatch", err.Error())
+		return
+	}
 
 	// Path style: /bucket or /bucket/key...
 	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/"), "/", 2)

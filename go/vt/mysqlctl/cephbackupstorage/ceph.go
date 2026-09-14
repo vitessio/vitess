@@ -106,20 +106,18 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		input := &s3.PutObjectInput{
+		// The body is a pipe, which smithy always sends with chunked
+		// transfer encoding and no Content-Length, so filesize is
+		// deliberately not passed as ContentLength: the signer would include
+		// a content-length header in the signature that never reaches the
+		// wire, and the gateway would reject the request with
+		// SignatureDoesNotMatch.
+		_, err := bh.client.PutObject(ctx, &s3.PutObjectInput{
 			Bucket:      aws.String(bucket),
 			Key:         aws.String(object),
 			Body:        reader,
 			ContentType: aws.String("application/octet-stream"),
-		}
-		// If filesize is unknown, the caller passes -1 and we leave
-		// ContentLength unset. When it is known we record it, but the SDK
-		// sends a pipe body with HTTP chunked transfer encoding either way,
-		// so the value documents intent rather than changing the wire.
-		if filesize >= 0 {
-			input.ContentLength = aws.Int64(filesize)
-		}
-		_, err := bh.client.PutObject(ctx, input)
+		})
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)

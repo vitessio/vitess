@@ -33,7 +33,7 @@ import (
 // newTestStorage returns a plugin instance pointed at a fresh fake S3 server.
 func newTestStorage(t *testing.T) (*CephBackupStorage, *fakeS3) {
 	t.Helper()
-	fake := newFakeS3()
+	fake := newFakeS3("access", "secret")
 	t.Cleanup(fake.close)
 	bs := NewFakeCephBackupStorage(FakeConfig{
 		AccessKey: "access",
@@ -57,6 +57,17 @@ func writeFile(t *testing.T, bh *CephBackupHandle, name, contents string, size i
 
 func sized(s string) int64 { return int64(len(s)) }
 
+// signedHeaders returns the header names a SigV4 Authorization header says
+// the signature covers.
+func signedHeaders(r *http.Request) []string {
+	for _, part := range strings.Split(r.Header.Get("Authorization"), ",") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(part), "SignedHeaders="); ok {
+			return strings.Split(v, ";")
+		}
+	}
+	return nil
+}
+
 func TestBackupRoundTrip(t *testing.T) {
 	ctx := t.Context()
 	bs, fake := newTestStorage(t)
@@ -75,6 +86,21 @@ func TestBackupRoundTrip(t *testing.T) {
 		"test_keyspace/-80/2026-09-13.100000/MANIFEST",
 		"test_keyspace/-80/2026-09-13.100000/data/ibdata1",
 	}, fake.objects("test-keyspace"))
+
+	// Both uploads went out chunked (a pipe body always does), so neither
+	// signature may cover a content-length header the wire never carried.
+	// The fake's verifier rejects that too; this pins the shape of the
+	// request rather than only its acceptance.
+	var puts int
+	for _, r := range fake.recorded() {
+		if r.Method != http.MethodPut || !strings.Contains(r.URL.Path, "/2026-09-13.100000/") {
+			continue
+		}
+		puts++
+		require.Equal(t, int64(-1), r.ContentLength, "%s arrived with a Content-Length", r.URL.Path)
+		assert.NotContains(t, signedHeaders(r), "content-length", "%s", r.URL.Path)
+	}
+	assert.Equal(t, 2, puts)
 
 	handles, err := bs.ListBackups(ctx, dir)
 	require.NoError(t, err)
