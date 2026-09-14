@@ -130,6 +130,7 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-microceph/action.yml'
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
