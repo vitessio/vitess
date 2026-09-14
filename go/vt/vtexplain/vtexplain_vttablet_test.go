@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -226,4 +227,59 @@ func TestErrParseSchema(t *testing.T) {
 
 	_, err = newTabletEnvironment(ddl, defaultTestOpts(), collations.MySQL8())
 	require.Error(t, err, "check your schema, table[t2] doesn't exist")
+}
+
+// TestNewTabletDoesNotMirrorMysqlWaitTimeout pins that vtexplain's fake
+// tablets run with the temp-table idle timeout disabled rather than in its
+// default auto mode. Auto mode reads @@global.wait_timeout on a background
+// goroutine at query-service open and on every schema reload, and vtexplain
+// records every query its fake tablets receive, so that read lands in the
+// explain output at a nondeterministic point and flakes the golden-output
+// tests. vtexplain serves no real connections, so there is nothing for the
+// idle timeout to govern.
+func TestNewTabletDoesNotMirrorMysqlWaitTimeout(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	ddls, err := parseSchema("create table t1 (id int primary key)", &Options{StrictDDL: false}, env.Parser())
+	require.NoError(t, err)
+	ctx := t.Context()
+
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
+
+	tabletEnv, err := newTabletEnvironment(ddls, defaultTestOpts(), env.CollationEnv())
+	require.NoError(t, err)
+	vte.setGlobalTabletEnv(tabletEnv)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tablet := vte.newTablet(ctx, env, defaultTestOpts(), &topodatapb.Tablet{
+		Keyspace: "ks_sharded",
+		Shard:    "-80",
+		Alias: &topodatapb.TabletAlias{
+			Cell: Cell,
+		},
+	}, ts, srvTopoCounts)
+	defer func() {
+		tablet.tsv.StopService()
+		tablet.tsv.Close(ctx)
+		tablet.db.Close()
+	}()
+
+	assert.Zero(t, tablet.tsv.Config().TempTableIdleTimeout, "vtexplain tablets must not mirror mysqld's wait_timeout")
+
+	// A schema broadcast is what triggers the background read in auto mode;
+	// the fake database reports any such read reaching the tablet.
+	waitTimeoutRead := make(chan string, 1)
+	tablet.db.AddQueryPatternWithCallback(`(?i)select @@global\.wait_timeout`, &sqltypes.Result{}, func(query string) {
+		select {
+		case waitTimeoutRead <- query:
+		default:
+		}
+	})
+	tablet.tsv.SchemaEngine().BroadcastForTesting(nil, nil, nil, false)
+
+	select {
+	case query := <-waitTimeoutRead:
+		assert.Failf(t, "unexpected wait_timeout read", "the fake tablet received %q after a schema broadcast", query)
+	case <-time.After(300 * time.Millisecond):
+	}
 }
