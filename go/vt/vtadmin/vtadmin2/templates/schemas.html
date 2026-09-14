@@ -1,0 +1,31 @@
+{{ define "schemas.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Schemas</h1>
+  <input class="table-filter" data-table-filter="#schemas-table" placeholder="Filter schemas" aria-label="Filter schemas">
+</div>
+<div class="card">
+  <table id="schemas-table">
+    <thead>
+      <tr><th>Cluster</th><th>Keyspace</th><th>Tables</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}{{ $s := . }}
+      <tr>
+        <td>{{ clusterID $s.GetCluster }}</td>
+        <td>{{ $s.GetKeyspace }}</td>
+        <td>
+          {{ schemaTableCount $s }}
+          {{ range $s.GetTableDefinitions }}<div><a href="/schema/{{ pathEscape (clusterID $s.GetCluster) }}/{{ pathEscape $s.GetKeyspace }}/{{ pathEscape .GetName }}">{{ .GetName }}</a></div>{{ end }}
+        </td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No schemas found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

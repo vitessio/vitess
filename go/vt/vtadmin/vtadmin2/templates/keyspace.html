@@ -1,0 +1,116 @@
+{{ define "keyspace.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $ks := .Data }}
+<div class="toolbar">
+  <h1>{{ keyspaceName $ks }}</h1>
+  <a href="/keyspaces">Back to keyspaces</a>
+</div>
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ clusterID $ks.GetCluster }}</dd>
+    <dt>Keyspace</dt><dd>{{ keyspaceName $ks }}</dd>
+  </dl>
+</div>
+<div class="card">
+  <h2>Shards</h2>
+  <table>
+    <thead><tr><th>Name</th></tr></thead>
+    <tbody>
+      {{ range sortedShardNames $ks }}
+      <tr><td><a href="/keyspace/{{ pathEscape (clusterID $ks.GetCluster) }}/{{ pathEscape (keyspaceName $ks) }}/shard/{{ pathEscape . }}">{{ . }}</a></td></tr>
+      {{ else }}
+      <tr><td>No shards found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ if not .ReadOnly }}
+<div class="card danger-zone">
+  <h2>Keyspace actions</h2>
+  <div class="actions-grid">
+    <details>
+      <summary>Validate</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "validate" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label class="checkbox-label">
+          <input type="checkbox" name="ping_tablets">
+          Ping tablets
+        </label>
+        <p class="muted">Validates that all nodes reachable from this keyspace are consistent.</p>
+        <button type="submit" class="button">Validate keyspace</button>
+      </form>
+    </details>
+    <details>
+      <summary>Validate schema</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "validate_schema" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <p class="muted">Validates that the schema is consistent across all tablets in this keyspace.</p>
+        <button type="submit" class="button">Validate schema</button>
+      </form>
+    </details>
+    <details>
+      <summary>Validate version</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "validate_version" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <p class="muted">Validates that the version on the primary matches all replicas.</p>
+        <button type="submit" class="button">Validate version</button>
+      </form>
+    </details>
+    <details>
+      <summary>Rebuild keyspace graph</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "rebuild_graph" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          Cells
+          <input type="text" name="cells" placeholder="zone1, zone2" autocomplete="off">
+        </label>
+        <p class="muted">Rebuilds the serving graph for this keyspace in the given cells. Leave cells empty for all.</p>
+        <button type="submit" class="button">Rebuild graph</button>
+      </form>
+    </details>
+    <details>
+      <summary>Reload schema</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "reload_schema" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <p class="muted">Reloads the schema on all tablets in this keyspace, including the primary. Best-effort.</p>
+        <button type="submit" class="button">Reload schema</button>
+      </form>
+    </details>
+    <details>
+      <summary>Create shard</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "create_shard" }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          Shard name
+          <input type="text" name="shard" required placeholder="-80" autocomplete="off">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="force">
+          Force (treat existing shard as success)
+        </label>
+        <button type="submit" class="button">Create shard</button>
+      </form>
+    </details>
+    <details>
+      <summary>Remove cell</summary>
+      <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "remove_cell" }}" class="form-grid" data-confirm="Remove a cell from keyspace {{ keyspaceName $ks }}?">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          Cell
+          <input type="text" name="cell" required placeholder="zone1" autocomplete="off">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="force">
+          Force
+        </label>
+        <p class="muted">Removes the cell from the keyspace's SrvKeyspace. All shards in the keyspace must have no tablets in the cell, unless forced.</p>
+        <button type="submit" class="button danger">Remove cell</button>
+      </form>
+    </details>
+  </div>
+</div>
+{{ end }}
+{{ end }}

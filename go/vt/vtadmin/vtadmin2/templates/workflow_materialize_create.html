@@ -1,0 +1,124 @@
+{{ define "workflow_materialize_create.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+<div class="toolbar">
+  <h1>Create Materialize workflow</h1>
+  <a href="/workflows">Back to workflows</a>
+</div>
+
+<p class="muted">Materialize continuously copies data from one keyspace into tables in another, driven by per-table select expressions. <a href="https://vitess.io/docs/user-guides/configuration-advanced/materialize/" target="_blank" rel="noopener noreferrer">Materialize user guide</a>.</p>
+
+<div class="card">
+  <h2>1. Choose source</h2>
+  <form method="GET" action="/workflows/materialize/create" class="form-grid">
+    <label>
+      Cluster
+      <select name="cluster_id">
+        {{ range $d.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $d.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Source keyspace
+      <select name="source_keyspace">
+        {{ range $d.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $d.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $d.SourceKeyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+    <div>
+      <button type="submit" class="button">Load reference tables</button>
+      <span class="muted">Reference tables live in the source keyspace and can be copied as-is for use by materialized queries.</span>
+    </div>
+  </form>
+</div>
+
+{{ if and $d.SelectedCluster $d.SourceKeyspace }}
+<div class="card">
+  <h2>2. Create the workflow</h2>
+  <form method="POST" action="/workflows/materialize/create" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <input type="hidden" name="cluster_id" value="{{ $d.SelectedCluster }}">
+    <input type="hidden" name="source_keyspace" value="{{ $d.SourceKeyspace }}">
+
+    <label>
+      Workflow name
+      <input type="text" name="workflow" required autocomplete="off">
+    </label>
+    <label>
+      Target keyspace
+      <select name="target_keyspace" required>
+        {{ range $d.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $d.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $d.SourceKeyspace }} disabled{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+      <span class="muted">Keyspace where the materialized tables will live.</span>
+    </label>
+    <label>
+      Table settings (JSON)
+      <textarea name="table_settings" rows="8" placeholder='[{"target_table":"target_table","source_expression":"select * from source_table"}]'></textarea>
+      <span class="muted">JSON defining which tables to materialize and the select expressions to build them from. Provide either table settings or reference tables — not both.</span>
+    </label>
+
+    {{ if $d.ReferenceTables }}
+    <fieldset class="form-fieldset">
+      <legend>Reference tables (in {{ $d.SourceKeyspace }})</legend>
+      {{ range $d.ReferenceTables }}
+      <label class="checkbox-label">
+        <input type="checkbox" name="reference_table" value="{{ . }}">
+        {{ . }}
+      </label>
+      {{ end }}
+      <span class="muted">Selecting reference tables creates a reference-table materialization; leave all unchecked when using table settings.</span>
+    </fieldset>
+    {{ end }}
+
+    <h3>Advanced</h3>
+    <label>
+      Cell
+      <input type="text" name="cell" placeholder="zone1, zone2" autocomplete="off">
+    </label>
+    <fieldset class="form-fieldset">
+      <legend>Source tablet types</legend>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="REPLICA" checked>
+        REPLICA
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="PRIMARY" checked>
+        PRIMARY
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="RDONLY">
+        RDONLY
+      </label>
+    </fieldset>
+    <label class="checkbox-label">
+      <input type="checkbox" name="tablet_selection_preference" checked>
+      Prefer tablets in order (REPLICA, then RDONLY)
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" name="stop_after_copy">
+      Stop after copy
+    </label>
+    <p class="muted">Stops VReplication once the backfill copy finishes, without catching up.</p>
+
+    <div>
+      <button type="submit" class="button">Create workflow</button>
+    </div>
+  </form>
+</div>
+{{ else }}
+<div class="card">
+  <p class="muted">Pick a cluster and source keyspace above to continue.</p>
+</div>
+{{ end }}
+{{ end }}

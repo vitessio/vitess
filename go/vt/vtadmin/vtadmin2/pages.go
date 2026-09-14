@@ -1,0 +1,181 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vtadmin2
+
+import (
+	"net/http"
+	"sync"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+)
+
+// loadFormOptions loads clusters and keyspaces for form rendering. The
+// selected cluster honors, in order: an explicit request, the saved default
+// cluster cookie, then the first cluster.
+func (s *Server) loadFormOptions(r *http.Request, requestedCluster, requestedKeyspace string) (formOptions, error) {
+	ctx := r.Context()
+	clustersResp, err := s.api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+	if err != nil {
+		return formOptions{}, err
+	}
+	clusters := clustersResp.GetClusters()
+	selectedCluster := selectedClusterID(clusters, requestedCluster, cookieValue(r, defaultClusterCookieName))
+
+	var (
+		keyspaces     []*vtadminpb.Keyspace
+		selectedError error
+		wg            sync.WaitGroup
+		mu            sync.Mutex
+	)
+	for _, cluster := range clusters {
+		wg.Add(1)
+		go func(cluster *vtadminpb.Cluster) {
+			defer wg.Done()
+
+			keyspacesResp, err := s.api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{
+				ClusterIds: []string{cluster.GetId()},
+			})
+			if err != nil {
+				if cluster.GetId() == selectedCluster {
+					mu.Lock()
+					selectedError = err
+					mu.Unlock()
+				}
+				return
+			}
+
+			mu.Lock()
+			keyspaces = append(keyspaces, keyspacesResp.GetKeyspaces()...)
+			mu.Unlock()
+		}(cluster)
+	}
+	wg.Wait()
+	if selectedError != nil {
+		return formOptions{}, selectedError
+	}
+
+	return formOptions{
+		Clusters:         clusters,
+		Keyspaces:        keyspaces,
+		SelectedCluster:  selectedCluster,
+		SelectedKeyspace: selectedKeyspaceName(keyspaces, selectedCluster, requestedKeyspace),
+	}, nil
+}
+
+func (s *Server) clusters(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.api.GetClusters(r.Context(), &vtadminpb.GetClustersRequest{})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Clusters", err)
+		return
+	}
+
+	s.render(w, r, http.StatusOK, "clusters.html", PageData{
+		Title:  "Clusters",
+		Active: "clusters",
+		Data:   resp.GetClusters(),
+	})
+}
+
+func (s *Server) keyspaces(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.api.GetKeyspaces(r.Context(), &vtadminpb.GetKeyspacesRequest{
+		ClusterIds: r.URL.Query()["cluster_id"],
+	})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Keyspaces", err)
+		return
+	}
+
+	s.render(w, r, http.StatusOK, "keyspaces.html", PageData{
+		Title:  "Keyspaces",
+		Active: "keyspaces",
+		Data:   resp.GetKeyspaces(),
+	})
+}
+
+func (s *Server) keyspace(w http.ResponseWriter, r *http.Request) {
+	ks, err := s.api.GetKeyspace(r.Context(), &vtadminpb.GetKeyspaceRequest{
+		ClusterId: r.PathValue("cluster_id"),
+		Keyspace:  r.PathValue("name"),
+	})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Keyspace", err)
+		return
+	}
+	if ks == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.render(w, r, http.StatusOK, "keyspace.html", PageData{
+		Title:     keyspaceName(ks),
+		Active:    "keyspaces",
+		NeedsCSRF: !s.opts.ReadOnly,
+		Data:      ks,
+	})
+}
+
+func (s *Server) tablets(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.api.GetTablets(r.Context(), &vtadminpb.GetTabletsRequest{
+		ClusterIds: r.URL.Query()["cluster_id"],
+	})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Tablets", err)
+		return
+	}
+
+	s.render(w, r, http.StatusOK, "tablets.html", PageData{
+		Title:  "Tablets",
+		Active: "tablets",
+		Data:   resp.GetTablets(),
+	})
+}
+
+func (s *Server) schemas(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.api.GetSchemas(r.Context(), &vtadminpb.GetSchemasRequest{
+		ClusterIds: r.URL.Query()["cluster_id"],
+	})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Schemas", err)
+		return
+	}
+
+	s.render(w, r, http.StatusOK, "schemas.html", PageData{
+		Title:  "Schemas",
+		Active: "schemas",
+		Data:   resp.GetSchemas(),
+	})
+}
+
+func (s *Server) createKeyspaceForm(w http.ResponseWriter, r *http.Request) {
+	if s.opts.ReadOnly {
+		s.renderReadOnly(w, r)
+		return
+	}
+
+	resp, err := s.api.GetClusters(r.Context(), &vtadminpb.GetClustersRequest{})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Create keyspace", err)
+		return
+	}
+
+	s.render(w, r, http.StatusOK, "keyspace_create.html", PageData{
+		Title:     "Create keyspace",
+		Active:    "keyspaces",
+		NeedsCSRF: true,
+		Data:      resp.GetClusters(),
+	})
+}

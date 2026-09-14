@@ -1,0 +1,19 @@
+{{ define "tablet_full_status.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Full Status</h1>
+  <a href="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}">Back to tablet</a>
+</div>
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ .Data.ClusterID }}</dd>
+    <dt>Alias</dt><dd>{{ .Data.Alias }}</dd>
+  </dl>
+</div>
+<div class="card">
+  <pre>{{ protoJSON .Data.Response }}</pre>
+</div>
+{{ end }}
