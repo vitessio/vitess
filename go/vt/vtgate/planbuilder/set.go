@@ -67,7 +67,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
 				return nil, vterrors.VT12001(fmt.Sprintf("system setting: %s", expr.Var.Name))
 			}
-			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
+			setOp, err := planSysVarCheckIgnore(expr, vschema, true, true)
 			if err != nil {
 				return nil, err
 			}
@@ -153,11 +153,11 @@ func buildSetOpIgnore(s setting) planFunc {
 
 func buildSetOpCheckAndIgnore(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return planSysVarCheckIgnore(expr, schema, s.boolean)
+		return planSysVarCheckIgnore(expr, schema, s.boolean, false)
 	}
 }
 
-func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool) (engine.SetOp, error) {
+func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool, global bool) (engine.SetOp, error) {
 	keyspace, dest, err := resolveDestination(schema)
 	if err != nil {
 		return nil, err
@@ -172,14 +172,17 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Expr:              value,
+		Global:            global,
 	}, nil
 }
 
 // validateSQLModePlan wraps sql_mode's planFunc with plan-time validation of constant
 // values: literals and constant expressions (e.g. CONCAT over literals) are evaluated and
-// validated the way MySQL validates a SET sql_mode, and modes the Vitess parser cannot
-// support are rejected (see sqlmode.Validate). Non-constant expressions are validated at
-// execution time, once their value is known.
+// validated the way MySQL validates a SET sql_mode, and the modes that change how SQL
+// text is read are rejected (see sqlmode.Validate) except those the parser honors, which
+// the session is then parsed under. Non-constant expressions are validated at execution
+// time, once their value is known; so is an honored mode when system settings are
+// disabled, which needs the session's stored value to judge (see judgeIgnoredSQLMode).
 func validateSQLModePlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
 		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
@@ -189,7 +192,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 		if err == nil {
 			if lit, ok := evalExpr.(*evalengine.Literal); ok {
 				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
-					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation()), 0); err != nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation()), sqlparser.HonoredSQLModes); err != nil {
 						return nil, err
 					}
 				}
@@ -202,7 +205,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
-			return planSysVarCheckIgnore(expr, vschema, s.boolean)
+			return planSysVarCheckIgnore(expr, vschema, s.boolean, false)
 		}
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {

@@ -18,17 +18,18 @@ package reservedconn
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestSetSysVarSingle(t *testing.T) {
@@ -62,6 +63,10 @@ func TestSetSysVarSingle(t *testing.T) {
 		name:     "sql_mode", // use reserved conn
 		expr:     "@@sql_mode",
 		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
+	}, {
+		name:     "sql_mode", // a lexer mode vtgate parses under; the tablet is sent the value and parses under it too
+		expr:     "'pipes_as_concat,no_zero_date'",
+		expected: []string{`[[VARCHAR("PIPES_AS_CONCAT,NO_ZERO_DATE")]]`},
 	}, {
 		name:     "SQL_SAFE_UPDATES", // use reserved conn
 		expr:     "1",
@@ -105,7 +110,79 @@ func TestSetSystemVariable(t *testing.T) {
 	utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00") INT64(7)]]`)
 
 	utils.Exec(t, conn, "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483")
-	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR(",STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO")]]`)
+	// the assigned value reads back in the canonical form MySQL reports: the empty
+	// list element dropped, names in MySQL's order
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_AUTO_VALUE_ON_ZERO,STRICT_ALL_TABLES")]]`)
+}
+
+// A session that sets PIPES_AS_CONCAT has its SQL read under the mode by
+// vtgate: || concatenates. The tablet is sent canonical SQL and the session's
+// sql_mode as it is, so the runtime modes set alongside apply on the tablet
+// and the tablet reads under the mode as well.
+func TestSetPipesAsConcat(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[INT64(0) INT64(1)]]`)
+
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT,NO_ZERO_DATE'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT,NO_ZERO_DATE")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[VARCHAR("ab") VARCHAR("10")]]`)
+	// an unaliased || names its column after the concat() call it is read as,
+	// where MySQL names it after the text as written; an alias is kept
+	qr := utils.Exec(t, conn, "select a || a, 1||0 as c from (select 1 as a) as t")
+	require.Len(t, qr.Fields, 2)
+	assert.Equal(t, "concat(a, a)", qr.Fields[0].Name)
+	assert.Equal(t, "c", qr.Fields[1].Name)
+	// the runtime mode set alongside applies on the tablet
+	utils.AssertMatches(t, conn, "select str_to_date('00/00/0000', '%m/%d/%Y')", `[[NULL]]`)
+
+	// a prepared statement is read under the mode as well
+	utils.Exec(t, conn, "prepare stmt from 'select ''a'' || ''b'''")
+	utils.AssertMatches(t, conn, "execute stmt", `[[VARCHAR("ab")]]`)
+
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[INT64(0) INT64(1)]]`)
+	utils.AssertMatches(t, conn, "select str_to_date('00/00/0000', '%m/%d/%Y')", `[[DATE("0000-00-00")]]`)
+
+	// setting the mode back off is a change of the session, whatever the tablet's
+	// connection ran under
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
+
+	// a session with open shard sessions sends them the mode
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "select id from test where id = 1")
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
+	utils.Exec(t, conn, "commit")
+
+	// so does a targeted session
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.Exec(t, conn, "use `"+keyspaceName+"`")
+
+	// a statement prepared over the binary protocol is read under the mode as
+	// well (client-side parameter interpolation off, so the driver prepares)
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%d)/%s?interpolateParams=false", vtParams.Host, vtParams.Port, keyspaceName))
+	require.NoError(t, err)
+	defer db.Close()
+	binary, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	defer binary.Close()
+	_, err = binary.ExecContext(t.Context(), "set sql_mode = 'PIPES_AS_CONCAT'")
+	require.NoError(t, err)
+	var got string
+	require.NoError(t, binary.QueryRowContext(t.Context(), "select 'a' || ?", "b").Scan(&got))
+	assert.Equal(t, "ab", got)
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {

@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
@@ -323,6 +324,10 @@ func (t *noopVCursor) SetSysVar(name string, expr string) {
 	// panic("implement me")
 }
 
+func (t *noopVCursor) StoredSQLMode() (sqlmode.Mode, bool) {
+	return 0, false
+}
+
 func (t *noopVCursor) InReservedConn() bool {
 	panic("implement me")
 }
@@ -491,6 +496,10 @@ type loggingVCursor struct {
 	inReservedConn  bool
 	systemVariables map[string]string
 	disableSetVar   bool
+	// storedSQLMode and hasStoredSQLMode stand in for the sql_mode a SET stored on
+	// the session, against which a sql_mode assignment is judged
+	storedSQLMode    sqlmode.Mode
+	hasStoredSQLMode bool
 
 	// map different shards to keyspaces in the test.
 	ksShardMap map[string][]string
@@ -582,6 +591,10 @@ func (f *loggingVCursor) SetUDV(key string, value any) error {
 
 func (f *loggingVCursor) SetSysVar(name string, expr string) {
 	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
+}
+
+func (f *loggingVCursor) StoredSQLMode() (sqlmode.Mode, bool) {
+	return f.storedSQLMode, f.hasStoredSQLMode
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {

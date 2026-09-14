@@ -294,6 +294,10 @@ func (v *vschema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
 }
 
+func (v *vschema) Parser() *sqlparser.Parser {
+	return v.Environment().Parser()
+}
+
 func (v *vschema) ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...any) error {
 	// TODO implement me
 	panic("implement me")

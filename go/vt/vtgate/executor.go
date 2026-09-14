@@ -1365,7 +1365,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	stmt, reservedVars, err := parseAndValidateQuery(query, vcursor.Parser())
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1449,6 +1449,9 @@ func (e *Executor) getCachedOrBuildPlan(
 	return plan, false, stmt, err
 }
 
+// buildPlanKey builds the plan cache key of query as the session's parser reads
+// it: the lexer modes the parser honors are part of the key, since they change
+// what the same text means.
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
 	allDest := getDestinations(ctx, vcursor)
 
@@ -1459,6 +1462,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
+		SQLMode:         vcursor.Parser().SQLMode(),
 	}
 }
 
@@ -1656,7 +1660,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
 		// unknown and is rejected below, rather than being reported to the
 		// client as a zero-parameter success.
-		stmt, err := e.env.Parser().Parse(sql)
+		stmt, err := e.sessionParser(safeSession).Parse(sql)
 		if err != nil {
 			// The statement stays unknown, and an unparseable statement is
 			// never SHOW, so record the type and clear warnings the way the
@@ -1841,6 +1845,12 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 		return nil, 0, false
 	}
 	return fields, countArguments(stmt), true
+}
+
+// sessionParser returns the parser that reads the session's SQL: the
+// environment's, under the sql_mode a SET stored on the session.
+func (e *Executor) sessionParser(session *econtext.SafeSession) *sqlparser.Parser {
+	return e.env.Parser().WithSQLMode(session.ParseSQLMode())
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {

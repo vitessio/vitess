@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,6 +72,15 @@ type (
 		// This causes all queries to route to the specified tablet until cleared.
 		// Note: This is stored in the Go wrapper, not in the protobuf Session.
 		targetTabletAlias *topodatapb.TabletAlias
+
+		// sqlModeMemo holds the sql_mode parsed from the expression a SET
+		// stored on the session, keyed by that expression, so that a changed
+		// or reset value is parsed again and an unchanged one is a field read.
+		sqlModeMemo struct {
+			stored string
+			mode   sqlmode.Mode
+			ok     bool
+		}
 
 		*vtgatepb.Session
 	}
@@ -697,6 +708,59 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+// ParseSQLMode returns the sql_mode the session's SQL is parsed under: its
+// sql_mode, expanded, as a SET stored it on the session, or zero for a session
+// that never set sql_mode: such a session runs under the backend's, which
+// carries no lexer mode (see sqlmode.NeutralizeSessionQuery). A stored value
+// that is not a literal mode value counts as zero as well.
+func (session *SafeSession) ParseSQLMode() sqlmode.Mode {
+	mode, _ := session.StoredSQLMode()
+	return mode
+}
+
+// StoredSQLMode returns the sql_mode a SET stored on the session, expanded, and
+// whether one is stored: false for a session that never set sql_mode, and for a
+// stored value that is not a literal mode value, such as an expression. The
+// stored value is decoded once per value and memoized.
+func (session *SafeSession) StoredSQLMode() (sqlmode.Mode, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	stored := session.SystemVariables[sysvars.SQLMode.Name]
+	if stored == "" {
+		return 0, false
+	}
+	if session.sqlModeMemo.stored != stored {
+		session.sqlModeMemo.stored = stored
+		session.sqlModeMemo.mode, session.sqlModeMemo.ok = storedSQLMode(stored)
+	}
+	return session.sqlModeMemo.mode, session.sqlModeMemo.ok
+}
+
+// storedSQLMode decodes the sql_mode value a SET stored on the session, as the
+// evaluated value's SQL encoding: a quoted mode list, with or without a binary
+// introducer, or a numeric bitmask. It returns the expanded mode, and false
+// for any other value, such as an expression or a value MySQL would reject.
+func storedSQLMode(stored string) (sqlmode.Mode, bool) {
+	var value sqltypes.Value
+	literal := strings.TrimPrefix(stored, "_binary")
+	if len(literal) >= 2 && literal[0] == '\'' && literal[len(literal)-1] == '\'' {
+		inner, err := sqltypes.DecodeStringSQL(literal)
+		if err != nil {
+			return 0, false
+		}
+		value = sqltypes.NewVarChar(inner)
+	} else if bits, err := strconv.ParseUint(stored, 10, 64); err == nil {
+		value = sqltypes.NewUint64(bits)
+	} else {
+		return 0, false
+	}
+	mode, err := sqlmode.FromValue(value)
+	if err != nil {
+		return 0, false
+	}
+	return mode.Expand(), true
 }
 
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.

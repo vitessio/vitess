@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 
@@ -65,9 +66,9 @@ func TestSetSystemVariableAsString(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
 		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
-		"SysVar set with (x,'foobar')",
 		"Needs Reserved Conn",
 		"ExecuteMultiShard ks.-20: set x = dummy_expr {} false false",
+		"SysVar set with (x,'foobar')",
 	})
 }
 
@@ -84,6 +85,8 @@ func TestSetTable(t *testing.T) {
 		mysqlVersion     string
 		disableSetVar    bool
 		shardSession     []*srvtopo.ResolvedShard
+		storedSQLMode    sqlmode.Mode
+		hasStoredSQLMode bool
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -386,8 +389,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
-			`SysVar set with (x,123456)`,
 			`Needs Reserved Conn`,
+			`SysVar set with (x,123456)`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -491,8 +494,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE' new {} false false`,
-			"SysVar set with (sql_mode,'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE",
@@ -511,8 +514,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,NO_ZERO_DATE' new {} false false`,
-			"SysVar set with (sql_mode,'no_zero_date,NO_ZERO_DATE')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'NO_ZERO_DATE')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,NO_ZERO_DATE",
@@ -548,8 +551,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -567,8 +570,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -587,8 +590,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -607,8 +610,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -627,8 +630,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -651,9 +654,9 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -738,6 +741,282 @@ func TestSetTable(t *testing.T) {
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|ansi",
 		)},
+	}, {
+		testName:     "sql_mode set to PIPES_AS_CONCAT, which vtgate's parser honors",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'pipes_as_concat,STRICT_TRANS_TABLES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'pipes_as_concat,STRICT_TRANS_TABLES' new {} false false`,
+			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT,STRICT_TRANS_TABLES')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|pipes_as_concat,STRICT_TRANS_TABLES",
+		)},
+	}, {
+		// a targeted session's SET sends the shard the judged value as it is, the
+		// honored lexer mode included: the tablet parses under it
+		testName:     "sql_mode set to PIPES_AS_CONCAT on a targeted session",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          &vindexes.Keyspace{Name: "ks", Sharded: true},
+				TargetDestination: key.DestinationShard("-20"),
+				Expr:              "'pipes_as_concat'",
+				SupportSetVar:     true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(-20)`,
+			`ExecuteMultiShard ks.DestinationShard(-20): select @@sql_mode orig, 'pipes_as_concat' new {} false false`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.DestinationShard(-20): set sql_mode = 'PIPES_AS_CONCAT' {} false false`,
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|pipes_as_concat",
+		)},
+	}, {
+		// open shard sessions of a reserved-connection session receive the judged
+		// value as it is too
+		testName:     "sql_mode set to PIPES_AS_CONCAT with open shard sessions",
+		mysqlVersion: "5.7.9",
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' new {} false false`,
+			"Needs Reserved Conn",
+			`ExecuteMultiShard ks.-20: set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' {} false false`,
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT,STRICT_TRANS_TABLES')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT,STRICT_TRANS_TABLES",
+		)},
+	}, {
+		// a session that stores a sql_mode is judged against it, not against the
+		// shard the judgment ran on: a pooled connection carries the backend's default
+		testName:         "sql_mode reset from the session's own mode to the shard's",
+		mysqlVersion:     "8.0.0",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "''",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|",
+		)},
+	}, {
+		// no change: nothing is sent, but the session's stored value is set to the
+		// canonical form, which canonicalizes a value stored as an older vtgate spelled it
+		testName:         "sql_mode set to the session's own mode is no change",
+		mysqlVersion:     "8.0.0",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'pipes_as_concat'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'pipes_as_concat' new {} false false`,
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|pipes_as_concat",
+		)},
+	}, {
+		// with system settings disabled the assignment stores nothing, so the session
+		// would not be parsed under the mode either: it is rejected, as before
+		testName: "sysvar check and ignore rejects a lexer mode the parser honors",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('PIPES_AS', '_CONCAT')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT",
+		)},
+		expectedError: "setting the PIPES_AS_CONCAT sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('PIPES_AS', '_CONCAT') new {} false false`,
+		},
+	}, {
+		// unless the session already stores that mode: re-assigning it is a no-op
+		testName:         "sysvar check and ignore accepts the session's own lexer mode",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT'",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
+		},
+	}, {
+		// a change of the runtime modes alongside the stored lexer mode is ignored
+		// like any other ignored assignment
+		testName:         "sysvar check and ignore ignores a runtime change beside the session's lexer mode",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT,NO_ZERO_DATE'",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT,NO_ZERO_DATE",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT,NO_ZERO_DATE' new {} false false`,
+		},
+	}, {
+		// an assignment that would take the session out of its stored lexer mode is
+		// rejected: ignored, it would leave the session parsed under the mode
+		testName:         "sysvar check and ignore rejects leaving the session's lexer mode",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "''",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|",
+		)},
+		expectedError: "changing the session's sql_mode from PIPES_AS_CONCAT is unsupported while system settings are disabled",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+		},
+	}, {
+		// a global assignment does not change the session: it is validated and
+		// ignored, whatever lexer mode the session stores
+		testName:         "sysvar check and ignore validates and ignores a global sql_mode assignment",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'NO_ZERO_DATE'",
+				Global:            true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|NO_ZERO_DATE",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'NO_ZERO_DATE' new {} false false`,
+		},
+	}, {
+		testName: "sysvar check and ignore ignores a global assignment of a lexer mode the parser honors",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT'",
+				Global:            true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
+		},
+	}, {
+		testName: "sysvar check and ignore rejects a global assignment of an unsupported mode",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'ANSI_QUOTES'",
+				Global:            true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|ANSI_QUOTES",
+		)},
+		expectedError: "setting the ANSI_QUOTES sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ANSI_QUOTES' new {} false false`,
+		},
+	}, {
+		// a judgment that cannot run cannot pass: unlike another ignored variable, an
+		// unjudged sql_mode assignment could put the client under a lexer mode the
+		// session does not run under
+		testName: "sysvar check and ignore fails when the sql_mode judgment fails",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT'",
+			},
+		},
+		execErr:       errors.New("some random error"),
+		expectedError: "unable to judge the sql_mode assignment: some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
+		},
 	}, {
 		testName:     "sql_mode set to IGNORE_SPACE",
 		mysqlVersion: "8.0.0",
@@ -864,8 +1143,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
-			"SysVar set with (default_week_format,'a')",
 			"Needs Reserved Conn",
+			"SysVar set with (default_week_format,'a')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
 			"a",
@@ -893,6 +1172,9 @@ func TestSetTable(t *testing.T) {
 				disableSetVar:  tc.disableSetVar,
 				parser:         parser,
 				shardSession:   tc.shardSession,
+
+				storedSQLMode:    tc.storedSQLMode,
+				hasStoredSQLMode: tc.hasStoredSQLMode,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {

@@ -50,7 +50,8 @@ func TestWithSQLMode(t *testing.T) {
 
 // Under PIPES_AS_CONCAT || is the concatenation operator, binding tighter than
 // ^ and looser than the unary operators, as in MySQL. It parses into a
-// concat() call, so the AST and its serialization carry no mode.
+// concat() call, so the AST and its serialization carry no mode: the
+// serialized text parses back to the same AST under either reading.
 func TestPipesAsConcat(t *testing.T) {
 	def := NewTestParser()
 	pipes := def.WithSQLMode(sqlmode.PipesAsConcat)
@@ -79,34 +80,16 @@ func TestPipesAsConcat(t *testing.T) {
 		t.Run(tc.in, func(t *testing.T) {
 			stmt, err := tc.parser.Parse(tc.in)
 			require.NoError(t, err)
-			assert.Equal(t, tc.out, String(stmt))
-		})
-	}
-}
-
-// Serialized SQL must read the same whether or not it is later lexed under
-// PIPES_AS_CONCAT: logical OR prints as the or keyword, and || read under the
-// mode prints as a concat() call, so the parse corpus serialized by either
-// reading parses back to the same AST under either reading. (A || inside a
-// comment is inert under both.)
-func TestFormatPipesAsConcatIndependence(t *testing.T) {
-	def := NewTestParser()
-	pipes := def.WithSQLMode(sqlmode.PipesAsConcat)
-	for _, parser := range []*Parser{def, pipes} {
-		for _, tcase := range validSQL {
-			stmt, err := parser.Parse(tcase.input)
-			if err != nil {
-				continue
-			}
 			out := String(stmt)
-			again, err := def.Parse(out)
-			if err != nil {
-				// a partially parsed DDL does not serialize back to itself
-				continue
-			}
+			assert.Equal(t, tc.out, out)
+
+			// the serialized text means the same thing under either reading
+			underDefault, err := def.Parse(out)
+			require.NoError(t, err)
 			underPipes, err := pipes.Parse(out)
-			require.NoError(t, err, "parsed %q, serialized %q", tcase.input, out)
-			assert.True(t, Equals.Statement(again, underPipes), "serialized %q reads differently under PIPES_AS_CONCAT", out)
-		}
+			require.NoError(t, err)
+			assert.True(t, Equals.Statement(underDefault, underPipes), "serialized %q reads differently under PIPES_AS_CONCAT", out)
+			assert.Equal(t, out, String(underPipes))
+		})
 	}
 }

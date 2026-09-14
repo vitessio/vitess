@@ -122,10 +122,12 @@ func TestSystemVariables(t *testing.T) {
 		expectation string
 		comment     string
 	}{
-		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`},
-		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`, comment: "/* comment */"},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`, comment: "/* comment */"},
+		// @@sql_mode reads back the canonical form MySQL reports: uppercase names in
+		// MySQL's order, and the empty string for a blank list
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`},
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`, comment: "/* comment */"},
 	}
 
 	for _, tc := range tcs {
@@ -134,6 +136,26 @@ func TestSystemVariables(t *testing.T) {
 			utils.AssertMatches(t, conn, fmt.Sprintf("select %s @@%s", tc.comment, tc.name), tc.expectation)
 		})
 	}
+}
+
+// This cluster's vtgate runs with a MySQL 8 server version and SET_VAR enabled,
+// so the session's sql_mode travels to the tablets in the optimizer hint. A hint
+// does not change how MySQL reads the statement it is on, so the query must
+// reach MySQL as a concat() call for || to concatenate.
+func TestPipesAsConcatOverSetVar(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
+
+	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
+	utils.AssertMatches(t, conn, "select a || a from (select 1 as a) as t", `[[VARCHAR("11")]]`)
+
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[INT64(0)]]`)
 }
 
 func TestUseSystemAndUserVariables(t *testing.T) {
@@ -145,12 +167,13 @@ func TestUseSystemAndUserVariables(t *testing.T) {
 	utils.Exec(t, conn, "select 1 from information_schema.table_constraints")
 
 	utils.Exec(t, conn, "set @var = @@sql_mode")
-	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
+	// @@sql_mode reads back in the canonical form MySQL reports
+	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES")]]`)
 
 	utils.Exec(t, conn, "create table t(name varchar(100))")
 	utils.Exec(t, conn, "insert into t(name) values (@var)")
 
-	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
+	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES")]]`)
 
 	utils.Exec(t, conn, "delete from t where name = @var")
 	utils.AssertMatches(t, conn, "select name from t", `[]`)

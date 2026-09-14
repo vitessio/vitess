@@ -72,6 +72,10 @@ type (
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
+		// Global is set for a global-scope assignment, which does not change the
+		// session: its value is validated and the assignment ignored, whatever the
+		// session stores.
+		Global bool `json:",omitempty"`
 	}
 
 	// SysVarReservedConn implements the SetOp interface and will write the changes variable into the session
@@ -228,6 +232,13 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 	}
 	qr, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false)
 	if err != nil {
+		if svci.Name == "sql_mode" {
+			// The judgment decides whether the ignored assignment may pass at all;
+			// unjudged, it could leave the client believing it runs under a lexer
+			// mode the session does not run under, so a judgment that cannot run
+			// fails the assignment.
+			return vterrors.Wrapf(err, "unable to judge the sql_mode assignment")
+		}
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.
@@ -235,15 +246,43 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return nil
 	}
 	if svci.Name == "sql_mode" {
-		// The assignment is ignored, but an unsupported sql_mode is an error all the
-		// same: constants were rejected at plan time, and a non-constant value gets
-		// the same judgment here, once evaluated, so that the client does not go on
-		// believing it runs under a mode the Vitess parser cannot honor.
-		if _, _, err := sqlModeChangedValue(qr); err != nil {
+		if svci.Global {
+			_, _, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, vcursor.Session())
 			return err
 		}
+		return judgeIgnoredSQLMode(qr, vcursor.Session())
 	}
 	return nil
+}
+
+// judgeIgnoredSQLMode judges a sql_mode assignment that is ignored because system
+// settings are disabled. The assignment stores nothing, so it cannot change what the
+// session's SQL is parsed under: an assignment that would, by putting the session
+// under a lexer mode the parser honors or by taking it out of the one it stores, is an
+// error, so that the client does not go on believing it runs under a mode the session
+// does not run under. An assignment that leaves the session's lexer modes as they are
+// is a no-op, as in MySQL; an unsupported or invalid value is an error all the same.
+func judgeIgnoredSQLMode(qr *sqltypes.Result, session SessionActions) error {
+	changed, value, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, session)
+	if err != nil {
+		return err
+	}
+	stored, ok := session.StoredSQLMode()
+	if !ok || stored&sqlmode.LexerModes == 0 {
+		_, _, err = sqlModeChangedValue(qr, 0, session)
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	newMode, err := sqlmode.Parse(value.ToString())
+	if err != nil {
+		return err
+	}
+	if (newMode^stored)&sqlmode.LexerModes == 0 {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "changing the session's sql_mode from %s is unsupported while system settings are disabled", stored)
 }
 
 var _ SetOp = (*SysVarReservedConn)(nil)
@@ -284,7 +323,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			if err != nil {
 				return err
 			}
-			_, value, err := sqlModeChangedValue(qr)
+			_, value, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, vcursor.Session())
 			if err != nil {
 				return err
 			}
@@ -300,26 +339,42 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		vcursor.Session().SetSysVar(svs.Name, storedValue)
 		return nil
 	}
-	needReservedConn, storedValue, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
+	changed, storedValue, err := svs.judgeSysVar(ctx, vcursor, env)
 	if err != nil {
 		return err
 	}
-	if !needReservedConn {
+	if !changed {
+		if svs.Name == "sql_mode" {
+			if _, ok := vcursor.Session().StoredSQLMode(); ok {
+				// the session already carries the value; storing the judged one
+				// canonicalizes a value stored as an older vtgate spelled it
+				vcursor.Session().SetSysVar(svs.Name, storedValue)
+			}
+		}
 		// setting ignored, same as underlying datastore
 		return nil
 	}
-	// Update existing shard session with new system variable settings.
-	rss := vcursor.Session().ShardSession()
-	if len(rss) == 0 {
-		return nil
+	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
+	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
+		vcursor.Session().NeedsReservedConn()
+		// Update existing shard sessions with the new system variable setting
+		// before the session stores it: a SET that fails changes nothing, in
+		// MySQL and here.
+		if rss := vcursor.Session().ShardSession(); len(rss) > 0 {
+			value := svs.Expr
+			if svs.Name == "sql_mode" {
+				// The SET carries the judged value, not the expression: evaluating the
+				// expression a second time could apply a value the session never judged.
+				value = storedValue
+			}
+			if err := svs.execSetStatement(ctx, vcursor, rss, env, value); err != nil {
+				return err
+			}
+		}
 	}
-	value := svs.Expr
-	if svs.Name == "sql_mode" {
-		// The SET carries the judged value, not the expression: evaluating the
-		// expression a second time could apply a value the session never judged.
-		value = storedValue
-	}
-	return svs.execSetStatement(ctx, vcursor, rss, env, value)
+	vcursor.Session().SetSysVar(svs.Name, storedValue)
+	return nil
 }
 
 // execSetStatement executes `set <name> = <value>` on the given shard sessions.
@@ -335,10 +390,9 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 	return vterrors.Aggregate(errs)
 }
 
-// checkAndUpdateSysVar evaluates the assignment on a shard and, when it changes the
-// variable's value, stores the evaluated value in the session. It returns whether a
-// reserved connection is needed to apply the change, and the stored value.
-func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (needReservedConn bool, storedValue string, err error) {
+// judgeSysVar evaluates the assignment on a shard and reports whether it changes the
+// variable's value, and the value the session stores for it.
+func (svs *SysVarReservedConn) judgeSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (changed bool, storedValue string, err error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	if svs.Name == "sql_mode" {
 		sysVarExprValidationQuery = sqlModeJudgmentQuery(svs.Expr)
@@ -351,12 +405,11 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if err != nil {
 		return false, "", err
 	}
-	var changed bool
 	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
 		// the judgment query always returns one row; the judgment decides whether
 		// the value changed, and a malformed result is an error rather than "no change"
-		changed, value, err = sqlModeChangedValue(qr)
+		changed, value, err = sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, vcursor.Session())
 		if err != nil {
 			return false, "", err
 		}
@@ -366,21 +419,12 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 			value = qr.Rows[0][0]
 		}
 	}
-	if !changed {
+	if value.IsNull() && !changed {
 		return false, "", nil
 	}
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
-	storedValue = buf.String()
-	vcursor.Session().SetSysVar(svs.Name, storedValue)
-
-	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
-	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
-		vcursor.Session().NeedsReservedConn()
-		return true, storedValue, nil
-	}
-	return false, storedValue, nil
+	return changed, buf.String(), nil
 }
 
 // sqlModeJudgmentQuery selects the session's current sql_mode alongside the assigned
@@ -391,26 +435,40 @@ func sqlModeJudgmentQuery(expr string) string {
 
 // sqlModeChangedValue reports whether the sql_mode assignment changes the session's
 // current value, after validating the assigned value the way MySQL validates a SET (see
-// sqlmode.Validate). Validation runs before the change detection, so an invalid or
-// unsupported value is rejected even when the assignment would not change the value —
-// name lists, numeric bitmasks, and combination modes like ANSI included.
-func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
+// sqlmode.Validate), with honored the lexer modes the session may run under. Validation
+// runs before the change detection, so an invalid or unsupported value is rejected even
+// when the assignment would not change the value, name lists, numeric bitmasks, and
+// combination modes like ANSI included. The returned value is the canonical form MySQL
+// would report back for @@sql_mode, names uppercased, combination modes expanded, in
+// canonical order, so the session stores a value the parser and the transports can
+// decode regardless of how the assignment spelled it (e.g. as a numeric bitmask).
+//
+// The assignment is judged against the mode the session itself stores when it has one:
+// the shard the judgment ran on need not be in the session's mode, since a pooled
+// connection carries the backend's default and receives the session's value by hint
+// per statement. A session without a stored mode runs under the shard's, which the
+// judgment query read.
+func sqlModeChangedValue(qr *sqltypes.Result, honored sqlmode.Mode, session SessionActions) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 || len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
 		// the verification query selects exactly two columns of one row; anything else
 		// means the value cannot be judged, which must fail rather than pass as "no change"
 		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading sql_mode: %d fields, %d rows", len(qr.Fields), len(qr.Rows))
 	}
-	newMode, err := sqlmode.Validate(qr.Rows[0][1], 0)
+	newMode, err := sqlmode.Validate(qr.Rows[0][1], honored)
 	if err != nil {
 		return false, sqltypes.Value{}, err
+	}
+	canonical := sqltypes.NewVarChar(newMode.String())
+	if current, ok := session.StoredSQLMode(); ok {
+		return current != newMode, canonical, nil
 	}
 	orig, err := sqlmode.Parse(qr.Rows[0][0].ToString())
 	if err != nil {
 		// The backend reported a value these semantics cannot parse; treat the
 		// assignment as a change and let the backend judge it.
-		return true, qr.Rows[0][1], nil
+		return true, canonical, nil
 	}
-	return orig.Expand() != newMode, qr.Rows[0][1], nil
+	return orig.Expand() != newMode, canonical, nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)

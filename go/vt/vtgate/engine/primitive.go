@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -198,6 +199,9 @@ type (
 		ClearPrepareData(name string)
 
 		SetSysVar(name string, expr string)
+		// StoredSQLMode returns the sql_mode a SET stored on the session, expanded,
+		// and whether one is stored
+		StoredSQLMode() (sqlmode.Mode, bool)
 
 		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()

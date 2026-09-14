@@ -147,6 +147,10 @@ func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
 	return vw.Env
 }
 
+func (vw *VSchemaWrapper) Parser() *sqlparser.Parser {
+	return vw.Env.Parser()
+}
+
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {
 }
 

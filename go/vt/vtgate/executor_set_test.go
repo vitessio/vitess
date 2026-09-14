@@ -625,9 +625,9 @@ func TestSetVar(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-		"|only_full_group_by")})
+		"|ONLY_FULL_GROUP_BY")})
 
-	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = ONLY_FULL_GROUP_BY", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	tcases := []struct {
@@ -665,20 +665,20 @@ func TestSetVarShowVariables(t *testing.T) {
 	sbc.SetResults([]*sqltypes.Result{
 		// select query result for checking any change in system settings
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|only_full_group_by"),
+			"|ONLY_FULL_GROUP_BY"),
 		// show query result
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
 	})
 
-	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = ONLY_FULL_GROUP_BY", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	// this should return the updated value of sql_mode.
 	qr, err := executorExecSession(ctx, executor, session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
-	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("ONLY_FULL_GROUP_BY")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
