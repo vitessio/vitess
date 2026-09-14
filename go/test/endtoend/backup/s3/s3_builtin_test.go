@@ -30,7 +30,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/assert"
@@ -118,13 +117,13 @@ func TestMain(m *testing.M) {
 }
 
 // newS3Client builds a client of the same shape as s3backupstorage's
-// (LoadDefaultConfig, WithRegion, path-style), with static credentials and
-// BaseEndpoint standing in for its credential chain and endpoint resolver.
+// (LoadDefaultConfig with the default credential chain, WithRegion,
+// path-style), with BaseEndpoint standing in for its endpoint resolver. The
+// default chain reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and, for
+// temporary credentials, AWS_SESSION_TOKEN from the environment, so the setup
+// client and the tests' client see the same identity.
 func newS3Client(ctx context.Context, env s3Env) (*s3.Client, error) {
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(env.region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(env.accessKey, env.secretKey, "")),
-	)
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(env.region))
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +151,14 @@ func ensureBucket(ctx context.Context, env s3Env) error {
 			return nil
 		}
 		if _, ok := errors.AsType[*types.NotFound](err); ok {
-			_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(env.bucket)})
+			input := &s3.CreateBucketInput{Bucket: aws.String(env.bucket)}
+			// S3 requires a location constraint outside us-east-1 and rejects one in it.
+			if env.region != "us-east-1" {
+				input.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+					LocationConstraint: types.BucketLocationConstraint(env.region),
+				}
+			}
+			_, err = client.CreateBucket(ctx, input)
 			if err == nil {
 				return nil
 			}
