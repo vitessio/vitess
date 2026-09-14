@@ -257,6 +257,52 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "real1",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// The consumer query sees its CTEs everywhere in its own block, not
+		// only in the top-level FROM: a derived table reading the CTE carries
+		// no permission, even if a base table of the same name exists.
+		input: "with t as (select * from real1) select * from (select * from t) as s",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A scalar subquery in the consumer's select list sees the CTE.
+		input: "with t as (select * from real1) select (select max(id) from t) from real2",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A subquery in the consumer's WHERE sees the CTE.
+		input: "with t as (select * from real1) select * from real2 where id in (select id from t)",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// Both arms of a union see the CTE declared on the union.
+		input: "with t as (select * from real1) select * from t union select * from t",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A subquery in a DELETE's WHERE sees the CTE declared on the DELETE.
+		input: "with t as (select * from real1) delete from real2 where id in (select id from t)",
+		output: []Permission{{
+			TableName: "real2",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {

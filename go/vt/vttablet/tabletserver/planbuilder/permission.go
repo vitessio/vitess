@@ -84,74 +84,98 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 	return buildSubqueryPermissionsInScope(stmt, role, nil, permissions)
 }
 
+// cteScope is the set of CTE names one query block brings into scope. with is
+// the clause that declared them, or nil for names inherited from an enclosing
+// query.
+type cteScope struct {
+	with  *sqlparser.With
+	names []sqlparser.IdentifierCS
+}
+
 // buildSubqueryPermissionsInScope walks stmt and collects the permissions for
 // every real table it references. outerCTEs are the CTE names that are already
 // in scope from an enclosing query (used when recursing into a CTE body).
+//
+// A statement's WITH clause is pushed when the walker enters the statement and
+// popped when it leaves, so the whole query block, including derived tables
+// and subqueries walked after the WITH clause itself, sees the CTE names. The
+// CTE bodies are walked separately with the narrower scope that is legal
+// inside a body.
 func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Role, outerCTEs []sqlparser.IdentifierCS, permissions []Permission) []Permission {
-	var cteScopes [][]sqlparser.IdentifierCS
+	var cteScopes []cteScope
 	if len(outerCTEs) > 0 {
-		cteScopes = append(cteScopes, outerCTEs)
+		cteScopes = append(cteScopes, cteScope{names: outerCTEs})
+	}
+	push := func(with *sqlparser.With) {
+		if with != nil {
+			cteScopes = append(cteScopes, cteScope{with: with, names: gatherCTEs(with)})
+		}
+	}
+	pop := func(with *sqlparser.With) {
+		if with != nil && len(cteScopes) > 0 && cteScopes[len(cteScopes)-1].with == with {
+			cteScopes = cteScopes[:len(cteScopes)-1]
+		}
 	}
 	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Select:
-			if node.With != nil {
-				cteScopes = append(cteScopes, gatherCTEs(node.With))
-			}
+			push(node.With)
 			var ctes []sqlparser.IdentifierCS
-			for _, cteScope := range cteScopes {
-				ctes = append(ctes, cteScope...)
+			for _, scope := range cteScopes {
+				ctes = append(ctes, scope.names...)
 			}
 			permissions = buildTableExprsPermissions(node.From, role, ctes, permissions)
 		case *sqlparser.Delete:
-			if node.With != nil {
-				cteScopes = append(cteScopes, gatherCTEs(node.With))
-			}
+			push(node.With)
 		case *sqlparser.Update:
-			if node.With != nil {
-				cteScopes = append(cteScopes, gatherCTEs(node.With))
-			}
+			push(node.With)
 		case *sqlparser.Union:
-			if node.With != nil {
-				cteScopes = append(cteScopes, gatherCTEs(node.With))
-			}
+			push(node.With)
 		case *sqlparser.ValuesStatement:
-			if node.With != nil {
-				cteScopes = append(cteScopes, gatherCTEs(node.With))
-			}
+			push(node.With)
 		case *sqlparser.With:
-			// The enclosing statement pushed this WITH's CTE names as the top
-			// scope so the consumer query can see them; drop that scope so the
-			// walker does not process the bodies with the consumer's view. A
-			// CTE body has a narrower view: a non-recursive CTE is not visible
-			// inside its own definition (there the name is the real base
-			// table), and later siblings are never visible. Walk each body
-			// with exactly the CTEs that are legal there.
-			//
-			// Every statement that carries a WITH pushes a scope before the
-			// walker reaches it, so the stack is never empty here. If a new
-			// statement type ever breaks that invariant, the fallback errs
-			// toward reporting more permissions, never fewer.
-			if len(cteScopes) > 0 {
-				cteScopes = cteScopes[:len(cteScopes)-1]
-			}
-			names := gatherCTEs(node)
+			// A CTE body has a narrower view than the query block that
+			// declares it: a non-recursive CTE is not visible inside its own
+			// definition (there the name is the real base table), and later
+			// siblings are never visible. Walk each body with exactly the CTEs
+			// that are legal there: everything in scope from enclosing query
+			// blocks, the earlier siblings, and the CTE itself only when the
+			// clause is RECURSIVE. Skip the walker's own descent so the bodies
+			// are not also walked with the consumer's view.
 			var outer []sqlparser.IdentifierCS
-			for _, cteScope := range cteScopes {
-				outer = append(outer, cteScope...)
+			for _, scope := range cteScopes {
+				if scope.with != node {
+					outer = append(outer, scope.names...)
+				}
 			}
 			for i, cte := range node.CTEs {
 				bodyScope := append([]sqlparser.IdentifierCS(nil), outer...)
-				bodyScope = append(bodyScope, names[:i]...)
+				for _, sibling := range node.CTEs[:i] {
+					bodyScope = append(bodyScope, sibling.ID)
+				}
 				if node.Recursive {
-					bodyScope = append(bodyScope, names[i])
+					bodyScope = append(bodyScope, cte.ID)
 				}
 				permissions = buildSubqueryPermissionsInScope(cte.Subquery, role, bodyScope, permissions)
 			}
 			return false
 		}
 		return true
-	}, nil)
+	}, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Select:
+			pop(node.With)
+		case *sqlparser.Delete:
+			pop(node.With)
+		case *sqlparser.Update:
+			pop(node.With)
+		case *sqlparser.Union:
+			pop(node.With)
+		case *sqlparser.ValuesStatement:
+			pop(node.With)
+		}
+		return true
+	})
 	return permissions
 }
 
