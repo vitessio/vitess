@@ -468,5 +468,35 @@
     "comment": "unknown sql_mode names fail with MySQL's error",
     "query": "set sql_mode = 'BOGUS'",
     "plan": "Variable 'sql_mode' can't be set to the value of 'BOGUS'"
+  },
+  {
+    "comment": "an unquoted mode name is a constant, judged at plan time like its quoted spelling",
+    "query": "set sql_mode = ANSI",
+    "plan": "setting the ANSI sql_mode is unsupported"
+  },
+  {
+    "comment": "a qualified name is never a mode name; MySQL rejects it as the wrong argument type",
+    "query": "set sql_mode = t.TRADITIONAL",
+    "plan": "Incorrect argument type to variable 'sql_mode'"
+  },
+  {
+    "comment": "a qualified name is never a value for any system variable",
+    "query": "set @@sql_safe_updates = t.x",
+    "plan": "Incorrect argument type to variable 'sql_safe_updates'"
+  },
+  {
+    "comment": "a qualified name is rejected before on/off coercion of a reserved-connection boolean",
+    "query": "set foreign_key_checks = t.off",
+    "plan": "Incorrect argument type to variable 'foreign_key_checks'"
+  },
+  {
+    "comment": "a qualified name is rejected before on/off coercion of a Vitess-aware boolean",
+    "query": "set autocommit = t.off",
+    "plan": "Incorrect argument type to variable 'autocommit'"
+  },
+  {
+    "comment": "a qualified name is rejected for global-scope assignments too",
+    "query": "set global sql_safe_updates = t.x",
+    "plan": "Incorrect argument type to variable 'sql_safe_updates'"
   }
 ]
