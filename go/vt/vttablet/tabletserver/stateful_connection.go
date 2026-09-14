@@ -19,9 +19,11 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -61,6 +63,15 @@ type StatefulConnection struct {
 	// refreshes the connection. Both are sticky by design.
 	holdsTempTables  bool
 	keepAliveManaged bool
+
+	// parseSQLMode holds the lexer modes the connection's session is in (from its
+	// settings or SET statements; see sqlparser.HonoredSQLModes): queries on the
+	// connection are parsed under them. Atomic because the plan path reads it
+	// without locking the connection.
+	parseSQLMode atomic.Uint64
+	// settingStale is set once a SET statement ran on the connection after its
+	// settings were applied (see MarkSettingStale).
+	settingStale bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
 	// captured when its first temporary-table DDL runs and re-captured after
@@ -456,10 +467,34 @@ func (sc *StatefulConnection) getUsername() string {
 
 // ApplySetting returns whether the settings where applied or not. It also returns an error, if encountered.
 func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) (bool, error) {
-	if sc.dbConn.Conn.Setting() == setting {
+	if sc.dbConn.Conn.Setting() == setting && !sc.settingStale {
 		return false, nil
 	}
-	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
+	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {
+		return true, err
+	}
+	sc.settingStale = false
+	if setting.SetsSQLMode() {
+		sc.SetParseSQLMode(sqlmode.Mode(setting.SQLMode()))
+	}
+	return true, nil
+}
+
+// MarkSettingStale records that a SET statement ran on the connection since its
+// settings were applied: the MySQL session no longer matches them, so a request
+// that brings the same settings must apply them again rather than skip them.
+func (sc *StatefulConnection) MarkSettingStale() {
+	sc.settingStale = true
+}
+
+// ParseSQLMode returns the lexer modes the connection's session is in.
+func (sc *StatefulConnection) ParseSQLMode() sqlmode.Mode {
+	return sqlmode.Mode(sc.parseSQLMode.Load())
+}
+
+// SetParseSQLMode records the lexer modes the connection's session is in.
+func (sc *StatefulConnection) SetParseSQLMode(mode sqlmode.Mode) {
+	sc.parseSQLMode.Store(uint64(mode))
 }
 
 // resetLastUsed restarts the idle clock ElapsedTimeout measures from.

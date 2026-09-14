@@ -44,6 +44,7 @@
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
+        - [VTTablet parses under the connection's `sql_mode`, and accepts `PIPES_AS_CONCAT`](#vttablet-sql-mode-parsing)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
@@ -472,6 +473,14 @@ The server's own configuration is covered as well. MySQL lexes every statement u
 Two consequences are deliberate. Connections that serve `ExecuteFetchAsDba`-style admin RPCs also start neutralized: operator-supplied statements run with the server's lexer modes stripped, and a multi-statement batch can still set the session `sql_mode` explicitly. Connections to *external* MySQL servers (vreplication sources, point-in-time recovery) are neutralized too, because Vitess sends them the same Vitess-formatted SQL. Statements that an operator's `sql_mode`-sensitive tooling sends outside Vitess are unaffected: the neutralization is session-scoped and never touches the global value.
 
 **Impact**: During a rolling upgrade, VTTablets are typically upgraded before VTGates. A session that set a now-rejected `sql_mode`, such as `ANSI`, through a not-yet-upgraded VTGate will start receiving errors from upgraded VTTablets. Such sessions were already unreliable, because VTGate parses queries without honoring these modes. Queries now always run with the server's lexer modes stripped from the session, so Vitess-formatted SQL parses consistently regardless of the backend's global configuration.
+
+#### <a id="vttablet-sql-mode-parsing"/>VTTablet parses under the connection's `sql_mode`, and accepts `PIPES_AS_CONCAT`</a>
+
+VTTablet parses every query it executes and sends MySQL its own serialization, which is why it rejects the `sql_mode` values that change how SQL text is read (see [the previous section](#vttablet-reject-unsupported-sql-modes)): a connection whose MySQL session ran under such a mode would read VTTablet's text differently than VTTablet read the client's. The Vitess parser can now read SQL under `PIPES_AS_CONCAT`, under which `||` is the concatenation operator rather than logical OR, and VTTablet honors it on its own entry points. Connection settings, reserved connections and session-scope `SET sql_mode` statements that carry the mode are applied to MySQL as written; the connection records the mode, every later query on it is parsed under the mode, and plans are cached per mode, so the same text read two ways never shares a plan. A `||` read under the mode is sent to MySQL as a `concat()` call, which means the same thing under any `sql_mode`.
+
+The other modes that change how SQL text is read (`ANSI_QUOTES`, `IGNORE_SPACE`, `REAL_AS_FLOAT`, `HIGH_NOT_PRECEDENCE`, `NO_BACKSLASH_ESCAPES`, and the `ANSI` combination) are still rejected. Applications using `go/vt/sqlparser` directly can read SQL under the mode with `Options.SQLMode` or `Parser.WithSQLMode`.
+
+**Impact**: This release's VTGate still rejects `SET sql_mode` values that include `PIPES_AS_CONCAT`, so the change is visible only to clients that talk to the query service directly. It is the tablet half of per-session `sql_mode` support: a later change lets VTGate accept the mode and forward it to the tablets.
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 
