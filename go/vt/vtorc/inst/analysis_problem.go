@@ -19,10 +19,10 @@ package inst
 import (
 	"fmt"
 	"log/slog"
-	"math"
 	"slices"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -399,7 +399,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout)
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !replication.HeartbeatIntervalsEqual(a.HeartbeatInterval, replication.HeartbeatIntervalForNetTimeout(a.ReplicaNetTimeout))
 		},
 	},
 	{
