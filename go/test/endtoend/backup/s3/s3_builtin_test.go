@@ -151,8 +151,7 @@ func ensureBucket(ctx context.Context, env s3Env) error {
 		if err == nil {
 			return nil
 		}
-		var notFound *types.NotFound
-		if errors.As(err, &notFound) { //nolint:modernize // errors.AsType is Go 1.26; this file is backported to branches on Go 1.24 and 1.25.
+		if _, ok := errors.AsType[*types.NotFound](err); ok {
 			_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(env.bucket)})
 			if err == nil {
 				return nil
