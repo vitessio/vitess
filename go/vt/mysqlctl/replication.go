@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -1006,6 +1007,35 @@ func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.Replic
 	defer conn.Recycle()
 
 	return conn.Conn.ShowReplicationStatus()
+}
+
+// ReplicationConfiguration reads only the heartbeat interval and replica network timeout.
+// It returns nil without an error if the server has no configuration or the flavor does not track it.
+func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdatapb.Configuration, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	configuration, err := conn.Conn.ReplicationConfiguration(0)
+	if err != nil || configuration == nil {
+		return nil, err
+	}
+
+	result, err := mysqld.executeFetchContext(ctx, conn, conn.Conn.ReplicationNetTimeoutQuery(), 1, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "replica network timeout query must return one row and one column")
+	}
+
+	configuration.ReplicaNetTimeout, err = result.Rows[0][0].ToInt32()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to parse replica network timeout")
+	}
+	return configuration, nil
 }
 
 // PrimaryStatus returns the primary replication statuses
