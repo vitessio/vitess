@@ -594,6 +594,12 @@ func (tsv *TabletServer) begin(
 				if err != nil {
 					return err
 				}
+				// a post-begin query runs on the transaction's connection under the
+				// same rule as any other statement: one that changes the session
+				// needs a reserved connection or the settings to carry it
+				if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+					return err
+				}
 
 				qre := &QueryExecutor{
 					ctx:              ctx,

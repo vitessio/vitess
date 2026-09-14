@@ -70,7 +70,9 @@ type StatefulConnection struct {
 	// without locking the connection.
 	parseSQLMode atomic.Uint64
 	// settingStale is set once a SET statement ran on the connection after its
-	// settings were applied (see MarkSettingStale).
+	// settings were applied (see MarkSettingStale): the same settings must be
+	// applied again on the next request, and the connection must not return to
+	// the pool under them.
 	settingStale bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
@@ -319,6 +321,14 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 			sc.pool.tempTableUnmanaged.Add(-1)
 		}
 	}
+	if sc.settingStale && !sc.tainted {
+		// A SET ran on the connection since its settings were applied, so its
+		// MySQL session no longer matches the settings the pool files it under.
+		// The pool would hand it to the next request that brings those settings
+		// as if they were applied: close it instead, and the pool opens a
+		// replacement. A tainted connection never returns to the pool.
+		sc.dbConn.Close()
+	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn(reason)
@@ -482,7 +492,8 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 
 // MarkSettingStale records that a SET statement ran on the connection since its
 // settings were applied: the MySQL session no longer matches them, so a request
-// that brings the same settings must apply them again rather than skip them.
+// that brings the same settings must apply them again rather than skip them,
+// and the connection is closed rather than recycled when it is released.
 func (sc *StatefulConnection) MarkSettingStale() {
 	sc.settingStale = true
 }

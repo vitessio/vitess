@@ -2833,6 +2833,59 @@ func TestInBandSetMakesTheConnectionSettingStale(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// A connection a SET ran on is closed when it is released, rather than recycled
+// into the pool under settings its MySQL session no longer matches: the next
+// request with the same settings gets a fresh connection and applies them.
+func TestInBandSetClosesTheConnectionOnRelease(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`set .*sql_safe_updates.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	settings := []string{"set sql_safe_updates = 1"}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, int64(0), beginState.ReservedID, "a settings-pool transaction is not a true reservation")
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "set sql_mode = 'PIPES_AS_CONCAT'", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+
+	// the connection was closed at commit, so the next transaction with the
+	// same settings opens a fresh one and applies them again; a recycled
+	// connection would have been handed over with the settings marked applied
+	db.ResetQueryLog()
+	beginState, _, err = tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, db.QueryLog(), "sql_safe_updates = 1", "the settings must be applied on a fresh connection")
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+}
+
+// A post-begin query runs on the transaction's connection under the same rule
+// as any other statement: a SET needs a reserved connection or settings that
+// carry it, so it cannot leave its change on a pooled connection.
+func TestPostBeginSetNeedsReservedConnection(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.BeginExecute(ctx, nil, &target, []string{"set sql_mode = 'PIPES_AS_CONCAT'"}, "select 1 from dual", nil, 0, &querypb.ExecuteOptions{})
+	require.ErrorContains(t, err, "not allowed without reserved connection")
+	if state.TransactionID != 0 {
+		_, _ = tsv.Rollback(ctx, &target, state.TransactionID)
+	}
+}
+
 func TestReserveExecute_WithTx(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
