@@ -183,10 +183,10 @@ jobs:
           sudo service etcd stop
           go mod download
 
-      - name: Install Minio
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'minio')
-        timeout-minutes: 5
-        uses: ./.github/actions/setup-minio
+      - name: Install MicroCeph
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-microceph
 
       # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
