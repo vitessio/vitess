@@ -940,6 +940,65 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 		},
 	}, {
+		// a global assignment does not change the session: it is validated and
+		// ignored, whatever lexer mode the session stores
+		testName:         "sysvar check and ignore validates and ignores a global sql_mode assignment",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'NO_ZERO_DATE'",
+				Global:            true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|NO_ZERO_DATE",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'NO_ZERO_DATE' new {} false false`,
+		},
+	}, {
+		testName: "sysvar check and ignore ignores a global assignment of a lexer mode the parser honors",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT'",
+				Global:            true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
+		},
+	}, {
+		testName: "sysvar check and ignore rejects a global assignment of an unsupported mode",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'ANSI_QUOTES'",
+				Global:            true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|ANSI_QUOTES",
+		)},
+		expectedError: "setting the ANSI_QUOTES sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ANSI_QUOTES' new {} false false`,
+		},
+	}, {
 		// a judgment that cannot run cannot pass: unlike another ignored variable, an
 		// unjudged sql_mode assignment could put the client under a lexer mode the
 		// session does not run under

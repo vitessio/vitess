@@ -172,4 +172,11 @@ func TestExecutorSetPipesAsConcat(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES'", nil)
 	require.ErrorContains(t, err, "setting the ANSI_QUOTES sql_mode is unsupported")
 	assert.Equal(t, "'PIPES_AS_CONCAT'", session.SystemVariables["sql_mode"], "the session keeps its value")
+
+	// a global assignment does not change the session: it is checked and ignored,
+	// whatever the session stores
+	judgment("STRICT_TRANS_TABLES", sqltypes.NewVarChar("NO_ZERO_DATE"))
+	_, err = executorExecSession(ctx, executor, session, "set global sql_mode = 'NO_ZERO_DATE'", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "'PIPES_AS_CONCAT'", session.SystemVariables["sql_mode"], "the session keeps its value")
 }

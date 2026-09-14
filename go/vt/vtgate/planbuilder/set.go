@@ -67,7 +67,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
 				return nil, vterrors.VT12001(fmt.Sprintf("system setting: %s", expr.Var.Name))
 			}
-			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
+			setOp, err := planSysVarCheckIgnore(expr, vschema, true, true)
 			if err != nil {
 				return nil, err
 			}
@@ -153,11 +153,11 @@ func buildSetOpIgnore(s setting) planFunc {
 
 func buildSetOpCheckAndIgnore(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return planSysVarCheckIgnore(expr, schema, s.boolean)
+		return planSysVarCheckIgnore(expr, schema, s.boolean, false)
 	}
 }
 
-func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool) (engine.SetOp, error) {
+func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool, global bool) (engine.SetOp, error) {
 	keyspace, dest, err := resolveDestination(schema)
 	if err != nil {
 		return nil, err
@@ -172,6 +172,7 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Expr:              value,
+		Global:            global,
 	}, nil
 }
 
@@ -204,7 +205,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
-			return planSysVarCheckIgnore(expr, vschema, s.boolean)
+			return planSysVarCheckIgnore(expr, vschema, s.boolean, false)
 		}
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {

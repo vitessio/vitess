@@ -72,6 +72,10 @@ type (
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
+		// Global is set for a global-scope assignment, which does not change the
+		// session: its value is validated and the assignment ignored, whatever the
+		// session stores.
+		Global bool `json:",omitempty"`
 	}
 
 	// SysVarReservedConn implements the SetOp interface and will write the changes variable into the session
@@ -242,6 +246,10 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return nil
 	}
 	if svci.Name == "sql_mode" {
+		if svci.Global {
+			_, _, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, vcursor.Session())
+			return err
+		}
 		return judgeIgnoredSQLMode(qr, vcursor.Session())
 	}
 	return nil

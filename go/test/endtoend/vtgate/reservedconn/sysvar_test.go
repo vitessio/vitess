@@ -129,6 +129,12 @@ func TestSetPipesAsConcat(t *testing.T) {
 	utils.Exec(t, conn, "set sql_mode = 'PIPES_AS_CONCAT,NO_ZERO_DATE'")
 	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT,NO_ZERO_DATE")]]`)
 	utils.AssertMatches(t, conn, "select 'a' || 'b', 1 || 0", `[[VARCHAR("ab") VARCHAR("10")]]`)
+	// an unaliased || names its column after the concat() call it is read as,
+	// where MySQL names it after the text as written; an alias is kept
+	qr := utils.Exec(t, conn, "select a || a, 1||0 as c from (select 1 as a) as t")
+	require.Len(t, qr.Fields, 2)
+	assert.Equal(t, "concat(a, a)", qr.Fields[0].Name)
+	assert.Equal(t, "c", qr.Fields[1].Name)
 	// the runtime mode set alongside applies on the tablet
 	utils.AssertMatches(t, conn, "select str_to_date('00/00/0000', '%m/%d/%Y')", `[[NULL]]`)
 

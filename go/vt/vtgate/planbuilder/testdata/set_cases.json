@@ -536,7 +536,8 @@
               "Sharded": false
             },
             "TargetDestination": {},
-            "Expr": "0"
+            "Expr": "0",
+            "Global": true
           }
         ],
         "Inputs": [
