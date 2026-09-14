@@ -82,9 +82,10 @@ func s3EnvFromEnvironment() s3Env {
 	}
 }
 
-// missing lists the environment variables that are unset. An empty bucket or
-// region would otherwise surface as a client-side validation error that
-// ensureBucket retries for a minute before giving up.
+// missing lists the environment variables that are unset. An empty AWS_BUCKET
+// or AWS_REGION would otherwise be sent to the store as a request for bucket ""
+// or signed with an empty region, and ensureBucket would retry the failure for
+// a minute.
 func (e s3Env) missing() []string {
 	var missing []string
 	for _, v := range []struct{ name, value string }{
@@ -120,8 +121,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// newS3Client builds a client the way s3backupstorage builds its production
-// one: path-style, static credentials, explicit endpoint.
+// newS3Client builds a client of the same shape as s3backupstorage's
+// (LoadDefaultConfig, WithRegion, path-style), with static credentials and
+// BaseEndpoint standing in for its credential chain and endpoint resolver.
 func newS3Client(ctx context.Context, env s3Env) (*s3.Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(env.region),
@@ -145,24 +147,34 @@ func ensureBucket(ctx context.Context, env s3Env) error {
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(60 * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	var lastErr error
 	for {
 		_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(env.bucket)})
 		if err == nil {
 			return nil
 		}
-		var notFound *types.NotFound
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*types.NotFound](err); ok {
 			_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(env.bucket)})
 			if err == nil {
 				return nil
 			}
 		}
-		if time.Now().After(deadline) {
-			return err
+		// Once the deadline has passed the SDK reports the cancellation, not
+		// what the store said; keep the store's error for the caller.
+		if ctx.Err() == nil {
+			lastErr = err
 		}
-		log.Printf("object store at %s not ready (%v); retrying", env.endpoint, err)
-		time.Sleep(time.Second)
+		select {
+		case <-ctx.Done():
+			if lastErr == nil {
+				return ctx.Err()
+			}
+			return lastErr
+		case <-time.After(time.Second):
+		}
+		log.Printf("object store at %s: %v; retrying", env.endpoint, lastErr)
 	}
 }
 
