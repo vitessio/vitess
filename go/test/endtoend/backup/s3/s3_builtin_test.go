@@ -20,13 +20,7 @@ import (
 	"context"
 	"errors"
 	"io"
-<<<<<<< HEAD
-||||||| parent of 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 	"log"
-	"net"
-=======
-	"log"
->>>>>>> 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 	"os"
 	"path"
 	"strconv"
@@ -34,18 +28,10 @@ import (
 	"testing"
 	"time"
 
-<<<<<<< HEAD
-	"log"
-
-	"github.com/minio/minio-go"
-||||||| parent of 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
-	"github.com/minio/minio-go"
-=======
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
->>>>>>> 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -71,36 +57,6 @@ import (
 	hence the rename to 'endtoend'.
 */
 
-<<<<<<< HEAD
-||||||| parent of 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
-// getRandomListenPorts() returns two consequtive, random tcp ports
-// that are hypothetically not in use.
-func getRandomListenPorts() (int, int) {
-	timeout := time.After(time.Minute)
-	for {
-		select {
-		case <-timeout:
-			panic("getRandomListenPorts() timed out")
-		default:
-			ln1, err := net.Listen("tcp", ":0")
-			if err != nil {
-				continue
-			}
-			addr1 := ln1.Addr().(*net.TCPAddr)
-
-			ln2, err := net.Listen("tcp", ":"+strconv.Itoa(addr1.Port+1))
-			if err != nil {
-				ln1.Close()
-				continue
-			}
-			ln1.Close()
-			ln2.Close()
-			return addr1.Port, addr1.Port + 1
-		}
-	}
-}
-
-=======
 // s3Env holds the object store coordinates every test in this package uses.
 type s3Env struct {
 	endpoint  string
@@ -140,7 +96,6 @@ func (e s3Env) missing() []string {
 	return missing
 }
 
->>>>>>> 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 func TestMain(m *testing.M) {
 	env := s3EnvFromEnvironment()
 	if missing := env.missing(); len(missing) > 0 {
@@ -151,116 +106,8 @@ func TestMain(m *testing.M) {
 			// must not do.
 			log.Fatal(msg)
 		}
-<<<<<<< HEAD
-
-		dataDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			log.Fatalf("could not create temporary directory: %v", err)
-		}
-		err = os.MkdirAll(dataDir, 0755)
-		if err != nil {
-			log.Fatalf("failed to create MinIO data directory: %v", err)
-		}
-
-		cmd := exec.Command(minioPath, "server", dataDir, "--console-address", ":9001")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err = cmd.Start()
-		if err != nil {
-			log.Fatalf("failed to start MinIO: %v", err)
-		}
-		defer func() {
-			cmd.Process.Kill()
-		}()
-
-		// Local MinIO credentials
-		accessKey := "minioadmin"
-		secretKey := "minioadmin"
-		minioEndpoint := "http://localhost:9000"
-		bucketName := "test-bucket"
-		region := "us-east-1"
-
-		client, err := minio.New("localhost:9000", accessKey, secretKey, false)
-		if err != nil {
-			log.Fatalf("failed to create MinIO client: %v", err)
-		}
-		waitForMinio(client)
-
-		err = client.MakeBucket(bucketName, region)
-		if err != nil {
-			log.Fatalf("failed to create test bucket: %v", err)
-		}
-
-		// Same env variables that are used between AWS S3 and Minio
-		os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
-		os.Setenv("AWS_BUCKET", bucketName)
-		os.Setenv("AWS_ENDPOINT", minioEndpoint)
-		os.Setenv("AWS_REGION", region)
-
-		return m.Run()
-||||||| parent of 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
-
-		dataDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			log.Fatalf("could not create temporary directory: %v", err)
-		}
-		err = os.MkdirAll(dataDir, 0o755)
-		if err != nil {
-			log.Fatalf("failed to create MinIO data directory: %v", err)
-		}
-
-		apiPort, consolePort := getRandomListenPorts()
-		minioAddress := net.JoinHostPort("localhost", strconv.Itoa(apiPort))
-		minioConsoleAddress := net.JoinHostPort("localhost", strconv.Itoa(consolePort))
-
-		cmd := exec.Command(
-			minioPath, "server", dataDir,
-			"--address", minioAddress,
-			"--console-address", minioConsoleAddress,
-		)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err = cmd.Start()
-		if err != nil {
-			log.Fatalf("failed to start MinIO: %v", err)
-		}
-		defer func() {
-			cmd.Process.Kill()
-		}()
-
-		// Local MinIO credentials
-		accessKey := "minioadmin"
-		secretKey := "minioadmin"
-		minioEndpoint := "http://" + minioAddress
-		bucketName := "test-bucket"
-		region := "us-east-1"
-
-		client, err := minio.New(minioAddress, accessKey, secretKey, false)
-		if err != nil {
-			log.Fatalf("failed to create MinIO client: %v", err)
-		}
-		waitForMinio(client)
-
-		err = client.MakeBucket(bucketName, region)
-		if err != nil {
-			log.Fatalf("failed to create test bucket: %v", err)
-		}
-
-		// Same env variables that are used between AWS S3 and Minio
-		os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
-		os.Setenv("AWS_BUCKET", bucketName)
-		os.Setenv("AWS_ENDPOINT", minioEndpoint)
-		os.Setenv("AWS_REGION", region)
-
-		return m.Run()
-=======
 		log.Println("skipping:", msg)
 		os.Exit(0)
->>>>>>> 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 	}
 	if err := ensureBucket(context.Background(), env); err != nil {
 		log.Fatalf("could not prepare bucket %q at %s: %v", env.bucket, env.endpoint, err)
@@ -268,15 +115,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-<<<<<<< HEAD
-func waitForMinio(client *minio.Client) {
-	for i := 0; i < 60; i++ {
-		_, err := client.ListBuckets()
-||||||| parent of 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
-func waitForMinio(client *minio.Client) {
-	for range 60 {
-		_, err := client.ListBuckets()
-=======
 // newS3Client builds a client of the same shape as s3backupstorage's
 // (LoadDefaultConfig with the default credential chain, WithRegion,
 // path-style), with BaseEndpoint standing in for its endpoint resolver. The
@@ -308,11 +146,11 @@ func ensureBucket(ctx context.Context, env s3Env) error {
 	var lastErr error
 	for {
 		_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(env.bucket)})
->>>>>>> 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 		if err == nil {
 			return nil
 		}
-		if _, ok := errors.AsType[*types.NotFound](err); ok {
+		var notFound *types.NotFound
+		if errors.As(err, &notFound) {
 			input := &s3.CreateBucketInput{Bucket: aws.String(env.bucket)}
 			// S3 requires a location constraint outside us-east-1 and rejects one in it.
 			if env.region != "us-east-1" {
@@ -340,17 +178,11 @@ func ensureBucket(ctx context.Context, env s3Env) error {
 		}
 		log.Printf("object store at %s: %v; retrying", env.endpoint, lastErr)
 	}
-<<<<<<< HEAD
-	log.Fatalf("MinIO server did not become ready in time")
-||||||| parent of 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
-	log.Fatal("MinIO server did not become ready in time")
-=======
->>>>>>> 97cd5bd43d (CI: Replace MinIO server with MicroCeph RGW (#21086))
 }
 
 func checkEnvForS3(t *testing.T) {
 	// We never want to skip the tests if we are running on CI.
-	// We will always run these tests on CI with the TestMain and the object store setup-microceph provisions.
+	// We will always run these tests on CI with the TestMain and Minio.
 	// There should not be a need to skip the tests due to missing ENV vars.
 	if os.Getenv("GITHUB_ACTIONS") != "" {
 		return
