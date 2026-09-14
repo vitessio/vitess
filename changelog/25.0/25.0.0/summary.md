@@ -60,6 +60,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [MySQL Shell restore speedup now also enables InnoDB insert change buffering](#backup-mysql-shell-change-buffering)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -663,6 +664,14 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="backup-mysql-shell-change-buffering"/>MySQL Shell restore speedup now also enables InnoDB insert change buffering</a>
+
+When the opt-in `--mysql-shell-speedup-restore` flag (default `false`) is enabled, a `mysqlshell`-engine restore now also sets `innodb_change_buffering='inserts'` for the duration of the MySQL Shell load and resets it to `'none'` afterward. This is in addition to the redo-log and double-write-buffer disabling already gated by the same flag, and it speeds up the inserts the load performs — roughly 6x faster in the author's testing.
+
+If the running MySQL server does not support the `innodb_change_buffering` variable, this step is skipped: the restore logs a message and continues. No action is needed on upgrade or downgrade, and the behavior applies only to operators already running `--mysql-shell-speedup-restore=true`. Builtin and xtrabackup restores are unaffected, since they run with mysqld stopped.
+
+See [#21085](https://github.com/vitessio/vitess/pull/21085) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
