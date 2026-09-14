@@ -129,6 +129,7 @@ func (u *Union) columnOffsets() map[string]int {
 // calls JoinPredicate.Clone, which overwrites the tracked expression.
 func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
 	offsets := u.columnOffsets()
+	resolved := map[derivedColumn]bool{}
 
 	safe := true
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
@@ -139,7 +140,7 @@ func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 		idx, ok := offsets[col.Name.Lowered()]
 		// !ok is a column the UNION does not project, which a column list on the derived
 		// table produces: `sub(c)` renames them and the offsets no longer resolve.
-		if !ok || !u.canSubstituteAt(ctx, idx) {
+		if !ok || !u.canSubstituteAt(ctx, resolved, idx) {
 			safe = false
 			return false, io.EOF
 		}
@@ -150,7 +151,7 @@ func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 
 // canSubstituteAt reports whether every leaf branch projects something at idx that substitution can
 // duplicate. A leaf the guard cannot inspect counts as unsafe.
-func (u *Union) canSubstituteAt(ctx *plancontext.PlanningContext, idx int) bool {
+func (u *Union) canSubstituteAt(ctx *plancontext.PlanningContext, resolved map[derivedColumn]bool, idx int) bool {
 	for i := range u.Sources {
 		for _, stmt := range u.allSelectsFor(i) {
 			// GetAllSelects also yields *ValuesStatement, which has no projection to inspect.
@@ -164,7 +165,7 @@ func (u *Union) canSubstituteAt(ctx *plancontext.PlanningContext, idx int) bool 
 				return false
 			}
 			ae, ok := cols[idx].(*sqlparser.AliasedExpr)
-			if !ok || projectsVolatile(ctx, ae.Expr) {
+			if !ok || unsafeToDuplicate(ctx, resolved, ae.Expr) {
 				return false
 			}
 		}
@@ -172,35 +173,57 @@ func (u *Union) canSubstituteAt(ctx *plancontext.PlanningContext, idx int) bool 
 	return true
 }
 
-// projectsVolatile reports whether a branch of the UNION projects a volatile expression, resolving
-// column references through derived tables first. A branch can select from a derived table of its
-// own, and it is that branch's Horizon.AddPredicate that then substitutes the volatile expression in.
-func projectsVolatile(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+// derivedColumn is what unsafeToDuplicate resolves, and so what it caches against.
+type derivedColumn struct {
+	tbl  *semantics.DerivedTable
+	name string
+}
+
+// unsafeToDuplicate reports whether substituting a branch projection would duplicate a volatile
+// expression. A branch can select from a derived table of its own, and it is that branch's
+// Horizon.AddPredicate that substitutes the expression in afterwards, so a column reference has to
+// be followed through the derived table before the question can be answered.
+//
+// resolved caches the answer per derived table column: `c + c` reaches the same column twice at
+// every level, so without it the walk costs 2^depth.
+func unsafeToDuplicate(ctx *plancontext.PlanningContext, resolved map[derivedColumn]bool, expr sqlparser.Expr) bool {
 	if sqlparser.ContainsVolatile(expr) {
 		return true
 	}
 
-	found := false
+	unsafe := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		col, ok := node.(*sqlparser.ColName)
 		if !ok {
 			return true, nil
 		}
-		tbl, err := ctx.SemTable.TableInfoForExpr(col)
-		if err != nil {
-			return true, nil
-		}
-		dt, ok := tbl.(*semantics.DerivedTable)
-		if !ok {
-			return true, nil
-		}
-		if projectsVolatile(ctx, semantics.RewriteDerivedTableExpression(col, dt)) {
-			found = true
+		if columnIsUnsafe(ctx, resolved, col) {
+			unsafe = true
 			return false, io.EOF
 		}
 		return true, nil
 	}, expr)
-	return found
+	return unsafe
+}
+
+func columnIsUnsafe(ctx *plancontext.PlanningContext, resolved map[derivedColumn]bool, col *sqlparser.ColName) bool {
+	tbl, err := ctx.SemTable.TableInfoForExpr(col)
+	if err != nil {
+		// A column an unexpanded * hides, so it comes from a real table and cannot be volatile.
+		return false
+	}
+	dt, ok := tbl.(*semantics.DerivedTable)
+	if !ok {
+		return false
+	}
+
+	key := derivedColumn{tbl: dt, name: col.Name.Lowered()}
+	if unsafe, ok := resolved[key]; ok {
+		return unsafe
+	}
+	unsafe := unsafeToDuplicate(ctx, resolved, semantics.RewriteDerivedTableExpression(col, dt))
+	resolved[key] = unsafe
+	return unsafe
 }
 
 func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
