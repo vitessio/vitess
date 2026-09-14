@@ -18,18 +18,20 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
-	"net"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/minio/minio-go"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -43,126 +45,143 @@ import (
 )
 
 /*
-	These tests use Minio to emulate AWS S3. It allows us to run the tests on
-	GitHub Actions without having the security burden of carrying out AWS secrets
-	in our GitHub repo.
-
-	Minio is almost a drop-in replacement for AWS S3, if you want to run these
-	tests against a true AWS S3 Bucket, you can do so by not running the TestMain
-	and setting the 'AWS_*' environment variables to your own values.
+	These tests run against an S3-compatible object store described by the
+	AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION and
+	AWS_BUCKET environment variables. In CI the setup-microceph action
+	provisions a Ceph RGW on the runner and exports them; locally, point them
+	at any S3-compatible store, or at a real S3 bucket, to run the tests.
+	Without them the package is skipped outside of CI and fails inside it.
 
 	This package and file are named 'endtoend', but it's more an integration test.
 	However, we don't want our CI infra to mistake this for a regular unit-test,
 	hence the rename to 'endtoend'.
 */
 
-// getRandomListenPorts() returns two consequtive, random tcp ports
-// that are hypothetically not in use.
-func getRandomListenPorts() (int, int) {
-	timeout := time.After(time.Minute)
-	for {
-		select {
-		case <-timeout:
-			panic("getRandomListenPorts() timed out")
-		default:
-			ln1, err := net.Listen("tcp", ":0")
-			if err != nil {
-				continue
-			}
-			addr1 := ln1.Addr().(*net.TCPAddr)
+// s3Env holds the object store coordinates every test in this package uses.
+type s3Env struct {
+	endpoint  string
+	accessKey string
+	secretKey string
+	region    string
+	bucket    string
+}
 
-			ln2, err := net.Listen("tcp", ":"+strconv.Itoa(addr1.Port+1))
-			if err != nil {
-				ln1.Close()
-				continue
-			}
-			ln1.Close()
-			ln2.Close()
-			return addr1.Port, addr1.Port + 1
+func s3EnvFromEnvironment() s3Env {
+	return s3Env{
+		endpoint:  os.Getenv("AWS_ENDPOINT"),
+		accessKey: os.Getenv("AWS_ACCESS_KEY_ID"),
+		secretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		region:    os.Getenv("AWS_REGION"),
+		bucket:    os.Getenv("AWS_BUCKET"),
+	}
+}
+
+// missing lists the environment variables that are unset. An empty AWS_BUCKET
+// or AWS_REGION would otherwise be sent to the store as a request for bucket ""
+// or signed with an empty region, and ensureBucket would retry the failure for
+// a minute.
+func (e s3Env) missing() []string {
+	var missing []string
+	for _, v := range []struct{ name, value string }{
+		{"AWS_ENDPOINT", e.endpoint},
+		{"AWS_ACCESS_KEY_ID", e.accessKey},
+		{"AWS_SECRET_ACCESS_KEY", e.secretKey},
+		{"AWS_REGION", e.region},
+		{"AWS_BUCKET", e.bucket},
+	} {
+		if v.value == "" {
+			missing = append(missing, v.name)
 		}
 	}
+	return missing
 }
 
 func TestMain(m *testing.M) {
-	f := func() int {
-		minioPath, err := exec.LookPath("minio")
-		if err != nil {
-			log.Fatalf("minio binary not found: %v", err)
+	env := s3EnvFromEnvironment()
+	if missing := env.missing(); len(missing) > 0 {
+		msg := "missing " + strings.Join(missing, ", ") + "; set AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION and AWS_BUCKET to run the S3 backup tests"
+		if os.Getenv("GITHUB_ACTIONS") != "" {
+			// In CI the setup-microceph action must have provided these;
+			// silently skipping the backup tests there is the one thing we
+			// must not do.
+			log.Fatal(msg)
 		}
-
-		dataDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			log.Fatalf("could not create temporary directory: %v", err)
-		}
-		err = os.MkdirAll(dataDir, 0o755)
-		if err != nil {
-			log.Fatalf("failed to create MinIO data directory: %v", err)
-		}
-
-		apiPort, consolePort := getRandomListenPorts()
-		minioAddress := net.JoinHostPort("localhost", strconv.Itoa(apiPort))
-		minioConsoleAddress := net.JoinHostPort("localhost", strconv.Itoa(consolePort))
-
-		cmd := exec.Command(minioPath, "server", dataDir,
-			"--address", minioAddress,
-			"--console-address", minioConsoleAddress,
-		)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err = cmd.Start()
-		if err != nil {
-			log.Fatalf("failed to start MinIO: %v", err)
-		}
-		defer func() {
-			cmd.Process.Kill()
-		}()
-
-		// Local MinIO credentials
-		accessKey := "minioadmin"
-		secretKey := "minioadmin"
-		minioEndpoint := "http://" + minioAddress
-		bucketName := "test-bucket"
-		region := "us-east-1"
-
-		client, err := minio.New(minioAddress, accessKey, secretKey, false)
-		if err != nil {
-			log.Fatalf("failed to create MinIO client: %v", err)
-		}
-		waitForMinio(client)
-
-		err = client.MakeBucket(bucketName, region)
-		if err != nil {
-			log.Fatalf("failed to create test bucket: %v", err)
-		}
-
-		// Same env variables that are used between AWS S3 and Minio
-		os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
-		os.Setenv("AWS_BUCKET", bucketName)
-		os.Setenv("AWS_ENDPOINT", minioEndpoint)
-		os.Setenv("AWS_REGION", region)
-
-		return m.Run()
+		log.Println("skipping:", msg)
+		os.Exit(0)
 	}
-
-	os.Exit(f())
+	if err := ensureBucket(context.Background(), env); err != nil {
+		log.Fatalf("could not prepare bucket %q at %s: %v", env.bucket, env.endpoint, err)
+	}
+	os.Exit(m.Run())
 }
 
-func waitForMinio(client *minio.Client) {
-	for range 60 {
-		_, err := client.ListBuckets()
-		if err == nil {
-			return
-		}
-		time.Sleep(1 * time.Second)
+// newS3Client builds a client of the same shape as s3backupstorage's
+// (LoadDefaultConfig with the default credential chain, WithRegion,
+// path-style), with BaseEndpoint standing in for its endpoint resolver. The
+// default chain reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and, for
+// temporary credentials, AWS_SESSION_TOKEN from the environment, so the setup
+// client and the tests' client see the same identity.
+func newS3Client(ctx context.Context, env s3Env) (*s3.Client, error) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(env.region))
+	if err != nil {
+		return nil, err
 	}
-	log.Fatal("MinIO server did not become ready in time")
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(env.endpoint)
+		o.UsePathStyle = true
+	}), nil
+}
+
+// ensureBucket waits for the object store to answer and makes sure the test
+// bucket exists. It creates the bucket only if HeadBucket says it is missing,
+// so it is safe against a pre-existing bucket on a real S3 account. The wait
+// absorbs a gateway that is still starting.
+func ensureBucket(ctx context.Context, env s3Env) error {
+	client, err := newS3Client(ctx, env)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	var lastErr error
+	for {
+		_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(env.bucket)})
+		if err == nil {
+			return nil
+		}
+		if _, ok := errors.AsType[*types.NotFound](err); ok {
+			input := &s3.CreateBucketInput{Bucket: aws.String(env.bucket)}
+			// S3 requires a location constraint outside us-east-1 and rejects one in it.
+			if env.region != "us-east-1" {
+				input.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+					LocationConstraint: types.BucketLocationConstraint(env.region),
+				}
+			}
+			_, err = client.CreateBucket(ctx, input)
+			if err == nil {
+				return nil
+			}
+		}
+		// Once the deadline has passed the SDK reports the cancellation, not
+		// what the store said; keep the store's error for the caller.
+		if ctx.Err() == nil {
+			lastErr = err
+		}
+		select {
+		case <-ctx.Done():
+			if lastErr == nil {
+				return ctx.Err()
+			}
+			return lastErr
+		case <-time.After(time.Second):
+		}
+		log.Printf("object store at %s: %v; retrying", env.endpoint, lastErr)
+	}
 }
 
 func checkEnvForS3(t *testing.T) {
 	// We never want to skip the tests if we are running on CI.
-	// We will always run these tests on CI with the TestMain and Minio.
+	// We will always run these tests on CI with the TestMain and the object store setup-microceph provisions.
 	// There should not be a need to skip the tests due to missing ENV vars.
 	if os.Getenv("GITHUB_ACTIONS") != "" {
 		return

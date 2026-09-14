@@ -126,6 +126,7 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-microceph/action.yml'
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
@@ -178,9 +179,10 @@ jobs:
           sudo service etcd stop
           go mod download
 
-      - name: Install Minio
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'minio')
-        uses: ./.github/actions/setup-minio
+      - name: Install MicroCeph
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-microceph
 
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
