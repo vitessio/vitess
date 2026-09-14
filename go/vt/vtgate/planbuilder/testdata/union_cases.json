@@ -3355,5 +3355,97 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "a volatile projection is found through a derived table when the reference is cased differently to the alias",
+    "query": "select * from (select C from (select uuid() as c from user) x union all select 'z' from dual) sub where C <> C",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select C from (select uuid() as c from user) x union all select 'z' from dual) sub where C <> C",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select C from (select C from (select uuid() as c from `user` where 1 != 1) as x where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select C from (select C from (select uuid() as c from `user`) as x union all select 'z' from dual) as sub where C != C"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the same the other way round, an upper case alias referenced in lower case",
+    "query": "select * from (select c from (select uuid() as C from user) x union all select 'z' from dual) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select c from (select uuid() as C from user) x union all select 'z' from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select c from (select uuid() as C from `user` where 1 != 1) as x where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select c from (select uuid() as C from `user`) as x union all select 'z' from dual) as sub where c != c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "an unexpanded * leaves the derived table non authoritative, but a volatile projection it does have is still found",
+    "query": "select * from (select c from (select uuid() as c, user_extra.* from user_extra) x union all select 'z' from dual) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select c from (select uuid() as c, user_extra.* from user_extra) x union all select 'z' from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select c from (select uuid() as c, user_extra.* from user_extra where 1 != 1) as x where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select c from (select uuid() as c, user_extra.* from user_extra) as x union all select 'z' from dual) as sub where c != c"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "a column an unexpanded * hides comes from a real table, so the predicate still pushes, vindex and all",
+    "query": "select * from (select user_id from (select * from user_extra) x union all select 1 from dual) sub where user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (select user_id from (select * from user_extra) x union all select 1 from dual) sub where user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id from (select user_id from (select * from user_extra where 1 != 1) as x where 1 != 1 union all select 1 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select user_id from (select user_id from (select * from user_extra) as x where user_id = 5 union all select 1 from dual where 1 = 5) as sub",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
   }
 ]
