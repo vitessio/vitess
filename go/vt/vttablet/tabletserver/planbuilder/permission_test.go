@@ -311,17 +311,13 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
-		// Once a parenthesized union arm declares its own WITH, MySQL no longer
-		// resolves the union's leading CTEs inside the arms: a same-named
-		// reference there is the real table. The walker drops the leading
-		// scope for every arm of such a union, so each reference to the name
-		// requires the table's permission.
+		// From the first parenthesized union arm that declares its own WITH
+		// onward, MySQL no longer resolves the union's leading CTEs: a
+		// same-named reference there is the real table and requires its
+		// permission. The arms before that one still see the leading CTEs.
 		input: "with t as (select * from real1) select * from t union all (with t as (select * from t) select * from t)",
 		output: []Permission{{
 			TableName: "real1",
-			Role:      tableacl.READER,
-		}, {
-			TableName: "t",
 			Role:      tableacl.READER,
 		}, {
 			TableName: "t",
@@ -337,12 +333,10 @@ func TestBuildPermissions(t *testing.T) {
 		}, {
 			TableName: "t",
 			Role:      tableacl.READER,
-		}, {
-			TableName: "t",
-			Role:      tableacl.READER,
 		}},
 	}, {
-		// A plain arm after the arm with the WITH reads the real table too.
+		// A plain arm after the arm with the WITH reads the real table too,
+		// while the plain arm before it still reads the CTE.
 		input: "with t as (select * from real1) select * from t union all (with s as (select 1 as id) select id from s) union all (select * from t)",
 		output: []Permission{{
 			TableName: "real1",
@@ -350,12 +344,9 @@ func TestBuildPermissions(t *testing.T) {
 		}, {
 			TableName: "t",
 			Role:      tableacl.READER,
-		}, {
-			TableName: "t",
-			Role:      tableacl.READER,
 		}},
 	}, {
-		// The arm with the WITH may come first.
+		// When the arm with the WITH comes first, no arm sees the leading CTEs.
 		input: "with t as (select * from real1) (with s as (select 1 as id) select * from t) union all select * from t",
 		output: []Permission{{
 			TableName: "real1",

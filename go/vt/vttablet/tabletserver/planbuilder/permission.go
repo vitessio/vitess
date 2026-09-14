@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
+	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -126,52 +127,31 @@ func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Rol
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Select:
 			push(node.With)
-			var ctes []sqlparser.IdentifierCS
-			for _, scope := range cteScopes {
-				ctes = append(ctes, scope.names...)
-			}
-			permissions = buildTableExprsPermissions(node.From, role, ctes, permissions)
+			permissions = buildTableExprsPermissions(node.From, role, visibleCTEs(cteScopes), permissions)
 		case *sqlparser.Delete:
 			push(node.With)
 		case *sqlparser.Update:
 			push(node.With)
 		case *sqlparser.Union:
-			// Once a parenthesized arm declares its own WITH, MySQL no longer
-			// resolves the union's leading CTEs inside the arms: a reference
-			// to one of their names is the real table. Leave the leading
-			// scope off the stack for such a union so every arm requires the
-			// table's permission; the With visit below still walks the
-			// leading CTE bodies with the enclosing scopes.
-			if !unionArmDeclaresCTEs(node) {
-				push(node.With)
+			if node.With != nil && unionArmDeclaresCTEs(node) {
+				permissions = buildUnionWithCTEArmsPermissions(node, role, visibleCTEs(cteScopes), permissions)
+				return false
 			}
+			push(node.With)
 		case *sqlparser.ValuesStatement:
 			push(node.With)
 		case *sqlparser.With:
-			// A CTE body has a narrower view than the query block that
-			// declares it: a non-recursive CTE is not visible inside its own
-			// definition (there the name is the real base table), and later
-			// siblings are never visible. Walk each body with exactly the CTEs
-			// that are legal there: everything in scope from enclosing query
-			// blocks, the earlier siblings, and the CTE itself only when the
-			// clause is RECURSIVE. Skip the walker's own descent so the bodies
-			// are not also walked with the consumer's view.
+			// The enclosing statement pushed this clause's names for its own
+			// query block; the bodies see everything but that scope. Skip the
+			// walker's own descent so the bodies are not also walked with the
+			// consumer's view.
 			var outer []sqlparser.IdentifierCS
 			for _, scope := range cteScopes {
 				if scope.with != node {
 					outer = append(outer, scope.names...)
 				}
 			}
-			for i, cte := range node.CTEs {
-				bodyScope := append([]sqlparser.IdentifierCS(nil), outer...)
-				for _, sibling := range node.CTEs[:i] {
-					bodyScope = append(bodyScope, sibling.ID)
-				}
-				if node.Recursive {
-					bodyScope = append(bodyScope, cte.ID)
-				}
-				permissions = buildSubqueryPermissionsInScope(cte.Subquery, role, bodyScope, permissions)
-			}
+			permissions = buildCTEBodiesPermissions(node, role, outer, permissions)
 			return false
 		}
 		return true
@@ -193,26 +173,92 @@ func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Rol
 	return permissions
 }
 
-// unionArmDeclaresCTEs reports whether any arm of the union chain carries a
-// WITH clause of its own. Arms are the statements joined by UNION, at any
-// depth of nesting; derived tables and subqueries inside an arm are separate
-// query blocks and are not inspected.
-func unionArmDeclaresCTEs(union *sqlparser.Union) bool {
-	for _, arm := range []sqlparser.TableStatement{union.Left, union.Right} {
-		switch arm := arm.(type) {
-		case *sqlparser.Select:
-			if arm.With != nil {
-				return true
-			}
-		case *sqlparser.ValuesStatement:
-			if arm.With != nil {
-				return true
-			}
-		case *sqlparser.Union:
-			if arm.With != nil || unionArmDeclaresCTEs(arm) {
-				return true
-			}
+// visibleCTEs flattens the scope stack into the CTE names visible to the
+// current query block.
+func visibleCTEs(scopes []cteScope) []sqlparser.IdentifierCS {
+	var ctes []sqlparser.IdentifierCS
+	for _, scope := range scopes {
+		ctes = append(ctes, scope.names...)
+	}
+	return ctes
+}
+
+// buildCTEBodiesPermissions walks the bodies of a WITH clause. A CTE body has
+// a narrower view than the query block that declares the clause: a
+// non-recursive CTE is not visible inside its own definition (there the name
+// is the real base table), and later siblings are never visible. Each body is
+// walked with exactly the CTEs that are legal there: outer, the names in scope
+// from enclosing query blocks, the earlier siblings, and the CTE itself only
+// when the clause is RECURSIVE.
+func buildCTEBodiesPermissions(with *sqlparser.With, role tableacl.Role, outer []sqlparser.IdentifierCS, permissions []Permission) []Permission {
+	for i, cte := range with.CTEs {
+		bodyScope := append([]sqlparser.IdentifierCS(nil), outer...)
+		for _, sibling := range with.CTEs[:i] {
+			bodyScope = append(bodyScope, sibling.ID)
 		}
+		if with.Recursive {
+			bodyScope = append(bodyScope, cte.ID)
+		}
+		permissions = buildSubqueryPermissionsInScope(cte.Subquery, role, bodyScope, permissions)
+	}
+	return permissions
+}
+
+// buildUnionWithCTEArmsPermissions walks a union that carries a leading WITH
+// clause and whose arms include one that declares a WITH of its own. MySQL
+// resolves the leading CTEs in the arms before that one, and from that arm
+// onward a reference to one of their names is the real table instead. Walk the
+// leading CTE bodies with the enclosing scopes, then each arm in order with
+// the enclosing scopes plus, until the first arm with its own WITH, the
+// leading CTEs.
+func buildUnionWithCTEArmsPermissions(union *sqlparser.Union, role tableacl.Role, outer []sqlparser.IdentifierCS, permissions []Permission) []Permission {
+	permissions = buildCTEBodiesPermissions(union.With, role, outer, permissions)
+	withLeading := append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(union.With)...)
+	leadingVisible := true
+	for _, arm := range unionArms(union) {
+		if statementDeclaresCTEs(arm) {
+			leadingVisible = false
+		}
+		scope := outer
+		if leadingVisible {
+			scope = withLeading
+		}
+		permissions = buildSubqueryPermissionsInScope(arm, role, scope, permissions)
+	}
+	return permissions
+}
+
+// unionArms lists the statements joined by UNION in a chain, left to right,
+// looking through nested unions that carry no WITH clause of their own. A
+// nested union with a WITH clause is a parenthesized arm and stays one arm.
+func unionArms(union *sqlparser.Union) []sqlparser.TableStatement {
+	var arms []sqlparser.TableStatement
+	for _, arm := range []sqlparser.TableStatement{union.Left, union.Right} {
+		if nested, ok := arm.(*sqlparser.Union); ok && nested.With == nil {
+			arms = append(arms, unionArms(nested)...)
+			continue
+		}
+		arms = append(arms, arm)
+	}
+	return arms
+}
+
+// unionArmDeclaresCTEs reports whether any arm of the union chain carries a
+// WITH clause of its own. Derived tables and subqueries inside an arm are
+// separate query blocks and are not inspected.
+func unionArmDeclaresCTEs(union *sqlparser.Union) bool {
+	return slices.ContainsFunc(unionArms(union), statementDeclaresCTEs)
+}
+
+// statementDeclaresCTEs reports whether a union arm carries a WITH clause.
+func statementDeclaresCTEs(stmt sqlparser.TableStatement) bool {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return stmt.With != nil
+	case *sqlparser.ValuesStatement:
+		return stmt.With != nil
+	case *sqlparser.Union:
+		return stmt.With != nil
 	}
 	return false
 }
