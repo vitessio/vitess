@@ -897,7 +897,9 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
 		},
 	}, {
-		testName:         "sysvar check and ignore rejects a change of the session's lexer mode",
+		// a change of the runtime modes alongside the stored lexer mode is ignored
+		// like any other ignored assignment
+		testName:         "sysvar check and ignore ignores a runtime change beside the session's lexer mode",
 		storedSQLMode:    sqlmode.PipesAsConcat,
 		hasStoredSQLMode: true,
 		setOps: []SetOp{
@@ -911,10 +913,31 @@ func TestSetTable(t *testing.T) {
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT,NO_ZERO_DATE",
 		)},
-		expectedError: "setting the PIPES_AS_CONCAT sql_mode is unsupported",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT,NO_ZERO_DATE' new {} false false`,
+		},
+	}, {
+		// an assignment that would take the session out of its stored lexer mode is
+		// rejected: ignored, it would leave the session parsed under the mode
+		testName:         "sysvar check and ignore rejects leaving the session's lexer mode",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "''",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|",
+		)},
+		expectedError: "changing the session's sql_mode from PIPES_AS_CONCAT is unsupported while system settings are disabled",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 		},
 	}, {
 		testName:     "sql_mode set to IGNORE_SPACE",

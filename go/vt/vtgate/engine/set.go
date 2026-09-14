@@ -241,21 +241,33 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 }
 
 // judgeIgnoredSQLMode judges a sql_mode assignment that is ignored because system
-// settings are disabled. The assignment stores nothing, but an unsupported value is an
-// error all the same, so that the client does not go on believing it runs under a mode
-// the session does not run under. That holds for a lexer mode the parser honors too,
-// since the ignored assignment would not put the session under it either, unless the
-// session already stores that very mode: re-assigning it is a no-op, as in MySQL.
+// settings are disabled. The assignment stores nothing, so it cannot change what the
+// session's SQL is parsed under: an assignment that would, by putting the session
+// under a lexer mode the parser honors or by taking it out of the one it stores, is an
+// error, so that the client does not go on believing it runs under a mode the session
+// does not run under. An assignment that leaves the session's lexer modes as they are
+// is a no-op, as in MySQL; an unsupported or invalid value is an error all the same.
 func judgeIgnoredSQLMode(qr *sqltypes.Result, session SessionActions) error {
-	changed, _, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, session)
+	changed, value, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, session)
 	if err != nil {
 		return err
 	}
-	if stored, ok := session.StoredSQLMode(); ok && !changed && stored&sqlmode.LexerModes != 0 {
+	stored, ok := session.StoredSQLMode()
+	if !ok || stored&sqlmode.LexerModes == 0 {
+		_, _, err = sqlModeChangedValue(qr, 0, session)
+		return err
+	}
+	if !changed {
 		return nil
 	}
-	_, _, err = sqlModeChangedValue(qr, 0, session)
-	return err
+	newMode, err := sqlmode.Parse(value.ToString())
+	if err != nil {
+		return err
+	}
+	if (newMode^stored)&sqlmode.LexerModes == 0 {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "changing the session's sql_mode from %s is unsupported while system settings are disabled", stored)
 }
 
 var _ SetOp = (*SysVarReservedConn)(nil)
