@@ -54,10 +54,6 @@ import (
 	at any S3-compatible store, or at a real S3 bucket, to run the tests.
 	Without them the package is skipped outside of CI and fails inside it.
 
-	The package is named after S3, but it also hosts the end-to-end test for
-	the ceph backup storage plugin (ceph_test.go), which talks to the same
-	gateway: it is the natural place, since RGW is what that plugin targets.
-
 	This package and file are named 'endtoend', but it's more an integration test.
 	However, we don't want our CI infra to mistake this for a regular unit-test,
 	hence the rename to 'endtoend'.

@@ -24,25 +24,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	minio "github.com/minio/minio-go"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/utils"
+
+	"vitess.io/vitess/go/vt/log"
 	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // configFilePath is where the configs/credentials for backups will be stored.
@@ -60,22 +55,16 @@ func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
 }
 
-// storageConfig is the content of the JSON file named by --ceph-backup-storage-config.
-type storageConfig struct {
+var storageConfig struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
-	// EndPoint is the gateway's host:port, without a scheme.
-	EndPoint string `json:"endPoint"`
-	UseSSL   bool   `json:"useSSL"`
+	EndPoint  string `json:"endPoint"`
+	UseSSL    bool   `json:"useSSL"`
 }
-
-// cephRegion is the region the S3 client is configured with. Ceph RGW ignores
-// it for signing purposes, but the AWS SDK requires one.
-const cephRegion = "us-east-1"
 
 // CephBackupHandle implements BackupHandle for Ceph Cloud Storage.
 type CephBackupHandle struct {
-	client    *s3.Client
+	client    *minio.Client
 	bs        *CephBackupStorage
 	dir       string
 	name      string
@@ -107,18 +96,8 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		// The body is a pipe, which smithy always sends with chunked
-		// transfer encoding and no Content-Length, so filesize is
-		// deliberately not passed as ContentLength: the signer would include
-		// a content-length header in the signature that never reaches the
-		// wire, and the gateway would reject the request with
-		// SignatureDoesNotMatch.
-		_, err := bh.client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket:      aws.String(bucket),
-			Key:         aws.String(object),
-			Body:        reader,
-			ContentType: aws.String("application/octet-stream"),
-		})
+		// If filesize is unknown, the caller should pass in -1 and we will pass it through.
+		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, filesize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
@@ -161,27 +140,14 @@ func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.R
 	// ceph bucket name
 	bucket := alterBucketName(bh.dir)
 	object := objName(bh.dir, bh.name, filename)
-	out, err := bh.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(object),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out.Body, nil
+	return bh.client.GetObjectWithContext(ctx, bucket, object, minio.GetObjectOptions{})
 }
 
 // CephBackupStorage implements BackupStorage for Ceph Cloud Storage.
 type CephBackupStorage struct {
-	// _client is the instance of the S3 client used to talk to Ceph.
-	_client *s3.Client
-	// config is the decoded configuration. Tests set it directly; production
-	// loads it from configFilePath the first time a client is needed and drops
-	// it again in Close, so the file is re-read on the next use.
-	config *storageConfig
-	// configFromFile records that config came from configFilePath rather than
-	// from a test, so Close knows whether to drop it.
-	configFromFile bool
+	// client is the instance of the Ceph Cloud Storage Go client.
+	// Once this field is set, it must not be written again/unset to nil.
+	_client *minio.Client
 	// mu guards all fields.
 	mu sync.Mutex
 }
@@ -199,24 +165,18 @@ func (bs *CephBackupStorage) ListBackups(ctx context.Context, dir string) ([]bac
 	var subdirs []string
 	searchPrefix := objName(dir, "")
 
-	paginator := s3.NewListObjectsV2Paginator(c, &s3.ListObjectsV2Input{
-		Bucket:    aws.String(bucket),
-		Prefix:    aws.String(searchPrefix),
-		Delimiter: aws.String("/"),
-	})
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			if isNoSuchBucket(err) {
+	doneCh := make(chan struct{})
+	for object := range c.ListObjects(bucket, searchPrefix, false, doneCh) {
+		if object.Err != nil {
+			_, err := c.BucketExists(bucket)
+			if err != nil {
 				return nil, nil
 			}
-			return nil, err
+			return nil, object.Err
 		}
-		for _, cp := range page.CommonPrefixes {
-			subdir := strings.TrimPrefix(aws.ToString(cp.Prefix), searchPrefix)
-			subdir = strings.TrimSuffix(subdir, "/")
-			subdirs = append(subdirs, subdir)
-		}
+		subdir := strings.TrimPrefix(object.Key, searchPrefix)
+		subdir = strings.TrimSuffix(subdir, "/")
+		subdirs = append(subdirs, subdir)
 	}
 
 	// Backups must be returned in order, oldest first.
@@ -244,16 +204,16 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 	// ceph bucket name
 	bucket := alterBucketName(dir)
 
-	found, err := bucketExists(ctx, c, bucket)
+	found, err := c.BucketExists(bucket)
 	if err != nil {
-		log.Info("Error checking whether bucket exists", slog.String("bucket", bucket), slog.Any("error", err))
+		log.Info(fmt.Sprintf("Error from BucketExists: %v, quitting", bucket))
 		return nil, errors.New("Error checking whether bucket exists: " + bucket)
 	}
 	if !found {
 		log.Info(fmt.Sprintf("Bucket: %v doesn't exist, creating new bucket with the required name", bucket))
-		_, err = c.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)})
+		err = c.MakeBucket(bucket, "")
 		if err != nil {
-			log.Info("Error creating bucket", slog.String("bucket", bucket), slog.Any("error", err))
+			log.Info(fmt.Sprintf("Error creating Bucket: %v, quitting", bucket))
 			return nil, errors.New("Error creating new bucket: " + bucket)
 		}
 	}
@@ -278,24 +238,16 @@ func (bs *CephBackupStorage) RemoveBackup(ctx context.Context, dir, name string)
 
 	fullName := objName(dir, name, "")
 	var arr []string
-	paginator := s3.NewListObjectsV2Paginator(c, &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
-		Prefix: aws.String(fullName),
-	})
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return err
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for object := range c.ListObjects(bucket, fullName, true, doneCh) {
+		if object.Err != nil {
+			return object.Err
 		}
-		for _, obj := range page.Contents {
-			arr = append(arr, aws.ToString(obj.Key))
-		}
+		arr = append(arr, object.Key)
 	}
 	for _, obj := range arr {
-		_, err = c.DeleteObject(ctx, &s3.DeleteObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(obj),
-		})
+		err = c.RemoveObject(bucket, obj)
 		if err != nil {
 			return err
 		}
@@ -308,11 +260,9 @@ func (bs *CephBackupStorage) Close() error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	// Drop the client so a new one is built the next time one is needed.
-	bs._client = nil
-	if bs.configFromFile {
-		// Drop the config too, so the file is re-read along with it.
-		bs.config = nil
+	if bs._client != nil {
+		// a new client the next time one is needed.
+		bs._client = nil
 	}
 	return nil
 }
@@ -322,99 +272,35 @@ func (bs *CephBackupStorage) WithParams(params backupstorage.Params) backupstora
 	return bs
 }
 
-// loadConfigLocked reads configFilePath into bs.config unless a config is
-// already present. bs.mu must be held.
-func (bs *CephBackupStorage) loadConfigLocked() error {
-	if bs.config != nil {
-		return nil
-	}
-	configFile, err := os.Open(configFilePath)
-	if err != nil {
-		return fmt.Errorf("file not present : %v", err)
-	}
-	defer configFile.Close()
-	var cfg storageConfig
-	if err = json.NewDecoder(configFile).Decode(&cfg); err != nil {
-		return fmt.Errorf("error parsing the json file : %v", err)
-	}
-	bs.config = &cfg
-	bs.configFromFile = true
-	return nil
-}
-
-// endpointURL returns the configured endpoint with the scheme UseSSL selects.
-// bs.mu must be held, or bs.config must be immutable (as it is for a
-// test-supplied config).
-func (bs *CephBackupStorage) endpointURL() string {
-	scheme := "http"
-	if bs.config.UseSSL {
-		scheme = "https"
-	}
-	return scheme + "://" + bs.config.EndPoint
-}
-
 // client returns the Ceph Storage client instance.
 // If there isn't one yet, it tries to create one.
-func (bs *CephBackupStorage) client() (*s3.Client, error) {
+func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
 	if bs._client == nil {
-		if err := bs.loadConfigLocked(); err != nil {
-			return nil, err
+		configFile, err := os.Open(configFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("file not present : %v", err)
 		}
-		cfg, err := config.LoadDefaultConfig(context.Background(),
-			config.WithRegion(cephRegion),
-			config.WithCredentialsProvider(
-				credentials.NewStaticCredentialsProvider(bs.config.AccessKey, bs.config.SecretKey, "")),
-		)
+		defer configFile.Close()
+		jsonParser := json.NewDecoder(configFile)
+		if err = jsonParser.Decode(&storageConfig); err != nil {
+			return nil, fmt.Errorf("error parsing the json file : %v", err)
+		}
+
+		accessKey := storageConfig.AccessKey
+		secretKey := storageConfig.SecretKey
+		url := storageConfig.EndPoint
+		useSSL := storageConfig.UseSSL
+
+		client, err := minio.NewV2(url, accessKey, secretKey, useSSL)
 		if err != nil {
 			return nil, err
 		}
-		endpoint := bs.endpointURL()
-		bs._client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(endpoint)
-			o.UsePathStyle = true
-			// AddFile streams each file through an io.Pipe, which cannot be
-			// rewound, so the SDK cannot read the payload to hash it for the
-			// signature or for a checksum header. Skip the default CRC32
-			// checksum (otherwise the SDK rejects an unseekable body over
-			// plain HTTP) and sign the headers only, sending the payload as
-			// UNSIGNED-PAYLOAD. This applies over HTTPS as well: with the
-			// checksum disabled the SDK does not fall back to a trailing
-			// checksum there either. It matches what minio-go did, since
-			// Signature V2 never covered the payload.
-			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-			// Symmetric with the request side: nothing here writes checksums,
-			// so there is nothing to validate, and the SDK would otherwise
-			// warn on every download.
-			o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
-			o.APIOptions = append(o.APIOptions, v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware)
-		})
+		bs._client = client
 	}
 	return bs._client, nil
-}
-
-// bucketExists reports whether bucket exists, distinguishing "not found"
-// from other errors.
-func bucketExists(ctx context.Context, c *s3.Client, bucket string) (bool, error) {
-	_, err := c.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)})
-	if err == nil {
-		return true, nil
-	}
-	if isNoSuchBucket(err) {
-		return false, nil
-	}
-	return false, err
-}
-
-// isNoSuchBucket reports whether err says the bucket does not exist. Listing
-// a missing bucket returns NoSuchBucket, while HeadBucket returns the generic
-// NotFound because a HEAD response has no body to name the error.
-func isNoSuchBucket(err error) bool {
-	var noSuchBucket *types.NoSuchBucket
-	var notFound *types.NotFound
-	return errors.As(err, &noSuchBucket) || errors.As(err, &notFound)
 }
 
 func init() {
