@@ -18,10 +18,13 @@ package cephbackupstorage
 
 import (
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -238,4 +241,99 @@ func TestCloseReloadsConfigFile(t *testing.T) {
 	require.NoError(t, fakeBS.Close())
 	_, err = fakeBS.client()
 	require.NoError(t, err)
+}
+
+// recvWithin returns the next value from ch, or fails the test if none
+// arrives within the timeout.
+func recvWithin[T any](t *testing.T, ch <-chan T, what string) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting for "+what)
+		var zero T
+		return zero
+	}
+}
+
+// TestAddFileStreamsWithoutBuffering pins that AddFile hands the pipe to the
+// server as it is written rather than reading it to the end first: the server
+// sees the PUT's headers, and its first bytes, while the writer is still open.
+//
+// This is what the two client options in client() buy.
+// RequestChecksumCalculationWhenRequired stops the SDK computing a CRC32 over
+// the body, and SwapComputePayloadSHA256ForUnsignedPayloadMiddleware stops the
+// signer hashing it. Either computation reads the stream to EOF and then
+// rewinds it, which a pipe cannot do, so the upload would wait for Close and
+// then fail with "request stream is not seekable" before any bytes left the
+// process. Remove either option and this test fails.
+func TestAddFileStreamsWithoutBuffering(t *testing.T) {
+	ctx := t.Context()
+	const head = "head"
+	tail := strings.Repeat("x", 1<<20)
+	// Path style: bucket "ks", object "ks/0/b/f".
+	const objectPath = "/ks/ks/0/b/f"
+
+	headersSeen := make(chan http.Header, 1)
+	firstBytes := make(chan []byte, 1)
+	received := make(chan []byte, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != objectPath {
+			// HeadBucket: say the bucket exists so StartBackup does not
+			// try to create it.
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Signal before touching the body: the headers are here while the
+		// writer is still open.
+		headersSeen <- r.Header.Clone()
+		first := make([]byte, len(head))
+		if _, err := io.ReadFull(r.Body, first); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		firstBytes <- first
+		rest, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		received <- append(first, rest...)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	bs := NewFakeCephBackupStorage(FakeConfig{
+		AccessKey: "access",
+		SecretKey: "secret",
+		EndPoint:  strings.TrimPrefix(srv.URL, "http://"),
+	})
+	bh, err := bs.StartBackup(ctx, "ks/0", "b")
+	require.NoError(t, err)
+
+	w, err := bh.AddFile(ctx, "f", -1)
+	require.NoError(t, err)
+	_, err = io.WriteString(w, head)
+	require.NoError(t, err)
+
+	hdr := recvWithin(t, headersSeen, "PUT headers while the writer is still open")
+	// These are what the two client options produce on the wire. An HTTPS
+	// endpoint produces the same: with checksums set to when-required the
+	// checksum middleware is a pass-through on both schemes, so there is no
+	// trailing checksum and no aws-chunked framing there either.
+	assert.Equal(t, "UNSIGNED-PAYLOAD", hdr.Get("X-Amz-Content-Sha256"))
+	assert.NotContains(t, hdr.Values("Content-Encoding"), "aws-chunked")
+	for name := range hdr {
+		assert.False(t, strings.HasPrefix(strings.ToLower(name), "x-amz-checksum-"),
+			"unexpected checksum header %s", name)
+	}
+	assert.Equal(t, head, string(recvWithin(t, firstBytes, "first bytes while the writer is still open")))
+
+	_, err = io.WriteString(w, tail)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	require.NoError(t, bh.EndBackup(ctx))
+
+	assert.Equal(t, head+tail, string(recvWithin(t, received, "the full payload")))
 }
