@@ -210,7 +210,8 @@ func TestValidate(t *testing.T) {
 }
 
 // A lexer mode the caller honors passes validation; the others are still rejected, the
-// ANSI combination included until every one of its members is honored.
+// ANSI combination included, which is a mode of its own and stays rejected until a
+// caller honors it as such, whatever it honors of its members.
 func TestValidateHonored(t *testing.T) {
 	mode, err := Validate(sqltypes.NewVarChar("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"), PipesAsConcat)
 	require.NoError(t, err)

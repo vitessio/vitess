@@ -69,7 +69,11 @@ func ValidateReservedSettings(settings []string, parser *sqlparser.Parser) (pars
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return 0, false, err
 		}
-		if mode, sawConstant := constantSetExprsSQLModeBits(set.Exprs); sawConstant {
+		mode, sawConstant, err := constantSetExprsSQLModeBits(set.Exprs)
+		if err != nil {
+			return 0, false, err
+		}
+		if sawConstant {
 			parseMode = mode
 			setsSQLMode = true
 		}
@@ -96,9 +100,9 @@ func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 // vttablet reads queries on this connection under, when that assignment is a constant.
 // sawConstant reports whether it is, so callers can record the session's modes even
 // when they are zero. An earlier assignment in the same statement is superseded by the
-// last one, whatever its form. Values the caller's validation pass did not reject are
-// the only ones seen here; an invalid one is ignored.
-func constantSetExprsSQLModeBits(exprs sqlparser.SetExprs) (parseMode sqlmode.Mode, sawConstant bool) {
+// last one, whatever its form. A constant that fails validation is an error, the same
+// one validateSetExprsSQLMode returns for it.
+func constantSetExprsSQLModeBits(exprs sqlparser.SetExprs) (parseMode sqlmode.Mode, sawConstant bool, err error) {
 	for _, expr := range exprs {
 		if !isSessionSQLModeAssignment(expr) {
 			continue
@@ -108,12 +112,14 @@ func constantSetExprsSQLModeBits(exprs sqlparser.SetExprs) (parseMode sqlmode.Mo
 		if !ok {
 			continue
 		}
-		if mode, err := sqlmode.Validate(value, sqlparser.HonoredSQLModes); err == nil {
-			parseMode = mode & sqlparser.HonoredSQLModes
-			sawConstant = true
+		mode, err := sqlmode.Validate(value, sqlparser.HonoredSQLModes)
+		if err != nil {
+			return 0, false, err
 		}
+		parseMode = mode & sqlparser.HonoredSQLModes
+		sawConstant = true
 	}
-	return parseMode, sawConstant
+	return parseMode, sawConstant, nil
 }
 
 // isSessionSQLModeAssignment reports whether the assignment sets the session's
@@ -161,13 +167,14 @@ func validateSetStatementSQLMode(set *sqlparser.Set) (readBack bool, err error) 
 }
 
 // validateSetExprsSQLMode judges the session-scope sql_mode assignments of a statement
-// the way MySQL applies them: in order, each constant value validated as a SET would
-// be (sqlmode.Validate with the modes the parser honors), with the last assignment
-// deciding the mode the session ends up in. When that last assignment is not a
-// constant it cannot be judged here; readBack=true then asks the executor to read back
-// the applied value after the statement runs and judge it then. An earlier
-// non-constant assignment is superseded by a later constant one before the connection
-// processes anything else, so it needs no read-back.
+// in order. Every constant value is validated as a SET would be (sqlmode.Validate with
+// the modes the parser honors), so a rejected mode is an error wherever it appears in
+// the statement, even when a later assignment would supersede it. The last assignment
+// decides what the executor does afterwards: when it is not a constant it cannot be
+// judged here, and readBack=true asks the executor to read back the applied value
+// after the statement runs and judge it then. An earlier non-constant assignment is
+// superseded by a later constant one before the connection processes anything else,
+// so it needs no read-back.
 func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (readBack bool, err error) {
 	for _, expr := range exprs {
 		if !isSessionSQLModeAssignment(expr) {

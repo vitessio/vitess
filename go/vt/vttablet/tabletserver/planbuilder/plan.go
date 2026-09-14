@@ -436,7 +436,11 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", 0, false, err
 		}
-		if mode, sawConstant := constantSetExprsSQLModeBits(set.Exprs); sawConstant {
+		mode, sawConstant, err := constantSetExprsSQLModeBits(set.Exprs)
+		if err != nil {
+			return "", "", 0, false, err
+		}
+		if sawConstant {
 			parseMode = mode
 			setsSQLMode = true
 		}

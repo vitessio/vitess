@@ -70,10 +70,12 @@ type StatefulConnection struct {
 	// without locking the connection.
 	parseSQLMode atomic.Uint64
 	// settingStale is set once a SET statement ran on the connection after its
-	// settings were applied (see MarkSettingStale): the same settings must be
-	// applied again on the next request, and the connection must not return to
-	// the pool under them.
-	settingStale bool
+	// settings were applied, and cleared once they are applied again (see
+	// MarkSettingStale). changedInBand is set at the same time and stays set: a
+	// re-applied setting restores its own variables only, so the connection
+	// must not return to the pool under any setting once a SET ran on it.
+	settingStale  bool
+	changedInBand bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
 	// captured when its first temporary-table DDL runs and re-captured after
@@ -321,12 +323,13 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 			sc.pool.tempTableUnmanaged.Add(-1)
 		}
 	}
-	if sc.settingStale && !sc.tainted {
-		// A SET ran on the connection since its settings were applied, so its
-		// MySQL session no longer matches the settings the pool files it under.
-		// The pool would hand it to the next request that brings those settings
-		// as if they were applied: close it instead, and the pool opens a
-		// replacement. A tainted connection never returns to the pool.
+	if sc.changedInBand && !sc.tainted {
+		// A SET ran on the connection, so its MySQL session no longer matches
+		// the settings the pool files it under, and applying those settings
+		// again restores their own variables only. The pool would hand it to
+		// the next request that brings those settings as if nothing else had
+		// changed: close it instead, and the pool opens a replacement. A tainted
+		// connection never returns to the pool.
 		sc.dbConn.Close()
 	}
 	sc.dbConn.Recycle()
@@ -496,6 +499,7 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 // and the connection is closed rather than recycled when it is released.
 func (sc *StatefulConnection) MarkSettingStale() {
 	sc.settingStale = true
+	sc.changedInBand = true
 }
 
 // ParseSQLMode returns the lexer modes the connection's session is in.
