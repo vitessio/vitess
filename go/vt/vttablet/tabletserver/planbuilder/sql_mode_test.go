@@ -63,8 +63,16 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 		settings:    []string{"set sql_mode = 'ANSI'"},
 		expectedErr: "setting the ANSI sql_mode is unsupported",
 	}, {
-		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = 'STRICT_TRANS_TABLES,ANSI_QUOTES'"},
-		expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported",
+		settings:      []string{"set sql_safe_updates = 1", "set sql_mode = 'STRICT_TRANS_TABLES,ANSI_QUOTES'"},
+		expectedQuery: "set sql_safe_updates = 1, sql_mode = 'STRICT_TRANS_TABLES,ANSI_QUOTES'",
+		expectedMode:  sqlmode.AnsiQuotes,
+	}, {
+		settings:      []string{"set sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES'"},
+		expectedQuery: "set sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES'",
+		expectedMode:  sqlmode.PipesAsConcat | sqlmode.AnsiQuotes,
+	}, {
+		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = 'STRICT_TRANS_TABLES,REAL_AS_FLOAT'"},
+		expectedErr: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 	}, {
 		settings:    []string{"set sql_mode = 'IGNORE_SPACE'"},
 		expectedErr: "setting the IGNORE_SPACE sql_mode is unsupported",
@@ -124,8 +132,8 @@ func TestValidateReservedSettings(t *testing.T) {
 	})
 
 	t.Run("the other lexer modes are rejected", func(t *testing.T) {
-		_, _, err := ValidateReservedSettings([]string{"set sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES'"}, parser)
-		require.EqualError(t, err, "setting the ANSI_QUOTES sql_mode is unsupported")
+		_, _, err := ValidateReservedSettings([]string{"set sql_mode = 'REAL_AS_FLOAT,STRICT_TRANS_TABLES'"}, parser)
+		require.EqualError(t, err, "setting the REAL_AS_FLOAT sql_mode is unsupported")
 		_, _, err = ValidateReservedSettings([]string{"set sql_mode = 'PIPES_AS_CONCAT,NO_BACKSLASH_ESCAPES'"}, parser)
 		require.EqualError(t, err, "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
 		_, _, err = ValidateReservedSettings([]string{"set sql_mode = 'ANSI'"}, parser)
@@ -231,7 +239,11 @@ func TestSetPlanSQLMode(t *testing.T) {
 		parseBits:   sqlmode.PipesAsConcat,
 	}, {
 		sql:         "set @@sql_mode = 'ansi_quotes'",
-		expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported",
+		setsSQLMode: true,
+		parseBits:   sqlmode.AnsiQuotes,
+	}, {
+		sql:         "set @@sql_mode = 'real_as_float'",
+		expectedErr: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 	}, {
 		sql:         "set session sql_mode = 'HIGH_NOT_PRECEDENCE'",
 		expectedErr: "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported",
@@ -280,8 +292,8 @@ func TestSetPlanSQLMode(t *testing.T) {
 		sql:         "set @@sql_mode = 'BOGUS', @@sql_mode = ''",
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
 	}, {
-		sql:         "set @@sql_mode = 'ANSI_QUOTES', @@sql_mode = 'PIPES_AS_CONCAT'",
-		expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported",
+		sql:         "set @@sql_mode = 'REAL_AS_FLOAT', @@sql_mode = 'PIPES_AS_CONCAT'",
+		expectedErr: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 	}, {
 		// a superseded non-constant value needs no read-back: MySQL validates it itself
 		// and the final constant is judged here

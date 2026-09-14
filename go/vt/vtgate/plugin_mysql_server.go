@@ -1235,7 +1235,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 }
 
 func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
+	queries, err := vh.vtg.executor.ParserForSession(session).SplitStatementToPieces(sql)
 	if err != nil {
 		return session, err
 	}

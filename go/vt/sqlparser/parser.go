@@ -386,11 +386,11 @@ type Parser struct {
 }
 
 // HonoredSQLModes are the lexer modes the parser reads SQL under: of
-// sqlmode.LexerModes, PIPES_AS_CONCAT only (see Options.SQLMode). Parsing
-// under a mode changes what the same text means, but the AST it yields always
-// serializes to text that means the same thing under any mode: || becomes a
-// concat() call.
-const HonoredSQLModes = sqlmode.PipesAsConcat
+// sqlmode.LexerModes, PIPES_AS_CONCAT and ANSI_QUOTES (see Options.SQLMode).
+// Parsing under a mode changes what the same text means, but the AST it yields
+// always serializes to text that means the same thing under any mode: || becomes
+// a concat() call, and a double-quoted identifier is written with backticks.
+const HonoredSQLModes = sqlmode.PipesAsConcat | sqlmode.AnsiQuotes
 
 // WithSQLMode returns a parser that reads SQL under mode: p itself when mode
 // has the same honored modes (HonoredSQLModes) as p's, since the reading is

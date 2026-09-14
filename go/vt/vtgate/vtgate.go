@@ -688,7 +688,7 @@ func (vtg *VTGate) ExecuteMulti(
 	session *vtgatepb.Session,
 	sqlString string,
 ) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
-	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	queries, err := vtg.executor.ParserForSession(session).SplitStatementToPieces(sqlString)
 	if err != nil {
 		return session, nil, err
 	}
@@ -794,7 +794,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 // StreamExecuteMulti executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	queries, err := vtg.executor.ParserForSession(session).SplitStatementToPieces(sqlString)
 	if err != nil {
 		return session, err
 	}

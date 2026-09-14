@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/test/utils"
 )
 
@@ -7236,13 +7237,15 @@ func TestNationalStringRequiresSingleQuote(t *testing.T) {
 		assert.Equal(t, NStringOp, nstr.Operator)
 		assert.Equal(t, "select N'foo' from t", String(stmt))
 	}
-	for _, in := range []string{`select N"foo" from t`, `select n"foo" from t`} {
-		stmt, err := parser.Parse(in)
-		require.NoError(t, err, in)
-		ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
-		col, ok := ae.Expr.(*ColName)
-		require.True(t, ok, "%s: got %T", in, ae.Expr)
-		assert.True(t, col.Name.EqualString("n"), in)
-		assert.Equal(t, "foo", ae.As.String(), in)
+	for _, p := range []*Parser{parser, parser.WithSQLMode(sqlmode.AnsiQuotes)} {
+		for _, in := range []string{`select N"foo" from t`, `select n"foo" from t`} {
+			stmt, err := p.Parse(in)
+			require.NoError(t, err, in)
+			ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
+			col, ok := ae.Expr.(*ColName)
+			require.True(t, ok, "%s: got %T", in, ae.Expr)
+			assert.True(t, col.Name.EqualString("n"), in)
+			assert.Equal(t, "foo", ae.As.String(), in)
+		}
 	}
 }

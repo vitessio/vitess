@@ -185,6 +185,42 @@ func TestSetPipesAsConcat(t *testing.T) {
 	assert.Equal(t, "ab", got)
 }
 
+func TestSetAnsiQuotes(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// without the mode a double-quoted token is a string literal
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[VARCHAR("a")]]`)
+
+	utils.Exec(t, conn, "set sql_mode = 'ANSI_QUOTES,NO_ZERO_DATE'")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("ANSI_QUOTES,NO_ZERO_DATE")]]`)
+	// under it, an identifier
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[INT32(1)]]`)
+	utils.AssertMatches(t, conn, `select "t"."a" from (select 1 as "a") as "t"`, `[[INT32(1)]]`)
+	// single-quoted strings are unaffected
+	utils.AssertMatches(t, conn, `select 'a"b' from (select 1 as a) as t`, `[[VARCHAR("a\"b")]]`)
+	// the runtime mode set alongside applies on the tablet
+	utils.AssertMatches(t, conn, "select str_to_date('00/00/0000', '%m/%d/%Y')", `[[NULL]]`)
+
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[VARCHAR("a")]]`)
+
+	// a session with open shard sessions sends them the mode
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "select id from test where id = 1")
+	utils.Exec(t, conn, "set sql_mode = 'ANSI_QUOTES'")
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[INT32(1)]]`)
+	utils.Exec(t, conn, "commit")
+
+	// so does a targeted session
+	utils.Exec(t, conn, "set sql_mode = ''")
+	utils.Exec(t, conn, "use `"+keyspaceName+":-80`")
+	utils.Exec(t, conn, "set sql_mode = 'ANSI_QUOTES'")
+	utils.AssertMatches(t, conn, `select "a" from (select 1 as a) as t`, `[[INT32(1)]]`)
+	utils.Exec(t, conn, "use `"+keyspaceName+"`")
+}
+
 func TestSetSystemVarWithTxFailure(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)

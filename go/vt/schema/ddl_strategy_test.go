@@ -374,8 +374,8 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			// modes the Vitess parser does not support are rejected like on a vtgate
 			// session: the migration statements are Vitess-formatted SQL
-			strategyVariable: "online --session-variable sql_mode=ANSI_QUOTES",
-			expectError:      "setting the ANSI_QUOTES sql_mode is unsupported",
+			strategyVariable: "online --session-variable sql_mode=REAL_AS_FLOAT",
+			expectError:      "setting the REAL_AS_FLOAT sql_mode is unsupported",
 		},
 		{
 			strategyVariable: "online --session-variable sql_mode=IGNORE_SPACE",

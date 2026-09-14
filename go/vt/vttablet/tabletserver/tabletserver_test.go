@@ -2734,6 +2734,37 @@ func TestReserveExecute_ParseSQLMode(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// Under ANSI_QUOTES a reserved connection's queries read a double-quoted token as
+// an identifier, and the query reaches MySQL with the identifier spelled the way
+// the vttablet spells identifiers.
+func TestReserveExecute_AnsiQuotes(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQuery("set sql_mode = 'ANSI_QUOTES'", &sqltypes.Result{})
+	db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target,
+		[]string{"set sql_mode = 'ANSI_QUOTES'"},
+		"select get_lock('l', 10) from dual", nil, 0, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.NotEqual(t, int64(0), state.ReservedID)
+
+	// under ANSI_QUOTES this query only matches its identifier serialization; the
+	// string-literal reading would hit an unregistered query and fail
+	identifierQuery := "select a, `b\"c` from dual limit 10001"
+	db.AddQuery(identifierQuery, &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, nil, &target, `select "a", "b""c" from dual`, nil, 0, state.ReservedID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(identifierQuery))
+
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+}
+
 // Reserving an existing transaction with settings that do not assign sql_mode leaves
 // the parse mode the transaction's connection is already in untouched: the mode its
 // connection settings put it in keeps governing how later queries on it are parsed.
