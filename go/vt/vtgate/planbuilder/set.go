@@ -199,7 +199,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 			if err := rejectQualifiedIdentifier(expr); err != nil {
 				return nil, err
 			}
-			if _, err := sqlmode.Validate(sqltypes.NewVarChar(colName.Name.String())); err != nil {
+			if _, err := sqlmode.Validate(sqltypes.NewVarChar(colName.Name.String()), 0); err != nil {
 				return nil, err
 			}
 			return inner(expr, vschema, ec)
@@ -211,7 +211,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 		if err == nil {
 			if lit, ok := evalExpr.(*evalengine.Literal); ok {
 				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
-					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation())); err != nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation()), 0); err != nil {
 						return nil, err
 					}
 				}

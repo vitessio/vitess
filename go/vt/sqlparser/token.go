@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -251,6 +252,9 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			case '|':
 				if tkn.cur() == '|' {
 					tkn.skip(1)
+					if tkn.pipesAsConcat() {
+						return PIPE_CONCAT, ""
+					}
 					return OR, ""
 				}
 				return int(ch), ""
@@ -397,6 +401,12 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 		return keywordID, keywordName
 	}
 	return ID, keywordName
+}
+
+// pipesAsConcat reports whether the tokenizer's sql_mode has PIPES_AS_CONCAT,
+// under which || is the concatenation operator rather than logical OR.
+func (tkn *Tokenizer) pipesAsConcat() bool {
+	return tkn.parser != nil && tkn.parser.sqlMode&sqlmode.PipesAsConcat != 0
 }
 
 // scanHex scans a hex numeral; assumes x' or X' has already been scanned
