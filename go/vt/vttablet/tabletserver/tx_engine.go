@@ -723,6 +723,12 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 			return err
 		}
 	}
+	if len(preQueries) > 0 {
+		// the pre-queries changed the session behind the settings an existing
+		// transaction's connection carries, which a later request bringing
+		// those settings must apply again
+		conn.MarkSettingStale()
+	}
 	if setsSQLMode {
 		conn.SetParseSQLMode(parseMode)
 	}
