@@ -51,10 +51,11 @@ type Tokenizer struct {
 	parser    *Parser
 	currStart int // start position of current token (set in Scan after skipBlank)
 
-	// pipeConcatAt holds the start positions of the || tokens read as concat
-	// under PIPES_AS_CONCAT, so the grammar can tell which select expressions
-	// contain one (see pipeConcatWithin).
-	pipeConcatAt []int
+	// pipeConcatEnd is the end position of the last || read as concat under
+	// PIPES_AS_CONCAT, zero when none was. A select expression that starts
+	// before it contains one: when the grammar reduces the expression the
+	// lexer is at most one token ahead, never at a later expression's ||.
+	pipeConcatEnd int
 }
 
 // location tracks the byte-offset span [start, end) of a grammar symbol
@@ -258,7 +259,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				if tkn.cur() == '|' {
 					tkn.skip(1)
 					if tkn.pipesAsConcat() {
-						tkn.pipeConcatAt = append(tkn.pipeConcatAt, tkn.currStart)
+						tkn.pipeConcatEnd = tkn.Pos
 						return PIPE_CONCAT, ""
 					}
 					return OR, ""
@@ -413,19 +414,6 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 // under which || is the concatenation operator rather than logical OR.
 func (tkn *Tokenizer) pipesAsConcat() bool {
 	return tkn.parser != nil && tkn.parser.sqlMode&sqlmode.PipesAsConcat != 0
-}
-
-// pipeConcatWithin reports whether a || read as concat lies in the input span
-// [start, end). An unaliased select expression containing one is aliased with
-// its input text, so that MySQL names the result column as written, the way it
-// does itself, rather than after the concat() call the operator is read as.
-func (tkn *Tokenizer) pipeConcatWithin(start, end int) bool {
-	for _, pos := range tkn.pipeConcatAt {
-		if start <= pos && pos < end {
-			return true
-		}
-	}
-	return false
 }
 
 // scanHex scans a hex numeral; assumes x' or X' has already been scanned

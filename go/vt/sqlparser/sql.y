@@ -5683,9 +5683,9 @@ select_expression:
       default:
         tkn := yylex.(*Tokenizer)
         ae.InputExpression = tkn.GetInputExpression(@1.start, @1.end)
-        if tkn.pipeConcatWithin(@1.start, @1.end) {
-          // || is read as concat() and prints as such; the alias keeps the
-          // column named as written, as MySQL names it
+        if tkn.pipeConcatEnd > @1.start {
+          // a || read as concat() prints as such; the alias keeps the column
+          // named as written, as MySQL names it
           ae.As = NewIdentifierCI(ae.InputExpression)
         }
       }

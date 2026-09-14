@@ -21574,9 +21574,9 @@ yydefault:
 				default:
 					tkn := yylex.(*Tokenizer)
 					ae.InputExpression = tkn.GetInputExpression(yyDollar[1].yyloc.start, yyDollar[1].yyloc.end)
-					if tkn.pipeConcatWithin(yyDollar[1].yyloc.start, yyDollar[1].yyloc.end) {
-						// || is read as concat() and prints as such; the alias keeps the
-						// column named as written, as MySQL names it
+					if tkn.pipeConcatEnd > yyDollar[1].yyloc.start {
+						// a || read as concat() prints as such; the alias keeps the column
+						// named as written, as MySQL names it
 						ae.As = NewIdentifierCI(ae.InputExpression)
 					}
 				}
