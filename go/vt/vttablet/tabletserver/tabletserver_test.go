@@ -2909,8 +2909,9 @@ func TestSettingSwitchClosesTheConnectionOnRelease(t *testing.T) {
 	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, modeSettings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	require.Equal(t, int64(0), beginState.ReservedID)
-	// the other setting is applied on top: the session keeps the mode, and
-	// the connection is read under it, as the setting does not touch sql_mode
+	// the other setting is applied on top and does not touch sql_mode, so the
+	// switch leaves the connection's mode in place (the mode governing later
+	// queries is pinned by TestSettingsWithoutSQLModeKeepTheConnectionMode)
 	concatQuery := "select concat('a', 'b') from dual limit 10001"
 	db.AddQuery(concatQuery, &sqltypes.Result{})
 	_, _, err = tsv.ReserveExecute(ctx, nil, &target, otherSettings, "select 'a' || 'b' from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
