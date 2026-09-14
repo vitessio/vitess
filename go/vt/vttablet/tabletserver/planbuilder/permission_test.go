@@ -303,6 +303,79 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "real1",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// Once a parenthesized union arm declares its own WITH, MySQL no longer
+		// resolves the union's leading CTEs inside the arms: a same-named
+		// reference there is the real table. The walker drops the leading
+		// scope for every arm of such a union, so each reference to the name
+		// requires the table's permission.
+		input: "with t as (select * from real1) select * from t union all (with t as (select * from t) select * from t)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// The arm's own WITH need not shadow anything for the leading CTEs to
+		// become invisible; the arm's consumer reads the real table.
+		input: "with t as (select * from real1) select * from t union all (with s as (select 1 as id) select * from t)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A plain arm after the arm with the WITH reads the real table too.
+		input: "with t as (select * from real1) select * from t union all (with s as (select 1 as id) select id from s) union all (select * from t)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// The arm with the WITH may come first.
+		input: "with t as (select * from real1) (with s as (select 1 as id) select * from t) union all select * from t",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// Only the union's own leading WITH is affected. A CTE from an
+		// enclosing query block stays visible in every arm, including inside
+		// the arm's own CTE bodies.
+		input: "with t as (select * from real1), s as (select * from t union all (with t as (select * from t) select * from t)) select * from s",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// Same for a union inside a derived table of the consumer.
+		input: "with t as (select * from real1) select * from (select * from t union all (with s as (select 1 as id) select * from t)) as d",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {

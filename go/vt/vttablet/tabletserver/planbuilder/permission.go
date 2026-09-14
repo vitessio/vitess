@@ -130,7 +130,15 @@ func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Rol
 		case *sqlparser.Update:
 			push(node.With)
 		case *sqlparser.Union:
-			push(node.With)
+			// Once a parenthesized arm declares its own WITH, MySQL no longer
+			// resolves the union's leading CTEs inside the arms: a reference
+			// to one of their names is the real table. Leave the leading
+			// scope off the stack for such a union so every arm requires the
+			// table's permission; the With visit below still walks the
+			// leading CTE bodies with the enclosing scopes.
+			if !unionArmDeclaresCTEs(node) {
+				push(node.With)
+			}
 		case *sqlparser.ValuesStatement:
 			push(node.With)
 		case *sqlparser.With:
@@ -177,6 +185,30 @@ func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Rol
 		return true
 	})
 	return permissions
+}
+
+// unionArmDeclaresCTEs reports whether any arm of the union chain carries a
+// WITH clause of its own. Arms are the statements joined by UNION, at any
+// depth of nesting; derived tables and subqueries inside an arm are separate
+// query blocks and are not inspected.
+func unionArmDeclaresCTEs(union *sqlparser.Union) bool {
+	for _, arm := range []sqlparser.TableStatement{union.Left, union.Right} {
+		switch arm := arm.(type) {
+		case *sqlparser.Select:
+			if arm.With != nil {
+				return true
+			}
+		case *sqlparser.ValuesStatement:
+			if arm.With != nil {
+				return true
+			}
+		case *sqlparser.Union:
+			if arm.With != nil || unionArmDeclaresCTEs(arm) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // gatherCTEs gathers the CTEs from the WITH clause.
