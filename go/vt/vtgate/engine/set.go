@@ -235,17 +235,27 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return nil
 	}
 	if svci.Name == "sql_mode" {
-		// The assignment is ignored, but an unsupported sql_mode is an error all the
-		// same: constants were rejected at plan time, and a non-constant value gets
-		// the same judgment here, once evaluated, so that the client does not go on
-		// believing it runs under a mode the session does not run under. That holds
-		// for the lexer modes the parser honors too: the ignored assignment stores
-		// nothing, so the session would not be parsed under the mode either.
-		if _, _, err := sqlModeChangedValue(qr, 0, vcursor.Session()); err != nil {
-			return err
-		}
+		return judgeIgnoredSQLMode(qr, vcursor.Session())
 	}
 	return nil
+}
+
+// judgeIgnoredSQLMode judges a sql_mode assignment that is ignored because system
+// settings are disabled. The assignment stores nothing, but an unsupported value is an
+// error all the same, so that the client does not go on believing it runs under a mode
+// the session does not run under. That holds for a lexer mode the parser honors too,
+// since the ignored assignment would not put the session under it either, unless the
+// session already stores that very mode: re-assigning it is a no-op, as in MySQL.
+func judgeIgnoredSQLMode(qr *sqltypes.Result, session SessionActions) error {
+	changed, _, err := sqlModeChangedValue(qr, sqlparser.HonoredSQLModes, session)
+	if err != nil {
+		return err
+	}
+	if stored, ok := session.StoredSQLMode(); ok && !changed && stored&sqlmode.LexerModes != 0 {
+		return nil
+	}
+	_, _, err = sqlModeChangedValue(qr, 0, session)
+	return err
 }
 
 var _ SetOp = (*SysVarReservedConn)(nil)
@@ -302,26 +312,42 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		vcursor.Session().SetSysVar(svs.Name, storedValue)
 		return nil
 	}
-	needReservedConn, storedValue, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
+	changed, storedValue, err := svs.judgeSysVar(ctx, vcursor, env)
 	if err != nil {
 		return err
 	}
-	if !needReservedConn {
+	if !changed {
+		if svs.Name == "sql_mode" {
+			if _, ok := vcursor.Session().StoredSQLMode(); ok {
+				// the session already carries the value; storing the judged one
+				// canonicalizes a value stored as an older vtgate spelled it
+				vcursor.Session().SetSysVar(svs.Name, storedValue)
+			}
+		}
 		// setting ignored, same as underlying datastore
 		return nil
 	}
-	// Update existing shard session with new system variable settings.
-	rss := vcursor.Session().ShardSession()
-	if len(rss) == 0 {
-		return nil
+	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
+	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
+		vcursor.Session().NeedsReservedConn()
+		// Update existing shard sessions with the new system variable setting
+		// before the session stores it: a SET that fails changes nothing, in
+		// MySQL and here.
+		if rss := vcursor.Session().ShardSession(); len(rss) > 0 {
+			value := svs.Expr
+			if svs.Name == "sql_mode" {
+				// The SET carries the judged value, not the expression: evaluating the
+				// expression a second time could apply a value the session never judged.
+				value = storedValue
+			}
+			if err := svs.execSetStatement(ctx, vcursor, rss, env, value); err != nil {
+				return err
+			}
+		}
 	}
-	value := svs.Expr
-	if svs.Name == "sql_mode" {
-		// The SET carries the judged value, not the expression: evaluating the
-		// expression a second time could apply a value the session never judged.
-		value = storedValue
-	}
-	return svs.execSetStatement(ctx, vcursor, rss, env, value)
+	vcursor.Session().SetSysVar(svs.Name, storedValue)
+	return nil
 }
 
 // execSetStatement executes `set <name> = <value>` on the given shard sessions.
@@ -337,10 +363,9 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 	return vterrors.Aggregate(errs)
 }
 
-// checkAndUpdateSysVar evaluates the assignment on a shard and, when it changes the
-// variable's value, stores the evaluated value in the session. It returns whether a
-// reserved connection is needed to apply the change, and the stored value.
-func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (needReservedConn bool, storedValue string, err error) {
+// judgeSysVar evaluates the assignment on a shard and reports whether it changes the
+// variable's value, and the value the session stores for it.
+func (svs *SysVarReservedConn) judgeSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (changed bool, storedValue string, err error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	if svs.Name == "sql_mode" {
 		sysVarExprValidationQuery = sqlModeJudgmentQuery(svs.Expr)
@@ -353,7 +378,6 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if err != nil {
 		return false, "", err
 	}
-	var changed bool
 	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
 		// the judgment query always returns one row; the judgment decides whether
@@ -368,21 +392,12 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 			value = qr.Rows[0][0]
 		}
 	}
-	if !changed {
+	if value.IsNull() && !changed {
 		return false, "", nil
 	}
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
-	storedValue = buf.String()
-	vcursor.Session().SetSysVar(svs.Name, storedValue)
-
-	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
-	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
-		vcursor.Session().NeedsReservedConn()
-		return true, storedValue, nil
-	}
-	return false, storedValue, nil
+	return changed, buf.String(), nil
 }
 
 // sqlModeJudgmentQuery selects the session's current sql_mode alongside the assigned

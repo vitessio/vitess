@@ -18,17 +18,18 @@ package reservedconn
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestSetSysVarSingle(t *testing.T) {
@@ -63,7 +64,7 @@ func TestSetSysVarSingle(t *testing.T) {
 		expr:     "@@sql_mode",
 		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
 	}, {
-		name:     "sql_mode", // a lexer mode vtgate parses under itself; the tablet is sent the value without it
+		name:     "sql_mode", // a lexer mode vtgate parses under; the tablet is sent the value and parses under it too
 		expr:     "'pipes_as_concat,no_zero_date'",
 		expected: []string{`[[VARCHAR("PIPES_AS_CONCAT,NO_ZERO_DATE")]]`},
 	}, {
@@ -115,8 +116,9 @@ func TestSetSystemVariable(t *testing.T) {
 }
 
 // A session that sets PIPES_AS_CONCAT has its SQL read under the mode by
-// vtgate: || concatenates. The tablet is sent canonical SQL and the sql_mode
-// without the lexer mode, so the runtime modes set alongside still apply.
+// vtgate: || concatenates. The tablet is sent canonical SQL and the session's
+// sql_mode as it is, so the runtime modes set alongside apply on the tablet
+// and the tablet reads under the mode as well.
 func TestSetPipesAsConcat(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
@@ -161,6 +163,20 @@ func TestSetPipesAsConcat(t *testing.T) {
 	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("PIPES_AS_CONCAT")]]`)
 	utils.AssertMatches(t, conn, "select 'a' || 'b'", `[[VARCHAR("ab")]]`)
 	utils.Exec(t, conn, "use `"+keyspaceName+"`")
+
+	// a statement prepared over the binary protocol is read under the mode as
+	// well (client-side parameter interpolation off, so the driver prepares)
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%d)/%s?interpolateParams=false", vtParams.Host, vtParams.Port, keyspaceName))
+	require.NoError(t, err)
+	defer db.Close()
+	binary, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	defer binary.Close()
+	_, err = binary.ExecContext(t.Context(), "set sql_mode = 'PIPES_AS_CONCAT'")
+	require.NoError(t, err)
+	var got string
+	require.NoError(t, binary.QueryRowContext(t.Context(), "select 'a' || ?", "b").Scan(&got))
+	assert.Equal(t, "ab", got)
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {

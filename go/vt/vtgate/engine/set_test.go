@@ -66,9 +66,9 @@ func TestSetSystemVariableAsString(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
 		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
-		"SysVar set with (x,'foobar')",
 		"Needs Reserved Conn",
 		"ExecuteMultiShard ks.-20: set x = dummy_expr {} false false",
+		"SysVar set with (x,'foobar')",
 	})
 }
 
@@ -389,8 +389,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
-			`SysVar set with (x,123456)`,
 			`Needs Reserved Conn`,
+			`SysVar set with (x,123456)`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -494,8 +494,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE",
@@ -514,8 +514,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,NO_ZERO_DATE' new {} false false`,
-			"SysVar set with (sql_mode,'NO_ZERO_DATE')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'NO_ZERO_DATE')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,NO_ZERO_DATE",
@@ -551,8 +551,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -570,8 +570,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -590,8 +590,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -610,8 +610,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -630,8 +630,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -654,9 +654,9 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -755,8 +755,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'pipes_as_concat,STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'PIPES_AS_CONCAT,STRICT_TRANS_TABLES')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT,STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|pipes_as_concat,STRICT_TRANS_TABLES",
@@ -802,9 +802,9 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'PIPES_AS_CONCAT,STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
 			`ExecuteMultiShard ks.-20: set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' {} false false`,
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT,STRICT_TRANS_TABLES')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT,STRICT_TRANS_TABLES",
@@ -827,13 +827,15 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"SysVar set with (sql_mode,'')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|",
 		)},
 	}, {
+		// no change: nothing is sent, but the session's stored value is set to the
+		// canonical form, which canonicalizes a value stored as an older vtgate spelled it
 		testName:         "sql_mode set to the session's own mode is no change",
 		mysqlVersion:     "8.0.0",
 		storedSQLMode:    sqlmode.PipesAsConcat,
@@ -849,6 +851,7 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'pipes_as_concat' new {} false false`,
+			"SysVar set with (sql_mode,'PIPES_AS_CONCAT')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|pipes_as_concat",
@@ -872,6 +875,46 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('PIPES_AS', '_CONCAT') new {} false false`,
+		},
+	}, {
+		// unless the session already stores that mode: re-assigning it is a no-op
+		testName:         "sysvar check and ignore accepts the session's own lexer mode",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT'",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
+		},
+	}, {
+		testName:         "sysvar check and ignore rejects a change of the session's lexer mode",
+		storedSQLMode:    sqlmode.PipesAsConcat,
+		hasStoredSQLMode: true,
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT,NO_ZERO_DATE'",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"STRICT_TRANS_TABLES|PIPES_AS_CONCAT,NO_ZERO_DATE",
+		)},
+		expectedError: "setting the PIPES_AS_CONCAT sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT,NO_ZERO_DATE' new {} false false`,
 		},
 	}, {
 		testName:     "sql_mode set to IGNORE_SPACE",
@@ -999,8 +1042,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
-			"SysVar set with (default_week_format,'a')",
 			"Needs Reserved Conn",
+			"SysVar set with (default_week_format,'a')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
 			"a",

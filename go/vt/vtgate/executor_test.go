@@ -2892,7 +2892,8 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			expectedQueries: [][]string{
 				{
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
-					"set time_zone = '+08:00'",
+					// the open shard session receives the SET once: the session stores the
+					// value after the send, so the reservation carries no pre-query for it
 					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (1)",
 					"insert into user_extra(user_id) values (2)",

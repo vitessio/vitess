@@ -168,8 +168,7 @@ func TestExecutorSetPipesAsConcat(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ concat(id, id) from main1", lastQuery(t, sbclookup).Sql)
 
-	// the other lexer modes are still rejected
-	judgment("", sqltypes.NewVarChar("PIPES_AS_CONCAT,ANSI_QUOTES"))
+	// the other lexer modes are still rejected, a constant at plan time
 	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'PIPES_AS_CONCAT,ANSI_QUOTES'", nil)
 	require.ErrorContains(t, err, "setting the ANSI_QUOTES sql_mode is unsupported")
 	assert.Equal(t, "'PIPES_AS_CONCAT'", session.SystemVariables["sql_mode"], "the session keeps its value")
