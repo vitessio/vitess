@@ -180,7 +180,7 @@ func ensureBucket(ctx context.Context, env s3Env) error {
 
 func checkEnvForS3(t *testing.T) {
 	// We never want to skip the tests if we are running on CI.
-	// We will always run these tests on CI with the TestMain and Minio.
+	// We will always run these tests on CI with the TestMain and the object store setup-microceph provisions.
 	// There should not be a need to skip the tests due to missing ENV vars.
 	if os.Getenv("GITHUB_ACTIONS") != "" {
 		return

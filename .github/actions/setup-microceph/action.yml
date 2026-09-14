@@ -6,7 +6,10 @@ runs:
     - name: Install MicroCeph
       shell: bash -e {0}
       run: |
-        sudo snap install microceph
+        # Pin the Ceph release. The store's default track is squid (Ceph 19);
+        # latest/stable currently still points at reef (Ceph 18). Bumping this is
+        # a deliberate change, as the MinIO package version was before.
+        sudo snap install microceph --channel=squid/stable
         # Hold the snap so an automatic refresh cannot restart Ceph mid-job.
         sudo snap refresh --hold microceph
 
@@ -41,7 +44,7 @@ runs:
         # Wait for the gateway to answer. An anonymous request gets either an
         # empty bucket listing (200) or AccessDenied (403); both mean it is up.
         for i in $(seq 1 120); do
-          if curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|403)$'; then
+          if curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|403)$'; then
             break
           fi
           if [ "$i" -eq 120 ]; then
