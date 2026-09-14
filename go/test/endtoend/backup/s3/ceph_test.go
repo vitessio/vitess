@@ -39,8 +39,9 @@ import (
 
 // TestCephBackupRestore runs the ceph backup storage plugin against the same
 // gateway the S3 tests use: backup, list, restore, remove. The plugin names
-// its bucket after the keyspace, so this also exercises bucket creation on
-// the gateway, which the S3 tests never do because their bucket pre-exists.
+// its bucket after the keyspace and creates it if missing, so this also
+// exercises bucket creation by a plugin, which the S3 plugin never does:
+// TestMain prepares its bucket for it.
 func TestCephBackupRestore(t *testing.T) {
 	checkEnvForS3(t)
 	env := s3EnvFromEnvironment()
@@ -65,6 +66,10 @@ func TestCephBackupRestore(t *testing.T) {
 	// Mirrors the plugin's alterBucketName: first segment of dir, lowercased,
 	// underscores replaced.
 	bucket := strings.ReplaceAll(strings.ToLower(keyspace), "_", "-")
+	require.NotEqual(t, env.bucket, bucket, "AWS_BUCKET collides with the bucket the ceph plugin derives from the keyspace; cleanup would delete it")
+
+	client, err := newS3Client(ctx, env)
+	require.NoError(t, err)
 
 	// The plugin creates the bucket; remove it when done so repeated runs
 	// against the same gateway start clean. A bucket must be empty before it
@@ -75,10 +80,7 @@ func TestCephBackupRestore(t *testing.T) {
 	// simply finds the bucket, so at most one backup is left behind.
 	t.Cleanup(func() {
 		_ = bs.RemoveBackup(ctx, dir, name)
-		client, err := newS3Client(ctx, env)
-		if err == nil {
-			_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: aws.String(bucket)})
-		}
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: aws.String(bucket)})
 	})
 
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -86,9 +88,14 @@ func TestCephBackupRestore(t *testing.T) {
 	defer blackbox.SetBuiltinBackupMysqldDeadline(oldDeadline)
 	logger := logutil.NewMemoryLogger()
 
-	// Backup.
+	// Backup. The bucket must not exist beforehand and must exist afterwards,
+	// so that bucket creation is verified rather than inferred.
+	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)})
+	require.Error(t, err, "bucket %s already exists; a previous run left it behind", bucket)
 	bh, err := bs.StartBackup(ctx, dir, name)
 	require.NoError(t, err)
+	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)})
+	require.NoError(t, err, "StartBackup did not create bucket %s", bucket)
 
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
@@ -147,8 +154,8 @@ func TestCephBackupRestore(t *testing.T) {
 		HookExtraEnv:         map[string]string{},
 		DeleteBeforeRestore:  false,
 		DbName:               "test",
-		Keyspace:             "test",
-		Shard:                "-",
+		Keyspace:             keyspace,
+		Shard:                shard,
 		StartTime:            time.Now(),
 		RestoreToPos:         replication.Position{},
 		RestoreToTimestamp:   time.Time{},
