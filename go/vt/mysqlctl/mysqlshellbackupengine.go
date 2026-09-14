@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -362,6 +363,27 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 				params.Logger.Infof("Enabled REDO_LOG")
 			}
 		}()
+
+		// Enable change buffering for inserts to speed up bulk loading.
+		// This variable was removed in MySQL 8.0.27; tolerate ERUnknownSystemVariable.
+		err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_change_buffering = 'inserts'")
+		if err != nil {
+			if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+				params.Logger.Infof("innodb_change_buffering not supported on this MySQL version, skipping")
+			} else {
+				return nil, vterrors.Wrap(err, "unable to set innodb_change_buffering")
+			}
+		} else {
+			params.Logger.Infof("Set innodb_change_buffering=inserts for faster restore")
+			defer func() {
+				err := params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_change_buffering = 'none'")
+				if err != nil {
+					params.Logger.Errorf("unable to reset innodb_change_buffering: %v", err)
+				} else {
+					params.Logger.Infof("Reset innodb_change_buffering=none")
+				}
+			}()
+		}
 	}
 
 	// we need to disable SuperReadOnly otherwise we won't be able to restore the backup properly.
