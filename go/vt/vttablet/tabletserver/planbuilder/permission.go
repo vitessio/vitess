@@ -37,11 +37,15 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	// All Statement types myst be covered here.
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
-		role := tableacl.READER
 		if _, ok := node.GetColumns()[0].(*sqlparser.Nextval); ok {
-			role = tableacl.WRITER
+			// A NEXT VALUE plan allocates from the sequence named in FROM,
+			// which the planner resolves against the real schema; any WITH
+			// clause or subquery is never executed. Require WRITER on the
+			// sequence itself, ignoring CTE names that may shadow it.
+			permissions = buildTableExprsPermissions(node.From, tableacl.WRITER, nil, permissions)
+			break
 		}
-		permissions = buildSubqueryPermissions(node, role, permissions)
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Union:
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Insert:
