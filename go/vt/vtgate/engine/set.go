@@ -228,6 +228,13 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 	}
 	qr, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false)
 	if err != nil {
+		if svci.Name == "sql_mode" {
+			// The judgment decides whether the ignored assignment may pass at all;
+			// unjudged, it could leave the client believing it runs under a lexer
+			// mode the session does not run under, so a judgment that cannot run
+			// fails the assignment.
+			return vterrors.Wrapf(err, "unable to judge the sql_mode assignment")
+		}
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.

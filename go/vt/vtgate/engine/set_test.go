@@ -940,6 +940,25 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 		},
 	}, {
+		// a judgment that cannot run cannot pass: unlike another ignored variable, an
+		// unjudged sql_mode assignment could put the client under a lexer mode the
+		// session does not run under
+		testName: "sysvar check and ignore fails when the sql_mode judgment fails",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'PIPES_AS_CONCAT'",
+			},
+		},
+		execErr:       errors.New("some random error"),
+		expectedError: "unable to judge the sql_mode assignment: some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'PIPES_AS_CONCAT' new {} false false`,
+		},
+	}, {
 		testName:     "sql_mode set to IGNORE_SPACE",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
