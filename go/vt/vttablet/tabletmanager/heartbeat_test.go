@@ -35,6 +35,7 @@ import (
 // TestRepairHeartbeat checks call order and the relay-log safety decision.
 func TestRepairHeartbeat(t *testing.T) {
 	unimplemented := vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported")
+	applierStopped := vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "applier is not running")
 	for _, tt := range []struct {
 		name         string
 		before       string
@@ -66,6 +67,9 @@ func TestRepairHeartbeat(t *testing.T) {
 		{name: "io_only_error", calls: []string{"heartbeat"}, before: "1-9", sqlState: replication.ReplicationStateRunning, repairError: errors.New("heartbeat unavailable"), wantError: "heartbeat unavailable"},
 		{name: "io_only_start_error", calls: []string{"start"}, before: "1-9", shouldRun: true, startError: errors.New("start unavailable"), wantError: "start unavailable"},
 		{name: "io_only_unsupported_after_start", calls: []string{"start", "heartbeat", "stop", "status"}, before: "1-9", executed: "1-10", received: "1-10", shouldRun: true, repairError: unimplemented, wantChange: true, wantStopped: true},
+
+		// Fall back when the daemon found the applier stopped after it stopped the IO thread.
+		{name: "io_only_applier_stopped_late", calls: []string{"heartbeat", "stop", "status"}, before: "1-9", executed: "1-9", received: "1-10", sqlState: replication.ReplicationStateRunning, repairError: applierStopped, wantStopped: true},
 
 		// Check fresh positions to decide whether the full change is safe.
 		{name: "drained_relay_log", calls: []string{"heartbeat", "stop", "status"}, repairError: unimplemented, before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},

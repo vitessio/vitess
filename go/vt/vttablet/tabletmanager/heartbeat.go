@@ -78,8 +78,11 @@ func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbe
 			resp.repaired = true
 			return resp, nil
 		}
-		// Only an unsupported flavor falls through to the full change.
-		if vterrors.Code(err) != vtrpc.Code_UNIMPLEMENTED {
+		// Fall through to the full change when the flavor cannot do this, or when
+		// the daemon found the applier stopped. Return every other error.
+		switch vterrors.Code(err) {
+		case vtrpc.Code_UNIMPLEMENTED, vtrpc.Code_FAILED_PRECONDITION:
+		default:
 			return nil, err
 		}
 	}
