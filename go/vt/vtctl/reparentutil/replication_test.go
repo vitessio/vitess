@@ -41,6 +41,7 @@ import (
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestMain(m *testing.M) {
@@ -520,23 +521,192 @@ func TestFindPositionsOfAllCandidates_EmptyMysqlGTIDReplicaStaysGTIDBased(t *tes
 	assert.ErrorContains(t, err, "no relay log position")
 }
 
-// TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
-// FindPositionsOfAllCandidates wraps an error the underlying cause message is
+func TestBuildERSCandidates(t *testing.T) {
+	t.Run("candidate state", func(t *testing.T) {
+		replicaInfo := &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Type:  topodatapb.TabletType_REPLICA,
+		}}
+		primaryInfo := &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+			Type:  topodatapb.TabletType_PRIMARY,
+		}}
+		replicaAlias := topoproto.TabletAliasString(replicaInfo.Alias)
+		primaryAlias := topoproto.TabletAliasString(primaryInfo.Alias)
+		replicaVersion := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+		primaryVersion := mysqlctl.ServerVersion{Major: 8, Minor: 4, Patch: 0}
+		replicaStatus := &replicationdatapb.StopReplicationStatus{After: &replicationdatapb.Status{
+			Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+			RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+		}}
+		primaryStatus := &replicationdatapb.PrimaryStatus{
+			Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+		}
+		snapshot := &replicationSnapshot{
+			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{replicaAlias: replicaStatus},
+			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{primaryAlias: primaryStatus},
+			tabletsBackupState: map[string]bool{replicaAlias: true},
+			mysqlVersions: map[string]mysqlctl.ServerVersion{
+				replicaAlias: replicaVersion,
+				primaryAlias: primaryVersion,
+			},
+			mysqlFlavors: map[string]mysqlctl.MySQLFlavor{
+				replicaAlias: mysqlctl.FlavorPercona,
+				primaryAlias: mysqlctl.FlavorMySQL,
+			},
+		}
+		tabletMap := map[string]*topo.TabletInfo{
+			replicaAlias: replicaInfo,
+			primaryAlias: primaryInfo,
+		}
+
+		candidates, isGTIDBased, err := buildERSCandidates(snapshot, tabletMap)
+		require.NoError(t, err)
+		require.True(t, isGTIDBased)
+		require.Len(t, candidates, 2)
+
+		replicaCandidate := findERSCandidateByAlias(candidates, replicaInfo.Alias)
+		require.NotNil(t, replicaCandidate)
+		assert.Same(t, replicaInfo, replicaCandidate.info)
+		assert.Same(t, replicaStatus, replicaCandidate.stopStatus)
+		assert.True(t, replicaCandidate.takingBackup)
+		assert.Zero(t, replicaCandidate.reparentJournalLen)
+		assert.True(t, replicaCandidate.hasMySQLVersion)
+		assert.Equal(t, replicaVersion, replicaCandidate.mysqlVersion)
+		assert.Equal(t, mysqlctl.FlavorPercona, replicaCandidate.mysqlFlavor)
+		assert.True(t, replicaCandidate.positions.Combined.Equal(replication.MustParsePosition(replication.Mysql56FlavorID, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")))
+		assert.True(t, replicaCandidate.positions.Executed.Equal(replication.MustParsePosition(replication.Mysql56FlavorID, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3")))
+
+		primaryCandidate := findERSCandidateByAlias(candidates, primaryInfo.Alias)
+		require.NotNil(t, primaryCandidate)
+		assert.Same(t, primaryInfo, primaryCandidate.info)
+		assert.Nil(t, primaryCandidate.stopStatus)
+		assert.False(t, primaryCandidate.takingBackup)
+		assert.Zero(t, primaryCandidate.reparentJournalLen)
+		assert.True(t, primaryCandidate.hasMySQLVersion)
+		assert.Equal(t, primaryVersion, primaryCandidate.mysqlVersion)
+		assert.Equal(t, mysqlctl.FlavorMySQL, primaryCandidate.mysqlFlavor)
+		assert.True(t, primaryCandidate.positions.Combined.Equal(replication.MustParsePosition(replication.Mysql56FlavorID, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")))
+		assert.True(t, primaryCandidate.positions.Executed.Equal(replication.MustParsePosition(replication.Mysql56FlavorID, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")))
+	})
+
+	t.Run("non-GTID disables version state", func(t *testing.T) {
+		alias := "zone1-0000000100"
+		version := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+		snapshot := &replicationSnapshot{
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				alias: {After: &replicationdatapb.Status{
+					Position:         "FilePos/mysql-bin.000001:10",
+					RelayLogPosition: "FilePos/mysql-bin.000001:10",
+				}},
+			},
+			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
+			tabletsBackupState: map[string]bool{},
+			mysqlVersions:      map[string]mysqlctl.ServerVersion{alias: version},
+			mysqlFlavors:       map[string]mysqlctl.MySQLFlavor{alias: mysqlctl.FlavorMySQL},
+		}
+		tabletMap := map[string]*topo.TabletInfo{
+			alias: {Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:  topodatapb.TabletType_REPLICA,
+			}},
+		}
+
+		candidates, isGTIDBased, err := buildERSCandidates(snapshot, tabletMap)
+		require.NoError(t, err)
+		require.False(t, isGTIDBased)
+		require.Len(t, candidates, 1)
+		assert.False(t, candidates[0].hasMySQLVersion)
+		assert.Equal(t, mysqlctl.FlavorUnknown, candidates[0].mysqlFlavor)
+	})
+
+	t.Run("missing tablet", func(t *testing.T) {
+		alias := "zone1-0000000100"
+		snapshot := &replicationSnapshot{
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				alias: {After: &replicationdatapb.Status{
+					Position:         "FilePos/mysql-bin.000001:10",
+					RelayLogPosition: "FilePos/mysql-bin.000001:10",
+				}},
+			},
+			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
+			tabletsBackupState: map[string]bool{},
+		}
+
+		_, _, err := buildERSCandidates(snapshot, map[string]*topo.TabletInfo{})
+		require.Error(t, err)
+		assert.Equal(t, vtrpc.Code_INTERNAL, vterrors.Code(err))
+		assert.EqualError(t, err, "candidate zone1-0000000100 not found in the tablet map; this an impossible situation")
+	})
+
+	t.Run("filters tablet types", func(t *testing.T) {
+		tabletTypes := []struct {
+			tabletType topodatapb.TabletType
+			eligible   bool
+		}{
+			{tabletType: topodatapb.TabletType_PRIMARY, eligible: true},
+			{tabletType: topodatapb.TabletType_RDONLY, eligible: true},
+			{tabletType: topodatapb.TabletType_SPARE, eligible: true},
+			{tabletType: topodatapb.TabletType_RESTORE},
+			{tabletType: topodatapb.TabletType_DRAINED},
+			{tabletType: topodatapb.TabletType_BACKUP},
+		}
+
+		statusMap := make(map[string]*replicationdatapb.StopReplicationStatus, len(tabletTypes))
+		tabletMap := make(map[string]*topo.TabletInfo, len(tabletTypes))
+		expectedAliases := make([]string, 0, len(tabletTypes))
+		for index, tabletType := range tabletTypes {
+			tablet := &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uint32(100 + index)},
+				Type:  tabletType.tabletType,
+			}
+			alias := topoproto.TabletAliasString(tablet.Alias)
+			tabletMap[alias] = &topo.TabletInfo{Tablet: tablet}
+			statusMap[alias] = &replicationdatapb.StopReplicationStatus{After: &replicationdatapb.Status{
+				Position:         "FilePos/mysql-bin.000001:10",
+				RelayLogPosition: "FilePos/mysql-bin.000001:10",
+			}}
+			if tabletType.eligible {
+				expectedAliases = append(expectedAliases, alias)
+			}
+		}
+
+		candidates, _, err := buildERSCandidates(&replicationSnapshot{
+			statusMap:          statusMap,
+			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
+			tabletsBackupState: map[string]bool{},
+		}, tabletMap)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, expectedAliases, ersCandidateAliases(candidates))
+	})
+}
+
+// TestBuildERSCandidatesErrorNotDuplicated verifies that when
+// buildERSCandidates wraps an error the underlying cause message is
 // not repeated twice in the output. vterrors.Wrapf already appends the cause
 // via "wrapper: cause", so including the cause in the format string would
 // duplicate it.
-func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
+func TestBuildERSCandidatesErrorNotDuplicated(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := FindPositionsOfAllCandidates(
-		map[string]*replicationdatapb.StopReplicationStatus{
-			"r1": {After: &replicationdatapb.Status{
-				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-				RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-			}},
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"r1": {After: &replicationdatapb.Status{
+			SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+			RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+		}},
+	}
+	primaryStatusMap := map[string]*replicationdatapb.PrimaryStatus{
+		"p1": {Position: "InvalidFlavor/1234"},
+	}
+	_, _, err := buildERSCandidates(
+		&replicationSnapshot{
+			statusMap:          statusMap,
+			primaryStatusMap:   primaryStatusMap,
+			tabletsBackupState: map[string]bool{},
 		},
-		map[string]*replicationdatapb.PrimaryStatus{
-			"p1": {Position: "InvalidFlavor/1234"},
+		map[string]*topo.TabletInfo{
+			"r1": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "r1", Uid: 100}, Type: topodatapb.TabletType_REPLICA}},
+			"p1": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "p1", Uid: 100}, Type: topodatapb.TabletType_PRIMARY}},
 		},
 	)
 	require.Error(t, err)
@@ -2447,7 +2617,7 @@ func TestHasUniformCombinedPosition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, hasUniformCombinedPosition(tt.candidates))
+			assert.Equal(t, tt.want, hasUniformCombinedPosition(ersCandidatesFromPositions(t, tt.candidates)))
 		})
 	}
 }
@@ -2467,7 +2637,7 @@ func TestDescribeCombinedPositions(t *testing.T) {
 
 	assert.Equal(t,
 		"zone1-0000000100=3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5, zone1-0000000101=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-6, zone2-0000000102=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-7",
-		describeCombinedPositions(candidates),
+		describeCombinedPositions(ersCandidatesFromPositions(t, candidates)),
 	)
 }
 
@@ -2540,19 +2710,35 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := filterToMostAdvancedCombined(tt.candidates, logutil.NewMemoryLogger())
+			candidates := ersCandidatesFromPositions(t, tt.candidates)
+			result := filterToMostAdvancedCombined(candidates, logutil.NewMemoryLogger())
 
 			kept := make([]string, 0, len(result))
-			for alias := range result {
-				kept = append(kept, alias)
+			for _, candidate := range result {
+				kept = append(kept, candidate.alias())
 			}
 			assert.ElementsMatch(t, tt.wantKept, kept)
 
-			// Survivors must share the caller's position structs (the reconcile
-			// step later mutates them through the returned map).
-			for alias, pos := range result {
-				assert.Same(t, tt.candidates[alias], pos)
+			// The reconcile step later mutates survivors through the returned slice.
+			for _, candidate := range result {
+				assert.Contains(t, candidates, candidate)
+				assert.Same(t, tt.candidates[candidate.alias()], candidate.positions)
 			}
 		})
 	}
+}
+
+func ersCandidatesFromPositions(t *testing.T, positions map[string]*RelayLogPositions) []*ersCandidate {
+	t.Helper()
+
+	candidates := make([]*ersCandidate, 0, len(positions))
+	for aliasString, position := range positions {
+		alias, err := topoproto.ParseTabletAlias(aliasString)
+		require.NoError(t, err)
+		candidates = append(candidates, &ersCandidate{
+			info:      &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias}},
+			positions: position,
+		})
+	}
+	return candidates
 }
