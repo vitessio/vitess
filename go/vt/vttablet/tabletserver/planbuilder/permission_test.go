@@ -322,6 +322,9 @@ func TestBuildPermissions(t *testing.T) {
 		}, {
 			TableName: "t",
 			Role:      tableacl.READER,
+		}, {
+			TableName: "dual",
+			Role:      tableacl.READER,
 		}},
 	}, {
 		// A plain arm after the arm with the WITH reads the real table too,
@@ -329,6 +332,9 @@ func TestBuildPermissions(t *testing.T) {
 		input: "with t as (select * from real1) select * from t union all (with s as (select 1 as id) select id from s) union all (select * from t)",
 		output: []Permission{{
 			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "dual",
 			Role:      tableacl.READER,
 		}, {
 			TableName: "t",
@@ -339,6 +345,9 @@ func TestBuildPermissions(t *testing.T) {
 		input: "with t as (select id from real1) select id from t union all (with s as (select 1 as id) select id from s) order by (select max(id) from real2)",
 		output: []Permission{{
 			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "dual",
 			Role:      tableacl.READER,
 		}, {
 			TableName: "real2",
@@ -421,6 +430,9 @@ func TestBuildPermissions(t *testing.T) {
 		output: []Permission{{
 			TableName: "tgt",
 			Role:      tableacl.WRITER,
+		}, {
+			TableName: "dual",
+			Role:      tableacl.READER,
 		}},
 	}, {
 		input: "insert into tgt(id, x) with t as (select id from real1) select 1, id from t union all (with s as (select 1 as id) select 1, id from s) on duplicate key update x = (select max(x) from t)",
@@ -429,6 +441,9 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.WRITER,
 		}, {
 			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "dual",
 			Role:      tableacl.READER,
 		}, {
 			TableName: "t",
@@ -448,6 +463,9 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}, {
 			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "dual",
 			Role:      tableacl.READER,
 		}},
 	}, {
@@ -494,6 +512,9 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "t",
 			Role:      tableacl.READER,
 		}, {
+			TableName: "dual",
+			Role:      tableacl.READER,
+		}, {
 			TableName: "t",
 			Role:      tableacl.READER,
 		}},
@@ -511,6 +532,9 @@ func TestBuildPermissions(t *testing.T) {
 		input: "with t as (select * from real1) select * from (select * from t union all (with s as (select 1 as id) select * from t)) as d",
 		output: []Permission{{
 			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "dual",
 			Role:      tableacl.READER,
 		}},
 	}, {
