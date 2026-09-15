@@ -1110,19 +1110,37 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 	if err != nil {
 		return err
 	}
+
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
 		return err
 	}
 
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{command}); err != nil {
-		log.Warn("Heartbeat change failed. Restarting the IO thread", slog.Float64("heartbeat_interval", heartbeatInterval), slog.Any("error", err))
+	// Restart the IO thread on any failure from here on, so a failed heartbeat
+	// change never leaves the replica without its receiver.
+	restartIO := func(cause error) error {
+		log.Warn("Heartbeat change failed. Restarting the IO thread", slog.Float64("heartbeat_interval", heartbeatInterval), slog.Any("error", cause))
 		restartCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
 
 		if restartErr := mysqld.executeSuperQueryListConn(restartCtx, conn, []string{conn.Conn.StartIOThreadCommand()}); restartErr != nil {
-			return vterrors.Wrapf(err, "heartbeat change failed and the IO thread did not restart: %v", restartErr)
+			return vterrors.Wrapf(cause, "heartbeat change failed and the IO thread did not restart: %v", restartErr)
 		}
-		return err
+		return cause
+	}
+
+	// Check the applier now that the IO thread is stopped. If it is not
+	// running, the change below would delete the relay log.
+	status, err := conn.Conn.ShowReplicationStatus()
+	if err != nil {
+		return restartIO(err)
+	}
+
+	if !status.SQLHealthy() {
+		return restartIO(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "applier is not running, a heartbeat change would delete the relay log"))
+	}
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{command}); err != nil {
+		return restartIO(err)
 	}
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartIOThreadCommand()})
