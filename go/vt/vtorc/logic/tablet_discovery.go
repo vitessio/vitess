@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -61,6 +62,14 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	// Consistent hash ring configuration. When ringSize > 1, each VTOrc
+	// instance watches only the keyspace/shards that hash into its ring
+	// segment (its own partition plus its two ring neighbors). Populated from
+	// the --vtorc-ring-* flags.
+	ringSize            int
+	ringIndex           int
+	ringAssignmentsFile string
+
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
@@ -84,6 +93,23 @@ func init() {
 		[]string{"Keyspace", "Shard"},
 		getEmergencyReparentShardDisabledStats,
 	)
+	stats.NewGaugeFunc("VtorcRingSize", "Configured consistent hash ring size (1 = disabled, partitioning active at >= 4)", func() int64 {
+		return int64(ringSize)
+	})
+	stats.NewGaugeFunc("VtorcRingIndex", "Consistent hash ring index for this VTOrc instance", func() int64 {
+		return int64(ringIndex)
+	})
+	stats.NewGaugeFunc("VtorcRingBuckets", "Number of virtual hash buckets loaded from --vtorc-ring-assignments-file (0 = pure hash mode, no file loaded)", func() int64 {
+		return int64(len(bucketAssignments))
+	})
+	stats.NewGaugeFunc("KeyspaceShardsWatched", "Number of distinct keyspace/shard pairs currently tracked by this VTOrc instance", func() int64 {
+		shardStats, err := inst.ReadKeyspaceShardStats()
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to read keyspace shard stats for KeyspaceShardsWatched: %+v", err))
+			return 0
+		}
+		return int64(len(shardStats))
+	})
 }
 
 // getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
@@ -128,6 +154,9 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &clustersToWatch, "clusters-to-watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells in which VTOrc skips recovery actions when the analyzed tablet is in one of these cells. For ClusterHasNoPrimary (no primary exists in the shard), recovery is suppressed only when every cell that has tablets in the shard is listed; a partial deny-list lets the initial election proceed. Detection still happens and discovery still spans all cells. Cells are validated against the topology at startup. Example: \"cell1,cell2\"")
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
+	utils.SetFlagIntVar(fs, &ringSize, "vtorc-ring-size", 1, "Total number of VTOrc instances in the consistent hash ring. Must be 1 (disabled) or >= 4. Values of 2 or 3 are accepted but have no partitioning effect because each instance ends up as both primary and neighbor for every shard. At ring-size >= 4 each instance watches ~3/N of the fleet, reducing per-instance load while keeping three-way HA coverage per shard. Defaults to 1 (watches the full fleet).")
+	utils.SetFlagIntVar(fs, &ringIndex, "vtorc-ring-index", 0, "Zero-based ordinal of this VTOrc instance within the consistent hash ring. Must be in the range [0, vtorc-ring-size).")
+	utils.SetFlagStringVar(fs, &ringAssignmentsFile, "vtorc-ring-assignments-file", "", "Path to a JSON file mapping virtual hash buckets to ring partitions for even load distribution. When set, a keyspace/shard is first hashed into one of num_buckets virtual buckets, then the file's mapping determines the owning ring partition. Unset uses direct hash modulo (sufficient for small rings). Format: {\"num_buckets\": 256, \"bucket_assignments\": [0,1,2,...]}")
 }
 
 // validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
@@ -207,6 +236,9 @@ func initializeShardsToWatch() error {
 
 // shouldWatchTablet checks if the given tablet is part of the watch list.
 func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
+	if ringSize > 1 && !isInRingSegment(tablet.GetKeyspace(), tablet.GetShard(), ringIndex, ringSize) {
+		return false
+	}
 	// If we are watching all keyspaces, then we want to watch this tablet too.
 	if len(shardsToWatch) == 0 {
 		return true
@@ -228,6 +260,54 @@ func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
 	return false
 }
 
+// ringAssignmentsConfig is the JSON schema of --vtorc-ring-assignments-file.
+type ringAssignmentsConfig struct {
+	NumBuckets  int   `json:"num_buckets"`
+	Assignments []int `json:"bucket_assignments"`
+}
+
+// loadRingAssignmentsFile reads and validates the bucket-assignment file
+// pointed to by --vtorc-ring-assignments-file and populates bucketAssignments.
+func loadRingAssignmentsFile(path string, rs int) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading ring assignments file %q: %w", path, err)
+	}
+	var cfg ringAssignmentsConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parsing ring assignments file %q: %w", path, err)
+	}
+	if cfg.NumBuckets <= 0 {
+		return fmt.Errorf("ring assignments file %q: num_buckets must be > 0, got %d", path, cfg.NumBuckets)
+	}
+	if len(cfg.Assignments) != cfg.NumBuckets {
+		return fmt.Errorf("ring assignments file %q: bucket_assignments length %d does not match num_buckets %d",
+			path, len(cfg.Assignments), cfg.NumBuckets)
+	}
+	for i, p := range cfg.Assignments {
+		if p < 0 || p >= rs {
+			return fmt.Errorf("ring assignments file %q: bucket_assignments[%d]=%d is out of range [0, %d)",
+				path, i, p, rs)
+		}
+	}
+	bucketAssignments = cfg.Assignments
+	return nil
+}
+
+// logRingConfig emits an Info log summarising the current ring configuration.
+func logRingConfig() {
+	if ringSize <= 1 {
+		return
+	}
+	if bucketAssignments != nil {
+		log.Info(fmt.Sprintf("VTOrc ring config: index %d of %d, bucket-assignment file loaded (%d buckets)",
+			ringIndex, ringSize, len(bucketAssignments)))
+	} else {
+		log.Info(fmt.Sprintf("VTOrc ring config: index %d of %d, pure hash mode (no assignment file)",
+			ringIndex, ringSize))
+	}
+}
+
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
 func OpenTabletDiscovery() <-chan time.Time {
@@ -242,6 +322,27 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if err != nil {
 		log.Error(fmt.Sprintf("Error parsing --clusters-to-watch: %v", err))
 		os.Exit(1)
+	}
+	// Validate the consistent hash ring flags and, if a ring is configured with
+	// an assignments file, load it.
+	if ringSize < 1 {
+		log.Error(fmt.Sprintf("--vtorc-ring-size must be >= 1, got %d", ringSize))
+		os.Exit(1)
+	}
+	if ringIndex < 0 || ringIndex >= ringSize {
+		log.Error(fmt.Sprintf("--vtorc-ring-index %d is out of range [0, %d)", ringIndex, ringSize))
+		os.Exit(1)
+	}
+	if ringSize > 1 && ringSize <= 3 {
+		log.Info(fmt.Sprintf("warning: --vtorc-ring-size=%d has no partitioning effect: with 2 neighbors each instance watches all shards when ring-size <= 3; use ring-size >= 4 for actual load reduction", ringSize))
+	} else if ringSize >= 4 {
+		if ringAssignmentsFile != "" {
+			if err := loadRingAssignmentsFile(ringAssignmentsFile, ringSize); err != nil {
+				log.Error(fmt.Sprintf("Failed to load --vtorc-ring-assignments-file: %v", err))
+				os.Exit(1)
+			}
+		}
+		logRingConfig()
 	}
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
