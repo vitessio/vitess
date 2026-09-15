@@ -755,6 +755,20 @@ func (mr *MockMysqlDaemonMockRecorder) SetReadOnly(ctx, on any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReadOnly", reflect.TypeOf((*MockMysqlDaemon)(nil).SetReadOnly), ctx, on)
 }
 
+// SetReplicationHeartbeat mocks base method.
+func (m *MockMysqlDaemon) SetReplicationHeartbeat(ctx context.Context, heartbeatInterval float64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetReplicationHeartbeat", ctx, heartbeatInterval)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetReplicationHeartbeat indicates an expected call of SetReplicationHeartbeat.
+func (mr *MockMysqlDaemonMockRecorder) SetReplicationHeartbeat(ctx, heartbeatInterval any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReplicationHeartbeat", reflect.TypeOf((*MockMysqlDaemon)(nil).SetReplicationHeartbeat), ctx, heartbeatInterval)
+}
+
 // SetReplicationPosition mocks base method.
 func (m *MockMysqlDaemon) SetReplicationPosition(ctx context.Context, pos replication.Position) error {
 	m.ctrl.T.Helper()
