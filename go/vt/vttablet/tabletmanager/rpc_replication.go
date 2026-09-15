@@ -1025,6 +1025,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}
 	}
 
+	resp := &repairHeartbeatResponse{}
 	changeSource := status.SourceHost != host || status.SourcePort != port
 	if !changeSource && heartbeatInterval != 0 {
 		// Refuse a heartbeat-only change without the current configuration.
@@ -1041,11 +1042,22 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Compare with the same rule VTOrc uses to detect a misconfigured
 		// heartbeat, otherwise VTOrc could request a repair that is a no-op here.
 		changeSource = !replication.HeartbeatIntervalsEqual(configuration.HeartbeatInterval, heartbeatInterval)
+		if changeSource {
+			resp, err = tm.repairHeartbeat(ctx, &repairHeartbeatRequest{
+				status:   status,
+				interval: heartbeatInterval,
+			})
+			if err != nil {
+				return err
+			}
+
+			changeSource = resp.changeSource
+		}
 	}
 
 	if changeSource {
 		// This handles both changing the address and starting replication.
-		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating && !resp.stopped, shouldbeReplicating); err != nil {
 			return err
 		}
 	} else if shouldbeReplicating {
@@ -1053,8 +1065,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// are taken into account. We don't attempt to recover from the known recoverable errors here
 		// because recovery requires running `STOP REPLICA` in order to reset the replication metadata.
 		// If we error the first time, we're likely to error the second time as well.
-		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			return err
+		if !resp.stopped {
+			if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+				return err
+			}
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
 			return err
