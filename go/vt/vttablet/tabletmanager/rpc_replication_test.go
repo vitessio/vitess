@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,15 +28,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/mock"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -963,6 +967,147 @@ func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializati
 	err := tm.fixSemiSyncAndReplication(t.Context(), topodatapb.TabletType_REPLICA, SemiSyncActionUnset)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+// TestSetReplicationSourceConfiguration checks source changes and relay-log-safe restarts.
+func TestSetReplicationSourceConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		name              string
+		host              string
+		port              int32
+		heartbeat         float64
+		configuration     *replicationdatapb.Configuration
+		configurationErr  error
+		readConfiguration bool
+		noForce           bool
+		change            bool
+		wantError         string
+	}{
+		{
+			name:      "equal",
+			heartbeat: 30, readConfiguration: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "equal_stays_stopped",
+			heartbeat: 30, readConfiguration: true, noForce: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
+		},
+		{
+			name: "zero",
+		},
+		{
+			name:      "different",
+			heartbeat: 30, readConfiguration: true, change: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_equal_below",
+			heartbeat: 30, readConfiguration: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.75, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_equal_above",
+			heartbeat: 30, readConfiguration: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.249, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_different_below",
+			heartbeat: 30, readConfiguration: true, change: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.749, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_different_above",
+			heartbeat: 30, readConfiguration: true, change: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.25, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "host_changed",
+			host:      "old-primary",
+			heartbeat: 30, change: true,
+		},
+		{
+			name:      "port_changed",
+			port:      3307,
+			heartbeat: 30, change: true,
+		},
+		{
+			name:   "host_changed_zero",
+			host:   "old-primary",
+			change: true,
+		},
+		{
+			name:   "port_changed_zero",
+			port:   3307,
+			change: true,
+		},
+		{
+			name:      "read_error",
+			heartbeat: 30, readConfiguration: true,
+			configurationErr: errors.New("configuration unavailable"),
+			wantError:        "read replication configuration: configuration unavailable",
+		},
+		{
+			name:      "missing_configuration",
+			heartbeat: 30, readConfiguration: true,
+			wantError: "replication configuration is unavailable",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(ts.Close)
+			_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+			require.NoError(t, err)
+
+			parent := newTestTablet(t, 200, "ks", "0", nil)
+			parent.Type = topodatapb.TabletType_PRIMARY
+			parent.MysqlHostname = "mysql-primary"
+			parent.MysqlPort = 3306
+			require.NoError(t, ts.CreateTablet(ctx, parent))
+
+			// The replica is stopped and points at the primary unless the case says otherwise.
+			status := replication.ReplicationStatus{
+				SourceHost: cmp.Or(tt.host, "mysql-primary"),
+				SourcePort: cmp.Or(tt.port, 3306),
+				IOState:    replication.ReplicationStateStopped,
+				SQLState:   replication.ReplicationStateStopped,
+			}
+
+			daemon := mock.NewMockMysqlDaemon(gomock.NewController(t))
+			calls := []any{
+				daemon.EXPECT().SemiSyncExtensionLoaded(ctx).Return(mysql.SemiSyncTypeSource, nil),
+				daemon.EXPECT().ReplicationStatus(ctx).Return(status, nil),
+				daemon.EXPECT().SetSemiSyncEnabled(ctx, false, false).Return(nil),
+			}
+			if tt.readConfiguration {
+				calls = append(calls, daemon.EXPECT().ReplicationConfiguration(ctx).Return(tt.configuration, tt.configurationErr))
+			}
+
+			hookEnv := map[string]string{"TABLET_ALIAS": "cell1-0000000100", "KEYSPACE": "ks", "SHARD": "0"}
+			if tt.change {
+				calls = append(calls,
+					daemon.EXPECT().SetReplicationSource(ctx, "mysql-primary", int32(3306), tt.heartbeat, false, false).Return(nil),
+					daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil),
+				)
+			} else if tt.wantError == "" && !tt.noForce {
+				calls = append(calls,
+					daemon.EXPECT().StopReplication(ctx, hookEnv).Return(nil),
+					daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil),
+				)
+			}
+			gomock.InOrder(calls...)
+
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, ts)
+			tm.tmc = newFakeTMClient()
+			err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", !tt.noForce, false, tt.heartbeat)
+			if tt.wantError != "" {
+				require.ErrorContains(t, err, tt.wantError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestSetReplicationSourceRecovery(t *testing.T) {
