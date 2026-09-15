@@ -1041,15 +1041,16 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		changeSource = !replication.HeartbeatIntervalsEqual(configured, heartbeatInterval)
 		if changeSource {
 			resp, err = tm.repairHeartbeat(ctx, &repairHeartbeatRequest{
-				status:   status,
-				interval: heartbeatInterval,
+				status:              status,
+				interval:            heartbeatInterval,
+				shouldBeReplicating: shouldbeReplicating,
 			})
 			if err != nil {
 				return err
 			}
 
 			changeSource = resp.changeSource
-			skipped = !changeSource
+			skipped = !changeSource && !resp.repaired
 		}
 	}
 
@@ -1066,7 +1067,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 				return err
 			}
 		}
-	} else if shouldbeReplicating {
+	} else if shouldbeReplicating && !resp.repaired {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
 		// are taken into account. We don't attempt to recover from the known recoverable errors here
 		// because recovery requires running `STOP REPLICA` in order to reset the replication metadata.

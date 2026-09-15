@@ -43,12 +43,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon mysqlctl.MysqlDaemon, ts *topo.Server) *TabletManager {
@@ -972,14 +974,16 @@ func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializati
 // TestSetReplicationSourceConfiguration checks source changes and relay-log-safe restarts.
 func TestSetReplicationSourceConfiguration(t *testing.T) {
 	const (
-		config    = "config"
-		status    = "status"
-		stop      = "stop"
-		start     = "start"
-		setSource = "setSource"
-		startFail = "startFail"
-		restart   = "restart"
+		config        = "config"
+		status        = "status"
+		stop          = "stop"
+		start         = "start"
+		setSource     = "setSource"
+		heartbeatOnly = "heartbeatOnly"
+		startFail     = "startFail"
+		restart       = "restart"
 	)
+	unimplemented := vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported")
 	for _, tt := range []struct {
 		name         string
 		host         string
@@ -1001,19 +1005,26 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		{name: "rounded_equal_below", heartbeat: 30, configured: 29.75, calls: []string{config, stop, start}},
 		{name: "rounded_equal_above", heartbeat: 30, configured: 30.249, calls: []string{config, stop, start}},
 
-		// A different heartbeat needs the full change, which deletes the relay log.
-		// Replication is stopped and the relay log re-read before deciding.
-		{name: "different", heartbeat: 30, configured: 15, calls: []string{config, status, setSource, start}},
-		{name: "different_running", heartbeat: 30, configured: 15, sqlRunning: true, calls: []string{config, stop, status, setSource, start}},
-		{name: "rounded_different_below", heartbeat: 30, configured: 29.749, calls: []string{config, status, setSource, start}},
-		{name: "rounded_different_above", heartbeat: 30, configured: 30.25, calls: []string{config, status, setSource, start}},
-		{name: "heartbeat_drained", heartbeat: 30, configured: 15, executed: "1-10", calls: []string{config, status, setSource, start}},
-		{name: "heartbeat_drained_superset", heartbeat: 30, configured: 15, executed: "1-11", calls: []string{config, status, setSource, start}},
-		{name: "heartbeat_unapplied", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, status, start}},
-		{name: "heartbeat_unapplied_running", heartbeat: 30, configured: 15, executed: "1-9", sqlRunning: true, calls: []string{config, stop, status, start}},
-		{name: "heartbeat_unapplied_stays_stopped", heartbeat: 30, configured: 15, noForce: true, executed: "1-9", calls: []string{config, status}},
+		// A different heartbeat is set with only the IO thread stopped. A cleanly
+		// stopped applier is started first when replication should run.
+		{name: "different", heartbeat: 30, configured: 15, calls: []string{config, start, heartbeatOnly}},
+		{name: "different_running", heartbeat: 30, configured: 15, sqlRunning: true, calls: []string{config, heartbeatOnly}},
+		{name: "different_unapplied", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, start, heartbeatOnly}},
+		{name: "rounded_different_below", heartbeat: 30, configured: 29.749, calls: []string{config, start, heartbeatOnly}},
+		{name: "rounded_different_above", heartbeat: 30, configured: 30.25, calls: []string{config, start, heartbeatOnly}},
+		{name: "heartbeat_error", heartbeat: 30, configured: 15, sqlRunning: true, heartbeatErr: assert.AnError, calls: []string{config, heartbeatOnly}, wantError: assert.AnError.Error()},
+
+		// With no reason to start the applier, the full change is checked against the relay log.
+		{name: "stays_stopped_unapplied", heartbeat: 30, configured: 15, noForce: true, executed: "1-9", calls: []string{config, status}},
+		{name: "stays_stopped_drained", heartbeat: 30, configured: 15, noForce: true, executed: "1-10", calls: []string{config, status, setSource}},
+
+		// Flavors without the IO-only change fall back to the full change on an empty relay log.
+		{name: "unsupported_drained", heartbeat: 30, configured: 15, executed: "1-10", heartbeatErr: unimplemented, calls: []string{config, start, heartbeatOnly, stop, status, setSource, start}},
+		{name: "unsupported_unapplied", heartbeat: 30, configured: 15, executed: "1-9", heartbeatErr: unimplemented, calls: []string{config, start, heartbeatOnly, stop, status, start}},
+		{name: "unsupported_running_unapplied", heartbeat: 30, configured: 15, executed: "1-9", sqlRunning: true, heartbeatErr: unimplemented, calls: []string{config, heartbeatOnly, stop, status, start}},
+
 		// A skipped change starts without recovery. The equal path keeps it.
-		{name: "heartbeat_unapplied_start_fails", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, status, startFail}, wantError: "master info structure"},
+		{name: "unsupported_unapplied_start_fails", heartbeat: 30, configured: 15, executed: "1-9", heartbeatErr: unimplemented, calls: []string{config, start, heartbeatOnly, stop, status, startFail}, wantError: "master info structure"},
 		{name: "equal_start_fails", heartbeat: 30, configured: 30, calls: []string{config, stop, startFail, restart}},
 
 		// Host and port changes never look at the heartbeat or the relay log.
@@ -1078,6 +1089,8 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 					calls = append(calls, daemon.EXPECT().RestartReplication(ctx, hookEnv).Return(nil))
 				case setSource:
 					calls = append(calls, daemon.EXPECT().SetReplicationSource(ctx, "mysql-primary", int32(3306), tt.heartbeat, false, false).Return(nil))
+				case heartbeatOnly:
+					calls = append(calls, daemon.EXPECT().SetReplicationHeartbeat(ctx, tt.heartbeat).Return(tt.heartbeatErr))
 				}
 			}
 			gomock.InOrder(calls...)
