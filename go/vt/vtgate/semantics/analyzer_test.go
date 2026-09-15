@@ -248,6 +248,26 @@ func TestRecursiveCTEChecking(t *testing.T) {
 	}
 }
 
+// A recursive CTE whose seed selects * from a table without authoritative column
+// information keeps the star in its projection, so the CTE's column list is not
+// known during analysis. Such a CTE is not authoritative and columns resolved
+// against it are uncertain, which analysis has to report rather than crash on.
+func TestRecursiveCTEWithUnexpandedStar(t *testing.T) {
+	queries := []string{
+		"with recursive x as (select * from t union select id + 1 from x where id < 10) select id from x",
+		"with recursive x(a) as (select * from t union select a + 1 from x where a < 10) select a from x",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+
+			_, err = AnalyzeStrict(parse, "user", fakeSchemaInfo())
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestBindingMultiAliasedTablePositive(t *testing.T) {
 	type testCase struct {
 		query          string
