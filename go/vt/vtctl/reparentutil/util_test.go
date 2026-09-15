@@ -1716,6 +1716,54 @@ zone1-0000000100 is not a replica`,
 	}
 }
 
+func TestElectNewPrimaryWarnsForMariaDB(t *testing.T) {
+	alias101 := &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+	alias102 := &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}
+	tmc := &chooseNewPrimaryTestTMClient{
+		replicationStatuses: map[string]*replicationdatapb.Status{
+			topoproto.TabletAliasString(alias101): {
+				Position:         "MariaDB/0-1-5",
+				RelayLogPosition: "MariaDB/0-1-5",
+			},
+			topoproto.TabletAliasString(alias102): {
+				Position:         "MariaDB/0-1-10",
+				RelayLogPosition: "MariaDB/0-1-10",
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		topoproto.TabletAliasString(alias101): {
+			Tablet: &topodatapb.Tablet{Alias: alias101, Type: topodatapb.TabletType_REPLICA},
+		},
+		topoproto.TabletAliasString(alias102): {
+			Tablet: &topodatapb.Tablet{Alias: alias102, Type: topodatapb.TabletType_REPLICA},
+		},
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	logger := logutil.NewMemoryLogger()
+
+	primary, err := ElectNewPrimary(t.Context(), tmc, topo.NewShardInfo("testkeyspace", "0", &topodatapb.Shard{}, nil), tabletMap, nil, &PlannedReparentOptions{
+		durability:          durability,
+		WaitReplicasTimeout: 30 * time.Second,
+	}, logger)
+	require.NoError(t, err)
+	assert.True(t, topoproto.TabletAliasEqual(alias102, primary))
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+
+	for _, status := range tmc.replicationStatuses {
+		status.BackupRunning = true
+		status.ServerVersion = "Ver 10.10.2-MariaDB"
+	}
+	logger = logutil.NewMemoryLogger()
+	_, err = ElectNewPrimary(t.Context(), tmc, topo.NewShardInfo("testkeyspace", "0", &topodatapb.Shard{}, nil), tabletMap, nil, &PlannedReparentOptions{
+		durability:          durability,
+		WaitReplicasTimeout: 30 * time.Second,
+	}, logger)
+	require.ErrorContains(t, err, "cannot find a tablet to reparent to")
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+}
+
 func TestFindPositionForTablet(t *testing.T) {
 	t.Parallel()
 

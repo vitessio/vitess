@@ -94,6 +94,7 @@ func (tm *TabletManager) getMySQLVersionString(ctx context.Context) string {
 		log.Warn("failed to get MySQL version string", slog.Any("error", err))
 		return ""
 	}
+	tm.warnMariaDBDeprecation(version)
 
 	c.mu.Lock()
 	c.version = version
@@ -101,6 +102,24 @@ func (tm *TabletManager) getMySQLVersionString(ctx context.Context) string {
 	c.mu.Unlock()
 
 	return version
+}
+
+// warnMariaDBDeprecation warns once for managed MariaDB tablets. Unmanaged
+// tablets remain supported as MariaDB import sources.
+func (tm *TabletManager) warnMariaDBDeprecation(version string) {
+	if tm.unmanaged {
+		return
+	}
+	flavor, _, err := mysqlctl.ParseVersionString(version)
+	if err != nil || flavor != mysqlctl.FlavorMariaDB {
+		return
+	}
+	if tm.mariaDBDeprecationWarned.CompareAndSwap(false, true) {
+		log.Warn("MariaDB support for managed tablets is deprecated and will become unsupported in v26.0.0; use --unmanaged in an external keyspace when importing from MariaDB",
+			slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias)),
+			slog.String("mysql_version", version),
+		)
+	}
 }
 
 // maxVersionLookupBudget caps how long a bounded version lookup may run
