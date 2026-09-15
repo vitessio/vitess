@@ -51,37 +51,13 @@ import (
 // collapsing the many per-RPC lookups down to roughly one query per TTL.
 const mysqlVersionCacheTTL = 10 * time.Second
 
-type (
-	// mysqlVersionCache caches the MySQL server version string behind its own lock
-	// so lookups never contend with unrelated TabletManager operations.
-	mysqlVersionCache struct {
-		mu        sync.Mutex
-		version   string
-		fetchedAt time.Time
-	}
-
-	// heartbeatRepairRequest is a heartbeat change on a replica whose source
-	// host and port already match.
-	heartbeatRepairRequest struct {
-		// status is the replication status from before any thread was touched.
-		status replication.ReplicationStatus
-
-		// interval is the heartbeat to set, in seconds.
-		interval float64
-	}
-
-	// heartbeatRepairResponse is what repairHeartbeat did and what is left for
-	// the caller.
-	heartbeatRepairResponse struct {
-		// changeSource is true when the relay log is empty and the full
-		// CHANGE REPLICATION SOURCE TO is safe to run.
-		changeSource bool
-
-		// stopped is true when both threads were stopped for the check. The
-		// caller must not stop them again.
-		stopped bool
-	}
-)
+// mysqlVersionCache caches the MySQL server version string behind its own lock
+// so lookups never contend with unrelated TabletManager operations.
+type mysqlVersionCache struct {
+	mu        sync.Mutex
+	version   string
+	fetchedAt time.Time
+}
 
 // getMySQLVersionString returns the MySQL server version string, caching it for
 // mysqlVersionCacheTTL. GetVersionString runs a live query against mysqld (and,
@@ -1122,49 +1098,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 
 	return nil
-}
-
-// repairHeartbeat decides whether the heartbeat can be changed with a full
-// CHANGE REPLICATION SOURCE TO. That statement deletes the relay log when both
-// threads are stopped, and under semi-sync the relay log may be the only copy
-// of acknowledged transactions. So we stop both threads, re-read the status so
-// the IO thread cannot add to the relay log under us, and only allow the
-// change when everything received has been applied. Otherwise the heartbeat
-// stays wrong until a later attempt finds the relay log empty, which is fine:
-// a wrong heartbeat only matters when the primary is quiet, and that is when
-// the applier catches up.
-func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *heartbeatRepairRequest) (*heartbeatRepairResponse, error) {
-	resp := &heartbeatRepairResponse{changeSource: true}
-
-	// Stop anything still moving, including an IO thread stuck in Connecting.
-	if req.status.IOState != replication.ReplicationStateStopped || req.status.SQLState != replication.ReplicationStateStopped {
-		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			return nil, err
-		}
-		resp.stopped = true
-	}
-
-	// Re-read now that the relay log cannot change.
-	stoppedStatus, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "read replication status after stop")
-	}
-
-	if stoppedStatus.IOState != replication.ReplicationStateStopped || stoppedStatus.SQLState != replication.ReplicationStateStopped {
-		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication threads must be stopped before heartbeat repair")
-	}
-
-	if !stoppedStatus.Position.AtLeast(stoppedStatus.RelayLogPosition) {
-		log.Warn("Skipping heartbeat repair to avoid deleting received but unapplied transactions from the relay log",
-			slog.String("tablet", topoproto.TabletAliasString(tm.Tablet().Alias)),
-			slog.String("source_host", req.status.SourceHost),
-			slog.Int("source_port", int(req.status.SourcePort)),
-			slog.Float64("heartbeat_interval", req.interval),
-		)
-		resp.changeSource = false
-	}
-
-	return resp, nil
 }
 
 // ReplicaWasRestarted updates the parent record for a tablet.
