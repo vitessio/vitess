@@ -1750,7 +1750,11 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 	require.NoError(t, err, "%s Error: %s: %s", command, err, output)
 }
 
-func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
+// switchWrites switches (or reverses) write traffic. extraArgs are appended to
+// the command; callers that switch writes before reads pass "--force" to bypass
+// the read-ordering guard. Callers that switch reads first pass nothing so they
+// still exercise the normal guarded path.
+func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool, extraArgs ...string) {
 	if workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables.String() &&
 		workflowType != binlogdatapb.VReplicationWorkflowType_Reshard.String() {
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
@@ -1765,11 +1769,13 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	defaultTargetKs, workflow, found := strings.Cut(ksWorkflow, ".")
 	require.True(t, found)
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() {
-		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", "--timeout="+SwitchWritesTimeout, "--tablet-types=primary")
+		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", append([]string{"--timeout=" + SwitchWritesTimeout, "--tablet-types=primary"}, extraArgs...)...)
 		return
 	}
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--tablet-types=primary", "--workflow", workflow,
-		"--target-keyspace", defaultTargetKs, command, "--timeout="+SwitchWritesTimeout, "--initialize-target-sequences")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(append([]string{
+		workflowType, "--tablet-types=primary", "--workflow", workflow,
+		"--target-keyspace", defaultTargetKs, command, "--timeout=" + SwitchWritesTimeout, "--initialize-target-sequences",
+	}, extraArgs...)...)
 	if output != "" {
 		fmt.Printf("Output of switching writes with vtctldclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
