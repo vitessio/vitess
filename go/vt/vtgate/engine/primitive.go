@@ -177,6 +177,10 @@ type (
 		ExecutedPrimitive() Primitive
 	}
 
+	resultRunExecutor interface {
+		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []*sqltypes.Result, []error)
+	}
+
 	// SessionActions gives primitives ability to interact with the session state
 	SessionActions interface {
 		// RecordWarning stores the given warning in the current session
