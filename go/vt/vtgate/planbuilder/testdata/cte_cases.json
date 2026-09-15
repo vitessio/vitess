@@ -2510,5 +2510,64 @@
         "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)"
       }
     }
+  },
+  {
+    "comment": "recursive cte joined against a derived union whose sources merge on the recursive predicate: the CTE merge must be declined, keeping the RecurseCTE primitive that produces the per-source :cte_id arguments. The column-form cte.depth in the term WHERE is a pre-existing bug on main, byte-identical there and unrelated to the merge decline: filters over pure CTE columns are never rewritten to their bind-variable form when the term does not merge",
+    "query": "with recursive cte as (select id, 0 as depth from user where id = 5 union all select refs.user_id, cte.depth + 1 from cte join (select user_id from music where user_id = 5 union all select user_id from user_extra where user_id = 5) as refs on refs.user_id = cte.id where cte.depth < 1) select id, depth from cte order by depth, id",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, 0 as depth from user where id = 5 union all select refs.user_id, cte.depth + 1 from cte join (select user_id from music where user_id = 5 union all select user_id from user_extra where user_id = 5) as refs on refs.user_id = cte.id where cte.depth < 1) select id, depth from cte order by depth, id",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC, (0|3) ASC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_depth": 1,
+              "cte_id": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as depth, weight_string(dt.c1), weight_string(dt.c0) from (select id, 0 as depth from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as depth, weight_string(dt.c1), weight_string(dt.c0) from (select id, 0 as depth from `user` where id = 5) as dt(c0, c1)",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select refs.user_id, :cte_depth + 1 as `cte.depth + 1`, weight_string(:cte_depth + 1), weight_string(refs.user_id) from (select user_id from music where 1 != 1 union all select user_id from user_extra where 1 != 1) as refs where 1 != 1",
+                "Query": "select refs.user_id, :cte_depth + 1 as `cte.depth + 1`, weight_string(:cte_depth + 1), weight_string(refs.user_id) from (select user_id from music where user_id = 5 and user_id = :cte_id union all select user_id from user_extra where user_id = 5 and user_id = :cte_id) as refs where cte.depth < 1",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
