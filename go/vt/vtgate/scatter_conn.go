@@ -150,6 +150,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	queries []*querypb.BoundQuery,
 	session *econtext.SafeSession,
 	autocommit bool,
+	settingsForStatement bool,
 	ignoreMaxMemoryRows bool,
 	resultsObserver econtext.ResultsObserver,
 	fetchLastInsertID bool,
@@ -159,7 +160,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	}
 
 	qr = new(sqltypes.Result)
-	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID,
+	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, settingsForStatement, resultsObserver, fetchLastInsertID,
 		func(_ int, innerqr *sqltypes.Result) {
 			// Don't append more rows if row count is exceeded.
 			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
@@ -196,7 +197,7 @@ func (stc *ScatterConn) ExecuteMultiShardPerShard(
 	}
 
 	results = make([]*sqltypes.Result, len(rss))
-	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID,
+	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, false /* settingsForStatement */, resultsObserver, fetchLastInsertID,
 		func(i int, innerqr *sqltypes.Result) {
 			results[i] = innerqr
 		},
@@ -218,6 +219,7 @@ func (stc *ScatterConn) executeMultiShard(
 	queries []*querypb.BoundQuery,
 	session *econtext.SafeSession,
 	autocommit bool,
+	settingsForStatement bool,
 	resultsObserver econtext.ResultsObserver,
 	fetchLastInsertID bool,
 	collect func(i int, innerqr *sqltypes.Result),
@@ -248,6 +250,7 @@ func (stc *ScatterConn) executeMultiShard(
 		rss,
 		session,
 		autocommit,
+		settingsForStatement,
 		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
 			var (
 				innerqr *sqltypes.Result
@@ -444,6 +447,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	bindVars []map[string]*querypb.BindVariable,
 	session *econtext.SafeSession,
 	autocommit bool,
+	settingsForStatement bool,
 	callback func(reply *sqltypes.Result) error,
 	resultsObserver econtext.ResultsObserver,
 	fetchLastInsertID bool,
@@ -478,6 +482,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		rss,
 		session,
 		autocommit,
+		settingsForStatement,
 		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
 			var (
 				err   error
@@ -742,6 +747,7 @@ func (stc *ScatterConn) multiGoTransaction(
 	rss []*srvtopo.ResolvedShard,
 	session *econtext.SafeSession,
 	autocommit bool,
+	settingsForStatement bool,
 	action shardActionTransactionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
 	numShards := len(rss)
@@ -755,7 +761,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
+		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, settingsForStatement, stc.txConn.txMode.TransactionMode())
 		if err != nil {
 			return
 		}
@@ -770,6 +776,12 @@ func (stc *ScatterConn) multiGoTransaction(
 			// We might not always update or append in the session.
 			// We need to track if rows were affected in the transaction.
 			shardSession.RowsAffected = info.rowsAffected
+		}
+		if info.reservedID != 0 && !session.InReservedConn() {
+			// A shard holding a reserved connection pins the session. The session
+			// only asked for its settings, but the tablet reserved a connection for
+			// the statement (a lock, a temporary table).
+			session.SetReservedConn(true)
 		}
 		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
 			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode())
@@ -924,9 +936,11 @@ func requireNewQS(err error, target *querypb.Target) bool {
 	return false
 }
 
-// actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
-	if !session.InTransaction() && !session.InReservedConn() {
+// actionInfo looks at the current session, and returns information about what needs to be done for this tablet.
+// settingsForStatement asks for the session's system variables on the shard's connection for this
+// statement only: the statement cannot carry them in a hint. It does not pin the session.
+func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit, settingsForStatement bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
+	if !session.InTransaction() && !session.InReservedConn() && !settingsForStatement {
 		// Check for tablet-specific routing for non-transactional queries
 		if alias := session.GetTargetTabletAlias(); alias != nil {
 			return &shardActionInfo{
@@ -949,7 +963,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 		return nil, nil, err
 	}
 
-	shouldReserve := session.InReservedConn() && (shardSession == nil || shardSession.ReservedId == 0)
+	shouldReserve := (session.InReservedConn() || settingsForStatement) && (shardSession == nil || shardSession.ReservedId == 0)
 	shouldBegin := session.InTransaction() && (shardSession == nil || shardSession.TransactionId == 0) && !autocommit
 
 	act := nothing
