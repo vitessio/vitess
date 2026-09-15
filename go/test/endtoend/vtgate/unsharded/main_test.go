@@ -157,6 +157,13 @@ END;
 `,
 		`CREATE PROCEDURE p1 (in x BIGINT) BEGIN declare y DECIMAL(14,2); set y = 4.2; END`,
 		`CREATE PROCEDURE p2 (in x BIGINT) BEGIN START TRANSACTION; SELECT 128 from dual; COMMIT; END`,
+		`CREATE PROCEDURE dirty_session()
+BEGIN
+	CREATE TEMPORARY TABLE leaked (id int);
+	SET SESSION transaction_isolation = 'READ-UNCOMMITTED';
+	SET SESSION time_zone = '+05:30';
+	SET NAMES latin1;
+END`,
 	}
 )
 
@@ -326,6 +333,69 @@ func TestDDLUnsharded(t *testing.T) {
 	utils.Exec(t, conn, `drop view v1`)
 	utils.Exec(t, conn, `drop table tempt1`)
 	utils.AssertMatchesAny(t, conn, "show tables", `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`, `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+}
+
+// TestCallProcedureSessionResidue pins the fix for vitessio/vitess#21046: session
+// state a procedure body leaves behind — a temporary table, SET SESSION
+// variables, SET NAMES — must not survive on the pooled connection the CALL ran
+// on and be served to the next borrower. Reads are repeated so they land on
+// recycled pool connections; before the fix the very first read after the CALL
+// observed READ-UNCOMMITTED and the leaked table. Of the SET NAMES residue,
+// MySQL restores character_set_client and character_set_connection when a
+// stored program ends, so character_set_results is the part that leaks.
+func TestCallProcedureSessionResidue(t *testing.T) {
+	ctx := t.Context()
+	vtParams := mysql.ConnParams{
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		DbName: "@primary",
+	}
+	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*), @@session.character_set_results from information_schema.innodb_temp_table_info"
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	// The backend's own defaults, read before anything dirties a session.
+	baseline := utils.Exec(t, conn, probe)
+	require.Len(t, baseline.Rows, 1)
+	require.NotEqual(t, "READ-UNCOMMITTED", baseline.Rows[0][0].ToString())
+	require.Equal(t, "0", baseline.Rows[0][2].ToString(), "no temp tables before the test")
+	require.Equal(t, "utf8mb4", baseline.Rows[0][3].ToString(), "the pooled connections negotiate utf8mb4")
+
+	assertClean := func(t *testing.T, what string) {
+		t.Helper()
+		for i := range 20 {
+			qr := utils.Exec(t, conn, probe)
+			require.Equal(t, baseline.Rows, qr.Rows, "%s: read %d after the CALL must see the backend's defaults, not the procedure's session residue", what, i)
+		}
+	}
+
+	t.Run("buffered", func(t *testing.T) {
+		utils.Exec(t, conn, "CALL dirty_session()")
+		assertClean(t, "buffered CALL")
+	})
+	t.Run("streaming", func(t *testing.T) {
+		// The probes stay on the OLAP workload too, so they draw from the
+		// streaming pool the CALL ran on rather than the untouched OLTP pool.
+		utils.Exec(t, conn, "set workload = olap")
+		defer utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		assertClean(t, "streaming CALL")
+	})
+	t.Run("a session setting is in effect on the settings pool after a CALL", func(t *testing.T) {
+		// A vtgate session SET is applied to every pooled connection the session
+		// borrows, so it must be in effect on the fresh connection the pool hands
+		// out after the CALL's connection is discarded. Probed through behavior
+		// MySQL decides under the setting (vtgate answers `select @@sql_mode`
+		// itself once the session holds the variable). Last subtest on this
+		// connection: the setting dies with it.
+		utils.Exec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
+		const q = "select str_to_date('00/00/0000', '%m/%d/%Y') from dual"
+		utils.AssertMatches(t, conn, q, `[[NULL]]`)
+		utils.Exec(t, conn, "CALL dirty_session()")
+		for range 5 {
+			utils.AssertMatches(t, conn, q, `[[NULL]]`)
+		}
+	})
 }
 
 func TestCallProcedure(t *testing.T) {
