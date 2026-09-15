@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -102,25 +101,4 @@ func TestReplicationConfigurationQueryError(t *testing.T) {
 			assert.Nil(t, configuration)
 		})
 	}
-}
-
-// TestFakeMysqlDaemonReplicationConfiguration checks the default and selected results.
-func TestFakeMysqlDaemonReplicationConfiguration(t *testing.T) {
-	fake := NewFakeMysqlDaemon(nil)
-	var mysqld MysqlDaemon = fake
-
-	configuration, err := mysqld.ReplicationConfiguration(t.Context())
-	require.NoError(t, err)
-	assert.Nil(t, configuration)
-
-	fake.ReplicationConfigurationResult = &replicationdatapb.Configuration{HeartbeatInterval: 4.5, ReplicaNetTimeout: 9}
-	configuration, err = mysqld.ReplicationConfiguration(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, fake.ReplicationConfigurationResult, configuration)
-
-	fake.ReplicationConfigurationResult = nil
-	fake.ReplicationConfigurationError = vterrors.New(vtrpcpb.Code_INTERNAL, "configuration unavailable")
-	configuration, err = mysqld.ReplicationConfiguration(t.Context())
-	require.ErrorIs(t, err, fake.ReplicationConfigurationError)
-	assert.Nil(t, configuration)
 }

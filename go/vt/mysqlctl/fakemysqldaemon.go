@@ -108,12 +108,6 @@ type FakeMysqlDaemon struct {
 	// ReplicationStatusError is used by ReplicationStatus.
 	ReplicationStatusError error
 
-	// ReplicationConfigurationResult is returned by ReplicationConfiguration.
-	ReplicationConfigurationResult *replicationdatapb.Configuration
-
-	// ReplicationConfigurationError is returned by ReplicationConfiguration.
-	ReplicationConfigurationError error
-
 	// StartReplicationError is used by StartReplication.
 	StartReplicationError error
 
@@ -409,9 +403,9 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	}, nil
 }
 
-// ReplicationConfiguration returns the configured test result and error.
+// ReplicationConfiguration is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReplicationConfiguration(context.Context) (*replicationdatapb.Configuration, error) {
-	return fmd.ReplicationConfigurationResult, fmd.ReplicationConfigurationError
+	return nil, nil
 }
 
 // CollectFullStatusData is part of the MysqlDaemon interface.
