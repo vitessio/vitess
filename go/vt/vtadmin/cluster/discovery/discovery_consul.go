@@ -265,11 +265,11 @@ func (c *ConsulDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([
 // discoverVTGates does the actual work of discovering VTGate hosts from a
 // consul datacenter. executeFQDNTemplate is boolean to allow an optimization
 // for DiscoverVTGateAddr (the only function that sets the boolean to false).
-func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.VTGate, error) {
+func (c *ConsulDiscovery) discoverVTGates(ctx context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.VTGate, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtgateDatacenter
 
-	entries, _, err := c.client.Health().ServiceMultipleTags(c.vtgateService, tags, c.passingOnly, &opts)
+	entries, _, err := c.client.Health().ServiceMultipleTags(c.vtgateService, tags, c.passingOnly, opts.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -410,11 +410,11 @@ func (c *ConsulDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([
 // discoverVtctlds does the actual work of discovering Vtctld hosts from a
 // consul datacenter. executeFQDNTemplate is boolean to allow an optimization
 // for DiscoverVtctldAddr (the only function that sets the boolean to false).
-func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.Vtctld, error) {
+func (c *ConsulDiscovery) discoverVtctlds(ctx context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.Vtctld, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtctldDatacenter
 
-	entries, _, err := c.client.Health().ServiceMultipleTags(c.vtctldService, tags, c.passingOnly, &opts)
+	entries, _, err := c.client.Health().ServiceMultipleTags(c.vtctldService, tags, c.passingOnly, opts.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
