@@ -356,6 +356,74 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// The ORDER BY of a parenthesized union arm sees no CTE at all, not
+		// even the enclosing union's leading one, so a subquery there reads
+		// the real table and requires its permission.
+		input: "with t as (select id from real1) select id from t union all (select id from real2 union all select id from real2 order by (select max(id) from t))",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// Same with an arm declaring its own WITH elsewhere in the chain.
+		input: "with t as (select id from real1) select id from t union all (select id from real2 union all select id from real2 order by (select max(id) from secret)) union all (with s as (select 1 as id) select id from s)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A union's own ORDER BY sees its leading CTEs while no arm has hidden
+		// them, and so does the ORDER BY of a parenthesized single-select arm.
+		input: "with t as (select id from real1) select id from t union all select id from real2 order by (select max(id) from t)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "with t as (select id from real1) select id from t union all (select id from real2 order by (select max(id) from t))",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A union inside a derived table sees the consumer's CTEs in its own
+		// ORDER BY; it is not a union arm.
+		input: "with t as (select id from real1) select * from (select id from real2 union all select id from real2 order by (select max(id) from t)) as d",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		// When the arm with the WITH comes first, no arm sees the leading CTEs.
 		input: "with t as (select * from real1) (with s as (select 1 as id) select * from t) union all select * from t",
 		output: []Permission{{
