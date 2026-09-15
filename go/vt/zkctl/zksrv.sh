@@ -21,7 +21,7 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 zk_java_opts=${ZK_JAVA_OPTS:-}
-zk_ver=${ZK_VERSION:-3.9.4}
+zk_ver=${ZK_VERSION:-3.9.6}
 
 # Build classpath: use wildcard to include all JARs in the lib directory.
 # This supports both the old fatjar layout and the new binary distribution layout.
