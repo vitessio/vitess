@@ -27,7 +27,6 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"log/slog"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -38,19 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-<<<<<<< HEAD
-type verifyPeerCertificateFunc func([][]byte, [][]*x509.Certificate) error
-
-func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
-	if !time.Now().Before(crl.NextUpdate) {
-		log.Warningf("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
-||||||| parent of bf6a04215d (vttls: Enforce CRLs in every SSL mode and on resumed TLS sessions (#21054))
-type verifyPeerCertificateFunc func([][]byte, [][]*x509.Certificate) error
-
-func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
-	if !time.Now().Before(crl.NextUpdate) {
-		log.Warn("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
-=======
 type (
 	// crlChecker rejects a connection when a certificate of the
 	// peer's verified chain is listed in a configured Certificate
@@ -96,7 +82,6 @@ type (
 		// warning about its expiry, a digest of the CRL worked out
 		// once rather than on every handshake that consults it.
 		warningKeys map[*x509.RevocationList]string
->>>>>>> bf6a04215d (vttls: Enforce CRLs in every SSL mode and on resumed TLS sessions (#21054))
 	}
 
 	// crlBinding is what binding the CRLs to an issuer made of
@@ -247,11 +232,8 @@ func warnExpiredCRL(crl *x509.RevocationList, key string) {
 			return
 		}
 	}
-	log.Warn("The Certificate Revocation List (CRL) is past its due date and must be updated. Revoked certificates will still be rejected in this state.",
-		slog.String("issuer", crl.Issuer.CommonName),
-		slog.String("crl_number", crlNumber(crl)),
-		slog.Time("next_update", crl.NextUpdate),
-	)
+	log.Warningf("The Certificate Revocation List (CRL) is past its due date and must be updated. Revoked certificates will still be rejected in this state. (issuer=%s crl_number=%s next_update=%s)",
+		crl.Issuer.CommonName, crlNumber(crl), crl.NextUpdate.Format(time.RFC3339))
 }
 
 // isRevoked reports whether crl, which has to be one of the checker's,
@@ -450,10 +432,8 @@ func warnRevokedAnchor(cert *x509.Certificate, revoked string) {
 	if _, warned := revokedAnchorWarnings.LoadOrStore(string(cert.Raw), struct{}{}); warned {
 		return
 	}
-	log.Warn("A configured CA certificate is revoked by the CRL of its issuer, or issued under one that is: connections whose chain ends at it will be rejected.",
-		slog.String("subject", cert.Subject.CommonName),
-		slog.String("revoked", revoked),
-	)
+	log.Warningf("A configured CA certificate is revoked by the CRL of its issuer, or issued under one that is: connections whose chain ends at it will be rejected. (subject=%s revoked=%s)",
+		cert.Subject.CommonName, revoked)
 }
 
 // bindCRLs returns the CRLs that issuer validates, the newest complete

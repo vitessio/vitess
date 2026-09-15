@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"math/big"
 	"net"
 	"os"
@@ -1104,9 +1103,9 @@ func partitionCRL(t *testing.T, ca *x509.Certificate, key crypto.Signer, number 
 // which the MySQL client does for every connection.
 func TestNewCRLCheckerWarnsOncePerRevokedAnchor(t *testing.T) {
 	warnings := atomic.Int32{}
-	warn := log.Warn
-	log.Warn = func(string, ...slog.Attr) { warnings.Add(1) }
-	t.Cleanup(func() { log.Warn = warn })
+	warn := log.Warningf
+	log.Warningf = func(string, ...any) { warnings.Add(1) }
+	t.Cleanup(func() { log.Warningf = warn })
 
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)
@@ -1735,9 +1734,9 @@ func TestCertIsRevokedWarnsPerExpiredCRL(t *testing.T) {
 
 	t.Run("handshakes consulting an expired CRL at once warn about it once", func(t *testing.T) {
 		warnings := atomic.Int32{}
-		warn := log.Warn
-		log.Warn = func(string, ...slog.Attr) { warnings.Add(1) }
-		t.Cleanup(func() { log.Warn = warn })
+		warn := log.Warningf
+		log.Warningf = func(string, ...any) { warnings.Add(1) }
+		t.Cleanup(func() { log.Warningf = warn })
 		crl := loadOneCRL(t, crlDueAt(t, certs.ServerCA, 7, expired))
 		checker, err := newCRLCheckerFrom([]*x509.RevocationList{crl}, nil)
 		require.NoError(t, err)
