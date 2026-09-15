@@ -62,6 +62,9 @@ type MysqlDaemon interface {
 	StopReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
+	// ReplicationConfiguration returns the heartbeat interval and replica network timeout.
+	// It returns nil without an error if the server has no configuration or the flavor does not track it.
+	ReplicationConfiguration(ctx context.Context) (*replicationdatapb.Configuration, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)

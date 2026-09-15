@@ -403,6 +403,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	}, nil
 }
 
+// ReplicationConfiguration is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ReplicationConfiguration(context.Context) (*replicationdatapb.Configuration, error) {
+	return nil, nil
+}
+
 // CollectFullStatusData is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
 	return nil, nil

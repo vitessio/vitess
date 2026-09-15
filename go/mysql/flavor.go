@@ -462,6 +462,11 @@ func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
 }
 
+// ReplicationNetTimeoutQuery returns the flavor-specific query for the replica network timeout.
+func (c *Conn) ReplicationNetTimeoutQuery() string {
+	return "SELECT " + c.flavor.replicationNetTimeoutVariable()
+}
+
 // ReplicationConfiguration reads the right performance schema information.
 // replicaNetTimeout is a global variable rather than performance schema data,
 // so the caller reads it separately and passes it in.
