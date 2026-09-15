@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,15 +28,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/mock"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -968,33 +972,86 @@ func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializati
 // TestSetReplicationSourceConfiguration checks source changes and relay-log-safe restarts.
 func TestSetReplicationSourceConfiguration(t *testing.T) {
 	for _, tt := range []struct {
-		name       string
-		host       string
-		port       int32
-		heartbeat  float64
-		configured float64
-		missing    bool
-		readError  bool
-		running    bool
-		noForce    bool
-		change     bool
-		wantError  string
+		name              string
+		host              string
+		port              int32
+		heartbeat         float64
+		configuration     *replicationdatapb.Configuration
+		configurationErr  error
+		readConfiguration bool
+		noForce           bool
+		change            bool
+		wantError         string
 	}{
-		{name: "equal", heartbeat: 30, configured: 30},
-		{name: "equal_running", heartbeat: 30, configured: 30, running: true},
-		{name: "equal_stays_stopped", heartbeat: 30, configured: 30, noForce: true},
-		{name: "zero", configured: 15, readError: true},
-		{name: "different", heartbeat: 30, configured: 15, change: true},
-		{name: "rounded_equal_below", heartbeat: 30, configured: 29.75},
-		{name: "rounded_equal_above", heartbeat: 30, configured: 30.249},
-		{name: "rounded_different_below", heartbeat: 30, configured: 29.749, change: true},
-		{name: "rounded_different_above", heartbeat: 30, configured: 30.25, change: true},
-		{name: "host_changed", host: "old-primary", heartbeat: 30, configured: 30, readError: true, change: true},
-		{name: "port_changed", port: 3307, heartbeat: 30, configured: 30, readError: true, change: true},
-		{name: "host_changed_zero", host: "old-primary", readError: true, change: true},
-		{name: "port_changed_zero", port: 3307, readError: true, change: true},
-		{name: "read_error", heartbeat: 30, readError: true, wantError: "read replication configuration: configuration unavailable"},
-		{name: "missing_configuration", heartbeat: 30, missing: true, wantError: "replication configuration is unavailable"},
+		{
+			name:      "equal",
+			heartbeat: 30, readConfiguration: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "equal_stays_stopped",
+			heartbeat: 30, readConfiguration: true, noForce: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
+		},
+		{
+			name: "zero",
+		},
+		{
+			name:      "different",
+			heartbeat: 30, readConfiguration: true, change: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_equal_below",
+			heartbeat: 30, readConfiguration: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.75, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_equal_above",
+			heartbeat: 30, readConfiguration: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.249, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_different_below",
+			heartbeat: 30, readConfiguration: true, change: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.749, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "rounded_different_above",
+			heartbeat: 30, readConfiguration: true, change: true,
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.25, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "host_changed",
+			host:      "old-primary",
+			heartbeat: 30, change: true,
+		},
+		{
+			name:      "port_changed",
+			port:      3307,
+			heartbeat: 30, change: true,
+		},
+		{
+			name:   "host_changed_zero",
+			host:   "old-primary",
+			change: true,
+		},
+		{
+			name:   "port_changed_zero",
+			port:   3307,
+			change: true,
+		},
+		{
+			name:      "read_error",
+			heartbeat: 30, readConfiguration: true,
+			configurationErr: errors.New("configuration unavailable"),
+			wantError:        "read replication configuration: configuration unavailable",
+		},
+		{
+			name:      "missing_configuration",
+			heartbeat: 30, readConfiguration: true,
+			wantError: "replication configuration is unavailable",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -1009,29 +1066,37 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 			parent.MysqlPort = 3306
 			require.NoError(t, ts.CreateTablet(ctx, parent))
 
-			daemon := newTestMysqlDaemon(t, 1)
-			daemon.CurrentSourceHost = parent.MysqlHostname
-			daemon.CurrentSourcePort = parent.MysqlPort
-			daemon.Replicating = tt.running
-			if tt.host != "" {
-				daemon.CurrentSourceHost = tt.host
-			}
-			if tt.port != 0 {
-				daemon.CurrentSourcePort = tt.port
-			}
-			if !tt.missing {
-				daemon.ReplicationConfigurationResult = &replicationdatapb.Configuration{HeartbeatInterval: tt.configured, ReplicaNetTimeout: 60}
-			}
-			if tt.readError {
-				daemon.ReplicationConfigurationError = errors.New("configuration unavailable")
+			// The replica is stopped and points at the primary unless the case says otherwise.
+			status := replication.ReplicationStatus{
+				SourceHost: cmp.Or(tt.host, "mysql-primary"),
+				SourcePort: cmp.Or(tt.port, 3306),
+				IOState:    replication.ReplicationStateStopped,
+				SQLState:   replication.ReplicationStateStopped,
 			}
 
-			daemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
-			if tt.change {
-				daemon.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
-			} else if tt.wantError == "" && !tt.noForce {
-				daemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+			daemon := mock.NewMockMysqlDaemon(gomock.NewController(t))
+			calls := []any{
+				daemon.EXPECT().SemiSyncExtensionLoaded(ctx).Return(mysql.SemiSyncTypeSource, nil),
+				daemon.EXPECT().ReplicationStatus(ctx).Return(status, nil),
+				daemon.EXPECT().SetSemiSyncEnabled(ctx, false, false).Return(nil),
 			}
+			if tt.readConfiguration {
+				calls = append(calls, daemon.EXPECT().ReplicationConfiguration(ctx).Return(tt.configuration, tt.configurationErr))
+			}
+
+			hookEnv := map[string]string{"TABLET_ALIAS": "cell1-0000000100", "KEYSPACE": "ks", "SHARD": "0"}
+			if tt.change {
+				calls = append(calls,
+					daemon.EXPECT().SetReplicationSource(ctx, "mysql-primary", int32(3306), tt.heartbeat, false, false).Return(nil),
+					daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil),
+				)
+			} else if tt.wantError == "" && !tt.noForce {
+				calls = append(calls,
+					daemon.EXPECT().StopReplication(ctx, hookEnv).Return(nil),
+					daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil),
+				)
+			}
+			gomock.InOrder(calls...)
 
 			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, ts)
 			tm.tmc = newFakeTMClient()
@@ -1040,9 +1105,7 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantError)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, !tt.noForce, daemon.Replicating)
 			}
-			assert.NoError(t, daemon.CheckSuperQueryList())
 		})
 	}
 }
