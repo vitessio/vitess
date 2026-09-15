@@ -33,12 +33,18 @@ type (
 		// status is the replication status read by the caller.
 		status replication.ReplicationStatus
 
-		// interval is the requested heartbeat interval in seconds, used in warnings.
+		// interval is the requested heartbeat interval in seconds.
 		interval float64
+
+		// shouldBeReplicating is whether the caller wants replication running when the RPC returns.
+		shouldBeReplicating bool
 	}
 
-	// repairHeartbeatResponse holds the repair decision and whether replication was stopped.
+	// repairHeartbeatResponse holds what the repair did and what the caller may still do.
 	repairHeartbeatResponse struct {
+		// repaired is true when the heartbeat was changed with only the IO thread stopped.
+		repaired bool
+
 		// changeSource is true when the full CHANGE REPLICATION SOURCE TO is safe to run.
 		changeSource bool
 
@@ -47,14 +53,39 @@ type (
 	}
 )
 
-// repairHeartbeat stops replication if needed and returns whether a heartbeat-only
-// change is safe, or an error if the check fails. It does not change the interval
-// or restart replication.
+// repairHeartbeat changes the heartbeat interval when the flavor can do it with
+// only the IO thread stopped. Otherwise it stops replication if needed and returns
+// whether a full source change is safe, or an error if the check fails.
 func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbeatRequest) (*repairHeartbeatResponse, error) {
-	resp := &repairHeartbeatResponse{changeSource: true}
+	resp := &repairHeartbeatResponse{}
+	status := req.status
+
+	// Try the IO-only change first. MySQL keeps the relay log while the applier runs,
+	// so nothing is at risk. An applier that stopped without an error is started for
+	// that if the caller wants replication running anyway.
+	started := false
+	if status.SQLHealthy() || (status.LastSQLError == "" && req.shouldBeReplicating) {
+		if !status.SQLHealthy() {
+			if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
+				return nil, err
+			}
+			started = true
+		}
+
+		err := tm.MysqlDaemon.SetReplicationHeartbeat(ctx, req.interval)
+		if err == nil {
+			resp.repaired = true
+			return resp, nil
+		}
+		// Only an unsupported flavor falls through to the full change.
+		if vterrors.Code(err) != vtrpc.Code_UNIMPLEMENTED {
+			return nil, err
+		}
+	}
 
 	// Stop both threads so received and applied positions cannot advance during the check.
-	if req.status.IOState != replication.ReplicationStateStopped || req.status.SQLState != replication.ReplicationStateStopped {
+	resp.changeSource = true
+	if started || status.IOState != replication.ReplicationStateStopped || status.SQLState != replication.ReplicationStateStopped {
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return nil, err
 		}
@@ -72,15 +103,15 @@ func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbe
 		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication threads must be stopped before heartbeat repair")
 	}
 
-	// Skip the change if received transactions remain unapplied. CHANGE REPLICATION
-	// SOURCE TO deletes relay logs when both threads are stopped unless relay-log
-	// coordinates are specified. Under semi-sync, these logs can hold acknowledged
-	// transactions that must survive a source failure.
-	if !stoppedStatus.Position.AtLeast(stoppedStatus.RelayLogPosition) {
+	// Skip the change if received transactions remain unapplied, or if the applier
+	// stopped on an error and so never will apply them. CHANGE REPLICATION SOURCE TO
+	// deletes relay logs when both threads are stopped, and under semi-sync those logs
+	// can hold acknowledged transactions that must survive a source failure.
+	if status.LastSQLError != "" || !stoppedStatus.Position.AtLeast(stoppedStatus.RelayLogPosition) {
 		log.Warn("Skipping heartbeat repair to avoid deleting received but unapplied transactions from the relay log",
 			slog.String("tablet", topoproto.TabletAliasString(tm.Tablet().Alias)),
-			slog.String("source_host", req.status.SourceHost),
-			slog.Int("source_port", int(req.status.SourcePort)),
+			slog.String("source_host", status.SourceHost),
+			slog.Int("source_port", int(status.SourcePort)),
 			slog.Float64("heartbeat_interval", req.interval),
 		)
 
