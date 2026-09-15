@@ -26,10 +26,14 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl/mock"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TestRepairHeartbeat checks call order and the relay-log safety decision.
 func TestRepairHeartbeat(t *testing.T) {
+	unimplemented := vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported")
 	for _, tt := range []struct {
 		name         string
 		before       string
@@ -40,24 +44,38 @@ func TestRepairHeartbeat(t *testing.T) {
 		afterIO      replication.ReplicationState
 		afterSQL     replication.ReplicationState
 		applierError string
+		shouldRun    bool
+		repairError  error
+		startError   error
 		stopError    error
 		statusError  error
 		wantError    string
+		wantRepaired bool
 		wantChange   bool
 		wantStopped  bool
 	}{
-		{name: "drained_relay_log", before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
-		{name: "applied_superset", before: "1-9", executed: "1-11", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
-		{name: "unapplied_relay_log", before: "1-10", executed: "1-10", received: "1-11", ioState: replication.ReplicationStateRunning, wantStopped: true},
+		// The IO-only change is tried first whenever the applier runs or can be started.
+		{name: "io_only_running", before: "1-9", ioState: replication.ReplicationStateRunning, sqlState: replication.ReplicationStateRunning, wantRepaired: true},
+		{name: "io_only_starts_applier", before: "1-9", ioState: replication.ReplicationStateRunning, shouldRun: true, wantRepaired: true},
+		{name: "io_only_not_started_when_not_wanted", before: "1-10", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, repairError: unimplemented, wantChange: true, wantStopped: true},
+		{name: "io_only_skipped_on_applier_error", before: "1-9", executed: "1-9", received: "1-10", ioState: replication.ReplicationStateRunning, shouldRun: true, applierError: "applier failed", wantStopped: true},
+		{name: "io_only_error", before: "1-9", sqlState: replication.ReplicationStateRunning, repairError: errors.New("heartbeat unavailable"), wantError: "heartbeat unavailable"},
+		{name: "io_only_start_error", before: "1-9", shouldRun: true, startError: errors.New("start unavailable"), wantError: "start unavailable"},
+		{name: "io_only_unsupported_after_start", before: "1-9", executed: "1-10", received: "1-10", shouldRun: true, repairError: unimplemented, wantChange: true, wantStopped: true},
+
+		// Flavors without the IO-only change fall back to the full change on an empty relay log.
+		{name: "drained_relay_log", repairError: unimplemented, before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "applied_superset", repairError: unimplemented, before: "1-9", executed: "1-11", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "unapplied_relay_log", repairError: unimplemented, before: "1-10", executed: "1-10", received: "1-11", ioState: replication.ReplicationStateRunning, wantStopped: true},
 		{name: "already_stopped", before: "1-10", executed: "1-10", received: "1-10", wantChange: true},
 		{name: "unapplied_already_stopped", before: "1-9", executed: "1-9", received: "1-10"},
 		{name: "applier_error", before: "1-9", executed: "1-9", received: "1-10", ioState: replication.ReplicationStateRunning, applierError: "applier failed", wantStopped: true},
-		{name: "io_connecting", before: "1-10", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateConnecting, wantChange: true, wantStopped: true},
-		{name: "sql_running", before: "1-10", executed: "1-10", received: "1-10", sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
-		{name: "stop_failure", before: "1-10", ioState: replication.ReplicationStateRunning, stopError: errors.New("stop unavailable"), wantError: "stop unavailable"},
-		{name: "status_read_failure", before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
-		{name: "io_still_running", before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
-		{name: "sql_still_running", before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
+		{name: "io_connecting", repairError: unimplemented, before: "1-10", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateConnecting, wantChange: true, wantStopped: true},
+		{name: "sql_running", repairError: unimplemented, before: "1-10", executed: "1-10", received: "1-10", sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "stop_failure", repairError: unimplemented, before: "1-10", ioState: replication.ReplicationStateRunning, stopError: errors.New("stop unavailable"), wantError: "stop unavailable"},
+		{name: "status_read_failure", repairError: unimplemented, before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
+		{name: "io_still_running", repairError: unimplemented, before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
+		{name: "sql_still_running", repairError: unimplemented, before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, state := range []*replication.ReplicationState{&tt.ioState, &tt.sqlState, &tt.afterIO, &tt.afterSQL} {
@@ -79,7 +97,8 @@ func TestRepairHeartbeat(t *testing.T) {
 					SourceHost:       "mysql-primary",
 					SourcePort:       3306,
 				},
-				interval: 30,
+				interval:            30,
+				shouldBeReplicating: tt.shouldRun,
 			}
 			status := replication.ReplicationStatus{
 				IOState:      tt.afterIO,
@@ -92,10 +111,21 @@ func TestRepairHeartbeat(t *testing.T) {
 			}
 
 			var calls []any
-			if tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped {
+			applierRuns := tt.sqlState == replication.ReplicationStateRunning
+			triesIOOnly := applierRuns || (tt.applierError == "" && tt.shouldRun)
+			started := false
+			if triesIOOnly && !applierRuns {
+				calls = append(calls, daemon.EXPECT().StartReplication(ctx, tm.hookExtraEnv()).Return(tt.startError))
+				started = tt.startError == nil
+			}
+			if triesIOOnly && tt.startError == nil {
+				calls = append(calls, daemon.EXPECT().SetReplicationHeartbeat(ctx, 30.0).Return(tt.repairError))
+			}
+			fallsBack := !triesIOOnly || (tt.startError == nil && errors.Is(tt.repairError, unimplemented))
+			if fallsBack && (started || tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped) {
 				calls = append(calls, daemon.EXPECT().StopReplication(ctx, tm.hookExtraEnv()).Return(tt.stopError))
 			}
-			if tt.stopError == nil {
+			if fallsBack && tt.stopError == nil {
 				calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(status, tt.statusError))
 			}
 			gomock.InOrder(calls...)
@@ -109,6 +139,7 @@ func TestRepairHeartbeat(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NotNil(t, resp)
+			assert.Equal(t, tt.wantRepaired, resp.repaired)
 			assert.Equal(t, tt.wantChange, resp.changeSource)
 			assert.Equal(t, tt.wantStopped, resp.stopped)
 		})
