@@ -1025,6 +1025,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}
 	}
 
+	// Track the early stop so neither outcome stops replication twice.
+	replicationStopped := false
 	changeSource := status.SourceHost != host || status.SourcePort != port
 	if !changeSource && heartbeatInterval != 0 {
 		// Refuse a heartbeat-only change without the current configuration.
@@ -1041,19 +1043,40 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Compare with the same rule VTOrc uses to detect a misconfigured
 		// heartbeat, otherwise VTOrc could request a repair that is a no-op here.
 		changeSource = !replication.HeartbeatIntervalsEqual(configuration.HeartbeatInterval, heartbeatInterval)
-		if changeSource && !status.Position.AtLeast(status.RelayLogPosition) {
-			log.Warn("Skipping heartbeat repair to avoid deleting received but unapplied transactions from the relay log",
-				slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
-				slog.String("source_host", host),
-				slog.Int("source_port", int(port)),
-			)
-			changeSource = false
+		if changeSource {
+			// Stop any thread that is not fully stopped, including an IO thread
+			// stuck in Connecting, so the relay log cannot grow under the comparison.
+			if status.IOState != replication.ReplicationStateStopped || status.SQLState != replication.ReplicationStateStopped {
+				if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+					return err
+				}
+				replicationStopped = true
+			}
+
+			// Read the stopped replica again so the IO thread cannot add transactions after the comparison.
+			stoppedStatus, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+			if err != nil {
+				return vterrors.Wrap(err, "read replication status after stop")
+			}
+
+			if stoppedStatus.IOState != replication.ReplicationStateStopped || stoppedStatus.SQLState != replication.ReplicationStateStopped {
+				return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication threads must be stopped before heartbeat repair")
+			}
+
+			if !stoppedStatus.Position.AtLeast(stoppedStatus.RelayLogPosition) {
+				log.Warn("Skipping heartbeat repair to avoid deleting received but unapplied transactions from the relay log",
+					slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+					slog.String("source_host", host),
+					slog.Int("source_port", int(port)),
+				)
+				changeSource = false
+			}
 		}
 	}
 
 	if changeSource {
 		// This handles both changing the address and starting replication.
-		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating && !replicationStopped, shouldbeReplicating); err != nil {
 			return err
 		}
 	} else if shouldbeReplicating {
@@ -1061,8 +1084,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// are taken into account. We don't attempt to recover from the known recoverable errors here
 		// because recovery requires running `STOP REPLICA` in order to reset the replication metadata.
 		// If we error the first time, we're likely to error the second time as well.
-		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			return err
+		if !replicationStopped {
+			if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+				return err
+			}
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
 			return err
