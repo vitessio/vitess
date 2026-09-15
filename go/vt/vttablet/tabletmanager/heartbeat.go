@@ -28,37 +28,27 @@ import (
 )
 
 type (
-	// heartbeatRepairRequest is a heartbeat change on a replica whose source
-	// host and port already match.
+	// heartbeatRepairRequest asks for a new heartbeat on the current source.
 	heartbeatRepairRequest struct {
-		// status is the replication status from before any thread was touched.
+		// status is from before any thread was touched.
 		status replication.ReplicationStatus
 
-		// interval is the heartbeat to set, in seconds.
+		// interval is the heartbeat in seconds.
 		interval float64
 	}
 
-	// heartbeatRepairResponse is what repairHeartbeat did and what is left for
-	// the caller.
+	// heartbeatRepairResponse is what repairHeartbeat did.
 	heartbeatRepairResponse struct {
-		// changeSource is true when the relay log is empty and the full
-		// CHANGE REPLICATION SOURCE TO is safe to run.
+		// changeSource means the relay log is empty and a full CHANGE is safe.
 		changeSource bool
 
-		// stopped is true when both threads were stopped for the check.
+		// stopped means both threads were stopped.
 		stopped bool
 	}
 )
 
-// repairHeartbeat decides whether the heartbeat can be changed with a full
-// CHANGE REPLICATION SOURCE TO. That statement deletes the relay log when both
-// threads are stopped, and under semi-sync the relay log may be the only copy
-// of acknowledged transactions. So we stop both threads, re-read the status so
-// the IO thread cannot add to the relay log under us, and only allow the
-// change when everything received has been applied. Otherwise the heartbeat
-// stays wrong until a later attempt finds the relay log empty, which is fine:
-// a wrong heartbeat only matters when the primary is quiet, and that is when
-// the applier catches up.
+// repairHeartbeat decides whether a full CHANGE can run without losing the
+// relay log. It stops both threads and allows it only on an empty relay log.
 func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *heartbeatRepairRequest) (*heartbeatRepairResponse, error) {
 	resp := &heartbeatRepairResponse{changeSource: true}
 
