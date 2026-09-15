@@ -21,7 +21,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.1
 	github.com/aws/smithy-go v1.28.1
 	github.com/bndr/gotabulate v1.1.2
-	github.com/brianvoe/gofakeit/v7 v7.15.0
+	github.com/brianvoe/gofakeit/v7 v7.16.0
 	github.com/buger/jsonparser v1.6.1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.1.3
