@@ -159,12 +159,6 @@ type FakeMysqlDaemon struct {
 	// match, SetReplicationSource will return an error.
 	SetReplicationSourceInputs []string
 
-	// SetReplicationHeartbeatInputs records heartbeat intervals in call order.
-	SetReplicationHeartbeatInputs []float64
-
-	// SetReplicationHeartbeatError is returned after each recorded heartbeat change.
-	SetReplicationHeartbeatError error
-
 	// SetReplicationSourceError is used by SetReplicationSource.
 	SetReplicationSourceError error
 
@@ -595,13 +589,9 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 	})
 }
 
-// SetReplicationHeartbeat records the call and returns the configured error.
-func (fmd *FakeMysqlDaemon) SetReplicationHeartbeat(ctx context.Context, heartbeatInterval float64) error {
-	fmd.mu.Lock()
-	defer fmd.mu.Unlock()
-
-	fmd.SetReplicationHeartbeatInputs = append(fmd.SetReplicationHeartbeatInputs, heartbeatInterval)
-	return fmd.SetReplicationHeartbeatError
+// SetReplicationHeartbeat is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetReplicationHeartbeat(context.Context, float64) error {
+	return nil
 }
 
 // SetReplicationSource is part of the MysqlDaemon interface.

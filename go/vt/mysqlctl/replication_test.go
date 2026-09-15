@@ -3488,15 +3488,6 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 	}
 }
 
-// TestFakeSetReplicationHeartbeat checks that the fake records each call and returns errors.
-func TestFakeSetReplicationHeartbeat(t *testing.T) {
-	fmd := NewFakeMysqlDaemon(nil)
-	require.NoError(t, fmd.SetReplicationHeartbeat(t.Context(), 5.4))
-	fmd.SetReplicationHeartbeatError = assert.AnError
-	require.ErrorIs(t, fmd.SetReplicationHeartbeat(t.Context(), 0), assert.AnError)
-	assert.Equal(t, []float64{5.4, 0}, fmd.SetReplicationHeartbeatInputs)
-}
-
 func TestSetReplicationSource(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
