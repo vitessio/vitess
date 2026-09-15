@@ -106,7 +106,7 @@ func TestSelfNamedCTEDoesNotBypassACL(t *testing.T) {
 
 	withAccess, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
 	require.NoError(t, err)
-	defer withAccess.Close()
+	t.Cleanup(withAccess.Close)
 
 	session := withAccess.Session(keyspaceName+"@primary", nil)
 	_, err = session.Execute(ctx, query, nil, false)
@@ -114,7 +114,7 @@ func TestSelfNamedCTEDoesNotBypassACL(t *testing.T) {
 
 	noAccess, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_no_access", "test_password")
 	require.NoError(t, err)
-	defer noAccess.Close()
+	t.Cleanup(noAccess.Close)
 
 	session = noAccess.Session(keyspaceName+"@primary", nil)
 	_, err = session.Execute(ctx, query, nil, false)

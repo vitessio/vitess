@@ -406,6 +406,21 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// MySQL refuses a CTE as the target of an UPDATE or DELETE, so a
+		// same-named CTE derives no WRITER for the shadowed table: nothing can
+		// be written through that name. The body's read still needs READER.
+		input: "with t as (select * from t) delete from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "with t as (select * from t) update t set x = 1",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		input: "with t as (select * from real1) delete from real2 using real2 join t on real2.id = t.id",
 		output: []Permission{{
 			TableName: "real2",

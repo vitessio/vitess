@@ -1125,7 +1125,7 @@ func TestQueryExecutorTableAclCTEBypass(t *testing.T) {
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	username := "u2"
 	callerID := &querypb.VTGateCallerID{Username: username}
@@ -1141,7 +1141,7 @@ func TestQueryExecutorTableAclCTEBypass(t *testing.T) {
 	require.NoError(t, tableacl.InitFromProto(config))
 
 	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
-	defer tsv.StopService()
+	t.Cleanup(tsv.StopService)
 
 	query := "with test_table as (select * from test_table) select * from test_table"
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
