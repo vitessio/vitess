@@ -215,6 +215,16 @@ func (mysqlFlavorLegacy) catchupToGTIDCommands(params *ConnParams, replPos repli
 	return cmds
 }
 
+// setReplicationHeartbeatCommand rejects legacy flavors without verified safe support.
+func (mysqlFlavorLegacy) setReplicationHeartbeatCommand(float64) (string, error) {
+	return "", errUnsupportedReplicationHeartbeat
+}
+
+// setReplicationHeartbeatCommand uses the syntax required before MySQL 8.0.26.
+func (mysqlFlavor8Legacy) setReplicationHeartbeatCommand(heartbeatInterval float64) (string, error) {
+	return fmt.Sprintf("CHANGE MASTER TO MASTER_HEARTBEAT_PERIOD = %g", heartbeatInterval), nil
+}
+
 func (mysqlFlavorLegacy) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),

@@ -201,6 +201,11 @@ func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []
 	}
 }
 
+// setReplicationHeartbeatCommand rejects MariaDB without verified safe support.
+func (mariadbFlavor) setReplicationHeartbeatCommand(float64) (string, error) {
+	return "", errUnsupportedReplicationHeartbeat
+}
+
 func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),

@@ -3456,6 +3456,38 @@ func TestSetReplicationPosition(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestSetReplicationHeartbeat checks command order and recovery after a failed change.
+func TestSetReplicationHeartbeat(t *testing.T) {
+	for _, failedQuery := range []string{"", "STOP REPLICA IO_THREAD", "CHANGE REPLICATION SOURCE TO SOURCE_HEARTBEAT_PERIOD = 5.4", "START REPLICA IO_THREAD"} {
+		t.Run(failedQuery, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.AddQuery("SELECT 1", &sqltypes.Result{})
+			queries := []string{"STOP REPLICA IO_THREAD", "CHANGE REPLICATION SOURCE TO SOURCE_HEARTBEAT_PERIOD = 5.4", "START REPLICA IO_THREAD"}
+			for _, query := range queries {
+				db.AddQuery(query, &sqltypes.Result{})
+			}
+			if failedQuery != "" {
+				db.AddRejectedQuery(failedQuery, assert.AnError)
+			}
+
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+			err := mysqld.SetReplicationHeartbeat(t.Context(), 5.4)
+			if failedQuery == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, failedQuery)
+			}
+			if failedQuery == queries[0] {
+				queries = queries[:1]
+			}
+			assert.Equal(t, "use `fakesqldb`;select 1;"+strings.ToLower(strings.Join(queries, ";")), db.QueryLog())
+		})
+	}
+}
+
 func TestSetReplicationSource(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

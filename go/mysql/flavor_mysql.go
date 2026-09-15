@@ -553,6 +553,11 @@ func (mysqlFlavor) baseShowIndexCardinalities() string {
 	return ShowIndexCardinalities
 }
 
+// setReplicationHeartbeatCommand changes no source settings other than the heartbeat.
+func (mysqlFlavor) setReplicationHeartbeatCommand(heartbeatInterval float64) (string, error) {
+	return fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HEARTBEAT_PERIOD = %g", heartbeatInterval), nil
+}
+
 func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("SOURCE_HOST = '%s'", host),

@@ -589,6 +589,11 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 	})
 }
 
+// SetReplicationHeartbeat is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetReplicationHeartbeat(context.Context, float64) error {
+	return nil
+}
+
 // SetReplicationSource is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	if fmd.SetReplicationSourceFunc != nil {
