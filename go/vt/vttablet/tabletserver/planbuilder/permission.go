@@ -31,9 +31,10 @@ type Permission struct {
 }
 
 // BuildPermissions builds the list of required permissions for all the
-// tables referenced in a query.
-func BuildPermissions(stmt sqlparser.Statement) []Permission {
-	var permissions []Permission
+// tables referenced in a query. tablesUndetermined reports a statement whose
+// tables the parser discards, so that no permission could be derived for it;
+// the executor fails closed on such a statement under strict table ACL.
+func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, tablesUndetermined bool) {
 	// All Statement types myst be covered here.
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
@@ -70,14 +71,23 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		}
 	case *sqlparser.Analyze:
 		permissions = buildTableNamePermissions(node.Table, tableacl.WRITER, nil, permissions)
-	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
-		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
+	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Load:
+		// The parser discards the tables these statements touch: DO's
+		// expressions and the tables REPAIR and OPTIMIZE name (OtherAdmin), a
+		// procedure body (CALL), and LOAD DATA's target table (a write, with
+		// vt_app holding the FILE privilege by default). No permission can be
+		// derived, so the statement is flagged and the executor denies it
+		// under strict table ACL rather than skip the check. A new statement
+		// type the parser leaves opaque belongs here, not in the arm below.
+		tablesUndetermined = true
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
+		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
 		*sqlparser.UnlockTables:
 		// no op
 	default:
 		panic(fmt.Errorf("BUG: unexpected statement type: %T", node))
 	}
-	return permissions
+	return permissions, tablesUndetermined
 }
 
 func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, permissions []Permission) []Permission {

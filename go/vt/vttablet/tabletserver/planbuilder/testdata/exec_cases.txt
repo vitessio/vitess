@@ -802,14 +802,16 @@ options:PassthroughDMLs
 "repair a"
 {
   "PlanID": "OtherAdmin",
-  "TableName": ""
+  "TableName": "",
+  "TablesUndetermined": true
 }
 
 # optimize
 "optimize a"
 {
   "PlanID": "OtherAdmin",
-  "TableName": ""
+  "TableName": "",
+  "TablesUndetermined": true
 }
 
 # syntax error
@@ -876,7 +878,8 @@ options:PassthroughDMLs
 "load data infile 'x.txt' into table a"
 {
     "PlanID":"Load",
-    "TableName":""
+    "TableName":"",
+    "TablesUndetermined":true
 }
 
 # alter view
@@ -967,7 +970,8 @@ options:PassthroughDMLs
 {
   "PlanID": "CallProcedure",
   "TableName": "",
-  "FullQuery": "call getAllTheThings()"
+  "FullQuery": "call getAllTheThings()",
+  "TablesUndetermined": true
 }
 
 # create table with function as a default value
