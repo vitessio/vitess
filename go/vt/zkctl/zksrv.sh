@@ -21,7 +21,13 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 zk_java_opts=${ZK_JAVA_OPTS:-}
+<<<<<<< HEAD
 zk_ver=${ZK_VERSION:-3.9.4}
+||||||| parent of fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
+zk_ver=${ZK_VERSION:-3.9.5}
+=======
+zk_ver=${ZK_VERSION:-3.9.6}
+>>>>>>> fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
 
 # Build classpath: use wildcard to include all JARs in the lib directory.
 # This supports both the old fatjar layout and the new binary distribution layout.

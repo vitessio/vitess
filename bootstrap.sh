@@ -171,7 +171,7 @@ install_protoc() {
 	local file="protoc-${version}-${platform}-${target}.zip"
 
 	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
+	"${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
 	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
 	verify_sha256 "$file" "$sha256"
 	unzip "$file"
@@ -186,10 +186,29 @@ install_zookeeper() {
 	local zk="zookeeper-$version"
 	local file="apache-${zk}-bin.tar.gz"
 
+<<<<<<< HEAD
 	# SHA512 checksum for Zookeeper 3.9.4 from Apache archives.
 	local sha512="36bffae6440ed0d71ed83a621b8c52c583860b414812197373237f0c148bd16e6b599977c90e5eb81c0fce6b82ef44aa782621535417cffc4c2a0a51a56f2cdf"
+||||||| parent of fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
+	# SHA512 checksum for Zookeeper 3.9.5 from Apache archives.
+	local sha512="baa1c21dda4d57238fca751e4fa2bbf1daff9a28612b125e497dccd5c188ee6449e2f79947e474c2dd4d19992789d4d36b27b1ba2feb80c2b0c45e7df0e22aa8"
+=======
+	# SHA512 checksum for Zookeeper 3.9.6 from Apache archives.
+	local sha512="e999626df06de30dc8bb53bb51da9bb786b1658406adafc6b92f104d72ca25e869f70a57c83a726f8b9558cc0fb519fc20f201aa5d6da09884bc4be5fe6dd3b0"
+>>>>>>> fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
 
+<<<<<<< HEAD
 	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+||||||| parent of fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
+	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
+	"${VTROOT}/tools/wget-retry" -q "https://dlcdn.apache.org/zookeeper/${zk}/${file}" || \
+		"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+=======
+	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
+	# Tries must be bounded: wget-retry retries a 404 forever by default and the fallback would never run.
+	"${VTROOT}/tools/wget-retry" -q -t 3 "https://dlcdn.apache.org/zookeeper/${zk}/${file}" || \
+		"${VTROOT}/tools/wget-retry" -q -t 3 "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+>>>>>>> fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
 	verify_sha512 "$dist/$file" "$sha512"
 	tar -xzf "$dist/$file"
 	mkdir -p "$dist"/lib
@@ -243,7 +262,7 @@ install_etcd() {
 	local file="etcd-${version}-${platform}-${target}.${ext}"
 
 	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q "https://github.com/etcd-io/etcd/releases/download/$version/$file"
+	"${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/etcd-io/etcd/releases/download/$version/$file"
 	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
 	verify_sha256 "$file" "$sha256"
 	if [ "$ext" = "tar.gz" ]; then
@@ -299,7 +318,7 @@ install_consul() {
 	# This is how we'd download directly from source:
 	# download_url=https://releases.hashicorp.com/consul
 	# wget "${download_url}/${version}/${file}"
-	"${VTROOT}/tools/wget-retry" -q "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	"${VTROOT}/tools/wget-retry" -q -t 3 "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
 	verify_sha256 "$file" "$sha256"
 	unzip "$file"
 	ln -snf "$dist/consul" "$VTROOT/bin/consul"
