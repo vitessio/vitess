@@ -99,7 +99,7 @@ type cteScope struct {
 	names []sqlparser.IdentifierCS
 }
 
-// buildSubqueryPermissionsInScope walks stmt and collects the permissions for
+// buildSubqueryPermissionsInScope walks node and collects the permissions for
 // every real table it references. outerCTEs are the CTE names that are already
 // in scope from an enclosing query (used when recursing into a CTE body).
 //
@@ -108,7 +108,7 @@ type cteScope struct {
 // and subqueries walked after the WITH clause itself, sees the CTE names. The
 // CTE bodies are walked separately with the narrower scope that is legal
 // inside a body.
-func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Role, outerCTEs []sqlparser.IdentifierCS, permissions []Permission) []Permission {
+func buildSubqueryPermissionsInScope(node sqlparser.SQLNode, role tableacl.Role, outerCTEs []sqlparser.IdentifierCS, permissions []Permission) []Permission {
 	var cteScopes []cteScope
 	if len(outerCTEs) > 0 {
 		cteScopes = append(cteScopes, cteScope{names: outerCTEs})
@@ -123,7 +123,7 @@ func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Rol
 			cteScopes = cteScopes[:len(cteScopes)-1]
 		}
 	}
-	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(node, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Select:
 			push(node.With)
@@ -224,6 +224,15 @@ func buildUnionWithCTEArmsPermissions(union *sqlparser.Union, role tableacl.Role
 			scope = withLeading
 		}
 		permissions = buildSubqueryPermissionsInScope(arm, role, scope, permissions)
+	}
+	// The union's own trailing clauses can hold subqueries too; walk them
+	// with the enclosing scopes.
+	permissions = buildSubqueryPermissionsInScope(union.OrderBy, role, outer, permissions)
+	if union.Limit != nil {
+		permissions = buildSubqueryPermissionsInScope(union.Limit, role, outer, permissions)
+	}
+	if union.Into != nil {
+		permissions = buildSubqueryPermissionsInScope(union.Into, role, outer, permissions)
 	}
 	return permissions
 }

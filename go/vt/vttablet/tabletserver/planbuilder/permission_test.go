@@ -346,6 +346,16 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// The union's own ORDER BY is walked too, with the enclosing scopes.
+		input: "with t as (select id from real1) select id from t union all (with s as (select 1 as id) select id from s) order by (select max(id) from real2)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		// When the arm with the WITH comes first, no arm sees the leading CTEs.
 		input: "with t as (select * from real1) (with s as (select 1 as id) select * from t) union all select * from t",
 		output: []Permission{{
