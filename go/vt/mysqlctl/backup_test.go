@@ -813,6 +813,188 @@ func TestScanLinesToLogger(t *testing.T) {
 	}
 }
 
+func TestUploadBackupLog(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "backup-log-*.txt")
+	require.NoError(t, err)
+
+	_, err = logFile.WriteString("line 1\nline 2\nline 3\n")
+	require.NoError(t, err)
+
+	var uploaded bytes.Buffer
+	bh := &FakeBackupHandle{
+		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
+			return FakeBackupHandleAddFileReturn{
+				WriteCloser: &writerAsWriteCloser{Writer: &uploaded},
+				Err:         nil,
+			}
+		},
+	}
+
+	logFile.Close()
+
+	uploadBackupLog(t.Context(), logger, logFile.Name(), bh)
+
+	require.Len(t, bh.AddFileCalls, 1)
+	assert.Equal(t, backupLogFileName, bh.AddFileCalls[0].Filename)
+	assert.Equal(t, "line 1\nline 2\nline 3\n", uploaded.String())
+}
+
+type writerAsWriteCloser struct {
+	io.Writer
+}
+
+func (w *writerAsWriteCloser) Close() error { return nil }
+
+func TestBackupWithLogToStorage(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+
+	previousValue := backupLogToStorage
+	backupLogToStorage = true
+	t.Cleanup(func() { backupLogToStorage = previousValue })
+
+	env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{
+		Res: BackupUsable,
+	}
+
+	var uploaded bytes.Buffer
+	startBackupHandle := env.backupStorage.StartBackupReturn.BackupHandle.(*FakeBackupHandle)
+	startBackupHandle.AddFileReturnF = func(filename string) FakeBackupHandleAddFileReturn {
+		if filename == backupLogFileName {
+			return FakeBackupHandleAddFileReturn{
+				WriteCloser: &writerAsWriteCloser{Writer: &uploaded},
+				Err:         nil,
+			}
+		}
+		return FakeBackupHandleAddFileReturn{
+			WriteCloser: &writerAsWriteCloser{Writer: io.Discard},
+			Err:         nil,
+		}
+	}
+
+	require.NoError(t, Backup(env.ctx, env.backupParams))
+
+	// The backup log should have been uploaded with engine-specific log content.
+	assert.Contains(t, uploaded.String(), "Using backup engine")
+}
+
+func TestUploadBackupLog_MissingFile(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	bh := &FakeBackupHandle{}
+
+	ok := uploadBackupLog(t.Context(), logger, "/nonexistent/path.log", bh)
+
+	assert.False(t, ok)
+	assert.Empty(t, bh.AddFileCalls)
+}
+
+func TestUploadBackupLog_AddFileError(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "backup-log-*.txt")
+	require.NoError(t, err)
+	_, err = logFile.WriteString("some content")
+	require.NoError(t, err)
+	logFile.Close()
+
+	bh := &FakeBackupHandle{
+		AddFileReturn: FakeBackupHandleAddFileReturn{
+			Err: errors.New("storage unavailable"),
+		},
+	}
+
+	ok := uploadBackupLog(t.Context(), logger, logFile.Name(), bh)
+
+	assert.False(t, ok)
+}
+
+func TestUploadBackupLog_CopyError(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "backup-log-*.txt")
+	require.NoError(t, err)
+	_, err = logFile.WriteString("some content")
+	require.NoError(t, err)
+	logFile.Close()
+
+	bh := &FakeBackupHandle{
+		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
+			return FakeBackupHandleAddFileReturn{
+				WriteCloser: &errWriteCloser{writeErr: errors.New("write failed")},
+			}
+		},
+	}
+
+	ok := uploadBackupLog(t.Context(), logger, logFile.Name(), bh)
+
+	assert.False(t, ok)
+}
+
+func TestUploadBackupLog_CloseError(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "backup-log-*.txt")
+	require.NoError(t, err)
+	_, err = logFile.WriteString("some content")
+	require.NoError(t, err)
+	logFile.Close()
+
+	bh := &FakeBackupHandle{
+		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
+			return FakeBackupHandleAddFileReturn{
+				WriteCloser: &errWriteCloser{closeErr: errors.New("close failed")},
+			}
+		},
+	}
+
+	ok := uploadBackupLog(t.Context(), logger, logFile.Name(), bh)
+
+	assert.False(t, ok)
+}
+
+type errWriteCloser struct {
+	writeErr error
+	closeErr error
+}
+
+func (e *errWriteCloser) Write(p []byte) (int, error) {
+	if e.writeErr != nil {
+		return 0, e.writeErr
+	}
+	return len(p), nil
+}
+
+func (e *errWriteCloser) Close() error {
+	return e.closeErr
+}
+
+func TestBackupWithLogToStorage_UnusableRetainsLog(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+
+	previousValue := backupLogToStorage
+	backupLogToStorage = true
+	t.Cleanup(func() { backupLogToStorage = previousValue })
+
+	env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{
+		Res: BackupUnusable,
+		Err: errors.New("engine failure"),
+	}
+
+	startBackupHandle := env.backupStorage.StartBackupReturn.BackupHandle.(*FakeBackupHandle)
+	startBackupHandle.AddFileReturnF = func(filename string) FakeBackupHandleAddFileReturn {
+		return FakeBackupHandleAddFileReturn{
+			WriteCloser: &writerAsWriteCloser{Writer: io.Discard},
+		}
+	}
+
+	err := Backup(env.ctx, env.backupParams)
+	require.Error(t, err)
+
+	assert.NotEmpty(t, startBackupHandle.AbortBackupCalls)
+	assert.Empty(t, startBackupHandle.EndBackupCalls)
+}
+
 func TestExecuteBackupInitSQL(t *testing.T) {
 	testCases := []struct {
 		name          string
