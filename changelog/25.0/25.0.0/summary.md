@@ -155,11 +155,9 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 #### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
 
-The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. Each message on the stream is either a log-event message (as before) or a terminal message carrying the backup's raw MANIFEST JSON and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method now returns `(manifest string, result mysqlctl.BackupResult, err error)` instead of just `error`.
+The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. Each message on the stream is either a log-event message (as before) or a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
 
-The wire protocol is backward and forward compatible: the new `BackupResponse.manifest` and `BackupResponse.status` proto fields are additive, and an older server that never sets them leaves `status` at `STATUS_UNSPECIFIED`, which callers treat as "unknown / unchanged behaviour".
-
-`mysqlctl.Backup` likewise now returns `(mysqlctl.BackupOutcome, error)` instead of a bare `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
+The wire protocol is backward and forward compatible: the new `BackupResponse.manifest`, `BackupResponse.status`, and `BackupResponse.backup_name` proto fields are additive, and an older server that never sets them leaves `status` at `STATUS_UNSPECIFIED`, which callers treat as "unknown / unchanged behaviour".
 
 The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, which lets `mysqlctl.Backup` skip reading the manifest back from storage (a `ListBackups` plus a `GET`, since the write handle returned by `StartBackup` cannot be read from). All in-tree engines do this; engines that do not simply fall back to the storage read, so out-of-tree engines keep working unchanged.
 

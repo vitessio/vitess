@@ -180,7 +180,9 @@ func TestConsumeBackupStream_Error(t *testing.T) {
 type erroringBackupStream struct{}
 
 func (e *erroringBackupStream) Recv() (*vtctldatapb.BackupResponse, error) {
-	return nil, assertErr
+	return nil, errStreamClosed
 }
 
-var assertErr = io.ErrClosedPipe
+// errStreamClosed is the error erroringBackupStream reports from Recv, standing
+// in for any transport-level failure mid-stream.
+var errStreamClosed = io.ErrClosedPipe

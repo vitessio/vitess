@@ -123,8 +123,6 @@ func TestBackupEmitsStats(t *testing.T) {
 	require.Empty(t, env.stats.ScopeV)
 }
 
-// TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
-// backupstorage.Params to backupstorage, but only if it responds to
 // TestBackupReturnsManifestAndResult covers the values Backup returns to its
 // callers: the raw MANIFEST read back from storage for a usable backup, the
 // BackupEmpty classification for a no-op incremental, and the fact that a
@@ -209,6 +207,8 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 	})
 }
 
+// TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
+// backupstorage.Params to backupstorage, but only if it responds to
 // backupstorage.WithParams.
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)

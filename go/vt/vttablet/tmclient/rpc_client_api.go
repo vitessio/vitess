@@ -63,10 +63,13 @@ func init() {
 }
 
 // BackupStream is the stream of messages returned by a Backup RPC. Each message
-// is either a log-event message (Event set) emitted during the backup, or the
-// terminal message (Event nil) carrying the backup's raw MANIFEST JSON and its
-// outcome Status. It is used instead of logutil.EventStream so the manifest and
-// status can be surfaced to callers.
+// is either a log-event message emitted during the backup, or the terminal
+// message carrying the backup's raw MANIFEST JSON, its name, and its outcome
+// Status. The terminal message also carries its own completion Event (never
+// nil) so that peers predating these fields, which read only Event, still get
+// a well-formed log line instead of dereferencing a nil one. It is used
+// instead of logutil.EventStream so the manifest and status can be surfaced to
+// callers.
 type BackupStream interface {
 	Recv() (*tabletmanagerdatapb.BackupResponse, error)
 }

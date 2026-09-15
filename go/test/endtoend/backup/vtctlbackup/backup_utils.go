@@ -1500,7 +1500,10 @@ type backupJSONOutput struct {
 // printed last, by json.MarshalIndent with a two space indent, so we decode starting at
 // the opening brace of its first field.
 func parseBackupJSONOutput(t *testing.T, output string) *backupJSONOutput {
-	idx := strings.Index(output, "{\n  \"status\"")
+	// output is combined stdout+stderr (ExecuteCommandWithOutput), and log events
+	// are free-text -- use LastIndex so a coincidental log line containing this
+	// marker can't be mistaken for the JSON object, which is always printed last.
+	idx := strings.LastIndex(output, "{\n  \"status\"")
 	require.GreaterOrEqualf(t, idx, 0, "no backup JSON object in output: %v", output)
 
 	result := &backupJSONOutput{}
