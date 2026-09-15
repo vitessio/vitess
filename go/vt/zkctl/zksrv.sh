@@ -21,8 +21,22 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 zk_java_opts=${ZK_JAVA_OPTS:-}
+<<<<<<< HEAD
 zk_ver=${ZK_VERSION:-3.8.0}
 classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/zookeeper-$zk_ver-fatjar.jar:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
+||||||| parent of fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
+zk_ver=${ZK_VERSION:-3.9.5}
+
+# Build classpath: use wildcard to include all JARs in the lib directory.
+# This supports both the old fatjar layout and the new binary distribution layout.
+classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/*:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
+=======
+zk_ver=${ZK_VERSION:-3.9.6}
+
+# Build classpath: use wildcard to include all JARs in the lib directory.
+# This supports both the old fatjar layout and the new binary distribution layout.
+classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/*:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
+>>>>>>> fc22202c49 (ci: bump Apache ZooKeeper to 3.9.6 and bound download retries (#21099))
 
 mkdir -p "$logdir"
 touch "$logdir/zksrv.log"
