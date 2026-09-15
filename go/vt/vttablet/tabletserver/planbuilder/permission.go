@@ -134,7 +134,10 @@ func buildSubqueryPermissionsInScope(node sqlparser.SQLNode, role tableacl.Role,
 		case *sqlparser.Update:
 			push(node.With)
 		case *sqlparser.Union:
-			permissions = buildUnionPermissions(node, role, visibleCTEs(cteScopes), permissions)
+			permissions, _ = buildUnionPermissions(node, role, visibleCTEs(cteScopes), permissions)
+			return false
+		case *sqlparser.Insert:
+			permissions = buildInsertPermissions(node, role, visibleCTEs(cteScopes), permissions)
 			return false
 		case *sqlparser.ValuesStatement:
 			push(node.With)
@@ -201,34 +204,81 @@ func buildCTEBodiesPermissions(with *sqlparser.With, role tableacl.Role, outer [
 }
 
 // buildUnionPermissions walks a union the way MySQL resolves CTE names in
-// it, which the generated walker cannot express:
+// it, which the generated walker cannot express, and returns the CTE names in
+// scope after its last arm:
 //
 //   - The arms see the enclosing scopes and the union's leading CTEs, until
-//     the first parenthesized arm that declares a WITH of its own; from that
-//     arm onward the leading CTEs are not resolved and a reference to one of
-//     their names is the real table.
-//   - A parenthesized union arm's own ORDER BY, LIMIT and INTO see no CTE at
-//     all, from no enclosing block.
-//   - The union's own ORDER BY, LIMIT and INTO see what the last arm saw.
+//     the first parenthesized arm that declares a WITH of its own. From that
+//     arm onward the WITH's names replace the leading CTEs, for the later
+//     arms and for the union's own ORDER BY, LIMIT and INTO; a later arm
+//     with its own WITH replaces them again.
+//   - A nested union without a WITH is transparent: its arms continue the
+//     chain, and its own ORDER BY, LIMIT and INTO see what its last arm saw.
+//   - A parenthesized nested union with a WITH is one arm, and leaves behind
+//     whatever its own chain ended with.
 //
 // Observed on MySQL 8.0, 8.4 and 9.
-func buildUnionPermissions(union *sqlparser.Union, role tableacl.Role, outer []sqlparser.IdentifierCS, permissions []Permission) []Permission {
+func buildUnionPermissions(union *sqlparser.Union, role tableacl.Role, outer []sqlparser.IdentifierCS, permissions []Permission) ([]Permission, []sqlparser.IdentifierCS) {
 	if union.With != nil {
 		permissions = buildCTEBodiesPermissions(union.With, role, outer, permissions)
 	}
-	withLeading := append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(union.With)...)
-	arms, nested := unionArms(union)
-	scope := withLeading
-	for _, arm := range arms {
-		if statementDeclaresCTEs(arm) {
-			scope = outer
+	scope := append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(union.With)...)
+	permissions, scope = buildUnionArmsPermissions(union, role, outer, scope, permissions)
+	return buildUnionTrailingPermissions(union, role, scope, permissions), scope
+}
+
+// buildUnionArmsPermissions walks the arms of a union chain left to right,
+// starting from scope, and returns the scope in effect after the last arm.
+func buildUnionArmsPermissions(union *sqlparser.Union, role tableacl.Role, outer, scope []sqlparser.IdentifierCS, permissions []Permission) ([]Permission, []sqlparser.IdentifierCS) {
+	for _, arm := range []sqlparser.TableStatement{union.Left, union.Right} {
+		switch arm := arm.(type) {
+		case *sqlparser.Union:
+			if arm.With == nil {
+				permissions, scope = buildUnionArmsPermissions(arm, role, outer, scope, permissions)
+				permissions = buildUnionTrailingPermissions(arm, role, scope, permissions)
+				continue
+			}
+			permissions, scope = buildUnionPermissions(arm, role, outer, permissions)
+		case *sqlparser.Select:
+			if arm.With == nil {
+				permissions = buildSubqueryPermissionsInScope(arm, role, scope, permissions)
+				continue
+			}
+			// The arm resolves its own WITH itself.
+			permissions = buildSubqueryPermissionsInScope(arm, role, outer, permissions)
+			scope = append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(arm.With)...)
+		case *sqlparser.ValuesStatement:
+			if arm.With == nil {
+				permissions = buildSubqueryPermissionsInScope(arm, role, scope, permissions)
+				continue
+			}
+			permissions = buildSubqueryPermissionsInScope(arm, role, outer, permissions)
+			scope = append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(arm.With)...)
+		default:
+			permissions = buildSubqueryPermissionsInScope(arm, role, scope, permissions)
 		}
-		permissions = buildSubqueryPermissionsInScope(arm, role, scope, permissions)
 	}
-	for _, u := range nested {
-		permissions = buildUnionTrailingPermissions(u, role, nil, permissions)
+	return permissions, scope
+}
+
+// buildInsertPermissions walks an INSERT's rows, then its ON DUPLICATE KEY
+// UPDATE clause with the CTE names the rows' last arm saw: a SELECT's own
+// WITH, or what a union chain ended with.
+func buildInsertPermissions(ins *sqlparser.Insert, role tableacl.Role, outer []sqlparser.IdentifierCS, permissions []Permission) []Permission {
+	scope := outer
+	switch rows := ins.Rows.(type) {
+	case *sqlparser.Union:
+		permissions, scope = buildUnionPermissions(rows, role, outer, permissions)
+	case *sqlparser.Select:
+		permissions = buildSubqueryPermissionsInScope(rows, role, outer, permissions)
+		scope = append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(rows.With)...)
+	case *sqlparser.ValuesStatement:
+		permissions = buildSubqueryPermissionsInScope(rows, role, outer, permissions)
+		scope = append(append([]sqlparser.IdentifierCS(nil), outer...), gatherCTEs(rows.With)...)
+	default:
+		permissions = buildSubqueryPermissionsInScope(rows, role, outer, permissions)
 	}
-	return buildUnionTrailingPermissions(union, role, scope, permissions)
+	return buildSubqueryPermissionsInScope(ins.OnDup, role, scope, permissions)
 }
 
 // buildUnionTrailingPermissions walks a union's ORDER BY, LIMIT and INTO.
@@ -241,36 +291,6 @@ func buildUnionTrailingPermissions(union *sqlparser.Union, role tableacl.Role, s
 		permissions = buildSubqueryPermissionsInScope(union.Into, role, scope, permissions)
 	}
 	return permissions
-}
-
-// unionArms lists the statements joined by UNION in a chain, left to right,
-// looking through nested unions that carry no WITH clause of their own, and
-// returns those nested unions as well so their trailing clauses can be walked.
-// A nested union with a WITH clause is a parenthesized arm and stays one arm.
-func unionArms(union *sqlparser.Union) (arms []sqlparser.TableStatement, nested []*sqlparser.Union) {
-	for _, arm := range []sqlparser.TableStatement{union.Left, union.Right} {
-		if u, ok := arm.(*sqlparser.Union); ok && u.With == nil {
-			innerArms, innerNested := unionArms(u)
-			arms = append(arms, innerArms...)
-			nested = append(append(nested, u), innerNested...)
-			continue
-		}
-		arms = append(arms, arm)
-	}
-	return arms, nested
-}
-
-// statementDeclaresCTEs reports whether a union arm carries a WITH clause.
-func statementDeclaresCTEs(stmt sqlparser.TableStatement) bool {
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		return stmt.With != nil
-	case *sqlparser.ValuesStatement:
-		return stmt.With != nil
-	case *sqlparser.Union:
-		return stmt.With != nil
-	}
-	return false
 }
 
 // gatherCTEs gathers the CTEs from the WITH clause, nil when there is none.

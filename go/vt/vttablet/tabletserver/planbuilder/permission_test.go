@@ -220,12 +220,10 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// A parenthesized arm's WITH stays visible to the arms after it.
 		input: "(with t1 as (select count(*) as a from user) select a from t1) union  select * from t1",
 		output: []Permission{{
 			TableName: "user",
-			Role:      tableacl.READER,
-		}, {
-			TableName: "t1",
 			Role:      tableacl.READER,
 		}},
 	}, {
@@ -356,9 +354,8 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
-		// The ORDER BY of a parenthesized union arm sees no CTE at all, not
-		// even the enclosing union's leading one, so a subquery there reads
-		// the real table and requires its permission.
+		// The ORDER BY of a parenthesized union arm sees the CTEs its last
+		// arm saw, here the leading one.
 		input: "with t as (select id from real1) select id from t union all (select id from real2 union all select id from real2 order by (select max(id) from t))",
 		output: []Permission{{
 			TableName: "real1",
@@ -368,6 +365,79 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}, {
 			TableName: "real2",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// From an arm with its own WITH onward, that WITH's names replace the
+		// leading CTEs for the later arms and the union's own ORDER BY.
+		input: "select id from real1 union all (with c as (select id from secret) select id from c) union all select id from c order by (select max(id) from c)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A later arm with its own WITH replaces them again.
+		input: "select id from real1 union all (with c as (select id from secret) select id from c) union all (with d as (select id from real2) select id from d) union all select id from c",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "c",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A parenthesized nested union with its own WITH leaves behind
+		// whatever its chain ended with.
+		input: "(with c as (select id from secret) select id from c union all (with d as (select id from real2) select id from d)) union all select id from d union all select id from c",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "c",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A nested union without a WITH is transparent: an arm with its own
+		// WITH inside it replaces the leading CTEs for the arms after it.
+		input: "with c as (select id from real1) select id from c union all ((with e as (select id from real2) select id from e) union all select id from c)",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "real2",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "c",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// ON DUPLICATE KEY UPDATE sees the CTEs the inserted rows' last arm
+		// saw: the SELECT's own WITH here, and the WITH arm's names once an
+		// arm declares one.
+		input: "insert into tgt(id, x) with t as (select 1 as id) select id, id from t on duplicate key update x = (select max(id) from t)",
+		output: []Permission{{
+			TableName: "tgt",
+			Role:      tableacl.WRITER,
+		}},
+	}, {
+		input: "insert into tgt(id, x) with t as (select id from real1) select 1, id from t union all (with s as (select 1 as id) select 1, id from s) on duplicate key update x = (select max(x) from t)",
+		output: []Permission{{
+			TableName: "tgt",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "real1",
 			Role:      tableacl.READER,
 		}, {
 			TableName: "t",
