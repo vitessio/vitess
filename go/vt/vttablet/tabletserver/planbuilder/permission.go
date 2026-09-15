@@ -24,12 +24,22 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 )
 
-// Permission associates the required access permission
-// for each table.
-type Permission struct {
-	TableName string
-	Role      tableacl.Role
-}
+type (
+	// Permission associates the required access permission
+	// for each table.
+	Permission struct {
+		TableName string
+		Role      tableacl.Role
+	}
+
+	// cteScope is the set of CTE names one query block brings into scope.
+	// with is the clause that declared them, or nil for names inherited from
+	// an enclosing query.
+	cteScope struct {
+		with  *sqlparser.With
+		names []sqlparser.IdentifierCS
+	}
+)
 
 // BuildPermissions builds the list of required permissions for all the
 // tables referenced in a query.
@@ -89,14 +99,6 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 
 func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, permissions []Permission) []Permission {
 	return buildSubqueryPermissionsInScope(stmt, role, nil, permissions)
-}
-
-// cteScope is the set of CTE names one query block brings into scope. with is
-// the clause that declared them, or nil for names inherited from an enclosing
-// query.
-type cteScope struct {
-	with  *sqlparser.With
-	names []sqlparser.IdentifierCS
 }
 
 // buildSubqueryPermissionsInScope walks node and collects the permissions for
