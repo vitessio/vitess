@@ -75,7 +75,7 @@ jobs:
       - name: Build bootstrap images
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 20
-        uses: ./.github/actions/build-bootstrap
+        uses: $/.github/actions/build-bootstrap
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
@@ -83,12 +83,12 @@ jobs:
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Run docker tests - ${{ matrix.shard }}
         if: steps.changes.outputs.end_to_end == 'true'

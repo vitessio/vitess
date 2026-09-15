@@ -68,16 +68,16 @@ jobs:
     - name: Build bootstrap images
       if: steps.changes.outputs.examples == 'true'
       timeout-minutes: 15
-      uses: ./.github/actions/build-bootstrap
+      uses: $/.github/actions/build-bootstrap
 
     - name: Set up Go
       if: steps.changes.outputs.examples == 'true'
-      uses: ./.github/actions/setup-go
+      uses: $/.github/actions/setup-go
 
     - name: Tune the OS
       if: steps.changes.outputs.examples == 'true'
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Get dependencies
       if: steps.changes.outputs.examples == 'true'

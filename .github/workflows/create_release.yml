@@ -36,7 +36,7 @@ jobs:
 
     - name: Tune the OS
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Get dependencies
       timeout-minutes: 5

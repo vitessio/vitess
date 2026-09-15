@@ -134,7 +134,7 @@ jobs:
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Set up python
         if: steps.changes.outputs.end_to_end == 'true'
@@ -143,19 +143,19 @@ jobs:
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
         if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
         timeout-minutes: 8
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
       - name: Setup Percona Apt repository
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
         timeout-minutes: 5
-        uses: ./.github/actions/setup-percona-repo
+        uses: $/.github/actions/setup-percona-repo
 
       - name: Setup Percona Server and XtraBackup
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
@@ -187,7 +187,7 @@ jobs:
       - name: Install MicroCeph
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
         timeout-minutes: 10
-        uses: ./.github/actions/setup-microceph
+        uses: $/.github/actions/setup-microceph
 
       # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".

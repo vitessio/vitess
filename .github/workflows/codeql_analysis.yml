@@ -37,11 +37,11 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Tune the OS
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -58,7 +58,7 @@ jobs:
 
       - name: Setup MySQL
         timeout-minutes: 8
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 

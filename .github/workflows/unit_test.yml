@@ -121,7 +121,7 @@ jobs:
 
       - name: Set up Go
         if: steps.changes.outputs.unit_tests == 'true'
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Set up python
         if: steps.changes.outputs.unit_tests == 'true'
@@ -138,12 +138,12 @@ jobs:
       - name: Tune the OS
         if: steps.changes.outputs.unit_tests == 'true'
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
         if: steps.changes.outputs.unit_tests == 'true'
         timeout-minutes: 8
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: ${{ matrix.flavor }}
 

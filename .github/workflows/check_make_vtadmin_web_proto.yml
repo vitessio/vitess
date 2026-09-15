@@ -34,7 +34,7 @@ jobs:
 
     - name: Tune the OS
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -57,7 +57,7 @@ jobs:
             - 'web/vtadmin/package-lock.json'
 
     - name: Set up Go
-      uses: ./.github/actions/setup-go
+      uses: $/.github/actions/setup-go
       if: steps.changes.outputs.proto_changes == 'true'
 
     - name: Setup Node
