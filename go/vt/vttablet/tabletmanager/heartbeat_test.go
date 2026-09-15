@@ -17,139 +17,100 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/mysqlctl/mock"
 )
 
-type (
-	// stoppedStatusDaemon changes status after a stop to test the heartbeat decision.
-	stoppedStatusDaemon struct {
-		// FakeMysqlDaemon checks the exact replication statement sequence.
-		*mysqlctl.FakeMysqlDaemon
-		// t reports status reads made before replication stops.
-		t *testing.T
-		// reads counts status snapshots.
-		reads int
-		// executed is the executed set returned after the stop.
-		executed replication.Position
-		// received is the received set returned after the stop.
-		received replication.Position
-		// statusError fails the status read after the stop.
-		statusError error
-		// connecting keeps an unhealthy IO thread active without a planned stop.
-		connecting bool
-	}
-)
-
-// ReplicationStatus returns an IO-only first snapshot and changed sets after the stop.
-func (d *stoppedStatusDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
-	d.reads++
-	status, err := d.FakeMysqlDaemon.ReplicationStatus(ctx)
-	if d.reads == 1 {
-		status.IOState = replication.ReplicationStateRunning
-		status.SQLState = replication.ReplicationStateStopped
-		if d.connecting {
-			status.IOState = replication.ReplicationStateConnecting
-			status.LastIOError = "connection refused"
-		}
-		return status, err
-	}
-
-	assert.False(d.t, d.Replicating, "status must be read after STOP REPLICA")
-	status.Position = d.executed
-	status.RelayLogPosition = d.received
-	return status, d.statusError
-}
-
-func TestSetReplicationSourceHeartbeatStoppedStatus(t *testing.T) {
+// TestRepairHeartbeat checks call order and the relay-log safety decision.
+func TestRepairHeartbeat(t *testing.T) {
 	for _, tt := range []struct {
-		name        string
-		before      string
-		executed    string
-		received    string
-		change      bool
-		stopError   bool
-		statusError bool
-		connecting  bool
+		name         string
+		before       string
+		executed     string
+		received     string
+		ioState      replication.ReplicationState
+		sqlState     replication.ReplicationState
+		afterIO      replication.ReplicationState
+		afterSQL     replication.ReplicationState
+		applierError string
+		stopError    error
+		statusError  error
+		wantError    string
+		wantChange   bool
+		wantStopped  bool
 	}{
-		{name: "received_after_first_read", before: "1-10", executed: "1-10", received: "1-11"},
-		{name: "applied_before_stop", before: "1-9", executed: "1-10", received: "1-10", change: true},
-		{name: "stop_error", before: "1-10", stopError: true},
-		{name: "status_error", before: "1-10", statusError: true},
-		{name: "io_reconnecting", before: "1-10", executed: "1-10", received: "1-10", change: true, connecting: true},
+		{name: "drained_relay_log", before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "applied_superset", before: "1-9", executed: "1-11", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "unapplied_relay_log", before: "1-10", executed: "1-10", received: "1-11", ioState: replication.ReplicationStateRunning, wantStopped: true},
+		{name: "already_stopped", before: "1-10", executed: "1-10", received: "1-10", wantChange: true},
+		{name: "unapplied_already_stopped", before: "1-9", executed: "1-9", received: "1-10"},
+		{name: "applier_error", before: "1-9", executed: "1-9", received: "1-10", ioState: replication.ReplicationStateRunning, applierError: "applier failed", wantStopped: true},
+		{name: "io_connecting", before: "1-10", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateConnecting, wantChange: true, wantStopped: true},
+		{name: "sql_running", before: "1-10", executed: "1-10", received: "1-10", sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "stop_failure", before: "1-10", ioState: replication.ReplicationStateRunning, stopError: errors.New("stop unavailable"), wantError: "stop unavailable"},
+		{name: "status_read_failure", before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
+		{name: "io_still_running", before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
+		{name: "sql_still_running", before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			for _, state := range []*replication.ReplicationState{&tt.ioState, &tt.sqlState, &tt.afterIO, &tt.afterSQL} {
+				if *state == replication.ReplicationStateUnknown {
+					*state = replication.ReplicationStateStopped
+				}
+			}
+
 			ctx := t.Context()
-			ts := memorytopo.NewServer(ctx, "cell1")
-			t.Cleanup(ts.Close)
-			_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+			daemon := mock.NewMockMysqlDaemon(gomock.NewController(t))
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+			req := &repairHeartbeatRequest{
+				status: replication.ReplicationStatus{
+					IOState:          tt.ioState,
+					SQLState:         tt.sqlState,
+					Position:         replication.MustParsePosition("MySQL56", serverUUID+":"+tt.before),
+					RelayLogPosition: replication.MustParsePosition("MySQL56", serverUUID+":1-10"),
+					LastSQLError:     tt.applierError,
+					SourceHost:       "mysql-primary",
+					SourcePort:       3306,
+				},
+				interval: 30,
+			}
+			status := replication.ReplicationStatus{
+				IOState:      tt.afterIO,
+				SQLState:     tt.afterSQL,
+				LastSQLError: tt.applierError,
+			}
+			if tt.executed != "" {
+				status.Position = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.executed)
+				status.RelayLogPosition = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.received)
+			}
+
+			var calls []any
+			if tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped {
+				calls = append(calls, daemon.EXPECT().StopReplication(ctx, tm.hookExtraEnv()).Return(tt.stopError))
+			}
+			if tt.stopError == nil {
+				calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(status, tt.statusError))
+			}
+			gomock.InOrder(calls...)
+
+			resp, err := tm.repairHeartbeat(ctx, req)
+			if tt.wantError != "" {
+				require.ErrorContains(t, err, tt.wantError)
+				assert.Nil(t, resp)
+				return
+			}
+
 			require.NoError(t, err)
-
-			parent := newTestTablet(t, 200, "ks", "0", nil)
-			parent.Type = topodatapb.TabletType_PRIMARY
-			parent.MysqlHostname = "mysql-primary"
-			parent.MysqlPort = 3306
-			require.NoError(t, ts.CreateTablet(ctx, parent))
-
-			daemon := &stoppedStatusDaemon{FakeMysqlDaemon: newTestMysqlDaemon(t, 1), t: t, connecting: tt.connecting}
-			daemon.CurrentSourceHost = parent.MysqlHostname
-			daemon.CurrentSourcePort = parent.MysqlPort
-			daemon.Replicating = true
-			daemon.CurrentPrimaryPosition = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.before)
-			daemon.CurrentRelayLogPosition = replication.MustParsePosition("MySQL56", serverUUID+":1-10")
-			daemon.ReplicationConfigurationResult = &replicationdatapb.Configuration{HeartbeatInterval: 15}
-			daemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
-			daemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
-			switch {
-			case tt.stopError:
-				daemon.StopReplicationError = errors.New("stop unavailable")
-				daemon.ExpectedExecuteSuperQueryList = nil
-			case tt.statusError:
-				daemon.statusError = errors.New("status unavailable")
-			default:
-				daemon.executed = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.executed)
-				daemon.received = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.received)
-				if tt.change {
-					daemon.ExpectedExecuteSuperQueryList = append(daemon.ExpectedExecuteSuperQueryList, "FAKE SET SOURCE")
-				}
-				// A replica that was only reconnecting was not replicating, so nothing restarts it.
-				if !tt.connecting {
-					daemon.ExpectedExecuteSuperQueryList = append(daemon.ExpectedExecuteSuperQueryList, "START REPLICA")
-				}
-			}
-
-			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, ts)
-			tm.tmc = newFakeTMClient()
-			err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", false, false, 30)
-			switch {
-			case tt.connecting:
-				require.NoError(t, err)
-				assert.False(t, daemon.Replicating)
-				assert.Equal(t, 2, daemon.reads)
-			case tt.stopError:
-				require.ErrorContains(t, err, "stop unavailable")
-				assert.Equal(t, 1, daemon.reads)
-			case tt.statusError:
-				require.ErrorContains(t, err, "status unavailable")
-				assert.False(t, daemon.Replicating)
-				assert.Equal(t, 2, daemon.reads)
-			default:
-				require.NoError(t, err)
-				assert.True(t, daemon.Replicating)
-				assert.Equal(t, 2, daemon.reads)
-			}
-			assert.NoError(t, daemon.CheckSuperQueryList())
+			require.NotNil(t, resp)
+			assert.Equal(t, tt.wantChange, resp.changeSource)
+			assert.Equal(t, tt.wantStopped, resp.stopped)
 		})
 	}
 }

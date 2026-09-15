@@ -1025,7 +1025,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}
 	}
 
-	resp := &heartbeatRepairResponse{}
+	resp := &repairHeartbeatResponse{}
 	changeSource := status.SourceHost != host || status.SourcePort != port
 	if !changeSource && heartbeatInterval != 0 {
 		// Refuse a heartbeat-only change without the current heartbeat.
@@ -1039,7 +1039,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// heartbeat, otherwise VTOrc could request a repair that is a no-op here.
 		changeSource = !replication.HeartbeatIntervalsEqual(configured, heartbeatInterval)
 		if changeSource {
-			resp, err = tm.repairHeartbeat(ctx, &heartbeatRepairRequest{
+			resp, err = tm.repairHeartbeat(ctx, &repairHeartbeatRequest{
 				status:   status,
 				interval: heartbeatInterval,
 			})
