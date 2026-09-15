@@ -91,6 +91,11 @@ type MysqlDaemon interface {
 	SetSuperReadOnly(ctx context.Context, on bool, opts ...SetSuperReadOnlyOption) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos replication.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
+
+	// SetReplicationHeartbeat changes the default channel heartbeat interval in seconds.
+	// The caller must keep the applier running to preserve relay logs. Only the IO thread is restarted.
+	SetReplicationHeartbeat(ctx context.Context, heartbeatInterval float64) error
+
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitSourcePos(context.Context, replication.Position) error

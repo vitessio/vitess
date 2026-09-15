@@ -33,6 +33,9 @@ import (
 )
 
 var (
+	// errUnsupportedReplicationHeartbeat rejects flavors without a safe heartbeat-only command.
+	errUnsupportedReplicationHeartbeat = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "heartbeat-only replication changes are not supported by this flavor")
+
 	// ErrNotReplica means there is no replication status.
 	// Returned by ShowReplicationStatus().
 	ErrNotReplica = sqlerror.NewSQLError(sqlerror.ERNotReplica, sqlerror.SSUnknownSQLState, "no replication status")
@@ -144,6 +147,9 @@ type flavor interface {
 	// setReplicationSourceCommand returns the command to use the provided host/port
 	// as the new replication source (without changing any GTID position).
 	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
+
+	// setReplicationHeartbeatCommand changes only the heartbeat interval in seconds.
+	setReplicationHeartbeatCommand(heartbeatInterval float64) (string, error)
 
 	// resetBinaryLogsCommand returns the command to reset the binary logs.
 	resetBinaryLogsCommand() string
@@ -420,6 +426,13 @@ func (c *Conn) ResetReplicationParametersCommands() []string {
 // when it is later reparented with SetReplicationSourceCommand.
 func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string {
 	return c.flavor.setReplicationPositionCommands(pos)
+}
+
+// SetReplicationHeartbeatCommand returns a heartbeat-only command for the default channel.
+// The caller must stop only the IO thread and keep the SQL thread running to preserve relay logs.
+// The interval is in seconds. Zero disables heartbeats.
+func (c *Conn) SetReplicationHeartbeatCommand(heartbeatInterval float64) (string, error) {
+	return c.flavor.setReplicationHeartbeatCommand(heartbeatInterval)
 }
 
 // SetReplicationSourceCommand returns the command to use the provided host/port

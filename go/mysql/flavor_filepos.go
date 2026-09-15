@@ -245,6 +245,11 @@ func (flv *filePosFlavor) setReplicationPositionCommands(pos replication.Positio
 	}
 }
 
+// setReplicationHeartbeatCommand rejects FilePos because it has no thread-control commands.
+func (*filePosFlavor) setReplicationHeartbeatCommand(float64) (string, error) {
+	return "", errUnsupportedReplicationHeartbeat
+}
+
 // setReplicationSourceCommand is part of the Flavor interface.
 func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	return UnsupportedCommand

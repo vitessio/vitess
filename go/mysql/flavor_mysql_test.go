@@ -20,9 +20,54 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
 )
+
+// TestSetReplicationHeartbeatCommand checks heartbeat-only SQL and unsupported flavors.
+func TestSetReplicationHeartbeatCommand(t *testing.T) {
+	for name, flv := range map[string]flavor{
+		"mysql8":       mysqlFlavor8{},
+		"mysql82":      mysqlFlavor82{},
+		"mysql9":       mysqlFlavor9{},
+		"mysql8Legacy": mysqlFlavor8Legacy{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn := &Conn{flavor: flv}
+			for _, interval := range []float64{0, 5.4} {
+				command, err := conn.SetReplicationHeartbeatCommand(interval)
+				require.NoError(t, err)
+				prefix, option := "CHANGE REPLICATION SOURCE TO", "SOURCE_HEARTBEAT_PERIOD"
+				stop, start := "STOP REPLICA IO_THREAD", "START REPLICA IO_THREAD"
+				if name == "mysql8Legacy" {
+					prefix, option = "CHANGE MASTER TO", "MASTER_HEARTBEAT_PERIOD"
+					stop, start = "STOP SLAVE IO_THREAD", "START SLAVE IO_THREAD"
+				}
+				value := "0"
+				if interval != 0 {
+					value = "5.4"
+				}
+				assert.Equal(t, []string{stop, prefix + " " + option + " = " + value, start}, []string{conn.StopIOThreadCommand(), command, conn.StartIOThreadCommand()})
+			}
+		})
+	}
+
+	for name, flv := range map[string]flavor{
+		"mysql57":          mysqlFlavor57{},
+		"mariadb101":       mariadbFlavor101{},
+		"mariadb102":       mariadbFlavor102{},
+		"filepos":          &filePosFlavor{},
+		"groupReplication": &mysqlGRFlavor{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn := &Conn{flavor: flv}
+			command, err := conn.SetReplicationHeartbeatCommand(5.4)
+			require.ErrorContains(t, err, "heartbeat-only replication changes are not supported")
+			assert.Empty(t, command)
+		})
+	}
+}
 
 func TestMysql8SetReplicationSourceCommand(t *testing.T) {
 	params := &ConnParams{

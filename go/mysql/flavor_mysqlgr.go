@@ -41,6 +41,11 @@ type mysqlGRFlavor struct {
 	mysqlFlavor
 }
 
+// setReplicationHeartbeatCommand rejects changes to channels managed by Group Replication.
+func (*mysqlGRFlavor) setReplicationHeartbeatCommand(float64) (string, error) {
+	return "", errUnsupportedReplicationHeartbeat
+}
+
 // newMysqlGRFlavor creates a new mysqlGR flavor.
 func newMysqlGRFlavor(serverVersion string) flavor {
 	return &mysqlGRFlavor{mysqlFlavor{serverVersion: serverVersion}}

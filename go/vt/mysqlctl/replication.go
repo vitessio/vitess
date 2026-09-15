@@ -1096,6 +1096,38 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
+// SetReplicationHeartbeat changes only the default channel heartbeat interval in seconds.
+// The caller must keep the applier running to preserve relay logs. Only the IO thread is restarted.
+// If the change fails, it attempts to restart the IO thread before returning the error.
+func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInterval float64) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	command, err := conn.Conn.SetReplicationHeartbeatCommand(heartbeatInterval)
+	if err != nil {
+		return err
+	}
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
+		return err
+	}
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{command}); err != nil {
+		log.Warn("Heartbeat change failed. Restarting the IO thread", slog.Float64("heartbeat_interval", heartbeatInterval), slog.Any("error", err))
+		restartCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+
+		if restartErr := mysqld.executeSuperQueryListConn(restartCtx, conn, []string{conn.Conn.StartIOThreadCommand()}); restartErr != nil {
+			return vterrors.Wrapf(err, "heartbeat change failed and the IO thread did not restart: %v", restartErr)
+		}
+		return err
+	}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartIOThreadCommand()})
+}
+
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
