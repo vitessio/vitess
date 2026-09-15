@@ -982,6 +982,7 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		noForce           bool
 		change            bool
 		wantError         string
+		executed          string
 	}{
 		{
 			name:      "equal",
@@ -1000,6 +1001,33 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 			name:      "different",
 			heartbeat: 30, readConfiguration: true, change: true,
 			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+		},
+		// Received transactions 1-10 stay in the relay log while the applier is behind,
+		// so a heartbeat change must not purge them. Host and port changes still may.
+		{
+			name:      "heartbeat_unapplied",
+			heartbeat: 30, readConfiguration: true, executed: "1-9",
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "heartbeat_applied_equal",
+			heartbeat: 30, readConfiguration: true, change: true, executed: "1-10",
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "heartbeat_applied_superset",
+			heartbeat: 30, readConfiguration: true, change: true, executed: "1-11",
+			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+		},
+		{
+			name:      "host_changed_unapplied",
+			host:      "old-primary",
+			heartbeat: 30, change: true, executed: "1-9",
+		},
+		{
+			name:      "port_changed_unapplied",
+			port:      3307,
+			heartbeat: 30, change: true, executed: "1-9",
 		},
 		{
 			name:      "rounded_equal_below",
@@ -1072,6 +1100,10 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 				SourcePort: cmp.Or(tt.port, 3306),
 				IOState:    replication.ReplicationStateStopped,
 				SQLState:   replication.ReplicationStateStopped,
+			}
+			if tt.executed != "" {
+				status.Position = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.executed)
+				status.RelayLogPosition = replication.MustParsePosition("MySQL56", serverUUID+":1-10")
 			}
 
 			daemon := mock.NewMockMysqlDaemon(gomock.NewController(t))

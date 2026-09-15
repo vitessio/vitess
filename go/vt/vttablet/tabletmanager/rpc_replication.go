@@ -1041,6 +1041,14 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Compare with the same rule VTOrc uses to detect a misconfigured
 		// heartbeat, otherwise VTOrc could request a repair that is a no-op here.
 		changeSource = !replication.HeartbeatIntervalsEqual(configuration.HeartbeatInterval, heartbeatInterval)
+		if changeSource && !status.Position.AtLeast(status.RelayLogPosition) {
+			log.Warn("Skipping heartbeat repair to avoid deleting received but unapplied transactions from the relay log",
+				slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+				slog.String("source_host", host),
+				slog.Int("source_port", int(port)),
+			)
+			changeSource = false
+		}
 	}
 
 	if changeSource {
