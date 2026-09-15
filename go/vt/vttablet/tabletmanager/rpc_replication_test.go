@@ -971,115 +971,56 @@ func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializati
 
 // TestSetReplicationSourceConfiguration checks source changes and relay-log-safe restarts.
 func TestSetReplicationSourceConfiguration(t *testing.T) {
+	const (
+		config    = "config"
+		status    = "status"
+		stop      = "stop"
+		start     = "start"
+		setSource = "setSource"
+	)
 	for _, tt := range []struct {
-		name              string
-		host              string
-		port              int32
-		heartbeat         float64
-		configuration     *replicationdatapb.Configuration
-		configurationErr  error
-		readConfiguration bool
-		noForce           bool
-		change            bool
-		wantError         string
-		executed          string
+		name         string
+		host         string
+		port         int32
+		sqlRunning   bool
+		executed     string
+		heartbeat    float64
+		configured   float64
+		configErr    error
+		noConfig     bool
+		noForce      bool
+		heartbeatErr error
+		calls        []string
+		wantError    string
 	}{
-		{
-			name:      "equal",
-			heartbeat: 30, readConfiguration: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "equal_stays_stopped",
-			heartbeat: 30, readConfiguration: true, noForce: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
-		},
-		{
-			name: "zero",
-		},
-		{
-			name:      "different",
-			heartbeat: 30, readConfiguration: true, change: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
-		},
-		// Received transactions 1-10 stay in the relay log while the applier is behind,
-		// so a heartbeat change must not purge them. Host and port changes still may.
-		{
-			name:      "heartbeat_unapplied",
-			heartbeat: 30, readConfiguration: true, executed: "1-9",
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "heartbeat_applied_equal",
-			heartbeat: 30, readConfiguration: true, change: true, executed: "1-10",
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "heartbeat_applied_superset",
-			heartbeat: 30, readConfiguration: true, change: true, executed: "1-11",
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "host_changed_unapplied",
-			host:      "old-primary",
-			heartbeat: 30, change: true, executed: "1-9",
-		},
-		{
-			name:      "port_changed_unapplied",
-			port:      3307,
-			heartbeat: 30, change: true, executed: "1-9",
-		},
-		{
-			name:      "rounded_equal_below",
-			heartbeat: 30, readConfiguration: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.75, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "rounded_equal_above",
-			heartbeat: 30, readConfiguration: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.249, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "rounded_different_below",
-			heartbeat: 30, readConfiguration: true, change: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.749, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "rounded_different_above",
-			heartbeat: 30, readConfiguration: true, change: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.25, ReplicaNetTimeout: 60},
-		},
-		{
-			name:      "host_changed",
-			host:      "old-primary",
-			heartbeat: 30, change: true,
-		},
-		{
-			name:      "port_changed",
-			port:      3307,
-			heartbeat: 30, change: true,
-		},
-		{
-			name:   "host_changed_zero",
-			host:   "old-primary",
-			change: true,
-		},
-		{
-			name:   "port_changed_zero",
-			port:   3307,
-			change: true,
-		},
-		{
-			name:      "read_error",
-			heartbeat: 30, readConfiguration: true,
-			configurationErr: errors.New("configuration unavailable"),
-			wantError:        "read replication configuration: configuration unavailable",
-		},
-		{
-			name:      "missing_configuration",
-			heartbeat: 30, readConfiguration: true,
-			wantError: "replication configuration is unavailable",
-		},
+		// Nothing differs, so the replica is only restarted.
+		{name: "equal", heartbeat: 30, configured: 30, calls: []string{config, stop, start}},
+		{name: "equal_stays_stopped", heartbeat: 30, configured: 30, noForce: true, calls: []string{config}},
+		{name: "zero", calls: []string{stop, start}},
+		{name: "rounded_equal_below", heartbeat: 30, configured: 29.75, calls: []string{config, stop, start}},
+		{name: "rounded_equal_above", heartbeat: 30, configured: 30.249, calls: []string{config, stop, start}},
+
+		// A different heartbeat needs the full change, which deletes the relay log.
+		// Replication is stopped and the relay log re-read before deciding.
+		{name: "different", heartbeat: 30, configured: 15, calls: []string{config, status, setSource, start}},
+		{name: "different_running", heartbeat: 30, configured: 15, sqlRunning: true, calls: []string{config, stop, status, setSource, start}},
+		{name: "rounded_different_below", heartbeat: 30, configured: 29.749, calls: []string{config, status, setSource, start}},
+		{name: "rounded_different_above", heartbeat: 30, configured: 30.25, calls: []string{config, status, setSource, start}},
+		{name: "heartbeat_drained", heartbeat: 30, configured: 15, executed: "1-10", calls: []string{config, status, setSource, start}},
+		{name: "heartbeat_drained_superset", heartbeat: 30, configured: 15, executed: "1-11", calls: []string{config, status, setSource, start}},
+		{name: "heartbeat_unapplied", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, status, stop, start}},
+		{name: "heartbeat_unapplied_running", heartbeat: 30, configured: 15, executed: "1-9", sqlRunning: true, calls: []string{config, stop, status, start}},
+		{name: "heartbeat_unapplied_stays_stopped", heartbeat: 30, configured: 15, noForce: true, executed: "1-9", calls: []string{config, status}},
+
+		// Host and port changes never look at the heartbeat or the relay log.
+		{name: "host_changed", host: "old-primary", heartbeat: 30, calls: []string{setSource, start}},
+		{name: "port_changed", port: 3307, heartbeat: 30, calls: []string{setSource, start}},
+		{name: "host_changed_zero", host: "old-primary", calls: []string{setSource, start}},
+		{name: "port_changed_zero", port: 3307, calls: []string{setSource, start}},
+		{name: "host_changed_unapplied", host: "old-primary", heartbeat: 30, executed: "1-9", calls: []string{setSource, start}},
+
+		{name: "read_error", heartbeat: 30, configErr: errors.New("configuration unavailable"), calls: []string{config}, wantError: "read replication configuration: configuration unavailable"},
+		{name: "missing_configuration", heartbeat: 30, noConfig: true, calls: []string{config}, wantError: "replication configuration is unavailable"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -1094,39 +1035,47 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 			parent.MysqlPort = 3306
 			require.NoError(t, ts.CreateTablet(ctx, parent))
 
-			// The replica is stopped and points at the primary unless the case says otherwise.
-			status := replication.ReplicationStatus{
+			// The replica points at the primary with both threads stopped unless the case says otherwise.
+			replStatus := replication.ReplicationStatus{
 				SourceHost: cmp.Or(tt.host, "mysql-primary"),
 				SourcePort: cmp.Or(tt.port, 3306),
 				IOState:    replication.ReplicationStateStopped,
 				SQLState:   replication.ReplicationStateStopped,
 			}
+			if tt.sqlRunning {
+				replStatus.SQLState = replication.ReplicationStateRunning
+			}
 			if tt.executed != "" {
-				status.Position = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.executed)
-				status.RelayLogPosition = replication.MustParsePosition("MySQL56", serverUUID+":1-10")
+				replStatus.Position = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.executed)
+				replStatus.RelayLogPosition = replication.MustParsePosition("MySQL56", serverUUID+":1-10")
+			}
+			var configuration *replicationdatapb.Configuration
+			if !tt.noConfig {
+				configuration = &replicationdatapb.Configuration{HeartbeatInterval: tt.configured, ReplicaNetTimeout: 60}
 			}
 
 			daemon := mock.NewMockMysqlDaemon(gomock.NewController(t))
+			hookEnv := map[string]string{"TABLET_ALIAS": "cell1-0000000100", "KEYSPACE": "ks", "SHARD": "0"}
 			calls := []any{
 				daemon.EXPECT().SemiSyncExtensionLoaded(ctx).Return(mysql.SemiSyncTypeSource, nil),
-				daemon.EXPECT().ReplicationStatus(ctx).Return(status, nil),
+				daemon.EXPECT().ReplicationStatus(ctx).Return(replStatus, nil),
 				daemon.EXPECT().SetSemiSyncEnabled(ctx, false, false).Return(nil),
 			}
-			if tt.readConfiguration {
-				calls = append(calls, daemon.EXPECT().ReplicationConfiguration(ctx).Return(tt.configuration, tt.configurationErr))
-			}
-
-			hookEnv := map[string]string{"TABLET_ALIAS": "cell1-0000000100", "KEYSPACE": "ks", "SHARD": "0"}
-			if tt.change {
-				calls = append(calls,
-					daemon.EXPECT().SetReplicationSource(ctx, "mysql-primary", int32(3306), tt.heartbeat, false, false).Return(nil),
-					daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil),
-				)
-			} else if tt.wantError == "" && !tt.noForce {
-				calls = append(calls,
-					daemon.EXPECT().StopReplication(ctx, hookEnv).Return(nil),
-					daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil),
-				)
+			stopped := replStatus
+			stopped.SQLState = replication.ReplicationStateStopped
+			for _, call := range tt.calls {
+				switch call {
+				case config:
+					calls = append(calls, daemon.EXPECT().ReplicationConfiguration(ctx).Return(configuration, tt.configErr))
+				case status:
+					calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(stopped, nil))
+				case stop:
+					calls = append(calls, daemon.EXPECT().StopReplication(ctx, hookEnv).Return(nil))
+				case start:
+					calls = append(calls, daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil))
+				case setSource:
+					calls = append(calls, daemon.EXPECT().SetReplicationSource(ctx, "mysql-primary", int32(3306), tt.heartbeat, false, false).Return(nil))
+				}
 			}
 			gomock.InOrder(calls...)
 
@@ -1135,9 +1084,9 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 			err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", !tt.noForce, false, tt.heartbeat)
 			if tt.wantError != "" {
 				require.ErrorContains(t, err, tt.wantError)
-			} else {
-				require.NoError(t, err)
+				return
 			}
+			require.NoError(t, err)
 		})
 	}
 }
