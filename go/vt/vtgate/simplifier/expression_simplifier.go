@@ -181,6 +181,10 @@ func (s *shrinker) fillQueue() bool {
 		for _, expr := range e.Exprs {
 			s.queue = append(s.queue, expr)
 		}
+	case *sqlparser.BuiltinFuncExpr:
+		for _, expr := range e.Exprs {
+			s.queue = append(s.queue, expr)
+		}
 	case sqlparser.AggrFunc:
 		for _, ae := range e.GetArgs() {
 			s.queue = append(s.queue, ae)

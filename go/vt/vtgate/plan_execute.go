@@ -119,7 +119,8 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
+		var spacedAggrCalls []sqlparser.SpacedAggrCall
+		plan, vcursor, stmt, spacedAggrCalls, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -142,6 +143,16 @@ func (e *Executor) newExecute(
 		// Add any warnings that the planner wants to add.
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
+		}
+		// a prepared plan, or an EXECUTE plan, carries the spaced aggregate
+		// calls of the text it executes without parsing; any other
+		// statement's come from this execution's parse. Both were read under
+		// the session's sql_mode, so a session with IGNORE_SPACE has none
+		// that whitespace alone separates.
+		for _, calls := range [][]sqlparser.SpacedAggrCall{plan.SpacedAggrCalls, spacedAggrCalls} {
+			for _, call := range calls {
+				safeSession.RecordWarning(spacedAggrCallWarning(call))
+			}
 		}
 
 		// set the overall query timeout if it is not already set

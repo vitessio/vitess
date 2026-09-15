@@ -2436,16 +2436,28 @@ func (node *CollateExpr) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *BuiltinFuncExpr) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.String())
+	buf.WriteByte('(')
+	buf.formatExprs(node.Exprs)
+	buf.WriteByte(')')
+}
+
+// FormatFast formats the node.
 func (node *FuncExpr) FormatFast(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
-	// Function names should not be back-quoted even
-	// if they match a reserved word, only if they contain illegal characters
+	// Function names are not back-quoted for matching a reserved word, only
+	// for containing illegal characters, except the names MySQL lexes as a
+	// keyword only directly before '(' (IsFuncCallKeywordName): a generic call
+	// by one of those came quoted, or with whitespace before the parenthesis
+	// under MySQL's reading, and is MySQL's stored-function path; printed bare
+	// the name would re-lex as the built-in.
 	funcName := node.Name.String()
 
-	if containEscapableChars(funcName, NoAt) {
+	if containEscapableChars(funcName, NoAt) || IsFuncCallKeywordName(funcName) {
 		writeEscapedString(buf, funcName)
 	} else {
 		buf.WriteString(funcName)
@@ -3893,6 +3905,20 @@ func (node *JSONArrayExpr) FormatFast(buf *TrackedBuffer) {
 		}
 	}
 	buf.WriteByte(')')
+}
+
+// FormatFast formats the node.
+func (node *STCollect) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_collect(")
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.FormatFast(buf)
+	}
 }
 
 // FormatFast formats the node.
