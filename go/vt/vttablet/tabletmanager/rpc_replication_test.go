@@ -1007,17 +1007,17 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		{
 			name:      "heartbeat_unapplied",
 			heartbeat: 30, readConfiguration: true, executed: "1-9",
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+			configured: 15,
 		},
 		{
 			name:      "heartbeat_applied_equal",
 			heartbeat: 30, readConfiguration: true, change: true, executed: "1-10",
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+			configured: 15,
 		},
 		{
 			name:      "heartbeat_applied_superset",
 			heartbeat: 30, readConfiguration: true, change: true, executed: "1-11",
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+			configured: 15,
 		},
 		{
 			name:      "host_changed_unapplied",
@@ -1143,6 +1143,7 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 	}
 }
 
+// TestSetReplicationSourceHeartbeatStoppedStatus checks that the stopped snapshot decides whether CHANGE is safe.
 func TestSetReplicationSourceRecovery(t *testing.T) {
 	t.Run("InitReplica recovers from start replication error", func(t *testing.T) {
 		ctx := t.Context()
