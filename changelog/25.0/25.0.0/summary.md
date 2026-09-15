@@ -198,7 +198,7 @@ VTOrc can now split shard-monitoring responsibility across a pool of instances u
 
 Each shard is assigned a primary owner by hashing `keyspace/shard`, and the two ring-adjacent instances also watch it, giving three-way HA coverage per shard. Ring sizes of 2 or 3 are a no-op (every instance is primary and both neighbors for every shard); partitioning takes effect at `ring-size >= 4`. The default `--vtorc-ring-size=1` preserves the existing behavior of watching the entire topology.
 
-See [#PR_PLACEHOLDER](https://github.com/vitessio/vitess/pull/PR_PLACEHOLDER) for details.
+See [#21121](https://github.com/vitessio/vitess/pull/21121) for details.
 
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
 
