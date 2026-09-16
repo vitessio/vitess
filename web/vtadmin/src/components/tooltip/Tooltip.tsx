@@ -20,7 +20,7 @@ import style from './Tooltip.module.scss';
 
 export interface TooltipProps {
     children: React.ReactElement;
-    text: string | JSX.Element;
+    text: string | React.JSX.Element;
 }
 
 /**
