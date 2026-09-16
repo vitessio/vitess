@@ -1026,6 +1026,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 
 	resp := &repairHeartbeatResponse{}
+	skipped := false
 	changeSource := status.SourceHost != host || status.SourcePort != port
 	if !changeSource && heartbeatInterval != 0 {
 		// Refuse a heartbeat-only change without the current heartbeat.
@@ -1048,6 +1049,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			}
 
 			changeSource = resp.changeSource
+			skipped = !changeSource
 		}
 	}
 
@@ -1056,15 +1058,21 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating && !resp.stopped, shouldbeReplicating); err != nil {
 			return err
 		}
+	} else if skipped {
+		// Start without recovery. Recovery runs RESET REPLICA, which deletes the
+		// relay log we just kept.
+		if shouldbeReplicating {
+			if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
+				return err
+			}
+		}
 	} else if shouldbeReplicating {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
 		// are taken into account. We don't attempt to recover from the known recoverable errors here
 		// because recovery requires running `STOP REPLICA` in order to reset the replication metadata.
 		// If we error the first time, we're likely to error the second time as well.
-		if !resp.stopped {
-			if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-				return err
-			}
+		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+			return err
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
 			return err

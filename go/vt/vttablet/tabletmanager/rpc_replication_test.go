@@ -977,6 +977,8 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		stop      = "stop"
 		start     = "start"
 		setSource = "setSource"
+		startFail = "startFail"
+		restart   = "restart"
 	)
 	for _, tt := range []struct {
 		name         string
@@ -1007,9 +1009,12 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		{name: "rounded_different_above", heartbeat: 30, configured: 30.25, calls: []string{config, status, setSource, start}},
 		{name: "heartbeat_drained", heartbeat: 30, configured: 15, executed: "1-10", calls: []string{config, status, setSource, start}},
 		{name: "heartbeat_drained_superset", heartbeat: 30, configured: 15, executed: "1-11", calls: []string{config, status, setSource, start}},
-		{name: "heartbeat_unapplied", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, status, stop, start}},
+		{name: "heartbeat_unapplied", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, status, start}},
 		{name: "heartbeat_unapplied_running", heartbeat: 30, configured: 15, executed: "1-9", sqlRunning: true, calls: []string{config, stop, status, start}},
 		{name: "heartbeat_unapplied_stays_stopped", heartbeat: 30, configured: 15, noForce: true, executed: "1-9", calls: []string{config, status}},
+		// A skipped change starts without recovery. The equal path keeps it.
+		{name: "heartbeat_unapplied_start_fails", heartbeat: 30, configured: 15, executed: "1-9", calls: []string{config, status, startFail}, wantError: "master info structure"},
+		{name: "equal_start_fails", heartbeat: 30, configured: 30, calls: []string{config, stop, startFail, restart}},
 
 		// Host and port changes never look at the heartbeat or the relay log.
 		{name: "host_changed", host: "old-primary", heartbeat: 30, calls: []string{setSource, start}},
@@ -1067,6 +1072,10 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 					calls = append(calls, daemon.EXPECT().StopReplication(ctx, hookEnv).Return(nil))
 				case start:
 					calls = append(calls, daemon.EXPECT().StartReplication(ctx, hookEnv).Return(nil))
+				case startFail:
+					calls = append(calls, daemon.EXPECT().StartReplication(ctx, hookEnv).Return(recoverableReplicationInitError()))
+				case restart:
+					calls = append(calls, daemon.EXPECT().RestartReplication(ctx, hookEnv).Return(nil))
 				case setSource:
 					calls = append(calls, daemon.EXPECT().SetReplicationSource(ctx, "mysql-primary", int32(3306), tt.heartbeat, false, false).Return(nil))
 				}
