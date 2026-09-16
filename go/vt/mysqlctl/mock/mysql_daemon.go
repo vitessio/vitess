@@ -595,19 +595,20 @@ func (mr *MockMysqlDaemonMockRecorder) ReleaseGlobalReadLock(ctx any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseGlobalReadLock", reflect.TypeOf((*MockMysqlDaemon)(nil).ReleaseGlobalReadLock), ctx)
 }
 
-// ReplicationConfiguration mocks base method.
-func (m *MockMysqlDaemon) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+// ReplicationHeartbeat mocks base method.
+func (m *MockMysqlDaemon) ReplicationHeartbeat(ctx context.Context) (float64, int32, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReplicationConfiguration", ctx)
-	ret0, _ := ret[0].(*replicationdata.Configuration)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "ReplicationHeartbeat", ctx)
+	ret0, _ := ret[0].(float64)
+	ret1, _ := ret[1].(int32)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
-// ReplicationConfiguration indicates an expected call of ReplicationConfiguration.
-func (mr *MockMysqlDaemonMockRecorder) ReplicationConfiguration(ctx any) *gomock.Call {
+// ReplicationHeartbeat indicates an expected call of ReplicationHeartbeat.
+func (mr *MockMysqlDaemonMockRecorder) ReplicationHeartbeat(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplicationConfiguration", reflect.TypeOf((*MockMysqlDaemon)(nil).ReplicationConfiguration), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplicationHeartbeat", reflect.TypeOf((*MockMysqlDaemon)(nil).ReplicationHeartbeat), ctx)
 }
 
 // ReplicationStatus mocks base method.
