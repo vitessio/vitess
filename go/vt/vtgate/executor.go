@@ -329,13 +329,32 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				// Carry over the OK-packet data (affected rows, last insert id, info,
+				// session state changes) so statements that return an OK packet (e.g.
+				// CALL of a procedure that performs DML) report it to the client,
+				// matching the buffered Execute path.
+				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.SessionStateChanges != "" {
+					result.SessionStateChanges = qr.SessionStateChanges
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
 					result.Fields = qr.Fields
-					if err := callback(qr.Metadata()); err != nil {
+					// Send only the fields here: any OK-packet data on qr was
+					// accumulated into result above and goes to the client with
+					// the left-over result, so repeating it in this packet would
+					// deliver it twice to clients that sum across packets.
+					if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 						return err
 					}
 					seenResults.Store(true)
@@ -367,8 +386,66 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
+<<<<<<< HEAD
+||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
+		updateLogStats := func() {
+			logStats.StmtType = plan.QueryType.String()
+			logStats.PlanType = plan.Type.String()
+			logStats.TablesUsed = plan.TablesUsed
+			executedRoot := vc.ExecutedPrimitive()
+			if executedRoot == nil {
+				executedRoot = plan.Instructions
+			}
+			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			logStats.TabletType = vc.TabletType().String()
+			logStats.ExecuteTime = time.Since(execStart)
+			logStats.ActiveKeyspace = vc.GetKeyspace()
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+		}
+
+=======
+		updateLogStats := func(err error) {
+			logStats.StmtType = plan.QueryType.String()
+			logStats.PlanType = plan.Type.String()
+			logStats.TabletType = vc.TabletType().String()
+			logStats.ExecuteTime = time.Since(execStart)
+			logStats.ActiveKeyspace = vc.GetKeyspace()
+
+			// On error, leave the tables, routing indexes and row counts unset so the
+			// per-table counters are not incremented, matching the buffered Execute path.
+			var tablesUsed []string
+			var errCount uint64
+			if err != nil {
+				logStats.Error = err
+				errCount = 1
+			} else {
+				srr.mu.Lock()
+				logStats.RowsAffected = srr.rowsAffected
+				logStats.RowsReturned = uint64(srr.rowsReturned)
+				srr.mu.Unlock()
+				logStats.TablesUsed = plan.TablesUsed
+				tablesUsed = plan.TablesUsed
+				executedRoot := vc.ExecutedPrimitive()
+				if executedRoot == nil {
+					executedRoot = plan.Instructions
+				}
+				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			}
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
+			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
+		}
+
+>>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			// Record query stats for a failed row-returning query before any
+			// rollback handling, matching the buffered Execute path which always
+			// records them ahead of its own rollback handling.
+			if canReturnRows(plan.QueryType) {
+				updateLogStats(err)
+			}
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
@@ -379,23 +456,44 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
+<<<<<<< HEAD
+||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
+			updateLogStats()
+=======
+			updateLogStats(nil)
+>>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 			return nil
 		}
 
-		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
+		// Send left-over rows if there is no error on execution. The left-over
+		// result must also go out when it carries OK-packet data with no rows —
+		// e.g. an affected-row count that arrived after a result set was already
+		// sent — so that data is not dropped.
+		hasOKData := result.RowsAffected > 0 || result.InsertIDUpdated() ||
+			result.SessionStateChanges != "" || result.Info != ""
+		if len(result.Rows) > 0 || hasOKData || !seenResults.Load() {
 			if err := callback(result); err != nil {
+				// The query executed; only the delivery to the client failed.
+				// Record it as an error, like a mid-stream send failure that
+				// surfaces through the execution error above.
+				updateLogStats(err)
 				return err
 			}
 		}
 
 		// 5: Log and add statistics
+<<<<<<< HEAD
 		logStats.TablesUsed = plan.TablesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()
 
 		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
+		updateLogStats()
+=======
+		updateLogStats(nil)
+>>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 
 		return err
 	}
