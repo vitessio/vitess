@@ -1027,20 +1027,16 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 
 	changeSource := status.SourceHost != host || status.SourcePort != port
 	if !changeSource && heartbeatInterval != 0 {
-		// Refuse a heartbeat-only change without the current configuration.
+		// Refuse a heartbeat-only change without the current heartbeat.
 		// An unnecessary source change can delete acknowledged transactions in relay logs.
-		configuration, err := tm.MysqlDaemon.ReplicationConfiguration(ctx)
+		configured, _, err := tm.MysqlDaemon.ReplicationHeartbeat(ctx)
 		if err != nil {
-			return vterrors.Wrap(err, "read replication configuration")
-		}
-
-		if configuration == nil {
-			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication configuration is unavailable")
+			return vterrors.Wrap(err, "read replication heartbeat")
 		}
 
 		// Compare with the same rule VTOrc uses to detect a misconfigured
 		// heartbeat, otherwise VTOrc could request a repair that is a no-op here.
-		changeSource = !replication.HeartbeatIntervalsEqual(configuration.HeartbeatInterval, heartbeatInterval)
+		changeSource = !replication.HeartbeatIntervalsEqual(configured, heartbeatInterval)
 	}
 
 	if changeSource {

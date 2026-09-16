@@ -976,8 +976,8 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		host              string
 		port              int32
 		heartbeat         float64
-		configuration     *replicationdatapb.Configuration
-		configurationErr  error
+		configured        float64
+		heartbeatErr      error
 		readConfiguration bool
 		noForce           bool
 		change            bool
@@ -986,12 +986,12 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		{
 			name:      "equal",
 			heartbeat: 30, readConfiguration: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
+			configured: 30,
 		},
 		{
 			name:      "equal_stays_stopped",
 			heartbeat: 30, readConfiguration: true, noForce: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30, ReplicaNetTimeout: 60},
+			configured: 30,
 		},
 		{
 			name: "zero",
@@ -999,27 +999,27 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		{
 			name:      "different",
 			heartbeat: 30, readConfiguration: true, change: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 15, ReplicaNetTimeout: 60},
+			configured: 15,
 		},
 		{
 			name:      "rounded_equal_below",
 			heartbeat: 30, readConfiguration: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.75, ReplicaNetTimeout: 60},
+			configured: 29.75,
 		},
 		{
 			name:      "rounded_equal_above",
 			heartbeat: 30, readConfiguration: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.249, ReplicaNetTimeout: 60},
+			configured: 30.249,
 		},
 		{
 			name:      "rounded_different_below",
 			heartbeat: 30, readConfiguration: true, change: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 29.749, ReplicaNetTimeout: 60},
+			configured: 29.749,
 		},
 		{
 			name:      "rounded_different_above",
 			heartbeat: 30, readConfiguration: true, change: true,
-			configuration: &replicationdatapb.Configuration{HeartbeatInterval: 30.25, ReplicaNetTimeout: 60},
+			configured: 30.25,
 		},
 		{
 			name:      "host_changed",
@@ -1044,13 +1044,14 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 		{
 			name:      "read_error",
 			heartbeat: 30, readConfiguration: true,
-			configurationErr: errors.New("configuration unavailable"),
-			wantError:        "read replication configuration: configuration unavailable",
+			heartbeatErr: errors.New("heartbeat unavailable"),
+			wantError:    "read replication heartbeat: heartbeat unavailable",
 		},
 		{
-			name:      "missing_configuration",
+			name:      "not_a_replica",
 			heartbeat: 30, readConfiguration: true,
-			wantError: "replication configuration is unavailable",
+			heartbeatErr: mysql.ErrNotReplica,
+			wantError:    "read replication heartbeat: no replication status",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1081,7 +1082,7 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 				daemon.EXPECT().SetSemiSyncEnabled(ctx, false, false).Return(nil),
 			}
 			if tt.readConfiguration {
-				calls = append(calls, daemon.EXPECT().ReplicationConfiguration(ctx).Return(tt.configuration, tt.configurationErr))
+				calls = append(calls, daemon.EXPECT().ReplicationHeartbeat(ctx).Return(tt.configured, int32(60), tt.heartbeatErr))
 			}
 
 			hookEnv := map[string]string{"TABLET_ALIAS": "cell1-0000000100", "KEYSPACE": "ks", "SHARD": "0"}
