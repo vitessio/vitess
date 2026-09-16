@@ -4188,6 +4188,18 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	input:  "with x as (select 1) (select * from x)",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) (select * from x union select 2)",
+	output: "with x as (select 1 from dual) select * from x union select 2 from dual",
+}, {
+	input:  "with x as (select 1) (values row(1))",
+	output: "with x as (select 1 from dual) values row(1)",
+}, {
+	input:  "with x as (select 1) ((select 2) union (select 3))",
+	output: "with x as (select 1 from dual) select 2 from dual union select 3 from dual",
 }}
 
 func TestValid(t *testing.T) {
