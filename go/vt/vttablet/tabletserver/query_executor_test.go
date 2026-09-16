@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/stats"
@@ -2162,9 +2163,10 @@ const (
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 // A SET statement whose sql_mode value cannot be judged at plan time (non-constant
 // expression) is executed and the applied value is read back and validated, so a
-// non-constant expression cannot put a dedicated connection into a mode vtgate
-// rejects. On violation the previous sql_mode is restored, making the failed SET a
-// no-op; the connection is only closed if the restore itself fails.
+// non-constant expression cannot put a dedicated connection into a mode the parser
+// does not read under. On violation the previous sql_mode is restored, making the
+// failed SET a no-op; the connection is only closed if the restore itself fails. An
+// accepted value's honored lexer modes are recorded on the connection.
 func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -2183,7 +2185,8 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	setQuery := "set @@sql_mode = concat('AN', 'SI')"
 	db.AddQuery(setQuery, &sqltypes.Result{})
 
-	// a supported applied value passes the verification
+	// a supported applied value passes the verification, and the connection records
+	// the lexer modes of it the parser honors: none here
 	db.AddQuery(readQuery, modeResult(prevMode))
 	txID := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
@@ -2191,8 +2194,21 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	require.True(t, qre.plan.VerifySQLMode)
 	_, err := qre.Execute()
 	require.NoError(t, err)
+	assert.Equal(t, sqlmode.Mode(0), tsv.te.ConnParseSQLMode(txID))
 	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
 	require.NoError(t, err)
+
+	// an applied value carrying an honored lexer mode passes too, and the connection
+	// is read under the mode from then on
+	db.AddQuery(readQuery, modeResult("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"))
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+	assert.Equal(t, sqlmode.PipesAsConcat, tsv.te.ConnParseSQLMode(txID))
+	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
+	require.NoError(t, err)
+	db.AddQuery(readQuery, modeResult(prevMode))
 
 	// an unsupported applied value fails with vtgate's error and restores the previous
 	// mode. The exact-match entry serves the snapshot read; the callback swaps in the
@@ -2248,19 +2264,31 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	// constant assignments are judged at plan time and need no read-back: with no
-	// registered result for the read, any read would fail the statement
+	// registered result for the read, any read would fail the statement. The
+	// connection records the lexer modes of the constant the parser honors.
 	db.DeleteQuery(readQuery)
 	txID = newTransaction(tsv, nil)
 	defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
+	pipesQuery := "set @@sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'"
+	db.AddQuery(pipesQuery, &sqltypes.Result{})
+	qre = newTestQueryExecutor(ctx, tsv, pipesQuery, txID)
+	require.False(t, qre.plan.VerifySQLMode)
+	require.True(t, qre.plan.SetsSQLMode)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(pipesQuery))
+	assert.Equal(t, sqlmode.PipesAsConcat, tsv.te.ConnParseSQLMode(txID))
+	// a later constant without lexer modes takes the connection out of the mode
 	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
 	_, err = qre.Execute()
 	require.NoError(t, err)
+	assert.Equal(t, sqlmode.Mode(0), tsv.te.ConnParseSQLMode(txID))
 
 	// a multi-assignment SET with a non-constant sql_mode is rejected at plan time: its
 	// other assignments would already be applied by the time the mode can be judged,
 	// while MySQL applies none of a SET's assignments when the statement fails
 	multiSetQuery := "set @@sql_safe_updates = 1, @@sql_mode = concat('AN', 'SI')"
-	_, err = tsv.qe.GetPlan(ctx, tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()), multiSetQuery, false, false)
+	_, err = tsv.qe.GetPlan(ctx, tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()), multiSetQuery, 0, false, false)
 	require.EqualError(t, err, "non-constant sql_mode value in a multi-assignment SET: "+multiSetQuery)
 
 	// a failed read-back of the applied value undoes the statement as well: without
@@ -2331,6 +2359,17 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	db.AddQuery(validSetting, &sqltypes.Result{})
 	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{validSetting})
 	require.NoError(t, err)
+	assert.Equal(t, sqlmode.Mode(0), tsv.te.ConnParseSQLMode(connID))
+	require.NoError(t, tsv.te.Release(ctx, connID))
+
+	// a setting carrying an honored lexer mode is applied as written, and the
+	// connection is read under the mode
+	pipesSetting := "set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'"
+	db.AddQuery(pipesSetting, &sqltypes.Result{})
+	connID, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{pipesSetting})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(pipesSetting))
+	assert.Equal(t, sqlmode.PipesAsConcat, tsv.te.ConnParseSQLMode(connID))
 	require.NoError(t, tsv.te.Release(ctx, connID))
 }
 
@@ -2394,7 +2433,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 
 func newTestQueryExecutorWithRowsLimit(ctx context.Context, tsv *TabletServer, sql string, txID int64, noRowsLimit bool) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest())
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, noRowsLimit)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, 0, false, noRowsLimit)
 	if err != nil {
 		panic(err)
 	}
@@ -2403,7 +2442,7 @@ func newTestQueryExecutorWithRowsLimit(ctx context.Context, tsv *TabletServer, s
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming", streamlog.NewQueryLogConfigForTest())
-	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, 0, false)
 	if err != nil {
 		panic(err)
 	}

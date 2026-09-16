@@ -400,7 +400,7 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 		// means the value cannot be judged, which must fail rather than pass as "no change"
 		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading sql_mode: %d fields, %d rows", len(qr.Fields), len(qr.Rows))
 	}
-	newMode, err := sqlmode.Validate(qr.Rows[0][1])
+	newMode, err := sqlmode.Validate(qr.Rows[0][1], 0)
 	if err != nil {
 		return false, sqltypes.Value{}, err
 	}

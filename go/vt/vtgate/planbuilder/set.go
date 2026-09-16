@@ -189,7 +189,7 @@ func validateSQLModePlan(inner planFunc) planFunc {
 		if err == nil {
 			if lit, ok := evalExpr.(*evalengine.Literal); ok {
 				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
-					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation())); err != nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation()), 0); err != nil {
 						return nil, err
 					}
 				}
