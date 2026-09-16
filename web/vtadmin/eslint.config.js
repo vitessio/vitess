@@ -89,6 +89,8 @@ export default defineConfig(
             '@eslint-react/no-direct-mutation-state': 'error',
             '@eslint-react/dom-no-find-dom-node': 'error',
             '@eslint-react/dom-no-render-return-value': 'error',
+            '@eslint-react/dom-no-render': 'error',
+            '@eslint-react/dom-no-hydrate': 'error',
             '@eslint-react/dom-no-unknown-property': 'error',
             '@eslint-react/no-unsafe-component-will-mount': 'error',
             '@eslint-react/no-unsafe-component-will-receive-props': 'error',
