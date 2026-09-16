@@ -128,6 +128,13 @@ func TestAppendMarshalSQLNumberGrammar(t *testing.T) {
 		`1e+`,
 		`1e`,
 		`--1`,
+		// Shapes JSON's grammar does not have: a written plus, an integer
+		// part opening with a zero, and a decimal point with nothing on
+		// one side of it.
+		`+1`,
+		`007`,
+		`.2`,
+		`12.`,
 	}
 	for _, input := range malformed {
 		buf := &bytes2.Buffer{}
