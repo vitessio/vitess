@@ -120,7 +120,7 @@ func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbe
 	// stopped on an error and so never will apply them. CHANGE REPLICATION SOURCE TO
 	// deletes relay logs when both threads are stopped, and under semi-sync those logs
 	// can hold acknowledged transactions that must survive a source failure.
-	if status.LastSQLError != "" || !stoppedStatus.Position.AtLeast(stoppedStatus.RelayLogPosition) {
+	if stoppedStatus.LastSQLError != "" || !stoppedStatus.Position.AtLeast(stoppedStatus.RelayLogPosition) {
 		log.Warn("Skipping heartbeat repair to avoid deleting received but unapplied transactions from the relay log",
 			slog.String("tablet", topoproto.TabletAliasString(tm.Tablet().Alias)),
 			slog.String("source_host", status.SourceHost),

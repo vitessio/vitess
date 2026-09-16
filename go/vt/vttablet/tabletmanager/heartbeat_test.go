@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"testing"
@@ -46,6 +47,7 @@ func TestRepairHeartbeat(t *testing.T) {
 		afterIO      replication.ReplicationState
 		afterSQL     replication.ReplicationState
 		applierError string
+		lateError    string
 		shouldRun    bool
 		calls        []string
 		startError   error
@@ -70,6 +72,7 @@ func TestRepairHeartbeat(t *testing.T) {
 
 		// Fall back when the daemon found the applier stopped after it stopped the IO thread.
 		{name: "io_only_applier_stopped_late", calls: []string{"heartbeat", "stop", "status"}, before: "1-9", executed: "1-9", received: "1-10", sqlState: replication.ReplicationStateRunning, repairError: applierStopped, wantStopped: true},
+		{name: "io_only_applier_fails_after_start", calls: []string{"start", "heartbeat", "stop", "status"}, before: "1-10", executed: "1-10", received: "1-10", shouldRun: true, repairError: applierStopped, lateError: "applier failed", wantStopped: true},
 
 		// Check fresh positions to decide whether the full change is safe.
 		{name: "drained_relay_log", calls: []string{"heartbeat", "stop", "status"}, repairError: unimplemented, before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
@@ -119,7 +122,7 @@ func TestRepairHeartbeat(t *testing.T) {
 			status := replication.ReplicationStatus{
 				IOState:      tt.afterIO,
 				SQLState:     tt.afterSQL,
-				LastSQLError: tt.applierError,
+				LastSQLError: cmp.Or(tt.lateError, tt.applierError),
 			}
 			if tt.executed != "" {
 				status.Position = replication.MustParsePosition("MySQL56", serverUUID+":"+tt.executed)
