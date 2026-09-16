@@ -1100,9 +1100,11 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// SetReplicationHeartbeat changes only the default channel heartbeat interval in seconds.
-// The caller must keep the applier running to preserve relay logs. Only the IO thread is restarted.
-// If the change fails, it attempts to restart the IO thread before returning the error.
+// SetReplicationHeartbeat changes the default channel heartbeat interval in seconds.
+// Only the IO thread is stopped for the change. It is started again before the
+// function returns, on success or failure. Returns UNIMPLEMENTED when the flavor
+// has no heartbeat-only command, and FAILED_PRECONDITION when the applier is not
+// running, since the change would delete the relay log.
 func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInterval float64) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
