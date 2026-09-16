@@ -318,7 +318,9 @@
   "FullQuery": "drop temporary table if exists a"
 }
 
-# temporary table with ddl statement only partially parsed
+# temporary table with ddl statement only partially parsed: the grammar kept
+# only the prefix, so the body is unknown and may read a source table; the
+# table set is flagged undetermined
 "create temporary table x"
 {
   "PlanID": "DDL",
@@ -329,5 +331,6 @@
       "Role": 2
     }
   ],
-  "NeedsReservedConn": true
+  "NeedsReservedConn": true,
+  "TablesUndetermined": true
 }

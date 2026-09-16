@@ -1278,6 +1278,124 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorTableAclEmbeddedReads covers statements whose main effect
+// is not a read but which execute one embedded in them: CREATE TABLE ... AS
+// SELECT copies the source rows. Before this fix the planner derived no
+// permission for the tables that read touches, so a caller with ADMIN on a
+// table they may create could read a table they are denied READER on. The
+// read's tables must now be checked like a plain SELECT's: denied for a
+// non-exempt caller under strict ACL, and the statement must not reach the
+// backend; an exempt caller, a dry run, and strict ACL off still run it.
+func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
+
+	// A fully parsed form is denied on the source table. A form the parser
+	// only partially parses (it keeps the CREATE TABLE prefix and the executor
+	// forwards the raw text) is denied on the undetermined table set instead,
+	// as MySQL still copies the rows. One of each: the per-shape
+	// classification is pinned in TestBuildPermissions.
+	cases := []struct {
+		name         string
+		query        string
+		planID       planbuilder.PlanType
+		undetermined bool
+	}{
+		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false},
+		{"create table with a parenthesized select", "create table ct (select pk from test_table)", planbuilder.PlanDDL, true},
+	}
+
+	// test_table is readable only by "superuser". The caller "u2" has ADMIN on
+	// ct (the table it creates) and nothing on test_table: exactly the caller
+	// the CREATE TABLE ... AS SELECT bypass served.
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}, {
+			Name:                 "group03",
+			TableNamesOrPrefixes: []string{"ct"},
+			Admins:               []string{"u2"},
+		}},
+	}
+	require.NoError(t, tableacl.InitFromProto(config))
+	callerID := &querypb.VTGateCallerID{Username: "u2", Groups: []string{"eng", "beta"}}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	newServer := func(t *testing.T, flags executorFlags) *TabletServer {
+		t.Helper()
+		tsv := newTestTabletServer(ctx, flags, db)
+		t.Cleanup(tsv.StopService)
+		return tsv
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			statsKey := strings.Join([]string{"test_table", "group02", tc.planID.String(), "u2"}, ".")
+			wantErr := tc.planID.String() + " command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)"
+			if tc.undetermined {
+				statsKey = strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u2"}, ".")
+				wantErr = tc.planID.String() + " command denied to user 'u2', in groups [eng, beta], for a table set that cannot be determined (ACL check error)"
+			}
+
+			t.Run("strict table ACL denies", func(t *testing.T) {
+				tsv := newServer(t, enableStrictTableACL)
+				qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+				require.Equal(t, tc.planID, qre.plan.PlanID)
+				require.Equal(t, tc.undetermined, qre.plan.TablesUndetermined)
+				deniedBefore := tsv.stats.TableaclDenied.Counts()[statsKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err := qre.Execute()
+				require.Error(t, err, "a caller denied READER on the source must not run a statement that reads it")
+				assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+				assert.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
+				require.EqualError(t, err, wantErr)
+				assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[statsKey], "the denial must be counted under the right label")
+			})
+
+			t.Run("exempt caller runs", func(t *testing.T) {
+				tsv := newServer(t, enableStrictTableACL)
+				f, err := tableacl.GetCurrentACLFactory()
+				require.NoError(t, err)
+				tsv.qe.exemptACL, err = f.New([]string{"exempt-acl"})
+				require.NoError(t, err)
+				exemptCtx := callerid.NewContext(context.Background(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
+				qre := newTestQueryExecutor(exemptCtx, tsv, tc.query, 0)
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err = qre.Execute()
+				require.NoError(t, err, "an exempt caller must still be able to run the statement under strict table ACL")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
+			})
+
+			t.Run("dry run only records", func(t *testing.T) {
+				tsv := newServer(t, enableStrictTableACL)
+				tsv.qe.enableTableACLDryRun = true
+				qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+				pseudoBefore := tsv.stats.TableaclPseudoDenied.Counts()[statsKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err := qre.Execute()
+				require.NoError(t, err, "a dry run must not enforce the ACL")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
+				assert.Equal(t, pseudoBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[statsKey], "a dry run must count the denial under the right label")
+			})
+
+			t.Run("strict table ACL off runs", func(t *testing.T) {
+				tsv := newServer(t, noFlags)
+				qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err := qre.Execute()
+				require.NoError(t, err, "with strict table ACL off the statement must still run")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
+			})
+		})
+	}
+}
+
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
