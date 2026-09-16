@@ -1392,6 +1392,44 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 				require.NoError(t, err, "with strict table ACL off the statement must still run")
 				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 			})
+
+			if !tc.undetermined {
+				return
+			}
+
+			// The planner still derived ADMIN on ct for the flagged form. That
+			// permission is checked before the statement fails closed, so a
+			// caller lacking it is denied on ct by name, and a dry run records
+			// both the ct denial and the undetermined one.
+			u3 := &querypb.VTGateCallerID{Username: "u3"}
+			u3Ctx := callerid.NewContext(context.Background(), nil, u3)
+			ctKey := strings.Join([]string{"ct", "group03", tc.planID.String(), "u3"}, ".")
+			undeterminedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u3"}, ".")
+
+			t.Run("strict table ACL denies on the derived table first", func(t *testing.T) {
+				tsv := newServer(t, enableStrictTableACL)
+				qre := newTestQueryExecutor(u3Ctx, tsv, tc.query, 0)
+				deniedBefore := tsv.stats.TableaclDenied.Counts()[ctKey]
+				undeterminedBefore := tsv.stats.TableaclDenied.Counts()[undeterminedKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err := qre.Execute()
+				require.EqualError(t, err, tc.planID.String()+" command denied to user 'u3' for table 'ct' (ACL check error)")
+				assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+				assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[ctKey], "the denial must be counted against ct")
+				assert.Equal(t, undeterminedBefore, tsv.stats.TableaclDenied.Counts()[undeterminedKey], "a statement denied on a named table must not also be counted as undetermined")
+			})
+
+			t.Run("dry run records the derived table and the undetermined set", func(t *testing.T) {
+				tsv := newServer(t, enableStrictTableACL)
+				tsv.qe.enableTableACLDryRun = true
+				qre := newTestQueryExecutor(u3Ctx, tsv, tc.query, 0)
+				ctBefore := tsv.stats.TableaclPseudoDenied.Counts()[ctKey]
+				undeterminedBefore := tsv.stats.TableaclPseudoDenied.Counts()[undeterminedKey]
+				_, err := qre.Execute()
+				require.NoError(t, err, "a dry run must not enforce the ACL")
+				assert.Equal(t, ctBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[ctKey], "a dry run must record the ct denial")
+				assert.Equal(t, undeterminedBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[undeterminedKey], "a dry run must record the undetermined denial too")
+			})
 		})
 	}
 }
