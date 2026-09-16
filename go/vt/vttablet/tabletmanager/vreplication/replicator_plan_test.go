@@ -1337,6 +1337,7 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		}, 1024)
 		require.ErrorContains(t, err, "malformed Before image (1 values, expected 2)")
 		require.ErrorContains(t, err, "table t")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
 		require.Empty(t, executed)
 	})
 
@@ -1357,6 +1358,7 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "malformed Before image (3 values, expected 2)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
 		require.Empty(t, executed)
 	})
 

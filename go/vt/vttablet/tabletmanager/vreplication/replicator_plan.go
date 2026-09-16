@@ -909,9 +909,12 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		// A well-formed Before image carries one length per field (-1 for an
 		// omitted value). A shorter one would make MakeRowTrusted return a
 		// row that vals[pkIndex] indexes out of range, and a longer one would
-		// make MakeRowTrusted itself index fields out of range.
+		// make MakeRowTrusted itself index fields out of range. The vstreamer
+		// derives the field event and every row image from the same plan, so a
+		// mismatch here is a malformed stream payload that replaying the same
+		// event cannot repair: fail terminally, like the shape check above.
 		if len(rowDelete.Before.Lengths) != len(tp.Fields) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-delete change for table %s has a malformed Before image (%d values, expected %d)",
 				tp.TargetName, len(rowDelete.Before.Lengths), len(tp.Fields))
 		}
