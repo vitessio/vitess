@@ -671,7 +671,7 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 #### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
 
-Building `vtadmin-web` now requires node >= v22.22.2 (LTS), up from v22.13.0. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The new floor is what jsdom 30, a test dependency, requires; the bump stays within the node 22 line, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
 
 ### <a id="minor-changes-general"/>General</a>
 
