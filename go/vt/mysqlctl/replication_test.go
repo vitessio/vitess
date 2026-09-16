@@ -3467,21 +3467,15 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 		colTypes = "varchar|varchar|varchar"
 	)
 	for _, tt := range []struct {
-		name        string
-		failedQuery string
-		cancelOn    string
-		sqlRunning  string
-		queries     []string
-		wantError   string
-
-		// closeOnCancel simulates a connection killed during the cancelled query.
+		name          string
+		failedQuery   string
+		cancelOn      string
+		sqlRunning    string
+		queries       []string
+		wantError     string
 		closeOnCancel bool
-
-		// closeOnStop simulates connection loss while the stop is in progress.
-		closeOnStop bool
-
-		// poolSize limits the DBA pool to test restart with one connection.
-		poolSize int64
+		closeOnStop   bool
+		poolSize      int64
 	}{
 		{name: "success", sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}},
 		{name: "stop_fails", failedQuery: stopIO, sqlRunning: "Yes", queries: []string{stopIO, startIO}, wantError: stopIO},
