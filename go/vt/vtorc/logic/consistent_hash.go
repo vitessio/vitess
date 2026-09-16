@@ -63,6 +63,11 @@ func isInRingSegment(keyspace, shard string, ringIndex, ringSize int) bool {
 	}
 	primary := computePrimary(keyspace, shard, ringSize)
 	left := (primary + 1) % ringSize
-	right := (primary - 1 + ringSize) % ringSize
+	// Compute the predecessor without the "+ ringSize" addition, which could
+	// overflow int for ring sizes near math.MaxInt.
+	right := primary - 1
+	if right < 0 {
+		right += ringSize
+	}
 	return ringIndex == primary || ringIndex == left || ringIndex == right
 }
