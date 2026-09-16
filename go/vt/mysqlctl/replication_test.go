@@ -3473,9 +3473,13 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 		sqlRunning  string
 		queries     []string
 		wantError   string
+
+		// closeOnCancel simulates a connection killed during the cancelled query.
+		closeOnCancel bool
 	}{
 		{name: "success", sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}},
 		{name: "stop_fails", failedQuery: stopIO, sqlRunning: "Yes", queries: []string{stopIO}, wantError: stopIO},
+		{name: "stop_cancelled", cancelOn: stopIO, closeOnCancel: true, sqlRunning: "Yes", queries: []string{stopIO, startIO}, wantError: stopIO},
 		{name: "status_fails", failedQuery: status, sqlRunning: "Yes", queries: []string{stopIO, status, startIO}, wantError: status},
 		{name: "applier_stopped", sqlRunning: "No", queries: []string{stopIO, status, startIO}, wantError: "applier is not running"},
 		{name: "change_fails", failedQuery: change, sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}, wantError: change},
@@ -3498,7 +3502,12 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			t.Cleanup(cancel)
 			if tt.cancelOn != "" {
-				db.SetBeforeFunc(tt.cancelOn, cancel)
+				db.SetBeforeFunc(tt.cancelOn, func() {
+					cancel()
+					if tt.closeOnCancel {
+						db.CloseAllConnections()
+					}
+				})
 			}
 
 			cp := *db.ConnParams()

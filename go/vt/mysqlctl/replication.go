@@ -1115,10 +1115,6 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 		return err
 	}
 
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
-		return err
-	}
-
 	// Start the IO thread on its own connection and context. A cancelled ctx
 	// kills the pooled connection, and the IO thread must not stay stopped
 	// because the RPC deadline passed.
@@ -1133,6 +1129,17 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 		defer startConn.Recycle()
 
 		return mysqld.executeSuperQueryListConn(startCtx, startConn, []string{startConn.Conn.StartIOThreadCommand()})
+	}
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
+		// A cancel may land after the stop took effect. Start the IO thread again.
+		if ctx.Err() != nil {
+			if startErr := startIO(); startErr != nil {
+				return vterrors.Wrapf(err, "IO thread did not restart: %v", startErr)
+			}
+		}
+
+		return err
 	}
 
 	// Check the applier now that the IO thread is stopped. If it is not
