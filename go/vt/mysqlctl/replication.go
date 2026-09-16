@@ -1108,7 +1108,11 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer func() {
+		if conn != nil {
+			conn.Recycle()
+		}
+	}()
 
 	command, err := conn.Conn.SetReplicationHeartbeatCommand(heartbeatInterval)
 	if err != nil {
@@ -1119,6 +1123,10 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 	// kills the pooled connection, and the IO thread must not stay stopped
 	// because the RPC deadline passed.
 	startIO := func() error {
+		// Release the first connection before borrowing so a pool of one works.
+		conn.Recycle()
+		conn = nil
+
 		startCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ioThreadRestartTimeout)
 		defer cancel()
 
@@ -1132,11 +1140,9 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 	}
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
-		// A cancel may land after the stop took effect. Start the IO thread again.
-		if ctx.Err() != nil {
-			if startErr := startIO(); startErr != nil {
-				return vterrors.Wrapf(err, "IO thread did not restart: %v", startErr)
-			}
+		// The stop may have taken effect before the error. Restart in all cases.
+		if startErr := startIO(); startErr != nil {
+			return vterrors.Wrapf(err, "IO thread did not restart: %v", startErr)
 		}
 
 		return err

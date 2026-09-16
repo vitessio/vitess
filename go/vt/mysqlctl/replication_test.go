@@ -3476,9 +3476,17 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 
 		// closeOnCancel simulates a connection killed during the cancelled query.
 		closeOnCancel bool
+
+		// closeOnStop simulates connection loss while the stop is in progress.
+		closeOnStop bool
+
+		// poolSize limits the DBA pool to test restart with one connection.
+		poolSize int64
 	}{
 		{name: "success", sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}},
-		{name: "stop_fails", failedQuery: stopIO, sqlRunning: "Yes", queries: []string{stopIO}, wantError: stopIO},
+		{name: "stop_fails", failedQuery: stopIO, sqlRunning: "Yes", queries: []string{stopIO, startIO}, wantError: stopIO},
+		{name: "single_connection_pool", poolSize: 1, sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}},
+		{name: "stop_connection_lost", closeOnStop: true, sqlRunning: "Yes", queries: []string{stopIO, startIO}, wantError: stopIO},
 		{name: "stop_cancelled", cancelOn: stopIO, closeOnCancel: true, sqlRunning: "Yes", queries: []string{stopIO, startIO}, wantError: stopIO},
 		{name: "status_fails", failedQuery: status, sqlRunning: "Yes", queries: []string{stopIO, status, startIO}, wantError: status},
 		{name: "applier_stopped", sqlRunning: "No", queries: []string{stopIO, status, startIO}, wantError: "applier is not running"},
@@ -3513,8 +3521,17 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 			cp := *db.ConnParams()
 			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
 			t.Cleanup(mysqld.Close)
+			if tt.poolSize != 0 {
+				require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), tt.poolSize))
+			}
+			if tt.closeOnStop {
+				db.SetBeforeFunc(stopIO, db.CloseAllConnections)
+			}
 
 			err := mysqld.SetReplicationHeartbeat(ctx, 5.4)
+			if tt.closeOnStop {
+				assert.NoError(t, ctx.Err())
+			}
 			if tt.wantError == "" {
 				require.NoError(t, err)
 			} else {
