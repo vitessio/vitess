@@ -61,8 +61,8 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 			if sortL != sortR {
 				return int(sortL) - int(sortR)
 			}
-			_, widthL := cs.DecodeRune(left[i:])
-			_, widthR := cs.DecodeRune(right[i:])
+			_, widthL, _ := cs.DecodeRune(left[i:])
+			_, widthR, _ := cs.DecodeRune(right[i:])
 			switch min(widthL, widthR) {
 			case 4:
 				i++
@@ -112,7 +112,7 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 				dst = append(dst, w)
 				src = src[1:]
 			} else {
-				_, width := cs.DecodeRune(src)
+				_, width, _ := cs.DecodeRune(src)
 				dst = append(dst, src[:width]...)
 				src = src[width:]
 			}
@@ -132,7 +132,7 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 				dst = append(dst, w)
 				src = src[1:]
 			} else {
-				_, width := cs.DecodeRune(src)
+				_, width, _ := cs.DecodeRune(src)
 				dst = append(dst, src[:width]...)
 				src = src[width:]
 			}
@@ -165,7 +165,7 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
 			hasher.Write8(w)
 			src = src[1:]
 		} else {
-			_, width := cs.DecodeRune(src)
+			_, width, _ := cs.DecodeRune(src)
 			hasher.Write(src[:width])
 			src = src[width:]
 		}
@@ -184,21 +184,5 @@ func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 }
 
 func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	var equals func(rune, rune) bool
-	var sortOrder = c.sort
-
-	if sortOrder != nil {
-		equals = func(a, b rune) bool {
-			if a < 128 && b < 128 {
-				return sortOrder[a] == sortOrder[b]
-			}
-			return a == b
-		}
-	} else {
-		equals = func(a, b rune) bool {
-			return a == b
-		}
-	}
-
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
+	return newMultibyteWildcardMatcher(c.charset, c.sort, c.Collate, pat, matchOne, matchMany, escape)
 }
