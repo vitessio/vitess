@@ -65,8 +65,9 @@ var (
 	// Consistent hash ring configuration. When ringSize > 1, each VTOrc
 	// instance watches only the keyspace/shards that hash into its ring
 	// segment (its own partition plus its two ring neighbors). Populated from
-	// the --vtorc-ring-* flags.
-	ringSize            int
+	// the --vtorc-ring-* flags. ringSize defaults to 1 (disabled) so entry
+	// points that do not register these flags via the CLI behave as before.
+	ringSize            = 1
 	ringIndex           int
 	ringAssignmentsFile string
 
