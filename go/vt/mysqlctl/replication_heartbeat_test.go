@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -30,8 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// newReplicationConfigurationTestDaemon connects a daemon to a fake SQL server.
-func newReplicationConfigurationTestDaemon(t *testing.T, flavor string) (*fakesqldb.DB, MysqlDaemon) {
+// newReplicationHeartbeatTestDaemon connects a daemon to a fake SQL server.
+func newReplicationHeartbeatTestDaemon(t *testing.T, flavor string) (*fakesqldb.DB, MysqlDaemon) {
 	t.Helper()
 
 	db := fakesqldb.New(t)
@@ -45,9 +46,9 @@ func newReplicationConfigurationTestDaemon(t *testing.T, flavor string) (*fakesq
 	return db, mysqld
 }
 
-// TestReplicationConfigurationReplica checks both settings with no status queries.
-func TestReplicationConfigurationReplica(t *testing.T) {
-	db, mysqld := newReplicationConfigurationTestDaemon(t, "")
+// TestReplicationHeartbeatReplica checks both values are read with no status queries.
+func TestReplicationHeartbeatReplica(t *testing.T) {
+	db, mysqld := newReplicationHeartbeatTestDaemon(t, "")
 	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"), "4.5",
 	))
@@ -55,50 +56,46 @@ func TestReplicationConfigurationReplica(t *testing.T) {
 		sqltypes.MakeTestFields("replica_net_timeout", "int32"), "9",
 	))
 
-	configuration, err := mysqld.ReplicationConfiguration(t.Context())
+	interval, netTimeout, err := mysqld.ReplicationHeartbeat(t.Context())
 	require.NoError(t, err)
-	require.NotNil(t, configuration)
-	assert.Equal(t, 4.5, configuration.HeartbeatInterval)
-	assert.Equal(t, int32(9), configuration.ReplicaNetTimeout)
+	assert.Equal(t, 4.5, interval)
+	assert.Equal(t, int32(9), netTimeout)
 	assert.Equal(t, 1, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
 	assert.Equal(t, 1, db.GetQueryCalledNum("SELECT @@global.replica_net_timeout"))
 }
 
-// TestReplicationConfigurationNotReplica checks that an empty result needs no timeout query.
-func TestReplicationConfigurationNotReplica(t *testing.T) {
-	db, mysqld := newReplicationConfigurationTestDaemon(t, "")
+// TestReplicationHeartbeatNotReplica checks that a primary returns ErrNotReplica without a timeout query.
+func TestReplicationHeartbeatNotReplica(t *testing.T) {
+	db, mysqld := newReplicationHeartbeatTestDaemon(t, "")
 	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", &sqltypes.Result{})
 
-	configuration, err := mysqld.ReplicationConfiguration(t.Context())
-	require.NoError(t, err)
-	assert.Nil(t, configuration)
+	_, _, err := mysqld.ReplicationHeartbeat(t.Context())
+	require.ErrorIs(t, err, mysql.ErrNotReplica)
 }
 
-// TestReplicationConfigurationUnsupportedFlavor checks that FilePos needs no configuration queries.
-func TestReplicationConfigurationUnsupportedFlavor(t *testing.T) {
-	_, mysqld := newReplicationConfigurationTestDaemon(t, replication.FilePosFlavorID)
+// TestReplicationHeartbeatUnsupportedFlavor checks that FilePos returns ErrNotReplica with no queries.
+func TestReplicationHeartbeatUnsupportedFlavor(t *testing.T) {
+	_, mysqld := newReplicationHeartbeatTestDaemon(t, replication.FilePosFlavorID)
 
-	configuration, err := mysqld.ReplicationConfiguration(t.Context())
-	require.NoError(t, err)
-	assert.Nil(t, configuration)
+	_, _, err := mysqld.ReplicationHeartbeat(t.Context())
+	require.ErrorIs(t, err, mysql.ErrNotReplica)
 }
 
-// TestReplicationConfigurationQueryError checks errors from each configuration query.
-func TestReplicationConfigurationQueryError(t *testing.T) {
+// TestReplicationHeartbeatQueryError checks errors from each query.
+func TestReplicationHeartbeatQueryError(t *testing.T) {
 	for _, query := range []string{
 		"SELECT * FROM performance_schema.replication_connection_configuration",
 		"SELECT @@global.replica_net_timeout",
 	} {
 		t.Run(query, func(t *testing.T) {
-			db, mysqld := newReplicationConfigurationTestDaemon(t, "")
+			db, mysqld := newReplicationHeartbeatTestDaemon(t, "")
 			db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"), "4.5",
 			))
 			db.AddRejectedQuery(query, vterrors.New(vtrpcpb.Code_INTERNAL, "configuration query failed"))
 
-			configuration, err := mysqld.ReplicationConfiguration(t.Context())
+			_, _, err := mysqld.ReplicationHeartbeat(t.Context())
 			require.ErrorContains(t, err, "configuration query failed")
-			assert.Nil(t, configuration)
 		})
 	}
 }
