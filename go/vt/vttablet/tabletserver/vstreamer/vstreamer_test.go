@@ -155,11 +155,128 @@ func TestNoBlob(t *testing.T) {
 					Count: 4,
 					Cols:  []byte{0x0b}, // Columns bitmap of 00001011 as the third column/bit position representing the blob column has no data
 				},
+				beforeDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // The blob column is also absent from the before image, which is signaled the same way
+				},
+			}}}},
+		}},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"delete from t1 where id = 1", []TestRowEvent{
+			// A delete only has a before image; the blob column is absent from it and the
+			// BeforeDataColumns bitmap says so.
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{
+				beforeRaw: &querypb.Row{
+					Lengths: []int64{1, -1, 3}, // -1 for the 2nd column / blob field, as it's not present
+					Values:  []byte("1bbb"),
+				},
+				beforeDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 3,
+					Cols:  []byte{0x05}, // Columns bitmap of 00000101 as the second column/bit position representing the blob column has no data
+				},
 			}}}},
 		}},
 		{"commit", nil},
 	}}
 	ts.Run()
+
+	// The BeforeDataColumns bitmap describes the columns as emitted by the stream,
+	// so when the filter reorders or drops columns it is projected along with the
+	// values. The existing DataColumns bitmap is intentionally left in the source
+	// table's column order for compatibility with existing consumers.
+	// t5 reorders the columns and keeps the blob; t6 drops the blob altogether.
+	tsp := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t5(id int, blb blob, val varbinary(4), primary key(id))",
+			"create table t6(id int, blb blob, val varbinary(4), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{
+					{Match: "t5", Filter: "select blb, id, val from t5"},
+					{Match: "t6", Filter: "select val, id from t6"},
+				},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsp.Close()
+	tsp.Init()
+
+	reorderedFE := &TestFieldEvent{
+		table: "t5",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	subsetFE := &TestFieldEvent{
+		table: "t6",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	// The after image bitmap is in the source table's (id, blb, val) order for both
+	// tables: only the blob is absent, i.e. 00000101.
+	afterBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x05}}
+	// The before image bitmap is projected. In the emitted (blb, id, val) order only
+	// the blob is absent: 00000110.
+	reorderedBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x06}}
+	// The omitted blob is not part of the emitted (val, id) columns, so both bits are set.
+	subsetBitmap := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}}
+
+	tsp.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t5 values (1, 'blob1', 'aaa')", []TestRowEvent{
+			{event: reorderedFE.String()},
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{after: []string{"blob1", "1", "aaa"}}}}},
+		}},
+		{"update t5 set val = 'bbb'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{
+				beforeRaw:            &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1aaa")},
+				afterRaw:             &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
+				dataColumnsRaw:       afterBitmap,
+				beforeDataColumnsRaw: reorderedBitmap,
+			}}}},
+		}},
+		{"delete from t5 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{
+				beforeRaw:            &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
+				beforeDataColumnsRaw: reorderedBitmap,
+			}}}},
+		}},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"insert into t6 values (1, 'blob1', 'aaa')", []TestRowEvent{
+			{event: subsetFE.String()},
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{after: []string{"aaa", "1"}}}}},
+		}},
+		{"update t6 set val = 'bbb'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{
+				before:               []string{"aaa", "1"},
+				after:                []string{"bbb", "1"},
+				dataColumnsRaw:       afterBitmap,
+				beforeDataColumnsRaw: subsetBitmap,
+			}}}},
+		}},
+		{"delete from t6 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{
+				before:               []string{"bbb", "1"},
+				beforeDataColumnsRaw: subsetBitmap,
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsp.Run()
 }
 
 // TestSetAndEnum confirms that the events for set and enum columns are correct.
