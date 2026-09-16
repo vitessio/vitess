@@ -18,9 +18,12 @@ package logic
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestIsInRingSegment_NoPartitioningBelowThreshold verifies that ring sizes of
@@ -203,5 +206,89 @@ func TestIsInRingSegment_ReasonableDistribution(t *testing.T) {
 	for idx, count := range counts {
 		assert.InDelta(t, expected, count, float64(expected)*0.3,
 			"instance %d watches %d shards; expected ~%d ±30%%", idx, count, expected)
+	}
+}
+
+// TestLoadRingAssignmentsFile exercises loadRingAssignmentsFile end to end: a
+// valid file populates bucketAssignments, and each validation branch returns an
+// error and leaves bucketAssignments untouched.
+func TestLoadRingAssignmentsFile(t *testing.T) {
+	const ringSize = 4
+
+	tests := []struct {
+		name        string
+		content     string
+		writeFile   bool
+		wantErr     string
+		wantBuckets int // only checked when wantErr == ""
+	}{
+		{
+			name:        "valid",
+			content:     `{"num_buckets": 4, "bucket_assignments": [0, 1, 2, 3]}`,
+			writeFile:   true,
+			wantBuckets: 4,
+		},
+		{
+			name:      "missing file",
+			writeFile: false,
+			wantErr:   "reading ring assignments file",
+		},
+		{
+			name:      "invalid json",
+			content:   `{not valid json`,
+			writeFile: true,
+			wantErr:   "parsing ring assignments file",
+		},
+		{
+			name:      "num_buckets not positive",
+			content:   `{"num_buckets": 0, "bucket_assignments": []}`,
+			writeFile: true,
+			wantErr:   "num_buckets must be > 0",
+		},
+		{
+			name:      "length mismatch",
+			content:   `{"num_buckets": 4, "bucket_assignments": [0, 1]}`,
+			writeFile: true,
+			wantErr:   "does not match num_buckets",
+		},
+		{
+			name:      "partition out of range",
+			content:   `{"num_buckets": 4, "bucket_assignments": [0, 1, 2, 4]}`,
+			writeFile: true,
+			wantErr:   "is out of range",
+		},
+		{
+			name:      "negative partition",
+			content:   `{"num_buckets": 4, "bucket_assignments": [0, 1, 2, -1]}`,
+			writeFile: true,
+			wantErr:   "is out of range",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			orig := bucketAssignments.Load()
+			t.Cleanup(func() { bucketAssignments.Store(orig) })
+			bucketAssignments.Store(nil)
+
+			path := filepath.Join(t.TempDir(), "ring-assignments.json")
+			if tc.writeFile {
+				require.NoError(t, os.WriteFile(path, []byte(tc.content), 0o600))
+			}
+
+			err := loadRingAssignmentsFile(path, ringSize)
+
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				assert.Nil(t, bucketAssignments.Load(), "bucketAssignments must be untouched on error")
+				return
+			}
+
+			require.NoError(t, err)
+			ba := bucketAssignments.Load()
+			require.NotNil(t, ba)
+			assert.Len(t, *ba, tc.wantBuckets)
+		})
 	}
 }
