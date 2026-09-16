@@ -25,6 +25,7 @@ import {
 } from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { server } from '../../tests/server';
 
 vi.mock('../errors/errorHandler');
 
@@ -35,7 +36,7 @@ const ORIGINAL_ENV = { ...import.meta.env };
 // for all requests made against the given `endpoint`.
 const mockServerJson = (endpoint: string, json: object, status: number = 200) => {
     const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
-    global.server.use(http.get(`${apiAddr}${endpoint}`, (info) => HttpResponse.json(json, { status: status })));
+    server.use(http.get(`${apiAddr}${endpoint}`, (info) => HttpResponse.json(json, { status: status })));
 };
 
 describe('api/http', () => {
@@ -92,9 +93,9 @@ describe('api/http', () => {
         });
 
         it('throws an error on malformed JSON', async () => {
-            errorHandler.notify.mockReset();
+            vi.mocked(errorHandler.notify).mockReset();
             const endpoint = `/api/tablets`;
-            global.server.use(
+            server.use(
                 http.get(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, (info) =>
                     HttpResponse.html('<html><head><title>504 Gateway Time-out</title></head></html>', {
                         status: 504,
@@ -136,17 +137,20 @@ describe('api/http', () => {
             it('uses the VITE_FETCH_CREDENTIALS env variable if specified', async () => {
                 import.meta.env.VITE_FETCH_CREDENTIALS = 'include';
 
-                vi.spyOn(global, 'fetch');
+                vi.spyOn(globalThis, 'fetch');
 
                 const endpoint = `/api/tablets`;
                 const response = { ok: true, result: null };
                 mockServerJson(endpoint, response);
 
                 await api.vtfetch(endpoint);
-                expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, {
-                    credentials: 'include',
-                });
+                expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+                expect(globalThis.fetch).toHaveBeenCalledWith(
+                    `${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`,
+                    {
+                        credentials: 'include',
+                    }
+                );
 
                 vi.restoreAllMocks();
             });
@@ -155,25 +159,29 @@ describe('api/http', () => {
                 // Explicitly unset VITE_FETCH_CREDENTIALS to test default behavior
                 delete import.meta.env.VITE_FETCH_CREDENTIALS;
 
-                vi.spyOn(global, 'fetch');
+                vi.spyOn(globalThis, 'fetch');
 
                 const endpoint = `/api/tablets`;
                 const response = { ok: true, result: null };
                 mockServerJson(endpoint, response);
 
                 await api.vtfetch(endpoint);
-                expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, {
-                    credentials: undefined,
-                });
+                expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+                expect(globalThis.fetch).toHaveBeenCalledWith(
+                    `${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`,
+                    {
+                        credentials: undefined,
+                    }
+                );
 
                 vi.restoreAllMocks();
             });
 
             it('throws an error if an invalid value used for `credentials`', async () => {
-                import.meta.env.VITE_FETCH_CREDENTIALS = 'nope';
+                // Deliberately not a RequestCredentials value; vtfetch is expected to reject it.
+                import.meta.env.VITE_FETCH_CREDENTIALS = 'nope' as RequestCredentials;
 
-                vi.spyOn(global, 'fetch');
+                vi.spyOn(globalThis, 'fetch');
 
                 const endpoint = `/api/tablets`;
                 const response = { ok: true, result: null };
@@ -186,7 +194,7 @@ describe('api/http', () => {
                     expect(e.message).toEqual(
                         'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
                     );
-                    expect(global.fetch).toHaveBeenCalledTimes(0);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(0);
 
                     expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                     expect(errorHandler.notify).toHaveBeenCalledWith(e);
@@ -213,7 +221,7 @@ describe('api/http', () => {
         it('throws an error when executing a write request in read only mode', async () => {
             import.meta.env.VITE_READONLY_MODE = 'true';
 
-            vi.spyOn(global, 'fetch');
+            vi.spyOn(globalThis, 'fetch');
 
             // Endpoint doesn't really matter here since the point is that we don't hit it
             const endpoint = `/api/fake`;
@@ -227,7 +235,7 @@ describe('api/http', () => {
                     await api.vtfetch(endpoint, { method });
                 } catch (e: any) {
                     expect(e.message).toEqual(`Cannot execute write request in read-only mode: ${method} ${endpoint}`);
-                    expect(global.fetch).toHaveBeenCalledTimes(0);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(0);
 
                     expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                     expect(errorHandler.notify).toHaveBeenCalledWith(e);
