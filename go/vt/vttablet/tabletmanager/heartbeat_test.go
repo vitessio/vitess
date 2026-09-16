@@ -40,6 +40,7 @@ func TestRepairHeartbeat(t *testing.T) {
 		afterIO      replication.ReplicationState
 		afterSQL     replication.ReplicationState
 		applierError string
+		calls        []string
 		stopError    error
 		statusError  error
 		restartError error
@@ -47,20 +48,25 @@ func TestRepairHeartbeat(t *testing.T) {
 		wantChange   bool
 		wantStopped  bool
 	}{
-		{name: "drained_relay_log", before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
-		{name: "applied_superset", before: "1-9", executed: "1-11", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
-		{name: "unapplied_relay_log", before: "1-10", executed: "1-10", received: "1-11", ioState: replication.ReplicationStateRunning, wantStopped: true},
-		{name: "already_stopped", before: "1-10", executed: "1-10", received: "1-10", wantChange: true},
-		{name: "unapplied_already_stopped", before: "1-9", executed: "1-9", received: "1-10"},
-		{name: "applier_error", before: "1-9", executed: "1-9", received: "1-10", ioState: replication.ReplicationStateRunning, applierError: "applier failed", wantStopped: true},
-		{name: "io_connecting", before: "1-10", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateConnecting, wantChange: true, wantStopped: true},
-		{name: "sql_running", before: "1-10", executed: "1-10", received: "1-10", sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
-		{name: "stop_failure", before: "1-10", ioState: replication.ReplicationStateRunning, stopError: errors.New("stop unavailable"), wantError: "stop unavailable"},
-		{name: "status_read_failure", before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
-		{name: "io_still_running", before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
-		{name: "sql_still_running", before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
-		{name: "status_read_failure_restart_fails", before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), restartError: errors.New("start unavailable"), wantError: "read replication status after stop: status unavailable: restart replication after failed heartbeat repair: start unavailable"},
-		{name: "io_still_running_already_stopped_status_fails", before: "1-10", statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
+		// Check fresh positions to decide whether the change is safe.
+		{name: "drained_relay_log", calls: []string{"stop", "status"}, before: "1-9", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "applied_superset", calls: []string{"stop", "status"}, before: "1-9", executed: "1-11", received: "1-10", ioState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+		{name: "unapplied_relay_log", calls: []string{"stop", "status"}, before: "1-10", executed: "1-10", received: "1-11", ioState: replication.ReplicationStateRunning, wantStopped: true},
+		{name: "already_stopped", calls: []string{"status"}, before: "1-10", executed: "1-10", received: "1-10", wantChange: true},
+		{name: "unapplied_already_stopped", calls: []string{"status"}, before: "1-9", executed: "1-9", received: "1-10"},
+		{name: "applier_error", calls: []string{"stop", "status"}, before: "1-9", executed: "1-9", received: "1-10", ioState: replication.ReplicationStateRunning, applierError: "applier failed", wantStopped: true},
+
+		// Stop active threads before reading their positions.
+		{name: "io_connecting", calls: []string{"stop", "status"}, before: "1-10", executed: "1-10", received: "1-10", ioState: replication.ReplicationStateConnecting, wantChange: true, wantStopped: true},
+		{name: "sql_running", calls: []string{"stop", "status"}, before: "1-10", executed: "1-10", received: "1-10", sqlState: replication.ReplicationStateRunning, wantChange: true, wantStopped: true},
+
+		// Restart after a failed check only if the repair stopped replication.
+		{name: "stop_failure", calls: []string{"stop"}, before: "1-10", ioState: replication.ReplicationStateRunning, stopError: errors.New("stop unavailable"), wantError: "stop unavailable"},
+		{name: "status_read_failure", calls: []string{"stop", "status", "start"}, before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
+		{name: "io_still_running", calls: []string{"stop", "status", "start"}, before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
+		{name: "sql_still_running", calls: []string{"stop", "status", "start"}, before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
+		{name: "status_read_failure_restart_fails", calls: []string{"stop", "status", "start"}, before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), restartError: errors.New("start unavailable"), wantError: "read replication status after stop: status unavailable: restart replication after failed heartbeat repair: start unavailable"},
+		{name: "already_stopped_status_fails", calls: []string{"status"}, before: "1-10", statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, state := range []*replication.ReplicationState{&tt.ioState, &tt.sqlState, &tt.afterIO, &tt.afterSQL} {
@@ -95,17 +101,17 @@ func TestRepairHeartbeat(t *testing.T) {
 			}
 
 			var calls []any
-			if tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped {
-				calls = append(calls, daemon.EXPECT().StopReplication(ctx, tm.hookExtraEnv()).Return(tt.stopError))
-			}
-			stopped := tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped
-			if tt.stopError == nil {
-				calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(status, tt.statusError))
-			}
-			// A failed check after our stop starts replication again.
-			checkFailed := tt.statusError != nil || tt.afterIO != replication.ReplicationStateStopped || tt.afterSQL != replication.ReplicationStateStopped
-			if tt.stopError == nil && stopped && checkFailed {
-				calls = append(calls, daemon.EXPECT().StartReplication(ctx, tm.hookExtraEnv()).Return(tt.restartError))
+			for _, call := range tt.calls {
+				switch call {
+				case "stop":
+					calls = append(calls, daemon.EXPECT().StopReplication(ctx, tm.hookExtraEnv()).Return(tt.stopError))
+				case "status":
+					calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(status, tt.statusError))
+				case "start":
+					calls = append(calls, daemon.EXPECT().StartReplication(ctx, tm.hookExtraEnv()).Return(tt.restartError))
+				default:
+					t.Fatalf("unknown daemon call %q", call)
+				}
 			}
 			gomock.InOrder(calls...)
 
