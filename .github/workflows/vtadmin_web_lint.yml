@@ -74,6 +74,10 @@ jobs:
         if: always()
         run: cd ./web/vtadmin && npm run lint:prettier
 
+      - name: Run tsc
+        if: always()
+        run: cd ./web/vtadmin && npm run lint:tsc
+
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
     concurrency: 
       group: ${{ github.workflow }}-${{ github.ref }}
