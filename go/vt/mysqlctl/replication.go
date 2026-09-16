@@ -50,6 +50,10 @@ const (
 	// superReadOnlyResetTimeout bounds the reset function returned by
 	// SetSuperReadOnly.
 	superReadOnlyResetTimeout = 1 * time.Minute
+
+	// ioThreadRestartTimeout bounds the IO thread restart after a failed or
+	// cancelled heartbeat change.
+	ioThreadRestartTimeout = 10 * time.Second
 )
 
 type (
@@ -1115,35 +1119,52 @@ func (mysqld *Mysqld) SetReplicationHeartbeat(ctx context.Context, heartbeatInte
 		return err
 	}
 
-	// Restart the IO thread on any failure from here on, so a failed heartbeat
-	// change never leaves the replica without its receiver.
-	restartIO := func(cause error) error {
-		log.Warn("Heartbeat change failed. Restarting the IO thread", slog.Float64("heartbeat_interval", heartbeatInterval), slog.Any("error", cause))
-		restartCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	// Start the IO thread on its own connection and context. A cancelled ctx
+	// kills the pooled connection, and the IO thread must not stay stopped
+	// because the RPC deadline passed.
+	startIO := func() error {
+		startCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ioThreadRestartTimeout)
 		defer cancel()
 
-		if restartErr := mysqld.executeSuperQueryListConn(restartCtx, conn, []string{conn.Conn.StartIOThreadCommand()}); restartErr != nil {
-			return vterrors.Wrapf(cause, "heartbeat change failed and the IO thread did not restart: %v", restartErr)
+		startConn, err := getPoolReconnect(startCtx, mysqld.dbaPool)
+		if err != nil {
+			return err
 		}
-		return cause
+		defer startConn.Recycle()
+
+		return mysqld.executeSuperQueryListConn(startCtx, startConn, []string{startConn.Conn.StartIOThreadCommand()})
 	}
 
 	// Check the applier now that the IO thread is stopped. If it is not
 	// running, the change below would delete the relay log.
 	status, err := conn.Conn.ShowReplicationStatus()
 	if err != nil {
-		return restartIO(err)
+		if startErr := startIO(); startErr != nil {
+			return vterrors.Wrapf(err, "IO thread did not restart: %v", startErr)
+		}
+
+		return err
 	}
 
 	if !status.SQLHealthy() {
-		return restartIO(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "applier is not running, a heartbeat change would delete the relay log"))
+		err := vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "applier is not running, a heartbeat change would delete the relay log")
+		if startErr := startIO(); startErr != nil {
+			return vterrors.Wrapf(err, "IO thread did not restart: %v", startErr)
+		}
+
+		return err
 	}
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{command}); err != nil {
-		return restartIO(err)
+		log.Warn("Heartbeat change failed. Restarting the IO thread", slog.Float64("heartbeat_interval", heartbeatInterval), slog.Any("error", err))
+		if startErr := startIO(); startErr != nil {
+			return vterrors.Wrapf(err, "IO thread did not restart: %v", startErr)
+		}
+
+		return err
 	}
 
-	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartIOThreadCommand()})
+	return startIO()
 }
 
 // SetReplicationSource makes the provided host / port the primary. It optionally

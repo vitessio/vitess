@@ -3469,6 +3469,7 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
 		failedQuery string
+		cancelOn    string
 		sqlRunning  string
 		queries     []string
 		wantError   string
@@ -3479,6 +3480,9 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 		{name: "applier_stopped", sqlRunning: "No", queries: []string{stopIO, status, startIO}, wantError: "applier is not running"},
 		{name: "change_fails", failedQuery: change, sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}, wantError: change},
 		{name: "start_fails", failedQuery: startIO, sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}, wantError: startIO},
+		// A cancelled context kills the pooled connection even when the change
+		// went through. The IO thread must still be started, on a fresh connection.
+		{name: "change_cancelled", cancelOn: change, sqlRunning: "Yes", queries: []string{stopIO, status, change, startIO}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
@@ -3491,18 +3495,32 @@ func TestSetReplicationHeartbeat(t *testing.T) {
 			if tt.failedQuery != "" {
 				db.AddRejectedQuery(tt.failedQuery, assert.AnError)
 			}
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			if tt.cancelOn != "" {
+				db.SetBeforeFunc(tt.cancelOn, cancel)
+			}
 
 			cp := *db.ConnParams()
 			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
 			t.Cleanup(mysqld.Close)
 
-			err := mysqld.SetReplicationHeartbeat(t.Context(), 5.4)
+			err := mysqld.SetReplicationHeartbeat(ctx, 5.4)
 			if tt.wantError == "" {
 				require.NoError(t, err)
 			} else {
 				require.ErrorContains(t, err, tt.wantError)
 			}
-			assert.Equal(t, "use `fakesqldb`;select 1;"+strings.ToLower(strings.Join(tt.queries, ";")), db.QueryLog())
+			// Check the statements ran once each and in order. Connection setup
+			// statements from the pool are interleaved and ignored.
+			queryLog := db.QueryLog()
+			last := -1
+			for _, query := range tt.queries {
+				assert.Equal(t, 1, db.GetQueryCalledNum(query), query)
+				index := strings.Index(queryLog, strings.ToLower(query))
+				assert.Greater(t, index, last, "%s out of order in %s", query, queryLog)
+				last = index
+			}
 		})
 	}
 }
