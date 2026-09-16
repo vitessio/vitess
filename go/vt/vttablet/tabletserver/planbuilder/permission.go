@@ -129,8 +129,13 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		if node.Type == sqlparser.AnalyzeType {
 			permissions, tablesUndetermined = BuildPermissions(node.Statement)
 		}
+	case *sqlparser.Show:
+		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
+		// subquery in it, so those reads are checked. The SHOW's own subject
+		// stays unchecked.
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
-		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, *sqlparser.ExplainTab,
+		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.ExplainTab,
 		*sqlparser.UnlockTables:
 		// no op
 	default:

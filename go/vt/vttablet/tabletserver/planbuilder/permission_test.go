@@ -71,6 +71,34 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "show variables like 'a%'",
 		output: nil,
 	}, {
+		// A WHERE with no subquery reads nothing.
+		input:  "show variables where Variable_name like 'a%'",
+		output: nil,
+	}, {
+		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
+		// subquery in it, so those reads are checked. The SHOW's own subject
+		// (the table of SHOW COLUMNS FROM t) stays unchecked as before.
+		input: "show tables where Tables_in_d = (select name from secret limit 1)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "show columns from t where Field in (select c from secret)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "show status where Variable_name = (select v from secret where id = (select max(id) from other))",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "other",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		input:  "describe select * from t",
 		output: nil,
 	}, {

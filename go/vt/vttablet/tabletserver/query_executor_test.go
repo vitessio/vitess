@@ -1280,8 +1280,9 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 
 // TestQueryExecutorTableAclEmbeddedReads covers statements whose main effect
 // is not a read but which execute one embedded in them: CREATE TABLE ... AS
-// SELECT copies the source rows, and EXPLAIN ANALYZE runs the statement it
-// explains. Before this fix the planner derived no permission for the tables
+// SELECT copies the source rows, EXPLAIN ANALYZE runs the statement it
+// explains, and SHOW ... WHERE evaluates the subqueries in its filter. Before
+// this fix the planner derived no permission for the tables
 // that read touches, so a caller with ADMIN on a table they may create, or
 // with nothing at all, could read a table they are denied READER on. The
 // read's tables must now be checked like a plain SELECT's: denied for a
@@ -1295,6 +1296,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	defer db.Close()
 	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)explain analyze .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)show variables .*", &sqltypes.Result{})
 
 	// A fully parsed CREATE TABLE ... AS SELECT is denied on the source table.
 	// A form the parser only partially parses (it keeps the CREATE TABLE
@@ -1310,6 +1312,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false},
 		{"create table with a parenthesized select", "create table ct (select pk from test_table)", planbuilder.PlanDDL, true},
 		{"explain analyze select", "explain analyze select pk from test_table", planbuilder.PlanSelect, false},
+		{"show with a subquery in its filter", "show variables where Variable_name in (select email from test_table)", planbuilder.PlanShow, false},
 	}
 
 	// test_table is readable only by "superuser". The caller "u2" has ADMIN on
