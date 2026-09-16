@@ -118,8 +118,19 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		// is checked on the tables it names and what the function touches is
 		// not.
 		tablesUndetermined = true
+	case *sqlparser.ValuesStatement:
+		// Reachable through EXPLAIN ANALYZE; it reads only through the
+		// subqueries in its rows.
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
+	case *sqlparser.ExplainStmt:
+		// EXPLAIN ANALYZE executes the statement it explains where MySQL
+		// supports that, so it needs that statement's permissions. A plain
+		// EXPLAIN only plans it and stays unchecked, as DESCRIBE does.
+		if node.Type == sqlparser.AnalyzeType {
+			permissions, tablesUndetermined = BuildPermissions(node.Statement)
+		}
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
-		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
+		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, *sqlparser.ExplainTab,
 		*sqlparser.UnlockTables:
 		// no op
 	default:

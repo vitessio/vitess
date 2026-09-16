@@ -1280,9 +1280,10 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 
 // TestQueryExecutorTableAclEmbeddedReads covers statements whose main effect
 // is not a read but which execute one embedded in them: CREATE TABLE ... AS
-// SELECT copies the source rows. Before this fix the planner derived no
-// permission for the tables that read touches, so a caller with ADMIN on a
-// table they may create could read a table they are denied READER on. The
+// SELECT copies the source rows, and EXPLAIN ANALYZE runs the statement it
+// explains. Before this fix the planner derived no permission for the tables
+// that read touches, so a caller with ADMIN on a table they may create, or
+// with nothing at all, could read a table they are denied READER on. The
 // read's tables must now be checked like a plain SELECT's: denied for a
 // non-exempt caller under strict ACL, and the statement must not reach the
 // backend; an exempt caller, a dry run, and strict ACL off still run it.
@@ -1293,12 +1294,13 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)explain analyze .*", &sqltypes.Result{})
 
-	// A fully parsed form is denied on the source table. A form the parser
-	// only partially parses (it keeps the CREATE TABLE prefix and the executor
-	// forwards the raw text) is denied on the undetermined table set instead,
-	// as MySQL still copies the rows. One of each: the per-shape
-	// classification is pinned in TestBuildPermissions.
+	// A fully parsed CREATE TABLE ... AS SELECT is denied on the source table.
+	// A form the parser only partially parses (it keeps the CREATE TABLE
+	// prefix and the executor forwards the raw text) is denied on the
+	// undetermined table set instead, as MySQL still copies the rows. One of
+	// each: the per-shape classification is pinned in TestBuildPermissions.
 	cases := []struct {
 		name         string
 		query        string
@@ -1307,6 +1309,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	}{
 		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false},
 		{"create table with a parenthesized select", "create table ct (select pk from test_table)", planbuilder.PlanDDL, true},
+		{"explain analyze select", "explain analyze select pk from test_table", planbuilder.PlanSelect, false},
 	}
 
 	// test_table is readable only by "superuser". The caller "u2" has ADMIN on

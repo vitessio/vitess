@@ -74,12 +74,60 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "describe select * from t",
 		output: nil,
 	}, {
-		// EXPLAIN carries no table permissions, so its per-table ACL is never
-		// checked. This is the shape VEXPLAIN MYSQLPLAN issues against every
-		// resolved shard; the empty result documents that those EXPLAINs are not
-		// ACL-checked on the explained table (see the 25.0 summary).
+		// A plain EXPLAIN, in any format, carries no table permissions, so
+		// its per-table ACL is never checked. This is the shape VEXPLAIN
+		// MYSQLPLAN issues against every resolved shard; the empty result
+		// documents that those EXPLAINs are not ACL-checked on the explained
+		// table (see the 25.0 summary).
 		input:  "explain format = json select * from t",
 		output: nil,
+	}, {
+		input:  "explain format = tree select * from t",
+		output: nil,
+	}, {
+		// EXPLAIN ANALYZE executes the statement it explains, so it carries
+		// that statement's permissions, the top-level split between READER
+		// and WRITER included.
+		input: "explain analyze select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain analyze update t set a = 1 where id in (select id from s)",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "s",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain analyze insert into t select * from s",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "s",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain analyze delete from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}},
+	}, {
+		// A VALUES statement is explainable too; it reads only through the
+		// subqueries in its rows.
+		input:  "explain analyze values row(1, 2)",
+		output: nil,
+	}, {
+		input: "explain analyze values row((select a from t))",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
 	}, {
 		// A bare CREATE TABLE is a partial parse (the grammar keeps only the
 		// prefix), indistinguishable from `create table t (select ...)`, so it
