@@ -79,10 +79,9 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		// derived, so the statement is flagged and the executor denies it
 		// under strict table ACL rather than skip the check. A new statement
 		// type the parser leaves opaque belongs here, not in the arm below.
-		// This flags whole statements only: a stored function called from a
-		// SELECT or DML is as opaque as a procedure body, but that statement
-		// is checked on the tables it names and what the function touches is
-		// not.
+		// This flags whole statements only. A stored function is invoked
+		// inside an expression rather than CALLed, so `select f()` is checked
+		// on the tables it names and what f's body touches is not.
 		tablesUndetermined = true
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
 		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
