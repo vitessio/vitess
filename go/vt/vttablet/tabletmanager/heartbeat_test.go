@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -44,6 +45,7 @@ func TestRepairHeartbeat(t *testing.T) {
 		stopError    error
 		statusError  error
 		restartError error
+		cancelBefore bool
 		wantError    string
 		wantChange   bool
 		wantStopped  bool
@@ -66,6 +68,7 @@ func TestRepairHeartbeat(t *testing.T) {
 		{name: "io_still_running", calls: []string{"stop", "status", "start"}, before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
 		{name: "sql_still_running", calls: []string{"stop", "status", "start"}, before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
 		{name: "status_read_failure_restart_fails", calls: []string{"stop", "status", "start"}, before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), restartError: errors.New("start unavailable"), wantError: "read replication status after stop: status unavailable: restart replication after failed heartbeat repair: start unavailable"},
+		{name: "status_read_failure_ctx_cancelled", calls: []string{"stop", "status", "start"}, before: "1-10", ioState: replication.ReplicationStateRunning, statusError: context.Canceled, cancelBefore: true, wantError: "read replication status after stop: context canceled"},
 		{name: "already_stopped_status_fails", calls: []string{"status"}, before: "1-10", statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,7 +78,8 @@ func TestRepairHeartbeat(t *testing.T) {
 				}
 			}
 
-			ctx := t.Context()
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
 			daemon := mock.NewMockMysqlDaemon(gomock.NewController(t))
 			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
 			req := &repairHeartbeatRequest{
@@ -106,9 +110,15 @@ func TestRepairHeartbeat(t *testing.T) {
 				case "stop":
 					calls = append(calls, daemon.EXPECT().StopReplication(ctx, tm.hookExtraEnv()).Return(tt.stopError))
 				case "status":
-					calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(status, tt.statusError))
+					calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).DoAndReturn(func(context.Context) (replication.ReplicationStatus, error) {
+						// The caller's deadline may pass during the check. The restart must not use it.
+						if tt.cancelBefore {
+							cancel()
+						}
+						return status, tt.statusError
+					}))
 				case "start":
-					calls = append(calls, daemon.EXPECT().StartReplication(ctx, tm.hookExtraEnv()).Return(tt.restartError))
+					calls = append(calls, daemon.EXPECT().StartReplication(gomock.Cond(func(c context.Context) bool { return c.Err() == nil }), tm.hookExtraEnv()).Return(tt.restartError))
 				default:
 					t.Fatalf("unknown daemon call %q", call)
 				}

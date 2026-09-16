@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -104,6 +105,11 @@ func (tm *TabletManager) restartAfterFailedRepair(ctx context.Context, stopped b
 	if !stopped {
 		return nil
 	}
+
+	// Use a fresh deadline. The caller's may be the reason the check failed, and
+	// the replica must not stay stopped for it.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+	defer cancel()
 
 	if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return vterrors.Wrap(err, "restart replication after failed heartbeat repair")
