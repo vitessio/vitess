@@ -21,8 +21,7 @@ import "math"
 // HeartbeatIntervalForNetTimeout returns the heartbeat interval a replica
 // must use for the given replica net timeout: half the timeout, so the
 // replica misses two heartbeats before it drops the connection to the
-// source. VTOrc requests this value and vttablet compares against it, so
-// both must derive it from one place.
+// source.
 func HeartbeatIntervalForNetTimeout(replicaNetTimeout int32) float64 {
 	return float64(replicaNetTimeout) / 2
 }
