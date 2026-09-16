@@ -1094,7 +1094,6 @@ func TestSetReplicationSourceConfiguration(t *testing.T) {
 	}
 }
 
-// TestSetReplicationSourceHeartbeatStoppedStatus checks that the stopped snapshot decides whether CHANGE is safe.
 func TestSetReplicationSourceRecovery(t *testing.T) {
 	t.Run("InitReplica recovers from start replication error", func(t *testing.T) {
 		ctx := t.Context()
