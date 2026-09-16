@@ -64,12 +64,21 @@ func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbe
 	// Read fresh positions because replication could have advanced since the caller's read.
 	stoppedStatus, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	if err != nil {
+		if restartErr := tm.restartAfterFailedRepair(ctx, resp.stopped); restartErr != nil {
+			return nil, vterrors.Wrapf(restartErr, "read replication status after stop: %v", err)
+		}
+
 		return nil, vterrors.Wrap(err, "read replication status after stop")
 	}
 
 	// Reject running threads because their positions are not stable for the safety check.
 	if stoppedStatus.IOState != replication.ReplicationStateStopped || stoppedStatus.SQLState != replication.ReplicationStateStopped {
-		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication threads must be stopped before heartbeat repair")
+		err := vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication threads must be stopped before heartbeat repair")
+		if restartErr := tm.restartAfterFailedRepair(ctx, resp.stopped); restartErr != nil {
+			return nil, vterrors.Wrapf(restartErr, "%v", err)
+		}
+
+		return nil, err
 	}
 
 	// Skip the change if received transactions remain unapplied. CHANGE REPLICATION
@@ -88,4 +97,17 @@ func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbe
 	}
 
 	return resp, nil
+}
+
+// restartAfterFailedRepair starts replication again when the repair stopped it.
+func (tm *TabletManager) restartAfterFailedRepair(ctx context.Context, stopped bool) error {
+	if !stopped {
+		return nil
+	}
+
+	if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
+		return vterrors.Wrap(err, "restart replication after failed heartbeat repair")
+	}
+
+	return nil
 }

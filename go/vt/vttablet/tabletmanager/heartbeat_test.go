@@ -42,6 +42,7 @@ func TestRepairHeartbeat(t *testing.T) {
 		applierError string
 		stopError    error
 		statusError  error
+		restartError error
 		wantError    string
 		wantChange   bool
 		wantStopped  bool
@@ -58,6 +59,8 @@ func TestRepairHeartbeat(t *testing.T) {
 		{name: "status_read_failure", before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
 		{name: "io_still_running", before: "1-10", ioState: replication.ReplicationStateRunning, afterIO: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
 		{name: "sql_still_running", before: "1-10", sqlState: replication.ReplicationStateRunning, afterSQL: replication.ReplicationStateRunning, wantError: "replication threads must be stopped before heartbeat repair"},
+		{name: "status_read_failure_restart_fails", before: "1-10", ioState: replication.ReplicationStateRunning, statusError: errors.New("status unavailable"), restartError: errors.New("start unavailable"), wantError: "read replication status after stop: status unavailable: restart replication after failed heartbeat repair: start unavailable"},
+		{name: "io_still_running_already_stopped_status_fails", before: "1-10", statusError: errors.New("status unavailable"), wantError: "read replication status after stop: status unavailable"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, state := range []*replication.ReplicationState{&tt.ioState, &tt.sqlState, &tt.afterIO, &tt.afterSQL} {
@@ -95,8 +98,14 @@ func TestRepairHeartbeat(t *testing.T) {
 			if tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped {
 				calls = append(calls, daemon.EXPECT().StopReplication(ctx, tm.hookExtraEnv()).Return(tt.stopError))
 			}
+			stopped := tt.ioState != replication.ReplicationStateStopped || tt.sqlState != replication.ReplicationStateStopped
 			if tt.stopError == nil {
 				calls = append(calls, daemon.EXPECT().ReplicationStatus(ctx).Return(status, tt.statusError))
+			}
+			// A failed check after our stop starts replication again.
+			checkFailed := tt.statusError != nil || tt.afterIO != replication.ReplicationStateStopped || tt.afterSQL != replication.ReplicationStateStopped
+			if tt.stopError == nil && stopped && checkFailed {
+				calls = append(calls, daemon.EXPECT().StartReplication(ctx, tm.hookExtraEnv()).Return(tt.restartError))
 			}
 			gomock.InOrder(calls...)
 
