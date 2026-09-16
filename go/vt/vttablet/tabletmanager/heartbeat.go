@@ -61,11 +61,11 @@ func (tm *TabletManager) repairHeartbeat(ctx context.Context, req *repairHeartbe
 	resp := &repairHeartbeatResponse{}
 	status := req.status
 
-	// Try the IO-only change first. MySQL keeps the relay log while the applier runs,
-	// so nothing is at risk. An applier that stopped without an error is started for
-	// that if the caller wants replication running anyway.
+	// Change the heartbeat with only the IO thread stopped. MySQL keeps the relay
+	// log while the applier runs.
 	started := false
 	if status.SQLHealthy() || (status.LastSQLError == "" && req.shouldBeReplicating) {
+		// Start a cleanly stopped applier first when the caller wants it running anyway.
 		if !status.SQLHealthy() {
 			if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
 				return nil, err
