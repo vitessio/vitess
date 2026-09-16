@@ -36,13 +36,13 @@ import FullStatus from './FullStatus';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 import { Code } from '../../Code';
 
-interface RouteParams {
+type RouteParams = {
     alias: string;
     clusterID: string;
-}
+};
 
 export const Tablet = () => {
-    const { clusterID, alias } = useParams<RouteParams>();
+    const { clusterID, alias } = useParams<RouteParams>() as RouteParams;
     useDocumentTitle(alias);
 
     const { data: tablet, ...tq } = useTablet({ alias, clusterID });
