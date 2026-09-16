@@ -100,7 +100,10 @@ func init() {
 		return int64(ringIndex)
 	})
 	stats.NewGaugeFunc("VtorcRingBuckets", "Number of virtual hash buckets loaded from --vtorc-ring-assignments-file (0 = pure hash mode, no file loaded)", func() int64 {
-		return int64(len(bucketAssignments))
+		if ba := bucketAssignments.Load(); ba != nil {
+			return int64(len(*ba))
+		}
+		return 0
 	})
 	stats.NewGaugeFunc("KeyspaceShardsWatched", "Number of distinct keyspace/shard pairs currently tracked by this VTOrc instance", func() int64 {
 		shardStats, err := inst.ReadKeyspaceShardStats()
@@ -290,7 +293,7 @@ func loadRingAssignmentsFile(path string, rs int) error {
 				path, i, p, rs)
 		}
 	}
-	bucketAssignments = cfg.Assignments
+	bucketAssignments.Store(&cfg.Assignments)
 	return nil
 }
 
@@ -299,9 +302,9 @@ func logRingConfig() {
 	if ringSize <= 1 {
 		return
 	}
-	if bucketAssignments != nil {
+	if ba := bucketAssignments.Load(); ba != nil {
 		log.Info(fmt.Sprintf("VTOrc ring config: index %d of %d, bucket-assignment file loaded (%d buckets)",
-			ringIndex, ringSize, len(bucketAssignments)))
+			ringIndex, ringSize, len(*ba)))
 	} else {
 		log.Info(fmt.Sprintf("VTOrc ring config: index %d of %d, pure hash mode (no assignment file)",
 			ringIndex, ringSize))

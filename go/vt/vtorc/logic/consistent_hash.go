@@ -16,17 +16,19 @@ limitations under the License.
 
 package logic
 
-import "hash/fnv"
+import (
+	"hash/fnv"
+	"sync/atomic"
+)
 
 // bucketAssignments maps virtual bucket index → ring partition index.
-// When non-nil, computePrimary uses it instead of direct hash modulo.
-// Loaded from --vtorc-ring-assignments-file at startup; nil means pure hash mode.
+// When set, computePrimary uses it instead of direct hash modulo. Loaded from
+// --vtorc-ring-assignments-file at startup; a nil pointer means pure hash mode.
 //
-// Synchronization: written once during startup (loadRingAssignmentsFile) before
-// any reader goroutines exist, so it needs no locking. Any future live-reload
-// path must synchronize this write (e.g. atomic.Pointer[[]int]) against
-// concurrent reads in computePrimary.
-var bucketAssignments []int
+// It is published through an atomic.Pointer because loadRingAssignmentsFile runs
+// inside the discovery goroutine while the /debug/vars handler may concurrently
+// read it via the VtorcRingBuckets gauge.
+var bucketAssignments atomic.Pointer[[]int]
 
 // computePrimary returns the primary ring partition index for the given
 // keyspace/shard. When a bucket assignment file is loaded, the key is hashed
@@ -35,11 +37,13 @@ var bucketAssignments []int
 func computePrimary(keyspace, shard string, ringSize int) int {
 	h := fnv.New32a()
 	h.Write([]byte(keyspace + "/" + shard))
-	if bucketAssignments != nil {
-		bucket := int(h.Sum32() % uint32(len(bucketAssignments)))
-		return bucketAssignments[bucket]
+	// int is 64-bit on the platforms VTOrc runs on, so int(h.Sum32()) is the
+	// non-negative hash and the modulus never narrows ringSize to uint32.
+	if ba := bucketAssignments.Load(); ba != nil {
+		bucket := int(h.Sum32()) % len(*ba)
+		return (*ba)[bucket]
 	}
-	return int(h.Sum32() % uint32(ringSize))
+	return int(h.Sum32()) % ringSize
 }
 
 // isInRingSegment reports whether the VTOrc instance with the given ringIndex

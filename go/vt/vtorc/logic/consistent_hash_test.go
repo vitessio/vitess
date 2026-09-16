@@ -123,13 +123,14 @@ func TestIsInRingSegment_NoShardIsOrphaned(t *testing.T) {
 func TestComputePrimary_BucketAssignmentOverridesHash(t *testing.T) {
 	const ringSize = 5
 	// Build a trivial assignment that routes everything to partition 3.
-	orig := bucketAssignments
-	defer func() { bucketAssignments = orig }()
+	orig := bucketAssignments.Load()
+	t.Cleanup(func() { bucketAssignments.Store(orig) })
 
-	bucketAssignments = make([]int, 256)
-	for i := range bucketAssignments {
-		bucketAssignments[i] = 3
+	ba := make([]int, 256)
+	for i := range ba {
+		ba[i] = 3
 	}
+	bucketAssignments.Store(&ba)
 
 	for i := 0; i < 50; i++ {
 		ks := fmt.Sprintf("keyspace%d", i)
@@ -142,9 +143,9 @@ func TestComputePrimary_BucketAssignmentOverridesHash(t *testing.T) {
 // assignment is loaded, computePrimary uses direct hash modulo.
 func TestComputePrimary_NilBucketsFallsBackToHash(t *testing.T) {
 	const ringSize = 5
-	orig := bucketAssignments
-	defer func() { bucketAssignments = orig }()
-	bucketAssignments = nil
+	orig := bucketAssignments.Load()
+	t.Cleanup(func() { bucketAssignments.Store(orig) })
+	bucketAssignments.Store(nil)
 
 	// Same key must always map to same partition and stay in [0, ringSize).
 	for i := 0; i < 100; i++ {
@@ -160,14 +161,15 @@ func TestComputePrimary_NilBucketsFallsBackToHash(t *testing.T) {
 // isInRingSegment correctly uses the bucket assignment when computing neighbors.
 func TestIsInRingSegment_BucketAssignmentRespectedByWatchDecision(t *testing.T) {
 	const ringSize = 5
-	orig := bucketAssignments
-	defer func() { bucketAssignments = orig }()
+	orig := bucketAssignments.Load()
+	t.Cleanup(func() { bucketAssignments.Store(orig) })
 
 	// Route everything to partition 2. Neighbors are 1 and 3; partition 0 and 4 never watch.
-	bucketAssignments = make([]int, 256)
-	for i := range bucketAssignments {
-		bucketAssignments[i] = 2
+	ba := make([]int, 256)
+	for i := range ba {
+		ba[i] = 2
 	}
+	bucketAssignments.Store(&ba)
 
 	for i := 0; i < 20; i++ {
 		ks := fmt.Sprintf("keyspace%d", i)
