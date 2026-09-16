@@ -198,7 +198,7 @@ VTOrc can now split shard-monitoring responsibility across a pool of instances u
 
 Each shard is assigned a primary owner by hashing `keyspace/shard`, and the two ring-adjacent instances also watch it, giving three-way HA coverage per shard. Ring sizes of 2 or 3 are a no-op (every instance is primary and both neighbors for every shard); partitioning takes effect at `ring-size >= 4`. The default `--vtorc-ring-size=1` preserves the existing behavior of watching the entire topology.
 
-Note that direct modulo ownership is not stable across ring-size changes: during a rolling resize where instances briefly run a mix of old and new `--vtorc-ring-size` values, a shard's old and new watcher sets can be disjoint, so it may be transiently unmonitored. To resize without a coverage gap, roll through `--vtorc-ring-size=1` (full-fleet watch) as an intermediate step, or pre-stage a `--vtorc-ring-assignments-file` that keeps ownership stable.
+Note that ownership is not stable across mapping changes — whether a `--vtorc-ring-size` change or a `--vtorc-ring-assignments-file` update. During a rolling deployment where instances briefly run a mix of the old and new configuration, a shard's old and new watcher sets can be disjoint, so it may be transiently unmonitored. To change either without a coverage gap, stage through a `--vtorc-ring-size=1` (full-fleet watch) window between the old and new configuration.
 
 See [#21121](https://github.com/vitessio/vitess/pull/21121) for details.
 
