@@ -23,7 +23,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -80,7 +80,7 @@ jobs:
     - name: Tune the OS
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Set up python
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
@@ -89,14 +89,14 @@ jobs:
     - name: Setup MySQL
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Setup Percona Apt repository
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
-      uses: ./.github/actions/setup-percona-repo
+      uses: $/.github/actions/setup-percona-repo
 
     - name: Get base dependencies
       timeout-minutes: 10
