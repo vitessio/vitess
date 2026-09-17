@@ -38837,6 +38837,270 @@ export namespace tabletmanagerdata {
     }
 
     /**
+     * Properties of a PrepareEmergencyReparentRequest.
+     * @deprecated Use tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties instead.
+     */
+    interface IPrepareEmergencyReparentRequest extends tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties {
+    }
+
+    /** Represents a PrepareEmergencyReparentRequest. */
+    class PrepareEmergencyReparentRequest {
+
+        /**
+         * Constructs a new PrepareEmergencyReparentRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PrepareEmergencyReparentRequest wait_for_position_timeout. */
+        wait_for_position_timeout?: (vttime.Duration.$Properties|null);
+
+        /**
+         * Creates a new PrepareEmergencyReparentRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrepareEmergencyReparentRequest instance
+         */
+        static create(properties: tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape): tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape;
+        static create(properties?: tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties): tabletmanagerdata.PrepareEmergencyReparentRequest;
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentRequest message. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentRequest.verify|verify} messages.
+         * @param message PrepareEmergencyReparentRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentRequest.verify|verify} messages.
+         * @param message PrepareEmergencyReparentRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrepareEmergencyReparentRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape} PrepareEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape;
+
+        /**
+         * Decodes a PrepareEmergencyReparentRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape} PrepareEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape;
+
+        /**
+         * Verifies a PrepareEmergencyReparentRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrepareEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrepareEmergencyReparentRequest
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.PrepareEmergencyReparentRequest;
+
+        /**
+         * Creates a plain object from a PrepareEmergencyReparentRequest message. Also converts values to other types if specified.
+         * @param message PrepareEmergencyReparentRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.PrepareEmergencyReparentRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrepareEmergencyReparentRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PrepareEmergencyReparentRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PrepareEmergencyReparentRequest {
+
+        /** Properties of a PrepareEmergencyReparentRequest. */
+        interface $Properties {
+
+            /** PrepareEmergencyReparentRequest wait_for_position_timeout */
+            wait_for_position_timeout?: (vttime.Duration.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PrepareEmergencyReparentRequest. */
+        type $Shape = tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties;
+    }
+
+    /**
+     * Properties of a PrepareEmergencyReparentResponse.
+     * @deprecated Use tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties instead.
+     */
+    interface IPrepareEmergencyReparentResponse extends tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties {
+    }
+
+    /** Represents a PrepareEmergencyReparentResponse. */
+    class PrepareEmergencyReparentResponse {
+
+        /**
+         * Constructs a new PrepareEmergencyReparentResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PrepareEmergencyReparentResponse status. */
+        status?: (replicationdata.StopReplicationStatus.$Properties|null);
+
+        /** PrepareEmergencyReparentResponse relay_log_position. */
+        relay_log_position: string;
+
+        /** PrepareEmergencyReparentResponse reparent_journal_length. */
+        reparent_journal_length: number;
+
+        /** PrepareEmergencyReparentResponse stop_replication_error. */
+        stop_replication_error?: (vtrpc.RPCError.$Properties|null);
+
+        /** PrepareEmergencyReparentResponse wait_for_position_error. */
+        wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
+
+        /** PrepareEmergencyReparentResponse read_reparent_journal_error. */
+        read_reparent_journal_error?: (vtrpc.RPCError.$Properties|null);
+
+        /**
+         * Creates a new PrepareEmergencyReparentResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrepareEmergencyReparentResponse instance
+         */
+        static create(properties: tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape): tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape;
+        static create(properties?: tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties): tabletmanagerdata.PrepareEmergencyReparentResponse;
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentResponse message. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentResponse.verify|verify} messages.
+         * @param message PrepareEmergencyReparentResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentResponse.verify|verify} messages.
+         * @param message PrepareEmergencyReparentResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrepareEmergencyReparentResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape} PrepareEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape;
+
+        /**
+         * Decodes a PrepareEmergencyReparentResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape} PrepareEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape;
+
+        /**
+         * Verifies a PrepareEmergencyReparentResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrepareEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrepareEmergencyReparentResponse
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.PrepareEmergencyReparentResponse;
+
+        /**
+         * Creates a plain object from a PrepareEmergencyReparentResponse message. Also converts values to other types if specified.
+         * @param message PrepareEmergencyReparentResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.PrepareEmergencyReparentResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrepareEmergencyReparentResponse to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PrepareEmergencyReparentResponse
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PrepareEmergencyReparentResponse {
+
+        /** Properties of a PrepareEmergencyReparentResponse. */
+        interface $Properties {
+
+            /** PrepareEmergencyReparentResponse status */
+            status?: (replicationdata.StopReplicationStatus.$Properties|null);
+
+            /** PrepareEmergencyReparentResponse relay_log_position */
+            relay_log_position?: (string|null);
+
+            /** PrepareEmergencyReparentResponse reparent_journal_length */
+            reparent_journal_length?: (number|null);
+
+            /** PrepareEmergencyReparentResponse stop_replication_error */
+            stop_replication_error?: (vtrpc.RPCError.$Properties|null);
+
+            /** PrepareEmergencyReparentResponse wait_for_position_error */
+            wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
+
+            /** PrepareEmergencyReparentResponse read_reparent_journal_error */
+            read_reparent_journal_error?: (vtrpc.RPCError.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PrepareEmergencyReparentResponse. */
+        type $Shape = tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties;
+    }
+
+    /**
      * Properties of a PromoteReplicaRequest.
      * @deprecated Use tabletmanagerdata.PromoteReplicaRequest.$Properties instead.
      */
@@ -39068,6 +39332,288 @@ export namespace tabletmanagerdata {
 
         /** Shape of a PromoteReplicaResponse. */
         type $Shape = tabletmanagerdata.PromoteReplicaResponse.$Properties;
+    }
+
+    /**
+     * Properties of a PromoteReplicaAndJournalRequest.
+     * @deprecated Use tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties instead.
+     */
+    interface IPromoteReplicaAndJournalRequest extends tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties {
+    }
+
+    /** Represents a PromoteReplicaAndJournalRequest. */
+    class PromoteReplicaAndJournalRequest {
+
+        /**
+         * Constructs a new PromoteReplicaAndJournalRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PromoteReplicaAndJournalRequest semi_sync. */
+        semi_sync: boolean;
+
+        /** PromoteReplicaAndJournalRequest wait_position. */
+        wait_position: string;
+
+        /** PromoteReplicaAndJournalRequest wait_for_position_timeout. */
+        wait_for_position_timeout?: (vttime.Duration.$Properties|null);
+
+        /** PromoteReplicaAndJournalRequest time_created. */
+        time_created?: (vttime.Time.$Properties|null);
+
+        /** PromoteReplicaAndJournalRequest action_name. */
+        action_name: string;
+
+        /** PromoteReplicaAndJournalRequest populate_reparent_journal_timeout. */
+        populate_reparent_journal_timeout?: (vttime.Duration.$Properties|null);
+
+        /**
+         * Creates a new PromoteReplicaAndJournalRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PromoteReplicaAndJournalRequest instance
+         */
+        static create(properties: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape): tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape;
+        static create(properties?: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties): tabletmanagerdata.PromoteReplicaAndJournalRequest;
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalRequest message. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalRequest.verify|verify} messages.
+         * @param message PromoteReplicaAndJournalRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalRequest.verify|verify} messages.
+         * @param message PromoteReplicaAndJournalRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PromoteReplicaAndJournalRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape} PromoteReplicaAndJournalRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape;
+
+        /**
+         * Decodes a PromoteReplicaAndJournalRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape} PromoteReplicaAndJournalRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape;
+
+        /**
+         * Verifies a PromoteReplicaAndJournalRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PromoteReplicaAndJournalRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PromoteReplicaAndJournalRequest
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.PromoteReplicaAndJournalRequest;
+
+        /**
+         * Creates a plain object from a PromoteReplicaAndJournalRequest message. Also converts values to other types if specified.
+         * @param message PromoteReplicaAndJournalRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.PromoteReplicaAndJournalRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PromoteReplicaAndJournalRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PromoteReplicaAndJournalRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PromoteReplicaAndJournalRequest {
+
+        /** Properties of a PromoteReplicaAndJournalRequest. */
+        interface $Properties {
+
+            /** PromoteReplicaAndJournalRequest semi_sync */
+            semi_sync?: (boolean|null);
+
+            /** PromoteReplicaAndJournalRequest wait_position */
+            wait_position?: (string|null);
+
+            /** PromoteReplicaAndJournalRequest wait_for_position_timeout */
+            wait_for_position_timeout?: (vttime.Duration.$Properties|null);
+
+            /** PromoteReplicaAndJournalRequest time_created */
+            time_created?: (vttime.Time.$Properties|null);
+
+            /** PromoteReplicaAndJournalRequest action_name */
+            action_name?: (string|null);
+
+            /** PromoteReplicaAndJournalRequest populate_reparent_journal_timeout */
+            populate_reparent_journal_timeout?: (vttime.Duration.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PromoteReplicaAndJournalRequest. */
+        type $Shape = tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties;
+    }
+
+    /**
+     * Properties of a PromoteReplicaAndJournalResponse.
+     * @deprecated Use tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties instead.
+     */
+    interface IPromoteReplicaAndJournalResponse extends tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties {
+    }
+
+    /** Represents a PromoteReplicaAndJournalResponse. */
+    class PromoteReplicaAndJournalResponse {
+
+        /**
+         * Constructs a new PromoteReplicaAndJournalResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PromoteReplicaAndJournalResponse position. */
+        position: string;
+
+        /** PromoteReplicaAndJournalResponse wait_for_position_error. */
+        wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
+
+        /** PromoteReplicaAndJournalResponse promote_replica_error. */
+        promote_replica_error?: (vtrpc.RPCError.$Properties|null);
+
+        /** PromoteReplicaAndJournalResponse populate_reparent_journal_error. */
+        populate_reparent_journal_error?: (vtrpc.RPCError.$Properties|null);
+
+        /**
+         * Creates a new PromoteReplicaAndJournalResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PromoteReplicaAndJournalResponse instance
+         */
+        static create(properties: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape): tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape;
+        static create(properties?: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties): tabletmanagerdata.PromoteReplicaAndJournalResponse;
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalResponse message. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalResponse.verify|verify} messages.
+         * @param message PromoteReplicaAndJournalResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalResponse.verify|verify} messages.
+         * @param message PromoteReplicaAndJournalResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PromoteReplicaAndJournalResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape} PromoteReplicaAndJournalResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape;
+
+        /**
+         * Decodes a PromoteReplicaAndJournalResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape} PromoteReplicaAndJournalResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape;
+
+        /**
+         * Verifies a PromoteReplicaAndJournalResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PromoteReplicaAndJournalResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PromoteReplicaAndJournalResponse
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.PromoteReplicaAndJournalResponse;
+
+        /**
+         * Creates a plain object from a PromoteReplicaAndJournalResponse message. Also converts values to other types if specified.
+         * @param message PromoteReplicaAndJournalResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.PromoteReplicaAndJournalResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PromoteReplicaAndJournalResponse to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PromoteReplicaAndJournalResponse
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PromoteReplicaAndJournalResponse {
+
+        /** Properties of a PromoteReplicaAndJournalResponse. */
+        interface $Properties {
+
+            /** PromoteReplicaAndJournalResponse position */
+            position?: (string|null);
+
+            /** PromoteReplicaAndJournalResponse wait_for_position_error */
+            wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
+
+            /** PromoteReplicaAndJournalResponse promote_replica_error */
+            promote_replica_error?: (vtrpc.RPCError.$Properties|null);
+
+            /** PromoteReplicaAndJournalResponse populate_reparent_journal_error */
+            populate_reparent_journal_error?: (vtrpc.RPCError.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PromoteReplicaAndJournalResponse. */
+        type $Shape = tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties;
     }
 
     /**

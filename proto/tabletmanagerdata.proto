@@ -564,12 +564,64 @@ message StopReplicationAndGetStatusResponse {
   replicationdata.StopReplicationStatus status = 2;
 }
 
+// PrepareEmergencyReparentRequest contains the parameters for preparing an emergency reparent candidate.
+message PrepareEmergencyReparentRequest {
+  // wait_for_position_timeout limits how long relay logs may take to apply. Zero uses the default remote operation timeout.
+  vttime.Duration wait_for_position_timeout = 1;
+}
+
+// PrepareEmergencyReparentResponse contains the completed phase results and any partial failure.
+// Phase failures are returned in the corresponding error field instead of as transport errors.
+message PrepareEmergencyReparentResponse {
+  // Output only. status contains replication state before and after stopping the I/O thread. After may be unset when stopping fails.
+  replicationdata.StopReplicationStatus status = 1;
+  // Output only. relay_log_position is set after the SQL thread applies the relay logs present when the I/O thread stopped.
+  string relay_log_position = 2;
+  // Output only. reparent_journal_length is the number of reparent journal rows found after the wait phase.
+  int32 reparent_journal_length = 3;
+  // Output only. stop_replication_error describes a stop phase failure. Later phases are skipped when this is set.
+  vtrpc.RPCError stop_replication_error = 4;
+  // Output only. wait_for_position_error describes a relay log wait failure. The journal read is still attempted when this is set.
+  vtrpc.RPCError wait_for_position_error = 5;
+  // Output only. read_reparent_journal_error describes a journal read failure.
+  vtrpc.RPCError read_reparent_journal_error = 6;
+}
+
 message PromoteReplicaRequest {
   bool semiSync = 1;
 }
 
 message PromoteReplicaResponse {
   string position = 1;
+}
+
+// PromoteReplicaAndJournalRequest contains the parameters for promoting a replica and writing its reparent journal row.
+message PromoteReplicaAndJournalRequest {
+  // semi_sync controls whether semi-sync is enabled on the promoted tablet.
+  bool semi_sync = 1;
+  // wait_position is the optional position to reach before promotion. An empty value skips the wait phase.
+  string wait_position = 2;
+  // wait_for_position_timeout limits the optional wait phase. Zero uses the default remote operation timeout.
+  vttime.Duration wait_for_position_timeout = 3;
+  // Required. time_created is the positive creation time stored in the reparent journal row.
+  vttime.Time time_created = 4;
+  // Required. action_name is the non-empty action stored in the reparent journal row and must not exceed 255 bytes.
+  string action_name = 5;
+  // populate_reparent_journal_timeout limits the journal write phase. Zero uses the default remote operation timeout.
+  vttime.Duration populate_reparent_journal_timeout = 6;
+}
+
+// PromoteReplicaAndJournalResponse contains the completed phase results and any partial failure.
+// Phase failures are returned in the corresponding error field instead of as transport errors.
+message PromoteReplicaAndJournalResponse {
+  // Output only. position is set after promotion, including when writing the reparent journal fails.
+  string position = 1;
+  // Output only. wait_for_position_error describes a wait phase failure. Later phases are skipped when this is set.
+  vtrpc.RPCError wait_for_position_error = 2;
+  // Output only. promote_replica_error describes a promotion failure. The journal write is skipped when this is set.
+  vtrpc.RPCError promote_replica_error = 3;
+  // Output only. populate_reparent_journal_error describes a journal write failure after promotion.
+  vtrpc.RPCError populate_reparent_journal_error = 4;
 }
 
 // Backup / Restore related messages

@@ -202,8 +202,14 @@ service TabletManager {
   // replication status
   rpc StopReplicationAndGetStatus(tabletmanagerdata.StopReplicationAndGetStatusRequest) returns (tabletmanagerdata.StopReplicationAndGetStatusResponse) {};
 
+  // PrepareEmergencyReparent stops the replication I/O thread, applies relay logs, and reads the reparent journal
+  rpc PrepareEmergencyReparent(tabletmanagerdata.PrepareEmergencyReparentRequest) returns (tabletmanagerdata.PrepareEmergencyReparentResponse) {};
+
   // PromoteReplica makes the replica the new primary
   rpc PromoteReplica(tabletmanagerdata.PromoteReplicaRequest) returns (tabletmanagerdata.PromoteReplicaResponse) {};
+
+  // PromoteReplicaAndJournal optionally waits for a position, promotes the replica, and writes the reparent journal
+  rpc PromoteReplicaAndJournal(tabletmanagerdata.PromoteReplicaAndJournalRequest) returns (tabletmanagerdata.PromoteReplicaAndJournalResponse) {};
 
   //
   // Backup related methods

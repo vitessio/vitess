@@ -45,6 +45,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // fakeRPCTM implements tabletmanager.RPCTM and fills in all
@@ -1440,6 +1441,51 @@ func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
+var (
+	testPrepareEmergencyReparentRequest = &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+		WaitForPositionTimeout: protoutil.DurationToProto(37 * time.Second),
+	}
+	testPrepareEmergencyReparentResponse = &tabletmanagerdatapb.PrepareEmergencyReparentResponse{
+		Status: &replicationdatapb.StopReplicationStatus{
+			Before: testReplicationStatus,
+			After:  testReplicationStatus,
+		},
+		RelayLogPosition:      testReplicationPosition,
+		ReparentJournalLength: 12,
+		StopReplicationError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_UNAVAILABLE,
+			Message: "stop replication failed",
+		},
+		WaitForPositionError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_DEADLINE_EXCEEDED,
+			Message: "relay log wait failed",
+		},
+		ReadReparentJournalError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_INTERNAL,
+			Message: "journal read failed",
+		},
+	}
+)
+
+func (fra *fakeRPCTM) PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+	if fra.panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	compare(fra.t, "PrepareEmergencyReparent request", request, testPrepareEmergencyReparentRequest)
+	return testPrepareEmergencyReparentResponse, nil
+}
+
+func tmRPCTestPrepareEmergencyReparent(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	response, err := client.PrepareEmergencyReparent(ctx, tablet, testPrepareEmergencyReparentRequest)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(testPrepareEmergencyReparentResponse, response))
+}
+
+func tmRPCTestPrepareEmergencyReparentPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.PrepareEmergencyReparent(ctx, tablet, testPrepareEmergencyReparentRequest)
+	expectHandleRPCPanic(t, "PrepareEmergencyReparent", true /*verbose*/, err)
+}
+
 func (fra *fakeRPCTM) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
@@ -1455,6 +1501,51 @@ func tmRPCTestPromoteReplica(ctx context.Context, t *testing.T, client tmclient.
 func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PromoteReplica(ctx, tablet, false)
 	expectHandleRPCPanic(t, "PromoteReplica", true /*verbose*/, err)
+}
+
+var (
+	testPromoteReplicaAndJournalRequest = &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+		SemiSync:                       true,
+		WaitPosition:                   testWaitPosition,
+		WaitForPositionTimeout:         protoutil.DurationToProto(38 * time.Second),
+		TimeCreated:                    protoutil.TimeToProto(time.Unix(1700000000, 123)),
+		ActionName:                     testActionName,
+		PopulateReparentJournalTimeout: protoutil.DurationToProto(39 * time.Second),
+	}
+	testPromoteReplicaAndJournalResponse = &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{
+		Position: testReplicationPosition,
+		WaitForPositionError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_DEADLINE_EXCEEDED,
+			Message: "position wait failed",
+		},
+		PromoteReplicaError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_ABORTED,
+			Message: "promotion failed",
+		},
+		PopulateReparentJournalError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_INTERNAL,
+			Message: "journal write failed",
+		},
+	}
+)
+
+func (fra *fakeRPCTM) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	if fra.panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	compare(fra.t, "PromoteReplicaAndJournal request", request, testPromoteReplicaAndJournalRequest)
+	return testPromoteReplicaAndJournalResponse, nil
+}
+
+func tmRPCTestPromoteReplicaAndJournal(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	response, err := client.PromoteReplicaAndJournal(ctx, tablet, testPromoteReplicaAndJournalRequest)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(testPromoteReplicaAndJournalResponse, response))
+}
+
+func tmRPCTestPromoteReplicaAndJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.PromoteReplicaAndJournal(ctx, tablet, testPromoteReplicaAndJournalRequest)
+	expectHandleRPCPanic(t, "PromoteReplicaAndJournal", true /*verbose*/, err)
 }
 
 //
@@ -1639,7 +1730,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestUndoDemotePrimary(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSource(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
+	tmRPCTestPrepareEmergencyReparent(ctx, t, client, tablet)
 	tmRPCTestPromoteReplica(ctx, t, client, tablet)
+	tmRPCTestPromoteReplicaAndJournal(ctx, t, client, tablet)
 
 	tmRPCTestInitReplica(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromoted(ctx, t, client, tablet)
@@ -1702,7 +1795,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestUndoDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSourcePanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
+	tmRPCTestPrepareEmergencyReparentPanic(ctx, t, client, tablet)
 	tmRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
+	tmRPCTestPromoteReplicaAndJournalPanic(ctx, t, client, tablet)
 
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromotedPanic(ctx, t, client, tablet)

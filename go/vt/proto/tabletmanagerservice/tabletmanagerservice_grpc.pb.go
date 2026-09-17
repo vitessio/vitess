@@ -103,7 +103,9 @@ const (
 	TabletManager_SetReplicationSource_FullMethodName            = "/tabletmanagerservice.TabletManager/SetReplicationSource"
 	TabletManager_ReplicaWasRestarted_FullMethodName             = "/tabletmanagerservice.TabletManager/ReplicaWasRestarted"
 	TabletManager_StopReplicationAndGetStatus_FullMethodName     = "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus"
+	TabletManager_PrepareEmergencyReparent_FullMethodName        = "/tabletmanagerservice.TabletManager/PrepareEmergencyReparent"
 	TabletManager_PromoteReplica_FullMethodName                  = "/tabletmanagerservice.TabletManager/PromoteReplica"
+	TabletManager_PromoteReplicaAndJournal_FullMethodName        = "/tabletmanagerservice.TabletManager/PromoteReplicaAndJournal"
 	TabletManager_Backup_FullMethodName                          = "/tabletmanagerservice.TabletManager/Backup"
 	TabletManager_RestoreFromBackup_FullMethodName               = "/tabletmanagerservice.TabletManager/RestoreFromBackup"
 	TabletManager_CheckThrottler_FullMethodName                  = "/tabletmanagerservice.TabletManager/CheckThrottler"
@@ -219,8 +221,12 @@ type TabletManagerClient interface {
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
+	// PrepareEmergencyReparent stops the replication I/O thread, applies relay logs, and reads the reparent journal
+	PrepareEmergencyReparent(ctx context.Context, in *tabletmanagerdata.PrepareEmergencyReparentRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
+	// PromoteReplicaAndJournal optionally waits for a position, promotes the replica, and writes the reparent journal
+	PromoteReplicaAndJournal(ctx context.Context, in *tabletmanagerdata.PromoteReplicaAndJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error)
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[tabletmanagerdata.BackupResponse], error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[tabletmanagerdata.RestoreFromBackupResponse], error)
@@ -888,10 +894,30 @@ func (c *tabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, i
 	return out, nil
 }
 
+func (c *tabletManagerClient) PrepareEmergencyReparent(ctx context.Context, in *tabletmanagerdata.PrepareEmergencyReparentRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(tabletmanagerdata.PrepareEmergencyReparentResponse)
+	err := c.cc.Invoke(ctx, TabletManager_PrepareEmergencyReparent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(tabletmanagerdata.PromoteReplicaResponse)
 	err := c.cc.Invoke(ctx, TabletManager_PromoteReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, in *tabletmanagerdata.PromoteReplicaAndJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(tabletmanagerdata.PromoteReplicaAndJournalResponse)
+	err := c.cc.Invoke(ctx, TabletManager_PromoteReplicaAndJournal_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1065,8 +1091,12 @@ type TabletManagerServer interface {
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
+	// PrepareEmergencyReparent stops the replication I/O thread, applies relay logs, and reads the reparent journal
+	PrepareEmergencyReparent(context.Context, *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)
+	// PromoteReplicaAndJournal optionally waits for a position, promotes the replica, and writes the reparent journal
+	PromoteReplicaAndJournal(context.Context, *tabletmanagerdata.PromoteReplicaAndJournalRequest) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error)
 	Backup(*tabletmanagerdata.BackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.BackupResponse]) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.RestoreFromBackupResponse]) error
@@ -1279,8 +1309,14 @@ func (UnimplementedTabletManagerServer) ReplicaWasRestarted(context.Context, *ta
 func (UnimplementedTabletManagerServer) StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopReplicationAndGetStatus not implemented")
 }
+func (UnimplementedTabletManagerServer) PrepareEmergencyReparent(context.Context, *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareEmergencyReparent not implemented")
+}
 func (UnimplementedTabletManagerServer) PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteReplica not implemented")
+}
+func (UnimplementedTabletManagerServer) PromoteReplicaAndJournal(context.Context, *tabletmanagerdata.PromoteReplicaAndJournalRequest) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PromoteReplicaAndJournal not implemented")
 }
 func (UnimplementedTabletManagerServer) Backup(*tabletmanagerdata.BackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.BackupResponse]) error {
 	return status.Error(codes.Unimplemented, "method Backup not implemented")
@@ -2485,6 +2521,24 @@ func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_PrepareEmergencyReparent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.PrepareEmergencyReparentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PrepareEmergencyReparent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TabletManager_PrepareEmergencyReparent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PrepareEmergencyReparent(ctx, req.(*tabletmanagerdata.PrepareEmergencyReparentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_PromoteReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PromoteReplicaRequest)
 	if err := dec(in); err != nil {
@@ -2499,6 +2553,24 @@ func _TabletManager_PromoteReplica_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).PromoteReplica(ctx, req.(*tabletmanagerdata.PromoteReplicaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_PromoteReplicaAndJournal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.PromoteReplicaAndJournalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PromoteReplicaAndJournal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TabletManager_PromoteReplicaAndJournal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PromoteReplicaAndJournal(ctx, req.(*tabletmanagerdata.PromoteReplicaAndJournalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2829,8 +2901,16 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_StopReplicationAndGetStatus_Handler,
 		},
 		{
+			MethodName: "PrepareEmergencyReparent",
+			Handler:    _TabletManager_PrepareEmergencyReparent_Handler,
+		},
+		{
 			MethodName: "PromoteReplica",
 			Handler:    _TabletManager_PromoteReplica_Handler,
+		},
+		{
+			MethodName: "PromoteReplicaAndJournal",
+			Handler:    _TabletManager_PromoteReplicaAndJournal_Handler,
 		},
 		{
 			MethodName: "CheckThrottler",
