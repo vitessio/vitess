@@ -291,7 +291,7 @@ var tableACLConfig = `{
     },
     {
       "name": "version",
-      "table_names_or_prefixes": ["vitess_version"],
+      "table_names_or_prefixes": ["vitess_version%"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

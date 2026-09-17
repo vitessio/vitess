@@ -146,6 +146,21 @@
   "NextCount": "1"
 }
 
+# nextval wrapped in a CTE of the same name still allocates from the real
+# sequence, so the permission is on the sequence, not the CTE's tables
+"with seq as (select * from a) (select next value from seq) limit 1"
+{
+  "PlanID": "Nextval",
+  "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 1
+    }
+  ],
+  "NextCount": "1"
+}
+
 # sequence with number
 "select next 10 values from seq"
 {
