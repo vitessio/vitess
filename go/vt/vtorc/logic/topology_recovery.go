@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -368,7 +369,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		}
 	}()
 
-	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+	ersLogger := logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
@@ -381,7 +382,21 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 			logger.Info("ERS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	})
+
+	var requiredPosition replication.Position
+	if config.EmergencyReparentRequirePrimaryPosition() {
+		// Audit the opt-in requirement so recovery history records the decision only when enabled.
+		var reason string
+		requiredPosition, reason = readRequiredPrimaryPosition(tablet)
+		if reason != "" {
+			ersLogger.Infof("required position: none (%s)", reason)
+		} else {
+			ersLogger.Infof("required position: %s (stored primary %s)", replication.EncodePosition(requiredPosition), topoproto.TabletAliasString(tablet.Alias))
+		}
+	}
+
+	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, ersLogger).ReparentShard(ctx,
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
@@ -389,10 +404,12 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 			WaitReplicasTimeout:       config.GetWaitReplicasTimeout(),
 			PreventCrossCellPromotion: config.GetPreventCrossCellFailover(),
 			WaitAllTablets:            waitForAllTablets,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error running ERS - %v", err))
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Error running ERS - %v", err))
 	}
 
 	if ev != nil && ev.NewPrimary != nil {
