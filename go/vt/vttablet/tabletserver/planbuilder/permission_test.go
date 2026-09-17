@@ -68,6 +68,23 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "set a=1",
 		output: nil,
 	}, {
+		// A SET forwards its expressions to MySQL, which evaluates any
+		// subquery in them, so those reads are checked.
+		input: "set @v = (select v from secret limit 1)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "set @a = 1, @b = (select count(*) from secret), @@sql_select_limit = (select n from other limit 1)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "other",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		input:  "show variables like 'a%'",
 		output: nil,
 	}, {
