@@ -43,25 +43,35 @@ import (
 // keep exiting 0 for an empty backup, preserving pre-existing behaviour.
 const EmptyBackupExitCode = 2
 
-// ErrEmptyBackup is returned by Backup/BackupShard in --json mode when an
-// incremental backup completed with no new data to back up. It is a successful
-// outcome, not a failure: main translates it into EmptyBackupExitCode without
-// logging it as an error.
-var ErrEmptyBackup = errors.New("backup completed with no new data")
+// emptyBackup records whether the Backup/BackupShard run that just completed was
+// an empty (no-op) incremental backup in --json mode.
+var emptyBackup bool
+
+// EmptyBackup reports whether the Backup/BackupShard command that just ran
+// completed with no new data to back up in --json mode. Callers map it to
+// EmptyBackupExitCode once Root.Execute has returned.
+//
+// An empty backup is reported out-of-band rather than as an error from RunE
+// because it is a success, not a failure. cobra returns from (*Command).execute
+// as soon as RunE reports an error, before it walks the PersistentPostRunE
+// chain, so returning a sentinel error here would silently skip the root
+// command's cleanup: cancelling the command context, closing the client, running
+// the onTerm hooks and flushing traces.
+func EmptyBackup() bool { return emptyBackup }
 
 // backupOutputHelp documents the backup output modes. It is shared by the
 // Backup and BackupShard long descriptions, which behave identically here.
 const backupOutputHelp = `With --json, a JSON object with the backup's outcome status ("USABLE", "EMPTY", or
-"UNKNOWN") and its MANIFEST is printed to stdout, while log events are written to stderr.
-Without --json the MANIFEST is not printed; progress is streamed as log events, ending
-with a "backup completed" line.
+"UNKNOWN"), its name, and its MANIFEST is printed to stdout, while log events are written
+to stderr. Without --json the MANIFEST is not printed; progress is streamed as log events,
+ending with a "backup completed" line.
 
 An incremental backup that finds no new data to back up completes successfully. In --json
 mode it reports status "EMPTY" and exits with code 2 so callers can skip follow-up work by
 checking $?; without --json an empty backup behaves as before and exits 0.`
 
 // backupJSONFlagHelp is the --json flag usage, shared by Backup and BackupShard.
-const backupJSONFlagHelp = "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with code 2."
+const backupJSONFlagHelp = "Output, on completion, the backup's MANIFEST, name and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with code 2."
 
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
@@ -243,13 +253,12 @@ type backupJSONOutput struct {
 
 // handleBackupStream drains a Backup/BackupShard stream, printing progress and,
 // on completion, the backup's MANIFEST and outcome. In --json mode, when the
-// backup is an empty (no-op) incremental backup it returns ErrEmptyBackup, which
-// main translates into EmptyBackupExitCode so callers can skip follow-up work by
-// checking $?.
+// backup is an empty (no-op) incremental backup it records that fact via
+// EmptyBackup, which the binaries translate into EmptyBackupExitCode so callers
+// can skip follow-up work by checking $?.
 //
-// The sentinel is returned rather than exiting here so that cobra still runs the
-// root command's PersistentPostRunE cleanup (closing the client, running onTerm
-// hooks, flushing traces).
+// It returns nil for an empty backup rather than a sentinel error so that cobra
+// runs the root command's PersistentPostRunE cleanup; see EmptyBackup.
 func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
 	status, err := consumeBackupStream(stream, outputJSON, os.Stdout, os.Stderr)
 	if err != nil {
@@ -257,10 +266,9 @@ func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
 	}
 	// The distinct exit code for an empty incremental backup is opt-in via
 	// --json, so existing (non-JSON) callers keep seeing a zero exit code and
-	// their scripts are unaffected.
-	if outputJSON && status == tabletmanagerdatapb.BackupResponse_EMPTY {
-		return ErrEmptyBackup
-	}
+	// their scripts are unaffected. Assign unconditionally so a later run in the
+	// same process cannot observe a stale value.
+	emptyBackup = outputJSON && status == tabletmanagerdatapb.BackupResponse_EMPTY
 	return nil
 }
 

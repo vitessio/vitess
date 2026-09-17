@@ -44,11 +44,11 @@ const (
 
 // Backup takes a db backup and sends it to the BackupStorage.
 //
-// On success it returns the backup result (mysqlctl.BackupUsable or
-// mysqlctl.BackupEmpty) and, for a usable backup, the raw JSON contents of the
-// backup's MANIFEST file so callers can identify and log the backup without
-// scraping log lines. The manifest is empty for an empty (no-op incremental)
-// backup.
+// On success it returns a mysqlctl.BackupOutcome carrying the backup's Result
+// (mysqlctl.BackupUsable or mysqlctl.BackupEmpty) and, for a usable backup, its
+// Name and the raw JSON contents of its MANIFEST file, so callers can identify
+// and log the backup without scraping log lines. Name and Manifest are empty for
+// an empty (no-op incremental) backup.
 func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) (mysqlctl.BackupOutcome, error) {
 	if tm.Cnf == nil {
 		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")

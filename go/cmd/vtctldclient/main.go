@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 
@@ -61,13 +60,13 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
 	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
-		// An empty incremental backup is a successful outcome reported through a
-		// sentinel error (so cobra still runs the root command's cleanup). Exit
-		// with its distinct code without logging it as a failure.
-		if errors.Is(err, command.ErrEmptyBackup) {
-			exit.Return(command.EmptyBackupExitCode)
-		}
 		log.Error(fmt.Sprint(err))
 		exit.Return(1)
+	}
+	// An empty incremental backup is a successful outcome, so it is reported
+	// out-of-band rather than as an error -- that way cobra runs the root
+	// command's cleanup before we exit with its distinct code.
+	if command.EmptyBackup() {
+		exit.Return(command.EmptyBackupExitCode)
 	}
 }

@@ -176,6 +176,12 @@ func main() {
 			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
 			exit.Return(255)
 		}
+		// Backup/BackupShard --json report an empty incremental backup as a
+		// success with a distinct exit code; honour it here too so that
+		// `vtctl VtctldCommand Backup --json` matches vtctldclient.
+		if command.EmptyBackup() {
+			exit.Return(command.EmptyBackupExitCode)
+		}
 	case strings.EqualFold(action, "LegacyVtctlCommand"):
 		// Strip off the prefix (being used for compatibility) and fallthrough
 		// to the legacy behavior.

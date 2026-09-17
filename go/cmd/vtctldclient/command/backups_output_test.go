@@ -151,11 +151,13 @@ func TestConsumeBackupStream_TextEmpty(t *testing.T) {
 	assert.Empty(t, errOut.String())
 }
 
-// TestHandleBackupStream_EmptySentinel pins the contract between the command and
-// main: an empty backup in --json mode reports ErrEmptyBackup (which main maps to
-// EmptyBackupExitCode) rather than exiting the process here, so cobra still runs
-// the root command's cleanup. Without --json it stays a plain success.
-func TestHandleBackupStream_EmptySentinel(t *testing.T) {
+// TestHandleBackupStream_EmptyReporting pins the contract between the command and
+// the binaries: an empty backup in --json mode is a success that is reported
+// out-of-band via EmptyBackup (which main maps to EmptyBackupExitCode), never an
+// error -- returning an error would make cobra skip the root command's
+// PersistentPostRunE cleanup. Without --json it stays a plain success and does
+// not set the flag.
+func TestHandleBackupStream_EmptyReporting(t *testing.T) {
 	emptyStream := func() *fakeBackupStream {
 		return &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
 			{Status: tabletmanagerdatapb.BackupResponse_EMPTY},
@@ -163,10 +165,19 @@ func TestHandleBackupStream_EmptySentinel(t *testing.T) {
 	}
 
 	err := handleBackupStream(emptyStream(), true /* outputJSON */)
-	require.ErrorIs(t, err, ErrEmptyBackup, "--json empty backup must report the sentinel")
+	require.NoError(t, err, "an empty backup is a success, not an error")
+	require.True(t, EmptyBackup(), "--json empty backup must be reported via EmptyBackup")
 
 	err = handleBackupStream(emptyStream(), false /* outputJSON */)
 	require.NoError(t, err, "without --json an empty backup stays a plain success")
+	require.False(t, EmptyBackup(), "without --json an empty backup must not set the flag")
+
+	// A subsequent usable backup must clear the flag rather than inherit it.
+	usableStream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
+		{Status: tabletmanagerdatapb.BackupResponse_USABLE, Manifest: "{}"},
+	}}
+	require.NoError(t, handleBackupStream(usableStream, true /* outputJSON */))
+	require.False(t, EmptyBackup(), "a usable backup must reset the flag")
 }
 
 func TestConsumeBackupStream_Error(t *testing.T) {
