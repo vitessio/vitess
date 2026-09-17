@@ -43,6 +43,8 @@
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
         - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [New `--emergency-reparent-require-primary-position` flag](#vtorc-emergency-reparent-require-primary-position)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -467,6 +469,14 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 Use this when you know a position that the new primary must not lose, for example the last `gtid_executed` of the failed primary. ERS compares the candidates only to each other. When every candidate lost the same received transactions, for example after a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, the candidates look fully applied, and ERS alone cannot see that they are behind.
 
 If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found. The check supports MySQL GTID shards only. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
+
+See [#21109](https://github.com/vitessio/vitess/issues/21109).
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-emergency-reparent-require-primary-position"/>New `--emergency-reparent-require-primary-position` flag</a>
+
+A new VTOrc flag, `--emergency-reparent-require-primary-position` (default off), makes `EmergencyReparentShard` require that the new primary has received the last `gtid_executed` VTOrc stored for the failed primary. If no replica has received it, the failover fails with `FAILED_PRECONDITION` and the recovery audit names the position and the most advanced replica positions. The requirement applies only to keyspaces with a semi-sync durability policy.
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
