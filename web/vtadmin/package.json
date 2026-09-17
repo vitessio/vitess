@@ -7,6 +7,9 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
     "npm": ">=10.9.2"
   },
+  "overrides": {
+    "@babel/plugin-transform-runtime": "^7.29.0"
+  },
   "dependencies": {
     "@bugsnag/js": "^8.10.0",
     "@headlessui/react": "^2.2.10",
@@ -80,7 +83,7 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.5.4",
     "cross-fetch": "^4.1.0",
     "eslint": "^9.39.4",
