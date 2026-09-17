@@ -43,6 +43,8 @@
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
         - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [New `--emergency-reparent-require-primary-position` flag](#vtorc-emergency-reparent-require-primary-position)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -471,6 +473,14 @@ If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` 
 The check supports MySQL GTID sets on MySQL GTID shards only. A position of another flavor fails with `INVALID_ARGUMENT` before ERS locks the shard. On a shard that does not use MySQL GTIDs, ERS fails with `INVALID_ARGUMENT` only after it stops replication and demotes a reachable primary. Do not use the flag on such a shard.
 
 The check runs in vtctld. An older vtctld ignores `--required-position` and runs ERS without it. Upgrade vtctld before relying on the flag.
+
+See [#21109](https://github.com/vitessio/vitess/issues/21109).
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-emergency-reparent-require-primary-position"/>New `--emergency-reparent-require-primary-position` flag</a>
+
+A new VTOrc flag, `--emergency-reparent-require-primary-position` (default off), makes `EmergencyReparentShard` require that the new primary has received the last `gtid_executed` VTOrc stored for the failed primary. If no replica has received it, the failover fails with `FAILED_PRECONDITION` and the recovery audit names the position and the most advanced replica positions. The requirement applies only to keyspaces with a semi-sync durability policy.
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 

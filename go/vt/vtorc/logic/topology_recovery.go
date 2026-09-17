@@ -368,7 +368,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		}
 	}()
 
-	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+	ersLogger := logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
@@ -381,7 +381,14 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 			logger.Info("ERS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	})
+
+	requiredPosition, err := requiredPositionForRecovery(tablet, ersLogger)
+	if err != nil {
+		return false, topologyRecovery, err
+	}
+
+	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, ersLogger).ReparentShard(ctx,
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
@@ -389,10 +396,12 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 			WaitReplicasTimeout:       config.GetWaitReplicasTimeout(),
 			PreventCrossCellPromotion: config.GetPreventCrossCellFailover(),
 			WaitAllTablets:            waitForAllTablets,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error running ERS - %v", err))
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Error running ERS - %v", err))
 	}
 
 	if ev != nil && ev.NewPrimary != nil {
