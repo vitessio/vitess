@@ -428,8 +428,12 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-		// settings are applied with no verification afterwards, so sql_mode values
-		// must be constants that can be judged here; vtgates only render constants
+		// settings are applied with no verification and no table ACL check, so a
+		// subquery is refused and sql_mode values must be constants that can be
+		// judged here
+		if err := rejectSettingSubqueries(set, setting); err != nil {
+			return "", "", err
+		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
 		}
