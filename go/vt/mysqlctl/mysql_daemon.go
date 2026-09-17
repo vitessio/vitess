@@ -32,6 +32,8 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination mock/mysql_daemon.go -package mock vitess.io/vitess/go/vt/mysqlctl MysqlDaemon
+
 // MysqlDaemon is the interface we use for abstracting Mysqld.
 type MysqlDaemon interface {
 	// methods related to mysql running or not
