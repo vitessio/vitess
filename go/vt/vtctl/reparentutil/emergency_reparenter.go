@@ -70,6 +70,11 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
+	// RequiredPosition is a position the promoted tablet must have received,
+	// either applied or still in its relay log. The reparent fails if no
+	// candidate has received it. Zero means no requirement.
+	RequiredPosition replication.Position
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -308,11 +313,20 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+
+	// Reject unsupported required positions as soon as the shard type is known.
+	// Only MySQL GTID shards track received transactions in Combined.
+	if !opts.RequiredPosition.IsZero() && (!isGTIDBased || !opts.RequiredPosition.MatchesFlavor(replication.Mysql56FlavorID)) {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "required position is only supported on MySQL GTID shards")
+	}
+
 	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
 	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
 	if err != nil {
 		return err
-	} else if len(validCandidates) == 0 {
+	}
+
+	if len(validCandidates) == 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
@@ -353,6 +367,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				waitCandidates = validCandidates
 			}
 		}
+	}
+
+	// Check the survivors of split-brain handling before the first relay log wait.
+	// If none received the position, a wait cannot help and leaves replication stopped.
+	if err := checkRequiredPosition(opts.RequiredPosition, validCandidates); err != nil {
+		return err
 	}
 
 	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
@@ -541,6 +561,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		flavorMap = nil
 	}
 
+	// Check receipt after errant GTID detection, including rescue and the second pass.
+	// Detection can remove the only candidate that received the position. The GTID
+	// winner dominates every survivor, so receipt by any survivor guarantees receipt
+	// by the winner without a separate check on the elected source.
+	if err := checkRequiredPosition(opts.RequiredPosition, validCandidates); err != nil {
+		return err
+	}
+
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
@@ -551,6 +579,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
 
 	// After finding the intermediate source, we want to filter the valid candidate list by the following criteria -
