@@ -276,7 +276,9 @@ func TestSetTable(t *testing.T) {
 			"1",
 		)},
 	}, {
-		testName: "sysvar set without destination",
+		// the session replays the stored text as a connection setting, so the
+		// value is stored, not the expression
+		testName: "targeted set evaluates the expression and stores the value",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
@@ -285,16 +287,25 @@ func TestSetTable(t *testing.T) {
 				Expr:              "dummy_expr",
 			},
 		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"dummy_expr",
+				"int64",
+			),
+			"123456",
+		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
-			`SysVar set with (x,dummy_expr)`,
+			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+			`SysVar set with (x,123456)`,
 		},
 	}, {
-		// a failed targeted SET must not leave its value in the session, where the
-		// settings transport would replay it on every subsequent query
-		testName: "targeted set failure does not store the value",
+		// a targeted SET whose evaluation fails must not leave its value in the
+		// session, where the settings transport would replay it on every
+		// subsequent query (TestSysVarSetErr covers the SET itself failing)
+		testName: "targeted set evaluation failure does not store the value",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
@@ -307,8 +318,32 @@ func TestSetTable(t *testing.T) {
 		expectedError: "some random error",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+		},
+	}, {
+		// the evaluation returns one value; anything else cannot be applied or
+		// stored and fails rather than pass the expression through
+		testName: "targeted set rejects an evaluation that is not a single value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"dummy_expr",
+				"int64",
+			),
+			"1",
+			"2",
+		)},
+		expectedError: "unexpected result evaluating x: 2 rows",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		},
 	}, {
 		// a targeted session's SET gets the same sql_mode judgment as an untargeted
@@ -920,11 +955,13 @@ func TestSysVarSetErr(t *testing.T) {
 		},
 	}
 
-	// the failed SET must not leave its value in the session: no "SysVar set with"
+	// the evaluation succeeds and the SET itself fails: it must not leave its
+	// value in the session, so no "SysVar set with"
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		"Needs Reserved Conn",
-		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+		`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
 	}
 
 	set := &Set{
@@ -932,8 +969,11 @@ func TestSysVarSetErr(t *testing.T) {
 		Input: &SingleRow{},
 	}
 	vc := &loggingVCursor{
-		shards:         []string{"-20", "20-"},
-		multiShardErrs: []error{errors.New("error")},
+		shards: []string{"-20", "20-"},
+		// the first result answers the evaluation; the nil entry makes the SET
+		// return resultErr
+		results:   []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("dummy_expr", "int64"), "123456"), nil},
+		resultErr: errors.New("error"),
 	}
 	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
