@@ -36,6 +36,42 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// TestERSRequiredPosition checks the `--required-position` wiring from the CLI to
+// ERS against real replica positions. The guarantee itself is covered by the
+// reparentutil unit tests.
+func TestERSRequiredPosition(t *testing.T) {
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+	position, _ := cluster.GetPrimaryPosition(t, *tablets[0], utils.Hostname)
+	for _, tablet := range tablets[1:] {
+		require.NoError(t, utils.WaitForReplicationPosition(t, tablets[0], tablet))
+	}
+
+	const missing = "MySQL56/ffffffff-ffff-ffff-ffff-ffffffffffff:1"
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"--action-timeout", "60s", "EmergencyReparentShard", utils.KeyspaceShard,
+		"--required-position", missing, "--wait-replicas-timeout", "30s",
+		"--wait-for-all-tablets",
+	)
+	require.Error(t, err, out)
+	require.Contains(t, out, "required position "+missing)
+
+	// The rejected ERS restarts replication on the replicas it stopped. The
+	// second ERS then promotes a replica and the checks below confirm the shard
+	// replicates again from it.
+	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"--action-timeout", "60s", "EmergencyReparentShard", utils.KeyspaceShard,
+		"--required-position", position, "--wait-replicas-timeout", "30s",
+		"--new-primary", tablets[1].Alias, "--wait-for-all-tablets",
+	)
+	require.NoError(t, err, out)
+	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
+}
+
 func TestTrivialERS(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
