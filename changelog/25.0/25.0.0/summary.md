@@ -161,7 +161,7 @@ The wire protocol is backward and forward compatible: the new `BackupResponse.ma
 
 The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, which lets `mysqlctl.Backup` skip reading the manifest back from storage (a `ListBackups` plus a `GET`, since the write handle returned by `StartBackup` cannot be read from). All in-tree engines do this; engines that do not simply fall back to the storage read, so out-of-tree engines keep working unchanged.
 
-**Impact**: This is a source-level change for Go code only. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
+**Impact**: This is a source-level Go API change; the wire protocol is unchanged. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
 
 See [#XXXXX](https://github.com/vitessio/vitess/pull/XXXXX) for details.
 
