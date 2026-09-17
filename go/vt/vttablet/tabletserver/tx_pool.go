@@ -112,6 +112,50 @@ func (tp *TxPool) Close() {
 	tp.scp.Close()
 }
 
+<<<<<<< HEAD
+||||||| parent of 2d5abb367f (vttablet: the wait_timeout publish no longer reads the transaction timeouts (#21024))
+// SetMysqlWaitTimeout publishes mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode and retimes the connection killer: a
+// dormant timer (both transaction timeouts disabled) is woken, and a slower
+// one is tightened, so auto-governed connections always have a reaper.
+// The tick only ever shrinks here — a raised wait_timeout keeps the shorter
+// tick, which just checks a little more often than strictly needed.
+func (tp *TxPool) SetMysqlWaitTimeout(waitTimeout time.Duration) {
+	tp.scp.SetMysqlWaitTimeout(waitTimeout)
+	desired := txKillerTimeoutInterval(tp.env.Config(), waitTimeout)
+	if desired <= 0 {
+		return
+	}
+	if current := tp.ticks.Interval(); current <= 0 || desired < current {
+		tp.ticks.SetInterval(desired)
+	}
+}
+
+=======
+// SetMysqlWaitTimeout publishes mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode and retimes the connection killer: a
+// dormant timer (both transaction timeouts disabled) is woken, and a slower
+// one is tightened, so auto-governed connections always have a reaper.
+// The tick only ever shrinks here — a raised wait_timeout keeps the shorter
+// tick, which just checks a little more often than strictly needed.
+//
+// The current tick already reflects the configured timeouts (see
+// txKillerTimeoutInterval), so this derives the desired tick from the
+// wait_timeout alone rather than re-reading the transaction timeouts: this
+// runs on a background goroutine, and the endtoend short-timeout tests
+// rewrite those config fields at runtime.
+func (tp *TxPool) SetMysqlWaitTimeout(waitTimeout time.Duration) {
+	tp.scp.SetMysqlWaitTimeout(waitTimeout)
+	desired := waitTimeout / 10
+	if desired <= 0 {
+		return
+	}
+	if current := tp.ticks.Interval(); current <= 0 || desired < current {
+		tp.ticks.SetInterval(desired)
+	}
+}
+
+>>>>>>> 2d5abb367f (vttablet: the wait_timeout publish no longer reads the transaction timeouts (#21024))
 // AdjustLastID adjusts the last transaction id to be at least
 // as large as the input value. This will ensure that there are
 // no dtid collisions with future transactions.
@@ -462,9 +506,48 @@ func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) 
 	conn.CleanTxState()
 }
 
+<<<<<<< HEAD
 func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
 	return smallerTimeout(
+||||||| parent of 2d5abb367f (vttablet: the wait_timeout publish no longer reads the transaction timeouts (#21024))
+// txKillerTimeoutInterval derives the killer's tick from the shortest enabled
+// timeout it enforces: the OLTP and OLAP transaction timeouts plus the
+// temp-table idle timeout — the explicit flag value, or in auto mode the
+// published mysqld wait_timeout (autoWaitTimeout, zero until the first
+// successful read). Without the temp-table term, disabling both transaction
+// timeouts would leave the timer dormant and the temp-table timeout with no
+// reaper at all.
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig, autoWaitTimeout time.Duration) time.Duration {
+	shortest := smallerTimeout(
+=======
+// txKillerTimeoutInterval derives the killer's initial tick from the shortest
+// enabled timeout it enforces: the OLTP and OLAP transaction timeouts plus an
+// explicit temp-table idle timeout. In auto mode the temp-table term is
+// unknown until the first wait_timeout read lands, so the timer starts from
+// the transaction timeouts alone (dormant when both are disabled) and
+// SetMysqlWaitTimeout tightens it once the value is published.
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
+	shortest := smallerTimeout(
+>>>>>>> 2d5abb367f (vttablet: the wait_timeout publish no longer reads the transaction timeouts (#21024))
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+<<<<<<< HEAD
 	) / 10
+||||||| parent of 2d5abb367f (vttablet: the wait_timeout publish no longer reads the transaction timeouts (#21024))
+	)
+	tempTableIdle := config.TempTableIdleTimeout
+	if tempTableIdle < 0 {
+		tempTableIdle = autoWaitTimeout
+	}
+	if tempTableIdle > 0 {
+		shortest = smallerTimeout(shortest, tempTableIdle)
+	}
+	return shortest / 10
+=======
+	)
+	if tempTableIdle := config.TempTableIdleTimeout; tempTableIdle > 0 {
+		shortest = smallerTimeout(shortest, tempTableIdle)
+	}
+	return shortest / 10
+>>>>>>> 2d5abb367f (vttablet: the wait_timeout publish no longer reads the transaction timeouts (#21024))
 }
