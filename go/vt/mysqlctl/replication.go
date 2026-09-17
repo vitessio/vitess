@@ -1008,6 +1008,39 @@ func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.Replic
 	return conn.Conn.ShowReplicationStatus()
 }
 
+// ReplicationHeartbeat returns the replica's heartbeat interval and net timeout, both in seconds.
+// It returns mysql.ErrNotReplica when the server is not a replica or the flavor does not track them.
+func (mysqld *Mysqld) ReplicationHeartbeat(ctx context.Context) (interval float64, netTimeout int32, err error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer conn.Recycle()
+
+	configuration, err := conn.Conn.ReplicationConfiguration(0)
+	if err != nil {
+		return 0, 0, err
+	}
+	if configuration == nil {
+		return 0, 0, mysql.ErrNotReplica
+	}
+
+	result, err := mysqld.executeFetchContext(ctx, conn, conn.Conn.ReplicationNetTimeoutQuery(), 1, true)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return 0, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "replica network timeout query must return one row and one column")
+	}
+
+	netTimeout, err = result.Rows[0][0].ToInt32()
+	if err != nil {
+		return 0, 0, vterrors.Wrap(err, "failed to parse replica network timeout")
+	}
+
+	return configuration.HeartbeatInterval, netTimeout, nil
+}
+
 // PrimaryStatus returns the primary replication statuses
 func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)

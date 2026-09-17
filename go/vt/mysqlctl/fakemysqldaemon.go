@@ -403,6 +403,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	}, nil
 }
 
+// ReplicationHeartbeat is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ReplicationHeartbeat(context.Context) (float64, int32, error) {
+	return 0, 0, mysql.ErrNotReplica
+}
+
 // CollectFullStatusData is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
 	return nil, nil

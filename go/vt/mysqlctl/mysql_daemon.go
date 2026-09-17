@@ -62,6 +62,9 @@ type MysqlDaemon interface {
 	StopReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
+	// ReplicationHeartbeat returns the replica's heartbeat interval and net timeout, both in seconds.
+	// It returns mysql.ErrNotReplica when the server is not a replica or the flavor does not track them.
+	ReplicationHeartbeat(ctx context.Context) (interval float64, netTimeout int32, err error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
