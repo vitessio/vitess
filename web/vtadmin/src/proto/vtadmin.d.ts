@@ -52993,7 +52993,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           reserved_id?: number|Long|null;
           reserved_conn_keep_alive?: boolean|null;
-          reserved_conn_keep_alive_ids?: number|Long[]|null;
+          reserved_conn_keep_alive_ids?: (number|Long)[]|null;
           reserved_conn_activity_refresh?: boolean|null;
           $unknowns?: Uint8Array[];
         };

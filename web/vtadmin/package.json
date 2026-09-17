@@ -93,7 +93,7 @@
     "msw": "^2.15.0",
     "postcss": "^8.5.10",
     "prettier": "^3.9.6",
-    "protobufjs-cli": "^2.5.5",
+    "protobufjs-cli": "^2.6.2",
     "serve": "^14.2.6",
     "stylelint": "^17.14.1",
     "stylelint-config-standard-scss": "^17.0.0",
