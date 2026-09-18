@@ -2676,8 +2676,12 @@ func TestReservedConnDML(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil, false)
 	require.NoError(t, err)
 
+	// The SET reserves a connection on the shard, carrying the value in its settings,
+	// and applies it there, so that the shard validates the value on the SET itself.
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select 1 from dual where @@default_week_format != 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	sbc.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
@@ -2689,8 +2693,8 @@ func TestReservedConnDML(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "begin", nil, false)
 	require.NoError(t, err)
 
+	// The transaction begins on the connection the SET reserved.
 	wantQueries = append(wantQueries,
-		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "insert into `simple`() values ()", nil, false)
 	require.NoError(t, err)
