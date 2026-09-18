@@ -627,6 +627,10 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__lastInsertId as test",
 		liid:     true,
 	}, {
+		// a qualified call names a stored function, whatever the name
+		in:       "SELECT db.last_insert_id(), db.database(), db.found_rows(), db.row_count() from t",
+		expected: "SELECT db.last_insert_id(), db.database(), db.found_rows(), db.row_count() from t",
+	}, {
 		in:       "SELECT last_insert_id() + database()",
 		expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
 		db:       true, liid: true,

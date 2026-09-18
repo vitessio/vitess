@@ -641,6 +641,13 @@ func TestQuerySignatureLastInsertID(t *testing.T) {
 	}, {
 		query:    "update user_extra set val = last_insert_id(123)",
 		expected: true,
+	}, {
+		// a qualified call is a stored function, not the built-in
+		query:    "select db.last_insert_id(123)",
+		expected: false,
+	}, {
+		query:    "update user_extra set val = db.last_insert_id(123)",
+		expected: false,
 	}}
 
 	for _, tc := range queries {

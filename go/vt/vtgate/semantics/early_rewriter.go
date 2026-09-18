@@ -538,7 +538,7 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 			aggrTrack.popAggr()
 			return
 		case *sqlparser.FuncExpr:
-			if node.Name.EqualsAnyString(r.aggrUDFs) {
+			if node.Qualifier.IsEmpty() && node.Name.EqualsAnyString(r.aggrUDFs) {
 				aggrTrack.popAggr()
 			}
 			return
@@ -601,7 +601,7 @@ func (at *aggrTracker) down(node, _ sqlparser.SQLNode) bool {
 	case sqlparser.AggrFunc:
 		at.insideAggr = true
 	case *sqlparser.FuncExpr:
-		if node.Name.EqualsAnyString(at.aggrUDFs) {
+		if node.Qualifier.IsEmpty() && node.Name.EqualsAnyString(at.aggrUDFs) {
 			at.insideAggr = true
 		}
 	}
