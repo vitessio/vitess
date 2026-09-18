@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -423,7 +424,7 @@ func TestSetChangeBuffering(t *testing.T) {
 		defer mysqld.Close()
 
 		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
-			return nil, fmt.Errorf("connection lost")
+			return nil, errors.New("connection lost")
 		}
 
 		logger := logutil.NewMemoryLogger()
@@ -448,7 +449,7 @@ func TestSetChangeBuffering(t *testing.T) {
 			"SET GLOBAL innodb_change_buffering = 'inserts'",
 		}
 		mysqld.ExecuteSuperQueryErrorMap = map[string]error{
-			"SET GLOBAL innodb_change_buffering = 'none'": fmt.Errorf("connection lost"),
+			"SET GLOBAL innodb_change_buffering = 'none'": errors.New("connection lost"),
 		}
 
 		logger := logutil.NewMemoryLogger()
