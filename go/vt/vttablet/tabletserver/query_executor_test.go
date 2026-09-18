@@ -1130,7 +1130,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	// The opaque statements never reach the backend under strict ACL (they are
 	// denied first), but the exempt, dry-run and non-strict cases execute them,
@@ -1164,7 +1164,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	}
 	require.NoError(t, tableacl.InitFromProto(config))
 	callerID := &querypb.VTGateCallerID{Username: "u2", Groups: []string{"eng", "beta"}}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 
 	// newServer starts a tablet server for one sub-case and stops it when that
 	// sub-case ends, whether or not its assertions pass, so a failure cannot
@@ -1210,7 +1210,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				require.NoError(t, err)
 				tsv.qe.exemptACL, err = f.New([]string{"exempt-acl"})
 				require.NoError(t, err)
-				exemptCtx := callerid.NewContext(context.Background(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
+				exemptCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
 				qre := newTestQueryExecutor(exemptCtx, tsv, tc.query, 0)
 				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err = qre.Execute()
