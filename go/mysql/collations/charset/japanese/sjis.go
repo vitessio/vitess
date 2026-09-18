@@ -115,6 +115,10 @@ func (Charset_sjis) MaxWidth() int {
 	return 2
 }
 
+func (Charset_sjis) MinWidth() int {
+	return 1
+}
+
 type Charset_cp932 struct{}
 
 func (Charset_cp932) Name() string {
@@ -144,4 +148,8 @@ func (Charset_cp932) DecodeRune(src []byte) (rune, int, bool) {
 
 func (Charset_cp932) MaxWidth() int {
 	return 2
+}
+
+func (Charset_cp932) MinWidth() int {
+	return 1
 }

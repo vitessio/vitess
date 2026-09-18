@@ -63,6 +63,10 @@ func (Charset_binary) MaxWidth() int {
 	return 1
 }
 
+func (Charset_binary) MinWidth() int {
+	return 1
+}
+
 func (Charset_binary) Slice(src []byte, from, to int) []byte {
 	if from >= len(src) {
 		return nil
