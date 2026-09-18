@@ -18,8 +18,10 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,7 +30,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -443,4 +447,273 @@ func TestGetDBClient(t *testing.T) {
 
 	shouldBeFilteredClient := vre.getDBClient(false /*runAsAdmin*/)
 	assert.Equal(t, shouldBeFilteredClient, dbClientFiltered)
+}
+
+// failingDbaDaemon simulates DBA connections being unavailable, which makes
+// the KILL of the connection executing a stream's post copy actions fail.
+// attempted is closed on the first attempt.
+type failingDbaDaemon struct {
+	mysqlctl.MysqlDaemon
+	attempted chan struct{}
+	once      sync.Once
+}
+
+func (d *failingDbaDaemon) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	d.once.Do(func() { close(d.attempted) })
+	return nil, errors.New("dba connections are unavailable")
+}
+
+// TestExecStopWhilePostCopyActionRunning drives a stream stop and a stream
+// delete -- what Workflow stop and Workflow delete issue to the tablet --
+// through the engine while the stream's controller is executing a post copy
+// action: the ALTER TABLE which re-adds deferred secondary keys and can run
+// for hours. The engine stops the controller while holding its lock, so the
+// operation, and with it every other vreplication operation on the tablet,
+// only completes once the controller has stopped. The operation must
+// therefore complete promptly, whether the KILL of the connection executing
+// the action succeeds or fails; in the latter case the action runs on as an
+// orphan and is reconciled when the stream is restarted.
+func TestExecStopWhilePostCopyActionRunning(t *testing.T) {
+	ctx := t.Context()
+	defer deleteTablet(addTablet(100))
+
+	// Like execStatements, but bound to this test's context rather than
+	// the calling subtest's, which is done by the time its cleanups run.
+	execSuper := func(t *testing.T, queries ...string) {
+		t.Helper()
+		require.NoError(t, env.Mysqld.ExecuteSuperQueryList(ctx, queries))
+		for _, query := range queries {
+			updateMockSchemaForQuery(query)
+		}
+	}
+	execSuper(t,
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		"insert into src1 values(1, 'aaa'), (2, 'bbb')",
+	)
+	defer execSuper(t, "drop table src1")
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "dst1",
+				Filter: "select * from src1",
+			}},
+		},
+	}
+	alter := fmt.Sprintf("alter table %s.dst1 add key val (val)", vrepldb)
+	action, err := json.Marshal(PostCopyAction{Type: PostCopyActionSQL, Task: alter})
+	require.NoError(t, err)
+
+	// superQueryCount returns the count that the query selects, or -1 on
+	// error, so that it can be polled from Eventually conditions.
+	superQueryCount := func(query string) int64 {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
+		if err != nil || len(qr.Rows) != 1 {
+			return -1
+		}
+		n, err := qr.Rows[0][0].ToInt64()
+		if err != nil {
+			return -1
+		}
+		return n
+	}
+	alterRunning := func() bool {
+		return superQueryCount(fmt.Sprintf("select count(*) from information_schema.processlist where info = %s", encodeString(alter))) == 1
+	}
+	alterBlocked := func() bool {
+		return superQueryCount(fmt.Sprintf("select count(*) from information_schema.processlist where info = %s and state = 'Waiting for table metadata lock'", encodeString(alter))) == 1
+	}
+	hasKey := func() bool {
+		return superQueryCount(fmt.Sprintf("select count(*) from information_schema.statistics where table_schema = '%s' and table_name = 'dst1' and index_name = 'val'", vrepldb)) > 0
+	}
+	postCopyActions := func(id int32) int64 {
+		return superQueryCount(fmt.Sprintf("select count(*) from _vt.post_copy_action where vrepl_id = %d", id))
+	}
+	streamState := func(id int32) string {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, fmt.Sprintf("select state from _vt.vreplication where id = %d", id))
+		if err != nil || len(qr.Rows) == 0 {
+			return ""
+		}
+		return qr.Rows[0][0].ToString()
+	}
+	controller := func(id int32) *controller {
+		playerEngine.mu.Lock()
+		defer playerEngine.mu.Unlock()
+		return playerEngine.controllers[id]
+	}
+	controllerStopped := func(id int32) bool {
+		ct := controller(id)
+		if ct == nil {
+			return false
+		}
+		select {
+		case <-ct.done:
+			return true
+		default:
+			return false
+		}
+	}
+
+	// startStream creates and starts a stream whose copy of dst1 is followed
+	// by the ALTER, and returns once the ALTER is running but blocked. The
+	// returned connection holds the lock which blocks it until it ends its
+	// transaction or is closed.
+	startStream := func(t *testing.T) (int32, *dbconnpool.DBConnection) {
+		execSuper(t, fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb))
+		t.Cleanup(func() { execSuper(t, fmt.Sprintf("drop table %s.dst1", vrepldb)) })
+		// The stream's queries are captured for the tests which assert on
+		// them; this one doesn't, so drain them once done.
+		t.Cleanup(drainDBQueries)
+
+		// Create the stream stopped so that the post copy action can be
+		// recorded, for the stream's id, before the copy of dst1 completes
+		// and the actions run. Deferring secondary keys would record the
+		// same action; recording it directly keeps the ALTER that drops the
+		// keys before the copy out of the way.
+		qr, err := playerEngine.Exec(binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0))
+		require.NoError(t, err)
+		id := int32(qr.InsertID)
+		t.Cleanup(func() {
+			// A no-op when the test deleted the stream.
+			_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id))
+			require.NoError(t, err)
+		})
+		insert, err := sqlparser.ParseAndBind(sqlCreatePostCopyAction, sqltypes.Int32BindVariable(id),
+			sqltypes.StringBindVariable("dst1"), sqltypes.StringBindVariable(string(action)))
+		require.NoError(t, err)
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, insert))
+
+		// Block the ALTER, but not the copy's inserts, with the shared
+		// metadata lock that an open transaction which has read the table
+		// holds until it ends: the ALTER waits for its exclusive lock.
+		blocker, err := env.Mysqld.GetDbaConnection(ctx)
+		require.NoError(t, err)
+		t.Cleanup(blocker.Close)
+		_, err = blocker.ExecuteFetch("begin", 1, false)
+		require.NoError(t, err)
+		_, err = blocker.ExecuteFetch(fmt.Sprintf("select * from %s.dst1", vrepldb), 10, false)
+		require.NoError(t, err)
+		t.Cleanup(func() { _, _ = blocker.ExecuteFetch("rollback", 1, false) })
+
+		_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state = 'Running' where id = %d", id))
+		require.NoError(t, err)
+		require.Eventually(t, alterBlocked, 30*time.Second, 50*time.Millisecond, "the post copy ALTER did not start")
+		return id, blocker
+	}
+
+	// exec runs the query through the engine in the background and returns
+	// its error once it completes, failing the test if it does not complete
+	// within the timeout: the engine lock is held meanwhile, so a blocked
+	// operation would otherwise hang the test.
+	exec := func(t *testing.T, query string, timeout time.Duration) error {
+		t.Helper()
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := playerEngine.Exec(query)
+			errCh <- err
+		}()
+		var err error
+		require.Eventually(t, func() bool {
+			select {
+			case err = <-errCh:
+				return true
+			default:
+				return false
+			}
+		}, timeout, 10*time.Millisecond, "the operation did not complete: %s", query)
+		return err
+	}
+
+	for _, tc := range []struct {
+		name  string
+		query string // with a %d for the stream id
+		// wantState is the stream's expected state afterwards; "" for no
+		// stream. wantActions is the expected number of post copy action
+		// records, and wantController whether a (stopped) controller is
+		// expected to remain.
+		wantState      string
+		wantActions    int64
+		wantController bool
+	}{
+		{
+			name:  "stop",
+			query: "update _vt.vreplication set state = 'Stopped' where id = %d",
+			// The action remains recorded, to be retried when the stream
+			// is restarted.
+			wantState:      "Stopped",
+			wantActions:    1,
+			wantController: true,
+		},
+		{
+			name:  "delete",
+			query: "delete from _vt.vreplication where id = %d",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, _ := startStream(t)
+
+			// The operation completes promptly -- the engine kills the
+			// connection executing the action -- rather than waiting for
+			// the ALTER to complete.
+			require.NoError(t, exec(t, fmt.Sprintf(tc.query, id), 30*time.Second))
+
+			// The killed ALTER did not add the key.
+			require.Eventually(t, func() bool { return !alterRunning() }, 30*time.Second, 50*time.Millisecond)
+			assert.False(t, hasKey())
+			assert.Equal(t, tc.wantState, streamState(id))
+			assert.Equal(t, tc.wantActions, postCopyActions(id))
+			if !tc.wantController {
+				assert.Nil(t, controller(id))
+				return
+			}
+			assert.True(t, controllerStopped(id), "the stream's controller is missing or still running")
+		})
+	}
+
+	t.Run("stop with failed kill", func(t *testing.T) {
+		// Make the kill fail. The daemon is captured by the controllers
+		// created from here on.
+		daemon := &failingDbaDaemon{MysqlDaemon: playerEngine.mysqld, attempted: make(chan struct{})}
+		setMysqld := func(mysqld mysqlctl.MysqlDaemon) {
+			playerEngine.mu.Lock()
+			defer playerEngine.mu.Unlock()
+			playerEngine.mysqld = mysqld
+		}
+		setMysqld(daemon)
+		t.Cleanup(func() { setMysqld(daemon.MysqlDaemon) })
+
+		id, blocker := startStream(t)
+
+		// The stop still completes promptly: the kill fails and the
+		// connection executing the action is abandoned instead.
+		require.NoError(t, exec(t, fmt.Sprintf("update _vt.vreplication set state = 'Stopped' where id = %d", id), 30*time.Second))
+		select {
+		case <-daemon.attempted:
+		default:
+			t.Fatal("the kill was never attempted")
+		}
+		assert.Equal(t, "Stopped", streamState(id))
+		assert.Equal(t, int64(1), postCopyActions(id))
+		assert.True(t, controllerStopped(id), "the stream's controller is missing or still running")
+
+		// The ALTER runs on as an orphan, still blocked...
+		assert.True(t, alterBlocked(), "the orphaned ALTER should still be running")
+
+		// ...and completes once unblocked.
+		_, err = blocker.ExecuteFetch("rollback", 1, false)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool { return hasKey() && !alterRunning() }, 30*time.Second, 50*time.Millisecond, "the orphaned ALTER did not complete")
+
+		// Restarting the stream re-runs the action, which finds the key in
+		// place and reconciles, and the stream completes its copy.
+		require.NoError(t, exec(t, fmt.Sprintf("update _vt.vreplication set state = 'Running' where id = %d", id), 30*time.Second))
+		require.Eventually(t, func() bool {
+			return postCopyActions(id) == 0 && streamState(id) == "Running"
+		}, 30*time.Second, 50*time.Millisecond, "the restarted stream did not reconcile the action and start running")
+
+		require.NoError(t, exec(t, fmt.Sprintf("update _vt.vreplication set state = 'Stopped' where id = %d", id), 30*time.Second))
+		assert.Equal(t, "Stopped", streamState(id))
+	})
 }
