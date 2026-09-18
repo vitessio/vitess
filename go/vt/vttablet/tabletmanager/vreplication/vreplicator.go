@@ -1063,16 +1063,27 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 		)
 		// We make a single kill attempt: retrying a failed kill could
 		// exhaust DB connections when the DBA path is stalled -- the
-		// very state a failed kill tends to indicate. On failure we log
-		// the error and leave the in-flight action to complete, as it
-		// would have before the interruption support existed, and the
-		// interrupted operation can be retried by the user/caller.
+		// very state a failed kill tends to indicate. If it fails we
+		// abandon the connection instead: closing it makes the
+		// in-flight ExecuteFetch return immediately, so the controller
+		// still stops promptly and neither the engine -- which waits
+		// for the controller while holding its lock, blocking every
+		// other vreplication operation on the tablet -- nor the caller
+		// of the interrupted operation is stuck behind the action for
+		// as long as it runs. The statement itself runs on in MySQL as
+		// an orphan until it completes, as it did before when a failed
+		// kill left it running, and the action record is kept: when the
+		// workflow is restarted the action is executed again, waits for
+		// the orphan's metadata lock, and then either applies or is
+		// reconciled against the schema (see the ERDupKeyName handling
+		// below).
 		if err := killActionsConnection(); err != nil {
-			log.Error("Failed to kill the connection executing post copy actions",
+			log.Error("Failed to kill the connection executing post copy actions, abandoning it instead",
 				slog.String("table", tableName),
 				slog.String("workflow", vr.WorkflowName),
 				slog.Any("error", err),
 			)
+			dbClient.Close()
 		}
 	}()
 
