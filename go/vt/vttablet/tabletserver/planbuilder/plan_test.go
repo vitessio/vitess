@@ -40,6 +40,7 @@ import (
 // This is only for testing.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
+<<<<<<< HEAD
 		PlanID            PlanType
 		TableName         sqlparser.IdentifierCS
 		Permissions       []Permission           `json:",omitempty"`
@@ -48,6 +49,28 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		NextCount         string                 `json:",omitempty"`
 		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
 		NeedsReservedConn bool                   `json:",omitempty"`
+||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
+		PlanID             PlanType
+		TableName          sqlparser.IdentifierCS
+		Permissions        []Permission           `json:",omitempty"`
+		FieldQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery          *sqlparser.ParsedQuery `json:",omitempty"`
+		NextCount          string                 `json:",omitempty"`
+		WhereClause        *sqlparser.ParsedQuery `json:",omitempty"`
+		NeedsReservedConn  bool                   `json:",omitempty"`
+		KillsConnOnTimeout bool                   `json:",omitempty"`
+=======
+		PlanID             PlanType
+		TableName          sqlparser.IdentifierCS
+		Permissions        []Permission           `json:",omitempty"`
+		FieldQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery          *sqlparser.ParsedQuery `json:",omitempty"`
+		NextCount          string                 `json:",omitempty"`
+		WhereClause        *sqlparser.ParsedQuery `json:",omitempty"`
+		NeedsReservedConn  bool                   `json:",omitempty"`
+		KillsConnOnTimeout bool                   `json:",omitempty"`
+		TablesUndetermined bool                   `json:",omitempty"`
+>>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
 	}{
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
@@ -61,6 +84,19 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	if p.NeedsReservedConn {
 		mplan.NeedsReservedConn = true
 	}
+<<<<<<< HEAD
+||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
+	if p.KillsConnOnTimeout {
+		mplan.KillsConnOnTimeout = true
+	}
+=======
+	if p.KillsConnOnTimeout {
+		mplan.KillsConnOnTimeout = true
+	}
+	if p.TablesUndetermined {
+		mplan.TablesUndetermined = true
+	}
+>>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
 	return json.Marshal(&mplan)
 }
 

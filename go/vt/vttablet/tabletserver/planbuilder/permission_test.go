@@ -26,8 +26,9 @@ import (
 
 func TestBuildPermissions(t *testing.T) {
 	tcases := []struct {
-		input  string
-		output []Permission
+		input        string
+		output       []Permission
+		undetermined bool
 	}{{
 		input: "select * from t",
 		output: []Permission{{
@@ -101,8 +102,9 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.ADMIN,
 		}},
 	}, {
-		input:  "repair t",
-		output: nil,
+		input:        "repair t",
+		output:       nil,
+		undetermined: true,
 	}, {
 		input: "select (select a from t2) from t1",
 		output: []Permission{{
@@ -627,16 +629,39 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "t",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// Statements whose tables the parser discards derive no permission
+		// and are flagged instead, so the executor can fail closed on them.
+		input:        "do (select * from t)",
+		undetermined: true,
+	}, {
+		input:        "optimize table t",
+		undetermined: true,
+	}, {
+		input:        "call proc()",
+		undetermined: true,
+	}, {
+		input:        "load data infile 'x' into table t",
+		undetermined: true,
 	}}
 
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			stmt, err := sqlparser.NewTestParser().Parse(tcase.input)
+<<<<<<< HEAD
 			if err != nil {
 				t.Fatal(err)
 			}
 			got := BuildPermissions(stmt)
+||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
+			require.NoError(t, err)
+			got := BuildPermissions(stmt)
+=======
+			require.NoError(t, err)
+			got, undetermined := BuildPermissions(stmt)
+>>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
 			utils.MustMatch(t, tcase.output, got)
+			utils.MustMatch(t, tcase.undetermined, undetermined)
 		})
 	}
 }
