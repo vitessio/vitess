@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -195,6 +196,17 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 	return conn.(*StatefulConnection), nil
 }
 
+// ParseSQLMode returns the lexer modes recorded on the given connection, or 0 when
+// the connection is not registered. It does not lock the connection: the recorded
+// modes are safe to read concurrently.
+func (sf *StatefulConnectionPool) ParseSQLMode(id int64) sqlmode.Mode {
+	conn, _ := sf.active.Peek(id).(*StatefulConnection)
+	if conn == nil {
+		return 0
+	}
+	return conn.ParseSQLMode()
+}
+
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
 func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, setting *smartconnpool.Setting) (*StatefulConnection, error) {
@@ -228,6 +240,9 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 	// This will set both the timeout and initialize the last-used time.
 	timeout := getTransactionTimeout(options, sf.env.Config(), options.GetWorkload())
 	sfConn.SetTimeout(timeout)
+	if setting != nil && setting.SetsSQLMode() {
+		sfConn.SetParseSQLMode(sqlmode.Mode(setting.SQLMode()))
+	}
 
 	err = sf.active.Register(sfConn.ConnID, sfConn)
 	if err != nil {

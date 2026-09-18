@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -370,12 +371,44 @@ type Options struct {
 	MySQLServerVersion string
 	TruncateUILen      int
 	TruncateErrLen     int
+	// SQLMode is the sql_mode the parser reads SQL under. Of its modes only
+	// HonoredSQLModes take effect; the others are ignored.
+	SQLMode sqlmode.Mode
 }
 
 type Parser struct {
 	version        string
 	truncateUILen  int
 	truncateErrLen int
+	// sqlMode holds the honored modes (HonoredSQLModes) of the sql_mode the
+	// parser reads SQL under.
+	sqlMode sqlmode.Mode
+}
+
+// HonoredSQLModes are the lexer modes the parser reads SQL under: of
+// sqlmode.LexerModes, PIPES_AS_CONCAT only (see Options.SQLMode). Parsing
+// under a mode changes what the same text means, but the AST it yields always
+// serializes to text that means the same thing under any mode: || becomes a
+// concat() call.
+const HonoredSQLModes = sqlmode.PipesAsConcat
+
+// WithSQLMode returns a parser that reads SQL under mode: p itself when mode
+// has the same honored modes (HonoredSQLModes) as p's, since the reading is
+// then the same, and otherwise a copy of p under mode.
+func (p *Parser) WithSQLMode(mode sqlmode.Mode) *Parser {
+	mode = mode.Expand() & HonoredSQLModes
+	if mode == p.sqlMode {
+		return p
+	}
+	clone := *p
+	clone.sqlMode = mode
+	return &clone
+}
+
+// SQLMode returns the honored modes (HonoredSQLModes) of the sql_mode p reads
+// SQL under.
+func (p *Parser) SQLMode() sqlmode.Mode {
+	return p.sqlMode
 }
 
 func New(opts Options) (*Parser, error) {
@@ -390,6 +423,7 @@ func New(opts Options) (*Parser, error) {
 		version:        convVersion,
 		truncateUILen:  opts.TruncateUILen,
 		truncateErrLen: opts.TruncateErrLen,
+		sqlMode:        opts.SQLMode.Expand() & HonoredSQLModes,
 	}, nil
 }
 
