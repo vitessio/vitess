@@ -30,8 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -783,19 +782,8 @@ func TestControllerErrorLogMessages(t *testing.T) {
 		100: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" test"),
 	}
 
-	infoLogger := logutil.NewMemoryLogger()
-	oldLogInfo := log.Info
-	log.Info = func(msg string, _ ...slog.Attr) {
-		infoLogger.Infof("%s", msg)
-	}
-	defer func() { log.Info = oldLogInfo }()
-
-	errorLogger := logutil.NewMemoryLogger()
-	oldLogError := log.Error
-	log.Error = func(msg string, _ ...slog.Attr) {
-		errorLogger.Errorf("%s", msg)
-	}
-	defer func() { log.Error = oldLogError }()
+	infoLogger := logtest.Capture(t, slog.LevelInfo)
+	errorLogger := logtest.Capture(t, slog.LevelError)
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
