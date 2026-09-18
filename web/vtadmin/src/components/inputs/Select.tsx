@@ -28,11 +28,11 @@ interface Props<T> {
     items: T[];
     itemToString?: (item: T | null) => string;
     label: string;
-    helpText?: string | JSX.Element;
+    helpText?: string | React.JSX.Element;
     onChange: (selectedItem: T | null | undefined) => void;
     placeholder: string;
-    emptyPlaceholder?: string | (() => JSX.Element | string);
-    renderItem?: (item: T) => JSX.Element | string;
+    emptyPlaceholder?: string | (() => React.JSX.Element | string);
+    renderItem?: (item: T) => React.JSX.Element | string;
     selectedItem: T | null;
     size?: 'large';
     description?: string;
@@ -93,7 +93,7 @@ export const Select = <T,>({
     });
 
     const _renderItem = React.useCallback(
-        (item: T): string | JSX.Element | null => {
+        (item: T): string | React.JSX.Element | null => {
             if (typeof item === 'string') {
                 return item;
             }
