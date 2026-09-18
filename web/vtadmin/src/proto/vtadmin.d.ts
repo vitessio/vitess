@@ -72126,6 +72126,9 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest allow_split_brain_promotion. */
         allow_split_brain_promotion: boolean;
 
+        /** EmergencyReparentShardRequest required_position. */
+        required_position: string;
+
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -72236,6 +72239,9 @@ export namespace vtctldata {
 
             /** EmergencyReparentShardRequest allow_split_brain_promotion */
             allow_split_brain_promotion?: (boolean|null);
+
+            /** EmergencyReparentShardRequest required_position */
+            required_position?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
