@@ -86,6 +86,12 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		// planning time, so an invalid or unsupported value fails the SET before any
 		// assignment executes, regardless of whether system settings are enabled.
 		pc.funcs[sysvars.SQLMode.Name] = validateSQLModePlan(pc.funcs[sysvars.SQLMode.Name])
+		// a qualified name is never a value; once the variable is resolved as known, the
+		// value is rejected before any plan function, the sql_mode validation included,
+		// coerces it (see rejectQualifiedName)
+		for name, pf := range pc.funcs {
+			pc.funcs[name] = rejectQualifiedNamePlan(pf)
+		}
 	})
 }
 

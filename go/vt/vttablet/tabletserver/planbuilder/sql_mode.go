@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -100,9 +101,12 @@ func validateSetStatementSQLMode(set *sqlparser.Set) (verify bool, err error) {
 }
 
 // validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant value
-// fails sqlmode.Validate. Assignments whose value is not a constant cannot be judged here;
-// for those it returns verify=true, asking the executor to read back and validate the
-// applied value after the statement runs.
+// fails sqlmode.Validate. A constant is a literal or an unquoted mode name: MySQL accepts
+// `SET sql_mode = TRADITIONAL` as `SET sql_mode = 'TRADITIONAL'`, and the parser yields
+// the unquoted name as a bare, unqualified column name. A qualified name is rejected the
+// way MySQL rejects it (see constantSQLModeValue). Assignments whose value is not a
+// constant cannot be judged here; for those it returns verify=true, asking the executor to
+// read back and validate the applied value after the statement runs.
 func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
@@ -114,13 +118,11 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 			// the global scope is the operator's domain, not a vtgate session's
 			continue
 		}
-		lit, ok := expr.Expr.(*sqlparser.Literal)
-		if !ok {
-			verify = true
-			continue
-		}
-		value, err := sqlparser.LiteralToValue(lit)
+		value, ok, err := constantSQLModeValue(expr.Expr)
 		if err != nil {
+			return false, err
+		}
+		if !ok {
 			verify = true
 			continue
 		}
@@ -129,4 +131,25 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 		}
 	}
 	return verify, nil
+}
+
+// constantSQLModeValue returns the value of a constant sql_mode expression: a literal, or
+// an unquoted mode name, which MySQL accepts as the equivalent string. A qualified name is
+// never a mode name: MySQL rejects it as the wrong argument type, whatever the qualifier,
+// and so does this, with MySQL's error. Any other expression is not a constant.
+func constantSQLModeValue(expr sqlparser.Expr) (value sqltypes.Value, ok bool, err error) {
+	switch node := expr.(type) {
+	case *sqlparser.Literal:
+		value, err := sqlparser.LiteralToValue(node)
+		if err != nil {
+			return sqltypes.Value{}, false, nil
+		}
+		return value, true, nil
+	case *sqlparser.ColName:
+		if !node.Qualifier.IsEmpty() {
+			return sqltypes.Value{}, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", sysvars.SQLMode.Name)
+		}
+		return sqltypes.NewVarChar(node.Name.String()), true, nil
+	}
+	return sqltypes.Value{}, false, nil
 }
