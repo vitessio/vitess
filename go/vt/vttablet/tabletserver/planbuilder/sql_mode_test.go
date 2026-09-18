@@ -46,8 +46,11 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = 'STRICT_TRANS_TABLES,ANSI_QUOTES'"},
 		expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported",
 	}, {
-		settings:    []string{"set sql_mode = 'IGNORE_SPACE'"},
-		expectedErr: "setting the IGNORE_SPACE sql_mode is unsupported",
+		settings:    []string{"set sql_mode = 'HIGH_NOT_PRECEDENCE'"},
+		expectedErr: "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported",
+	}, {
+		// IGNORE_SPACE is the one lexer mode the parser honors
+		settings: []string{"set sql_mode = 'IGNORE_SPACE'"},
 	}, {
 		settings:    []string{"set sql_mode = 'BOGUS'"},
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",

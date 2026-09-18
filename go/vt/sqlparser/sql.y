@@ -404,7 +404,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Functions
 %token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE SESSION_USER SYSTEM_USER ST_COLLECT
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
@@ -6780,7 +6780,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("utc_date")}
   }
 | now
   {
@@ -6790,11 +6790,19 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("current_date")}
   }
 | CURDATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("curdate")}
+  }
+| SESSION_USER openb closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("session_user")}
+  }
+| SYSTEM_USER openb closeb
+  {
+    $$ = &BuiltinFuncExpr{Name: NewIdentifierCI("system_user")}
   }
 | UTC_TIME func_datetime_precision
   {
@@ -6812,22 +6820,27 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb '*' closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &CountStar{OverClause: $5}
   }
 | COUNT openb distinct_opt expression_list closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Count{Distinct:$3, Args:$4, OverClause: $6}
   }
 | MAX openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Max{Distinct:$3, Arg:$4, OverClause: $6}
   }
 | MIN openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Min{Distinct:$3, Arg:$4, OverClause: $6}
   }
 | SUM openb distinct_opt expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Sum{Distinct:$3, Arg:$4, OverClause: $6}
   }
 | AVG openb distinct_opt expression closeb over_clause_opt
@@ -6836,46 +6849,57 @@ UTC_DATE func_paren_opt
   }
 | BIT_AND openb expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &BitAnd{Arg:$3, OverClause: $5}
   }
 | BIT_OR openb expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &BitOr{Arg:$3, OverClause: $5}
   }
 | BIT_XOR openb expression closeb over_clause_opt
    {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &BitXor{Arg:$3, OverClause: $5}
    }
 | STD openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Std{Arg:$3, OverClause: $5}
     }
 | STDDEV openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &StdDev{Arg:$3, OverClause: $5}
     }
 | STDDEV_POP openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &StdPop{Arg:$3, OverClause: $5}
     }
 | STDDEV_SAMP openb expression closeb over_clause_opt
     {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &StdSamp{Arg:$3, OverClause: $5}
     }
 | VAR_POP openb expression closeb over_clause_opt
      {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &VarPop{Arg:$3, OverClause: $5}
      }
 | VAR_SAMP openb expression closeb over_clause_opt
      {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &VarSamp{Arg:$3, OverClause: $5}
      }
 | VARIANCE openb expression closeb over_clause_opt
      {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &Variance{Arg:$3, OverClause: $5}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | ANY_VALUE openb expression closeb
@@ -6912,10 +6936,17 @@ UTC_DATE func_paren_opt
   }
 | JSON_ARRAYAGG openb expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &JSONArrayAgg{Expr: $3, OverClause: $5}
+  }
+| ST_COLLECT openb distinct_opt expression closeb over_clause_opt
+  {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
+    $$ = &STCollect{Distinct: $3, Arg: $4, OverClause: $6}
   }
 | JSON_OBJECTAGG openb expression ',' expression closeb over_clause_opt
   {
+    yylex.(*Tokenizer).recordSpacedAggrCall($1, @1, @2)
     $$ = &JSONObjectAgg{Key: $3, Value: $5, OverClause: $7}
   }
 | LTRIM openb expression closeb
@@ -9472,6 +9503,7 @@ non_reserved_keyword:
 | SECURITY
 | SEQUENCE
 | SESSION
+| SESSION_USER %prec FUNCTION_CALL_NON_KEYWORD
 | SERIALIZABLE
 | SHARE
 | SHARED
@@ -9515,6 +9547,7 @@ non_reserved_keyword:
 | ST_AsGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Centroid %prec FUNCTION_CALL_NON_KEYWORD
+| ST_COLLECT %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
 | ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
@@ -9561,6 +9594,7 @@ non_reserved_keyword:
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
+| SYSTEM_USER %prec FUNCTION_CALL_NON_KEYWORD
 | TABLE_NAME
 | TABLES
 | TABLESAMPLE
