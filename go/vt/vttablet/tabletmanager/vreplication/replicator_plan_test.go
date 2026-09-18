@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -1319,6 +1320,111 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
 	})
 
+	t.Run("short Before image returns an error instead of panicking", func(t *testing.T) {
+		// A Before image with fewer values than the table has fields used to
+		// make vals[pkIndex] index out of range once the PK column sat past
+		// the short row's end.
+		tp := newTablePlan()
+		tp.PKIndices = []bool{false, true}
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(1),
+			}),
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (1 values, expected 2)")
+		require.ErrorContains(t, err, "table t")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
+	t.Run("long Before image returns an error instead of panicking", func(t *testing.T) {
+		// A Before image with more values than the table has fields used to
+		// make MakeRowTrusted itself index fields out of range.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(1),
+				sqltypes.NewVarChar("a"),
+				sqltypes.NewVarChar("extra"),
+			}),
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (3 values, expected 2)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
+	t.Run("Before image with a short Values buffer returns an error instead of panicking", func(t *testing.T) {
+		// A Values buffer shorter than the sum of the Lengths used to make
+		// MakeRowTrusted slice out of range.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: &querypb.Row{
+				Lengths: []int64{1, 3},
+				Values:  []byte("1a"),
+			},
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (length 3 at column 1 exceeds the 1 bytes remaining)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
+	t.Run("Before image with an invalid negative length returns an error instead of deleting nothing", func(t *testing.T) {
+		// Only -1 denotes an omitted value. MakeRowTrusted treats any negative
+		// length as NULL, so a corrupted PK length would have produced
+		// "where id in (null)" and silently left the target row in place.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: &querypb.Row{
+				Lengths: []int64{-2, 1},
+				Values:  []byte("a"),
+			},
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (invalid length -2 at column 0)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
+	t.Run("Before image with trailing bytes returns an error instead of applying shifted values", func(t *testing.T) {
+		// Values must be exactly the concatenation of the declared lengths. A
+		// length that under-declares a value leaves trailing bytes and would
+		// have made MakeRowTrusted return shifted, truncated values.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: &querypb.Row{
+				Lengths: []int64{1, 1},
+				Values:  []byte("1ab"),
+			},
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (1 trailing bytes after the declared lengths)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
 	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
 		// A change with no Before image (an insert) riding in a bulk-delete
 		// event used to panic with a nil pointer dereference in MakeRowTrusted,
@@ -1404,6 +1510,37 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
+}
+
+// TestApplyBulkInsertChangesMalformedRowImage confirms that a bulk-insert
+// change whose After image does not match the table plan's width fails with a
+// terminal error instead of indexing vals out of range.
+func TestApplyBulkInsertChangesMalformedRowImage(t *testing.T) {
+	tp := &TablePlan{
+		TargetName:      "t",
+		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+			":a_c1", ":a_c2",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_INT32},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+		FieldsToSkip:     map[string]bool{},
+		TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+	}
+	rowChanges := []*binlogdatapb.RowChange{
+		{After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")})},
+		{After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2)})},
+	}
+	var executed []string
+	_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	}, 1024)
+	require.ErrorContains(t, err, "bulk-insert change for table t has a malformed After image (1 values, expected 2)")
+	assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+	assert.Empty(t, executed)
 }
 
 func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
@@ -1744,6 +1881,85 @@ func TestCheckJSONRowSize(t *testing.T) {
 		err := tp.checkJSONRowSize(row, 8)
 		require.ErrorContains(t, err, "vreplication: row JSON payload")
 	})
+}
+
+// TestApplyChangeMalformedRowImages confirms that the per-change apply path
+// fails with a terminal error, instead of indexing vals out of range, when a
+// Before or After image does not match the table plan's width or carries a
+// Values buffer shorter than its lengths.
+func TestApplyChangeMalformedRowImages(t *testing.T) {
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName: "t",
+			Insert:     sqlparser.BuildParsedQuery("insert into t(id, v) values (%a, %a)", ":a_id", ":a_v"),
+			Delete:     sqlparser.BuildParsedQuery("delete from t where id=%a", ":b_id"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			PKReferences:   []string{"id"},
+			WorkflowConfig: &vttablet.VReplicationConfig{},
+		}
+	}
+	shortRow := sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1)})
+
+	testCases := []struct {
+		name      string
+		rowChange *binlogdatapb.RowChange
+		wantErr   string
+	}{{
+		name:      "short Before image",
+		rowChange: &binlogdatapb.RowChange{Before: shortRow},
+		wantErr:   "change for table t has a malformed Before image (1 values, expected 2)",
+	}, {
+		name:      "short After image",
+		rowChange: &binlogdatapb.RowChange{After: shortRow},
+		wantErr:   "change for table t has a malformed After image (1 values, expected 2)",
+	}, {
+		name: "After image with a short Values buffer",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{1, 3},
+			Values:  []byte("1a"),
+		}},
+		wantErr: "change for table t has a malformed After image (length 3 at column 1 exceeds the 1 bytes remaining)",
+	}, {
+		name: "After image with an invalid negative length",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{1, -2},
+			Values:  []byte("1"),
+		}},
+		wantErr: "change for table t has a malformed After image (invalid length -2 at column 1)",
+	}, {
+		// Two lengths that would overflow an int64 sum must be caught by the
+		// per-column check against the remaining buffer, not slip through a
+		// wrapped total.
+		name: "After image whose lengths overflow when summed",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{math.MaxInt64, math.MaxInt64},
+			Values:  []byte("1"),
+		}},
+		wantErr: "change for table t has a malformed After image (length 9223372036854775807 at column 0 exceeds the 1 bytes remaining)",
+	}, {
+		name: "After image with trailing bytes",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{1, 1},
+			Values:  []byte("1ab"),
+		}},
+		wantErr: "change for table t has a malformed After image (1 trailing bytes after the declared lengths)",
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var executed []string
+			_, err := newTablePlan().applyChange(tc.rowChange, func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			})
+			require.ErrorContains(t, err, tc.wantErr)
+			assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+			require.Empty(t, executed)
+		})
+	}
 }
 
 func TestApplyChangeChecksEffectiveJSONSizeForPartialDeleteInsert(t *testing.T) {
