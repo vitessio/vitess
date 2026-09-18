@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -1377,7 +1378,28 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			executed = append(executed, sql)
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
-		require.ErrorContains(t, err, "malformed Before image (lengths total 4 bytes, 2 present)")
+		require.ErrorContains(t, err, "malformed Before image (length 3 at column 1 exceeds the 1 bytes remaining)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
+	t.Run("Before image with an invalid negative length returns an error instead of deleting nothing", func(t *testing.T) {
+		// Only -1 denotes an omitted value. MakeRowTrusted treats any negative
+		// length as NULL, so a corrupted PK length would have produced
+		// "where id in (null)" and silently left the target row in place.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: &querypb.Row{
+				Lengths: []int64{-2, 1},
+				Values:  []byte("a"),
+			},
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (invalid length -2 at column 0)")
 		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
 		require.Empty(t, executed)
 	})
@@ -1878,7 +1900,24 @@ func TestApplyChangeMalformedRowImages(t *testing.T) {
 			Lengths: []int64{1, 3},
 			Values:  []byte("1a"),
 		}},
-		wantErr: "change for table t has a malformed After image (lengths total 4 bytes, 2 present)",
+		wantErr: "change for table t has a malformed After image (length 3 at column 1 exceeds the 1 bytes remaining)",
+	}, {
+		name: "After image with an invalid negative length",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{1, -2},
+			Values:  []byte("1"),
+		}},
+		wantErr: "change for table t has a malformed After image (invalid length -2 at column 1)",
+	}, {
+		// Two lengths that would overflow an int64 sum must be caught by the
+		// per-column check against the remaining buffer, not slip through a
+		// wrapped total.
+		name: "After image whose lengths overflow when summed",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{math.MaxInt64, math.MaxInt64},
+			Values:  []byte("1"),
+		}},
+		wantErr: "change for table t has a malformed After image (length 9223372036854775807 at column 0 exceeds the 1 bytes remaining)",
 	}}
 
 	for _, tc := range testCases {

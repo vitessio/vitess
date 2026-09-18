@@ -666,30 +666,38 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 }
 
 // validateRowImage checks that a row image is consistent with the table plan
-// before MakeRowTrusted indexes it: one length per field (-1 for an omitted
-// value), and a Values buffer that covers the sum of the lengths. A shorter
-// image would make the per-field loops index vals out of range, a longer one
-// would make MakeRowTrusted index fields out of range, and a short Values
-// buffer would make it slice out of range. The vstreamer derives the field
-// event and every row image from the same plan, so a mismatch is a malformed
-// stream payload that replaying the same event cannot repair: the error is
-// terminal, like the shape checks on the bulk paths.
+// before MakeRowTrusted indexes it: one length per field, each length either
+// -1 (an omitted value) or a byte count the Values buffer can still satisfy.
+// A shorter image would make the per-field loops index vals out of range, a
+// longer one would make MakeRowTrusted index fields out of range, and a short
+// Values buffer would make it slice out of range. Negative lengths other than
+// -1 are rejected as well: MakeRowTrusted would treat them as NULL, which for
+// a PK column turns a delete into a silent no-op. Lengths are checked one at
+// a time against the remaining buffer so that adding them up cannot overflow.
+// The vstreamer derives the field event and every row image from the same
+// plan, so a mismatch is a malformed stream payload that replaying the same
+// event cannot repair: the error is terminal, like the shape checks on the
+// bulk paths.
 func (tp *TablePlan) validateRowImage(row *querypb.Row, change, image string) error {
 	if len(row.Lengths) != len(tp.Fields) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"vreplication: %s for table %s has a malformed %s image (%d values, expected %d)",
 			change, tp.TargetName, image, len(row.Lengths), len(tp.Fields))
 	}
-	var total int64
-	for _, length := range row.Lengths {
-		if length > 0 {
-			total += length
+	remaining := int64(len(row.Values))
+	for i, length := range row.Lengths {
+		switch {
+		case length < -1:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: %s for table %s has a malformed %s image (invalid length %d at column %d)",
+				change, tp.TargetName, image, length, i)
+		case length > remaining:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: %s for table %s has a malformed %s image (length %d at column %d exceeds the %d bytes remaining)",
+				change, tp.TargetName, image, length, i, remaining)
+		case length > 0:
+			remaining -= length
 		}
-	}
-	if total > int64(len(row.Values)) {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"vreplication: %s for table %s has a malformed %s image (lengths total %d bytes, %d present)",
-			change, tp.TargetName, image, total, len(row.Values))
 	}
 	return nil
 }
