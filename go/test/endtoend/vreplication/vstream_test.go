@@ -1055,8 +1055,9 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 
 	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
-	// Switch the traffic to the new shards.
-	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType)
+	// Switch the traffic to the new shards. Only writes (PRIMARY) are switched here,
+	// which now requires --force because it leaves reads on the source shards.
+	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType, "--force")
 
 	// Now start a new VStream from our previous VGTID which only has the old/original shards.
 	func() {
@@ -1252,8 +1253,9 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	require.Len(t, newVGTID.GetShardGtids(), 2)
 	t.Logf("Position at end of first stream: %+v", newVGTID.GetShardGtids())
 
-	// Switch the traffic to the new shards.
-	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType)
+	// Switch the traffic to the new shards. Only writes (PRIMARY) are switched here,
+	// which now requires --force because it leaves reads on the source shards.
+	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType, "--force")
 
 	// Now start a new VStream from our previous VGTID which only has the old/original shards.
 	expectedJournalEvents := 2 // One for each old shard: -80,80-

@@ -2816,9 +2816,23 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = DefaultTimeout
 	}
 	direction := TrafficSwitchDirection(req.Direction)
+	if direction != DirectionForward && direction != DirectionBackward {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid traffic switch direction: %d", req.Direction)
+	}
 	switchReplica, switchRdonly, switchPrimary, err = parseTabletTypes(req.TabletTypes)
 	if err != nil {
 		return nil, err
+	}
+	// Probed once and shared by the read-ordering guard and switchReads so both agree
+	// on whether switchReads will add RDONLY (tablet records are not under the workflow
+	// lock, so probing twice could disagree).
+	autoSwitchRdonly := false
+	if switchReplica && !switchRdonly {
+		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
+		if err != nil {
+			return nil, err
+		}
+		autoSwitchRdonly = !rdonlyTabletsExist
 	}
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
@@ -2878,6 +2892,116 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	ts.force = req.GetForce()
 
+	// Don't switch writes forward while leaving reads on the source. Moving writes
+	// while any read type stays on the source strands those reads and, for a Reshard,
+	// makes the workflow uncompletable. For each read type, work out whether reads
+	// would still be on the source after this request's read switches and flag any
+	// that remain; --force overrides. Evaluated on freshly reloaded state under the
+	// workflow lock, so it is serialized against concurrent switches rather than
+	// relying on the pre-lock state. How read state is determined depends on the
+	// workflow kind (see below).
+	if TrafficSwitchDirection(req.Direction) == DirectionForward && switchPrimary {
+		lockedTS, lockedState, stateErr := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+		if stateErr != nil {
+			return nil, stateErr
+		}
+		// Different workflow kinds strand reads differently:
+		//   - Partial MoveTables switches every tablet type together through shard
+		//     routing rules, so switching writes cannot leave reads on the source.
+		//     There is nothing to guard.
+		//   - Reshard reads are per-cell served types that the write switch does not
+		//     touch, so a request naming only some cells can leave the rest on the
+		//     source; the State's per-cell lists are authoritative.
+		//   - Multi-tenant MoveTables reads are keyspace routing rules resolved into
+		//     the same per-cell (all-or-nothing) State lists, also authoritative.
+		//   - Ordinary MoveTables reads follow the global table routing rules; the
+		//     write switch rebuilds SrvVSchema in every cell and propagates whatever
+		//     those rules currently say, so the rule is authoritative while a per-cell
+		//     SrvVSchema snapshot can be stale after a cell-scoped read reversal.
+		useCellState := lockedState.WorkflowType == TypeReshard || lockedTS.IsMultiTenantMigration()
+		if !lockedTS.isPartialMigration && !lockedState.WritesSwitched {
+			var reqCells sets.Set[string]
+			var globalRules map[string][]string
+			if useCellState {
+				// ExpandCells resolves aliases to concrete cell names (empty means all
+				// cells) so they compare against the concrete cells in the state.
+				expanded, err := s.ts.ExpandCells(ctx, strings.Join(req.Cells, ","))
+				if err != nil {
+					return nil, err
+				}
+				reqCells = sets.New(expanded...)
+			} else {
+				var err error
+				globalRules, err = topotools.GetRoutingRules(ctx, s.ts)
+				if err != nil {
+					return nil, err
+				}
+			}
+			// moveTablesReadsOnTarget reports whether the global routing rule already
+			// points every workflow table's reads of this type at the target keyspace.
+			moveTablesReadsOnTarget := func(tabletType topodatapb.TabletType) bool {
+				tt := strings.ToLower(tabletType.String())
+				for _, table := range lockedTS.Tables() {
+					rr := globalRules[fmt.Sprintf("%s.%s@%s", lockedTS.SourceKeyspaceName(), table, tt)]
+					if len(rr) == 0 || rr[0] != fmt.Sprintf("%s.%s", lockedTS.TargetKeyspaceName(), table) {
+						return false
+					}
+				}
+				return true
+			}
+			// cellsStrandedOnSource returns the cells still on the source after this
+			// request switches (or does not switch) a read type.
+			cellsStrandedOnSource := func(tabletType topodatapb.TabletType, switchedByReq bool, cellsNotSwitched []string) []string {
+				if !useCellState {
+					// Ordinary MoveTables: not stranded if this request switches the type
+					// or the global rule already routes it to the target.
+					if switchedByReq || moveTablesReadsOnTarget(tabletType) {
+						return nil
+					}
+					if len(cellsNotSwitched) == 0 {
+						return []string{"all"}
+					}
+					return cellsNotSwitched
+				}
+				if len(cellsNotSwitched) == 0 {
+					return nil
+				}
+				// Reshard / multi-tenant: an unswitched type leaves every not-switched
+				// cell behind; a switched type only leaves cells this request does not
+				// target.
+				if !switchedByReq {
+					return cellsNotSwitched
+				}
+				var stranded []string
+				for _, c := range cellsNotSwitched {
+					if !reqCells.Has(c) {
+						stranded = append(stranded, c)
+					}
+				}
+				return stranded
+			}
+			var readsNotSwitched []string
+			if stranded := cellsStrandedOnSource(topodatapb.TabletType_REPLICA, switchReplica, lockedState.ReplicaCellsNotSwitched); len(stranded) > 0 {
+				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("REPLICA (cells: %s)", strings.Join(stranded, ",")))
+			}
+			// switchReads auto-adds RDONLY when replica reads are being switched and
+			// the targeted cells have no rdonly tablets, so RDONLY is not stranded then.
+			rdonlySwitchedByReq := switchRdonly || autoSwitchRdonly
+			if stranded := cellsStrandedOnSource(topodatapb.TabletType_RDONLY, rdonlySwitchedByReq, lockedState.RdonlyCellsNotSwitched); len(stranded) > 0 {
+				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(stranded, ",")))
+			}
+			if len(readsNotSwitched) > 0 {
+				if !req.GetForce() {
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+						"cannot switch writes for workflow %s before reads are switched; reads still on the source: %s. Switch reads first, or include them in this request (e.g. --tablet-types=rdonly,replica,primary), or use --force to override.",
+						lockedState.Workflow, strings.Join(readsNotSwitched, "; "))
+				}
+				s.Logger().Warningf("Switching writes for workflow %s while reads are not switched (%s); proceeding because --force was specified",
+					lockedState.Workflow, strings.Join(readsNotSwitched, "; "))
+			}
+		}
+	}
+
 	if writesAlreadySwitched {
 		s.Logger().Infof("Writes already switched no need to check lag for the %s.%s workflow",
 			ts.targetKeyspace, ts.workflow)
@@ -2895,7 +3019,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if switchReplica || switchRdonly {
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction, autoSwitchRdonly); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
@@ -2958,7 +3082,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, rebuildSrvVSchema bool, direction TrafficSwitchDirection) (*[]string, error) {
+func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, rebuildSrvVSchema bool, direction TrafficSwitchDirection, autoSwitchRdonly bool) (*[]string, error) {
 	var roTabletTypes []topodatapb.TabletType
 	// When we are switching all traffic we also get the primary tablet type, which we need to
 	// filter out for switching reads.
@@ -3028,16 +3152,9 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
 	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent
-	// rdonly tablets.
-	if switchReplica && !switchRdonly {
-		var err error
-		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
-		if err != nil {
-			return nil, err
-		}
-		if !rdonlyTabletsExist {
-			roTabletTypes = append(roTabletTypes, topodatapb.TabletType_RDONLY)
-		}
+	// rdonly tablets. autoSwitchRdonly carries this decision from the caller so it is not re-probed here.
+	if switchReplica && !switchRdonly && autoSwitchRdonly {
+		roTabletTypes = append(roTabletTypes, topodatapb.TabletType_RDONLY)
 	}
 
 	journalsExist, _, err := ts.checkJournals(ctx)

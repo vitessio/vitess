@@ -66,6 +66,7 @@ type workflowExecOptions struct {
 	atomicCopy         bool
 	shardSubset        string
 	percent            float32
+	force              bool
 }
 
 var defaultWorkflowExecOptions = &workflowExecOptions{
@@ -152,6 +153,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, defaultSourceKs, defaultTarg
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
 		args = append(args, "--timeout=90s")
+		if options.force {
+			args = append(args, "--force")
+		}
 	}
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")
@@ -188,6 +192,14 @@ func tstWorkflowReverseReads(t *testing.T, tabletTypes, cells string) {
 
 func tstWorkflowSwitchWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "primary", ""))
+}
+
+// tstWorkflowSwitchWritesForced switches writes (only) with --force, which is
+// required to switch writes forward while reads are still on the source (that
+// is otherwise refused because it strands reads).
+func tstWorkflowSwitchWritesForced(t *testing.T) {
+	require.NoError(t, tstWorkflowExec(t, "", defaultWorkflowName, defaultSourceKs, defaultTargetKs, "customer",
+		workflowActionSwitchTraffic, "primary", "", "", &workflowExecOptions{deferSecondaryKeys: true, force: true}))
 }
 
 func tstWorkflowReverseWrites(t *testing.T) {
@@ -742,7 +754,14 @@ func testRestOfWorkflow(t *testing.T) {
 	validateWritesRouteToSource(t)
 
 	waitForLowLag(t, defaultTargetKs, "wf1")
-	tstWorkflowSwitchWrites(t)
+	// Switching writes forward while reads are still on the source is now
+	// refused (it would strand reads on a source that no longer takes writes).
+	// Assert the specific ordering error so a transient failure can't masquerade
+	// as the guard firing.
+	err = tstWorkflowAction(t, workflowActionSwitchTraffic, "primary", "")
+	require.ErrorContains(t, err, "before reads are switched")
+	// --force overrides the guard to reach the writes-switched state exercised below.
+	tstWorkflowSwitchWritesForced(t)
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateWritesSwitched)
 	validateReadsRouteToSource(t, "replica,rdonly")
 	validateWritesRouteToTarget(t)
@@ -922,7 +941,8 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, workflowType, ksWorkflow, false)
+		// Reads are still on the source here, so switching writes first requires --force.
+		switchWrites(t, workflowType, ksWorkflow, false, "--force")
 		validateWritesRouteToTarget(t)
 
 		validateReadsRouteToSource(t, "replica")
@@ -944,7 +964,9 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		printRoutingRules(t, vc, "After reversing read traffic")
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, workflowType, ksWorkflow, false)
+		// Reads were reversed back to the source above, so switching writes here is
+		// again a write-before-read switch and requires --force.
+		switchWrites(t, workflowType, ksWorkflow, false, "--force")
 		validateWritesRouteToTarget(t)
 
 		printRoutingRules(t, vc, "After switching writes and reversing reads")
@@ -959,7 +981,8 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, workflowType, ksWorkflow, false)
+		// Reads are still on the source here, so switching writes first requires --force.
+		switchWrites(t, workflowType, ksWorkflow, false, "--force")
 		validateWritesRouteToTarget(t)
 
 		switchWrites(t, workflowType, ksWorkflow, true)
