@@ -39,8 +39,10 @@ import (
 	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -108,7 +110,7 @@ func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mysqlShellDumpFlags, "mysql-shell-dump-flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
 	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
 	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
-	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
+	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer, and enabling change buffering for inserts during the restore process")
 	fs.BoolVar(&mysqlShellRestoreSkipVersionCheck, "mysql-shell-restore-skip-version-check", mysqlShellRestoreSkipVersionCheck, "skip the MySQL version compatibility check when restoring from a mysql-shell backup")
 }
 
@@ -345,6 +347,15 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to set local_infile=1")
 	}
+	defer func() {
+		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeout)
+		defer cancel()
+		if err := params.Mysqld.ExecuteSuperQuery(resetCtx, "SET GLOBAL LOCAL_INFILE=0"); err != nil {
+			params.Logger.Errorf("unable to reset local_infile: %v", err)
+		} else {
+			params.Logger.Infof("set local_infile=0")
+		}
+	}()
 
 	if mysqlShellSpeedUpRestore {
 		// disable redo logging and double write buffer if we are configured to do so.
@@ -354,14 +365,22 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		}
 		params.Logger.Infof("Disabled REDO_LOG")
 
-		defer func() { // re-enable once we are done with the restore.
-			err := params.Mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE ENABLE INNODB REDO_LOG")
+		defer func() {
+			resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeout)
+			defer cancel()
+			err := params.Mysqld.ExecuteSuperQuery(resetCtx, "ALTER INSTANCE ENABLE INNODB REDO_LOG")
 			if err != nil {
 				params.Logger.Errorf("unable to re-enable REDO_LOG: %v", err)
 			} else {
 				params.Logger.Infof("Enabled REDO_LOG")
 			}
 		}()
+
+		resetCB, err := setChangeBuffering(ctx, params.Mysqld, params.Logger)
+		if err != nil {
+			return nil, err
+		}
+		defer resetCB()
 	}
 
 	// we need to disable SuperReadOnly otherwise we won't be able to restore the backup properly.
@@ -415,13 +434,6 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
 	params.Logger.Infof("%s completed successfully", be.binaryName)
-
-	// disable local_infile now that the restore is done.
-	err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL LOCAL_INFILE=0")
-	if err != nil {
-		return nil, vterrors.Wrap(err, "unable to set local_infile=0")
-	}
-	params.Logger.Infof("set local_infile=0")
 
 	params.Logger.Infof("Restore completed")
 
@@ -548,6 +560,39 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 	}
 
 	return shouldDeleteUsers, nil
+}
+
+// setChangeBuffering enables innodb_change_buffering=inserts for faster bulk loading and
+// returns a function that restores the original value. If the variable is not supported
+// (ERUnknownSystemVariable), the returned function is a no-op.
+func setChangeBuffering(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger) (func(), error) {
+	origCB, err := mysqld.FetchSuperQuery(ctx, "SELECT @@GLOBAL.innodb_change_buffering")
+	if err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			logger.Infof("innodb_change_buffering not supported on this MySQL version, skipping")
+			return func() {}, nil
+		}
+		return nil, vterrors.Wrap(err, "unable to query innodb_change_buffering")
+	}
+	if len(origCB.Rows) == 0 {
+		return func() {}, nil
+	}
+
+	originalValue := origCB.Rows[0][0].ToString()
+	if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_change_buffering = 'inserts'"); err != nil {
+		return nil, vterrors.Wrap(err, "unable to set innodb_change_buffering")
+	}
+	logger.Infof("Set innodb_change_buffering=inserts for faster restore (was %s)", originalValue)
+
+	return func() {
+		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeout)
+		defer cancel()
+		if err := mysqld.ExecuteSuperQuery(resetCtx, fmt.Sprintf("SET GLOBAL innodb_change_buffering = '%s'", originalValue)); err != nil {
+			logger.Errorf("unable to reset innodb_change_buffering: %v", err)
+		} else {
+			logger.Infof("Reset innodb_change_buffering=%s", originalValue)
+		}
+	}, nil
 }
 
 func (be *MySQLShellBackupEngine) handleSuperReadOnly(ctx context.Context, params RestoreParams) (func(), error) {
