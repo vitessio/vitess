@@ -18,6 +18,7 @@ package primaryfailure
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -43,8 +44,11 @@ func waitForReceivedPosition(t *testing.T, source, replica *cluster.Vttablet) {
 	position := strings.ReplaceAll(res.Rows[0][0].ToString(), "\n", "")
 
 	require.Eventually(t, func() bool {
-		status, err := utils.RunSQL(t, `show replica status`, replica, "")
-		if err != nil || len(status.Rows) != 1 {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+
+		status, queryErr := replica.VttabletProcess.QueryTabletWithContext(ctx, `show replica status`, "", false)
+		if queryErr != nil || len(status.Rows) != 1 {
 			return false
 		}
 		var retrieved string
@@ -56,8 +60,8 @@ func waitForReceivedPosition(t *testing.T, source, replica *cluster.Vttablet) {
 		if retrieved == "" {
 			return false
 		}
-		res, err := utils.RunSQL(t, fmt.Sprintf(`select gtid_subset('%s', concat(@@global.gtid_executed, ',', '%s'))`, position, retrieved), replica, "")
-		return err == nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == "1"
+		subset, queryErr := replica.VttabletProcess.QueryTabletWithContext(ctx, fmt.Sprintf(`select gtid_subset('%s', concat(@@global.gtid_executed, ',', '%s'))`, position, retrieved), "", false)
+		return queryErr == nil && len(subset.Rows) == 1 && subset.Rows[0][0].ToString() == "1"
 	}, 30*time.Second, time.Second)
 }
 
@@ -71,7 +75,7 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s", "--emergency-reparent-require-primary-position"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -107,6 +111,23 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 	waitForReceivedPosition(t, curPrimary, crossCellReplica)
 
+	// Wait for a stored position so the failover must use the enabled requirement.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		rows, err := utils.ReadVTOrcTable(vtOrcProcess, "database_instance")
+		if !assert.NoError(c, err) {
+			return
+		}
+
+		for _, row := range rows {
+			if row.GetString("alias") == curPrimary.Alias {
+				assert.NotEmpty(c, row.GetString("executed_gtid_set"))
+				return
+			}
+		}
+
+		assert.Fail(c, "primary is missing from database_instance")
+	}, 30*time.Second, time.Second)
+
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 0, true)
 	// Make the rdonly vttablet unavailable
@@ -141,6 +162,22 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	// Check the audit to confirm that the successful ERS used the required position.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		steps, err := utils.ReadVTOrcTable(vtOrcProcess, "topology_recovery_steps")
+		if !assert.NoError(c, err) {
+			return
+		}
+
+		var messages []string
+		for _, step := range steps {
+			messages = append(messages, step.GetString("message"))
+		}
+
+		assert.Contains(c, strings.Join(messages, "\n"), "required position: MySQL56/")
+	}, 30*time.Second, time.Second)
+
 	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
 		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
 		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")

@@ -196,6 +196,17 @@ var (
 		},
 	)
 
+	// emergencyReparentRequirePrimaryPosition guards against promoting a replica that lost its relay log.
+	// It applies only to semi-sync durability policies.
+	emergencyReparentRequirePrimaryPosition = viperutil.Configure(
+		"emergency-reparent-require-primary-position",
+		viperutil.Options[bool]{
+			FlagName: "emergency-reparent-require-primary-position",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
 	allowRecovery = viperutil.Configure(
 		"allow-recovery",
 		viperutil.Options[bool]{
@@ -292,6 +303,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("topo-information-refresh-duration", topoInformationRefreshDuration.Default(), "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.Bool("allow-emergency-reparent", ersEnabled.Default(), "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
+	fs.Bool("emergency-reparent-require-primary-position", emergencyReparentRequirePrimaryPosition.Default(), "Whether VTOrc should require the last stored primary GTID position when it runs an emergency reparent. Applies only to semi-sync durability policies")
 	fs.Bool("allow-recovery", allowRecovery.Default(), "Whether VTOrc should be allowed to run recovery actions")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
@@ -320,6 +332,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		topoInformationRefreshDuration,
 		recoveryPollDuration,
 		ersEnabled,
+		emergencyReparentRequirePrimaryPosition,
 		allowRecovery,
 		convertTabletsWithErrantGTIDs,
 		enablePrimaryDiskStalledRecovery,
@@ -444,6 +457,11 @@ func GetRecoveryPollDuration() time.Duration {
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
 func ERSEnabled() bool {
 	return ersEnabled.Get()
+}
+
+// EmergencyReparentRequirePrimaryPosition reports whether ERS requires the last stored primary position.
+func EmergencyReparentRequirePrimaryPosition() bool {
+	return emergencyReparentRequirePrimaryPosition.Get()
 }
 
 // SetERSEnabled sets the value for the ersEnabled variable. This should only be used from tests.

@@ -43,6 +43,8 @@
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
         - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [Require the last stored primary position during failover](#vtorc-emergency-reparent-require-primary-position)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -465,6 +467,14 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 `EmergencyReparentShard` only compared candidates to each other. When every candidate lost the same relay log, for example after `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, they all looked fully applied and ERS promoted a stale replica.
 
 A new `--required-position` flag (and `required_position` field on the `EmergencyReparentShard` RPC) names a position the new primary must have received, applied or still in its relay log, in Vitess position format such as `MySQL56/<uuid>:1-100`. If no candidate has received it, ERS fails with `FAILED_PRECONDITION` and reports the most advanced received positions it found, before it waits on any relay log. Only MySQL GTID shards are supported. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
+
+See [#21109](https://github.com/vitessio/vitess/issues/21109).
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-emergency-reparent-require-primary-position"/>Require the last stored primary position during failover</a>
+
+The new `--emergency-reparent-require-primary-position` flag is off by default. For semi-sync durability policies only, it makes automated ERS require the last stored primary GTID position. ERS fails if no candidate has received that position. VTOrc skips the requirement when stored data cannot be read, the stored set is empty or is not a MySQL56 GTID set, or the analyzed tablet is not a primary. This includes a surviving replica analyzed after the primary tablet was deleted. When the flag is on, the recovery audit records the position or the reason for skipping it.
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 

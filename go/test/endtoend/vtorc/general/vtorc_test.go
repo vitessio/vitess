@@ -18,7 +18,6 @@ package general
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -826,45 +825,31 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 	// The topology_recovery table has auto-incremented recovery_id values that
 	// reflect execution order. All ReplicaSemiSyncMustBeSet recovery_ids should
 	// be less than any PrimarySemiSyncMustBeSet recovery_id.
-	type tableState struct {
-		TableName string
-		Rows      []map[string]any
-	}
-
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		status, response, err := utils.MakeAPICall(t, vtorc, "/api/database-state")
-		assert.NoError(c, err)
-		assert.Equal(c, 200, status)
-
-		var tables []tableState
-		if !assert.NoError(c, json.Unmarshal([]byte(response), &tables)) {
+		rows, err := utils.ReadVTOrcTable(vtorc, "topology_recovery")
+		if !assert.NoError(c, err) {
 			return
 		}
 
 		var maxReplicaRecoveryID, minPrimaryRecoveryID int
 		var replicaCount, primaryCount int
-		for _, table := range tables {
-			if table.TableName != "topology_recovery" {
+		for _, row := range rows {
+			analysis := row.GetString("analysis")
+			recoveryIDStr := row.GetString("recovery_id")
+			recoveryID, err := strconv.Atoi(recoveryIDStr)
+			if err != nil {
 				continue
 			}
-			for _, row := range table.Rows {
-				analysis, _ := row["analysis"].(string)
-				recoveryIDStr, _ := row["recovery_id"].(string)
-				recoveryID, err := strconv.Atoi(recoveryIDStr)
-				if err != nil {
-					continue
+			switch inst.AnalysisCode(analysis) {
+			case inst.ReplicaSemiSyncMustBeSet:
+				replicaCount++
+				if replicaCount == 1 || recoveryID > maxReplicaRecoveryID {
+					maxReplicaRecoveryID = recoveryID
 				}
-				switch inst.AnalysisCode(analysis) {
-				case inst.ReplicaSemiSyncMustBeSet:
-					replicaCount++
-					if replicaCount == 1 || recoveryID > maxReplicaRecoveryID {
-						maxReplicaRecoveryID = recoveryID
-					}
-				case inst.PrimarySemiSyncMustBeSet:
-					primaryCount++
-					if primaryCount == 1 || recoveryID < minPrimaryRecoveryID {
-						minPrimaryRecoveryID = recoveryID
-					}
+			case inst.PrimarySemiSyncMustBeSet:
+				primaryCount++
+				if primaryCount == 1 || recoveryID < minPrimaryRecoveryID {
+					minPrimaryRecoveryID = recoveryID
 				}
 			}
 		}

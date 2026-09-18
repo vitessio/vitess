@@ -168,6 +168,43 @@ func TestGetKeyspaceShardName(t *testing.T) {
 	require.Equal(t, shard, shardRead)
 }
 
+// TestReadExecutedGtidSet checks stored GTIDs after a tablet clears its MySQL address.
+func TestReadExecutedGtidSet(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+
+	const gtid = "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100"
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	require.NoError(t, WriteInstance(&Instance{
+		InstanceAlias:   alias,
+		Hostname:        "primary",
+		Port:            3306,
+		ExecutedGtidSet: gtid,
+	}, true, nil))
+	require.NoError(t, SaveTablet(&topodatapb.Tablet{
+		Alias:         alias,
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "",
+		MysqlPort:     0,
+	}))
+
+	instance, found, err := ReadInstance(alias)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.NotNil(t, instance)
+	assert.Empty(t, instance.ExecutedGtidSet)
+
+	stored, found, err := ReadExecutedGtidSet(alias)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, gtid, stored)
+
+	stored, found, err = ReadExecutedGtidSet(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101})
+	require.NoError(t, err)
+	assert.False(t, found)
+	assert.Empty(t, stored)
+}
+
 // TestReadInstance is used to test the functionality of ReadInstance and verify its failure modes and successes.
 func TestReadInstance(t *testing.T) {
 	tests := []struct {
