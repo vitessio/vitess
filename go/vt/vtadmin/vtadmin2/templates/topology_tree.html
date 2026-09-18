@@ -1,0 +1,59 @@
+{{ define "topology_tree.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+<div class="toolbar">
+  <h1>Topology: {{ $d.ClusterID }}</h1>
+  <a href="/topology">Path lookup</a>
+</div>
+
+<div class="card">
+  <h2>Cells</h2>
+  <table>
+    <thead><tr><th>Cell</th><th>Tablets</th></tr></thead>
+    <tbody>
+      {{ range $d.Cells }}
+      <tr><td>{{ .Name }}</td><td>{{ .TabletCount }}</td></tr>
+      {{ else }}
+      <tr><td colspan="2">No cells found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Keyspaces</h2>
+  {{ range $d.Keyspaces }}{{ $tk := . }}
+  <div class="topo-keyspace">
+    <h3><a href="/keyspace/{{ pathEscape $d.ClusterID }}/{{ pathEscape $tk.Name }}">{{ $tk.Name }}</a></h3>
+    <table>
+      <thead><tr><th>Shard</th><th>Primary</th><th>Tablets</th></tr></thead>
+      <tbody>
+        {{ range $tk.Shards }}
+        <tr>
+          <td><a href="/keyspace/{{ pathEscape $d.ClusterID }}/{{ pathEscape $tk.Name }}/shard/{{ pathEscape .Name }}">{{ .Name }}</a></td>
+          <td>
+            {{ if .PrimaryAlias }}
+            <a href="/tablet/{{ pathEscape $d.ClusterID }}/{{ pathEscape .PrimaryAlias }}">{{ .PrimaryAlias }}</a>
+            {{ else }}
+            <span class="muted">none</span>
+            {{ end }}
+          </td>
+          <td>
+            {{ range .Tablets }}<a href="/tablet/{{ pathEscape $d.ClusterID }}/{{ pathEscape . }}">{{ . }}</a> {{ end }}
+            {{ if not .Tablets }}<span class="muted">No tablets</span>{{ end }}
+          </td>
+        </tr>
+        {{ else }}
+        <tr><td colspan="3">No shards found.</td></tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  <p class="muted">No keyspaces found.</p>
+  {{ end }}
+</div>
+{{ end }}

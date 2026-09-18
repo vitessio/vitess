@@ -1,0 +1,34 @@
+{{ define "cells_aliases.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Cell Aliases</h1>
+  <input class="table-filter" data-table-filter="#cells-aliases-table" placeholder="Filter cell aliases" aria-label="Filter cell aliases">
+</div>
+<div class="card">
+  <table id="cells-aliases-table">
+    <thead>
+      <tr><th>Cluster</th><th>Alias</th><th>Cells</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      {{ $cluster := clusterID .GetCluster }}
+      {{ range $name, $alias := .GetAliases }}
+      <tr>
+        <td>{{ $cluster }}</td>
+        <td>{{ $name }}</td>
+        <td>{{ range $alias.GetCells }}<span>{{ . }}</span> {{ end }}</td>
+        <td><pre>{{ protoJSON $alias }}</pre></td>
+      </tr>
+      {{ else }}
+      <tr><td>{{ $cluster }}</td><td colspan="3">No aliases found for this cluster.</td></tr>
+      {{ end }}
+      {{ else }}
+      <tr><td colspan="4">No cell aliases found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

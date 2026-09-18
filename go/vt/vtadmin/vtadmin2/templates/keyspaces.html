@@ -1,0 +1,31 @@
+{{ define "keyspaces.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Keyspaces</h1>
+  <div>
+    <input class="table-filter" data-table-filter="#keyspaces-table" placeholder="Filter keyspaces" aria-label="Filter keyspaces">
+    {{ if not .ReadOnly }}<a class="button" href="/keyspaces/create">Create keyspace</a>{{ end }}
+  </div>
+</div>
+<div class="card">
+  <table id="keyspaces-table">
+    <thead>
+      <tr><th>Cluster</th><th>Keyspace</th><th>Shards</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td><a href="/keyspace/{{ pathEscape (clusterID .GetCluster) }}/{{ pathEscape (keyspaceName .) }}">{{ keyspaceName . }}</a></td>
+        <td>{{ len .GetShards }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No keyspaces found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
