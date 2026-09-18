@@ -919,6 +919,19 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
+	// Fail closed for a statement whose table set the planner could not
+	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA). It is forwarded to
+	// MySQL as opaque text and can still read or modify tables, but no
+	// permission could be derived for it, so the per-table loop below has
+	// nothing to iterate and would let any authenticated caller run it under
+	// strict table ACL. The planner flags such statements in the one switch
+	// that must account for every statement type (BuildPermissions), so this
+	// needs no list of its own. The exempt ACL applied above stays as the
+	// escape hatch for operators who need these statements.
+	if qre.plan.TablesUndetermined {
+		return qre.checkUndeterminedTableAccess(callerID)
+	}
+
 	for i, auth := range qre.plan.Authorized {
 		if err := qre.checkAccess(auth, qre.plan.Permissions[i].TableName, callerID); err != nil {
 			return err
@@ -941,12 +954,8 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		}
 
 		if qre.tsv.qe.strictTableACL {
-			groupStr := ""
-			if len(callerID.Groups) > 0 {
-				groupStr = fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
-			}
 			aclState = acl.ACLDenied
-			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, groupStr, tableName)
+			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID), tableName)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
@@ -954,6 +963,43 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	}
 	aclState = acl.ACLAllow
 	return nil
+}
+
+// checkUndeterminedTableAccess enforces table ACL for a statement whose table
+// set could not be determined at planning time (see checkPermissions). It
+// mirrors checkAccess's dry-run and stats handling, but denies unconditionally
+// under strict table ACL: there is no table whose grants could authorize the
+// caller, and the caller has already been shown to be non-exempt.
+func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
+	var aclState acl.ACLState
+	defer func() {
+		// There is no table to name; label the denial so operators can tell
+		// it apart from a per-table one in the TableACL* counters. The label
+		// carries hyphens so that no unquoted table name can share the series.
+		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
+		qre.recordACLStats(statsKey, aclState)
+	}()
+
+	if qre.tsv.qe.enableTableACLDryRun {
+		aclState = acl.ACLPseudoDenied
+		return nil
+	}
+	if !qre.tsv.qe.strictTableACL {
+		return nil
+	}
+	aclState = acl.ACLDenied
+	errStr := fmt.Sprintf("%s command denied to user '%s'%s for a table set that cannot be determined (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID))
+	qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
+	return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
+}
+
+// aclGroupsSuffix renders the caller's groups for an ACL denial message, so
+// operators who manage the ACL by group can see which ones the caller carried.
+func aclGroupsSuffix(callerID *querypb.VTGateCallerID) string {
+	if len(callerID.Groups) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
 }
 
 func (qre *QueryExecutor) generateACLStatsKey(tableName string, authorized *tableacl.ACLResult, callerID *querypb.VTGateCallerID) []string {
