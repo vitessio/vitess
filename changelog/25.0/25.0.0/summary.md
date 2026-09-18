@@ -18,6 +18,8 @@
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [Consistent hash ring to partition shard monitoring across instances](#vtorc-consistent-hash-ring)
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
@@ -185,6 +187,22 @@ Both compatibility behaviors will be removed in v26, along with the `SelectStrea
 **Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above, and re-key `OtherRead` rules meant to gate streamed `ANALYZE` on the `Select` plan or a `Query` pattern. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-consistent-hash-ring"/>Consistent hash ring to partition shard monitoring across instances</a>
+
+VTOrc can now split shard-monitoring responsibility across a pool of instances using a consistent hash ring, so each instance watches only a deterministic slice of the fleet instead of the entire topology. It is controlled by three new flags, all off by default:
+
+- `--vtorc-ring-size` (default `1`, disabled): total number of VTOrc instances in the ring.
+- `--vtorc-ring-index`: this instance's 0-based position in the ring.
+- `--vtorc-ring-assignments-file` (optional): a JSON file mapping virtual hash buckets to ring partitions for even distribution; unset uses direct hash modulo.
+
+Each shard is assigned a primary owner by hashing `keyspace/shard`, and the two ring-adjacent instances also watch it, giving three-way HA coverage per shard. Ring sizes of 2 or 3 are a no-op (every instance is primary and both neighbors for every shard); partitioning takes effect at `ring-size >= 4`. The default `--vtorc-ring-size=1` preserves the existing behavior of watching the entire topology.
+
+Note that ownership is not stable across mapping changes — whether a `--vtorc-ring-size` change or a `--vtorc-ring-assignments-file` update. During a rolling deployment where instances briefly run a mix of the old and new configuration, a shard's old and new watcher sets can be disjoint, so it may be transiently unmonitored. To change either without a coverage gap, stage through a `--vtorc-ring-size=1` (full-fleet watch) window between the old and new configuration.
+
+See [#21121](https://github.com/vitessio/vitess/pull/21121) for details.
 
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
 
