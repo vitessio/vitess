@@ -1404,6 +1404,27 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		require.Empty(t, executed)
 	})
 
+	t.Run("Before image with trailing bytes returns an error instead of applying shifted values", func(t *testing.T) {
+		// Values must be exactly the concatenation of the declared lengths. A
+		// length that under-declares a value leaves trailing bytes and would
+		// have made MakeRowTrusted return shifted, truncated values.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: &querypb.Row{
+				Lengths: []int64{1, 1},
+				Values:  []byte("1ab"),
+			},
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "malformed Before image (1 trailing bytes after the declared lengths)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
+	})
+
 	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
 		// A change with no Before image (an insert) riding in a bulk-delete
 		// event used to panic with a nil pointer dereference in MakeRowTrusted,
@@ -1918,6 +1939,13 @@ func TestApplyChangeMalformedRowImages(t *testing.T) {
 			Values:  []byte("1"),
 		}},
 		wantErr: "change for table t has a malformed After image (length 9223372036854775807 at column 0 exceeds the 1 bytes remaining)",
+	}, {
+		name: "After image with trailing bytes",
+		rowChange: &binlogdatapb.RowChange{After: &querypb.Row{
+			Lengths: []int64{1, 1},
+			Values:  []byte("1ab"),
+		}},
+		wantErr: "change for table t has a malformed After image (1 trailing bytes after the declared lengths)",
 	}}
 
 	for _, tc := range testCases {

@@ -673,7 +673,10 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 // Values buffer would make it slice out of range. Negative lengths other than
 // -1 are rejected as well: MakeRowTrusted would treat them as NULL, which for
 // a PK column turns a delete into a silent no-op. Lengths are checked one at
-// a time against the remaining buffer so that adding them up cannot overflow.
+// a time against the remaining buffer so that adding them up cannot overflow,
+// and they must consume the buffer exactly: Values is defined as the
+// concatenation of the row's values, so trailing bytes mean a length
+// under-declares a value and the remaining values would be applied shifted.
 // The vstreamer derives the field event and every row image from the same
 // plan, so a mismatch is a malformed stream payload that replaying the same
 // event cannot repair: the error is terminal, like the shape checks on the
@@ -698,6 +701,11 @@ func (tp *TablePlan) validateRowImage(row *querypb.Row, change, image string) er
 		case length > 0:
 			remaining -= length
 		}
+	}
+	if remaining != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vreplication: %s for table %s has a malformed %s image (%d trailing bytes after the declared lengths)",
+			change, tp.TargetName, image, remaining)
 	}
 	return nil
 }
