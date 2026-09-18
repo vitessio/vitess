@@ -21,7 +21,6 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -74,30 +73,6 @@ func usableMySQLVersions(mysqlVersions []mysqlctl.ServerVersion, flavors []mysql
 		return nil
 	}
 	return mysqlVersions
-}
-
-// scopedVersionMap returns versionMap when it is safe to use as an election
-// tiebreaker for the given candidate set, or nil to disable version-aware
-// ordering when those candidates span more than one flavor family (see
-// sameFlavorFamily).
-//
-// The guard is scoped to the passed candidates specifically — not to every
-// tablet in versionMap/flavorMap — so a non-candidate tablet elsewhere in the
-// shard (e.g. one dropped for errant GTIDs) cannot disable version comparison for
-// the tablets actually being elected among. Used on the ERS election path where
-// versions and flavors are keyed by tablet alias.
-func scopedVersionMap(candidates []*topodatapb.Tablet, versionMap map[string]mysqlctl.ServerVersion, flavorMap map[string]mysqlctl.MySQLFlavor) map[string]mysqlctl.ServerVersion {
-	if len(versionMap) == 0 {
-		return versionMap
-	}
-	flavors := make([]mysqlctl.MySQLFlavor, 0, len(candidates))
-	for _, c := range candidates {
-		flavors = append(flavors, flavorMap[topoproto.TabletAliasString(c.Alias)])
-	}
-	if !sameFlavorFamily(flavors) {
-		return nil
-	}
-	return versionMap
 }
 
 // SortMode controls the priority order used when sorting reparent candidates.
@@ -356,5 +331,74 @@ func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []*RelayLogP
 	}
 
 	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, mysqlVersions, durability, mode))
+	return nil
+}
+
+type ersCandidateSorter struct {
+	candidates []*ersCandidate
+	sorter     *reparentSorter
+}
+
+func (es *ersCandidateSorter) Len() int {
+	return len(es.candidates)
+}
+
+func (es *ersCandidateSorter) Swap(i, j int) {
+	es.candidates[i], es.candidates[j] = es.candidates[j], es.candidates[i]
+	es.sorter.Swap(i, j)
+}
+
+func (es *ersCandidateSorter) Less(i, j int) bool {
+	return es.sorter.Less(i, j)
+}
+
+func usableERSCandidateMySQLVersions(candidates []*ersCandidate) ([]mysqlctl.ServerVersion, bool) {
+	hasMySQLVersion := false
+	for _, candidate := range candidates {
+		if candidate.hasMySQLVersion {
+			hasMySQLVersion = true
+			break
+		}
+	}
+	if !hasMySQLVersion {
+		return nil, false
+	}
+
+	mysqlVersions := make([]mysqlctl.ServerVersion, len(candidates))
+	mysqlFlavors := make([]mysqlctl.MySQLFlavor, len(candidates))
+	for i, candidate := range candidates {
+		mysqlVersions[i] = unknownVersion
+		if candidate.hasMySQLVersion {
+			mysqlVersions[i] = candidate.mysqlVersion
+		}
+		mysqlFlavors[i] = candidate.mysqlFlavor
+	}
+
+	usableVersions := usableMySQLVersions(mysqlVersions, mysqlFlavors)
+	return usableVersions, usableVersions == nil
+}
+
+// sortERSCandidates orders the ERS promotion candidates in place, most eligible first,
+// by replication position with ties broken by the promotion rules and MySQL version.
+// Pass the versions from usableERSCandidateMySQLVersions, or nil to sort without a
+// version tiebreak.
+func sortERSCandidates(candidates []*ersCandidate, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler) error {
+	// mysqlVersions is positional, so the sorter swaps it alongside the candidates.
+	// fail-safe code prevents an out-of-range swap if the lengths are unequal
+	if len(mysqlVersions) != 0 && len(mysqlVersions) != len(candidates) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of candidates and mysql versions")
+	}
+
+	tablets := make([]*topodatapb.Tablet, len(candidates))
+	positions := make([]*RelayLogPositions, len(candidates))
+	for i, candidate := range candidates {
+		tablets[i] = candidate.tablet()
+		positions[i] = candidate.positions
+	}
+
+	sort.Sort(&ersCandidateSorter{
+		candidates: candidates,
+		sorter:     newReparentSorter(tablets, positions, nil, mysqlVersions, durability, SortByPosition),
+	})
 	return nil
 }
