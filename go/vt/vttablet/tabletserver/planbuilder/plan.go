@@ -187,10 +187,11 @@ type Plan struct {
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
 	// TablesUndetermined is set for a statement whose tables the parser
-	// discards (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA): Permissions is empty
-	// because none could be derived, not because the statement touches no
-	// table. Under strict table ACL the executor denies such a statement
-	// rather than skip the check.
+	// discards or leaves opaque (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a
+	// partially parsed CREATE TABLE): Permissions does not cover everything
+	// the statement touches, whether it is empty or names the tables the
+	// parser did keep. Under strict table ACL the executor denies such a
+	// statement rather than skip the check.
 	TablesUndetermined bool
 
 	// FullQuery will be set for all plans.
@@ -427,8 +428,12 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-		// settings are applied with no verification afterwards, so sql_mode values
-		// must be constants that can be judged here; vtgates only render constants
+		// settings are applied with no verification and no table ACL check, so a
+		// subquery is refused and sql_mode values must be constants that can be
+		// judged here
+		if err := rejectSettingSubqueries(set, setting); err != nil {
+			return "", "", err
+		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
 		}

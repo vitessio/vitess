@@ -195,3 +195,47 @@ func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 		})
 	}
 }
+
+// A connection setting is applied to the connection with no table ACL check, so
+// a subquery in one would read tables unchecked. Settings carry constants (vtgate
+// evaluates a SET's expression on a shard and sends the value), so both the
+// settings-pool path and the reservation path reject a subquery upfront.
+func TestSettingsRejectSubqueries(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	tests := []struct {
+		setting  string
+		rejected bool
+	}{
+		{setting: "set @@sql_select_limit = (select if(v = 'x', 1, 2) from secret where id = 1)", rejected: true},
+		{setting: "set @@sql_safe_updates = exists (select 1 from secret)", rejected: true},
+		{setting: "set @@sql_select_limit = 1 + (select count(*) from secret)", rejected: true},
+		{setting: "set @@sql_select_limit = if((select v from secret limit 1) = 'x', 1, 2)", rejected: true},
+		{setting: "set @@sql_select_limit = 10"},
+		{setting: "set @@sql_select_limit = default"},
+		// a non-constant expression that reads no table is not this check's concern
+		{setting: "set @@sql_select_limit = 1 + 1"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.setting, func(t *testing.T) {
+			settings := []string{"set @@sql_safe_updates = 1", tc.setting}
+			expectedErr := "connection setting must not contain a subquery: " + tc.setting
+
+			query, resetQuery, err := BuildSettingQuery(settings, parser)
+			if tc.rejected {
+				require.EqualError(t, err, expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.NotEmpty(t, query)
+				assert.NotEmpty(t, resetQuery)
+			}
+
+			err = ValidateSettingsSQLMode(settings, parser)
+			if tc.rejected {
+				require.EqualError(t, err, expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

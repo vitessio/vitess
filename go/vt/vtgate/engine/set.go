@@ -272,26 +272,37 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		if err != nil {
 			return err
 		}
-		storedValue := svs.Expr
+		// A targeted session's SET is evaluated once on the target shard, like
+		// an untargeted one's, and the value is what the SET applies and the
+		// session stores. The session replays the stored text as a connection
+		// setting on every reserved connection, where an expression would be
+		// re-evaluated each time and a subquery would read tables outside the
+		// table ACL. sql_mode gets the same judgment as an untargeted one's:
+		// constants were judged at plan time, and a non-constant expression
+		// must not reach the session or the shard unjudged.
+		var value sqltypes.Value
 		if svs.Name == "sql_mode" {
-			// A targeted session's SET gets the same sql_mode judgment as an
-			// untargeted one, evaluated on the target shard: constants were judged
-			// at plan time, and a non-constant expression must not reach the
-			// session or the shard unjudged. The judged value is what the session
-			// stores, not the expression.
-			query := sqlModeJudgmentQuery(svs.Expr)
-			qr, err := execShard(ctx, nil /*primitive*/, vcursor, query, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+			qr, err := execShard(ctx, nil /*primitive*/, vcursor, sqlModeJudgmentQuery(svs.Expr), env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
 			if err != nil {
 				return err
 			}
-			_, value, err := sqlModeChangedValue(qr)
+			_, value, err = sqlModeChangedValue(qr)
 			if err != nil {
 				return err
 			}
-			var buf strings.Builder
-			value.EncodeSQL(&buf)
-			storedValue = buf.String()
+		} else {
+			qr, err := execShard(ctx, nil /*primitive*/, vcursor, fmt.Sprintf("select %s from dual", svs.Expr), env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+			if err != nil {
+				return err
+			}
+			if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result evaluating %s: %d rows", svs.Name, len(qr.Rows))
+			}
+			value = qr.Rows[0][0]
 		}
+		var buf strings.Builder
+		value.EncodeSQL(&buf)
+		storedValue := buf.String()
 		vcursor.Session().NeedsReservedConn()
 		if err := svs.execSetStatement(ctx, vcursor, rss, env, storedValue); err != nil {
 			// the statement failed, so the session must not store its value

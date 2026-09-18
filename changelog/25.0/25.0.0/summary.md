@@ -54,6 +54,7 @@
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
+        - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -606,6 +607,26 @@ The exported `planbuilder.BuildPermissions` now returns a second result, `tables
 This covers statements. A stored **function** invoked inside an expression (`SELECT f()`, a `WHERE` clause, a `SET` in DML) is not `CALL`ed, so it still runs its body with vttablet's MySQL privileges while the ACL checks only the tables the statement itself names; Vitess does not parse `CREATE FUNCTION`, so this applies to functions defined directly in MySQL. That gap is tracked in [#21134](https://github.com/vitessio/vitess/issues/21134). Reads embedded in statements the planner does parse — `CREATE TABLE ... AS SELECT`, `EXPLAIN ANALYZE`, `SHOW ... WHERE`, `SET` — are covered by [#21139](https://github.com/vitessio/vitess/pull/21139).
 
 See [#21053](https://github.com/vitessio/vitess/pull/21053) for details.
+
+#### <a id="vttablet-table-acl-embedded-reads"/>Table ACL: reads embedded in non-SELECT statements are now checked</a>
+
+This completes the fix for [GHSA-w6mx-2f8x-pqf4](https://github.com/vitessio/vitess/security/advisories/GHSA-w6mx-2f8x-pqf4) begun [above](#vttablet-table-acl-undetermined-table-set): that change fails closed on statements whose tables the parser discards; this one derives permissions for the reads embedded in four statement types the planner does parse but never checked, so a caller with no grant on a table could read it through them. Each is now checked like a plain `SELECT` of the same tables, under strict table ACL (`--queryserver-config-strict-table-acl`), with the same dry-run and exempt-ACL behavior as any other table ACL check:
+
+- `CREATE TABLE ... AS SELECT` requires `READER` on the tables the `SELECT` reads (through CTEs, joins and unions included), in addition to `ADMIN` on the table it creates. `CREATE VIEW ... AS SELECT` is unchanged: it reads nothing at creation.
+- `EXPLAIN ANALYZE` executes the statement it explains and now requires that statement's permissions, `WRITER` on the target of a DML included. A plain `EXPLAIN`, in any format, and `DESCRIBE` remain unchecked; see [`VEXPLAIN MYSQLPLAN`](#vtgate-vexplain-mysqlplan) for the reasoning.
+- `SHOW ... WHERE <expr>` requires `READER` on the tables read by any subquery in the filter, which MySQL evaluates. The `SHOW`'s own subject (the table of `SHOW COLUMNS FROM t`) remains unchecked. This covers `SHOW VITESS_MIGRATIONS ... WHERE` as well.
+- `SET` requires `READER` on the tables read by any subquery in its expressions.
+
+A `CREATE TABLE` that vttablet's parser cannot fully parse is forwarded to MySQL as the client's raw text, with only the `CREATE TABLE <name>` prefix known to the planner. Some such statements copy rows from a table the planner never sees (`CREATE TABLE t (SELECT ...)`, `CREATE TABLE t AS TABLE src`, an `EXCEPT` or `INTERSECT` source), and the planner cannot tell them from a valid statement in syntax Vitess lacks. Every partially parsed `CREATE TABLE` is therefore treated as a statement whose tables cannot be determined and denied the same way, for callers outside the exempt ACL; a `CREATE TABLE` in syntax vttablet does not parse must be issued by a caller in the exempt ACL. Parsing these sources is tracked in [#21138](https://github.com/vitessio/vitess/issues/21138).
+
+A statement flagged this way now has the permissions the planner did derive checked first, so a caller lacking `ADMIN` on the table a partial `CREATE TABLE` creates is denied on that table by name, and a dry run records both that denial and the undetermined one.
+
+Connection settings — the SET statements vtgate attaches to a session's queries, and the pre-queries of a reservation — are applied to a connection with no table ACL check. vttablet now rejects a setting whose expressions contain a subquery, whether or not strict table ACL is on: settings carry constants, and vtgate only sends values. To make that true for every session, a `SET` of a system variable in a targeted session (`use ks:-80`) is now evaluated once on the target shard, with the tablet checking the read, and the resulting value is what the session applies and stores, matching an untargeted session. Previously such a session stored the expression as written and re-evaluated it on every reserved connection; as a side effect, `SELECT @@var` after a non-constant targeted `SET` now returns the value instead of failing to evaluate the stored text. Each targeted `SET` costs one additional round trip to the shard.
+
+**Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade.
+
+See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
