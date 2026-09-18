@@ -14,8 +14,8 @@ interface WorkflowActionProps {
     loadingText: string;
     description?: string;
     className?: string;
-    body?: JSX.Element;
-    successBody?: JSX.Element;
+    body?: React.JSX.Element;
+    successBody?: React.JSX.Element;
     hideSuccessDialog?: boolean;
     refetchWorkflows: Function;
     closeDialog: () => void;
