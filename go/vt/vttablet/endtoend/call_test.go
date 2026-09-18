@@ -252,13 +252,7 @@ func TestCallProcedureChangedTxStreaming(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.StreamBeginExecuteWithOptions(query, nil, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-<<<<<<< HEAD
-			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
-||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
-			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
-=======
-			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
->>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
+			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
 			client.Release()
 		})
 	}
@@ -311,13 +305,7 @@ func TestCallProcedureChangedTx(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.BeginExecute(query, nil, nil)
-<<<<<<< HEAD
-			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
-||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
-			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
-=======
-			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
->>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
+			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
 			client.Release()
 		})
 	}

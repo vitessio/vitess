@@ -273,10 +273,10 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 // BuildStreaming builds a streaming plan based on the schema.
 func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
-		PlanID:      PlanSelectStream,
-		FullQuery:   GenerateFullQuery(statement),
-		Permissions: BuildPermissions(statement),
+		PlanID:    PlanSelectStream,
+		FullQuery: GenerateFullQuery(statement),
 	}
+	plan.Permissions, plan.TablesUndetermined = BuildPermissions(statement)
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:

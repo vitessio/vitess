@@ -140,10 +140,12 @@ func TestTableACL(t *testing.T) {
 		query: "call proc_dml()",
 		err:   undeterminedErr,
 	}, {
-		// LOAD DATA streams through its own entry point (streamDML); it is
-		// denied before it reaches MySQL, so the file need not exist.
+		// On this branch the streaming planner refuses LOAD DATA before any
+		// ACL check runs, so a streaming LOAD DATA is already fail-closed
+		// here; the undetermined-table denial for LOAD DATA is pinned on the
+		// non-streaming path above. The file need not exist either way.
 		query: "load data infile '/nonexistent' into table vitess_test",
-		err:   undeterminedErr,
+		err:   "not allowed for streaming",
 	}}
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)
