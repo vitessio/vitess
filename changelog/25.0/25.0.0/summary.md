@@ -64,6 +64,7 @@
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
+        - [Administrative operations now honor caller cancellation](#general-context-cancellation)
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
 
@@ -689,6 +690,10 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
 
 ### <a id="minor-changes-general"/>General</a>
+
+#### <a id="general-context-cancellation"/>Administrative operations now honor caller cancellation</a>
+
+Several control-plane operations now stop when their caller disconnects or its deadline expires. This includes VTAdmin requests and discovery, MySQL hooks, binlog streamer connection setup, S3 backup-storage initialization, database transaction startup, and workflow progress queries. Lifecycle maintenance and recovery work that must finish remains detached from caller cancellation.
 
 #### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
 

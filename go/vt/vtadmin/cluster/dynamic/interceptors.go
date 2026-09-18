@@ -53,7 +53,7 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
 		}
 
-		dynamicAPI := api.WithCluster(c, id)
+		dynamicAPI := withCluster(ss.Context(), api, c, id)
 		streamHandler := streamHandlersByName[nameFromFullMethod(info.FullMethod)]
 		return streamHandler(dynamicAPI, ss)
 	}
@@ -81,7 +81,7 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
 		}
 
-		dynamicAPI := api.WithCluster(c, id)
+		dynamicAPI := withCluster(ctx, api, c, id)
 		method := methodHandlersByName[nameFromFullMethod(info.FullMethod)]
 
 		// NOTE: because we don't have access to the interceptor
