@@ -97,7 +97,12 @@ func (cte *CTETable) getColumns(bool) []ColumnInfo {
 	for i, selExpr := range selExprs {
 		ae, isAe := selExpr.(*sqlparser.AliasedExpr)
 		if !isAe {
-			panic(vterrors.VT12001("should not be called"))
+			// A star we could not expand hides every column from here on, so this
+			// is as much of the list as we know. newCTETable has already marked the
+			// CTE as not authoritative, which is what makes a partial list safe:
+			// dependencies() falls back to uncertain for anything not found here,
+			// and expandTableColumns() refuses to expand a non-authoritative table.
+			return cols
 		}
 		if len(cte.Columns) == 0 {
 			cols = append(cols, ColumnInfo{Name: ae.ColumnName()})
