@@ -107,7 +107,7 @@ export const Select = <T,>({
         [renderItem]
     );
 
-    let content = null;
+    let content: React.ReactNode;
     if (items.length) {
         content = (
             <ul {...getMenuProps()} className={style.menu}>

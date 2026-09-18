@@ -91,7 +91,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
 		env:     env,
 		scp:     NewStatefulConnPool(env),
-		ticks:   timer.NewTimer(txKillerTimeoutInterval(config, 0)),
+		ticks:   timer.NewTimer(txKillerTimeoutInterval(config)),
 		limiter: limiter,
 		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 		tempTableIdleKills: env.Exporter().NewCounter("TempTableIdleTimeoutKills",
@@ -142,9 +142,15 @@ func (tp *TxPool) Close() {
 // one is tightened, so auto-governed connections always have a reaper.
 // The tick only ever shrinks here — a raised wait_timeout keeps the shorter
 // tick, which just checks a little more often than strictly needed.
+//
+// The current tick already reflects the configured timeouts (see
+// txKillerTimeoutInterval), so this derives the desired tick from the
+// wait_timeout alone rather than re-reading the transaction timeouts: this
+// runs on a background goroutine, and the endtoend short-timeout tests
+// rewrite those config fields at runtime.
 func (tp *TxPool) SetMysqlWaitTimeout(waitTimeout time.Duration) {
 	tp.scp.SetMysqlWaitTimeout(waitTimeout)
-	desired := txKillerTimeoutInterval(tp.env.Config(), waitTimeout)
+	desired := waitTimeout / 10
 	if desired <= 0 {
 		return
 	}
@@ -643,23 +649,18 @@ func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) 
 	conn.CleanTxState()
 }
 
-// txKillerTimeoutInterval derives the killer's tick from the shortest enabled
-// timeout it enforces: the OLTP and OLAP transaction timeouts plus the
-// temp-table idle timeout — the explicit flag value, or in auto mode the
-// published mysqld wait_timeout (autoWaitTimeout, zero until the first
-// successful read). Without the temp-table term, disabling both transaction
-// timeouts would leave the timer dormant and the temp-table timeout with no
-// reaper at all.
-func txKillerTimeoutInterval(config *tabletenv.TabletConfig, autoWaitTimeout time.Duration) time.Duration {
+// txKillerTimeoutInterval derives the killer's initial tick from the shortest
+// enabled timeout it enforces: the OLTP and OLAP transaction timeouts plus an
+// explicit temp-table idle timeout. In auto mode the temp-table term is
+// unknown until the first wait_timeout read lands, so the timer starts from
+// the transaction timeouts alone (dormant when both are disabled) and
+// SetMysqlWaitTimeout tightens it once the value is published.
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
 	shortest := smallerTimeout(
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
 	)
-	tempTableIdle := config.TempTableIdleTimeout
-	if tempTableIdle < 0 {
-		tempTableIdle = autoWaitTimeout
-	}
-	if tempTableIdle > 0 {
+	if tempTableIdle := config.TempTableIdleTimeout; tempTableIdle > 0 {
 		shortest = smallerTimeout(shortest, tempTableIdle)
 	}
 	return shortest / 10
