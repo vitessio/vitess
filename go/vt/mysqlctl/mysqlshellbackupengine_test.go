@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -337,6 +338,126 @@ func TestCleanupMySQL(t *testing.T) {
 				"unexpected number of queries executed")
 		})
 	}
+}
+
+func TestSetChangeBuffering(t *testing.T) {
+	t.Run("set and restore", func(t *testing.T) {
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+
+		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+			"SELECT @@GLOBAL.innodb_change_buffering": {
+				Rows: [][]sqltypes.Value{
+					{sqltypes.NewVarChar("none")},
+				},
+			},
+		}
+		mysqld.ExpectedExecuteSuperQueryList = []string{
+			"SET GLOBAL innodb_change_buffering = 'inserts'",
+			"SET GLOBAL innodb_change_buffering = 'none'",
+		}
+
+		logger := logutil.NewMemoryLogger()
+		resetFunc, err := setChangeBuffering(t.Context(), mysqld, logger)
+		require.NoError(t, err)
+		assert.Contains(t, logger.String(), "innodb_change_buffering=inserts")
+		assert.Contains(t, logger.String(), "was none")
+
+		resetFunc()
+		assert.Contains(t, logger.String(), "Reset innodb_change_buffering=none")
+		assert.Equal(t, 2, mysqld.ExpectedExecuteSuperQueryCurrent)
+	})
+
+	t.Run("set and restore original value all", func(t *testing.T) {
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+
+		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+			"SELECT @@GLOBAL.innodb_change_buffering": {
+				Rows: [][]sqltypes.Value{
+					{sqltypes.NewVarChar("all")},
+				},
+			},
+		}
+		mysqld.ExpectedExecuteSuperQueryList = []string{
+			"SET GLOBAL innodb_change_buffering = 'inserts'",
+			"SET GLOBAL innodb_change_buffering = 'all'",
+		}
+
+		logger := logutil.NewMemoryLogger()
+		resetFunc, err := setChangeBuffering(t.Context(), mysqld, logger)
+		require.NoError(t, err)
+
+		resetFunc()
+		assert.Contains(t, logger.String(), "Reset innodb_change_buffering=all")
+		assert.Equal(t, 2, mysqld.ExpectedExecuteSuperQueryCurrent)
+	})
+
+	t.Run("variable not supported skips gracefully", func(t *testing.T) {
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			return nil, sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, sqlerror.SSUnknownSQLState, "Unknown system variable 'innodb_change_buffering'")
+		}
+
+		logger := logutil.NewMemoryLogger()
+		resetFunc, err := setChangeBuffering(t.Context(), mysqld, logger)
+		require.NoError(t, err)
+		assert.Contains(t, logger.String(), "not supported on this MySQL version")
+
+		resetFunc()
+		assert.Equal(t, 0, mysqld.ExpectedExecuteSuperQueryCurrent)
+	})
+
+	t.Run("unexpected fetch error is fatal", func(t *testing.T) {
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			return nil, fmt.Errorf("connection lost")
+		}
+
+		logger := logutil.NewMemoryLogger()
+		_, err := setChangeBuffering(t.Context(), mysqld, logger)
+		require.ErrorContains(t, err, "unable to query innodb_change_buffering")
+	})
+
+	t.Run("reset logs error on failure", func(t *testing.T) {
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+
+		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+			"SELECT @@GLOBAL.innodb_change_buffering": {
+				Rows: [][]sqltypes.Value{
+					{sqltypes.NewVarChar("none")},
+				},
+			},
+		}
+		mysqld.ExpectedExecuteSuperQueryList = []string{
+			"SET GLOBAL innodb_change_buffering = 'inserts'",
+		}
+		mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+			"SET GLOBAL innodb_change_buffering = 'none'": fmt.Errorf("connection lost"),
+		}
+
+		logger := logutil.NewMemoryLogger()
+		resetFunc, err := setChangeBuffering(t.Context(), mysqld, logger)
+		require.NoError(t, err)
+
+		resetFunc()
+		assert.Contains(t, logger.String(), "unable to reset innodb_change_buffering")
+	})
 }
 
 // this is a helper to write files in a temporary directory
