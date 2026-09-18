@@ -1983,16 +1983,18 @@ func (node *ComparisonExpr) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *BetweenExpr) FormatFast(buf *TrackedBuffer) {
+	// BETWEEN is ternary and non-associative: no operand position may drop
+	// the parentheses of an equal-precedence child.
 	if node.IsBetween {
-		buf.printExpr(node, node.Left, true)
+		buf.printExpr(node, node.Left, false)
 		buf.WriteString(" between ")
-		buf.printExpr(node, node.From, true)
+		buf.printExpr(node, node.From, false)
 		buf.WriteString(" and ")
 		buf.printExpr(node, node.To, false)
 	} else {
-		buf.printExpr(node, node.Left, true)
+		buf.printExpr(node, node.Left, false)
 		buf.WriteString(" not between ")
-		buf.printExpr(node, node.From, true)
+		buf.printExpr(node, node.From, false)
 		buf.WriteString(" and ")
 		buf.printExpr(node, node.To, false)
 	}
