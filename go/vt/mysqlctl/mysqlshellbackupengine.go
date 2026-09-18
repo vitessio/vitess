@@ -347,6 +347,15 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to set local_infile=1")
 	}
+	defer func() {
+		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeout)
+		defer cancel()
+		if err := params.Mysqld.ExecuteSuperQuery(resetCtx, "SET GLOBAL LOCAL_INFILE=0"); err != nil {
+			params.Logger.Errorf("unable to reset local_infile: %v", err)
+		} else {
+			params.Logger.Infof("set local_infile=0")
+		}
+	}()
 
 	if mysqlShellSpeedUpRestore {
 		// disable redo logging and double write buffer if we are configured to do so.
@@ -425,13 +434,6 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
 	params.Logger.Infof("%s completed successfully", be.binaryName)
-
-	// disable local_infile now that the restore is done.
-	err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL LOCAL_INFILE=0")
-	if err != nil {
-		return nil, vterrors.Wrap(err, "unable to set local_infile=0")
-	}
-	params.Logger.Infof("set local_infile=0")
 
 	params.Logger.Infof("Restore completed")
 
