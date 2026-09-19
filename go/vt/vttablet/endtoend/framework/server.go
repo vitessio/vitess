@@ -124,12 +124,7 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.QueryCacheDoorkeeper = false
 	config.SchemaReloadInterval = 5 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
-<<<<<<< HEAD
 	log.Infof("Config:\n%s", gotBytes)
-||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
-	log.Info(fmt.Sprintf("Config:\n%s", gotBytes))
-=======
-	log.Info(fmt.Sprintf("Config:\n%s", gotBytes))
 	// The engine builds the exempt ACL from the registered factory as it
 	// starts, and with none registered it only logs and runs with no exempt
 	// ACL, which would surface as every CALL test being denied. Fail here
@@ -137,7 +132,6 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	if _, err := tableacl.GetCurrentACLFactory(); err != nil {
 		return vterrors.Wrapf(err, "the table ACL factory must be registered before StartServer, or the exempt ACL for %q cannot be built", ExemptCallerID)
 	}
->>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
 	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)
 }
 

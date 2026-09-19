@@ -648,18 +648,10 @@ func TestBuildPermissions(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			stmt, err := sqlparser.NewTestParser().Parse(tcase.input)
-<<<<<<< HEAD
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := BuildPermissions(stmt)
-||||||| parent of e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
-			require.NoError(t, err)
-			got := BuildPermissions(stmt)
-=======
-			require.NoError(t, err)
 			got, undetermined := BuildPermissions(stmt)
->>>>>>> e66114ee01 (VTTablet: fail closed under strict table ACL when a statement's table set cannot be determined (#21053))
 			utils.MustMatch(t, tcase.output, got)
 			utils.MustMatch(t, tcase.undetermined, undetermined)
 		})
