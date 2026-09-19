@@ -37,11 +37,11 @@ import { formatDateTimeShort } from '../../../util/time';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 import { Code } from '../../Code';
 
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     keyspace: string;
     name: string;
-}
+};
 
 const REFETCH_OPTIONS = [
     {
@@ -67,7 +67,7 @@ const REFETCH_OPTIONS = [
 ];
 
 export const Workflow = () => {
-    const { clusterID, keyspace, name } = useParams<RouteParams>();
+    const { clusterID, keyspace, name } = useParams<RouteParams>() as RouteParams;
 
     useDocumentTitle(`${name} (${keyspace})`);
 
