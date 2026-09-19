@@ -19,8 +19,16 @@ import { Popover } from 'react-tiny-popover';
 import style from './Tooltip.module.scss';
 
 export interface TooltipProps {
+<<<<<<< HEAD
     children: React.ReactElement;
     text: string | JSX.Element;
+||||||| parent of a66cfb242c (vtadmin: catch up with react-query, react-router and headlessui (#21131))
+    children: React.ReactElement;
+    text: string | React.JSX.Element;
+=======
+    children: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
+    text: string | React.JSX.Element;
+>>>>>>> a66cfb242c (vtadmin: catch up with react-query, react-router and headlessui (#21131))
 }
 
 /**

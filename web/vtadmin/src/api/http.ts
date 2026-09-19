@@ -46,8 +46,16 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
 
         let response = null;
         try {
+<<<<<<< HEAD
             response = await global.fetch(url, opts);
         } catch (error) {
+||||||| parent of a66cfb242c (vtadmin: catch up with react-query, react-router and headlessui (#21131))
+            response = await global.fetch(url, opts);
+        } catch {
+=======
+            response = await globalThis.fetch(url, opts);
+        } catch {
+>>>>>>> a66cfb242c (vtadmin: catch up with react-query, react-router and headlessui (#21131))
             // Capture fetch() promise rejections and rethrow as HttpFetchError.
             // fetch() promises will reject with a TypeError when a network error is
             // encountered or CORS is misconfigured, in which case the request never
