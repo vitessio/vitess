@@ -31,14 +31,14 @@ import Advanced from './Advanced';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 import { Code } from '../../Code';
 
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     keyspace: string;
     shard: string;
-}
+};
 
 export const Shard = () => {
-    const params = useParams<RouteParams>();
+    const params = useParams<RouteParams>() as RouteParams;
 
     const shardName = `${params.keyspace}/${params.shard}`;
 

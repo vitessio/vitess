@@ -33,21 +33,23 @@ import {
     useNodesState,
     useEdgesState,
     Connection,
+    Edge,
+    Node,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { getTopologyPath } from '../../../api/http';
 
 export const ClusterTopology = () => {
-    interface RouteParams {
+    type RouteParams = {
         clusterID: string;
-    }
+    };
     useDocumentTitle('Cluster Topolgy');
-    const { clusterID } = useParams<RouteParams>();
+    const { clusterID } = useParams<RouteParams>() as RouteParams;
     const { data } = useTopologyPath({ clusterID, path: '/' });
     const [topology, setTopology] = useState<{ cell: TopologyCell }>({ cell: data?.cell as TopologyCell });
 
-    const [nodes, setNodes, onNodesChange] = useNodesState([]);
-    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
     const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
     const onExpand = async (path: string) => {
