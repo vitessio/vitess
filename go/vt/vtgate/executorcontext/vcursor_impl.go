@@ -1120,6 +1120,11 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
+// RemoveSysVar implements the SessionActions interface
+func (vc *VCursorImpl) RemoveSysVar(name string) {
+	vc.SafeSession.RemoveSystemVariable(name)
+}
+
 func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
 	if setVarComment == "" {
 		return
