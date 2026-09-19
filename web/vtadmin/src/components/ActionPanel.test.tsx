@@ -21,6 +21,7 @@ import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-q
 import { describe, it, expect, vi } from 'vitest';
 
 import ActionPanel, { ActionPanelProps } from './ActionPanel';
+import { server } from '../../tests/server';
 
 describe('ActionPanel', () => {
     const queryClient = new QueryClient({
@@ -32,18 +33,18 @@ describe('ActionPanel', () => {
      * that is _within_ the context of a QueryClientProvider. This Wrapper component
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
-    const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
+    const Wrapper: React.FC<Omit<ActionPanelProps, 'mutation'> & { url?: string }> = (props) => {
         const mutation = useMutation({
-            mutationFn: () => fetch(new URL(props['url']), { method: 'post' }),
+            mutationFn: () => fetch(new URL(props.url!), { method: 'post' }),
         });
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
     it('initiates the mutation', async () => {
-        vi.spyOn(global, 'fetch');
+        vi.spyOn(globalThis, 'fetch');
 
         const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
-        global.server.use(
+        server.use(
             http.post(url, async (info) => {
                 await delay();
                 return HttpResponse.json({ ok: true });
@@ -78,8 +79,8 @@ describe('ActionPanel', () => {
         // Validate form while API request is in flight
         await waitFor(() => expect(button).toHaveTextContent('Doing Action...'));
 
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(global.fetch).toHaveBeenCalledWith(new URL(url), { method: 'post' });
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        expect(globalThis.fetch).toHaveBeenCalledWith(new URL(url), { method: 'post' });
 
         // Wait for API request to complete
         await waitFor(() => expect(button).toHaveTextContent('Do Action'));
