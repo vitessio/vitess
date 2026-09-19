@@ -215,8 +215,14 @@ func createGRPCServer() {
 		return
 	}
 
+	tlsEnabled, err := vttls.ServerTLSEnabled(gRPCCert, gRPCKey, gRPCCRL)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to configure gRPC TLS: %v", err))
+		os.Exit(1)
+	}
+
 	var opts []grpc.ServerOption
-	if gRPCCert != "" && gRPCKey != "" {
+	if tlsEnabled {
 		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
 		if err != nil {
 			log.Error(fmt.Sprintf("Failed to log gRPC cert/key/ca: %v", err))
