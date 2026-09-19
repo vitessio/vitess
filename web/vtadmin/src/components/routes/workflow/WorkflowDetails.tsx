@@ -175,9 +175,13 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
                                 <StreamStatePip state={rowState} />{' '}
                             </span>
                         </Tooltip>
-                        <Link className="font-bold" to={href}>
-                            {row.key}
-                        </Link>
+                        {href ? (
+                            <Link className="font-bold" to={href}>
+                                {row.key}
+                            </Link>
+                        ) : (
+                            <span className="font-bold">{row.key}</span>
+                        )}
                         <div className="text-sm text-secondary">
                             Tablet{' '}
                             <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
