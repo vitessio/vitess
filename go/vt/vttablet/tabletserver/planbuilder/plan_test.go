@@ -40,14 +40,15 @@ import (
 // This is only for testing.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
-		PlanID            PlanType
-		TableName         sqlparser.IdentifierCS `json:",omitempty"`
-		Permissions       []Permission           `json:",omitempty"`
-		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
-		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
-		NextCount         string                 `json:",omitempty"`
-		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
-		NeedsReservedConn bool                   `json:",omitempty"`
+		PlanID             PlanType
+		TableName          sqlparser.IdentifierCS `json:",omitempty"`
+		Permissions        []Permission           `json:",omitempty"`
+		FieldQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery          *sqlparser.ParsedQuery `json:",omitempty"`
+		NextCount          string                 `json:",omitempty"`
+		WhereClause        *sqlparser.ParsedQuery `json:",omitempty"`
+		NeedsReservedConn  bool                   `json:",omitempty"`
+		TablesUndetermined bool                   `json:",omitempty"`
 	}{
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
@@ -60,6 +61,9 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	}
 	if p.NeedsReservedConn {
 		mplan.NeedsReservedConn = true
+	}
+	if p.TablesUndetermined {
+		mplan.TablesUndetermined = true
 	}
 	return json.Marshal(&mplan)
 }
