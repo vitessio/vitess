@@ -407,9 +407,14 @@ func TestConnectionWithProxyProtocol(t *testing.T) {
 	})
 
 	t.Run("without PROXY header", func(t *testing.T) {
+		start := time.Now()
 		c, err := Connect(ctx, params)
 		require.NoError(t, err, "a connection without a PROXY header should complete the regular MySQL handshake")
 		c.Close()
+		// A headerless connection must not pay go-proxyproto's 10s default
+		// ReadHeaderTimeout: the server speaks first, so that wait would
+		// delay every direct client and TCP health check by 10s.
+		assert.Less(t, time.Since(start), 5*time.Second, "handshake without a PROXY header took too long, want it well under go-proxyproto's 10s default header timeout")
 	})
 }
 

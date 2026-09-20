@@ -56,6 +56,10 @@ const (
 	versionTLS13      = "TLS13"
 	versionTLSUnknown = "UnknownTLSVersion"
 	versionNoTLS      = "None"
+
+	// proxyProtocolHeaderTimeout is how long the PROXY protocol listener
+	// waits for a header before giving up on one.
+	proxyProtocolHeaderTimeout = 200 * time.Millisecond
 )
 
 var (
@@ -283,6 +287,15 @@ func NewFromListener(
 			ConnPolicy: func(proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
 				return proxyproto.USE, nil
 			},
+			// MySQL is a server-speaks-first protocol, so on a headerless
+			// connection the server's first write blocks here until this
+			// timeout expires, delaying the handshake greeting. Without an
+			// explicit value, go-proxyproto falls back to its own 10s
+			// default; a proxy that does send a header sends it as the
+			// connection's first bytes, so a short timeout only needs to
+			// cover local network latency, not any round trip to the
+			// far-end client.
+			ReadHeaderTimeout: proxyProtocolHeaderTimeout,
 		}
 	}
 
