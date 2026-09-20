@@ -65,6 +65,7 @@ import (
 	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -96,6 +97,7 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
+	env *vtenv.Environment
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	ws  *workflow.Server
@@ -106,6 +108,7 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
+		env: env,
 		ts:  ts,
 		tmc: tmc,
 		ws:  workflow.NewServer(env, ts, tmc),
@@ -115,10 +118,12 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 // NewTestVtctldServer returns a new VtctldServer for the given topo server
 // AND tmclient for use in tests. This should NOT be used in production.
 func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	env := vtenv.NewTestEnv()
 	return &VtctldServer{
+		env: env,
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(vtenv.NewTestEnv(), ts, tmc),
+		ws:  workflow.NewServer(env, ts, tmc),
 	}
 }
 
@@ -5088,7 +5093,15 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 						return
 					}
 
-					tmutils.DiffSchema(topoproto.TabletAliasString(referenceAlias), referenceSchema, topoproto.TabletAliasString(alias), replicaSchema, &aliasErrs)
+					diffEnv := schemadiff.NewEnv(s.env, s.env.CollationEnv().DefaultConnectionCharset())
+					tmutils.DiffSchemaWithEnvironment(
+						diffEnv,
+						topoproto.TabletAliasString(referenceAlias),
+						referenceSchema,
+						topoproto.TabletAliasString(alias),
+						replicaSchema,
+						&aliasErrs,
+					)
 				}(alias)
 			}
 			aliasWg.Wait()
