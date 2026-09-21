@@ -110,7 +110,9 @@ func NewTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 
 // TabletInfo is the container for a Tablet, read from the topology server.
 type TabletInfo struct {
-	version Version // node version - used to prevent stomping concurrent writes
+	version                      Version // node version - used to prevent stomping concurrent writes
+	originalTabletKnown          bool
+	originalNonManagedTabletPath string
 	*topodatapb.Tablet
 }
 
@@ -165,7 +167,49 @@ func (ti *TabletInfo) GetPrimaryTermStartTime() time.Time {
 // version set. This function should be only used by Server
 // implementations.
 func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
-	return &TabletInfo{version: version, Tablet: tablet}
+	ti := &TabletInfo{version: version, Tablet: tablet}
+	if version != nil {
+		ti.rememberCurrentTablet()
+	}
+	return ti
+}
+
+func nonManagedTabletsPath(keyspace, shard string) string {
+	return path.Join(KeyspacesPath, keyspace, ShardsPath, shard, NonManagedTabletsPath)
+}
+
+func nonManagedTabletPath(tablet *topodatapb.Tablet) string {
+	return path.Join(nonManagedTabletsPath(tablet.Keyspace, tablet.Shard), topoproto.TabletAliasString(tablet.Alias))
+}
+
+func (ti *TabletInfo) rememberCurrentTablet() {
+	ti.originalTabletKnown = true
+	if ti.GetMysqlMode() == topodatapb.TabletMySQLMode_MANAGED {
+		ti.originalNonManagedTabletPath = ""
+		return
+	}
+	ti.originalNonManagedTabletPath = nonManagedTabletPath(ti.Tablet)
+}
+
+func createNonManagedTabletMarker(ctx context.Context, conn Conn, tablet *topodatapb.Tablet) (string, error) {
+	if tablet.GetMysqlMode() == topodatapb.TabletMySQLMode_MANAGED {
+		return "", nil
+	}
+	markerPath := nonManagedTabletPath(tablet)
+	if _, err := conn.Create(ctx, markerPath, nil); err != nil && !IsErrType(err, NodeExists) {
+		return "", vterrors.Wrapf(err, "failed to create non-managed tablet marker for %s", topoproto.TabletAliasString(tablet.Alias))
+	}
+	return markerPath, nil
+}
+
+func deleteNonManagedTabletMarker(ctx context.Context, conn Conn, markerPath string) error {
+	if markerPath == "" {
+		return nil
+	}
+	if err := conn.Delete(ctx, markerPath, nil); err != nil && !IsErrType(err, NoNode) {
+		return err
+	}
+	return nil
 }
 
 // GetTablet is a high level function to read tablet data.
@@ -192,10 +236,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 		return nil, err
 	}
 
-	return &TabletInfo{
-		version: version,
-		Tablet:  tablet,
-	}, nil
+	return NewTabletInfo(tablet, version), nil
 }
 
 // GetTabletAliasesByCell returns all the tablet aliases in a cell.
@@ -226,6 +267,66 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 		}
 	}
 	return result, nil
+}
+
+// GetNonManagedTabletAliasesByShard returns tablet aliases from the per-shard non-managed index.
+// It can return ErrPartialResult if some cells could not be read.
+func (ts *Server) GetNonManagedTabletAliasesByShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	cells, err := ts.GetKnownCells(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([][]*topodatapb.TabletAlias, len(cells))
+	partialErrorsByCell := make([]error, len(cells))
+	fatalErrorsByCell := make([]error, len(cells))
+	var wg sync.WaitGroup
+	wg.Add(len(cells))
+	for i, cell := range cells {
+		go func() {
+			defer wg.Done()
+			conn, err := ts.ConnForCell(ctx, cell)
+			if err != nil {
+				partialErrorsByCell[i] = err
+				return
+			}
+			entries, err := conn.ListDir(ctx, nonManagedTabletsPath(keyspace, shard), false)
+			if IsErrType(err, NoNode) {
+				return
+			}
+			if err != nil {
+				partialErrorsByCell[i] = err
+				return
+			}
+			results[i] = make([]*topodatapb.TabletAlias, 0, len(entries))
+			for _, entry := range entries {
+				alias, err := topoproto.ParseTabletAlias(entry.Name)
+				if err != nil {
+					fatalErrorsByCell[i] = err
+					return
+				}
+				results[i] = append(results[i], alias)
+			}
+		}()
+	}
+	wg.Wait()
+
+	var aliases []*topodatapb.TabletAlias
+	var partial bool
+	for i := range cells {
+		aliases = append(aliases, results[i]...)
+		if fatalErrorsByCell[i] != nil {
+			return nil, fatalErrorsByCell[i]
+		}
+		if partialErrorsByCell[i] != nil {
+			partial = true
+		}
+	}
+	sort.Sort(topoproto.TabletAliasList(aliases))
+	if partial {
+		return aliases, NewError(PartialResult, shard)
+	}
+	return aliases, nil
 }
 
 // GetTabletsByCellOptions controls the behavior of
@@ -287,7 +388,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 				continue
 			}
 		}
-		tablets = append(tablets, &TabletInfo{Tablet: tablet, version: listResults[n].Version})
+		tablets = append(tablets, NewTabletInfo(tablet, listResults[n].Version))
 	}
 	return tablets, nil
 }
@@ -345,12 +446,29 @@ func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 	if err != nil {
 		return err
 	}
+	markerPath, err := createNonManagedTabletMarker(ctx, conn, ti.Tablet)
+	if err != nil {
+		return err
+	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(ti.Alias), TabletFile)
 	newVersion, err := conn.Update(ctx, tabletPath, data, ti.version)
 	if err != nil {
 		return err
 	}
 	ti.version = newVersion
+
+	var oldMarkerPath string
+	if ti.originalTabletKnown {
+		if ti.originalNonManagedTabletPath != markerPath {
+			oldMarkerPath = ti.originalNonManagedTabletPath
+		}
+	} else if markerPath == "" {
+		oldMarkerPath = nonManagedTabletPath(ti.Tablet)
+	}
+	if err := deleteNonManagedTabletMarker(ctx, conn, oldMarkerPath); err != nil {
+		return vterrors.Wrapf(err, "failed to delete old non-managed tablet marker for %s", topoproto.TabletAliasString(ti.Alias))
+	}
+	ti.rememberCurrentTablet()
 
 	event.Dispatch(&events.TabletChange{
 		Tablet: ti.Tablet,
@@ -423,9 +541,18 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 	if err != nil {
 		return err
 	}
+	markerPath, err := createNonManagedTabletMarker(ctx, conn, tablet)
+	if err != nil {
+		return err
+	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
 	if _, err := conn.Create(ctx, tabletPath, data); err != nil {
 		return err
+	}
+	if markerPath == "" {
+		if err := deleteNonManagedTabletMarker(ctx, conn, nonManagedTabletPath(tablet)); err != nil {
+			return vterrors.Wrapf(err, "failed to delete stale non-managed tablet marker for %s", topoproto.TabletAliasString(tablet.Alias))
+		}
 	}
 
 	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {
@@ -454,6 +581,12 @@ func (ts *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Tabl
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tabletAlias), TabletFile)
 	if err := conn.Delete(ctx, tabletPath, nil); err != nil {
 		return err
+	}
+
+	if tErr == nil {
+		if err := deleteNonManagedTabletMarker(ctx, conn, nonManagedTabletPath(ti.Tablet)); err != nil {
+			return vterrors.Wrapf(err, "failed to delete non-managed tablet marker for %s", topoproto.TabletAliasString(tabletAlias))
+		}
 	}
 
 	// Only try to log if we have the required info.

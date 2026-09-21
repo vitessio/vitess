@@ -121,6 +121,41 @@ func TestEmergencyReparenter_getLockAction(t *testing.T) {
 	}
 }
 
+func TestEmergencyReparenterRejectsUnmanagedTabletMissingFromShardReplication(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	unmanaged := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Keyspace:  "testkeyspace",
+		Shard:     "-",
+		Type:      topodatapb.TabletType_REPLICA,
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: primary.Keyspace,
+		Name:     primary.Shard,
+		Shard:    &topodatapb.Shard{PrimaryAlias: primary.Alias},
+	})
+	testutil.AddTablets(ctx, t, ts, nil, primary, unmanaged)
+	require.NoError(t, topo.DeleteTabletReplicationData(ctx, ts, unmanaged))
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, primary.Keyspace, policy.DurabilityNone)
+
+	erp := NewEmergencyReparenter(ts, &testutil.TabletManagerClient{}, logutil.NewMemoryLogger())
+	_, err := erp.ReparentShard(ctx, primary.Keyspace, primary.Shard, EmergencyReparentOptions{})
+
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000101]")
+}
+
 func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -141,6 +176,42 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		wantSplitBrainOverride int64
 		wantNewPrimary         *topodatapb.TabletAlias
 	}{
+		{
+			// The tmc has no responses configured, so if the guard did not fire first the run
+			// would fail on a stop-replication RPC instead, with a different error.
+			name:       "refuses a shard containing an unmanaged tablet",
+			durability: policy.DurabilityNone,
+			tmc:        &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:  "testkeyspace",
+					Shard:     "-",
+					Type:      topodatapb.TabletType_PRIMARY,
+					MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+				},
+				{
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:  "testkeyspace",
+					Shard:     "-",
+					MysqlMode: topodatapb.TabletMySQLMode_MANAGED,
+				},
+			},
+			cells:            []string{"zone1"},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			shouldErr:        true,
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		},
 		{
 			name:       "success with matching expected primary",
 			durability: policy.DurabilityNone,

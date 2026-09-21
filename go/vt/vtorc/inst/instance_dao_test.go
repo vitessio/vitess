@@ -18,10 +18,13 @@ package inst
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,7 +45,27 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type (
+	blockingFullStatusTMC struct {
+		*testutil.TabletManagerClient
+		started chan struct{}
+		release chan struct{}
+		result  *replicationdatapb.FullStatus
+		err     error
+	}
+)
+
 var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
+
+func (tmc *blockingFullStatusTMC) FullStatus(ctx context.Context, _ *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	close(tmc.started)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-tmc.release:
+		return tmc.result, tmc.err
+	}
+}
 
 func normalizeQuery(name string) string {
 	name = strings.ReplaceAll(name, "`", "")
@@ -806,6 +829,455 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 	}
 }
 
+func TestForgetInstanceRollsBackWhenDatabaseInstanceDeleteFails(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	currentErrantGTIDCount.ResetAll()
+	resetShardPeerHealth()
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		currentErrantGTIDCount.ResetAll()
+		resetShardPeerHealth()
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 112}
+	aliasString := topoproto.TabletAliasString(alias)
+	stateBefore := captureInstanceWriteGeneration(alias)
+	currentErrantGTIDCount.Set(aliasString, 3)
+	shardPeerHealthMu.Lock()
+	shardPeerHealthByObserver[aliasString] = &observerRecord{}
+	shardPeerHealthMu.Unlock()
+
+	_, err := db.ExecVTOrc(`CREATE TRIGGER fail_forget_database_instance
+		BEFORE DELETE ON database_instance
+		WHEN OLD.alias = 'zone1-0000000112'
+		BEGIN
+			SELECT RAISE(ABORT, 'injected database_instance delete failure');
+		END`)
+	require.NoError(t, err)
+
+	err = ForgetInstance(alias)
+	require.ErrorContains(t, err, "injected database_instance delete failure")
+
+	_, err = ReadTablet(alias)
+	require.NoError(t, err)
+	_, found, err := ReadInstance(alias)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.False(t, InstanceIsForgotten(alias))
+	stateAfter := captureInstanceWriteGeneration(alias)
+	assert.Same(t, stateBefore, stateAfter)
+	assert.False(t, stateAfter.retired)
+	assert.EqualValues(t, 3, currentErrantGTIDCount.Counts()[aliasString])
+	shardPeerHealthMu.Lock()
+	_, found = shardPeerHealthByObserver[aliasString]
+	shardPeerHealthMu.Unlock()
+	assert.True(t, found)
+}
+
+func TestForgetInstanceReclaimsWriteGenerationState(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987654}
+	aliasString := topoproto.TabletAliasString(alias)
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		instanceWriteGenerations.Delete(aliasString)
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	tablet := &topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, SaveTablet(tablet))
+
+	staleState := captureInstanceWriteGeneration(alias)
+	_, found := instanceWriteGenerations.Load(aliasString)
+	require.True(t, found)
+
+	require.NoError(t, ForgetInstance(alias))
+	_, found = instanceWriteGenerations.Load(aliasString)
+	assert.False(t, found)
+
+	currentState := captureInstanceWriteGeneration(alias)
+	assert.NotSame(t, staleState, currentState)
+	called := false
+	require.NoError(t, staleState.runIfCurrent(func() error {
+		called = true
+		return nil
+	}))
+	assert.False(t, called)
+}
+
+func TestForgetInstanceRetiresWriteGenerationAfterAliasCleanup(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987653}
+	aliasString := topoproto.TabletAliasString(alias)
+	var unlockOnce sync.Once
+	t.Cleanup(func() {
+		unlockOnce.Do(shardPeerHealthMu.Unlock)
+		forgetAliases = oldCache
+		instanceWriteGenerations.Delete(aliasString)
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	require.NoError(t, SaveTablet(&topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}))
+	state := captureInstanceWriteGeneration(alias)
+
+	shardPeerHealthMu.Lock()
+	forgetDone := make(chan error, 1)
+	go func() {
+		forgetDone <- ForgetInstance(alias)
+	}()
+	assert.Eventually(t, func() bool {
+		_, err := ReadTablet(alias)
+		return errors.Is(err, ErrTabletAliasNil)
+	}, 30*time.Second, time.Millisecond)
+
+	stateValue, found := instanceWriteGenerations.Load(aliasString)
+	require.True(t, found)
+	assert.Same(t, state, stateValue)
+
+	unlockOnce.Do(shardPeerHealthMu.Unlock)
+	require.NoError(t, <-forgetDone)
+	_, found = instanceWriteGenerations.Load(aliasString)
+	assert.False(t, found)
+}
+
+func TestForgetInstancePreventsStaleProbeWriteAfterMarkerExpires(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(20*time.Millisecond, time.Millisecond)
+	oldTMC := tmc
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		forgetAliases = oldCache
+		tmc = oldTMC
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	_, err := db.OpenVTOrc()
+	require.NoError(t, err)
+
+	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987656}
+	tablet := &topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, SaveTablet(tablet))
+	require.NoError(t, SaveShard(topo.NewShardInfo(tablet.Keyspace, tablet.Shard, &topodatapb.Shard{PrimaryAlias: alias}, nil)))
+
+	started := make(chan struct{})
+	tmc = &blockingFullStatusTMC{
+		TabletManagerClient: &testutil.TabletManagerClient{},
+		started:             started,
+		release:             release,
+		result:              &replicationdatapb.FullStatus{TabletType: topodatapb.TabletType_PRIMARY},
+	}
+	latency := stopwatch.NewNamedStopwatch()
+	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
+	probeDone := make(chan error, 1)
+	var probedInstance *Instance
+	go func() {
+		var err error
+		probedInstance, err = ReadTopologyInstanceBufferable(alias, latency)
+		probeDone <- err
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "FullStatus did not start")
+	}
+	require.NoError(t, ForgetInstance(alias))
+	assert.Eventually(t, func() bool {
+		return !InstanceIsForgotten(alias)
+	}, 30*time.Second, time.Millisecond)
+
+	releaseOnce.Do(func() { close(release) })
+	require.NoError(t, <-probeDone)
+
+	dbConn, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	var rows int
+	require.NoError(t, dbConn.QueryRow("SELECT COUNT(*) FROM database_instance WHERE alias = ?", topoproto.TabletAliasString(alias)).Scan(&rows))
+	assert.Zero(t, rows)
+
+	require.NoError(t, SaveTablet(tablet))
+	require.NoError(t, WriteInstance(probedInstance, true, nil))
+	require.NoError(t, dbConn.QueryRow("SELECT COUNT(*) FROM database_instance WHERE alias = ?", topoproto.TabletAliasString(alias)).Scan(&rows))
+	assert.Equal(t, 1, rows)
+}
+
+func TestForgetInstancePreventsStaleShardPeerHealthWrite(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	oldTMC := tmc
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	resetShardPeerHealth()
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		forgetAliases = oldCache
+		tmc = oldTMC
+		resetShardPeerHealth()
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	_, err := db.OpenVTOrc()
+	require.NoError(t, err)
+
+	observer := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987657}
+	primary := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987658}
+	tablet := &topodatapb.Tablet{
+		Alias:         observer,
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, SaveTablet(tablet))
+	require.NoError(t, SaveShard(topo.NewShardInfo(tablet.Keyspace, tablet.Shard, &topodatapb.Shard{PrimaryAlias: primary}, nil)))
+
+	started := make(chan struct{})
+	tmc = &blockingFullStatusTMC{
+		TabletManagerClient: &testutil.TabletManagerClient{},
+		started:             started,
+		release:             release,
+		result: &replicationdatapb.FullStatus{
+			TabletType:      topodatapb.TabletType_REPLICA,
+			ShardPeerHealth: reportFor(primary, 5, 0, time.Now()),
+		},
+	}
+	latency := stopwatch.NewNamedStopwatch()
+	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
+	probeDone := make(chan error, 1)
+	go func() {
+		_, probeErr := ReadTopologyInstanceBufferable(observer, latency)
+		probeDone <- probeErr
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "FullStatus did not start")
+	}
+	require.NoError(t, ForgetInstance(observer))
+
+	releaseOnce.Do(func() { close(release) })
+	require.NoError(t, <-probeDone)
+
+	quorum := EvaluatePrimaryQuorum(primary, tablet.Keyspace, tablet.Shard, 0, QuorumOptions{
+		FailureThreshold: 3,
+		Freshness:        time.Minute,
+		Fraction:         1,
+		MinObservers:     1,
+	}, time.Now())
+	assert.Empty(t, quorum.Observers)
+}
+
+func TestForgetInstancePreventsStaleFailedProbeUpdate(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(20*time.Millisecond, time.Millisecond)
+	oldTMC := tmc
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		forgetAliases = oldCache
+		tmc = oldTMC
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	_, err := db.OpenVTOrc()
+	require.NoError(t, err)
+
+	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987659}
+	tablet := &topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, SaveTablet(tablet))
+
+	started := make(chan struct{})
+	tmc = &blockingFullStatusTMC{
+		TabletManagerClient: &testutil.TabletManagerClient{},
+		started:             started,
+		release:             release,
+		err:                 errors.New("injected stale probe failure"),
+	}
+	latency := stopwatch.NewNamedStopwatch()
+	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
+	probeDone := make(chan error, 1)
+	go func() {
+		_, probeErr := ReadTopologyInstanceBufferable(alias, latency)
+		probeDone <- probeErr
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "FullStatus did not start")
+	}
+	require.NoError(t, ForgetInstance(alias))
+	assert.Eventually(t, func() bool {
+		return !InstanceIsForgotten(alias)
+	}, 30*time.Second, time.Millisecond)
+
+	require.NoError(t, SaveTablet(tablet))
+	fresh := NewInstance()
+	fresh.InstanceAlias = alias
+	fresh.Hostname = tablet.MysqlHostname
+	fresh.Port = int(tablet.MysqlPort)
+	fresh.Cell = alias.Cell
+	fresh.TabletType = tablet.Type
+	require.NoError(t, WriteInstance(fresh, true, nil))
+
+	dbConn, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		var clockAdvanced bool
+		err := dbConn.QueryRow(`SELECT DATETIME('now') > last_seen FROM database_instance WHERE alias = ?`, topoproto.TabletAliasString(alias)).Scan(&clockAdvanced)
+		return err == nil && clockAdvanced
+	}, 30*time.Second, time.Millisecond)
+
+	releaseOnce.Do(func() { close(release) })
+	require.ErrorContains(t, <-probeDone, "injected stale probe failure")
+
+	rediscovered, found, err := ReadInstance(alias)
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.True(t, rediscovered.IsLastCheckValid)
+	assert.NotContains(t, rediscovered.Problems, "last_check_invalid")
+}
+
+func TestForgetInstancePreventsQueuedInstanceWrite(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+
+	db.ClearVTOrcDatabase()
+	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987655}
+	aliasString := topoproto.TabletAliasString(alias)
+	tablet := &topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, SaveTablet(tablet))
+	instance := NewInstance()
+	instance.InstanceAlias = alias
+	instance.Hostname = tablet.MysqlHostname
+	instance.Port = int(tablet.MysqlPort)
+	instance.Cell = alias.Cell
+	instance.TabletType = tablet.Type
+	require.NoError(t, WriteInstance(instance, true, nil))
+	_, err := db.ExecVTOrc(`CREATE TRIGGER slow_forget_instance
+		BEFORE DELETE ON vitess_tablet
+		WHEN OLD.alias = '` + aliasString + `'
+		BEGIN
+			SELECT sum(x) FROM (
+				WITH RECURSIVE counter(x) AS (
+					SELECT 1
+					UNION ALL
+					SELECT x + 1 FROM counter WHERE x < 500000
+				)
+				SELECT x FROM counter
+			);
+		END`)
+	require.NoError(t, err)
+
+	dbConn, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	blockingTx, err := dbConn.Begin()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = blockingTx.Rollback() })
+
+	initialWaitCount := dbConn.Stats().WaitCount
+	forgetDone := make(chan error, 1)
+	go func() {
+		forgetDone <- ForgetInstance(alias)
+	}()
+	assert.Eventually(t, func() bool {
+		return dbConn.Stats().WaitCount > initialWaitCount
+	}, 30*time.Second, time.Millisecond)
+
+	require.NoError(t, blockingTx.Commit())
+	assert.Eventually(t, func() bool {
+		return dbConn.Stats().InUse == 1 && !InstanceIsForgotten(alias)
+	}, 30*time.Second, time.Millisecond)
+
+	writeStarted := make(chan struct{})
+	writeDone := make(chan error, 1)
+	go func() {
+		close(writeStarted)
+		writeDone <- WriteInstance(instance, true, nil)
+	}()
+	<-writeStarted
+
+	require.NoError(t, <-forgetDone)
+	require.NoError(t, <-writeDone)
+
+	var rows int
+	require.NoError(t, dbConn.QueryRow("SELECT COUNT(*) FROM database_instance WHERE alias = ?", aliasString).Scan(&rows))
+	assert.Zero(t, rows)
+	assert.True(t, InstanceIsForgotten(alias))
+}
+
 func TestGetDatabaseState(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
@@ -1262,4 +1734,53 @@ func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
 		"GtidErrant should be cleared on the no-errant path so callers reusing the Instance don't see stale state")
 	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
 		"gauge should be reset to 0 after errant GTIDs are resolved")
+}
+
+// TestForgetInstanceTopologyOnlyTablet checks that forgetting a tablet VTOrc read from the topo
+// but never probed reports success. It has no database_instance row, and treating that as
+// "not found" logged an error and skipped the audit for a removal that actually happened.
+func TestForgetInstanceTopologyOnlyTablet(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	db.ClearVTOrcDatabase()
+
+	tablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 500},
+		Hostname:      "localhost",
+		Keyspace:      "external",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "localhost",
+		MysqlPort:     500,
+	}
+	require.NoError(t, SaveTablet(tablet))
+	_, err := ReadTablet(tablet.Alias)
+	require.NoError(t, err, "tablet must be present before forgetting it")
+
+	require.NoError(t, ForgetInstance(tablet.Alias))
+
+	_, err = ReadTablet(tablet.Alias)
+	require.EqualError(t, err, ErrTabletAliasNil.Error(), "tablet must be gone after forgetting it")
+	require.True(t, InstanceIsForgotten(tablet.Alias))
+}
+
+// TestForgetInstanceUnknownTablet checks that a tablet in neither table is still reported as
+// not found, so the fix above does not turn every bogus forget into a silent success.
+func TestForgetInstanceUnknownTablet(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	db.ClearVTOrcDatabase()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 501}
+	require.ErrorContains(t, ForgetInstance(alias), "not found")
 }
