@@ -166,7 +166,13 @@ func TestOptionalTLSRequiredClientCert(t *testing.T) {
 			t.Run("a TLS connection without a client certificate is refused", func(t *testing.T) {
 				creds, err := credentials.NewClientTLSFromFile(certs.ServerCA, certs.ServerName)
 				require.NoError(t, err)
-				require.ErrorContains(t, sayHello(t, creds), "certificate required")
+				// In TLS 1.3 the server only rejects the client after the
+				// client has finished its side of the handshake, so the
+				// client sees either the server's "certificate required"
+				// alert or its own write failing on the closed connection.
+				err = sayHello(t, creds)
+				require.Error(t, err)
+				require.Equal(t, codes.Unavailable, status.Code(err))
 			})
 
 			t.Run("a TLS connection with a client certificate is served", func(t *testing.T) {
