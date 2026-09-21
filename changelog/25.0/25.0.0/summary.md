@@ -42,6 +42,7 @@
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
+        - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -458,6 +459,14 @@ GTID containment is pairwise, so a candidate set can mix comparable and divergen
 Candidates are now ordered by GTID dominance before the existing promotion-rule, buffer-pool, and tablet-alias tiebreakers, so a dominated candidate can never rank ahead of its dominator regardless of input order. `EmergencyReparentShard` still rejects incomparable candidates as split brain, and `PlannedReparentShard` still chooses among incomparable maximal candidates. Positions that contain each other without being equal (possible with MariaDB GTIDs, where containment ignores the origin server) are now also rejected by `EmergencyReparentShard` as split brain, wherever the pair sits among the candidates; previously a leading pair failed with an internal sorting error, while a pair behind a more advanced candidate was not detected at all.
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
+
+#### <a id="ers-required-position"/>`EmergencyReparentShard` can require a position on the new primary</a>
+
+`EmergencyReparentShard` only compared candidates to each other. When every candidate lost the same relay log, for example after `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, they all looked fully applied and ERS promoted a stale replica.
+
+A new `--required-position` flag (and `required_position` field on the `EmergencyReparentShard` RPC) names a position the new primary must have received, applied or still in its relay log. It accepts a MySQL GTID set with or without the `MySQL56/` prefix. If no candidate has received it, ERS fails with `FAILED_PRECONDITION` and reports the most advanced received positions it found, before it waits on any relay log. The check supports MySQL GTID shards only. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
+
+See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

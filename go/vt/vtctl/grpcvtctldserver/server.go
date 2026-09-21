@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -1312,6 +1313,19 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("shard", req.Shard)
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
+	span.Annotate("required_position", req.RequiredPosition)
+
+	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required position %q: %s", req.RequiredPosition, err.Error())
+	}
+
+	// Reject a non empty string that decodes to nothing. The parser drops a
+	// reversed interval such as uuid:8-7 without error, and an empty position
+	// disables the check.
+	if req.RequiredPosition != "" && requiredPosition.IsZero() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required position %q", req.RequiredPosition)
+	}
 
 	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
 	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
@@ -1347,6 +1361,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 

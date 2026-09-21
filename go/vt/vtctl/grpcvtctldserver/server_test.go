@@ -4877,6 +4877,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 					Uid:  200,
 				},
 				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+				RequiredPosition:    "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 			},
 			expected: &vtctldatapb.EmergencyReparentShardResponse{
 				Keyspace: "testkeyspace",
@@ -4952,6 +4953,111 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 			require.NoError(t, err)
 			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
+// TestEmergencyReparentShardRequiredPositionNotReceived checks that the decoded
+// required position reaches the reparenter.
+func TestEmergencyReparentShardRequiredPositionNotReceived(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttime.Time{Seconds: 100},
+			Keyspace:             "testkeyspace",
+			Shard:                "-",
+		},
+		{
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+			Type:     topodatapb.TabletType_REPLICA,
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, tablets...)
+
+	const received = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"
+	tmc := &testutil.TabletManagerClient{
+		StopReplicationAndGetStatusResults: map[string]struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Error      error
+		}{
+			"zone1-0000000100": {Error: mysql.ErrNotReplica},
+			"zone1-0000000200": {
+				StopStatus: &replicationdatapb.StopReplicationStatus{
+					Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3e11fa47-71ca-11e1-9e33-c80aa9429562",
+						RelayLogPosition: received,
+						Position:         received,
+					},
+				},
+			},
+		},
+		// Leave every wait unconfigured. ERS must fail before any relay log wait.
+		StartReplicationResults: map[string]error{"zone1-0000000200": nil},
+	}
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	const missing = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100"
+	for _, tc := range []struct {
+		name     string
+		required string
+	}{
+		{name: "with flavor prefix", required: missing},
+		{name: "bare GTID set", required: strings.TrimPrefix(missing, "MySQL56/")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := vtctld.EmergencyReparentShard(ctx, &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace:            "testkeyspace",
+				Shard:               "-",
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+				RequiredPosition:    tc.required,
+			})
+			require.ErrorContains(t, err, "required position "+missing)
+			require.ErrorContains(t, err, received)
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		})
+	}
+}
+
+// TestEmergencyReparentShardInvalidRequiredPosition checks validation before topology access.
+func TestEmergencyReparentShardInvalidRequiredPosition(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		required string
+		want     string
+	}{
+		{name: "not a position", required: "not-a-position", want: `invalid required position "not-a-position": invalid MySQL 5.6 GTID set`},
+		{name: "typed empty set", required: "MySQL56/", want: `invalid required position "MySQL56/"`},
+		{name: "reversed interval decodes to nothing", required: "3e11fa47-71ca-11e1-9e33-c80aa9429562:8-7", want: `invalid required position "3e11fa47-71ca-11e1-9e33-c80aa9429562:8-7"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Leave topology and the tablet client nil. A reparent attempt panics,
+			// and the recovered error fails the message check below.
+			server := &VtctldServer{}
+			resp, err := server.EmergencyReparentShard(t.Context(), &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace:         "ks",
+				Shard:            "0",
+				RequiredPosition: tc.required,
+			})
+			require.ErrorContains(t, err, tc.want)
+			assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			assert.Nil(t, resp)
 		})
 	}
 }
