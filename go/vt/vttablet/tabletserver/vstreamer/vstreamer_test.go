@@ -159,6 +159,10 @@ func TestNoBlob(t *testing.T) {
 					Count: 4,
 					Cols:  []byte{0x0b}, // The blob column is also absent from the before image, which is signaled the same way
 				},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // The projected after image bitmap is the same as DataColumns for a "select *" filter
+				},
 			}}}},
 		}},
 		{"commit", nil},
@@ -182,10 +186,11 @@ func TestNoBlob(t *testing.T) {
 	}}
 	ts.Run()
 
-	// The BeforeDataColumns bitmap describes the columns as emitted by the stream,
-	// so when the filter reorders or drops columns it is projected along with the
-	// values. The existing DataColumns bitmap is intentionally left in the source
-	// table's column order for compatibility with existing consumers.
+	// The BeforeDataColumns and AfterDataColumns bitmaps describe the columns as
+	// emitted by the stream, so when the filter reorders or drops columns they are
+	// projected along with the values. The existing DataColumns bitmap is
+	// intentionally left in the source table's column order for compatibility
+	// with existing consumers.
 	// t5 reorders the columns and keeps the blob; t6 drops the blob altogether.
 	tsp := &TestSpec{
 		t: t,
@@ -224,11 +229,11 @@ func TestNoBlob(t *testing.T) {
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
 	}
-	// The after image bitmap is in the source table's (id, blb, val) order for both
-	// tables: only the blob is absent, i.e. 00000101.
+	// The legacy after image bitmap is in the source table's (id, blb, val) order
+	// for both tables: only the blob is absent, i.e. 00000101.
 	afterBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x05}}
-	// The before image bitmap is projected. In the emitted (blb, id, val) order only
-	// the blob is absent: 00000110.
+	// The before and projected after image bitmaps follow the emitted columns. In
+	// the emitted (blb, id, val) order only the blob is absent: 00000110.
 	reorderedBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x06}}
 	// The omitted blob is not part of the emitted (val, id) columns, so both bits are set.
 	subsetBitmap := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}}
@@ -245,6 +250,7 @@ func TestNoBlob(t *testing.T) {
 				afterRaw:             &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
 				dataColumnsRaw:       afterBitmap,
 				beforeDataColumnsRaw: reorderedBitmap,
+				afterDataColumnsRaw:  reorderedBitmap,
 			}}}},
 		}},
 		{"delete from t5 where id = 1", []TestRowEvent{
@@ -266,6 +272,7 @@ func TestNoBlob(t *testing.T) {
 				after:                []string{"bbb", "1"},
 				dataColumnsRaw:       afterBitmap,
 				beforeDataColumnsRaw: subsetBitmap,
+				afterDataColumnsRaw:  subsetBitmap,
 			}}}},
 		}},
 		{"delete from t6 where id = 1", []TestRowEvent{

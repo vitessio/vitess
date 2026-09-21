@@ -1829,6 +1829,98 @@ func TestPlayerPartialImages(t *testing.T) {
 	}
 }
 
+// TestPlayerPartialImagesWithTargetOnlyExpressions confirms that partial row
+// images are applied correctly when the target table has more columns than the
+// source table, sourced from expressions that use no streamed column, e.g. a
+// Materialize filter that adds constants. The vstreamer's AfterDataColumns
+// bitmap describes the streamed columns, and the vplayer maps it onto its
+// target column expressions when generating the partial queries. With the
+// legacy source-ordered bitmap the generator ran out of columns and failed with
+// "unable to create partial update query". The source JSON column is not part
+// of the filter, but a partial JSON update to it still marks the row event as
+// partial.
+func TestPlayerPartialImagesWithTargetOnlyExpressions(t *testing.T) {
+	if !runPartialJSONTest {
+		t.Skip("Skipping test as binlog_row_value_options=PARTIAL_JSON is not enabled")
+	}
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src (id int, val varbinary(128), jd json, primary key(id))",
+		fmt.Sprintf("create table %s.dst (id int, val varbinary(128), c int, d int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select id, val, 1 as c, 1 as d from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testCases := []struct {
+		input  string
+		output []string
+		data   [][]string
+	}{
+		{
+			input: `insert into src (id, val, jd) values (1, 'aaa', '{"key1": "val1"}')`,
+			output: []string{
+				"insert into dst(id,val,c,d) values (1,_binary'aaa',1,1)",
+			},
+			data: [][]string{
+				{"1", "aaa", "1", "1"},
+			},
+		},
+		{
+			// The partially updated JSON column is not streamed, but the row event is
+			// still a partial one; the constant target columns must still be set.
+			input: `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
+			output: []string{
+				"update dst set val=_binary'aaa', c=1, d=1 where id=1",
+			},
+			data: [][]string{
+				{"1", "aaa", "1", "1"},
+			},
+		},
+		{
+			input: `update src set val = 'bbb' where id = 1`,
+			output: []string{
+				"update dst set val=_binary'bbb', c=1, d=1 where id=1",
+			},
+			data: [][]string{
+				{"1", "bbb", "1", "1"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			execStatements(t, []string{tc.input})
+			want := qh.Expect(
+				"begin",
+				tc.output...,
+			).Then(qh.Immediately(
+				"/update _vt.vreplication set pos=",
+				"commit",
+			))
+			expectDBClientQueries(t, want)
+			expectData(t, "dst", tc.data)
+		})
+	}
+}
+
 func TestPlayerTypes(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
@@ -3475,6 +3567,87 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
+}
+
+// TestPlayerNoBlobProjectedFilter confirms that partial row images from
+// binlog_row_image=NOBLOB are applied correctly when the filter reorders the
+// columns, renames one through a convert(... using ...) expression and adds a
+// constant. The vplayer maps the vstreamer's projected AfterDataColumns bitmap
+// onto its target column expressions. With the legacy bitmap, which is in the
+// source table's (id, blb, val) order and has fewer bits than the target has
+// columns, the partial update could not be generated at all ("unable to create
+// partial update query"); the projected bitmap also keeps the omitted blob from
+// being mistaken for a present column when the layouts differ.
+func TestPlayerNoBlobProjectedFilter(t *testing.T) {
+	if !runNoBlobTest {
+		t.Skip()
+	}
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src(id int, blb blob, val varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst(blb blob, id int, val2 varchar(4), c int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select blb, id, convert(val using utf8mb4) as val2, 1 as c from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		data   [][]string
+	}{{
+		// Inserts always carry a full image.
+		input:  "insert into src values (1, 'blob1', 'aaa')",
+		output: "insert into dst(blb,id,val2,c) values (_binary'blob1',1,convert(_binary'aaa' using utf8mb4),1)",
+		data: [][]string{
+			{"blob1", "1", "aaa", "1"},
+		},
+	}, {
+		// The blob did not change, so it is absent from the row image and must be
+		// left alone on the target while the renamed column is updated.
+		input:  "update src set val = 'bbb' where id = 1",
+		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		data: [][]string{
+			{"blob1", "1", "bbb", "1"},
+		},
+	}, {
+		// The blob changed, so the image is full again.
+		input:  "update src set blb = 'blob2' where id = 1",
+		output: "update dst set blb=_binary'blob2', val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		data: [][]string{
+			{"blob2", "1", "bbb", "1"},
+		},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			execStatements(t, []string{tcase.input})
+			expectNontxQueries(t, qh.Expect(tcase.output), recvTimeout)
+			expectData(t, "dst", tcase.data)
+		})
+	}
 }
 
 func TestPlayerBatchMode(t *testing.T) {

@@ -1273,11 +1273,15 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 					// DataColumns is intentionally left in the source table's column
 					// order: existing vplayers (and possibly other consumers) depend
 					// on that layout, and changing it would break replication between
-					// mixed-version tablets. See #21075 for a projected variant.
+					// mixed-version tablets.
 					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 						Count: int64(rows.DataColumns.Count()),
 						Cols:  rows.DataColumns.Bits(),
 					}
+					// AfterDataColumns describes the columns as emitted, so project
+					// it through the plan the same way the values were. Consumers
+					// that know about it prefer it over DataColumns.
+					rowChange.AfterDataColumns = plan.mapBitmap(&rows.DataColumns)
 				}
 				if row.JSONPartialValues.Count() > 0 {
 					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{

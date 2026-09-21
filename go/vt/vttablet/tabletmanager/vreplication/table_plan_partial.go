@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/hex"
+	"strings"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,7 +51,89 @@ func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
 		return false
 	}
 	return (rowChange.DataColumns != nil && rowChange.DataColumns.Count > 0) ||
+		(rowChange.AfterDataColumns != nil && rowChange.AfterDataColumns.Count > 0) ||
 		(rowChange.JsonPartialValues != nil && rowChange.JsonPartialValues.Count > 0)
+}
+
+// streamedDataColumns returns the after image column presence bitmap of a row
+// event, indexed by the columns streamed from the source (tp.Fields). It
+// prefers AfterDataColumns, which the vstreamer projects through the filter so
+// that bit i always describes tp.Fields[i]. When an older source only sends the
+// legacy DataColumns, that is returned instead; its bits are in the source
+// table's column order and only line up with tp.Fields when the filter neither
+// reorders nor drops columns, which is the behavior we have always had.
+func (tp *TablePlan) streamedDataColumns(rowChange *binlogdatapb.RowChange) *binlogdatapb.RowChange_Bitmap {
+	if rowChange == nil {
+		return nil
+	}
+	if rowChange.AfterDataColumns != nil && rowChange.AfterDataColumns.Count > 0 {
+		return rowChange.AfterDataColumns
+	}
+	return rowChange.DataColumns
+}
+
+// targetDataColumns maps a bitmap indexed by the columns streamed from the
+// source (tp.Fields) onto the target table's column expressions
+// (tpb.colExprs), so that bit i of the result says whether colExprs[i] can be
+// generated from the row event. A target column is present when every streamed
+// column that its expression uses is present. The column names are resolved by
+// walking the expression rather than using colExpr.references: for a rename
+// like "convert(c1 using utf8mb4) as c2" the references map holds the alias c2
+// while the stream carries the source column c1. Expressions that use no
+// streamed column, such as constants in a Materialize filter or count(*),
+// always have a value and are marked as present.
+func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) (*binlogdatapb.RowChange_Bitmap, error) {
+	fieldIndexes := make(map[string]int, len(tp.Fields))
+	for i, field := range tp.Fields {
+		fieldIndexes[strings.ToLower(field.Name)] = i
+	}
+	colExprs := tp.TablePlanBuilder.colExprs
+	target := &binlogdatapb.RowChange_Bitmap{
+		Count: int64(len(colExprs)),
+		Cols:  make([]byte, (len(colExprs)+7)/8),
+	}
+	for i, cexpr := range colExprs {
+		present := true
+		if cexpr.expr != nil {
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				col, ok := node.(*sqlparser.ColName)
+				if !ok {
+					return true, nil
+				}
+				idx, ok := fieldIndexes[col.Name.Lowered()]
+				if !ok {
+					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+						"column %s used by target column %s of table %s is not among the streamed fields",
+						col.Name.String(), cexpr.colName.String(), tp.TargetName)
+				}
+				if int64(idx) >= streamed.Count || !isBitSet(streamed.Cols, idx) {
+					present = false
+					return false, nil
+				}
+				return true, nil
+			}, cexpr.expr)
+			if err != nil {
+				return nil, err
+			}
+		}
+		setBit(target.Cols, i, present)
+	}
+	return target, nil
+}
+
+// partialQueryDataColumns returns the after image column presence bitmap to
+// generate partial insert/update queries from, indexed by the target table's
+// column expressions. When the source sends the projected AfterDataColumns it
+// is mapped onto the target expressions; otherwise the legacy DataColumns is
+// used as-is, which is only exact for identity projections (see #21075).
+func (tp *TablePlan) partialQueryDataColumns(rowChange *binlogdatapb.RowChange) (*binlogdatapb.RowChange_Bitmap, error) {
+	if rowChange.AfterDataColumns != nil && rowChange.AfterDataColumns.Count > 0 {
+		return tp.targetDataColumns(rowChange.AfterDataColumns)
+	}
+	if rowChange.DataColumns == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "partial row event for %s has no data columns bitmap", tp.TargetName)
+	}
+	return rowChange.DataColumns, nil
 }
 
 func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
@@ -176,7 +259,11 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	return buf.ParsedQuery()
 }
 
-func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
+func (tp *TablePlan) getPartialInsertQuery(rowChange *binlogdatapb.RowChange) (*sqlparser.ParsedQuery, error) {
+	dataColumns, err := tp.partialQueryDataColumns(rowChange)
+	if err != nil {
+		return nil, err
+	}
 	key := hex.EncodeToString(dataColumns.Cols)
 	ins, ok := tp.PartialInserts[key]
 	if ok {
@@ -191,7 +278,11 @@ func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_B
 	return ins, nil
 }
 
-func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
+func (tp *TablePlan) getPartialUpdateQuery(rowChange *binlogdatapb.RowChange) (*sqlparser.ParsedQuery, error) {
+	dataColumns, err := tp.partialQueryDataColumns(rowChange)
+	if err != nil {
+		return nil, err
+	}
 	key := hex.EncodeToString(dataColumns.Cols)
 	upd, ok := tp.PartialUpdates[key]
 	if ok {

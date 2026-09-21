@@ -1335,7 +1335,8 @@ type RowChange struct {
 	// the source table's columns as found in the binlog event, NOT in the
 	// order of the columns emitted by the stream; the two only line up
 	// when the filter does not reorder or drop columns. This layout is
-	// kept as-is for compatibility with existing consumers.
+	// kept as-is for compatibility with existing consumers; new consumers
+	// should use after_data_columns instead.
 	DataColumns *RowChange_Bitmap `protobuf:"bytes,3,opt,name=data_columns,json=dataColumns,proto3" json:"data_columns,omitempty"`
 	// JsonPartialValues is a bitmap of any JSON columns, where the bit
 	// is set if the value in the AFTER image is a partial JSON value
@@ -1353,8 +1354,16 @@ type RowChange struct {
 	// bits are in the order of the columns emitted by the stream (after
 	// the filter's projection), matching the values in the before image.
 	BeforeDataColumns *RowChange_Bitmap `protobuf:"bytes,5,opt,name=before_data_columns,json=beforeDataColumns,proto3" json:"before_data_columns,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// AfterDataColumns is the projected counterpart of data_columns: a bitmap
+	// of the columns emitted by the stream, where the bit is set if the column
+	// is present in the after image. It is set whenever data_columns is, and
+	// like before_data_columns the bits are in the order of the columns
+	// emitted by the stream (after the filter's projection), matching the
+	// values in the after image. Consumers should prefer it over data_columns
+	// when present.
+	AfterDataColumns *RowChange_Bitmap `protobuf:"bytes,6,opt,name=after_data_columns,json=afterDataColumns,proto3" json:"after_data_columns,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RowChange) Reset() {
@@ -1418,6 +1427,13 @@ func (x *RowChange) GetJsonPartialValues() *RowChange_Bitmap {
 func (x *RowChange) GetBeforeDataColumns() *RowChange_Bitmap {
 	if x != nil {
 		return x.BeforeDataColumns
+	}
+	return nil
+}
+
+func (x *RowChange) GetAfterDataColumns() *RowChange_Bitmap {
+	if x != nil {
+		return x.AfterDataColumns
 	}
 	return nil
 }
@@ -3359,7 +3375,7 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\x10external_cluster\x18\n" +
 	" \x01(\tR\x0fexternalCluster\x12(\n" +
 	"\x10source_time_zone\x18\v \x01(\tR\x0esourceTimeZone\x12(\n" +
-	"\x10target_time_zone\x18\f \x01(\tR\x0etargetTimeZone\"\xe2\x02\n" +
+	"\x10target_time_zone\x18\f \x01(\tR\x0etargetTimeZone\"\xae\x03\n" +
 	"\tRowChange\x12\"\n" +
 	"\x06before\x18\x01 \x01(\v2\n" +
 	".query.RowR\x06before\x12 \n" +
@@ -3367,7 +3383,8 @@ const file_binlogdata_proto_rawDesc = "" +
 	".query.RowR\x05after\x12?\n" +
 	"\fdata_columns\x18\x03 \x01(\v2\x1c.binlogdata.RowChange.BitmapR\vdataColumns\x12L\n" +
 	"\x13json_partial_values\x18\x04 \x01(\v2\x1c.binlogdata.RowChange.BitmapR\x11jsonPartialValues\x12L\n" +
-	"\x13before_data_columns\x18\x05 \x01(\v2\x1c.binlogdata.RowChange.BitmapR\x11beforeDataColumns\x1a2\n" +
+	"\x13before_data_columns\x18\x05 \x01(\v2\x1c.binlogdata.RowChange.BitmapR\x11beforeDataColumns\x12J\n" +
+	"\x12after_data_columns\x18\x06 \x01(\v2\x1c.binlogdata.RowChange.BitmapR\x10afterDataColumns\x1a2\n" +
 	"\x06Bitmap\x12\x14\n" +
 	"\x05count\x18\x01 \x01(\x03R\x05count\x12\x12\n" +
 	"\x04cols\x18\x02 \x01(\fR\x04cols\"\xd5\x01\n" +
@@ -3678,65 +3695,66 @@ var file_binlogdata_proto_depIdxs = []int32{
 	45, // 18: binlogdata.RowChange.data_columns:type_name -> binlogdata.RowChange.Bitmap
 	45, // 19: binlogdata.RowChange.json_partial_values:type_name -> binlogdata.RowChange.Bitmap
 	45, // 20: binlogdata.RowChange.before_data_columns:type_name -> binlogdata.RowChange.Bitmap
-	18, // 21: binlogdata.RowEvent.row_changes:type_name -> binlogdata.RowChange
-	51, // 22: binlogdata.FieldEvent.fields:type_name -> query.Field
-	36, // 23: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
-	21, // 24: binlogdata.VGtid.shard_gtids:type_name -> binlogdata.ShardGtid
-	5,  // 25: binlogdata.Journal.migration_type:type_name -> binlogdata.MigrationType
-	21, // 26: binlogdata.Journal.shard_gtids:type_name -> binlogdata.ShardGtid
-	23, // 27: binlogdata.Journal.participants:type_name -> binlogdata.KeyspaceShard
-	4,  // 28: binlogdata.VEvent.type:type_name -> binlogdata.VEventType
-	19, // 29: binlogdata.VEvent.row_event:type_name -> binlogdata.RowEvent
-	20, // 30: binlogdata.VEvent.field_event:type_name -> binlogdata.FieldEvent
-	22, // 31: binlogdata.VEvent.vgtid:type_name -> binlogdata.VGtid
-	24, // 32: binlogdata.VEvent.journal:type_name -> binlogdata.Journal
-	35, // 33: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
-	51, // 34: binlogdata.MinimalTable.fields:type_name -> query.Field
-	26, // 35: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
-	46, // 36: binlogdata.VStreamOptions.config_overrides:type_name -> binlogdata.VStreamOptions.ConfigOverridesEntry
-	4,  // 37: binlogdata.VStreamOptions.event_types:type_name -> binlogdata.VEventType
-	52, // 38: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	53, // 39: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	54, // 40: binlogdata.VStreamRequest.target:type_name -> query.Target
-	16, // 41: binlogdata.VStreamRequest.filter:type_name -> binlogdata.Filter
-	36, // 42: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
-	28, // 43: binlogdata.VStreamRequest.options:type_name -> binlogdata.VStreamOptions
-	25, // 44: binlogdata.VStreamResponse.events:type_name -> binlogdata.VEvent
-	52, // 45: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	53, // 46: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	54, // 47: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
-	55, // 48: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
-	28, // 49: binlogdata.VStreamRowsRequest.options:type_name -> binlogdata.VStreamOptions
-	51, // 50: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
-	51, // 51: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
-	50, // 52: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
-	50, // 53: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
-	52, // 54: binlogdata.VStreamTablesRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	53, // 55: binlogdata.VStreamTablesRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	54, // 56: binlogdata.VStreamTablesRequest.target:type_name -> query.Target
-	28, // 57: binlogdata.VStreamTablesRequest.options:type_name -> binlogdata.VStreamOptions
-	51, // 58: binlogdata.VStreamTablesResponse.fields:type_name -> query.Field
-	51, // 59: binlogdata.VStreamTablesResponse.pkfields:type_name -> query.Field
-	50, // 60: binlogdata.VStreamTablesResponse.rows:type_name -> query.Row
-	50, // 61: binlogdata.VStreamTablesResponse.lastpk:type_name -> query.Row
-	36, // 62: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
-	55, // 63: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
-	52, // 64: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	53, // 65: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	54, // 66: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
-	51, // 67: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
-	50, // 68: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
-	52, // 69: binlogdata.BinlogDumpGTIDRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	53, // 70: binlogdata.BinlogDumpGTIDRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	54, // 71: binlogdata.BinlogDumpGTIDRequest.target:type_name -> query.Target
-	6,  // 72: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
-	8,  // 73: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
-	14, // 74: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
-	75, // [75:75] is the sub-list for method output_type
-	75, // [75:75] is the sub-list for method input_type
-	75, // [75:75] is the sub-list for extension type_name
-	75, // [75:75] is the sub-list for extension extendee
-	0,  // [0:75] is the sub-list for field type_name
+	45, // 21: binlogdata.RowChange.after_data_columns:type_name -> binlogdata.RowChange.Bitmap
+	18, // 22: binlogdata.RowEvent.row_changes:type_name -> binlogdata.RowChange
+	51, // 23: binlogdata.FieldEvent.fields:type_name -> query.Field
+	36, // 24: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
+	21, // 25: binlogdata.VGtid.shard_gtids:type_name -> binlogdata.ShardGtid
+	5,  // 26: binlogdata.Journal.migration_type:type_name -> binlogdata.MigrationType
+	21, // 27: binlogdata.Journal.shard_gtids:type_name -> binlogdata.ShardGtid
+	23, // 28: binlogdata.Journal.participants:type_name -> binlogdata.KeyspaceShard
+	4,  // 29: binlogdata.VEvent.type:type_name -> binlogdata.VEventType
+	19, // 30: binlogdata.VEvent.row_event:type_name -> binlogdata.RowEvent
+	20, // 31: binlogdata.VEvent.field_event:type_name -> binlogdata.FieldEvent
+	22, // 32: binlogdata.VEvent.vgtid:type_name -> binlogdata.VGtid
+	24, // 33: binlogdata.VEvent.journal:type_name -> binlogdata.Journal
+	35, // 34: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
+	51, // 35: binlogdata.MinimalTable.fields:type_name -> query.Field
+	26, // 36: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
+	46, // 37: binlogdata.VStreamOptions.config_overrides:type_name -> binlogdata.VStreamOptions.ConfigOverridesEntry
+	4,  // 38: binlogdata.VStreamOptions.event_types:type_name -> binlogdata.VEventType
+	52, // 39: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 40: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 41: binlogdata.VStreamRequest.target:type_name -> query.Target
+	16, // 42: binlogdata.VStreamRequest.filter:type_name -> binlogdata.Filter
+	36, // 43: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
+	28, // 44: binlogdata.VStreamRequest.options:type_name -> binlogdata.VStreamOptions
+	25, // 45: binlogdata.VStreamResponse.events:type_name -> binlogdata.VEvent
+	52, // 46: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 47: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 48: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
+	55, // 49: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
+	28, // 50: binlogdata.VStreamRowsRequest.options:type_name -> binlogdata.VStreamOptions
+	51, // 51: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
+	51, // 52: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
+	50, // 53: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
+	50, // 54: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
+	52, // 55: binlogdata.VStreamTablesRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 56: binlogdata.VStreamTablesRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 57: binlogdata.VStreamTablesRequest.target:type_name -> query.Target
+	28, // 58: binlogdata.VStreamTablesRequest.options:type_name -> binlogdata.VStreamOptions
+	51, // 59: binlogdata.VStreamTablesResponse.fields:type_name -> query.Field
+	51, // 60: binlogdata.VStreamTablesResponse.pkfields:type_name -> query.Field
+	50, // 61: binlogdata.VStreamTablesResponse.rows:type_name -> query.Row
+	50, // 62: binlogdata.VStreamTablesResponse.lastpk:type_name -> query.Row
+	36, // 63: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
+	55, // 64: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
+	52, // 65: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 66: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 67: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
+	51, // 68: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
+	50, // 69: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
+	52, // 70: binlogdata.BinlogDumpGTIDRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	53, // 71: binlogdata.BinlogDumpGTIDRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	54, // 72: binlogdata.BinlogDumpGTIDRequest.target:type_name -> query.Target
+	6,  // 73: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
+	8,  // 74: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
+	14, // 75: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
+	76, // [76:76] is the sub-list for method output_type
+	76, // [76:76] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_binlogdata_proto_init() }
