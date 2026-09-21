@@ -217,6 +217,40 @@ func TestApplyChangePartialProjectedFilter(t *testing.T) {
 	require.ErrorContains(t, err, "unable to create partial update query for dst")
 }
 
+// TestApplyChangePartialNoWritableColumns confirms that a partial UPDATE whose
+// image carries none of the target's writable columns is a no-op rather than an
+// invalid "update dst set  where ..." statement. This happens when the source
+// row change only touched columns the filter does not select: the projected
+// bitmap then marks every non-PK target column as absent.
+func TestApplyChangePartialNoWritableColumns(t *testing.T) {
+	// Source is src(id, blb, val); the filter drops val.
+	tp := buildTestTablePlan(t, "dst", "select blb, id from src", []*querypb.Field{
+		{Name: "blb", Type: querypb.Type_BLOB},
+		{Name: "id", Type: querypb.Type_INT32},
+	})
+	tp.Stats = binlogplayer.NewStats()
+
+	// "update src set val = ..." under NOBLOB: the unchanged blob is omitted.
+	rowChange := &binlogdatapb.RowChange{
+		Before:           &querypb.Row{Lengths: []int64{-1, 1}, Values: []byte("1")},
+		After:            &querypb.Row{Lengths: []int64{-1, 1}, Values: []byte("1")},
+		DataColumns:      bitmap(true, false, true), // source order (id, blb, val)
+		AfterDataColumns: bitmap(false, true),       // streamed order (blb, id)
+	}
+	executed, err := applyChangeQueries(t, tp, rowChange)
+	require.NoError(t, err)
+	assert.Empty(t, executed)
+	assert.Empty(t, tp.PartialUpdates, "a no-op must not be cached")
+	assert.Empty(t, tp.Stats.PartialQueryCount.Counts())
+
+	// Once the blob is present again the update is generated as usual.
+	rowChange.After = &querypb.Row{Lengths: []int64{5, 1}, Values: []byte("blob21")}
+	rowChange.AfterDataColumns = bitmap(true, true)
+	executed, err = applyChangeQueries(t, tp, rowChange)
+	require.NoError(t, err)
+	require.Equal(t, []string{"update dst set blb=_binary'blob2' where id=1"}, executed)
+}
+
 // TestApplyChangePartialAggregatePlansRejected confirms that a partial row
 // event for a plan with group by / aggregate expressions is rejected with a
 // clear error on both the insert and the update path, whichever bitmap the

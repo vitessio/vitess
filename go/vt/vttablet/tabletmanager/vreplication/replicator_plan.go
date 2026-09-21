@@ -747,6 +747,12 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				if err != nil {
 					return nil, err
 				}
+				if upd == nil {
+					// The image carries none of the target's writable columns, e.g.
+					// the source row change only touched columns the filter does
+					// not select. Nothing to apply.
+					return nil, nil
+				}
 				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
 				return execParsedQuery(upd, bindvars, executor)
 			} else {

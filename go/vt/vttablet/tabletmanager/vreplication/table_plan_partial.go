@@ -249,7 +249,12 @@ func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
+// createPartialUpdateQuery generates the UPDATE for a partial row image. It
+// returns a nil query and no error when none of the writable target columns is
+// present in the image, e.g. when the only change in the source row was to a
+// column that the filter does not select: there is nothing to update on the
+// target and the row event should be treated as a no-op.
+func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
@@ -257,7 +262,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	for i, cexpr := range tpb.colExprs {
 		if int64(i) >= dataColumns.Count {
 			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
-			return nil
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial update query for "+tpb.name.String())
 		}
 		if cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {
 			continue
@@ -283,8 +288,12 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 			}
 		}
 	}
+	if separator == "" {
+		// No writable target column is present in the image.
+		return nil, nil
+	}
 	tpb.generateWhere(buf, bvf)
-	return buf.ParsedQuery()
+	return buf.ParsedQuery(), nil
 }
 
 func (tp *TablePlan) getPartialInsertQuery(rowChange *binlogdatapb.RowChange) (*sqlparser.ParsedQuery, error) {
@@ -316,9 +325,13 @@ func (tp *TablePlan) getPartialUpdateQuery(rowChange *binlogdatapb.RowChange) (*
 	if ok {
 		return upd, nil
 	}
-	upd = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
+	upd, err = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
+	if err != nil {
+		return nil, err
+	}
 	if upd == nil {
-		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial update query for "+tp.TargetName)
+		// Nothing to update on the target for this image; not worth caching.
+		return nil, nil
 	}
 	tp.PartialUpdates[key] = upd
 	tp.Stats.PartialQueryCacheSize.Add([]string{"update"}, 1)

@@ -3590,18 +3590,27 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
-		"create table src(id int, blb blob, val varbinary(4), primary key(id))",
+		"create table src(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
 		fmt.Sprintf("create table %s.dst(blb blob, id int, val2 varchar(4), c int, primary key(id))", vrepldb),
+		// src2/dst2: the only non-key target column is the blob, so an update to a
+		// source column outside the filter leaves nothing to apply on the target.
+		"create table src2(id int, blb blob, val varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst2(blb blob, id int, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst",
 			Filter: "select blb, id, convert(val using utf8mb4) as val2, 1 as c from src",
+		}, {
+			Match:  "dst2",
+			Filter: "select blb, id from src2",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -3610,44 +3619,75 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	cancel, _ := startVReplication(t, bls, "")
+	cancel, vrId := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
 		input  string
-		output string
+		output string // empty means the row event must not produce any query
+		table  string
 		data   [][]string
 	}{{
 		// Inserts always carry a full image.
-		input:  "insert into src values (1, 'blob1', 'aaa')",
+		input:  "insert into src values (1, 'blob1', 'aaa', 'xxx')",
 		output: "insert into dst(blb,id,val2,c) values (_binary'blob1',1,convert(_binary'aaa' using utf8mb4),1)",
-		data: [][]string{
-			{"blob1", "1", "aaa", "1"},
-		},
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "aaa", "1"}},
 	}, {
 		// The blob did not change, so it is absent from the row image and must be
 		// left alone on the target while the renamed column is updated.
 		input:  "update src set val = 'bbb' where id = 1",
 		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
-		data: [][]string{
-			{"blob1", "1", "bbb", "1"},
-		},
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "bbb", "1"}},
+	}, {
+		// NOBLOB only omits unchanged BLOB/TEXT columns: a change to a column
+		// outside the filter still ships val, so val2 is (re)written.
+		input:  "update src set extra = 'yyy' where id = 1",
+		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "bbb", "1"}},
 	}, {
 		// The blob changed, so the image is full again.
 		input:  "update src set blb = 'blob2' where id = 1",
 		output: "update dst set blb=_binary'blob2', val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
-		data: [][]string{
-			{"blob2", "1", "bbb", "1"},
-		},
+		table:  "dst",
+		data:   [][]string{{"blob2", "1", "bbb", "1"}},
+	}, {
+		input:  "insert into src2 values (1, 'blob1', 'aaa')",
+		output: "insert into dst2(blb,id) values (_binary'blob1',1)",
+		table:  "dst2",
+		data:   [][]string{{"blob1", "1"}},
+	}, {
+		// Only a column outside the filter changed and the blob is omitted: the
+		// image has no writable target column, so nothing is applied (and no
+		// invalid empty UPDATE is generated).
+		input: "update src2 set val = 'bbb' where id = 1",
+		table: "dst2",
+		data:  [][]string{{"blob1", "1"}},
+	}, {
+		input:  "update src2 set blb = 'blob2' where id = 1",
+		output: "update dst2 set blb=_binary'blob2' where id=1",
+		table:  "dst2",
+		data:   [][]string{{"blob2", "1"}},
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			execStatements(t, []string{tcase.input})
-			expectNontxQueries(t, qh.Expect(tcase.output), recvTimeout)
-			expectData(t, "dst", tcase.data)
+			if tcase.output != "" {
+				expectNontxQueries(t, qh.Expect(tcase.output), recvTimeout)
+			}
+			expectData(t, tcase.table, tcase.data)
 		})
 	}
+	// Two partial updates reached dst, both with the same projected bitmap (one
+	// cached query). The dst2 no-op must not have generated or cached a partial
+	// query; had it produced an invalid empty UPDATE, the stream would have
+	// errored before the last case could be applied.
+	stats := globalStats.controllers[int32(vrId)].blpStats
+	require.Equal(t, int64(2), stats.PartialQueryCount.Counts()["update"])
+	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["update"])
 }
 
 func TestPlayerBatchMode(t *testing.T) {
