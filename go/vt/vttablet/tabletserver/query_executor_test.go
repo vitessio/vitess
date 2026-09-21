@@ -1336,7 +1336,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	}
 	require.NoError(t, tableacl.InitFromProto(config))
 	callerID := &querypb.VTGateCallerID{Username: "u2", Groups: []string{"eng", "beta"}}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 
 	newServer := func(t *testing.T, flags executorFlags) *TabletServer {
 		t.Helper()
@@ -1389,7 +1389,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 				require.NoError(t, err)
 				tsv.qe.exemptACL, err = f.New([]string{"exempt-acl"})
 				require.NoError(t, err)
-				exemptCtx := callerid.NewContext(context.Background(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
+				exemptCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "exempt-acl"})
 				qre := newTestQueryExecutor(exemptCtx, tsv, tc.query, connID(t, tsv))
 				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err = qre.Execute()
@@ -1427,7 +1427,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 			// caller lacking it is denied on ct by name, and a dry run records
 			// both the ct denial and the undetermined one.
 			u3 := &querypb.VTGateCallerID{Username: "u3"}
-			u3Ctx := callerid.NewContext(context.Background(), nil, u3)
+			u3Ctx := callerid.NewContext(t.Context(), nil, u3)
 			ctKey := strings.Join([]string{"ct", "group03", tc.planID.String(), "u3"}, ".")
 			undeterminedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u3"}, ".")
 
