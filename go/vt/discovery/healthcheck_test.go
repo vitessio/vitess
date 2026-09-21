@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -2027,4 +2029,16 @@ func deleteCellsAlias(t *testing.T, ts *topo.Server, alias string) {
 	if err := ts.DeleteCellsAlias(t.Context(), alias); err != nil {
 		t.Logf("DeleteCellsAlias(%s) failed: %v", alias, err)
 	}
+}
+
+func TestHealthCheckServeHTTP(t *testing.T) {
+	hc := &HealthCheckImpl{
+		healthData: make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/debug/gateway", nil)
+	hc.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "application/json; charset=utf-8", rec.Header().Get("Content-Type"))
 }
