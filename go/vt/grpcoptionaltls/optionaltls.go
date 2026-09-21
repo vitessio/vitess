@@ -82,12 +82,18 @@ func New(config *tls.Config) credentials.TransportCredentials {
 }
 
 // RequiresClientCert reports whether config requires the client to present a
-// certificate, going by its ClientAuth; a GetConfigForClient callback is not
-// consulted. Only the policies known not to require one say no, so that one
-// this package does not know is taken to require it.
+// certificate, going by its ClientAuth. Only the policies known not to
+// require one say no, so that one this package does not know is taken to
+// require it. So is a config with a GetConfigForClient callback: the callback
+// can hand a TLS client a configuration that requires a certificate whatever
+// this one says, and it never sees a plain-text connection, so what such a
+// server requires cannot be told from config.
 func RequiresClientCert(config *tls.Config) bool {
 	if config == nil {
 		return false
+	}
+	if config.GetConfigForClient != nil {
+		return true
 	}
 	switch config.ClientAuth {
 	case tls.NoClientCert, tls.RequestClientCert, tls.VerifyClientCertIfGiven:

@@ -178,6 +178,58 @@ func TestOptionalTLSRequiredClientCert(t *testing.T) {
 	}
 }
 
+// TestOptionalTLSConfigForClient checks that a TLS configuration that picks the
+// configuration to use per TLS client, with a GetConfigForClient callback, has
+// plain-text connections refused: the callback can hand a TLS client a
+// configuration that requires a certificate whatever the base one says, and it
+// never sees a plain-text connection, so what such a server requires cannot be
+// told from the base configuration.
+func TestOptionalTLSConfigForClient(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	requiringClientCert, err := vttls.ServerConfig(certs.ServerCert, certs.ServerKey, certs.ClientCA, "", certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+	// The base configuration requires no client certificate; the one the
+	// callback returns does.
+	config, err := vttls.ServerConfig(certs.ServerCert, certs.ServerKey, "", "", certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+	require.Equal(t, tls.NoClientCert, config.ClientAuth)
+	config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		return requiringClientCert, nil
+	}
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer lis.Close()
+	srv := createUnstartedServer(New(config))
+	go func() {
+		srv.Serve(lis)
+	}()
+	defer srv.Stop()
+
+	sayHello := func(t *testing.T, creds credentials.TransportCredentials) error {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+		require.NoError(t, err)
+		defer conn.Close()
+		_, err = pb.NewGreeterClient(conn).SayHello(ctx, &pb.HelloRequest{Name: "Vitess"})
+		return err
+	}
+
+	t.Run("a plain-text connection is refused", func(t *testing.T) {
+		err := sayHello(t, insecure.NewCredentials())
+		require.Error(t, err, "a client that presents no certificate at all must not be served")
+		require.Equal(t, codes.Unavailable, status.Code(err))
+	})
+
+	t.Run("a TLS connection with a client certificate is served", func(t *testing.T) {
+		clientConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		require.NoError(t, sayHello(t, credentials.NewTLS(clientConfig)))
+	})
+}
+
 // TestRequiresClientCert checks which client authentication policies make the
 // optional TLS credentials refuse plain-text connections: the ones that
 // require a certificate, and any policy this package does not know.
@@ -195,4 +247,11 @@ func TestRequiresClientCert(t *testing.T) {
 		})
 	}
 	require.False(t, RequiresClientCert(nil))
+
+	t.Run("a GetConfigForClient callback", func(t *testing.T) {
+		require.True(t, RequiresClientCert(&tls.Config{
+			ClientAuth:         tls.NoClientCert,
+			GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) { return nil, nil },
+		}))
+	})
 }
