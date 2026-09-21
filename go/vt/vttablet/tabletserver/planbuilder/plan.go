@@ -162,6 +162,12 @@ type Plan struct {
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
+	// TablesUndetermined is set for a statement whose tables the parser
+	// discards (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA): Permissions is empty
+	// because none could be derived, not because the statement touches no
+	// table. Under strict table ACL the executor denies such a statement
+	// rather than skip the check.
+	TablesUndetermined bool
 
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
@@ -260,17 +266,17 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 		return nil, err
 	}
 	plan.AllTables = lookupAllTables(statement, tables)
-	plan.Permissions = BuildPermissions(statement)
+	plan.Permissions, plan.TablesUndetermined = BuildPermissions(statement)
 	return plan, nil
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
 func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
-		PlanID:      PlanSelectStream,
-		FullQuery:   GenerateFullQuery(statement),
-		Permissions: BuildPermissions(statement),
+		PlanID:    PlanSelectStream,
+		FullQuery: GenerateFullQuery(statement),
 	}
+	plan.Permissions, plan.TablesUndetermined = BuildPermissions(statement)
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
