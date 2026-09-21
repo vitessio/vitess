@@ -95,6 +95,7 @@ const (
 	KeyspacesPath            = "keyspaces"
 	ShardsPath               = "shards"
 	TabletsPath              = "tablets"
+	NonManagedTabletsPath    = "non_managed_tablets"
 	MetadataPath             = "metadata"
 	ExternalClusterVitess    = "vitess"
 	RoutingRulesPath         = "routing_rules"

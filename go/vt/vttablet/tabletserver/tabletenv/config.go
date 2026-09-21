@@ -968,21 +968,34 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 	return c.checkConnectionForExternalMysql()
 }
 
+func (c *TabletConfig) externalMysqlConnParams() mysql.ConnParams {
+	params := mysql.ConnParams{
+		Host:             c.DB.Host,
+		Port:             c.DB.Port,
+		DbName:           c.DB.DBName,
+		Uname:            c.DB.App.User,
+		Pass:             c.DB.App.Password,
+		Flags:            c.DB.Flags,
+		ConnectTimeoutMs: uint64(c.DB.ConnectTimeoutMilliseconds),
+	}
+	if !c.DB.App.UseTCP {
+		params.UnixSocket = c.DB.Socket
+	}
+	if c.DB.App.UseSSL {
+		params.SslMode = c.DB.SslMode
+		params.SslCa = c.DB.SslCa
+		params.SslCaPath = c.DB.SslCaPath
+		params.SslCert = c.DB.SslCert
+		params.SslKey = c.DB.SslKey
+		params.TLSMinVersion = c.DB.TLSMinVersion
+		params.ServerName = c.DB.ServerName
+	}
+	return params
+}
+
 // Test connectivity of external mysql
 func (c *TabletConfig) checkConnectionForExternalMysql() error {
-	params := mysql.ConnParams{
-		Host:       c.DB.Host,
-		Port:       c.DB.Port,
-		DbName:     c.DB.DBName,
-		Uname:      c.DB.App.User,
-		Pass:       c.DB.App.Password,
-		UnixSocket: c.DB.Socket,
-		SslMode:    c.DB.SslMode,
-		SslCa:      c.DB.SslCa,
-		SslCaPath:  c.DB.SslCaPath,
-		SslCert:    c.DB.SslCert,
-		SslKey:     c.DB.SslKey,
-	}
+	params := c.externalMysqlConnParams()
 
 	conn, err := mysql.Connect(context.Background(), &params)
 	if err != nil {

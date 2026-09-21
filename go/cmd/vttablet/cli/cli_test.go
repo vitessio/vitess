@@ -18,12 +18,15 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 // TestRunFailsToStartTabletManager tests the code path in 'run' where we fail to start the TabletManager
@@ -68,4 +71,48 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 
 	err := Main.ExecuteContext(ctx)
 	require.ErrorContains(t, err, "you cannot enable --restore-from-backup or --restore-with-clone without a my.cnf file")
+}
+
+func TestInitConfigVerifiesTabletConfigFile(t *testing.T) {
+	oldTabletConfig := tabletConfig
+	t.Cleanup(func() {
+		tabletConfig = oldTabletConfig
+	})
+
+	tests := []struct {
+		name          string
+		config        string
+		expectedError string
+	}{
+		{
+			name: "unmanaged without app user",
+			config: `unmanaged: true
+db:
+  host: localhost
+  app:
+    user: ""
+    password: ""
+`,
+			expectedError: "invalid config: database app user not specified",
+		},
+		{
+			name: "invalid hot row queue size",
+			config: `db:
+  host: localhost
+hotRowProtection:
+  maxQueueSize: 0
+`,
+			expectedError: "invalid config: --hot-row-protection-max-queue-size must be > 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tabletConfig = filepath.Join(t.TempDir(), "vttablet.yaml")
+			require.NoError(t, os.WriteFile(tabletConfig, []byte(tt.config), 0o600))
+
+			_, _, err := initConfig(&topodatapb.TabletAlias{Cell: "cell", Uid: 100}, vtenv.NewTestEnv().CollationEnv())
+			require.ErrorContains(t, err, tt.expectedError)
+		})
+	}
 }

@@ -1364,3 +1364,64 @@ func TestValidateFlags(t *testing.T) {
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
 }
+
+// TestStartStampsTabletMode checks that Start() records the tablet's mode in its topo record, so
+// that remote callers such as VTOrc can tell an unmanaged tablet from a managed one.
+func TestStartStampsTabletMode(t *testing.T) {
+	testcases := []struct {
+		name   string
+		config *tabletenv.TabletConfig
+		want   topodatapb.TabletMySQLMode
+	}{
+		{
+			name:   "no config",
+			config: nil,
+			want:   topodatapb.TabletMySQLMode_MANAGED,
+		}, {
+			name:   "managed",
+			config: &tabletenv.TabletConfig{DB: &dbconfigs.DBConfigs{}},
+			want:   topodatapb.TabletMySQLMode_MANAGED,
+		}, {
+			name:   "unmanaged",
+			config: &tabletenv.TabletConfig{DB: &dbconfigs.DBConfigs{}, Unmanaged: true},
+			want:   topodatapb.TabletMySQLMode_UNMANAGED,
+		},
+	}
+
+	for i, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(func() { ts.Close() })
+
+			tablet := newTestTablet(t, i+1, "ks", "0", nil)
+			require.Equal(t, topodatapb.TabletMySQLMode_MANAGED, tablet.GetMysqlMode(), "a tablet with no mode set must read as managed")
+
+			// Seed the opposite of the expected mode. MANAGED is the zero value, so a record that
+			// Start() never stamped would read as MANAGED anyway and the managed cases below would
+			// pass without proving anything.
+			tablet.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
+			if testcase.want == topodatapb.TabletMySQLMode_UNMANAGED {
+				tablet.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
+			}
+
+			fakeDb := newTestMysqlDaemon(t, 1)
+			tm := &TabletManager{
+				BatchCtx:            ctx,
+				TopoServer:          ts,
+				MysqlDaemon:         fakeDb,
+				DBConfigs:           &dbconfigs.DBConfigs{},
+				SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+				QueryServiceControl: tabletservermock.NewController(),
+			}
+			require.NoError(t, tm.Start(tablet, testcase.config))
+			t.Cleanup(tm.Stop)
+
+			assert.Equal(t, testcase.want, tm.mysqlMode)
+
+			ti, err := ts.GetTablet(ctx, tablet.Alias)
+			require.NoError(t, err)
+			assert.Equal(t, testcase.want, ti.GetMysqlMode())
+		})
+	}
+}

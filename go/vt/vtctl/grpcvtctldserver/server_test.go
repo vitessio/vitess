@@ -26,6 +26,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -86,6 +87,58 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+}
+
+type (
+	resetReplicationErrorTMC struct {
+		*testutil.TabletManagerClient
+		resetCalls atomic.Int32
+	}
+)
+
+func (tmc *resetReplicationErrorTMC) ResetReplication(context.Context, *topodatapb.Tablet) error {
+	tmc.resetCalls.Add(1)
+	return assert.AnError
+}
+
+func TestInitShardPrimaryRejectsUnmanagedTabletMissingFromShardReplication(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	unmanaged := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Keyspace:  primary.Keyspace,
+		Shard:     primary.Shard,
+		Type:      topodatapb.TabletType_REPLICA,
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: primary.Keyspace,
+		Name:     primary.Shard,
+		Shard:    &topodatapb.Shard{PrimaryAlias: primary.Alias},
+	})
+	testutil.AddTablets(ctx, t, ts, nil, primary, unmanaged)
+	require.NoError(t, topo.DeleteTabletReplicationData(ctx, ts, unmanaged))
+
+	tmc := &resetReplicationErrorTMC{TabletManagerClient: &testutil.TabletManagerClient{}}
+	server := NewTestVtctldServer(ts, tmc)
+	_, err := server.InitShardPrimary(ctx, &vtctldatapb.InitShardPrimaryRequest{
+		Keyspace:                primary.Keyspace,
+		Shard:                   primary.Shard,
+		PrimaryElectTabletAlias: primary.Alias,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000101]")
+	assert.Zero(t, tmc.resetCalls.Load())
 }
 
 func TestPanicHandler(t *testing.T) {
