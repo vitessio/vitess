@@ -26,8 +26,9 @@ import (
 
 func TestBuildPermissions(t *testing.T) {
 	tcases := []struct {
-		input  string
-		output []Permission
+		input        string
+		output       []Permission
+		undetermined bool
 	}{{
 		input: "select * from t",
 		output: []Permission{{
@@ -101,8 +102,9 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.ADMIN,
 		}},
 	}, {
-		input:  "repair t",
-		output: nil,
+		input:        "repair t",
+		output:       nil,
+		undetermined: true,
 	}, {
 		input: "select (select a from t2) from t1",
 		output: []Permission{{
@@ -627,6 +629,20 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "t",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// Statements whose tables the parser discards derive no permission
+		// and are flagged instead, so the executor can fail closed on them.
+		input:        "do (select * from t)",
+		undetermined: true,
+	}, {
+		input:        "optimize table t",
+		undetermined: true,
+	}, {
+		input:        "call proc()",
+		undetermined: true,
+	}, {
+		input:        "load data infile 'x' into table t",
+		undetermined: true,
 	}}
 
 	for _, tcase := range tcases {
@@ -635,8 +651,9 @@ func TestBuildPermissions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := BuildPermissions(stmt)
+			got, undetermined := BuildPermissions(stmt)
 			utils.MustMatch(t, tcase.output, got)
+			utils.MustMatch(t, tcase.undetermined, undetermined)
 		})
 	}
 }
