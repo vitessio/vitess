@@ -80,8 +80,8 @@ func (tp *TablePlan) streamedDataColumns(rowChange *binlogdatapb.RowChange) *bin
 // walking the expression rather than using colExpr.references: for a rename
 // like "convert(c1 using utf8mb4) as c2" the references map holds the alias c2
 // while the stream carries the source column c1. Expressions that use no
-// streamed column, such as constants in a Materialize filter or count(*),
-// always have a value and are marked as present.
+// streamed column, such as constants in a Materialize filter, always have a
+// value and are marked as present.
 func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) (*binlogdatapb.RowChange_Bitmap, error) {
 	fieldIndexes := make(map[string]int, len(tp.Fields))
 	for i, field := range tp.Fields {
@@ -121,12 +121,40 @@ func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) 
 	return target, nil
 }
 
+// supportsPartialImages reports whether partial insert/update queries can be
+// generated for the plan. The partial generators only know how to emit plain
+// column expressions: grouped plans need "insert ... on duplicate key update"
+// semantics and count(*)/sum() need the aggregate update forms that the full
+// statements carry, none of which the partial forms produce. Such plans have
+// never worked with partial row images (the generated SQL was invalid), so we
+// reject them with a clear error instead.
+func (tp *TablePlan) supportsPartialImages() bool {
+	tpb := tp.TablePlanBuilder
+	if tpb == nil {
+		return true
+	}
+	if tpb.onInsert != insertNormal {
+		return false
+	}
+	for _, cexpr := range tpb.colExprs {
+		if cexpr.operation != opExpr {
+			return false
+		}
+	}
+	return true
+}
+
 // partialQueryDataColumns returns the after image column presence bitmap to
 // generate partial insert/update queries from, indexed by the target table's
 // column expressions. When the source sends the projected AfterDataColumns it
 // is mapped onto the target expressions; otherwise the legacy DataColumns is
 // used as-is, which is only exact for identity projections (see #21075).
 func (tp *TablePlan) partialQueryDataColumns(rowChange *binlogdatapb.RowChange) (*binlogdatapb.RowChange_Bitmap, error) {
+	if !tp.supportsPartialImages() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"partial row image received for %s, whose filter uses group by or aggregate expressions, which is not supported; you will need to re-run the workflow with binlog-row-image=FULL and without binlog-row-value-options=PARTIAL_JSON",
+			tp.TargetName)
+	}
 	if rowChange.AfterDataColumns != nil && rowChange.AfterDataColumns.Count > 0 {
 		return tp.targetDataColumns(rowChange.AfterDataColumns)
 	}

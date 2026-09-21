@@ -245,6 +245,8 @@ The existing `RowChange.data_columns` bitmap, sent for partial after images (`bi
 
 VReplication now prefers `after_data_columns` when the source sends it and maps it onto the target table's column expressions by the source columns each expression actually uses. This makes partial-image handling correct for non-identity projections that only worked by coincidence before, such as a Materialize filter adding constants (`select id, val, 1 as c from t`) or an Online DDL column conversion (`convert(c1 using utf8mb4) as c2`) under NOBLOB or PARTIAL_JSON. When the source is an older vttablet that only sends `data_columns`, the previous behavior is kept. `data_columns` will be deprecated once `after_data_columns` has shipped in enough releases.
 
+Partial row images were never supported for filters with `group by` or aggregate expressions (`count(*)`, `sum()`): the generated partial statements were invalid SQL. VReplication now fails such a workflow with an explicit error asking for `binlog_row_image=FULL` on the source instead.
+
 See [#21075](https://github.com/vitessio/vitess/issues/21075) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>

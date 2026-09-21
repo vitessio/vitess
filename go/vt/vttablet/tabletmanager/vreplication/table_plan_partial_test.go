@@ -217,6 +217,49 @@ func TestApplyChangePartialProjectedFilter(t *testing.T) {
 	require.ErrorContains(t, err, "unable to create partial update query for dst")
 }
 
+// TestApplyChangePartialAggregatePlansRejected confirms that a partial row
+// event for a plan with group by / aggregate expressions is rejected with a
+// clear error on both the insert and the update path, whichever bitmap the
+// source sends. The partial query generators only handle plain expressions,
+// so such plans never worked with partial images (they produced invalid SQL
+// such as "cnt=" without a value).
+func TestApplyChangePartialAggregatePlansRejected(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		{Name: "val", Type: querypb.Type_VARBINARY},
+	}
+	for _, filter := range []string{
+		"select id, count(*) as cnt from src group by id",
+		"select id, sum(val) as total from src group by id",
+		"select id, val from src group by id, val",
+		"select id, count(*) as cnt from src", // aggregate without group by is still an insertNormal plan
+	} {
+		t.Run(filter, func(t *testing.T) {
+			tp := buildTestTablePlan(t, "dst", filter, fields)
+			tp.Stats = binlogplayer.NewStats()
+			require.False(t, tp.supportsPartialImages())
+
+			before := &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1aaa")}
+			after := &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1bbb")}
+			for name, rowChange := range map[string]*binlogdatapb.RowChange{
+				"projected": {AfterDataColumns: bitmap(true, true)},
+				"legacy":    {DataColumns: bitmap(true, true)},
+			} {
+				rowChange.After = after
+				_, err := applyChangeQueries(t, tp, rowChange)
+				require.ErrorContains(t, err, "partial row image received for dst", "%s insert", name)
+				rowChange.Before = before
+				_, err = applyChangeQueries(t, tp, rowChange)
+				require.ErrorContains(t, err, "partial row image received for dst", "%s update", name)
+			}
+		})
+	}
+
+	// A plain projection is fine.
+	tp := buildTestTablePlan(t, "dst", "select id, val, 1 as c from src", fields)
+	require.True(t, tp.supportsPartialImages())
+}
+
 // TestApplyChangePartialLegacyBitmapMisaligned shows why the projected bitmap
 // is needed even when the source and target have the same number of columns:
 // for a reordering filter the legacy bitmap's bits describe the wrong target
