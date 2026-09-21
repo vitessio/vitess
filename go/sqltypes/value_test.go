@@ -17,6 +17,8 @@ limitations under the License.
 package sqltypes
 
 import (
+	"bytes"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -186,6 +188,70 @@ func TestNewValue(t *testing.T) {
 		inType: Expression,
 		inVal:  "a",
 		outErr: "invalid type specified for MakeValue: EXPRESSION",
+	}, {
+		// SQL text declared as a hex literal.
+		inType: HexVal,
+		inVal:  "1+1",
+		outErr: `invalid HEXVAL literal: "1+1", expected x'<hex digits>' with an even digit count`,
+	}, {
+		inType: HexVal,
+		inVal:  "x'41'",
+		outVal: TestValue(HexVal, "x'41'"),
+	}, {
+		inType: HexVal,
+		inVal:  "x'4'",
+		outErr: `invalid HEXVAL literal: "x'4'", expected x'<hex digits>' with an even digit count`,
+	}, {
+		inType: HexNum,
+		inVal:  "0xAB",
+		outVal: TestValue(HexNum, "0xAB"),
+	}, {
+		inType: HexNum,
+		inVal:  "1; drop table x #",
+		outErr: `invalid HEXNUM literal: "1; drop table x #", expected 0x<hex digits>`,
+	}, {
+		inType: BitNum,
+		inVal:  "0b101",
+		outVal: TestValue(BitNum, "0b101"),
+	}, {
+		inType: BitNum,
+		inVal:  "(select user())",
+		outErr: `invalid BITNUM literal: "(select user())", expected 0b<binary digits>`,
+	}, {
+		// decimal.NewFromMySQL sizes the value from digit counts and truncates
+		// an over-long integral or fractional part instead of scanning past it,
+		// so trailing SQL text passed the parser.
+		inType: Decimal,
+		inVal:  strings.Repeat("9", 80) + "; drop table x #",
+		outErr: `invalid DECIMAL literal:`,
+	}, {
+		inType: Decimal,
+		inVal:  "1." + strings.Repeat("9", 80) + "; drop table x #",
+		outErr: `invalid DECIMAL literal:`,
+	}, {
+		// Go float words that MySQL has no literal for.
+		inType: Float64,
+		inVal:  "NaN",
+		outErr: `invalid FLOAT64 literal: "NaN", expected a numeric literal`,
+	}, {
+		inType: Float64,
+		inVal:  "Infinity",
+		outErr: `invalid FLOAT64 literal: "Infinity", expected a numeric literal`,
+	}, {
+		// The parsers' whitespace tolerance is preserved.
+		inType: Float64,
+		inVal:  " 1.5",
+		outVal: TestValue(Float64, " 1.5"),
+	}, {
+		inType: Int64,
+		inVal:  " 42\t",
+		outVal: TestValue(Int64, " 42\t"),
+	}, {
+		// The echoed payload is capped so a hostile payload cannot inflate
+		// the error and its log line.
+		inType: HexVal,
+		inVal:  strings.Repeat("a", 100),
+		outErr: `invalid HEXVAL literal: "` + strings.Repeat("a", 64) + `…", expected x'<hex digits>' with an even digit count`,
 	}}
 	for _, tcase := range testcases {
 		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
@@ -392,6 +458,9 @@ func TestEncode(t *testing.T) {
 	}, {
 		in:     TestValue(Bit, "a"),
 		outSQL: "b'01100001'",
+	}, {
+		in:     TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
+		outSQL: "(1, 'foo')",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder
@@ -675,7 +744,7 @@ func TestEncodeSQLBytes2(t *testing.T) {
 		outSQL: "b'01100001'",
 	}, {
 		in:     TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
-		outSQL: "\x89\x02\x011\x950\x03foo",
+		outSQL: "(1, 'foo')",
 	}}
 	for _, tcase := range testcases {
 		var buf bytes2.Buffer
@@ -712,4 +781,139 @@ func TestIsComparable(t *testing.T) {
 		isCmp := tcase.in.IsComparable()
 		assert.Equal(t, tcase.isCmp, isCmp)
 	}
+}
+
+// TestIsRawSQLLiteral pins the one legal payload grammar per type that the
+// encoders write into generated SQL verbatim. The grammar follows the lexer
+// and MySQL: hex digits in either case, 0x/0b prefixes lowercase only, an even
+// digit count inside x'...', and the space/tab padding the numeric parsers
+// already tolerate.
+func TestIsRawSQLLiteral(t *testing.T) {
+	testcases := []struct {
+		typ querypb.Type
+		val string
+		ok  bool
+	}{
+		// signed integral
+		{Int64, "0", true},
+		{Int64, "42", true},
+		{Int64, "-42", true},
+		{Int8, " 42\t", true},
+		{Int64, "", false},
+		{Int64, "-", false},
+		{Int64, "+42", false},
+		{Int64, "4 2", false},
+		{Int64, "1; drop table x #", false},
+		{Int64, "1 or 1=1", false},
+		{Int64, "--1", false},
+		{Int64, " \t", false},
+		{Int64, "1\n", false},
+		// unsigned integral (Year is unsigned integral)
+		{Uint64, "42", true},
+		{Year, "2026", true},
+		{Uint64, "-1", false},
+		{Uint64, "", false},
+		// float
+		{Float64, "1.5", true},
+		{Float64, "+1.5", true},
+		{Float64, "-1.5", true},
+		{Float64, ".5", true},
+		{Float64, "1.", true},
+		{Float64, "1e5", true},
+		{Float64, "1.5E-3", true},
+		{Float32, " 1.5 ", true},
+		{Float64, "NaN", false},
+		{Float64, "Inf", false},
+		{Float64, "Infinity", false},
+		{Float64, "-inf", false},
+		{Float64, "1e", false},
+		{Float64, "e5", false},
+		{Float64, ".", false},
+		{Float64, "1.5.2", false},
+		{Float64, "1.5 or 1=1", false},
+		{Float64, "1.e5", true},
+		{Float64, "1e+", false},
+		{Float64, "1..5", false},
+		{Float64, "1.5\n-- x", false},
+		// decimal: no exponent
+		{Decimal, "1.5", true},
+		{Decimal, "-0", true},
+		{Decimal, "+.5", true},
+		{Decimal, " 1.5 ", true},
+		{Decimal, "1e5", false},
+		{Decimal, strings.Repeat("9", 80) + "; drop table x #", false},
+		// HexNum: 0x + one or more hex digits, lowercase prefix only
+		{HexNum, "0x0", true},
+		{HexNum, "0xAB", true},
+		{HexNum, "0xab", true},
+		{HexNum, "0xA", true},
+		{HexNum, "0x", false},
+		{HexNum, "0X1", false},
+		{HexNum, "0xG", false},
+		{HexNum, "1+1", false},
+		{HexNum, "", false},
+		{HexNum, "0x1 ", false},
+		// HexVal: x'..' or X'..' with an even number of hex digits (zero allowed)
+		{HexVal, "x''", true},
+		{HexVal, "x'41'", true},
+		{HexVal, "X'aB'", true},
+		{HexVal, "x'ABCD'", true},
+		{HexVal, "x'4'", false},
+		{HexVal, "x'41", false},
+		{HexVal, "'41'", false},
+		{HexVal, "x'4G'", false},
+		{HexVal, "1+1", false},
+		{HexVal, "x", false},
+		{HexVal, "", false},
+		{HexVal, "x'41' or 1=1", false},
+		{HexVal, "x'''", false},
+		{HexVal, "''", false},
+		// BitNum: 0b + one or more binary digits, lowercase prefix only
+		{BitNum, "0b0", true},
+		{BitNum, "0b101", true},
+		{BitNum, "0b", false},
+		{BitNum, "0B1", false},
+		{BitNum, "0b102", false},
+		{BitNum, "1+1", false},
+		// never raw
+		{VarChar, "1", false},
+		{VarBinary, "1", false},
+		{Bit, "1", false},
+		{Null, "", false},
+		{Expression, "1", false},
+		{Tuple, "", false},
+		{querypb.Type_RAW, "1", false},
+		{Datetime, "2026-01-01 00:00:00", false},
+	}
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s/%q", tc.typ, tc.val), func(t *testing.T) {
+			assert.Equal(t, tc.ok, isRawSQLLiteral(tc.typ, []byte(tc.val)))
+		})
+	}
+}
+
+// TestForEachValueMalformedEncoding pins that a tuple payload whose member
+// length prefix exceeds the buffer reports ErrBadTupleEncoding instead of
+// panicking: the tablet validator decodes wire-supplied tuple payloads.
+func TestForEachValueMalformedEncoding(t *testing.T) {
+	// A well-formed single-member tuple, then the same bytes with the member
+	// length inflated past the end of the buffer.
+	good := TestTuple(TestValue(Int64, "1"))
+	var n int
+	require.NoError(t, good.ForEachValue(func(Value) { n++ }))
+	require.Equal(t, 1, n)
+
+	bad := make([]byte, len(good.val))
+	copy(bad, good.val)
+	// protowire layout from encodeTuple: varint type, varint len, bytes.
+	// The length byte precedes the single payload byte '1'; inflate it.
+	idx := bytes.LastIndexByte(bad, '1') - 1
+	require.GreaterOrEqual(t, idx, 0)
+	require.Equal(t, byte(1), bad[idx], "expected the member length byte")
+	bad[idx] = 0x7f
+	malformed := Value{typ: uint16(Tuple), val: bad}
+	require.NotPanics(t, func() {
+		err := malformed.ForEachValue(func(Value) {})
+		assert.ErrorIs(t, err, ErrBadTupleEncoding)
+	})
 }

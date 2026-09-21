@@ -282,7 +282,7 @@ func (asm *assembler) PushBVar_hexnum(key string) {
 }
 
 func push_hexval(env *ExpressionEnv, raw []byte) int {
-	raw, env.vm.err = parseHexLiteral(raw[2 : len(raw)-1])
+	raw, env.vm.err = parseHexValLiteral(raw)
 	env.vm.stack[env.vm.sp] = newEvalBytesHex(raw)
 	env.vm.sp++
 	return 1

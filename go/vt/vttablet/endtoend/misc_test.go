@@ -134,14 +134,15 @@ func TestNocacheListArgs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, qr.Rows, 1)
 
-	// Error case
+	// Error case: the tablet's bind variable gate rejects the empty tuple
+	// before substitution, with the message vtgate uses for the same case.
 	_, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
 			"list": sqltypes.TestBindVariable([]any{}),
 		},
 	)
-	assert.EqualError(t, err, "empty list supplied for list (CallerID: dev)")
+	assert.EqualError(t, err, "list: empty tuple is not allowed (CallerID: dev)")
 }
 
 func TestIntegrityError(t *testing.T) {
