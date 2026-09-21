@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/servenv/testutils"
 )
 
@@ -31,6 +32,7 @@ func TestFlushLogsHandler(t *testing.T) {
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
+	// 1. Allowed with default policy
 	resp, err := http.Get(server.URL + "/debug/flushlogs")
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -39,15 +41,56 @@ func TestFlushLogsHandler(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "flushed", string(body))
+
+	// 2. Denied with deny-all policy
+	cleanup := acl.SetPolicyForTest("deny-all")
+	defer cleanup()
+
+	respDeny, err := http.Get(server.URL + "/debug/flushlogs")
+	require.NoError(t, err)
+	defer respDeny.Body.Close()
+
+	require.Equal(t, http.StatusForbidden, respDeny.StatusCode)
 }
 
 func TestDebugVarsHandler(t *testing.T) {
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
+	// 1. Allowed with default policy
 	resp, err := http.Get(server.URL + "/debug/vars")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// 2. Denied with deny-all policy
+	cleanup := acl.SetPolicyForTest("deny-all")
+	defer cleanup()
+
+	respDeny, err := http.Get(server.URL + "/debug/vars")
+	require.NoError(t, err)
+	defer respDeny.Body.Close()
+
+	require.Equal(t, http.StatusForbidden, respDeny.StatusCode)
+}
+
+func TestLivenessHandlerACL(t *testing.T) {
+	server := testutils.HTTPTestServer()
+	defer server.Close()
+
+	// 1. Allowed with default policy
+	resp, err := http.Get(server.URL + "/debug/liveness")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// 2. Must remain reachable (200 OK) even under deny-all policy
+	cleanup := acl.SetPolicyForTest("deny-all")
+	defer cleanup()
+
+	respDeny, err := http.Get(server.URL + "/debug/liveness")
+	require.NoError(t, err)
+	defer respDeny.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
