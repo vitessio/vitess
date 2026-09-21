@@ -184293,6 +184293,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [wait_for_all_tablets] EmergencyReparentShardRequest wait_for_all_tablets
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
          * @property {boolean|null} [allow_split_brain_promotion] EmergencyReparentShardRequest allow_split_brain_promotion
+         * @property {string|null} [required_position] EmergencyReparentShardRequest required_position
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -184398,6 +184399,14 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.prototype.allow_split_brain_promotion = false;
 
         /**
+         * EmergencyReparentShardRequest required_position.
+         * @member {string} required_position
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.required_position = "";
+
+        /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.EmergencyReparentShardRequest
@@ -184448,6 +184457,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.topodata.TabletAlias.encode(message.expected_primary, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion") && message.allow_split_brain_promotion !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.allow_split_brain_promotion);
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position") && message.required_position !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.required_position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -184566,6 +184577,15 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.allow_split_brain_promotion;
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.required_position = value;
+                        else
+                            delete message.required_position;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -184648,6 +184668,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
                 if (typeof message.allow_split_brain_promotion !== "boolean")
                     return "allow_split_brain_promotion: boolean expected";
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
+                if (!$util.isString(message.required_position))
+                    return "required_position: string expected";
             return null;
         };
 
@@ -184709,6 +184732,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.allow_split_brain_promotion != null)
                 if (object.allow_split_brain_promotion)
                     message.allow_split_brain_promotion = $Boolean(object.allow_split_brain_promotion);
+            if (object.required_position != null)
+                if (typeof object.required_position !== "string" || object.required_position.length)
+                    message.required_position = $String(object.required_position);
             return message;
         };
 
@@ -184740,6 +184766,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.wait_for_all_tablets = false;
                 object.expected_primary = null;
                 object.allow_split_brain_promotion = false;
+                object.required_position = "";
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -184762,6 +184789,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.expected_primary = $root.topodata.TabletAlias.toObject(message.expected_primary, options, _depth + 1);
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
                 object.allow_split_brain_promotion = message.allow_split_brain_promotion;
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
+                object.required_position = message.required_position;
             return object;
         };
 
