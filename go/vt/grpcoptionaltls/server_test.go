@@ -24,12 +24,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/status"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -50,7 +53,7 @@ func createUnstartedServer(creds credentials.TransportCredentials) *grpc.Server 
 
 type testCredentials struct {
 	client credentials.TransportCredentials
-	server credentials.TransportCredentials
+	server *tls.Config
 }
 
 func createCredentials(t *testing.T) (*testCredentials, error) {
@@ -69,7 +72,7 @@ func createCredentials(t *testing.T) (*testCredentials, error) {
 	}
 	tc := &testCredentials{
 		client: clientCredentials,
-		server: credentials.NewServerTLSFromCert(&cert),
+		server: &tls.Config{Certificates: []tls.Certificate{cert}},
 	}
 	return tc, nil
 }
@@ -113,4 +116,83 @@ func TestOptionalTLS(t *testing.T) {
 			testFunc(t, grpc.WithTransportCredentials(tc.client))
 		}
 	})
+}
+
+// TestOptionalTLSRequiredClientCert checks that a server that requires client
+// certificates, as one configured with --grpc-ca does, refuses the plain-text
+// connections that optional TLS otherwise accepts: a plain-text connection can
+// never present a certificate, so serving it would leave the requirement
+// enforced only for the clients that choose to use TLS.
+func TestOptionalTLSRequiredClientCert(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	// The server is configured the way servenv configures it for --grpc-cert,
+	// --grpc-key and --grpc-ca.
+	config, err := vttls.ServerConfig(certs.ServerCert, certs.ServerKey, certs.ClientCA, "", certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+	require.Equal(t, tls.RequireAndVerifyClientCert, config.ClientAuth)
+
+	// A copy of the credentials has to refuse them as well.
+	for name, serverCreds := range map[string]credentials.TransportCredentials{
+		"credentials": New(config),
+		"cloned":      New(config).Clone(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer lis.Close()
+			srv := createUnstartedServer(serverCreds)
+			go func() {
+				srv.Serve(lis)
+			}()
+			defer srv.Stop()
+
+			sayHello := func(t *testing.T, creds credentials.TransportCredentials) error {
+				t.Helper()
+				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+				defer cancel()
+				conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+				require.NoError(t, err)
+				defer conn.Close()
+				_, err = pb.NewGreeterClient(conn).SayHello(ctx, &pb.HelloRequest{Name: "Vitess"})
+				return err
+			}
+
+			t.Run("a plain-text connection is refused", func(t *testing.T) {
+				err := sayHello(t, insecure.NewCredentials())
+				require.Error(t, err, "a client that presents no certificate at all must not be served")
+				require.Equal(t, codes.Unavailable, status.Code(err))
+			})
+
+			t.Run("a TLS connection without a client certificate is refused", func(t *testing.T) {
+				creds, err := credentials.NewClientTLSFromFile(certs.ServerCA, certs.ServerName)
+				require.NoError(t, err)
+				require.ErrorContains(t, sayHello(t, creds), "certificate required")
+			})
+
+			t.Run("a TLS connection with a client certificate is served", func(t *testing.T) {
+				clientConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+				require.NoError(t, err)
+				require.NoError(t, sayHello(t, credentials.NewTLS(clientConfig)))
+			})
+		})
+	}
+}
+
+// TestRequiresClientCert checks which client authentication policies make the
+// optional TLS credentials refuse plain-text connections: the ones that
+// require a certificate, and any policy this package does not know.
+func TestRequiresClientCert(t *testing.T) {
+	for clientAuth, want := range map[tls.ClientAuthType]bool{
+		tls.NoClientCert:               false,
+		tls.RequestClientCert:          false,
+		tls.VerifyClientCertIfGiven:    false,
+		tls.RequireAnyClientCert:       true,
+		tls.RequireAndVerifyClientCert: true,
+		tls.ClientAuthType(99):         true,
+	} {
+		t.Run(clientAuth.String(), func(t *testing.T) {
+			require.Equal(t, want, RequiresClientCert(&tls.Config{ClientAuth: clientAuth}))
+		})
+	}
+	require.False(t, RequiresClientCert(nil))
 }

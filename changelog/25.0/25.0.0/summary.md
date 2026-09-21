@@ -66,6 +66,7 @@
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
+        - [`--grpc-enable-optional-tls` refuses plain-text connections when client certificates are required](#grpc-optional-tls-client-certs)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -747,3 +748,15 @@ Several configurations that used to connect with the CRL silently ignored are no
 - A delta CRL, an indirect CRL, or a CRL that its issuing distribution point limits to end-entity certificates, to CA certificates, to attribute certificates, or to some revocation reasons: only complete CRLs are supported. A CRL that names its distribution point without limiting itself otherwise is accepted, and every such partition of an issuer's CRL is applied.
 - A CRL that carries a critical extension other than the issuing distribution point, on the list or on an entry.
 - A CRL whose `thisUpdate` lies more than five minutes in the future, so that a CRL staged ahead of time cannot supersede the current one. Provide the current CRL, and check the clocks.
+
+#### <a id="grpc-optional-tls-client-certs"/>`--grpc-enable-optional-tls` refuses plain-text connections when client certificates are required</a>
+
+`--grpc-enable-optional-tls` lets a gRPC server accept TLS and plain-text connections on the same port. When the server is also configured with `--grpc-ca`, which requires every TLS client to present a certificate signed by that CA, plain-text connections used to be served all the same: a plain-text connection cannot present a certificate, so the requirement, and a `--grpc-crl` along with it, only applied to the clients that chose to use TLS.
+
+A server with both flags now refuses plain-text connections and serves TLS only, and says so in a warning at startup. Anything that connects in plain text to such a server, health checks included, has to move to TLS with a client certificate, or the server has to run without `--grpc-ca` until it has. Servers that use optional TLS without `--grpc-ca` are not affected.
+
+Moving a cluster from plain text to mutual TLS without downtime still works, with `--grpc-ca` added last: run the servers with `--grpc-cert`, `--grpc-key` and `--grpc-enable-optional-tls`, move the clients to TLS with their certificates configured, then add `--grpc-ca` as optional TLS is turned off.
+
+The exported `grpcoptionaltls.New` now takes the server's `*tls.Config` rather than transport credentials built from it, so that it can tell whether client certificates are required. This breaks any out-of-tree caller on purpose: a caller left on the old signature would keep serving plain-text connections whatever its TLS configuration requires.
+
+See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.

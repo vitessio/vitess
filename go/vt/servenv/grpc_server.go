@@ -160,7 +160,7 @@ func RegisterGRPCServerFlags() {
 		utils.SetFlagStringVar(fs, &gRPCKey, "grpc-key", gRPCKey, "server private key to use for gRPC connections, requires grpc-cert, enables TLS")
 		utils.SetFlagStringVar(fs, &gRPCCA, "grpc-ca", gRPCCA, "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
 		utils.SetFlagStringVar(fs, &gRPCCRL, "grpc-crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
-		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
+		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port; plain-text connections are refused when --grpc-ca requires client certificates")
 		utils.SetFlagStringVar(fs, &gRPCServerCA, "grpc-server-ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTime, "grpc-server-keepalive-time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTimeout, "grpc-server-keepalive-timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
@@ -226,8 +226,15 @@ func createGRPCServer() {
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
-			creds = grpcoptionaltls.New(creds)
+			if grpcoptionaltls.RequiresClientCert(config) {
+				// A plain-text connection cannot present the client
+				// certificate that --grpc-ca requires, so serving it would
+				// leave the requirement to the clients that choose TLS.
+				log.Warn("Optional TLS is active, but client certificates are required (--grpc-ca). Plain-text connections cannot present one and will be refused")
+			} else {
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+			}
+			creds = grpcoptionaltls.New(config)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
