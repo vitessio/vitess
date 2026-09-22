@@ -720,7 +720,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		// (the CALL still reports it, as the client's procedure is at fault),
 		// and a mid-stream error may have left it with unread packets. Deferred
 		// before the stream runs so a callback panic cannot recycle it dirty.
-		defer qre.discardPooledConnAfterCall(qre.tsv.qe.streamConns, dbConn)
+		defer qre.discardPooledConnAfterCall(dbConn)
 	}
 	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
@@ -1524,8 +1524,12 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	// rather than returned to the pool, whatever the CALL's outcome. Closing is
 	// the one cleanup that restores every piece of a fresh connection's state —
 	// COM_RESET_CONNECTION restores globals, losing the negotiated charset and
-	// anything init_connect applied. The recycle then frees the slot.
-	defer qre.discardPooledConnAfterCall(qre.tsv.qe.conns, conn)
+	// anything init_connect applied. The recycle that follows then opens the
+	// replacement synchronously, before this returns: the CALL request pays for
+	// the connect and session setup, and it runs on the pool's lifetime context
+	// rather than this request's, so a cancelled or timed-out CALL still waits
+	// for it and only --db-connect-timeout-ms bounds the wait.
+	defer qre.discardPooledConnAfterCall(conn)
 
 	qr, err := qre.execDBConn(conn.Conn, sql, true)
 	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
@@ -1548,21 +1552,20 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 }
 
 // discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
-// execCallProc) so it is not reused, counting the discard on the pool that
-// owns the connection. A timed-out CALL is counted like any other: KILL QUERY
-// leaves the connection open, and this policy is what then closes it. Not
-// counted: a connection something else already closed — a kill that had to
-// escalate to the connection, or a connection error — since that loss is not
-// this policy's, and a connection no pool owns (the appdebug user's standalone
-// connection, which Recycle closes after every query anyway).
-func (qre *QueryExecutor) discardPooledConnAfterCall(pool *connpool.Pool, conn *connpool.PooledConn) {
+// execCallProc) so it is not reused; Discard counts the loss on the pool that
+// owns the connection, and on no pool for the appdebug user's standalone one.
+// A timed-out CALL is discarded like any other: KILL QUERY leaves the
+// connection open, and this policy is what then closes it. Skipped only for a
+// connection something else already closed — a kill that had to escalate to
+// the connection, or a reconnect that already failed — since that loss is not
+// this policy's to report. A connection the server dropped mid-query comes
+// back with the client-side flag still clear, and is discarded here like any
+// other.
+func (qre *QueryExecutor) discardPooledConnAfterCall(conn *connpool.PooledConn) {
 	if conn.Conn.IsClosed() {
 		return
 	}
-	conn.Close()
-	if conn.IsPooled() {
-		pool.Metrics.RecordDiscardedAfterCall()
-	}
+	conn.Discard()
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {

@@ -2689,9 +2689,11 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		t.Helper()
 		callConns := db.QueryConnIDs(query)
 		require.Len(t, callConns, 1, "the CALL must have run once")
+		// Counted first: the discard is recorded before the CALL returns, so a
+		// regression fails here immediately rather than after the wait below.
+		require.EqualValues(t, 1, tsv.qe.conns.Metrics.DiscardedByCallerCount(), "the discarded connection must be counted")
 		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
 			30*time.Second, 10*time.Millisecond, "the connection a CALL ran on must be closed, not returned to the pool")
-		assert.EqualValues(t, 1, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "the discarded connection must be counted")
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -2735,8 +2737,8 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
 		_, err = qre.Execute()
 		require.ErrorContains(t, err, "missing bind var")
-		assert.Empty(t, db.QueryConnIDs(query), "nothing must have reached MySQL")
-		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "a CALL that was never sent must not cost the connection")
+		assert.NotContains(t, db.QueryLog(), "call test_proc(", "nothing must have reached MySQL")
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedByCallerCount(), "a CALL that was never sent must not cost the connection")
 
 		_, err = newTestQueryExecutor(ctx, tsv, "select 1 from dual", 0).Execute()
 		require.NoError(t, err)
@@ -2749,10 +2751,17 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		// it open — so the CALL policy is what discards it, and that is counted.
 		db, tsv := newExecutor(t)
 		db.AddQuery(query, &sqltypes.Result{})
-		db.SetBeforeFunc(query, func() { time.Sleep(1 * time.Second) })
-		db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
-		execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		execCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
+		// Cancelled from inside the CALL rather than on a deadline that could
+		// expire while the plan is built or the connection borrowed: by the
+		// time this runs the fake has recorded the connection the CALL is on,
+		// and the pause holds it there while the kill lands.
+		db.SetBeforeFunc(query, func() {
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+		})
+		db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
 		qre := newTestQueryExecutor(execCtx, tsv, query, 0)
 
 		_, err := qre.Execute()
@@ -2775,7 +2784,7 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		_, err = qre.Execute()
 		require.NoError(t, err)
 		require.Len(t, db.QueryConnIDs(query), 1)
-		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "an appdebug connection is never a pool member, so it must not count as a discard")
+		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedByCallerCount(), "an appdebug connection is never a pool member, so it must not count as a discard")
 	})
 	t.Run("streaming discard is attributed to the streaming pool", func(t *testing.T) {
 		db, tsv := newExecutor(t)
@@ -2787,10 +2796,10 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		require.NoError(t, err)
 		callConns := db.QueryConnIDs(query)
 		require.Len(t, callConns, 1)
+		require.EqualValues(t, 1, tsv.qe.streamConns.Metrics.DiscardedByCallerCount(), "the discard must be counted on the streaming pool")
+		require.Zero(t, tsv.qe.conns.Metrics.DiscardedByCallerCount(), "and not on the OLTP pool")
 		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
 			30*time.Second, 10*time.Millisecond, "the streaming connection a CALL ran on must be closed")
-		assert.EqualValues(t, 1, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "the discard must be counted on the streaming pool")
-		assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount(), "and not on the OLTP pool")
 
 		// A streaming CALL that fails with the procedure's own error also
 		// costs its connection, and that discard must be counted like the
@@ -2798,7 +2807,7 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 		db.AddRejectedQuery(query, errors.New("procedure failed"))
 		err = newTestQueryExecutorStreaming(ctx, tsv, query, 0).Stream(func(*sqltypes.Result) error { return nil })
 		require.ErrorContains(t, err, "procedure failed")
-		assert.EqualValues(t, 2, tsv.qe.streamConns.Metrics.DiscardedAfterCallCount(), "a failed streaming CALL's discard must be counted too")
+		assert.EqualValues(t, 2, tsv.qe.streamConns.Metrics.DiscardedByCallerCount(), "a failed streaming CALL's discard must be counted too")
 	})
 }
 
@@ -2821,7 +2830,7 @@ func TestExecProcKeepsReservedConn(t *testing.T) {
 	_, err = qre.execProc(conn)
 	require.NoError(t, err)
 	assert.False(t, conn.IsClosed(), "a CALL on a reserved connection must keep the caller's own session")
-	assert.Zero(t, tsv.qe.conns.Metrics.DiscardedAfterCallCount())
+	assert.Zero(t, tsv.qe.conns.Metrics.DiscardedByCallerCount())
 }
 
 // TestExecProcClosesConnOnError verifies that a failed CALL on a reserved
