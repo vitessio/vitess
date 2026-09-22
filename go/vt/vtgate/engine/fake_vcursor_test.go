@@ -315,6 +315,9 @@ func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard
 func (t *noopVCursor) NeedsReservedConn() {
 }
 
+func (t *noopVCursor) RemoveSysVar(string) {
+}
+
 func (t *noopVCursor) SetUDV(key string, value any) error {
 	panic("implement me")
 }
@@ -555,8 +558,10 @@ func (f *loggingVCursor) HasSystemVariables() bool {
 	return len(f.systemVariables) > 0
 }
 
-func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
-	panic("implement me")
+func (f *loggingVCursor) GetSystemVariables(visit func(k string, v string)) {
+	for k, v := range f.systemVariables {
+		visit(k, v)
+	}
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -582,6 +587,15 @@ func (f *loggingVCursor) SetUDV(key string, value any) error {
 
 func (f *loggingVCursor) SetSysVar(name string, expr string) {
 	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
+	if f.systemVariables == nil {
+		f.systemVariables = map[string]string{}
+	}
+	f.systemVariables[name] = expr
+}
+
+func (f *loggingVCursor) RemoveSysVar(name string) {
+	f.log = append(f.log, fmt.Sprintf("SysVar removed (%s)", name))
+	delete(f.systemVariables, name)
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {
