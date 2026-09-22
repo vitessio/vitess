@@ -66,7 +66,7 @@
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
-        - [Upgrade note: `--grpc-enable-optional-tls` with `--grpc-ca` now refuses plain-text gRPC connections](#grpc-optional-tls-client-certs)
+        - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -749,25 +749,8 @@ Several configurations that used to connect with the CRL silently ignored are no
 - A CRL that carries a critical extension other than the issuing distribution point, on the list or on an entry.
 - A CRL whose `thisUpdate` lies more than five minutes in the future, so that a CRL staged ahead of time cannot supersede the current one. Provide the current CRL, and check the clocks.
 
-#### <a id="grpc-optional-tls-client-certs"/>Upgrade note: `--grpc-enable-optional-tls` with `--grpc-ca` now refuses plain-text gRPC connections</a>
+#### <a id="grpc-optional-tls-connections"/>Optional gRPC TLS: connections are counted by transport</a>
 
-This only concerns components that are started with both `--grpc-enable-optional-tls` and `--grpc-ca`, along with `--grpc-cert` and `--grpc-key`. If you do not use `--grpc-enable-optional-tls`, or use it without `--grpc-ca`, nothing changes and there is nothing to do.
-
-**What changes on upgrade.** `--grpc-ca` requires every gRPC client to present a certificate signed by that CA, but with optional TLS on, a client that connected in plain text skipped the TLS handshake in which that is enforced and was served without any authentication. Such a server now refuses plain-text connections and serves its TLS clients only. Anything that still dials it in plain text stops working: other Vitess components that have no `*-grpc-cert`, `*-grpc-key` and `*-grpc-ca` client flags set yet, applications and scripts, and plain-text gRPC health checks.
-
-**How to tell that a server is affected.** After the upgrade it logs this warning at startup:
-
-```
-Optional TLS is active, but client certificates are required (--grpc-ca). Plain-text connections cannot present one and will be refused
-```
-
-Before the upgrade, these are the servers that run with `--grpc-ca` and log `Optional TLS is active. Plain-text connections will be accepted`. The server does not log the individual connections it refuses; the callers that are turned away see their RPCs fail with `code = Unavailable` and `error reading server preface`.
-
-**What to do** before upgrading a server that has both flags, one of:
-
-- Finish the move to TLS. Give the remaining plain-text callers a client certificate signed by that CA, which for Vitess components is the cert, key and CA flags under `--tablet-grpc-*`, `--tablet-manager-grpc-*`, `--vtgate-grpc-*` and `--vtctld-grpc-*`, and then remove `--grpc-enable-optional-tls` from the server. Point health checks that cannot present a certificate at an HTTP endpoint instead, such as `/debug/health` on vtgate and vttablet.
-- If plain-text callers have to keep working for now, remove `--grpc-ca`, and `--grpc-crl` with it, from the server until they have moved. This matches what the server enforced before, since any caller could already connect without a certificate by not using TLS. A cluster can still be moved to mutual TLS without downtime this way: run the servers with `--grpc-cert`, `--grpc-key` and `--grpc-enable-optional-tls`, move the clients to TLS with their certificates configured, then add `--grpc-ca` as `--grpc-enable-optional-tls` is removed.
-
-For anyone who builds on the Go packages: the exported `grpcoptionaltls.New` now takes the server's `*tls.Config` rather than transport credentials built from it. This breaks out-of-tree callers on purpose, since a caller left on the old signature would keep serving plain-text connections whatever its TLS configuration requires.
+A gRPC server started with `--grpc-enable-optional-tls` now counts the connections it serves in the new `GrpcOptionalTlsConnections` stat, labeled by transport: `tls` or `plaintext`. Optional TLS serves plain-text connections unauthenticated so that clients can be moved to TLS one at a time, including when `--grpc-ca` is set, whose client certificate check only applies to the TLS connections. The `plaintext` count reaching zero is what shows that every client has moved and `--grpc-enable-optional-tls` can be dropped. A server that has both flags also says so in its startup warning now.
 
 See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
