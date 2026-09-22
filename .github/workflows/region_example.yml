@@ -61,9 +61,14 @@ jobs:
 
   build:
     needs: changes
-    if: needs.changes.outputs.examples == 'true'
+    # Matrix jobs skipped at the job level report a single un-expanded check
+    # name, which would leave the per-topo required status checks pending.
+    if: ${{ !cancelled() }}
     name: Region Sharding example using ${{ matrix.topo }} on Ubuntu
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    # When nothing relevant changed the legs still run (so their required
+    # status checks are reported), but on a GitHub-hosted runner with every
+    # step below skipped.
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && (github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || 'ubuntu-24.04' }}
     strategy:
       matrix:
         topo: [etcd]
@@ -81,33 +86,45 @@ jobs:
           exit 1
         fi
 
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
     - name: Check out code
+      if: needs.changes.outputs.examples == 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
 
     - name: Build bootstrap images
+      if: needs.changes.outputs.examples == 'true'
       timeout-minutes: 15
       uses: $/.github/actions/build-bootstrap
 
     - name: Set up Go
+      if: needs.changes.outputs.examples == 'true'
       uses: $/.github/actions/setup-go
 
     - name: Tune the OS
+      if: needs.changes.outputs.examples == 'true'
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
     - name: Run make minimaltools
+      if: needs.changes.outputs.examples == 'true'
       timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: Build
+      if: needs.changes.outputs.examples == 'true'
       timeout-minutes: 10
       run: |
         make build
 
     - name: region_example
+      if: needs.changes.outputs.examples == 'true'
       timeout-minutes: 30
       run: |
         export TOPO=${{matrix.topo}}

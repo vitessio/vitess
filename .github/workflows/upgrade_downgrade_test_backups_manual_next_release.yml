@@ -74,7 +74,10 @@ jobs:
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     needs: changes
-    if: needs.changes.outputs.end_to_end == 'true' && needs.changes.outputs.next_release_ref != ''
+    # Runs when the gate found relevant changes, and also when the gate itself
+    # failed, so that failure is reported instead of silently skipping a
+    # required status check.
+    if: ${{ !cancelled() && (needs.changes.result == 'failure' || (needs.changes.outputs.end_to_end == 'true' && needs.changes.outputs.next_release_ref != '')) }}
     timeout-minutes: 40
     name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
     runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
@@ -91,6 +94,10 @@ jobs:
           echo "skipping CI due to the 'Skip CI' label"
           exit 1
         fi
+
+    - name: Fail if the gate job failed
+      if: needs.changes.result != 'success'
+      run: exit 1
 
     # Checkout to this build's commit
     - name: Checkout to commit's code
@@ -139,6 +146,9 @@ jobs:
 
     - name: Set up Go
       uses: $/.github/actions/setup-go
+      with:
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
 
     - name: Building next release's binaries
       timeout-minutes: 5
@@ -157,6 +167,10 @@ jobs:
 
     - name: Set up Go
       uses: $/.github/actions/setup-go
+      with:
+        # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
+        # must not be the one saving the branch caches; restore on PRs only.
+        cache: ${{ github.event_name == 'pull_request' }}
 
     - name: Run make minimaltools
       timeout-minutes: 5

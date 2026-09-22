@@ -27,6 +27,7 @@ jobs:
   # relevant changed.
   changes:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       unit_tests: ${{ steps.changes.outputs.unit_tests }}
     steps:
@@ -54,7 +55,9 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.unit_tests == 'true'
+    # Matrix jobs skipped at the job level report a single un-expanded check
+    # name, which would leave the per-flavor required status checks pending.
+    if: ${{ !cancelled() }}
     timeout-minutes: ${{ matrix.race && 45 || 30 }}
     strategy:
       fail-fast: false
@@ -115,7 +118,10 @@ jobs:
             race: true
 
     name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }}${{ matrix.arch && format('_{0}', matrix.arch) || '' }})"
-    runs-on: ${{ github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
+    # When nothing relevant changed the legs still run (so their required
+    # status checks are reported), but on a GitHub-hosted runner with every
+    # step below skipped.
+    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && (github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -130,19 +136,27 @@ jobs:
             exit 1
           fi
 
+      - name: Fail if the gate job failed
+        # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+        if: needs.changes.result != 'success'
+        run: exit 1
+
       - name: Check out code
+        if: needs.changes.outputs.unit_tests == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
 
       - name: Set up Go
+        if: needs.changes.outputs.unit_tests == 'true'
         uses: $/.github/actions/setup-go
 
       - name: Set up python
+        if: needs.changes.outputs.unit_tests == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
       - name: Avoid the Oracle Cloud apt mirror
-        if: matrix.arch == 'arm64'
+        if: needs.changes.outputs.unit_tests == 'true' && matrix.arch == 'arm64'
         run: |
           # The Oracle Cloud regional apt mirror (e.g. us-sanjose-1-ad-1.clouds.ports.ubuntu.com)
           # is extremely slow; point apt at the default Ubuntu ports archive instead.
@@ -150,28 +164,33 @@ jobs:
             | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
 
       - name: Tune the OS
+        if: needs.changes.outputs.unit_tests == 'true'
         timeout-minutes: 5
         uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
+        if: needs.changes.outputs.unit_tests == 'true'
         timeout-minutes: 8
         uses: $/.github/actions/setup-mysql
         with:
           flavor: ${{ matrix.flavor }}
 
       - name: Get dependencies
+        if: needs.changes.outputs.unit_tests == 'true'
         timeout-minutes: 5
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
 
       - name: Run make tools
+        if: needs.changes.outputs.unit_tests == 'true'
         timeout-minutes: 10
         run: |
           make BUILD_JAVA=${{ matrix.java && '1' || '0' }} BUILD_PROTOC=0 tools
 
       - name: Setup launchable dependencies
         if: |
+          needs.changes.outputs.unit_tests == 'true' &&
           github.event_name == 'pull_request' &&
           github.event.pull_request.draft == false &&
           github.base_ref == 'main'
@@ -181,6 +200,7 @@ jobs:
           launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
       - name: Run test
+        if: needs.changes.outputs.unit_tests == 'true'
         run: |
           set -exo pipefail
 
@@ -194,6 +214,7 @@ jobs:
 
       - name: Record test results in launchable
         if: |
+          needs.changes.outputs.unit_tests == 'true' &&
           github.event_name == 'pull_request' &&
           github.event.pull_request.draft == false &&
           github.base_ref == 'main' &&
@@ -202,14 +223,14 @@ jobs:
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
       - name: Test Summary
-        if: failure()
+        if: needs.changes.outputs.unit_tests == 'true' && failure()
         uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
         with:
           paths: "report.xml"
           show: "fail"
 
       - name: Slowest Tests
-        if: ${{ !cancelled() }}
+        if: ${{ needs.changes.outputs.unit_tests == 'true' && !cancelled() }}
         run: |
           echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
