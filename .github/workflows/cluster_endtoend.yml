@@ -30,6 +30,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      shard_count: ${{ steps.set-matrix.outputs.shard_count }}
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
       - name: Check out code
@@ -71,6 +72,7 @@ jobs:
           ' test/config.json test/config_partial_keyspace.json)
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
+          echo "shard_count=$(echo "$matrix" | jq length)" >> $GITHUB_OUTPUT
 
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -110,6 +112,10 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
+      # Real runs fan out fully. When nothing relevant changed (or the gate
+      # failed) the legs only report a status, so trickle them through a few
+      # at a time instead of claiming one runner per shard at once.
+      max-parallel: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && fromJson(needs.generate-matrix.outputs.shard_count) || 8 }}
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
     name: Run endtoend tests on Cluster (${{ matrix.shard }})
