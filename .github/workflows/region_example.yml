@@ -7,7 +7,12 @@ on:
     tags: '**'
   pull_request:
     branches: '**'
-permissions: read-all
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'region_example')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   BOOTSTRAP_VERSION: "ci"
@@ -15,14 +20,16 @@ env:
 
 jobs:
 
-  build:
-    name: Region Sharding example using ${{ matrix.topo }} on Ubuntu
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-    strategy:
-      matrix:
-        topo: [etcd]
-
+  # Path filtering runs once here, on a GitHub-hosted runner, so that the
+  # job below (on a large runner) is not started at all when nothing relevant
+  # changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      examples: ${{ steps.changes.outputs.examples }}
     steps:
+<<<<<<< HEAD
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
@@ -30,6 +37,21 @@ jobs:
           exit 1
         fi
 
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+=======
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
@@ -56,42 +78,131 @@ jobs:
             - 'examples/**'
             - '.github/workflows/region_example.yml'
 
+  build:
+    needs: changes
+    # Matrix jobs skipped at the job level report a single un-expanded check
+    # name, which would leave the per-topo required status checks pending.
+    if: ${{ !cancelled() }}
+    name: Region Sharding example using ${{ matrix.topo }} on Ubuntu
+    # When nothing relevant changed the legs still run (so their required
+    # status checks are reported), but on a GitHub-hosted runner with every
+    # step below skipped.
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && (github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || 'ubuntu-24.04' }}
+    strategy:
+      matrix:
+        topo: [etcd]
+
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Check out code
+      if: needs.changes.outputs.examples == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
     - name: Build bootstrap images
+<<<<<<< HEAD
       if: steps.changes.outputs.examples == 'true'
       uses: ./.github/actions/build-bootstrap
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 15
+      uses: $/.github/actions/build-bootstrap
+=======
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 15
+      uses: $/.github/actions/build-bootstrap
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Set up Go
+<<<<<<< HEAD
       if: steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
         cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.examples == 'true'
+      uses: $/.github/actions/setup-go
+=======
+      if: needs.changes.outputs.examples == 'true'
+      uses: $/.github/actions/setup-go
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Tune the OS
+<<<<<<< HEAD
       if: steps.changes.outputs.examples == 'true'
       uses: ./.github/actions/tune-os
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+=======
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
+<<<<<<< HEAD
     - name: Get dependencies
       if: steps.changes.outputs.examples == 'true'
       run: |
         go mod download
 
-    - name: Run make minimaltools
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    - name: Get dependencies
       if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+      run: |
+        go mod download
+
+=======
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    - name: Run make minimaltools
+<<<<<<< HEAD
+      if: steps.changes.outputs.examples == 'true'
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+=======
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       run: |
         make minimaltools
 
     - name: Build
+<<<<<<< HEAD
       if: steps.changes.outputs.examples == 'true'
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 10
+=======
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 10
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       run: |
         make build
 
     - name: region_example
-      if: steps.changes.outputs.examples == 'true'
+      if: needs.changes.outputs.examples == 'true'
       timeout-minutes: 30
       run: |
         export TOPO=${{matrix.topo}}
-        if [ "${{matrix.os}}" = "macos-latest" ]; then
-          export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
-        fi
         go run test.go -print-log -follow -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} region_example

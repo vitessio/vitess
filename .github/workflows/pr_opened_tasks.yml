@@ -1,0 +1,118 @@
+# Runs when a PR is opened. Performs the following tasks:
+# - Adds a review checklist comment
+# - Adds initial labels (NeedsWebsiteDocsUpdate, NeedsDescriptionUpdate, NeedsIssue, NeedsBackportReason)
+name: PR opened tasks
+
+permissions:
+  contents: read
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] only checks out the base ref, never PR code
+    types: [opened]
+
+jobs:
+  # Skip PRs with "Backport" or "Forwardport" labels since those are automated.
+  check_labels:
+    name: Check for Backport or Forwardport labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check_labels.outputs.skip }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: read
+
+      - name: Check for Backport or Forwardport labels
+        id: check_labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # Get labels for this pull request
+          LABELS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels --jq '.[].name')
+
+          # Check if PR has Backport or Forwardport label (case-insensitive)
+          if echo "$LABELS" | grep -qi "^backport$\|^forwardport$"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "PR has Backport or Forwardport label, skipping opened PR tasks"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  add_review_checklist:
+    name: Add Review Checklist
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: check_labels
+    if: needs.check_labels.outputs.skip != 'true'
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.base_ref }}
+          persist-credentials: 'false'
+
+      - name: Add Review Checklist Comment
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body-file .github/review_checklist.md
+
+  add_initial_labels:
+    name: Add Initial Labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: check_labels
+    if: needs.check_labels.outputs.skip != 'true'
+
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Add Initial Labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --add-label "NeedsWebsiteDocsUpdate,NeedsDescriptionUpdate,NeedsIssue,NeedsBackportReason"
+
+  labeler:
+    if: github.repository == 'vitessio/vitess'
+    needs: add_initial_labels
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run actions/labeler
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0

@@ -58,6 +58,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/vitess_tester_vtgate.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -89,8 +90,6 @@ jobs:
         sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
 
         sudo service etcd stop
-
-        go mod download
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD

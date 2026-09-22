@@ -7,6 +7,10 @@ on:
     tags: '**'
   pull_request:
     branches: '**'
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'endtoend')
+  cancel-in-progress: true
+
 permissions: read-all
 jobs:
 
@@ -45,6 +49,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/endtoend.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -70,8 +75,6 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
         sudo service etcd stop
-
-        go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'

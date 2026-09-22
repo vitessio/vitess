@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: '**'
 
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Static Code Checks, Etc.')
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:
@@ -154,7 +158,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
-          go mod download
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -212,7 +215,42 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
+<<<<<<< HEAD
         run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        timeout-minutes: 15
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          args: --timeout 10m
+          install-mode: "goinstall"
+          skip-cache: true
+          working-directory: go
+          version: ${{ steps.golangci_lint_version.outputs.version }}
+
+      - name: Check license headers
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
+        run: |
+          tools/check_license_headers.sh
+=======
+        timeout-minutes: 15
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          args: --timeout 10m
+          install-mode: "goinstall"
+          # Same policy as the setup-go action: only pushes to main and the
+          # release branches save the golangci-lint cache, everything else
+          # restores from it.
+          skip-save-cache: ${{ !(github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))) }}
+          working-directory: go
+          version: ${{ steps.golangci_lint_version.outputs.version }}
+
+      - name: Check license headers
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
+        run: |
+          tools/check_license_headers.sh
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'
