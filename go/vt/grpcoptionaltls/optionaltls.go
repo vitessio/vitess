@@ -16,6 +16,7 @@ package grpcoptionaltls
 
 import (
 	"net"
+	"sync"
 
 	"google.golang.org/grpc/credentials"
 
@@ -27,20 +28,55 @@ const (
 	transportPlaintext = "plaintext"
 )
 
-// ConnectionCounts counts the connections a server with optional TLS has
-// handshaken, by transport. Optional TLS serves the plain-text ones
-// unauthenticated so that clients can move to TLS one at a time; the plaintext
-// count reaching zero is what tells an operator that every client has moved
-// and the flag can be dropped.
-var ConnectionCounts = stats.NewCountersWithSingleLabel(
-	"GrpcOptionalTlsConnections",
-	"Connections handshaken by a gRPC server with optional TLS, by transport (tls or plaintext). Plain-text connections are served unauthenticated; optional TLS can be turned off once no more arrive.",
-	"Transport",
-	transportPlaintext, transportTLS,
+// Optional TLS serves plain-text connections unauthenticated so that clients
+// can move to TLS one at a time. These stats, by transport, show when every
+// client has moved and the flag can be dropped: OpenConnections at zero for
+// plaintext means no plain-text client is connected, which matters because
+// gRPC connections are long-lived and a client that connected long ago does
+// not handshake again; ConnectionCounts no longer increasing for plaintext
+// means none is connecting anymore either.
+var (
+	// ConnectionCounts counts the connections handshaken, by transport.
+	ConnectionCounts = stats.NewCountersWithSingleLabel(
+		"GrpcOptionalTlsConnections",
+		"Connections handshaken by a gRPC server with optional TLS, by transport (tls or plaintext). Plain-text connections are served unauthenticated.",
+		"Transport",
+		transportPlaintext, transportTLS,
+	)
+	// OpenConnections counts the connections currently open, by transport.
+	OpenConnections = stats.NewGaugesWithSingleLabel(
+		"GrpcOptionalTlsOpenConnections",
+		"Connections currently open on a gRPC server with optional TLS, by transport (tls or plaintext). Optional TLS can be turned off once no plain-text connection is open and none is being made.",
+		"Transport",
+		transportPlaintext, transportTLS,
+	)
 )
 
-type optionalTLSCreds struct {
-	credentials.TransportCredentials
+type (
+	optionalTLSCreds struct {
+		credentials.TransportCredentials
+	}
+
+	// countedConn is a handshaken connection that is counted as open until
+	// it is closed, once, however many times Close is called.
+	countedConn struct {
+		net.Conn
+		transport string
+		closeOnce sync.Once
+	}
+)
+
+func newCountedConn(conn net.Conn, transport string) net.Conn {
+	ConnectionCounts.Add(transport, 1)
+	OpenConnections.Add(transport, 1)
+	return &countedConn{Conn: conn, transport: transport}
+}
+
+func (c *countedConn) Close() error {
+	c.closeOnce.Do(func() {
+		OpenConnections.Add(c.transport, -1)
+	})
+	return c.Conn.Close()
 }
 
 func (c *optionalTLSCreds) Clone() credentials.TransportCredentials {
@@ -60,16 +96,14 @@ func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials
 		if err != nil {
 			return nil, nil, err
 		}
-		ConnectionCounts.Add(transportTLS, 1)
-		return tlsConn, authInfo, nil
+		return newCountedConn(tlsConn, transportTLS), authInfo, nil
 	}
 
-	ConnectionCounts.Add(transportPlaintext, 1)
 	authInfo := info{
 		SecurityLevel: credentials.NoSecurity,
 	}
 
-	return wc, authInfo, nil
+	return newCountedConn(wc, transportPlaintext), authInfo, nil
 }
 
 func New(tc credentials.TransportCredentials) credentials.TransportCredentials {

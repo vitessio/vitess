@@ -180,3 +180,43 @@ func TestOptionalTLSClientCA(t *testing.T) {
 		require.NoError(t, sayHello(t, credentials.NewTLS(clientConfig)))
 	})
 }
+
+// TestOptionalTLSOpenConnections checks that the connections a server has open
+// are counted by transport for as long as they are open: gRPC connections are
+// long-lived, so a plain-text client that connected long ago shows up here,
+// where the handshake count would not move for it again.
+func TestOptionalTLSOpenConnections(t *testing.T) {
+	tc, err := createCredentials(t)
+	require.NoError(t, err)
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { lis.Close() })
+	srv := createUnstartedServer(New(tc.server))
+	go func() {
+		srv.Serve(lis)
+	}()
+	t.Cleanup(srv.Stop)
+
+	for transport, creds := range map[string]credentials.TransportCredentials{
+		transportPlaintext: insecure.NewCredentials(),
+		transportTLS:       tc.client,
+	} {
+		t.Run(transport, func(t *testing.T) {
+			before := OpenConnections.Counts()[transport]
+			conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+			require.NoError(t, err)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			_, err = pb.NewGreeterClient(conn).SayHello(ctx, &pb.HelloRequest{Name: "Vitess"})
+			require.NoError(t, err)
+			require.Equal(t, before+1, OpenConnections.Counts()[transport], "the connection is counted while open")
+
+			require.NoError(t, conn.Close())
+			// The server notices the close on its own time.
+			require.Eventually(t, func() bool {
+				return OpenConnections.Counts()[transport] == before
+			}, 30*time.Second, 10*time.Millisecond, "the connection is no longer counted once closed")
+		})
+	}
+}

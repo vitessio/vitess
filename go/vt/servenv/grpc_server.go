@@ -232,7 +232,7 @@ func createGRPCServer() {
 			// when a client CA is configured, since --grpc-ca then only holds
 			// for the TLS connections.
 			if gRPCCA != "" {
-				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS; the GrpcOptionalTlsConnections stat shows when that is")
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS: when GrpcOptionalTlsOpenConnections is zero for plaintext and GrpcOptionalTlsConnections no longer increases for it")
 			} else {
 				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
 			}
