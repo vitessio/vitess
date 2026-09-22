@@ -37,34 +37,8 @@ jobs:
         with:
           persist-credentials: "false"
 
-      - name: Check for changes in relevant files
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: changes
-        with:
-          token: ""
-          filters: |
-            end_to_end:
-              - 'test/config.json'
-              - 'test/config_partial_keyspace.json'
-              - 'go/**/!(*_test).go'
-              - 'go/**/*.s'
-              - 'go/test/endtoend/**'
-              - 'go/vt/sidecardb/**/*.sql'
-              - 'go/mysql/collations/colldata/**'
-              - 'go/mysql/icuregex/internal/icudata/**'
-              - 'test.go'
-              - 'Makefile'
-              - 'build.env'
-              - 'go.sum'
-              - 'go.mod'
-              - 'proto/*.proto'
-              - 'tools/**'
-              - 'config/**'
-              - 'bootstrap.sh'
-              - '.github/workflows/cluster_endtoend.yml'
-              - '.github/actions/setup-mysql/action.yml'
-              - '.github/actions/setup-microceph/action.yml'
-
+      # Generated before the path filter so that a filter failure still leaves
+      # the shard legs able to run and report that failure.
       - name: Generate shard matrix
         id: set-matrix
         run: |
@@ -98,12 +72,41 @@ jobs:
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
 
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: changes
+        with:
+          token: ""
+          filters: |
+            end_to_end:
+              - 'test/config.json'
+              - 'test/config_partial_keyspace.json'
+              - 'go/**/!(*_test).go'
+              - 'go/**/*.s'
+              - 'go/test/endtoend/**'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/mysql/collations/colldata/**'
+              - 'go/mysql/icuregex/internal/icudata/**'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/cluster_endtoend.yml'
+              - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-microceph/action.yml'
+
   test:
     needs: generate-matrix
-    # Deliberately not gated on end_to_end: a matrix job skipped at the job
-    # level reports a single un-expanded check name, which would leave the
-    # per-shard required status checks pending. end_to_end is applied per step.
-    if: needs.generate-matrix.outputs.matrix != ''
+    # Deliberately not gated on end_to_end or on the gate's success: a matrix
+    # job skipped at the job level reports a single un-expanded check name,
+    # which would leave the per-shard required status checks pending.
+    # end_to_end is applied per step; a gate failure fails every shard.
+    if: ${{ !cancelled() && needs.generate-matrix.outputs.matrix != '' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -127,6 +130,10 @@ jobs:
             echo "skipping CI due to the 'Skip CI' label"
             exit 1
           fi
+
+      - name: Fail if the gate job failed
+        if: needs.generate-matrix.result != 'success'
+        run: exit 1
 
       - name: Check Memory
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'memory-check')
