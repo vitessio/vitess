@@ -310,7 +310,18 @@ func (f *FakeConn) List(ctx context.Context, filePathPrefix string) ([]topo.KVIn
 
 // Delete implements the Conn interface
 func (f *FakeConn) Delete(ctx context.Context, filePath string, version topo.Version) error {
-	panic("implement me")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	res, ok := f.getResultMap[filePath]
+	if !ok {
+		return topo.NewError(topo.NoNode, filePath)
+	}
+	if version != nil && version != memorytopo.NodeVersion(res.version) {
+		return topo.NewError(topo.BadVersion, filePath)
+	}
+	delete(f.getResultMap, filePath)
+	return nil
 }
 
 // fakeLockDescriptor implements the topo.LockDescriptor interface

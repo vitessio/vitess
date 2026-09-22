@@ -51888,7 +51888,7 @@ export const topodata = $root.topodata = (() => {
      * @property {number} UNMANAGED=1 UNMANAGED value
      */
     topodata.TabletMySQLMode = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "MANAGED"] = 0;
         values[valuesById[1] = "UNMANAGED"] = 1;
         return values;
