@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"encoding/hex"
 	"strings"
 
@@ -24,6 +25,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -72,28 +74,51 @@ func (tp *TablePlan) streamedDataColumns(rowChange *binlogdatapb.RowChange) *bin
 	return rowChange.DataColumns
 }
 
+// mappedDataColumns is a streamed after-image bitmap projected onto the target
+// table's column expressions. It only depends on the bitmap, so it is cached
+// per distinct bitmap in TablePlan.PartialBitmaps.
+type mappedDataColumns struct {
+	// target has bit i set when colExprs[i] can be generated from the image.
+	target *binlogdatapb.RowChange_Bitmap
+	// mixed lists the target expressions that use both present and absent
+	// streamed columns, with the indexes (into tp.Fields) of their present
+	// inputs. Such an expression cannot be computed from the image. It is left
+	// out of the partial query when none of its present inputs changed, since
+	// its value cannot have changed either, and rejected otherwise.
+	mixed []mixedColExpr
+}
+
+type mixedColExpr struct {
+	colExpr int
+	present []int
+}
+
 // targetDataColumns maps a bitmap indexed by the columns streamed from the
 // source (tp.Fields) onto the target table's column expressions
 // (tpb.colExprs), so that bit i of the result says whether colExprs[i] can be
 // generated from the row event. A target column is present when every streamed
-// column that its expression uses is present. The column names are resolved by
-// walking the expression rather than using colExpr.references: for a rename
-// like "convert(c1 using utf8mb4) as c2" the references map holds the alias c2
-// while the stream carries the source column c1. Expressions that use no
-// streamed column, such as constants in a Materialize filter, always have a
-// value and are marked as present.
-func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) (*binlogdatapb.RowChange_Bitmap, error) {
+// column that its expression uses is present, and absent when none is (nothing
+// it reads changed). Expressions with a mix of present and absent inputs are
+// recorded in mixed and left absent; see partialQueryDataColumns. The column
+// names are resolved by walking the expression rather than using
+// colExpr.references: for a rename like "convert(c1 using utf8mb4) as c2" the
+// references map holds the alias c2 while the stream carries the source column
+// c1. Expressions that use no streamed column, such as constants in a
+// Materialize filter, always have a value and are marked as present.
+func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) (*mappedDataColumns, error) {
 	fieldIndexes := make(map[string]int, len(tp.Fields))
 	for i, field := range tp.Fields {
 		fieldIndexes[strings.ToLower(field.Name)] = i
 	}
 	colExprs := tp.TablePlanBuilder.colExprs
-	target := &binlogdatapb.RowChange_Bitmap{
-		Count: int64(len(colExprs)),
-		Cols:  make([]byte, (len(colExprs)+7)/8),
+	mapped := &mappedDataColumns{
+		target: &binlogdatapb.RowChange_Bitmap{
+			Count: int64(len(colExprs)),
+			Cols:  make([]byte, (len(colExprs)+7)/8),
+		},
 	}
 	for i, cexpr := range colExprs {
-		present := true
+		var presentInputs, absentInputs []int
 		if cexpr.expr != nil {
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				col, ok := node.(*sqlparser.ColName)
@@ -107,8 +132,9 @@ func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) 
 						col.Name.String(), cexpr.colName.String(), tp.TargetName)
 				}
 				if int64(idx) >= streamed.Count || !isBitSet(streamed.Cols, idx) {
-					present = false
-					return false, nil
+					absentInputs = append(absentInputs, idx)
+				} else {
+					presentInputs = append(presentInputs, idx)
 				}
 				return true, nil
 			}, cexpr.expr)
@@ -116,25 +142,76 @@ func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) 
 				return nil, err
 			}
 		}
-		setBit(target.Cols, i, present)
+		switch {
+		case len(absentInputs) == 0:
+			setBit(mapped.target.Cols, i, true)
+		case len(presentInputs) > 0:
+			mapped.mixed = append(mapped.mixed, mixedColExpr{colExpr: i, present: presentInputs})
+		}
 	}
-	return target, nil
+	return mapped, nil
+}
+
+// mappedDataColumnsFor returns the cached projection of the streamed bitmap
+// onto the target expressions, computing it on first use.
+func (tp *TablePlan) mappedDataColumnsFor(streamed *binlogdatapb.RowChange_Bitmap) (*mappedDataColumns, error) {
+	key := hex.EncodeToString(streamed.Cols)
+	if mapped, ok := tp.PartialBitmaps[key]; ok {
+		return mapped, nil
+	}
+	mapped, err := tp.targetDataColumns(streamed)
+	if err != nil {
+		return nil, err
+	}
+	tp.PartialBitmaps[key] = mapped
+	return mapped, nil
+}
+
+// checkMixedColExprs rejects a row change when a target expression that uses
+// both present and absent streamed columns has a present input whose value
+// differs between the before and after images: the expression's new value
+// cannot be computed without the absent column. When none of the present
+// inputs changed the expression's value did not change either, so leaving it
+// out of the partial query is correct.
+func (tp *TablePlan) checkMixedColExprs(mapped *mappedDataColumns, rowChange *binlogdatapb.RowChange) error {
+	if len(mapped.mixed) == 0 {
+		return nil
+	}
+	colExprs := tp.TablePlanBuilder.colExprs
+	if rowChange.Before == nil {
+		return tp.missingValueError(colExprs[mapped.mixed[0].colExpr])
+	}
+	before := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
+	after := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
+	for _, m := range mapped.mixed {
+		for _, idx := range m.present {
+			if idx >= len(before) || idx >= len(after) ||
+				before[idx].IsNull() != after[idx].IsNull() ||
+				!bytes.Equal(before[idx].Raw(), after[idx].Raw()) {
+				return tp.missingValueError(colExprs[m.colExpr])
+			}
+		}
+	}
+	return nil
+}
+
+func (tp *TablePlan) missingValueError(cexpr *colExpr) error {
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+		"binary log event missing a needed value for %s.%s due to not using binlog-row-image=FULL; you will need to re-run the workflow with binlog-row-image=FULL",
+		tp.TargetName, cexpr.colName.String())
 }
 
 // supportsPartialImages reports whether partial insert/update queries can be
 // generated for the plan. The partial generators only know how to emit plain
-// column expressions: grouped plans need "insert ... on duplicate key update"
-// semantics and count(*)/sum() need the aggregate update forms that the full
-// statements carry, none of which the partial forms produce. Such plans have
-// never worked with partial row images (the generated SQL was invalid), so we
-// reject them with a clear error instead.
+// column expressions; count(*) and sum() need the aggregate update forms that
+// the full statements carry. Such plans have never worked with partial row
+// images (the generated SQL was invalid), so we reject them with a clear error
+// instead. Grouped plans without aggregates, such as the Materialize filter of
+// an owned lookup vindex backfill, only use plain expressions and are fine.
 func (tp *TablePlan) supportsPartialImages() bool {
 	tpb := tp.TablePlanBuilder
 	if tpb == nil {
 		return true
-	}
-	if tpb.onInsert != insertNormal {
-		return false
 	}
 	for _, cexpr := range tpb.colExprs {
 		if cexpr.operation != opExpr {
@@ -151,12 +228,20 @@ func (tp *TablePlan) supportsPartialImages() bool {
 // used as-is, which is only exact for identity projections (see #21075).
 func (tp *TablePlan) partialQueryDataColumns(rowChange *binlogdatapb.RowChange) (*binlogdatapb.RowChange_Bitmap, error) {
 	if !tp.supportsPartialImages() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-			"partial row image received for %s, whose filter uses group by or aggregate expressions, which is not supported; you will need to re-run the workflow with binlog-row-image=FULL and without binlog-row-value-options=PARTIAL_JSON",
+		// Not recoverable by retrying: the workflow has to be recreated with full row images.
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"partial row image received for %s, whose filter uses aggregate expressions, which is not supported; you will need to re-run the workflow with binlog-row-image=FULL and without binlog-row-value-options=PARTIAL_JSON",
 			tp.TargetName)
 	}
 	if rowChange.AfterDataColumns != nil && rowChange.AfterDataColumns.Count > 0 {
-		return tp.targetDataColumns(rowChange.AfterDataColumns)
+		mapped, err := tp.mappedDataColumnsFor(rowChange.AfterDataColumns)
+		if err != nil {
+			return nil, err
+		}
+		if err := tp.checkMixedColExprs(mapped, rowChange); err != nil {
+			return nil, err
+		}
+		return mapped.target, nil
 	}
 	if rowChange.DataColumns == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "partial row event for %s has no data columns bitmap", tp.TargetName)

@@ -227,6 +227,10 @@ type TablePlan struct {
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
+	// PartialBitmaps caches the projection of each distinct AfterDataColumns
+	// bitmap received from the source onto the target column expressions. The
+	// key is the serialized streamed bitmap.
+	PartialBitmaps map[string]*mappedDataColumns
 
 	CollationEnv   *collations.Environment
 	WorkflowConfig *vttablet.VReplicationConfig

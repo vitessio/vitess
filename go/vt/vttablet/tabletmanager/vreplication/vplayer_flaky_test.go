@@ -3596,12 +3596,17 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		// source column outside the filter leaves nothing to apply on the target.
 		"create table src2(id int, blb blob, val varbinary(4), primary key(id))",
 		fmt.Sprintf("create table %s.dst2(blb blob, id int, primary key(id))", vrepldb),
+		// src3/dst3: a target expression combining a non-blob and a blob column.
+		"create table src3(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst3(id int, c varbinary(16), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
+		"drop table src3",
+		fmt.Sprintf("drop table %s.dst3", vrepldb),
 	})
 
 	filter := &binlogdatapb.Filter{
@@ -3611,6 +3616,9 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		}, {
 			Match:  "dst2",
 			Filter: "select blb, id from src2",
+		}, {
+			Match:  "dst3",
+			Filter: "select id, concat(val, blb) as c from src3",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -3670,6 +3678,23 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		output: "update dst2 set blb=_binary'blob2' where id=1",
 		table:  "dst2",
 		data:   [][]string{{"blob2", "1"}},
+	}, {
+		input:  "insert into src3 values (1, 'blob1', 'aaa', 'xxx')",
+		output: "insert into dst3(id,c) values (1,concat(_binary'aaa', _binary'blob1'))",
+		table:  "dst3",
+		data:   [][]string{{"1", "aaablob1"}},
+	}, {
+		// c uses val (present, unchanged) and blb (omitted): its value did not
+		// change, so it is left alone rather than recomputed with a NULL blob.
+		input: "update src3 set extra = 'yyy' where id = 1",
+		table: "dst3",
+		data:  [][]string{{"1", "aaablob1"}},
+	}, {
+		// The blob changed, so the image is full and c is recomputed.
+		input:  "update src3 set blb = 'blob2' where id = 1",
+		output: "update dst3 set c=concat(_binary'aaa', _binary'blob2') where id=1",
+		table:  "dst3",
+		data:   [][]string{{"1", "aaablob2"}},
 	}}
 
 	for _, tcase := range testcases {
@@ -3682,9 +3707,9 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		})
 	}
 	// Two partial updates reached dst, both with the same projected bitmap (one
-	// cached query). The dst2 no-op must not have generated or cached a partial
-	// query; had it produced an invalid empty UPDATE, the stream would have
-	// errored before the last case could be applied.
+	// cached query). The dst2 and dst3 no-ops must not have generated or cached
+	// a partial query; had they produced an invalid empty UPDATE or an error,
+	// the stream would have stopped before the following cases could be applied.
 	stats := globalStats.controllers[int32(vrId)].blpStats
 	require.Equal(t, int64(2), stats.PartialQueryCount.Counts()["update"])
 	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["update"])

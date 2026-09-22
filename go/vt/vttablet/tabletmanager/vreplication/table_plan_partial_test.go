@@ -26,9 +26,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
@@ -212,6 +214,9 @@ func TestApplyChangePartialProjectedFilter(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "missing a needed value for dst.blb")
 
+	// Both row changes carried the same streamed bitmap, mapped once.
+	assert.Len(t, tp.PartialBitmaps, 1)
+
 	// From an older vstreamer only the legacy bitmap arrives.
 	_, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{Before: before, After: after, DataColumns: legacy})
 	require.ErrorContains(t, err, "unable to create partial update query for dst")
@@ -252,20 +257,24 @@ func TestApplyChangePartialNoWritableColumns(t *testing.T) {
 }
 
 // TestApplyChangePartialAggregatePlansRejected confirms that a partial row
-// event for a plan with group by / aggregate expressions is rejected with a
-// clear error on both the insert and the update path, whichever bitmap the
-// source sends. The partial query generators only handle plain expressions,
-// so such plans never worked with partial images (they produced invalid SQL
-// such as "cnt=" without a value).
+// event for a plan with aggregate expressions is rejected with a clear,
+// non-retryable error on both the insert and the update path, whichever bitmap
+// the source sends. The partial query generators only handle plain
+// expressions, so such plans never worked with partial images (they produced
+// invalid SQL such as "cnt=" without a value). Grouped plans without
+// aggregates, like the Materialize filter of an owned lookup vindex backfill,
+// only use plain expressions and keep working.
 func TestApplyChangePartialAggregatePlansRejected(t *testing.T) {
 	fields := []*querypb.Field{
 		{Name: "id", Type: querypb.Type_INT32},
 		{Name: "val", Type: querypb.Type_VARBINARY},
 	}
+	before := &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1aaa")}
+	after := &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1bbb")}
+
 	for _, filter := range []string{
 		"select id, count(*) as cnt from src group by id",
 		"select id, sum(val) as total from src group by id",
-		"select id, val from src group by id, val",
 		"select id, count(*) as cnt from src", // aggregate without group by is still an insertNormal plan
 	} {
 		t.Run(filter, func(t *testing.T) {
@@ -273,8 +282,6 @@ func TestApplyChangePartialAggregatePlansRejected(t *testing.T) {
 			tp.Stats = binlogplayer.NewStats()
 			require.False(t, tp.supportsPartialImages())
 
-			before := &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1aaa")}
-			after := &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1bbb")}
 			for name, rowChange := range map[string]*binlogdatapb.RowChange{
 				"projected": {AfterDataColumns: bitmap(true, true)},
 				"legacy":    {DataColumns: bitmap(true, true)},
@@ -282,16 +289,99 @@ func TestApplyChangePartialAggregatePlansRejected(t *testing.T) {
 				rowChange.After = after
 				_, err := applyChangeQueries(t, tp, rowChange)
 				require.ErrorContains(t, err, "partial row image received for dst", "%s insert", name)
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 				rowChange.Before = before
 				_, err = applyChangeQueries(t, tp, rowChange)
 				require.ErrorContains(t, err, "partial row image received for dst", "%s update", name)
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 			}
 		})
 	}
 
-	// A plain projection is fine.
-	tp := buildTestTablePlan(t, "dst", "select id, val, 1 as c from src", fields)
-	require.True(t, tp.supportsPartialImages())
+	t.Run("group by without aggregates is applied", func(t *testing.T) {
+		// This is the shape of an owned lookup vindex backfill (insertIgnore plan).
+		tp := buildTestTablePlan(t, "dst", "select id, val from src group by id, val", fields)
+		tp.Stats = binlogplayer.NewStats()
+		require.True(t, tp.supportsPartialImages())
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before: before, After: after, AfterDataColumns: bitmap(true, true),
+		})
+		require.NoError(t, err)
+		require.Equal(t, []string{"update dst set val=_binary'bbb' where id=1"}, executed)
+	})
+
+	t.Run("plain projection is fine", func(t *testing.T) {
+		tp := buildTestTablePlan(t, "dst", "select id, val, 1 as c from src", fields)
+		require.True(t, tp.supportsPartialImages())
+	})
+}
+
+// TestApplyChangePartialMixedInputs pins down the rule for a target expression
+// that uses both a present and an absent streamed column, e.g.
+// concat(val, blb) under NOBLOB with the unchanged blob omitted. Its value
+// cannot be computed from the image. When none of its present inputs changed,
+// its value did not change either and it is left out of the partial update.
+// When a present input did change, the row event is rejected with a
+// non-retryable error rather than silently dropping the change (or writing
+// concat(val, NULL), as the legacy path did).
+func TestApplyChangePartialMixedInputs(t *testing.T) {
+	tp := buildTestTablePlan(t, "dst", "select id, concat(val, blb) as c from src", []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		{Name: "val", Type: querypb.Type_VARBINARY},
+		{Name: "blb", Type: querypb.Type_BLOB},
+	})
+	tp.Stats = binlogplayer.NewStats()
+	blobOmitted := bitmap(true, true, false)
+
+	t.Run("present input unchanged: nothing to apply", func(t *testing.T) {
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before:           &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1aaa")},
+			After:            &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1aaa")},
+			AfterDataColumns: blobOmitted,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, executed)
+	})
+
+	t.Run("present input changed: rejected", func(t *testing.T) {
+		_, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before:           &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1aaa")},
+			After:            &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1bbb")},
+			AfterDataColumns: blobOmitted,
+		})
+		require.ErrorContains(t, err, "missing a needed value for dst.c")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	})
+
+	t.Run("present input NULL-ness changed: rejected", func(t *testing.T) {
+		_, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before:           &querypb.Row{Lengths: []int64{1, -1, -1}, Values: []byte("1")},
+			After:            &querypb.Row{Lengths: []int64{1, 0, -1}, Values: []byte("1")},
+			AfterDataColumns: blobOmitted,
+		})
+		require.ErrorContains(t, err, "missing a needed value for dst.c")
+	})
+
+	t.Run("no before image to compare against: rejected", func(t *testing.T) {
+		_, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			After:            &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1bbb")},
+			AfterDataColumns: blobOmitted,
+		})
+		require.ErrorContains(t, err, "missing a needed value for dst.c")
+	})
+
+	t.Run("all inputs present: applied", func(t *testing.T) {
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before:           &querypb.Row{Lengths: []int64{1, 3, 5}, Values: []byte("1aaablob1")},
+			After:            &querypb.Row{Lengths: []int64{1, 3, 5}, Values: []byte("1bbbblob2")},
+			AfterDataColumns: bitmap(true, true, true),
+		})
+		require.NoError(t, err)
+		require.Equal(t, []string{"update dst set c=concat(_binary'bbb', _binary'blob2') where id=1"}, executed)
+	})
+
+	// The projection of each distinct streamed bitmap is computed once.
+	assert.Len(t, tp.PartialBitmaps, 2)
 }
 
 // TestApplyChangePartialLegacyBitmapMisaligned shows why the projected bitmap

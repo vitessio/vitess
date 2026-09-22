@@ -24,7 +24,6 @@
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
-        - [VStream: projected `after_data_columns` bitmap and VReplication partial-image mapping](#vstream-after-data-columns)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -233,21 +232,9 @@ See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
 When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that are not part of the primary key from the before image of UPDATE and DELETE row events, whether or not they changed. The vstreamer already signaled this for the after image via `RowChange.data_columns`, but the before image carried no such information, so VStream consumers could not tell an omitted column apart from a `NULL`.
 
-`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; see `after_data_columns` below for the projected counterpart. The field is additive: consumers that do not know about it are unaffected.
+`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
-
-#### <a id="vstream-after-data-columns"/>VStream: projected `after_data_columns` bitmap and VReplication partial-image mapping</a>
-
-The existing `RowChange.data_columns` bitmap, sent for partial after images (`binlog_row_image=NOBLOB` and/or `binlog_row_value_options=PARTIAL_JSON`), is in the source table's column order as found in the binlog event rather than in the order of the columns the stream emits. The two only line up when the filter neither reorders nor drops columns, so consumers of a projecting filter could not map the bits onto the values they received. Changing `data_columns` in place would break replication between tablets one version apart, so it is left as-is.
-
-`RowChange` now has an additional `after_data_columns` bitmap, set whenever `data_columns` is, with the bits in the order of the columns emitted by the stream (after the filter's projection), matching the values in the after image and the layout of `before_data_columns`. VStream consumers should prefer it over `data_columns` when present.
-
-VReplication now prefers `after_data_columns` when the source sends it and maps it onto the target table's column expressions by the source columns each expression actually uses. This makes partial-image handling correct for non-identity projections that only worked by coincidence before, such as a Materialize filter adding constants (`select id, val, 1 as c from t`) or an Online DDL column conversion (`convert(c1 using utf8mb4) as c2`) under NOBLOB or PARTIAL_JSON. When the source is an older vttablet that only sends `data_columns`, the previous behavior is kept. `data_columns` will be deprecated once `after_data_columns` has shipped in enough releases.
-
-Partial row images were never supported for filters with `group by` or aggregate expressions (`count(*)`, `sum()`): the generated partial statements were invalid SQL. VReplication now fails such a workflow with an explicit error asking for `binlog_row_image=FULL` on the source instead.
-
-See [#21075](https://github.com/vitessio/vitess/issues/21075) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
