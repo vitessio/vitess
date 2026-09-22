@@ -217,7 +217,9 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 		},
 	}, {
-		testName: "sysvar checkAndIgnore multi destination error",
+		// the setting is only checked, so a target spanning several shards is
+		// checked on its first shard rather than rejected
+		testName: "sysvar checkAndIgnore checks one shard of a multi-shard target",
 		setOps: []SetOp{
 			&SysVarCheckAndIgnore{
 				Name:              "x",
@@ -228,8 +230,8 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
 		},
-		expectedError: "Unexpected error, DestinationKeyspaceID mapping to multiple shards: DestinationAllShards()",
 	}, {
 		testName: "sysvar checkAndIgnore execute error",
 		setOps: []SetOp{
@@ -276,20 +278,111 @@ func TestSetTable(t *testing.T) {
 			"1",
 		)},
 	}, {
-		testName: "sysvar set without destination",
+		// a targeted session's SET is judged on the target shard, not on the shard
+		// owning keyspace id 0, and is then carried the way an untargeted session's
+		// is: nothing is executed on shards the session has not reached
+		testName: "targeted set probes the target shard",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
 				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
+				TargetDestination: key.DestinationShard("20-"),
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id", "int64"),
+			"123456",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			`SysVar set with (x,123456)`,
+			`Needs Reserved Conn`,
+		},
+	}, {
+		testName: "targeted set to the current value is ignored",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("20-"),
 				Expr:              "dummy_expr",
 			},
 		},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
+		},
+	}, {
+		// a targeted session rides on SET_VAR like an untargeted one instead of
+		// pinning itself to a reserved connection
+		testName:     "targeted set of a SET_VAR-capable variable needs no reserved connection",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("20-"),
+				Expr:              "dummy_expr",
+				SupportSetVar:     true,
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id", "int64"),
+			"123456",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			`SysVar set with (x,123456)`,
+			`SET_VAR can be used`,
+		},
+	}, {
+		// a target spanning several shards is judged on its first shard; the value
+		// reaches every shard through the session's settings
+		testName: "targeted set spanning several shards probes the first",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAllShards{},
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id", "int64"),
+			"123456",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			`SysVar set with (x,123456)`,
+			`Needs Reserved Conn`,
+		},
+	}, {
+		// shards the session already holds receive the SET directly, as for an
+		// untargeted session
+		testName: "targeted set applies to existing shard sessions",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("-20"),
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id", "int64"),
+			"123456",
+		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(-20)`,
+			`ExecuteMultiShard ks.DestinationShard(-20): select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			`SysVar set with (x,123456)`,
 			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
-			`SysVar set with (x,dummy_expr)`,
 		},
 	}, {
 		// a failed targeted SET must not leave its value in the session, where the
@@ -299,16 +392,15 @@ func TestSetTable(t *testing.T) {
 			&SysVarReservedConn{
 				Name:              "x",
 				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
+				TargetDestination: key.DestinationShard("20-"),
 				Expr:              "dummy_expr",
 			},
 		},
 		execErr:       errors.New("some random error"),
 		expectedError: "some random error",
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
 		},
 	}, {
 		// a targeted session's SET gets the same sql_mode judgment as an untargeted
@@ -354,12 +446,13 @@ func TestSetTable(t *testing.T) {
 			),
 			"NO_ZERO_DATE|STRICT_TRANS_TABLES",
 		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
 			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
-			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
 		},
 	}, {
 		testName: "sysvar set not modifying setting",
@@ -923,8 +1016,7 @@ func TestSysVarSetErr(t *testing.T) {
 	// the failed SET must not leave its value in the session: no "SysVar set with"
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		"Needs Reserved Conn",
-		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+		`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
 	}
 
 	set := &Set{

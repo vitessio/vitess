@@ -67,6 +67,8 @@ type (
 	}
 
 	// SysVarCheckAndIgnore implements the SetOp interface to check underlying setting and ignore if same.
+	// TargetDestination is where the setting is checked: the session's target when it has
+	// one, so that a targeted session checks a shard it will query.
 	SysVarCheckAndIgnore struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
@@ -74,7 +76,13 @@ type (
 		Expr              string
 	}
 
-	// SysVarReservedConn implements the SetOp interface and will write the changes variable into the session
+	// SysVarReservedConn implements the SetOp interface and will write the changes variable into the session.
+	// The assignment is evaluated on one shard before anything is stored: on the session's
+	// target when it has one, so that a targeted session judges its SET on a shard it will
+	// query, and otherwise on the shard owning keyspace id 0. The stored value then reaches
+	// the shards the same way for every session: as a SET_VAR hint when the variable
+	// supports one, and otherwise through the settings the session carries to each shard
+	// connection.
 	SysVarReservedConn struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
@@ -218,10 +226,11 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 	if err != nil {
 		return err
 	}
-
-	if len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
+	if len(rss) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no shard resolved for %v", svci.TargetDestination)
 	}
+	// The setting is only checked, never applied, so one shard of the target suffices,
+	// whether the target is a single shard or a key range spanning several.
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
 	if svci.Name == "sql_mode" {
 		checkSysVarQuery = sqlModeJudgmentQuery(svci.Expr)
@@ -266,49 +275,17 @@ func (svs *SysVarReservedConn) VariableName() string {
 
 // Execute implements the SetOp interface method
 func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
-	// For those running on advanced vitess settings.
-	if svs.TargetDestination != nil {
-		rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.TargetDestination})
-		if err != nil {
-			return err
-		}
-		storedValue := svs.Expr
-		if svs.Name == "sql_mode" {
-			// A targeted session's SET gets the same sql_mode judgment as an
-			// untargeted one, evaluated on the target shard: constants were judged
-			// at plan time, and a non-constant expression must not reach the
-			// session or the shard unjudged. The judged value is what the session
-			// stores, not the expression.
-			query := sqlModeJudgmentQuery(svs.Expr)
-			qr, err := execShard(ctx, nil /*primitive*/, vcursor, query, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
-			if err != nil {
-				return err
-			}
-			_, value, err := sqlModeChangedValue(qr)
-			if err != nil {
-				return err
-			}
-			var buf strings.Builder
-			value.EncodeSQL(&buf)
-			storedValue = buf.String()
-		}
-		vcursor.Session().NeedsReservedConn()
-		if err := svs.execSetStatement(ctx, vcursor, rss, env, storedValue); err != nil {
-			// the statement failed, so the session must not store its value
-			return err
-		}
-		vcursor.Session().SetSysVar(svs.Name, storedValue)
-		return nil
-	}
 	needReservedConn, storedValue, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
 	if err != nil {
 		return err
 	}
 	if !needReservedConn {
-		// setting ignored, same as underlying datastore
+		// Either the assignment does not change the value, in which case nothing was
+		// stored, or the stored value travels as a SET_VAR hint on each query.
 		return nil
 	}
-	// Update existing shard session with new system variable settings.
+	// Update existing shard session with new system variable settings; shards the
+	// session reaches later receive the value through the settings it carries.
 	rss := vcursor.Session().ShardSession()
 	if len(rss) == 0 {
 		return nil
@@ -343,9 +320,12 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if svs.Name == "sql_mode" {
 		sysVarExprValidationQuery = sqlModeJudgmentQuery(svs.Expr)
 	}
-	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{key.DestinationKeyspaceID{0}})
+	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.probeDestination()})
 	if err != nil {
 		return false, "", err
+	}
+	if len(rss) == 0 {
+		return false, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no shard resolved for %v", svs.probeDestination())
 	}
 	qr, err := execShard(ctx, nil /*primitive*/, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
 	if err != nil {
@@ -381,6 +361,17 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 		return true, storedValue, nil
 	}
 	return false, storedValue, nil
+}
+
+// probeDestination is where the assignment is evaluated: the session's target when it
+// has one, so that a shard-targeted session judges its SET on a shard it will query, and
+// otherwise the shard owning keyspace id 0. A target spanning several shards is judged on
+// its first shard; the value is applied to every shard through the session's settings.
+func (svs *SysVarReservedConn) probeDestination() key.ShardDestination {
+	if svs.TargetDestination != nil {
+		return svs.TargetDestination
+	}
+	return key.DestinationKeyspaceID{0}
 }
 
 // sqlModeJudgmentQuery selects the session's current sql_mode alongside the assigned
