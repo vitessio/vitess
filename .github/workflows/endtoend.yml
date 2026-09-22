@@ -7,6 +7,10 @@ on:
     tags: '**'
   pull_request:
     branches: '**'
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'endtoend')
+  cancel-in-progress: true
+
 permissions: read-all
 jobs:
 
@@ -83,8 +87,6 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
         sudo service etcd stop
-
-        go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'

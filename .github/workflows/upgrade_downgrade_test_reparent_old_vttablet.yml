@@ -12,34 +12,28 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent Old VTTablet')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
 
-  upgrade_downgrade_test:
-    timeout-minutes: 60
-    name: Run Upgrade Downgrade Test - Reparent Old VTTablet
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
+  # Path filtering and release-branch discovery run once here, on a
+  # GitHub-hosted runner, so that the test job below (on a large runner) is not
+  # started at all when nothing relevant changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
+      previous_release_ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out commit's code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        # Full history is needed to list the release branches.
         fetch-depth: 0
         persist-credentials: 'false'
 
@@ -79,17 +73,39 @@ jobs:
             - '.github/workflows/upgrade_downgrade_test_reparent_old_vttablet.yml'
             - '.github/actions/setup-mysql/action.yml'
 
+  upgrade_downgrade_test:
+    needs: changes
+    if: needs.changes.outputs.end_to_end == 'true'
+    timeout-minutes: 60
+    name: Run Upgrade Downgrade Test - Reparent Old VTTablet
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check out commit's code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
     - name: Set up python
-      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
       uses: $/.github/actions/setup-mysql
       with:
@@ -97,7 +113,6 @@ jobs:
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
@@ -107,28 +122,16 @@ jobs:
         sudo service etcd stop
 
     # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.changes.outputs.end_to_end == 'true'
+    - name: Check out other version's code (${{ needs.changes.outputs.previous_release_ref }})
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        ref: ${{ needs.changes.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the last release
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-      run: |
-        go mod download
+      uses: $/.github/actions/setup-go
 
     - name: Building last release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -139,26 +142,14 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for this commit
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-      run: |
-        go mod download
+      uses: $/.github/actions/setup-go
 
     - name: Building the binaries for this commit
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -168,7 +159,6 @@ jobs:
 
     # Swap the binaries. Use vtctl version n and keep vttablet at version n-1
     - name: Use current version Vtctl, and other version VTTablet
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -181,7 +171,6 @@ jobs:
 
     # Running a test with vtctl at version n and vttablet at version n-1
     - name: Run reparent tests (vtctl=N, vttablet=N-1)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

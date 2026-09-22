@@ -131,8 +131,6 @@ jobs:
 
         sudo apt-get install -y make unzip g++ curl git wget
 
-        go mod download
-
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       timeout-minutes: 10

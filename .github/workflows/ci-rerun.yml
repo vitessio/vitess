@@ -29,6 +29,7 @@ jobs:
   rerun-failed:
     name: Rerun Failed CI Jobs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: write
       pull-requests: read

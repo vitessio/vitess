@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: '**'
 
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Static Code Checks, Etc.')
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:
@@ -140,7 +144,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
-          go mod download
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -209,7 +212,10 @@ jobs:
         with:
           args: --timeout 10m
           install-mode: "goinstall"
-          skip-cache: true
+          # Same policy as the setup-go action: only pushes to main and the
+          # release branches save the golangci-lint cache, everything else
+          # restores from it.
+          skip-save-cache: ${{ !(github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))) }}
           working-directory: go
           version: ${{ steps.golangci_lint_version.outputs.version }}
 
