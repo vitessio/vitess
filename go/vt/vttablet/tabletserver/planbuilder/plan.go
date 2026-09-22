@@ -439,7 +439,15 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
 			resetExpr := sqlparser.Expr(defaultValue)
-			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
+			switch sysVar.Name.Lowered() {
+			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
+				// MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` (and
+				// unique_checks) sets the session value to the opposite of the global
+				// value, so `default` would hand the next caller a connection with the
+				// checks off. Restore the global value explicitly, which is what DEFAULT
+				// means for a session variable.
+				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
+			case sysvars.SQLMode.Name:
 				// `default` would re-inherit the server's global sql_mode including its
 				// lexer modes, undoing the neutralization every Vitess-created
 				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore

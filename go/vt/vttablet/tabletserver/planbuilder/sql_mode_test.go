@@ -96,6 +96,18 @@ func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 	assert.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
 }
 
+// MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` and the same for
+// unique_checks set the session value to the opposite of the global value on every
+// MySQL version, so a `default` reset would hand the next caller a pooled connection
+// with the checks off. The reset restores the global value explicitly instead.
+func TestBuildSettingQueryResetRestoresGlobalForeignKeyAndUniqueChecks(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	_, resetQuery, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser)
+	require.NoError(t, err)
+	assert.Equal(t, "set @@foreign_key_checks = @@global.foreign_key_checks, @@unique_checks = @@global.unique_checks, sql_safe_updates = default", resetQuery)
+}
+
 func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
 	env := vtenv.NewTestEnv()
 	tables := map[string]*schema.Table{}
