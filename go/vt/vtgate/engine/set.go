@@ -280,6 +280,13 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		// table ACL. sql_mode gets the same judgment as an untargeted one's:
 		// constants were judged at plan time, and a non-constant expression
 		// must not reach the session or the shard unjudged.
+		//
+		// The connection is reserved before the expression is evaluated, as
+		// it was before the SET carried the expression itself: an expression
+		// can depend on connection state, and the tablet refuses a lock
+		// function such as get_lock() outside a reserved connection, so the
+		// evaluation runs on the connection the SET is then applied to.
+		vcursor.Session().NeedsReservedConn()
 		var value sqltypes.Value
 		if svs.Name == "sql_mode" {
 			qr, err := execShard(ctx, nil /*primitive*/, vcursor, sqlModeJudgmentQuery(svs.Expr), env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
@@ -303,7 +310,6 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		var buf strings.Builder
 		value.EncodeSQL(&buf)
 		storedValue := buf.String()
-		vcursor.Session().NeedsReservedConn()
 		if err := svs.execSetStatement(ctx, vcursor, rss, env, storedValue); err != nil {
 			// the statement failed, so the session must not store its value
 			return err

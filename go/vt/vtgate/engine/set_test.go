@@ -296,10 +296,39 @@ func TestSetTable(t *testing.T) {
 		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
 			`SysVar set with (x,123456)`,
+		},
+	}, {
+		// the expression is evaluated on the reserved connection the SET is then
+		// applied to: the tablet refuses a lock function outside a reserved
+		// connection, and the lock get_lock() takes must be held by the
+		// connection the session keeps, as it was when the SET carried the
+		// expression itself
+		testName: "targeted set evaluates a lock function on the reserved connection",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "get_lock('x', 0)",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"get_lock('x', 0)",
+				"int64",
+			),
+			"1",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select get_lock('x', 0) from dual {} false false`,
+			`ExecuteMultiShard ks.-20: set x = 1 {} false false`,
+			`SysVar set with (x,1)`,
 		},
 	}, {
 		// a targeted SET whose evaluation fails must not leave its value in the
@@ -318,6 +347,7 @@ func TestSetTable(t *testing.T) {
 		expectedError: "some random error",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		},
 	}, {
@@ -343,6 +373,7 @@ func TestSetTable(t *testing.T) {
 		expectedError: "unexpected result evaluating x: 2 rows",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		},
 	}, {
@@ -368,6 +399,7 @@ func TestSetTable(t *testing.T) {
 		expectedError: "setting the ANSI sql_mode is unsupported",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
 		},
 	}, {
@@ -391,8 +423,8 @@ func TestSetTable(t *testing.T) {
 		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
 			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
 		},
@@ -959,8 +991,8 @@ func TestSysVarSetErr(t *testing.T) {
 	// value in the session, so no "SysVar set with"
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		"Needs Reserved Conn",
+		`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
 	}
 
