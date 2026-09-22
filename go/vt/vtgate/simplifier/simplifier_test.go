@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -145,4 +146,13 @@ func plus(a, b sqlparser.Expr) sqlparser.Expr {
 		Left:     a,
 		Right:    b,
 	}
+}
+
+// The keyword form of a built-in shrinks to its arguments like a generic call.
+func TestShrinkBuiltinFuncExpr(t *testing.T) {
+	a, b := sqlparser.NewIntLiteral("1"), sqlparser.NewIntLiteral("2")
+	s := &shrinker{orig: &sqlparser.BuiltinFuncExpr{Name: sqlparser.NewIdentifierCI("f"), Exprs: []sqlparser.Expr{a, b}}}
+	assert.Equal(t, a, s.Next())
+	assert.Equal(t, b, s.Next())
+	assert.Nil(t, s.Next())
 }

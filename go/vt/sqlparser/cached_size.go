@@ -596,6 +596,28 @@ func (cached *BitXor) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *BuiltinFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	size += cached.Name.CachedSize(false)
+	// field Exprs []vitess.io/vitess/go/vt/sqlparser.Expr
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
+		for _, elem := range cached.Exprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+
 func (cached *CallProc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3652,7 +3674,7 @@ func (cached *Parser) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field version string
 	size += hack.RuntimeAllocSize(int64(len(cached.version)))
@@ -4265,6 +4287,23 @@ func (cached *SRollback) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *STCollect) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
+
 func (cached *Savepoint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4739,6 +4778,19 @@ func (cached *SingleStatement) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Statement.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+
+func (cached *SpacedAggrCall) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
 

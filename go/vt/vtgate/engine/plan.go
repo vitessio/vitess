@@ -18,6 +18,7 @@ package engine
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -46,10 +48,19 @@ type (
 		Instructions Primitive               // Instructions define how the query is executed.
 		BindVarNeeds *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
 		Warnings     []*querypb.QueryWarning // Warnings accumulates any warnings generated for this plan.
-		TablesUsed   []string                // TablesUsed enumerates the tables this query accesses.
-		QueryHints   sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
-		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
-		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
+		// SpacedAggrCalls are the aggregates the text this plan executes
+		// without parsing it again separates from their parenthesis: a
+		// prepared statement's own, or the executed statement's for an
+		// EXECUTE plan. Each is warned about on every execution, like
+		// Warnings (see sqlparser.Tokenizer.SpacedAggrCalls). A plan built
+		// for a statement that is parsed on every execution carries none,
+		// since its key is the normalized text, which spellings with and
+		// without the whitespace share.
+		SpacedAggrCalls []sqlparser.SpacedAggrCall
+		TablesUsed      []string             // TablesUsed enumerates the tables this query accesses.
+		QueryHints      sqlparser.QueryHints // QueryHints stores any SET_VAR hints that influenced plan generation.
+		ParamsCount     uint16               // ParamsCount is the total number of bind parameters (?) in the query.
+		Optimized       atomic.Bool          // Prepared queries need to be optimized before the first execution
 
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
@@ -68,6 +79,7 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+		SQLMode         sqlmode.Mode          // SQLMode holds the lexer modes the statement was read under (sqlparser.HonoredSQLModes), which change what the same text means.
 	}
 )
 
@@ -255,13 +267,16 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, SQLMode: %q", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.SQLMode.String())
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+	var sqlMode [8]byte
+	binary.LittleEndian.PutUint64(sqlMode[:], uint64(pk.SQLMode))
+	_, _ = hasher.Write(sqlMode[:])
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)

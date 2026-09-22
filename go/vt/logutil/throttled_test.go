@@ -65,3 +65,29 @@ func TestThrottledLogger(t *testing.T) {
 		assert.Equalf(t, want, got, "skippedCount is %v but was expecting %v", got, want)
 	}
 }
+
+// The structured methods throttle like the printf ones, and pass the
+// attributes through.
+func TestThrottledLoggerAttrs(t *testing.T) {
+	type entry struct {
+		msg   string
+		attrs []slog.Attr
+	}
+	logged := make(chan entry)
+	warnDepth = func(depth int, msg string, attrs ...slog.Attr) {
+		logged <- entry{msg: msg, attrs: attrs}
+	}
+	interval := 100 * time.Millisecond
+	tl := NewThrottledLogger("name", interval)
+
+	go tl.Warn("test", slog.String("k", "v"), slog.Int("n", 1))
+	got := <-logged
+	assert.Equal(t, "name: test", got.msg)
+	assert.Equal(t, []slog.Attr{slog.String("k", "v"), slog.Int("n", 1)}, got.attrs)
+
+	// the second call within the interval is skipped and reported as such
+	go tl.Warn("test again", slog.String("k", "w"))
+	got = <-logged
+	assert.Equal(t, "name: skipped 1 log messages", got.msg)
+	assert.Empty(t, got.attrs)
+}

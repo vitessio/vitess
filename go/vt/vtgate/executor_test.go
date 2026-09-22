@@ -46,6 +46,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
@@ -104,23 +105,23 @@ func TestPlanKey(t *testing.T) {
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, SQLMode: \"\"",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: \"\"",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -134,7 +135,7 @@ func TestPlanKey(t *testing.T) {
 			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
 			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
 			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg, nil)
-			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
+			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment, e.env.Parser())
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
 	}
@@ -1684,7 +1685,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := buildPlanKey(t.Context(), vc, sql, "")
+		h := buildPlanKey(t.Context(), vc, sql, "", e.env.Parser())
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	assert.NotNilf(t, plan, "plan not found for query: %s", sql)
@@ -1695,7 +1696,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, session *econ
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 	session.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats, true)
+	plan, _, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats, true)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1851,7 +1852,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 
-			plan, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+			plan, _, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
@@ -3682,4 +3683,234 @@ func TestExecutorShowShards(t *testing.T) {
 			assert.Truef(t, tt.want.Equal(got), "Results got - %v", got)
 		})
 	}
+}
+
+// An aggregate name separated from its parenthesis by whitespace or a
+// comment is read as the aggregate, as before, and warns: the next major
+// release reads it as a stored-function call. The warning is a protocol
+// warning on the session, replayed on every execution of the cached plan,
+// counted once per plan, and withheld from a session whose sql_mode has
+// IGNORE_SPACE, under which the reading is MySQL's too.
+func TestExecutorSpacedAggrCallWarning(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	counter := func() int64 { return warnings.Counts()["SpacedAggrCall"] }
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		session := &vtgatepb.Session{TargetString: "@primary"}
+		if sqlMode != "" {
+			session.SystemVariables = map[string]string{"sql_mode": sqlMode}
+		}
+		return econtext.NewSafeSession(session)
+	}
+
+	session := newSession("")
+	before := counter()
+	_, err := executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.Warnings, 1)
+	warning := session.Warnings[0]
+	assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, warning.Code)
+	assert.Contains(t, warning.Message, "'sum' is separated from its parenthesis by whitespace and is read as the aggregate sum()")
+	assert.Contains(t, warning.Message, "set IGNORE_SPACE in sql_mode")
+	assert.Equal(t, before+1, counter(), "counted once per plan")
+
+	// the warning is visible through SHOW WARNINGS
+	qr, err := executorExecSession(ctx, executor, session, "show warnings", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	assert.Equal(t, "Warning", qr.Rows[0][0].ToString())
+	assert.Equal(t, "1287", qr.Rows[0][1].ToString())
+	assert.Equal(t, warning.Message, qr.Rows[0][2].ToString())
+
+	// a cache hit replays the warning, and does not count again
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.Warnings, 1)
+	assert.Equal(t, before+1, counter(), "not counted on a cache hit")
+
+	// one warning per aggregate name; a spaced non-aggregate is a
+	// stored-function call, MySQL's to judge, and warns about nothing
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "select count (id), sum (id), now (), substr (name, 1) from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.Warnings, 2)
+	assert.Contains(t, session.Warnings[0].Message, "'count'")
+	assert.Contains(t, session.Warnings[1].Message, "'sum'")
+
+	// a session whose sql_mode has IGNORE_SPACE gets no warning from the same
+	// cached plan, whether the mode is alone, among others, or set numerically
+	for _, sqlMode := range []string{"'IGNORE_SPACE'", "'STRICT_TRANS_TABLES,IGNORE_SPACE'", "8"} {
+		session = newSession(sqlMode)
+		_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+		require.NoError(t, err, sqlMode)
+		assert.Empty(t, session.Warnings, sqlMode)
+	}
+
+	// a session sql_mode without IGNORE_SPACE does not withhold it
+	session = newSession("'STRICT_TRANS_TABLES'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.Warnings, 1)
+
+	// a comment between the name and the parenthesis is warned about under
+	// either mode, with its own text: IGNORE_SPACE skips whitespace, not
+	// comments, so only attaching the parenthesis keeps that call
+	for _, sqlMode := range []string{"", "'IGNORE_SPACE'"} {
+		session = newSession(sqlMode)
+		_, err = executorExecSession(ctx, executor, session, "select count/*c*/(id) from main1", nil)
+		require.NoError(t, err, sqlMode)
+		require.Len(t, session.Warnings, 1, sqlMode)
+		assert.Contains(t, session.Warnings[0].Message, "'count' is separated from its parenthesis by a comment", sqlMode)
+		assert.NotContains(t, session.Warnings[0].Message, "set IGNORE_SPACE", sqlMode)
+	}
+
+	// the stored sql_mode is parsed once and memoized on the session; a
+	// changed value is parsed again
+	session = newSession("'IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, session.Warnings)
+	memo, ok := session.SQLModeMemo("'IGNORE_SPACE'")
+	require.True(t, ok)
+	assert.Equal(t, sqlmode.IgnoreSpace, memo)
+	session.SetSystemVariable("sql_mode", "'STRICT_TRANS_TABLES'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.Warnings, 1)
+	memo, ok = session.SQLModeMemo("'STRICT_TRANS_TABLES'")
+	require.True(t, ok)
+	assert.Equal(t, sqlmode.StrictTransTables, memo)
+
+	// a query that skips the plan cache is built for every execution: its
+	// warning reaches the client each time, and it is counted once at most
+	before = counter()
+	session = newSession("")
+	for range 2 {
+		_, err = executorExecSession(ctx, executor, session, "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ sum (id) from main1", nil)
+		require.NoError(t, err)
+		require.Len(t, session.Warnings, 1)
+	}
+	assert.Equal(t, before, counter(), "a plan built for every execution is not counted")
+
+	// a binary-typed stored value carries its introducer, and an empty mode
+	// withholds nothing
+	session = newSession("_binary'IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, session.Warnings)
+	session = newSession("''")
+	_, err = executorExecSession(ctx, executor, session, "select sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.Warnings, 1)
+
+	// the attached form warns about nothing
+	before = counter()
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "select sum(id), `count`(id) from main1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, session.Warnings)
+	assert.Equal(t, before, counter())
+
+	// a statement prepared with PREPARE ... FROM warns when executed, since
+	// EXECUTE runs the prepared statement's plan; the prepared statement is
+	// counted once although its plan is built more than once
+	before = counter()
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "prepare stmt from 'select sum (id) from main1 where id = ?'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "set @id = 1", nil)
+	require.NoError(t, err)
+	for range 2 {
+		_, err = executorExecSession(ctx, executor, session, "execute stmt using @id", nil)
+		require.NoError(t, err)
+		require.Len(t, session.Warnings, 1)
+		assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, session.Warnings[0].Code)
+	}
+	assert.Equal(t, before+1, counter(), "counted once for the prepared statement")
+}
+
+// The spaced and the attached spelling of a query share a cached plan, since
+// the plan is keyed by the normalized text; the warning follows the spelling
+// executed, whichever populated the cache.
+func TestExecutorSpacedAggrCallWarningSharedPlan(t *testing.T) {
+	spaced, attached := "select sum (id) from main1", "select sum(id) from main1"
+	for name, order := range map[string][]string{
+		"spaced first":   {spaced, attached, spaced},
+		"attached first": {attached, spaced, attached},
+	} {
+		t.Run(name, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			for _, query := range order {
+				session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+				_, err := executorExecSession(ctx, executor, session, query, nil)
+				require.NoError(t, err)
+				if query == spaced {
+					require.Len(t, session.Warnings, 1, query)
+					assert.EqualValues(t, sqlerror.ERWarnDeprecatedSyntax, session.Warnings[0].Code)
+				} else {
+					assert.Empty(t, session.Warnings, query)
+				}
+			}
+		})
+	}
+}
+
+// A session's SQL is read under the session's sql_mode: with IGNORE_SPACE, the
+// whitespace-sensitive function names are keywords before a parenthesis that
+// follows whitespace, as in MySQL under that mode, and the two readings do
+// not share a cached plan.
+func TestExecutorSessionIgnoreSpace(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		session := &vtgatepb.Session{TargetString: "@primary"}
+		if sqlMode != "" {
+			session.SystemVariables = map[string]string{"sql_mode": sqlMode}
+		}
+		return econtext.NewSafeSession(session)
+	}
+	// the query sent to the tablet carries the session's sql_mode as a
+	// SET_VAR hint, so the statement body is what is compared
+	lastQuery := func() string {
+		require.NotEmpty(t, sbclookup.Queries)
+		return sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	}
+
+	// under the mode, the spaced calls are the built-ins
+	session := newSession("'IGNORE_SPACE'")
+	_, err := executorExecSession(ctx, executor, session, "select now (), cast (id as char), sum (id) from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " now(), cast(id as char), sum(id) from main1")
+	assert.Empty(t, session.Warnings, "whitespace is the mode's own reading")
+
+	// without it, MySQL's default reading: a stored-function call, and a
+	// syntax error where the built-in's own argument syntax follows
+	session = newSession("")
+	_, err = executorExecSession(ctx, executor, session, "select now () from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " `now`() from main1")
+	_, err = executorExecSession(ctx, executor, session, "select cast (id as char) from main1", nil)
+	require.ErrorContains(t, err, "syntax error")
+
+	// the readings do not share a plan: the same text again, under the mode
+	session = newSession("'STRICT_TRANS_TABLES,IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "select now () from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " now() from main1")
+
+	// a comment between an aggregate and its parenthesis is kept the
+	// aggregate under the mode too, and warned about
+	_, err = executorExecSession(ctx, executor, session, "select count/*c*/(id) from main1", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " count(id) from main1")
+	require.Len(t, session.Warnings, 1)
+	assert.Contains(t, session.Warnings[0].Message, "by a comment")
+
+	// a prepared statement is read under the session's mode as well
+	session = newSession("'IGNORE_SPACE'")
+	_, err = executorExecSession(ctx, executor, session, "prepare stmt from 'select now () from main1'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "execute stmt", nil)
+	require.NoError(t, err)
+	assert.Contains(t, lastQuery(), " now() from main1")
+	assert.Empty(t, session.Warnings)
 }
