@@ -62,6 +62,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/e2e_race.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'

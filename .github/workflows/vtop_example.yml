@@ -54,6 +54,7 @@ jobs:
               - 'test/**'
               - '.github/workflows/vtop_example.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-go/action.yml'
 
   build:
     needs: changes

@@ -69,6 +69,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_manual_next_release.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
             - 'examples/**'
 
   # This job usually execute in ± 20 minutes

@@ -65,6 +65,7 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend_disk_health_monitor.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-go/action.yml'
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'

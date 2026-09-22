@@ -69,6 +69,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_e2e_next_release.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
   upgrade_downgrade_test_e2e:
     needs: changes

@@ -57,7 +57,7 @@ jobs:
         predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
             - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     - name: Set up Go
