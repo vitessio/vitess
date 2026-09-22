@@ -353,7 +353,7 @@ func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 	require.NotNil(t, execResult)
 
 	logStats := tabletenv.NewLogStats(ctx, "TestNextval", streamlog.NewQueryLogConfigForTest())
-	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, false)
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, 0, false)
 	require.NoError(t, err)
 
 	qreStream := &QueryExecutor{
@@ -376,7 +376,7 @@ func setUpSeqStreamPlan(t *testing.T, ctx context.Context, tsv *TabletServer, op
 	t.Helper()
 	logStats := tabletenv.NewLogStats(ctx, "TestSeqStream", streamlog.NewQueryLogConfigForTest())
 	query := "select next 1 values from seq"
-	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, false)
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, 0, false)
 	require.NoError(t, err)
 	return &QueryExecutor{
 		ctx:      ctx,

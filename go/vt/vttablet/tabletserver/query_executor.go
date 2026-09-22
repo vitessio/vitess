@@ -1385,15 +1385,26 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 }
 
 // execSet executes a SET statement on a dedicated transaction or reserved connection.
-// When the statement assigns sql_mode a value that could not be judged at plan time (a
-// non-constant expression), the applied value is read back and validated, so that such an
-// expression cannot put the connection into a mode the Vitess parser cannot honor (see
-// sqlmode.Validate). On violation the previous sql_mode is restored, so the assignment is
-// not applied, as it would not be in MySQL; only if the restore itself fails is the
-// connection closed rather than left running under an unsupported mode.
+// A constant sql_mode assignment was judged at plan time: the statement applies the
+// value as written and the connection records the lexer modes the parser honors of
+// it, so that later queries on the connection are read under them. When the assigned
+// value is not a constant, the applied value is read back and judged the same way a
+// constant is at plan time (see sqlmode.Validate), so that such an expression cannot
+// put the connection into a mode the parser does not read under. On violation the
+// previous sql_mode is restored, so the assignment is not applied, as it would not be
+// in MySQL; only if the restore itself fails is the connection closed rather than left
+// running under an unsupported mode.
 func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, error) {
 	if !qre.plan.VerifySQLMode {
-		return qre.txFetch(conn, false)
+		result, err := qre.txFetch(conn, false)
+		if err != nil {
+			return nil, err
+		}
+		conn.MarkSettingStale()
+		if qre.plan.SetsSQLMode {
+			conn.SetParseSQLMode(qre.plan.SQLModeParseBits)
+		}
+		return result, nil
 	}
 	prev, err := qre.readSQLMode(conn)
 	if err != nil {
@@ -1403,23 +1414,26 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 	if err != nil {
 		return nil, err
 	}
+	conn.MarkSettingStale()
 	applied, err := qre.readSQLMode(conn)
 	if err != nil {
 		// The statement has already run, and without the read-back there is no telling
-		// what sql_mode the connection is in now — undo the statement rather than
+		// what sql_mode the connection is in now: undo the statement rather than
 		// returning the connection in an unverified state.
 		qre.undoSQLModeSet(conn, prev, err)
 		return nil, err
 	}
-	vErr := func() error { _, err := sqlmode.Validate(applied); return err }()
-	if vErr == nil {
-		return result, nil
+	mode, vErr := sqlmode.Validate(applied, sqlparser.HonoredSQLModes)
+	if vErr != nil {
+		// This also fails an applied value that does not decode as MySQL 8.x modes at
+		// all: a constant with an unknown mode name is rejected at plan time, and an
+		// expression producing one must not fare better just because it cannot be
+		// judged.
+		qre.undoSQLModeSet(conn, prev, vErr)
+		return nil, vErr
 	}
-	// This also fails an applied value that does not decode as MySQL 8.x modes at all:
-	// a constant with an unknown mode name is rejected at plan time, and an expression
-	// producing one must not fare better just because it cannot be judged.
-	qre.undoSQLModeSet(conn, prev, vErr)
-	return nil, vErr
+	conn.SetParseSQLMode(mode & sqlparser.HonoredSQLModes)
+	return result, nil
 }
 
 // undoSQLModeSet restores the previous sql_mode after a failed SET, leaving the

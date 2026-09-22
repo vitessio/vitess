@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -390,8 +392,8 @@ func (qe *QueryEngine) Close() {
 
 var errNoCache = errors.New("plan should not be cached")
 
-func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit bool) (*TabletPlan, error) {
-	statement, err := qe.env.Environment().Parser().Parse(sql)
+func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit bool, parseMode sqlmode.Mode) (*TabletPlan, error) {
+	statement, err := qe.parserFor(parseMode).Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +412,9 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, noRowsLimit bool) (*TabletPlan, error) {
+// parseMode carries the lexer modes of the session the query runs in (see
+// sqlparser.HonoredSQLModes), so the same SQL text is planned separately per mode.
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, parseMode sqlmode.Mode, skipQueryPlanCache bool, noRowsLimit bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
@@ -420,10 +424,10 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	curSchema := qe.schema.Load()
 
 	if skipQueryPlanCache {
-		plan, err = qe.getPlan(curSchema, sql, noRowsLimit)
+		plan, err = qe.getPlan(curSchema, sql, noRowsLimit, parseMode)
 	} else {
-		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getPlanCacheKey(sql, noRowsLimit)), curSchema.epoch, func() (*TabletPlan, error) {
-			return qe.getPlan(curSchema, sql, noRowsLimit)
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getPlanCacheKey(sql, noRowsLimit, parseMode)), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getPlan(curSchema, sql, noRowsLimit, parseMode)
 		})
 	}
 
@@ -433,8 +437,8 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	return plan, err
 }
 
-func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
-	statement, err := qe.env.Environment().Parser().Parse(sql)
+func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string, parseMode sqlmode.Mode) (*TabletPlan, error) {
+	statement, err := qe.parserFor(parseMode).Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +478,8 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 }
 
 // GetStreamPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
-func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+// parseMode carries the lexer modes of the session the query runs in.
+func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, parseMode sqlmode.Mode, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetStreamPlan")
 	defer span.Finish()
 
@@ -484,10 +489,10 @@ func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.Lo
 	curSchema := qe.schema.Load()
 
 	if skipQueryPlanCache {
-		plan, err = qe.getStreamPlan(curSchema, sql)
+		plan, err = qe.getStreamPlan(curSchema, sql, parseMode)
 	} else {
-		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getStreamPlanCacheKey(sql)), curSchema.epoch, func() (*TabletPlan, error) {
-			return qe.getStreamPlan(curSchema, sql)
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getStreamPlanCacheKey(sql, parseMode)), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getStreamPlan(curSchema, sql, parseMode)
 		})
 	}
 
@@ -511,17 +516,32 @@ func warnAnalyzeLegacyRuleMatch(sql string) {
 	})
 }
 
-// gets key used to cache stream query plan
-func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
-	return "__STREAM__" + sql
+// parserFor returns the parser that reads SQL under the given lexer modes: the
+// environment's own when there are none.
+func (qe *QueryEngine) parserFor(parseMode sqlmode.Mode) *sqlparser.Parser {
+	return qe.env.Environment().Parser().WithSQLMode(parseMode)
+}
+
+// sqlModeCacheKeyPrefix distinguishes cached plans of the same SQL text read under
+// different lexer modes.
+func sqlModeCacheKeyPrefix(parseMode sqlmode.Mode) string {
+	if parseMode == 0 {
+		return ""
+	}
+	return "__SQLMODE_" + strconv.FormatUint(uint64(parseMode), 16) + "__"
 }
 
 // gets key used to cache stream query plan
-func (qe *QueryEngine) getPlanCacheKey(sql string, noRowsLimit bool) string {
+func (qe *QueryEngine) getStreamPlanCacheKey(sql string, parseMode sqlmode.Mode) string {
+	return "__STREAM__" + sqlModeCacheKeyPrefix(parseMode) + sql
+}
+
+// gets key used to cache query plan
+func (qe *QueryEngine) getPlanCacheKey(sql string, noRowsLimit bool, parseMode sqlmode.Mode) string {
 	if noRowsLimit {
-		return "__UNLIMITED__" + sql
+		return "__UNLIMITED__" + sqlModeCacheKeyPrefix(parseMode) + sql
 	}
-	return sql
+	return sqlModeCacheKeyPrefix(parseMode) + sql
 }
 
 // GetMessageStreamPlan builds a plan for Message streaming.
@@ -550,11 +570,16 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
+		query, resetQuery, parseMode, setsSQLMode, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
 		if err != nil {
 			return nil, err
 		}
-		return smartconnpool.NewSetting(query, resetQuery), nil
+		if !setsSQLMode {
+			// settings that leave sql_mode alone leave the connection's recorded
+			// parse mode alone as well
+			return smartconnpool.NewSetting(query, resetQuery), nil
+		}
+		return smartconnpool.NewSettingWithSQLMode(query, resetQuery, uint64(parseMode)), nil
 	})
 	return connSetting, err
 }
