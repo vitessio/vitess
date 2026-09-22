@@ -230,9 +230,12 @@ func createGRPCServer() {
 			// plain-text connections are served, unauthenticated, until the
 			// last client has moved and the flag is dropped. Say so plainly
 			// when a client CA is configured, since --grpc-ca then only holds
-			// for the TLS connections.
+			// for the TLS connections, and point at the stats that show the
+			// plain-text connections without claiming they prove that every
+			// client has moved: one that is offline or connects only now and
+			// then does not show in them.
 			if gRPCCA != "" {
-				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS: when GrpcOptionalTlsOpenConnections is zero for plaintext and GrpcOptionalTlsConnections no longer increases for it")
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
 			} else {
 				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
 			}

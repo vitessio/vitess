@@ -29,12 +29,14 @@ const (
 )
 
 // Optional TLS serves plain-text connections unauthenticated so that clients
-// can move to TLS one at a time. These stats, by transport, show when every
-// client has moved and the flag can be dropped: OpenConnections at zero for
-// plaintext means no plain-text client is connected, which matters because
-// gRPC connections are long-lived and a client that connected long ago does
-// not handshake again; ConnectionCounts no longer increasing for plaintext
-// means none is connecting anymore either.
+// can move to TLS one at a time. These stats, by transport, are the evidence
+// an operator has for whether every client has moved, before dropping the
+// flag: OpenConnections at zero for plaintext means no plain-text client is
+// connected right now, which matters because gRPC connections are long-lived
+// and a client that connected long ago does not handshake again;
+// ConnectionCounts no longer increasing for plaintext means none has
+// connected lately. Neither shows a client that is offline or connects only
+// now and then, so they support the decision rather than prove it.
 var (
 	// ConnectionCounts counts the connections handshaken, by transport.
 	ConnectionCounts = stats.NewCountersWithSingleLabel(

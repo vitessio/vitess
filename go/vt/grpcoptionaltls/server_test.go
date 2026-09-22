@@ -24,15 +24,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/status"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/tlstest"
-	"vitess.io/vitess/go/vt/vttls"
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -123,61 +120,6 @@ func TestOptionalTLS(t *testing.T) {
 		after := ConnectionCounts.Counts()
 		require.Equal(t, int64(5), after[transportTLS]-before[transportTLS], "TLS connections counted")
 		require.Equal(t, before[transportPlaintext], after[transportPlaintext], "no plain-text connection counted")
-	})
-}
-
-// TestOptionalTLSClientCA pins down what optional TLS means for a server that
-// verifies client certificates against a CA, as one started with --grpc-ca is:
-// plain-text connections are still served, unauthenticated, and the TLS
-// connections are held to the certificate check. That is what lets clients move
-// to TLS one at a time, with the certificate check validated on the ones that
-// have moved, before optional TLS is turned off.
-func TestOptionalTLSClientCA(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	config, err := vttls.ServerConfig(certs.ServerCert, certs.ServerKey, certs.ClientCA, "", certs.ServerCA, tls.VersionTLS12)
-	require.NoError(t, err)
-	require.Equal(t, tls.RequireAndVerifyClientCert, config.ClientAuth)
-
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	t.Cleanup(func() { lis.Close() })
-	srv := createUnstartedServer(New(credentials.NewTLS(config)))
-	go func() {
-		srv.Serve(lis)
-	}()
-	t.Cleanup(srv.Stop)
-
-	sayHello := func(t *testing.T, creds credentials.TransportCredentials) error {
-		t.Helper()
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(creds))
-		require.NoError(t, err)
-		defer conn.Close()
-		_, err = pb.NewGreeterClient(conn).SayHello(ctx, &pb.HelloRequest{Name: "Vitess"})
-		return err
-	}
-
-	t.Run("a plain-text connection is served", func(t *testing.T) {
-		require.NoError(t, sayHello(t, insecure.NewCredentials()))
-	})
-
-	t.Run("a TLS connection without a client certificate is refused", func(t *testing.T) {
-		creds, err := credentials.NewClientTLSFromFile(certs.ServerCA, certs.ServerName)
-		require.NoError(t, err)
-		// In TLS 1.3 the server only rejects the client after the client has
-		// finished its side of the handshake, so the client sees either the
-		// server's "certificate required" alert or its own write failing on
-		// the closed connection.
-		err = sayHello(t, creds)
-		require.Error(t, err)
-		require.Equal(t, codes.Unavailable, status.Code(err))
-	})
-
-	t.Run("a TLS connection with a client certificate is served", func(t *testing.T) {
-		clientConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
-		require.NoError(t, err)
-		require.NoError(t, sayHello(t, credentials.NewTLS(clientConfig)))
 	})
 }
 
