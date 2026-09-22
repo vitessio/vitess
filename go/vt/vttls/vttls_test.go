@@ -366,16 +366,11 @@ func loadOneCert(t *testing.T, file string) *x509.Certificate {
 	return loaded[0]
 }
 
-// TestServerConfigCRL checks the revocation of client certificates by
-// a server configured with a CRL, through real TLS handshakes: on
-// full and resumed handshakes, and with certificates presented beyond
-// the verified chain.
 // TestServerTLSEnabled checks what makes a server do TLS, and that a
 // CRL set for a server without TLS is refused rather than silently
-// ignored.
+// ignored. The helper only looks at whether the paths are set, so
+// literal paths are enough.
 func TestServerTLSEnabled(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-
 	t.Run("nothing set does not enable TLS", func(t *testing.T) {
 		enabled, err := ServerTLSEnabled("", "", "")
 		require.NoError(t, err)
@@ -383,27 +378,32 @@ func TestServerTLSEnabled(t *testing.T) {
 	})
 
 	t.Run("a certificate and a key enable TLS", func(t *testing.T) {
-		enabled, err := ServerTLSEnabled(certs.ServerCert, certs.ServerKey, "")
+		enabled, err := ServerTLSEnabled("server-cert.pem", "server-key.pem", "")
 		require.NoError(t, err)
 		require.True(t, enabled)
 	})
 
 	t.Run("a certificate and a key enable TLS with a CRL", func(t *testing.T) {
-		enabled, err := ServerTLSEnabled(certs.ServerCert, certs.ServerKey, certs.ClientCRL)
+		enabled, err := ServerTLSEnabled("server-cert.pem", "server-key.pem", "client-crl.pem")
 		require.NoError(t, err)
 		require.True(t, enabled)
 	})
 
 	t.Run("a CRL without a certificate and a key is refused", func(t *testing.T) {
-		_, err := ServerTLSEnabled("", "", certs.ClientCRL)
+		_, err := ServerTLSEnabled("", "", "client-crl.pem")
 		require.ErrorContains(t, err, "a CRL is configured without a certificate and a key")
 	})
 
 	t.Run("a CRL with a certificate but no key is refused", func(t *testing.T) {
-		_, err := ServerTLSEnabled(certs.ServerCert, "", certs.ClientCRL)
+		_, err := ServerTLSEnabled("server-cert.pem", "", "client-crl.pem")
 		require.ErrorContains(t, err, "a CRL is configured without a certificate and a key")
 	})
 }
+
+// TestServerConfigCRL checks the revocation of client certificates by
+// a server configured with a CRL, through real TLS handshakes: on
+// full and resumed handshakes, and with certificates presented beyond
+// the verified chain.
 
 func TestServerConfigCRL(t *testing.T) {
 	root := t.TempDir()

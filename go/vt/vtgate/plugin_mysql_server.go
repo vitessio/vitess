@@ -1892,13 +1892,13 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 
 	// A CRL without the certificate and key is refused up front, rather
 	// than silently ignored by a server that would not do TLS at all.
-	if _, err := vttls.ServerTLSEnabled(mysqlSslCert, mysqlSslKey, mysqlSslCrl); err != nil {
+	tlsEnabled, err := vttls.ServerTLSEnabled(mysqlSslCert, mysqlSslKey, mysqlSslCrl)
+	if err != nil {
 		log.Error(fmt.Sprintf("mysql server TLS config failed: %v", err))
 		os.Exit(1)
 	}
 
 	// Create a Listener.
-	var err error
 	srv := &mysqlServer{}
 	srv.vtgateHandle = newVtgateHandler(vtgate)
 
@@ -1930,7 +1930,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
 			os.Exit(1)
 		}
-		if mysqlSslCert != "" && mysqlSslKey != "" {
+		if tlsEnabled {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
 				log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
