@@ -5,6 +5,8 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+    - **[Security](#security)**
+        - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
@@ -14,7 +16,6 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
-        - [vtctld HTTP API removed](#vtctld-http-api-removed)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -69,6 +70,20 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
 
 ## <a id="major-changes"/>Major Changes</a>
+
+### <a id="security"/>Security</a>
+
+#### <a id="vtctld-http-api-removed"/>Legacy vtctld HTTP API removed</a>
+
+The HTTP API that vtctld served under `/api/` has been removed because it was dead code that exposed a security attack surface. It was built for the vtctld web UI, which VTAdmin replaced in v16, and nothing has served or called it since; VTAdmin reaches vtctld over gRPC. What remained was an unauthenticated HTTP surface that served topology data, tablet health, arbitrary vtctl commands, schema changes, and keyspace and shard validations, with `--security-policy` coverage that varied from one endpoint to the next. Removing it removes that surface, rather than patching it endpoint by endpoint.
+
+The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keyspace`, `tablets`, `topodata`, `vtctl`, `schema/apply`, and `features`, and the keyspace, shard, and tablet action endpoints behind them. The `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` flags of vtctld and vtcombo that configured the API are now deprecated no-ops, so that a process started with them keeps starting, and will be removed in v26.
+
+**Migration**: use `vtctldclient`, or the `VtctldServer` gRPC service it calls, for anything a script did against `/api/`. Remove `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` from vtctld and vtcombo startup arguments. The `/debug/health` and `/debug/status` endpoints are unchanged.
+
+**Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
+
+See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
 
 ### <a id="new-support"/>New Support</a>
 
@@ -159,16 +174,6 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 
-#### <a id="vtctld-http-api-removed"/>vtctld HTTP API removed</a>
-
-The HTTP API that vtctld served under `/api/` — the `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keyspace`, `tablets`, `topodata`, `vtctl`, `schema/apply`, and `features` endpoints, and the keyspace, shard, and tablet action endpoints behind them — has been removed. It was built for the vtctld web UI, which VTAdmin replaced in v16, and nothing has served or called it since. The `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` flags of vtctld and vtcombo that configured it are now deprecated no-ops and will be removed in v26.
-
-**Migration**: use `vtctldclient`, or the `VtctldServer` gRPC service it calls, for anything a script did against `/api/`; VTAdmin already reaches vtctld over gRPC. Remove `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` from vtctld and vtcombo startup arguments. The `/debug/health` and `/debug/status` endpoints are unchanged.
-
-**Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
-
-See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
-
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -183,7 +188,7 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 
 **Impact**: Remove any usage of the `--vreplication-enable-http-log` flag from VTTablet startup scripts or configuration.
 
-The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
+The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
 
