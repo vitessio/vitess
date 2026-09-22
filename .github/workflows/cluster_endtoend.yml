@@ -22,16 +22,24 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
+  # Path filtering runs once here, on a GitHub-hosted runner, so that the
+  # matrix jobs below (many of them on large runners) are not started at all
+  # when nothing relevant changed.
   generate-matrix:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      shard_count: ${{ steps.set-matrix.outputs.shard_count }}
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
 
+      # Generated before the path filter so that a filter failure still leaves
+      # the shard legs able to run and report that failure.
       - name: Generate shard matrix
         id: set-matrix
         run: |
@@ -64,45 +72,7 @@ jobs:
           ' test/config.json test/config_partial_keyspace.json)
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
-
-  test:
-    needs: generate-matrix
-    if: needs.generate-matrix.outputs.matrix != ''
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-
-    name: Run endtoend tests on Cluster (${{ matrix.shard }})
-    runs-on: ${{ contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
-      - name: Check Memory
-        if: contains(matrix.needs, 'memory-check')
-        run: |
-          totalMem=$(free -g | awk 'NR==2 {print $2}')
-          echo "total memory $totalMem GB"
-          if [[ "$totalMem" -lt 15 ]]; then
-            echo "Less memory than required"
-            exit 1
-          fi
-
-      - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: "false"
+          echo "shard_count=$(echo "$matrix" | jq length)" >> $GITHUB_OUTPUT
 
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -130,35 +100,91 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-go/action.yml'
               - '.github/actions/setup-microceph/action.yml'
 
+  test:
+    needs: generate-matrix
+    # Deliberately not gated on end_to_end or on the gate's success: a matrix
+    # job skipped at the job level reports a single un-expanded check name,
+    # which would leave the per-shard required status checks pending.
+    # end_to_end is applied per step; a gate failure fails every shard.
+    if: ${{ !cancelled() && needs.generate-matrix.outputs.matrix != '' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Real runs fan out fully. When nothing relevant changed (or the gate
+      # failed) the legs only report a status, so trickle them through a few
+      # at a time instead of claiming one runner per shard at once.
+      max-parallel: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && fromJson(needs.generate-matrix.outputs.shard_count) || 8 }}
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+
+    name: Run endtoend tests on Cluster (${{ matrix.shard }})
+    # When nothing relevant changed the shards still run (so their required
+    # status checks are reported), but on a GitHub-hosted runner with every
+    # step below skipped.
+    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Fail if the gate job failed
+        if: needs.generate-matrix.result != 'success'
+        run: exit 1
+
+      - name: Check Memory
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'memory-check')
+        run: |
+          totalMem=$(free -g | awk 'NR==2 {print $2}')
+          echo "total memory $totalMem GB"
+          if [[ "$totalMem" -lt 15 ]]; then
+            echo "Less memory than required"
+            exit 1
+          fi
+
+      - name: Check out code
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
       - name: Set up Go
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
 
       - name: Set up python
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
       - name: Tune the OS
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         timeout-minutes: 5
         uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
-        if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
+        if: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup') }}
         timeout-minutes: 8
         uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
       - name: Setup Percona Apt repository
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
         timeout-minutes: 5
         uses: $/.github/actions/setup-percona-repo
 
       - name: Setup Percona Server and XtraBackup
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
         timeout-minutes: 5
         run: |
           sudo percona-release setup pdps8.0
@@ -172,7 +198,7 @@ jobs:
           sudo apt-get -qq install -y percona-xtrabackup-80 lz4
 
       - name: Get dependencies
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         timeout-minutes: 10
         run: |
           # Install mysql-shell for non-XtraBackup shards
@@ -182,17 +208,16 @@ jobs:
 
           sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
           sudo service etcd stop
-          go mod download
 
       - name: Install MicroCeph
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
         timeout-minutes: 10
         uses: $/.github/actions/setup-microceph
 
       # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
       - name: Cache ZooKeeper
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
         # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -200,15 +225,15 @@ jobs:
           key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
 
       - name: Install Consul and ZooKeeper
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
         timeout-minutes: 5
         run: make BUILD_PROTOC=0 tools
 
       - name: Setup launchable dependencies
         if: |
+          needs.generate-matrix.outputs.end_to_end == 'true' &&
           github.event_name == 'pull_request' &&
           github.event.pull_request.draft == false &&
-          steps.changes.outputs.end_to_end == 'true' &&
           github.base_ref == 'main'
         run: |
           pip3 install --user launchable~=1.0 > /dev/null
@@ -216,7 +241,7 @@ jobs:
           launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
       - name: Run cluster endtoend test
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         timeout-minutes: 45
         env:
           LIMIT_RESOURCES: ${{ contains(matrix.needs, 'limit-resources') }}
@@ -269,16 +294,16 @@ jobs:
 
       - name: Record test results in launchable
         if: |
+          needs.generate-matrix.outputs.end_to_end == 'true' &&
           github.event_name == 'pull_request' &&
           github.event.pull_request.draft == false &&
-          steps.changes.outputs.end_to_end == 'true' &&
           github.base_ref == 'main' &&
           !cancelled()
         run: |
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
       - name: Test Summary
-        if: steps.changes.outputs.end_to_end == 'true' && failure()
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && failure()
         uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
         with:
           paths: "_test/junit/*.xml"

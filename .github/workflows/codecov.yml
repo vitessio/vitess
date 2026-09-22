@@ -57,7 +57,7 @@ jobs:
         predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
             - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     - name: Set up Go
@@ -130,8 +130,6 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
-
-        go mod download
 
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
