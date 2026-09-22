@@ -198,6 +198,8 @@ type (
 		ClearPrepareData(name string)
 
 		SetSysVar(name string, expr string)
+		// RemoveSysVar drops a system variable from the session, so that it no longer applies to connections
+		RemoveSysVar(name string)
 
 		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()
