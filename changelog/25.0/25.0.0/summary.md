@@ -436,6 +436,8 @@ A session targeted at a shard or key range (`USE ks:-80`, `USE ks/-80`) used to 
 
 A targeted session now takes the same path as an untargeted one. The assignment is evaluated on the target shard, stored in the session when it changes the value, and delivered to the shards as a `SET_VAR` hint when the variable supports one, or otherwise through the settings the session sends with its queries, which VTTablet serves from its settings pool. A targeted session no longer holds a reserved connection because of a `SET`, and a `SET` that does not change the value is ignored, as it already was for untargeted sessions.
 
+Evaluating the assigned expression no longer depends on the session's reserved connection. A session whose stored value a shard rejects, so that every reservation failed on the pre-query, could not be corrected before: the corrective `SET` was evaluated through the same reserved connection and failed the same way. The evaluation now runs on a pooled connection, so a corrective `SET` always gets through, and the next query carries the corrected value. Because the comparison is now against the shard's default rather than the session's current value, a `SET` on a variable the session already overrides always stores the new value, including one equal to the default, which previously left the old override in place. A `SET` that a shard rejects leaves the session's variables as they were.
+
 A targeted `SET` of a variable that VTGate only checks and ignores, such as a `GLOBAL` assignment, no longer fails when the target spans several shards; it is checked on the first shard of the target.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>

@@ -306,12 +306,23 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 }
 
 // evaluate runs the assignment on the probe shard and reports whether it changes the
-// variable's value, along with the evaluated value for the session to store.
+// variable's value, along with the evaluated value for the session to store. The query
+// runs outside the session's reserved connection and transaction: it only needs the
+// shard's own defaults, and the reserved connection's settings may hold the very value
+// this SET is replacing, which the shard may reject. It must also not reserve a shard
+// merely to evaluate an expression.
 func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (changed bool, storedValue string, err error) {
+	_, held := svs.heldValue(vcursor)
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
-	if svs.Name == "sql_mode" {
+	switch {
+	case svs.Name == "sql_mode":
 		sysVarExprValidationQuery = sqlModeJudgmentQuery(svs.Expr)
+	case held:
+		// The session already overrides this variable, so the shard's default is not
+		// the value to compare against: the new value is stored either way.
+		sysVarExprValidationQuery = fmt.Sprintf("select %s from dual", svs.Expr)
 	}
+	ctx = context.WithValue(ctx, IgnoreReserveTxn, true)
 	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.probeDestination()})
 	if err != nil {
 		return false, "", err
@@ -331,6 +342,7 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 		if err != nil {
 			return false, "", err
 		}
+		changed = changed || held
 	} else {
 		changed = len(qr.Rows) > 0
 		if changed {

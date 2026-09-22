@@ -805,3 +805,37 @@ func TestSetVarTargetedSession(t *testing.T) {
 	}, shardSaw())
 	assert.EqualValues(t, 1, sbc1.ReserveCount.Load(), "the settings travel with the first query to the shard")
 }
+
+// TestSetSysVarRecoversSessionWithRejectedStoredValue checks that a corrective SET gets
+// through a session whose stored value the shard rejects: the assignment is evaluated
+// outside the reserved connection, so the rejected pre-query does not precede it, and the
+// next query carries the corrected value.
+func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	// A session whose stored value the shard rejects: every reservation fails on
+	// the pre-query, so nothing that needs the reserved connection can run.
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		InReservedConn:       true,
+		SystemVariables:      map[string]string{"default_week_format": "'bad'"},
+	})
+
+	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"), "good")})
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 'good'", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	assert.Equal(t, "'good'", session.SystemVariables["default_week_format"])
+	assert.EqualValues(t, 0, lookup.ReserveCount.Load(), "evaluating the assignment must not reserve a connection")
+	utils.MustMatch(t, []*querypb.BoundQuery{
+		{Sql: "select 'good' from dual", BindVariables: map[string]*querypb.BindVariable{}},
+	}, lookup.Queries)
+	lookup.Queries = nil
+
+	// The next query reserves a connection whose settings carry the corrected value.
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	utils.MustMatch(t, []*querypb.BoundQuery{
+		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+	}, lookup.Queries)
+}
