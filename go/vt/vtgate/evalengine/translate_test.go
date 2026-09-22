@@ -399,6 +399,13 @@ func TestTranslationFailures(t *testing.T) {
 		}, {
 			expression:  "cast('3.4' as FLOAT(3))",
 			expectedErr: "Unsupported type conversion: FLOAT(3)",
+		}, {
+			// a qualified call names a stored function, whatever the name: MySQL evaluates it
+			expression:  "db.abs(-1)",
+			expectedErr: "expr cannot be translated, not supported: db.abs(-1)",
+		}, {
+			expression:  "db.user()",
+			expectedErr: "expr cannot be translated, not supported: db.user()",
 		},
 	}
 

@@ -96,7 +96,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		if !s.currentScope().inHaving {
 			break
 		}
-		if node.Name.EqualsAnyString(s.si.GetAggregateUDFs()) {
+		if node.Qualifier.IsEmpty() && node.Name.EqualsAnyString(s.si.GetAggregateUDFs()) {
 			s.currentScope().inHavingAggr = true
 		}
 	case *sqlparser.Where:
