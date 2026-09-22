@@ -192,7 +192,7 @@ func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T
 func TestCallProcedureDiscardsConnection(t *testing.T) {
 	setOltpPoolSize(t, 1)
 
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	connID := func() string {
 		qr, err := client.Execute("select connection_id()", nil)
 		require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestCallProcedureDiscardsConnection(t *testing.T) {
 	assert.NotEqual(t, before, after, "the connection a successful CALL ran on must not be reused")
 
 	_, err = client.Execute("call proc_select4()", nil)
-	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: acl-exempt)")
 	assert.NotEqual(t, after, connID(), "the connection a failed CALL ran on must not be reused either")
 }
 
