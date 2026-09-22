@@ -12,19 +12,26 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Online DDL flow')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 # This test ensures that our Online DDL + VReplication + throttler components
 # work using primary and replica vttablets built on different versions.
 
 jobs:
 
-  upgrade_downgrade_test:
-    timeout-minutes: 60
-    name: Run Upgrade Downgrade Test - Online DDL flow
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
+  # Path filtering and release-branch discovery run once here, on a
+  # GitHub-hosted runner, so that the test job below (on a large runner) is not
+  # started at all when nothing relevant changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
+      previous_release_ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+      next_release_ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
     steps:
+<<<<<<< HEAD
     - name: Harden the runner (Audit all outbound calls)
       uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
       with:
@@ -37,11 +44,47 @@ jobs:
           exit 1
         fi
 
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+=======
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
     - name: Check out commit's code
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        # Full history is needed to list the release branches.
         fetch-depth: 0
         persist-credentials: 'false'
+
+    - name: Set output with latest release branch
+      id: output-previous-release-ref
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        REF: ${{ github.ref }}
+      run: |
+        previous_release_ref=$(./tools/get_previous_release.sh "$BASE_REF" "$REF")
+        echo $previous_release_ref
+        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
+    - name: Set output with next release branch
+      id: output-next-release-ref
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        REF: ${{ github.ref }}
+      run: |
+        next_release_ref=$(./tools/get_next_release.sh "$BASE_REF" "$REF")
+        echo $next_release_ref
+        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -64,46 +107,81 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
-    - name: Set output with latest release branch
-      if: steps.changes.outputs.end_to_end == 'true'
-      id: output-previous-release-ref
-      env:
-        BASE_REF: ${{ github.base_ref }}
-        REF: ${{ github.ref }}
-      run: |
-        previous_release_ref=$(./tools/get_previous_release.sh "$BASE_REF" "$REF")
-        echo $previous_release_ref
-        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+  upgrade_downgrade_test:
+    needs: changes
+    # Runs when the gate found relevant changes, and also when the gate itself
+    # failed, so that failure is reported instead of silently skipping a
+    # required status check.
+    if: ${{ !cancelled() && (needs.changes.result == 'failure' || (needs.changes.outputs.end_to_end == 'true')) }}
+    timeout-minutes: 60
+    name: Run Upgrade Downgrade Test - Online DDL flow
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
-    - name: Set output with next release branch
-      if: steps.changes.outputs.end_to_end == 'true'
-      id: output-next-release-ref
-      env:
-        BASE_REF: ${{ github.base_ref }}
-        REF: ${{ github.ref }}
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
       run: |
-        next_release_ref=$(./tools/get_next_release.sh "$BASE_REF" "$REF")
-        echo $next_release_ref
-        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Fail if the gate job failed
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Check out commit's code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
 
     - name: Tune the OS
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: ./.github/actions/tune-os
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+=======
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Set up python
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+=======
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Setup MySQL
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: ./.github/actions/setup-mysql
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
+      uses: $/.github/actions/setup-mysql
+=======
+      timeout-minutes: 8
+      uses: $/.github/actions/setup-mysql
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
         flavor: mysql-8.4
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
@@ -113,17 +191,34 @@ jobs:
         sudo service etcd stop
 
     # Checkout to the last release of Vitess
+<<<<<<< HEAD
     - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+=======
+    - name: Check out last version's code (${{ needs.changes.outputs.previous_release_ref }})
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
-        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        ref: ${{ needs.changes.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
     - name: Set up Go
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+=======
+      uses: $/.github/actions/setup-go
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
+<<<<<<< HEAD
         go-version-file: go.mod
         cache: false
 
@@ -131,9 +226,21 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        go-version-file: go.mod
+        cache: false
+
+    - name: Get dependencies for the last release
+      if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
+      run: |
+        go mod download
+=======
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Building last release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building last release: $(git rev-parse HEAD)"
@@ -144,17 +251,34 @@ jobs:
         rm -Rf bin/*
 
     # Checkout to the next release of Vitess
+<<<<<<< HEAD
     - name: Check out next version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    - name: Check out next version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+=======
+    - name: Check out next version's code (${{ needs.changes.outputs.next_release_ref }})
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
-        ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
+        ref: ${{ needs.changes.outputs.next_release_ref }}
         persist-credentials: 'false'
 
     - name: Set up Go
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+=======
+      uses: $/.github/actions/setup-go
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
+<<<<<<< HEAD
         go-version-file: go.mod
         cache: false
 
@@ -162,9 +286,21 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        go-version-file: go.mod
+        cache: false
+
+    - name: Get dependencies for the next release
+      if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
+      run: |
+        go mod download
+=======
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Building next release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building next release: $(git rev-parse HEAD)"
@@ -176,15 +312,30 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+=======
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
         persist-credentials: 'false'
 
     - name: Set up Go
+<<<<<<< HEAD
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+=======
+      uses: $/.github/actions/setup-go
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       with:
+<<<<<<< HEAD
         go-version-file: go.mod
         cache: false
 
@@ -192,9 +343,22 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        go-version-file: go.mod
+        cache: false
+
+    - name: Get dependencies for this commit
+      if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
+      run: |
+        go mod download
+=======
+        # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
+        # must not be the one saving the branch caches; restore on PRs only.
+        cache: ${{ github.event_name == 'pull_request' }}
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Building the binaries for this commit
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building this SHA: $(git rev-parse HEAD)"
@@ -205,7 +369,6 @@ jobs:
 
     # Copy vttablet and related binaries under new names
     - name: Use current version Vtctl, and other version VTTablet
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -221,7 +384,6 @@ jobs:
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n-1
     - name: Run Online DDL tests (primary=N, replica=N-1)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -233,7 +395,6 @@ jobs:
 
     # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N-1, replica=N)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -245,7 +406,6 @@ jobs:
 
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N+1, replica=N)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -257,7 +417,6 @@ jobs:
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n+1
     - name: Run Online DDL tests (primary=N, replica=N+1)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

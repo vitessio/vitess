@@ -68,7 +68,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
-        go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.vtadmin_changes == 'true'

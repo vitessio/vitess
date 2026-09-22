@@ -50,12 +50,20 @@ jobs:
         token: ''
         filters: |
           changed_files:
+<<<<<<< HEAD
             - .github/workflows/codecov.yml
             - .github/actions/setup-mysql/action.yml
             - 'go/**'
             - go.mod
             - go.sum
             - Makefile
+||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+=======
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+>>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
     - name: Set up Go
       if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
@@ -124,8 +132,6 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
-
-        go mod download
 
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
