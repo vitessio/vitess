@@ -15,35 +15,36 @@ limitations under the License.
 package grpcoptionaltls
 
 import (
-	"crypto/tls"
 	"net"
 
 	"google.golang.org/grpc/credentials"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/stats"
 )
 
-type (
-	optionalTLSCreds struct {
-		credentials.TransportCredentials
-		// requireClientCert is set when the TLS configuration requires the
-		// client to present a certificate. A plain-text connection can
-		// never present one, so it is refused rather than served without
-		// the authentication the server was configured to require.
-		requireClientCert bool
-	}
-
-	info struct {
-		credentials.CommonAuthInfo
-	}
+const (
+	transportTLS       = "tls"
+	transportPlaintext = "plaintext"
 )
+
+// ConnectionCounts counts the connections a server with optional TLS has
+// handshaken, by transport. Optional TLS serves the plain-text ones
+// unauthenticated so that clients can move to TLS one at a time; the plaintext
+// count reaching zero is what tells an operator that every client has moved
+// and the flag can be dropped.
+var ConnectionCounts = stats.NewCountersWithSingleLabel(
+	"GrpcOptionalTlsConnections",
+	"Connections handshaken by a gRPC server with optional TLS, by transport (tls or plaintext). Plain-text connections are served unauthenticated; optional TLS can be turned off once no more arrive.",
+	"Transport",
+	transportPlaintext, transportTLS,
+)
+
+type optionalTLSCreds struct {
+	credentials.TransportCredentials
+}
 
 func (c *optionalTLSCreds) Clone() credentials.TransportCredentials {
-	return &optionalTLSCreds{
-		TransportCredentials: c.TransportCredentials.Clone(),
-		requireClientCert:    c.requireClientCert,
-	}
+	return New(c.TransportCredentials.Clone())
 }
 
 func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -55,14 +56,15 @@ func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials
 
 	wc := NewWrappedConn(conn, bytes)
 	if isTLS {
-		return c.TransportCredentials.ServerHandshake(wc)
+		tlsConn, authInfo, err := c.TransportCredentials.ServerHandshake(wc)
+		if err != nil {
+			return nil, nil, err
+		}
+		ConnectionCounts.Add(transportTLS, 1)
+		return tlsConn, authInfo, nil
 	}
 
-	if c.requireClientCert {
-		conn.Close()
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNAUTHENTICATED, "plain-text connection refused: the server requires a client certificate, which only a TLS connection can present")
-	}
-
+	ConnectionCounts.Add(transportPlaintext, 1)
 	authInfo := info{
 		SecurityLevel: credentials.NoSecurity,
 	}
@@ -70,45 +72,12 @@ func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials
 	return wc, authInfo, nil
 }
 
-// New returns server credentials for config that accept plain-text
-// connections as well as TLS ones, unless config requires the client to
-// present a certificate, see RequiresClientCert: a plain-text connection
-// cannot present one, so those are then refused and only TLS is served.
-func New(config *tls.Config) credentials.TransportCredentials {
-	return &optionalTLSCreds{
-		TransportCredentials: credentials.NewTLS(config),
-		requireClientCert:    RequiresClientCert(config),
-	}
+func New(tc credentials.TransportCredentials) credentials.TransportCredentials {
+	return &optionalTLSCreds{TransportCredentials: tc}
 }
 
-// RequiresClientCert reports whether config requires the client to present a
-// certificate, going by its ClientAuth. Only the policies known not to
-// require one say no, so that one this package does not know is taken to
-// require it. So is a config whose callbacks leave it open, as none of them
-// ever sees a plain-text connection:
-//
-//   - a GetConfigForClient callback can hand a TLS client a configuration that
-//     requires a certificate whatever this one says;
-//   - a VerifyConnection or VerifyPeerCertificate callback can refuse a TLS
-//     client that presented no certificate where the policy requests one and
-//     leaves presenting it to the client, as Go runs both for such a client.
-//     With NoClientCert no certificate is requested and no client can present
-//     one, so no callback can be what requires it.
-func RequiresClientCert(config *tls.Config) bool {
-	if config == nil {
-		return false
-	}
-	if config.GetConfigForClient != nil {
-		return true
-	}
-	switch config.ClientAuth {
-	case tls.NoClientCert:
-		return false
-	case tls.RequestClientCert, tls.VerifyClientCertIfGiven:
-		return config.VerifyConnection != nil || config.VerifyPeerCertificate != nil
-	default:
-		return true
-	}
+type info struct {
+	credentials.CommonAuthInfo
 }
 
 func (info) AuthType() string {

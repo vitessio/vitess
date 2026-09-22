@@ -226,15 +226,17 @@ func createGRPCServer() {
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-			if grpcoptionaltls.RequiresClientCert(config) {
-				// A plain-text connection cannot present the client
-				// certificate that --grpc-ca requires, so serving it would
-				// leave the requirement to the clients that choose TLS.
-				log.Warn("Optional TLS is active, but client certificates are required (--grpc-ca). Plain-text connections cannot present one and will be refused")
+			// Optional TLS is for moving clients to TLS one at a time: the
+			// plain-text connections are served, unauthenticated, until the
+			// last client has moved and the flag is dropped. Say so plainly
+			// when a client CA is configured, since --grpc-ca then only holds
+			// for the TLS connections.
+			if gRPCCA != "" {
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS; the GrpcOptionalTlsConnections stat shows when that is")
 			} else {
 				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
 			}
-			creds = grpcoptionaltls.New(config)
+			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
