@@ -84,10 +84,10 @@ func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	assert.Contains(t, resetQuery, "sql_safe_updates = default")
 }
 
-// Every setting other than sql_mode is reset with the DEFAULT keyword. MySQL accepts
-// `SET var = DEFAULT` for any system variable and rejects the string 'default' for
-// most of them, so the reset must use the keyword for the pool to be able to reuse the
-// connection rather than replace it.
+// Every setting other than sql_mode, foreign_key_checks and unique_checks is reset with
+// the DEFAULT keyword. MySQL accepts `SET var = DEFAULT` for any system variable and
+// rejects the string 'default' for most of them, so the reset must use the keyword for
+// the pool to be able to reuse the connection rather than replace it.
 func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 

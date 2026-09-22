@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -58,14 +57,30 @@ func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 // value explicitly.
 func TestSettingsResetRestoresForeignKeyChecks(t *testing.T) {
 	resetTxConnPool(t)
-	// with a single connection in the pool, the settingless transaction below can only
-	// be served by the connection that carried the settings
-	txPoolSize := framework.Server.TxPoolSize()
-	require.NoError(t, framework.Server.SetTxPoolSize(t.Context(), 1))
-	t.Cleanup(func() { require.NoError(t, framework.Server.SetTxPoolSize(context.Background(), txPoolSize)) })
+
+	// hold every connection but one, so the settingless transaction below can only be
+	// served by the connection that carried the settings
+	txPoolSize := framework.Server.Config().TxPool.Size
+	holders := make([]*framework.QueryClient, 0, txPoolSize-1)
+	for range txPoolSize - 1 {
+		holder := framework.NewClient()
+		_, err := holder.BeginExecute("select 1", nil, nil)
+		require.NoError(t, err)
+		holders = append(holders, holder)
+	}
+	t.Cleanup(func() {
+		for _, holder := range holders {
+			assert.NoError(t, holder.Release())
+		}
+	})
 
 	client := framework.NewClient()
-	defer client.Release()
+	t.Cleanup(func() {
+		// the test rolls back both transactions; release only what a failure left behind
+		if client.TransactionID() != 0 || client.ReservedID() != 0 {
+			assert.NoError(t, client.Release())
+		}
+	})
 
 	query := "select connection_id(), @@foreign_key_checks, @@unique_checks"
 	settings := []string{"set @@foreign_key_checks = 0, @@unique_checks = 0"}
@@ -80,8 +95,8 @@ func TestSettingsResetRestoresForeignKeyChecks(t *testing.T) {
 	assert.Equal(t, "0", withSettings.Rows[0][1].ToString())
 	assert.Equal(t, "0", withSettings.Rows[0][2].ToString())
 
-	// a settingless transaction reuses the most recently released connection; it must
-	// see the checks on again
+	// a settingless transaction reuses the released connection; it must see the
+	// checks on again
 	fresh, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, client.Rollback())
