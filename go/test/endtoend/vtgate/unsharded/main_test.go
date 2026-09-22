@@ -350,7 +350,10 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		Port:   clusterInstance.VtgateMySQLPort,
 		DbName: "@primary",
 	}
-	const probe = "select @@session.transaction_isolation, @@session.time_zone, count(*), @@session.character_set_results from information_schema.innodb_temp_table_info"
+	// Read through a routed query (the FROM keeps vtgate from answering out of
+	// its own session) so every probe lands on a pooled backend connection.
+	const probe = "select @@session.transaction_isolation, @@session.time_zone, @@session.character_set_results from dual"
+	const tempTables = "select count(*) from information_schema.innodb_temp_table_info"
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -358,15 +361,24 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 	baseline := utils.Exec(t, conn, probe)
 	require.Len(t, baseline.Rows, 1)
 	require.NotEqual(t, "READ-UNCOMMITTED", baseline.Rows[0][0].ToString())
-	require.Equal(t, "0", baseline.Rows[0][2].ToString(), "no temp tables before the test")
-	require.Equal(t, "utf8mb4", baseline.Rows[0][3].ToString(), "the pooled connections negotiate utf8mb4")
+	require.Equal(t, "utf8mb4", baseline.Rows[0][2].ToString(), "the pooled connections negotiate utf8mb4")
+	require.Equal(t, "0", utils.Exec(t, conn, tempTables).Rows[0][0].ToString(), "no temp tables before the test")
 
 	assertClean := func(t *testing.T, what string) {
 		t.Helper()
+		// The session settings die with the CALL's connection, so every read
+		// after it must already see the backend's defaults.
 		for i := range 20 {
 			qr := utils.Exec(t, conn, probe)
 			require.Equal(t, baseline.Rows, qr.Rows, "%s: read %d after the CALL must see the backend's defaults, not the procedure's session residue", what, i)
 		}
+		// The temporary table does not: innodb_temp_table_info is server-wide
+		// and mysqld tears the discarded session down asynchronously once its
+		// socket closes, so the table can briefly outlive the CALL's response.
+		require.Eventually(t, func() bool {
+			qr, err := conn.ExecuteFetch(tempTables, 1, false)
+			return err == nil && len(qr.Rows) == 1 && qr.Rows[0][0].ToString() == "0"
+		}, 30*time.Second, 100*time.Millisecond, "%s: the procedure's temporary table must not outlive the connection it was created on", what)
 	}
 
 	t.Run("buffered", func(t *testing.T) {
@@ -386,14 +398,17 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		// borrows, so it must be in effect on the fresh connection the pool hands
 		// out after the CALL's connection is discarded. Probed through behavior
 		// MySQL decides under the setting (vtgate answers `select @@sql_mode`
-		// itself once the session holds the variable). Last subtest on this
-		// connection: the setting dies with it.
-		utils.Exec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
+		// itself once the session holds the variable), and the setting has to
+		// be one that flips the probe away from the server default: MySQL 8.0
+		// enables NO_ZERO_DATE out of the box, so clearing sql_mode is what
+		// makes the zero date come back as a value rather than NULL. Last
+		// subtest on this connection: the setting dies with it.
+		utils.Exec(t, conn, "set @@sql_mode = ''")
 		const q = "select str_to_date('00/00/0000', '%m/%d/%Y') from dual"
-		utils.AssertMatches(t, conn, q, `[[NULL]]`)
+		utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
 		utils.Exec(t, conn, "CALL dirty_session()")
 		for range 5 {
-			utils.AssertMatches(t, conn, q, `[[NULL]]`)
+			utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
 		}
 	})
 }
