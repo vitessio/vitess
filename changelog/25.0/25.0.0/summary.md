@@ -476,7 +476,9 @@ See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
 #### <a id="vtorc-emergency-reparent-require-primary-position"/>VTOrc can require the last known primary position in an emergency reparent</a>
 
-When every replica loses the same relay logs, the replicas look fully applied and `EmergencyReparentShard` (ERS) can promote a stale replica. ERS can now require a position on the new primary (see [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)), and VTOrc can use it. VTOrc stores the primary's `gtid_executed` on every successful poll. With the new flag, VTOrc requires that the new primary has received that stored set.
+VTOrc can now require that the new primary of an emergency reparent has received the last `gtid_executed` that VTOrc saw on the failed primary. VTOrc stores that GTID set on every successful poll of the primary, and passes it to `EmergencyReparentShard` (ERS) as the required position (see [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)).
+
+Use this to prevent the promotion of a stale replica when every replica lost the same received transactions. For example, a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1` can discard the relay logs on every replica. The replicas then look fully applied, and ERS alone cannot see that they are behind the primary.
 
 The feature is opt-in and disabled by default. Set `--emergency-reparent-require-primary-position` on VTOrc. VTOrc then passes the stored set to ERS when all of these are true:
 
