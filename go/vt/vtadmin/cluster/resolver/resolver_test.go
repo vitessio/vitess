@@ -292,7 +292,7 @@ func TestDialAuthority(t *testing.T) {
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
 			require.NoError(t, err)
 
-			defer listener.Close()
+			t.Cleanup(func() { listener.Close() })
 
 			authorities := make(chan string, 1)
 
@@ -306,7 +306,7 @@ func TestDialAuthority(t *testing.T) {
 			}))
 
 			go server.Serve(listener)
-			defer server.Stop()
+			t.Cleanup(server.Stop)
 
 			disco := fakediscovery.New()
 			disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
@@ -325,18 +325,17 @@ func TestDialAuthority(t *testing.T) {
 				grpc.WithResolvers(b))
 			require.NoError(t, err)
 
-			defer conn.Close()
+			t.Cleanup(func() { conn.Close() })
 
-			ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
-			defer cancel()
-
-			_ = conn.Invoke(ctx, "/vtadmin.Authority/Get", &vtadminpb.Cluster{}, &vtadminpb.Cluster{})
+			// The handler sends before it returns, so by the time the call completes the
+			// authority is already buffered and no waiting is needed.
+			_ = conn.Invoke(t.Context(), "/vtadmin.Authority/Get", &vtadminpb.Cluster{}, &vtadminpb.Cluster{})
 
 			select {
 			case authority := <-authorities:
 				assert.Equal(t, component, authority)
-			case <-ctx.Done():
-				t.Error("server received no request")
+			default:
+				assert.Fail(t, "server received no request")
 			}
 		})
 	}
