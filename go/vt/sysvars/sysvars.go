@@ -300,18 +300,21 @@ func SupportsSetVar(name string) bool {
 	return sys.SupportSetVar
 }
 
-// GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
-func GetInterestingVariables() []string {
-	var res []string
+// GetInterestingVariables returns the variables whose values VTGate substitutes in the
+// output of a SHOW VARIABLES command: the server identity VTGate advertises and, for the
+// session scope, the variables whose session values may not have reached the MySQL
+// connection. A SHOW GLOBAL VARIABLES reports the global values, which the session's
+// values must not replace.
+func GetInterestingVariables(global bool) []string {
+	// version, version comment and socket describe the server VTGate presents itself as
+	res := []string{Version.Name, VersionComment.Name, Socket.Name}
+	if global {
+		return res
+	}
 	// Add all the vitess aware variables
 	for _, variable := range VitessAware {
 		res = append(res, variable.Name)
 	}
-	// Also add version and version comment
-	res = append(res, Version.Name)
-	res = append(res, VersionComment.Name)
-	res = append(res, Socket.Name)
-
 	for _, variable := range UseReservedConn {
 		if variable.SupportSetVar {
 			res = append(res, variable.Name)

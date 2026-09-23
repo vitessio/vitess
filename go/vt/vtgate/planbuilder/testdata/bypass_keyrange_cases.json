@@ -230,5 +230,51 @@
         "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
       }
     }
+  },
+  {
+    "comment": "show variables on a targeted session substitutes the variables VTGate owns",
+    "query": "show variables",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SHOW",
+      "Original": "show variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "ExactKeyRange(-)",
+            "Query": "show variables"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show global variables on a targeted session substitutes the server identity",
+    "query": "show global variables",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SHOW",
+      "Original": "show global variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "ExactKeyRange(-)",
+            "Query": "show global variables"
+          }
+        ]
+      }
+    }
   }
 ]

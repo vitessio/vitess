@@ -200,13 +200,7 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		// No rewriting needed for prepare or execute statements.
 		return false
 	case *ShowBasic:
-		if node.Command != VariableGlobal && node.Command != VariableSession {
-			break
-		}
-		varsToAdd := sysvars.GetInterestingVariables()
-		for _, sysVar := range varsToAdd {
-			nz.bindVarNeeds.AddSysVar(sysVar)
-		}
+		nz.rewriteShowBasic(node)
 	}
 	b := nz.err == nil
 	if !b {
@@ -646,8 +640,7 @@ func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 // rewriteShowBasic handles the rewriting of SHOW statements, particularly for system variables.
 func (nz *normalizer) rewriteShowBasic(node *ShowBasic) {
 	if node.Command == VariableGlobal || node.Command == VariableSession {
-		varsToAdd := sysvars.GetInterestingVariables()
-		for _, sysVar := range varsToAdd {
+		for _, sysVar := range sysvars.GetInterestingVariables(node.Command == VariableGlobal) {
 			nz.bindVarNeeds.AddSysVar(sysVar)
 		}
 	}
