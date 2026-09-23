@@ -254,6 +254,29 @@ func TestResolveEmptyList(t *testing.T) {
 	r.Close()
 }
 
+var _ grpcresolver.AuthorityOverrider = (*builder)(nil)
+
+func TestOverrideAuthority(t *testing.T) {
+	t.Parallel()
+
+	b := &builder{scheme: "test"}
+
+	for _, component := range []string{"vtctld", "vtgate"} {
+		t.Run(component, func(t *testing.T) {
+			t.Parallel()
+
+			u, err := url.Parse(DialAddr(b, component))
+			require.NoError(t, err)
+
+			// Without the override grpc derives the authority from the endpoint, which
+			// DialAddr leaves empty, and an empty :authority is invalid HTTP/2.
+			authority := b.OverrideAuthority(grpcresolver.Target{URL: *u})
+			assert.NotEmpty(t, authority)
+			assert.Equal(t, component, authority)
+		})
+	}
+}
+
 func TestBuild(t *testing.T) {
 	t.Parallel()
 
