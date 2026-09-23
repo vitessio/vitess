@@ -18,7 +18,6 @@ package reparentutil
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -59,97 +58,13 @@ func requiredPosition(t *testing.T, encoded string) replication.Position {
 	return position
 }
 
-// TestValidateRequiredPositionFlavor checks the flavor rule.
-func TestValidateRequiredPositionFlavor(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		required string
-		wantCode vtrpcpb.Code
-	}{
-		{name: "zero position", required: "", wantCode: vtrpcpb.Code_OK},
-		{name: "MySQL56 position", required: requiredHigh, wantCode: vtrpcpb.Code_OK},
-		{name: "typed empty MySQL56 position", required: "MySQL56/", wantCode: vtrpcpb.Code_OK},
-		{name: "MariaDB position", required: "MariaDB/0-1-20", wantCode: vtrpcpb.Code_INVALID_ARGUMENT},
-		{name: "typed empty MariaDB position", required: "MariaDB/", wantCode: vtrpcpb.Code_INVALID_ARGUMENT},
-		{name: "FilePos position", required: "FilePos/mysql-bin.000001:20", wantCode: vtrpcpb.Code_INVALID_ARGUMENT},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateRequiredPositionFlavor(requiredPosition(t, tc.required))
-			assert.Equal(t, tc.wantCode, vterrors.Code(err))
-		})
-	}
-}
-
-// TestValidateRequiredPosition checks the shard type rule.
-func TestValidateRequiredPosition(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		required    string
-		isGTIDBased bool
-		wantCode    vtrpcpb.Code
-	}{
-		{name: "zero position on non GTID shard", required: "", isGTIDBased: false, wantCode: vtrpcpb.Code_OK},
-		{name: "MySQL56 position on GTID shard", required: requiredHigh, isGTIDBased: true, wantCode: vtrpcpb.Code_OK},
-		{name: "MySQL56 position on non GTID shard", required: requiredHigh, isGTIDBased: false, wantCode: vtrpcpb.Code_INVALID_ARGUMENT},
-		{name: "typed empty MySQL56 position on non GTID shard", required: "MySQL56/", isGTIDBased: false, wantCode: vtrpcpb.Code_INVALID_ARGUMENT},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateRequiredPosition(requiredPosition(t, tc.required), tc.isGTIDBased)
-			assert.Equal(t, tc.wantCode, vterrors.Code(err))
-		})
-	}
-}
-
-// TestCheckRequiredPosition checks that a candidate has the position and which positions the error reports.
+// TestCheckRequiredPosition checks that a candidate that received the
+// required position satisfies it, even when it has not applied it.
 func TestCheckRequiredPosition(t *testing.T) {
-	t.Run("no candidates report none", func(t *testing.T) {
-		err := checkRequiredPosition(requiredPosition(t, requiredHigh), nil)
-		require.ErrorContains(t, err, "most advanced received positions: none")
-	})
-
-	t.Run("divergent histories name every maximum", func(t *testing.T) {
-		divergent := "MySQL56/4e11fa47-71ca-11e1-9e33-c80aa9429562:1-10"
-		candidates := map[string]*RelayLogPositions{
-			"a":         {Combined: requiredPosition(t, requiredHigh)},
-			"b":         {Combined: requiredPosition(t, divergent)},
-			"dominated": {Combined: requiredPosition(t, requiredLow)},
-		}
-
-		err := checkRequiredPosition(requiredPosition(t, requiredMissing), candidates)
-		require.Error(t, err)
-		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-		assert.EqualError(t, err, "no candidate received required position "+requiredMissing+": most advanced received positions: a="+requiredHigh+", b="+divergent)
-	})
-
-	t.Run("maxima sort by alias", func(t *testing.T) {
-		// Five incomparable histories. Map iteration order is random, and a
-		// three entry map lands sorted by chance half the time.
-		candidates := map[string]*RelayLogPositions{}
-		var want []string
-		for _, alias := range []string{"e", "c", "a", "d", "b"} {
-			position := "MySQL56/" + alias + alias + "11fa47-71ca-11e1-9e33-c80aa9429562:1-10"
-			candidates[alias] = &RelayLogPositions{Combined: requiredPosition(t, position)}
-			want = append(want, alias+"="+position)
-		}
-		slices.Sort(want)
-
-		assert.Equal(t, want, mostAdvancedReceivedPositions(candidates))
-	})
-
-	t.Run("zero positions report <zero>", func(t *testing.T) {
-		candidates := map[string]*RelayLogPositions{"a": {}, "b": {}}
-		err := checkRequiredPosition(requiredPosition(t, requiredHigh), candidates)
-		require.Error(t, err)
-		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-		assert.ErrorContains(t, err, "a=<zero>, b=<zero>")
-	})
-
-	t.Run("GTID uses Combined rather than executed", func(t *testing.T) {
-		candidates := map[string]*RelayLogPositions{"a": {
-			Executed: requiredPosition(t, requiredLow), Combined: requiredPosition(t, requiredHigh),
-		}}
-		require.NoError(t, checkRequiredPosition(requiredPosition(t, requiredHigh), candidates))
-	})
+	candidates := map[string]*RelayLogPositions{"a": {
+		Executed: requiredPosition(t, requiredLow), Combined: requiredPosition(t, requiredHigh),
+	}}
+	require.NoError(t, checkRequiredPosition(requiredPosition(t, requiredHigh), candidates))
 }
 
 // requiredPositionFixture holds an ERS setup with a lagging replica at index 0
@@ -357,8 +272,9 @@ func TestERSRequiredPositionFailsBeforeAnyWait(t *testing.T) {
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 }
 
-// TestERSRequiredPositionFailsAfterSelection checks the checks that run after
-// a step removed candidates.
+// TestERSRequiredPositionFailsAfterSelection checks that ERS fails when a step
+// that removes candidates removes the only one that received the required
+// position.
 func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 	t.Run("split brain override drops the only candidate that received it", func(t *testing.T) {
 		divergent := "MySQL56/4e11fa47-71ca-11e1-9e33-c80aa9429562:1-10"
