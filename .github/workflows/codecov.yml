@@ -2,11 +2,8 @@ name: Code Coverage
 on:
   schedule:
     - cron: '0 0 * * 6'  # Saturday midnight UTC
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: '**'
+  # No push trigger: a push has no pull request base to diff against, so push
+  # runs only ever failed (on Go changes) or skipped the upload.
   pull_request:
     branches: '**'
 concurrency:
