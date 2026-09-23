@@ -462,9 +462,11 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 #### <a id="ers-required-position"/>`EmergencyReparentShard` can require a position on the new primary</a>
 
-`EmergencyReparentShard` only compared candidates to each other. When every candidate lost the same relay log, for example after `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, they all looked fully applied and ERS promoted a stale replica.
+`EmergencyReparentShard` (ERS) can now require that the new primary has received a given position. A new `--required-position` flag, and a `required_position` field on the `EmergencyReparentShard` RPC, names that position. The new primary must have it applied or still in its relay log. The flag accepts a MySQL GTID set with or without the `MySQL56/` prefix.
 
-A new `--required-position` flag (and `required_position` field on the `EmergencyReparentShard` RPC) names a position the new primary must have received, applied or still in its relay log. It accepts a MySQL GTID set with or without the `MySQL56/` prefix. If no candidate has received it, ERS fails with `FAILED_PRECONDITION` and reports the most advanced received positions it found, before it waits on any relay log. The check supports MySQL GTID shards only. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
+Use this when you know a position that the new primary must not lose, for example the last `gtid_executed` of the failed primary. ERS compares the candidates only to each other. When every candidate lost the same received transactions, for example after a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, the candidates look fully applied, and ERS alone cannot see that they are behind.
+
+If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found. The check supports MySQL GTID shards only. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
