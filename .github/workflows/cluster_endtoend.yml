@@ -71,89 +71,7 @@ jobs:
           ' test/config.json test/config_partial_keyspace.json)
 
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
-<<<<<<< HEAD
-
-  test:
-    needs: generate-matrix
-    if: needs.generate-matrix.outputs.matrix != ''
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-
-    name: Run endtoend tests on Cluster (${{ matrix.shard }})
-    runs-on: ${{ contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
-      - name: Check Memory
-        if: contains(matrix.needs, 'memory-check')
-        run: |
-          totalMem=$(free -g | awk 'NR==2 {print $2}')
-          echo "total memory $totalMem GB"
-          if [[ "$totalMem" -lt 15 ]]; then
-            echo "Less memory than required"
-            exit 1
-          fi
-
-      - name: Check out code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: "false"
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-
-  test:
-    needs: generate-matrix
-    if: needs.generate-matrix.outputs.matrix != ''
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-
-    name: Run endtoend tests on Cluster (${{ matrix.shard }})
-    runs-on: ${{ contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
-      - name: Check Memory
-        if: contains(matrix.needs, 'memory-check')
-        run: |
-          totalMem=$(free -g | awk 'NR==2 {print $2}')
-          echo "total memory $totalMem GB"
-          if [[ "$totalMem" -lt 15 ]]; then
-            echo "Less memory than required"
-            exit 1
-          fi
-
-      - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: "false"
-=======
           echo "shard_count=$(echo "$matrix" | jq length)" >> $GITHUB_OUTPUT
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -205,7 +123,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
         with:
           egress-policy: audit
 
@@ -232,91 +150,33 @@ jobs:
 
       - name: Check out code
         if: needs.generate-matrix.outputs.end_to_end == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: "false"
 
       - name: Set up Go
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version-file: go.mod
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: $/.github/actions/setup-go
-=======
-        if: needs.generate-matrix.outputs.end_to_end == 'true'
-        uses: $/.github/actions/setup-go
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
       - name: Set up python
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-=======
         if: needs.generate-matrix.outputs.end_to_end == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
       - name: Tune the OS
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/tune-os
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 5
-        uses: $/.github/actions/tune-os
-=======
         if: needs.generate-matrix.outputs.end_to_end == 'true'
-        timeout-minutes: 5
         uses: $/.github/actions/tune-os
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
       - name: Setup MySQL
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
-        uses: ./.github/actions/setup-mysql
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
-        timeout-minutes: 8
-        uses: $/.github/actions/setup-mysql
-=======
         if: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup') }}
-        timeout-minutes: 8
         uses: $/.github/actions/setup-mysql
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
         with:
           flavor: mysql-8.4
 
-<<<<<<< HEAD
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-      - name: Setup Percona Apt repository
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
-        timeout-minutes: 5
-        uses: $/.github/actions/setup-percona-repo
-
-=======
-      - name: Setup Percona Apt repository
-        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
-        timeout-minutes: 5
-        uses: $/.github/actions/setup-percona-repo
-
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
       - name: Setup Percona Server and XtraBackup
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
-        timeout-minutes: 5
-=======
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
-        timeout-minutes: 5
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
         run: |
           sudo apt-get -qq update
           sudo apt-get -qq install -y lsb-release gnupg2
@@ -347,47 +207,11 @@ jobs:
       - name: Install MicroCeph
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
         timeout-minutes: 10
-<<<<<<< HEAD
-        uses: ./.github/actions/setup-microceph
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
         uses: $/.github/actions/setup-microceph
-
-      # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
-      # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
-      - name: Cache ZooKeeper
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: dist/vt-zookeeper-*
-          key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
-=======
-        uses: $/.github/actions/setup-microceph
-
-      # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
-      # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
-      - name: Cache ZooKeeper
-        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: dist/vt-zookeeper-*
-          key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
 
       - name: Install Consul and ZooKeeper
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        run: make tools
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        timeout-minutes: 5
-        run: make BUILD_PROTOC=0 tools
-=======
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        timeout-minutes: 5
-        run: make BUILD_PROTOC=0 tools
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        run: make tools
 
       - name: Setup launchable dependencies
         if: |
@@ -463,16 +287,8 @@ jobs:
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
       - name: Test Summary
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true' && failure()
-        uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-        if: steps.changes.outputs.end_to_end == 'true' && failure()
-        uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
-=======
         if: needs.generate-matrix.outputs.end_to_end == 'true' && failure()
-        uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+        uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
         with:
           paths: "_test/junit/*.xml"
           show: "fail"
