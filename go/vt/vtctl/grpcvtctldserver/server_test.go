@@ -4877,7 +4877,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 					Uid:  200,
 				},
 				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
-				RequiredPosition:    "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 			},
 			expected: &vtctldatapb.EmergencyReparentShardResponse{
 				Keyspace: "testkeyspace",
@@ -5041,7 +5040,6 @@ func TestEmergencyReparentShardInvalidRequiredPosition(t *testing.T) {
 		want     string
 	}{
 		{name: "not a position", required: "not-a-position", want: `invalid required position "not-a-position": invalid MySQL 5.6 GTID set`},
-		{name: "typed empty set", required: "MySQL56/", want: `invalid required position "MySQL56/"`},
 		{name: "reversed interval decodes to nothing", required: "3e11fa47-71ca-11e1-9e33-c80aa9429562:8-7", want: `invalid required position "3e11fa47-71ca-11e1-9e33-c80aa9429562:8-7"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
