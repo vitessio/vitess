@@ -19,13 +19,18 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
@@ -273,6 +278,66 @@ func TestOverrideAuthority(t *testing.T) {
 			authority := b.OverrideAuthority(grpcresolver.Target{URL: *u})
 			assert.NotEmpty(t, authority)
 			assert.Equal(t, component, authority)
+		})
+	}
+}
+
+// TestDialAuthority checks the :authority grpc sends when dialing through the resolver.
+// TestOverrideAuthority covers the method on its own; this covers grpc using it.
+func TestDialAuthority(t *testing.T) {
+	t.Parallel()
+
+	for _, component := range []string{"vtctld", "vtgate"} {
+		t.Run(component, func(t *testing.T) {
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			defer listener.Close()
+
+			authorities := make(chan string, 1)
+
+			// No service is registered, so this handler answers any method.
+			server := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+				md, _ := metadata.FromIncomingContext(stream.Context())
+				// Joined, not indexed: an empty authority never reaches the metadata.
+				authorities <- strings.Join(md.Get(":authority"), "")
+
+				return nil
+			}))
+
+			go server.Serve(listener)
+			defer server.Stop()
+
+			disco := fakediscovery.New()
+			disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
+				Hostname: listener.Addr().String(),
+			})
+			disco.AddTaggedGates(nil, &vtadminpb.VTGate{
+				Hostname: listener.Addr().String(),
+			})
+
+			opts := testopts
+			opts.Discovery = disco
+			b := opts.NewBuilder("test")
+
+			conn, err := grpc.NewClient(DialAddr(b, component),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(b))
+			require.NoError(t, err)
+
+			defer conn.Close()
+
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+			defer cancel()
+
+			_ = conn.Invoke(ctx, "/vtadmin.Authority/Get", &vtadminpb.Cluster{}, &vtadminpb.Cluster{})
+
+			select {
+			case authority := <-authorities:
+				assert.Equal(t, component, authority)
+			case <-ctx.Done():
+				t.Error("server received no request")
+			}
 		})
 	}
 }
