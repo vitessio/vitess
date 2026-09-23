@@ -385,7 +385,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 
 	requiredPosition, err := requiredPositionForRecovery(tablet, ersLogger)
 	if err != nil {
-		return false, topologyRecovery, err
+		return true, topologyRecovery, err
 	}
 
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, ersLogger).ReparentShard(ctx,
