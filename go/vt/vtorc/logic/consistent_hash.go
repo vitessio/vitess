@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,57 +17,72 @@ limitations under the License.
 package logic
 
 import (
-	"hash/fnv"
-	"sync/atomic"
+	"strconv"
+
+	"github.com/cespare/xxhash/v2"
 )
 
-// bucketAssignments maps virtual bucket index → ring partition index.
-// When set, computePrimary uses it instead of direct hash modulo. Loaded from
-// --vtorc-ring-assignments-file at startup; a nil pointer means pure hash mode.
+// ringWeight returns the rendezvous-hashing (HRW) weight of a ring index for a
+// keyspace/shard key. The weight depends only on the (index, key) pair and not
+// on the rest of the ring, which is what keeps ownership stable as the ring
+// resizes: adding or removing a different index never changes this value.
 //
-// It is published through an atomic.Pointer because loadRingAssignmentsFile runs
-// inside the discovery goroutine while the /debug/vars handler may concurrently
-// read it via the VtorcRingBuckets gauge.
-var bucketAssignments atomic.Pointer[[]int]
-
-// computePrimary returns the primary ring partition index for the given
-// keyspace/shard. When a bucket assignment file is loaded, the key is hashed
-// into a virtual bucket and the file's mapping determines the partition.
-// Otherwise, the partition is derived directly from the hash modulo ringSize.
-func computePrimary(keyspace, shard string, ringSize int) int {
-	h := fnv.New32a()
-	h.Write([]byte(keyspace + "/" + shard))
-	// int is 64-bit on the platforms VTOrc runs on, so int(h.Sum32()) is the
-	// non-negative hash and the modulus never narrows ringSize to uint32.
-	if ba := bucketAssignments.Load(); ba != nil {
-		bucket := int(h.Sum32()) % len(*ba)
-		return (*ba)[bucket]
-	}
-	return int(h.Sum32()) % ringSize
+// xxhash is used (rather than a weaker hash such as fnv) because HRW relies on
+// the per-index weights for a given key being effectively independent; xxhash's
+// avalanche gives that when only the index prefix changes. This mirrors the
+// rendezvous hashing already used by vtgate's balancer (tabletWeight).
+func ringWeight(ringIndex int, keyspaceShard string) uint64 {
+	h := xxhash.New()
+	_, _ = h.WriteString(strconv.Itoa(ringIndex))
+	_, _ = h.WriteString("#")
+	_, _ = h.WriteString(keyspaceShard)
+	return h.Sum64()
 }
 
-// isInRingSegment reports whether the VTOrc instance with the given ringIndex
-// should watch the keyspace/shard pair based on consistent hash ring assignment.
+// higherRank reports whether candidate a outranks candidate b under HRW: the
+// higher weight wins, and equal weights (a vanishingly rare 64-bit collision)
+// break toward the lower index. The tie-break is deterministic so every VTOrc
+// instance computes the same ordering and agrees on the watcher set.
+func higherRank(weightA uint64, indexA int, weightB uint64, indexB int) bool {
+	if weightA != weightB {
+		return weightA > weightB
+	}
+	return indexA < indexB
+}
+
+// isInRingSegment reports whether the VTOrc instance with ringIndex is one of
+// the watchersPerShard highest-ranked instances for the keyspace/shard under
+// rendezvous hashing, i.e. whether this instance should watch that shard.
 //
-// Each shard has exactly one primary owner determined by computePrimary. The two
-// ring-adjacent instances (left and right neighbors) also watch the segment for
-// HA, giving three-way coverage per shard at all times.
+// Because HRW weights are independent of the candidate set, the top-k watcher
+// sets for ring sizes N and N+1 always share at least k-1 pre-existing
+// instances. During a rolling resize where instances briefly run different
+// ring sizes, every shard therefore keeps at least k-1 live watchers at all
+// times, with no staging window required.
 //
-// Ring sizes of 3 or fewer always produce full overlap (every instance is
-// simultaneously primary and neighbor for every shard), so partitioning only
-// takes effect at ringSize >= 4. For ringSize <= 3 this function always
-// returns true, matching the full-fleet default behavior.
-func isInRingSegment(keyspace, shard string, ringIndex, ringSize int) bool {
-	if ringSize <= 3 {
+// When ringSize <= watchersPerShard every instance is always within the top-k,
+// so all instances watch every shard — matching the full-fleet default.
+// Partitioning only reduces per-instance load once ringSize > watchersPerShard.
+func isInRingSegment(keyspace, shard string, ringIndex, ringSize, watchersPerShard int) bool {
+	if ringSize <= watchersPerShard {
 		return true
 	}
-	primary := computePrimary(keyspace, shard, ringSize)
-	left := (primary + 1) % ringSize
-	// Compute the predecessor without the "+ ringSize" addition, which could
-	// overflow int for ring sizes near math.MaxInt.
-	right := primary - 1
-	if right < 0 {
-		right += ringSize
+	key := keyspace + "/" + shard
+	self := ringWeight(ringIndex, key)
+	// This instance is a watcher iff fewer than watchersPerShard other instances
+	// outrank it for this key. Stop early once enough higher-ranked instances
+	// are found.
+	higher := 0
+	for i := 0; i < ringSize; i++ {
+		if i == ringIndex {
+			continue
+		}
+		if higherRank(ringWeight(i, key), i, self, ringIndex) {
+			higher++
+			if higher >= watchersPerShard {
+				return false
+			}
+		}
 	}
-	return ringIndex == primary || ringIndex == left || ringIndex == right
+	return true
 }

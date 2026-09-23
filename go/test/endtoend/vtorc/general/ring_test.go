@@ -36,6 +36,7 @@ func TestConsistentHashRing(t *testing.T) {
 	orcExtraArgs := []string{
 		"--vtorc-ring-size=4",
 		"--vtorc-ring-index=0",
+		"--vtorc-ring-watchers-per-shard=3",
 	}
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, orcExtraArgs, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
@@ -53,11 +54,10 @@ func TestConsistentHashRing(t *testing.T) {
 	// The ring configuration is published via exported vars.
 	utils.CheckVarExists(t, vtorc, "VtorcRingSize")
 	utils.CheckVarExists(t, vtorc, "VtorcRingIndex")
-	utils.CheckVarExists(t, vtorc, "VtorcRingBuckets")
+	utils.CheckVarExists(t, vtorc, "VtorcRingWatchersPerShard")
 
 	vars := vtorc.GetVars()
 	require.EqualValues(t, 4, utils.GetIntFromValue(vars["VtorcRingSize"]))
 	require.EqualValues(t, 0, utils.GetIntFromValue(vars["VtorcRingIndex"]))
-	// No assignments file was provided, so pure hash mode (0 buckets loaded).
-	require.EqualValues(t, 0, utils.GetIntFromValue(vars["VtorcRingBuckets"]))
+	require.EqualValues(t, 3, utils.GetIntFromValue(vars["VtorcRingWatchersPerShard"]))
 }

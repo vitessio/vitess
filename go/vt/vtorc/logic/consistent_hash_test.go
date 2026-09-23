@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,277 +18,192 @@ package logic
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestIsInRingSegment_NoPartitioningBelowThreshold verifies that ring sizes of
-// 3 or fewer always return true regardless of index, matching the full-fleet
-// default. At these sizes every instance is simultaneously primary and neighbor
-// for every shard so there is no load-reduction benefit.
-func TestIsInRingSegment_NoPartitioningBelowThreshold(t *testing.T) {
-	for _, ringSize := range []int{0, 1, 2, 3} {
-		for ringIndex := 0; ringIndex < max(ringSize, 1); ringIndex++ {
-			assert.True(t, isInRingSegment("ks", "0", ringIndex, ringSize),
-				"ringSize=%d ringIndex=%d should always return true", ringSize, ringIndex)
+// watchersFor returns the set of ring indices that watch the given
+// keyspace/shard for a ring of ringSize with watchersPerShard watchers.
+func watchersFor(keyspace, shard string, ringSize, watchersPerShard int) map[int]bool {
+	watchers := make(map[int]bool)
+	for idx := 0; idx < ringSize; idx++ {
+		if isInRingSegment(keyspace, shard, idx, ringSize, watchersPerShard) {
+			watchers[idx] = true
+		}
+	}
+	return watchers
+}
+
+func TestRingWeight_Deterministic(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, ringWeight(3, "ks/0"), ringWeight(3, "ks/0"),
+			"same (index, key) must produce the same weight")
+	}
+}
+
+func TestRingWeight_VariesWithIndexAndKey(t *testing.T) {
+	assert.NotEqual(t, ringWeight(0, "ks/0"), ringWeight(1, "ks/0"),
+		"different indices should (almost always) differ")
+	assert.NotEqual(t, ringWeight(0, "ks/0"), ringWeight(0, "ks/1"),
+		"different keys should (almost always) differ")
+}
+
+func TestHigherRank(t *testing.T) {
+	// Higher weight wins regardless of index.
+	assert.True(t, higherRank(10, 5, 9, 0), "greater weight outranks")
+	assert.False(t, higherRank(9, 0, 10, 5), "lesser weight does not outrank")
+	// Equal weights break toward the lower index.
+	assert.True(t, higherRank(7, 1, 7, 2), "tie: lower index outranks higher index")
+	assert.False(t, higherRank(7, 2, 7, 1), "tie: higher index does not outrank lower index")
+	assert.False(t, higherRank(7, 2, 7, 2), "identical candidate does not outrank itself")
+}
+
+// TestIsInRingSegment_NoOpWhenRingSizeAtOrBelowWatchers verifies that when the
+// ring is no larger than the watcher count, every instance watches everything.
+func TestIsInRingSegment_NoOpWhenRingSizeAtOrBelowWatchers(t *testing.T) {
+	for _, watchersPerShard := range []int{1, 3} {
+		for ringSize := 1; ringSize <= watchersPerShard; ringSize++ {
+			for idx := 0; idx < ringSize; idx++ {
+				assert.True(t, isInRingSegment("ks", "0", idx, ringSize, watchersPerShard),
+					"ringSize=%d watchers=%d idx=%d must watch everything", ringSize, watchersPerShard, idx)
+			}
 		}
 	}
 }
 
 func TestIsInRingSegment_Deterministic(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		first := isInRingSegment("mykeyspace", "0", 2, 5)
-		assert.Equal(t, first, isInRingSegment("mykeyspace", "0", 2, 5),
+		assert.Equal(t,
+			isInRingSegment("mykeyspace", "0", 2, 8, 3),
+			isInRingSegment("mykeyspace", "0", 2, 8, 3),
 			"repeated calls must return the same result")
 	}
 }
 
-// TestIsInRingSegment_PartitioningActivatesAtFour verifies that ring-size=4 is
-// the minimum at which actual partitioning occurs (each instance watches 3 of
-// 4 segments, not all of them).
-func TestIsInRingSegment_PartitioningActivatesAtFour(t *testing.T) {
-	const ringSize = 4
-	// Pick a keyspace whose primary owner is instance 0 so we can assert that
-	// instance 0 does NOT watch it. We probe until we find one.
-	var unownedKS string
-	for i := 0; i < 1000; i++ {
-		ks := fmt.Sprintf("keyspace%d", i)
-		// count how many instances watch this shard
-		watchers := 0
-		for idx := 0; idx < ringSize; idx++ {
-			if isInRingSegment(ks, "0", idx, ringSize) {
-				watchers++
+// TestIsInRingSegment_ExactlyKWatchersPerShard verifies that once the ring is
+// larger than the watcher count, every shard is watched by exactly
+// watchersPerShard instances.
+func TestIsInRingSegment_ExactlyKWatchersPerShard(t *testing.T) {
+	for _, watchersPerShard := range []int{1, 2, 3, 4} {
+		for _, ringSize := range []int{watchersPerShard + 1, 8, 12} {
+			for i := 0; i < 100; i++ {
+				ks := fmt.Sprintf("keyspace%d", i)
+				watchers := watchersFor(ks, "0", ringSize, watchersPerShard)
+				assert.Len(t, watchers, watchersPerShard,
+					"ringSize=%d watchers=%d: shard %s/0 must have exactly %d watchers",
+					ringSize, watchersPerShard, ks, watchersPerShard)
 			}
-		}
-		if watchers == 3 {
-			// find the one that doesn't watch
-			for idx := 0; idx < ringSize; idx++ {
-				if !isInRingSegment(ks, "0", idx, ringSize) {
-					unownedKS = ks
-					break
-				}
-			}
-			break
-		}
-	}
-	assert.NotEmpty(t, unownedKS, "expected to find at least one shard not watched by all instances at ring-size=4")
-}
-
-// TestIsInRingSegment_ExactlyThreeWatchersPerShard verifies that for ringSize >= 4
-// (the minimum effective ring size), every shard is watched by exactly 3 instances
-// (primary + 2 neighbors).
-func TestIsInRingSegment_ExactlyThreeWatchersPerShard(t *testing.T) {
-	for _, ringSize := range []int{4, 5, 7, 10} {
-		keyspaces := make([]string, 50)
-		for i := range keyspaces {
-			keyspaces[i] = fmt.Sprintf("keyspace%d", i)
-		}
-
-		for _, ks := range keyspaces {
-			watchers := 0
-			for idx := 0; idx < ringSize; idx++ {
-				if isInRingSegment(ks, "0", idx, ringSize) {
-					watchers++
-				}
-			}
-			assert.Equal(t, 3, watchers,
-				"ringSize=%d: shard %s/0 must have exactly 3 watchers, got %d", ringSize, ks, watchers)
 		}
 	}
 }
 
-// TestIsInRingSegment_NoShardIsOrphaned verifies that every shard has at least
-// one watcher regardless of ring size, including effective ring sizes.
-func TestIsInRingSegment_NoShardIsOrphaned(t *testing.T) {
-	for _, ringSize := range []int{1, 4, 5, 10} {
-		for i := 0; i < 100; i++ {
+// TestIsInRingSegment_NoShardOrphaned verifies every shard keeps at least one
+// watcher across a range of ring sizes.
+func TestIsInRingSegment_NoShardOrphaned(t *testing.T) {
+	const watchersPerShard = 3
+	for _, ringSize := range []int{1, 4, 5, 10, 25} {
+		for i := 0; i < 200; i++ {
 			ks := fmt.Sprintf("keyspace%d", i)
-			watched := false
-			for idx := 0; idx < ringSize; idx++ {
-				if isInRingSegment(ks, "0", idx, ringSize) {
-					watched = true
-					break
-				}
-			}
-			assert.True(t, watched,
-				"ringSize=%d: shard %s/0 must be watched by at least one instance", ringSize, ks)
+			assert.NotEmpty(t, watchersFor(ks, "0", ringSize, watchersPerShard),
+				"ringSize=%d: shard %s/0 must have at least one watcher", ringSize, ks)
 		}
 	}
 }
 
-// TestComputePrimary_BucketAssignmentOverridesHash verifies that when
-// bucketAssignments is set, computePrimary uses the file mapping instead of
-// direct hash modulo.
-func TestComputePrimary_BucketAssignmentOverridesHash(t *testing.T) {
-	const ringSize = 5
-	// Build a trivial assignment that routes everything to partition 3.
-	orig := bucketAssignments.Load()
-	t.Cleanup(func() { bucketAssignments.Store(orig) })
+// TestIsInRingSegment_ResizePreservesCoverage is the core property: growing the
+// ring from N to N+1 keeps at least watchersPerShard-1 of a shard's watchers,
+// so a rolling resize never drops coverage below that. This is what rendezvous
+// hashing buys over modulo, where nearly every shard would remap at once.
+func TestIsInRingSegment_ResizePreservesCoverage(t *testing.T) {
+	const watchersPerShard = 3
+	for ringSize := watchersPerShard; ringSize < 40; ringSize++ {
+		for i := 0; i < 200; i++ {
+			ks := fmt.Sprintf("keyspace%d", i)
+			before := watchersFor(ks, "0", ringSize, watchersPerShard)
+			after := watchersFor(ks, "0", ringSize+1, watchersPerShard)
 
-	ba := make([]int, 256)
-	for i := range ba {
-		ba[i] = 3
-	}
-	bucketAssignments.Store(&ba)
-
-	for i := 0; i < 50; i++ {
-		ks := fmt.Sprintf("keyspace%d", i)
-		p := computePrimary(ks, "0", ringSize)
-		assert.Equal(t, 3, p, "bucket assignment should route %s/0 to partition 3", ks)
-	}
-}
-
-// TestComputePrimary_NilBucketsFallsBackToHash verifies that when no bucket
-// assignment is loaded, computePrimary uses direct hash modulo.
-func TestComputePrimary_NilBucketsFallsBackToHash(t *testing.T) {
-	const ringSize = 5
-	orig := bucketAssignments.Load()
-	t.Cleanup(func() { bucketAssignments.Store(orig) })
-	bucketAssignments.Store(nil)
-
-	// Same key must always map to same partition and stay in [0, ringSize).
-	for i := 0; i < 100; i++ {
-		ks := fmt.Sprintf("keyspace%d", i)
-		p := computePrimary(ks, "0", ringSize)
-		assert.GreaterOrEqual(t, p, 0, "partition must be non-negative")
-		assert.Less(t, p, ringSize, "partition must be < ringSize")
-		assert.Equal(t, p, computePrimary(ks, "0", ringSize), "computePrimary must be deterministic")
+			shared := 0
+			for idx := range before {
+				if after[idx] {
+					shared++
+				}
+			}
+			assert.GreaterOrEqual(t, shared, watchersPerShard-1,
+				"resize %d->%d for %s/0 must retain >= %d watchers (before=%v after=%v)",
+				ringSize, ringSize+1, ks, watchersPerShard-1, before, after)
+		}
 	}
 }
 
-// TestIsInRingSegment_BucketAssignmentRespectedByWatchDecision verifies that
-// isInRingSegment correctly uses the bucket assignment when computing neighbors.
-func TestIsInRingSegment_BucketAssignmentRespectedByWatchDecision(t *testing.T) {
-	const ringSize = 5
-	orig := bucketAssignments.Load()
-	t.Cleanup(func() { bucketAssignments.Store(orig) })
-
-	// Route everything to partition 2. Neighbors are 1 and 3; partition 0 and 4 never watch.
-	ba := make([]int, 256)
-	for i := range ba {
-		ba[i] = 2
-	}
-	bucketAssignments.Store(&ba)
-
-	for i := 0; i < 20; i++ {
-		ks := fmt.Sprintf("keyspace%d", i)
-		assert.True(t, isInRingSegment(ks, "0", 1, ringSize), "left neighbor (p1) must watch")
-		assert.True(t, isInRingSegment(ks, "0", 2, ringSize), "primary owner (p2) must watch")
-		assert.True(t, isInRingSegment(ks, "0", 3, ringSize), "right neighbor (p3) must watch")
-		assert.False(t, isInRingSegment(ks, "0", 0, ringSize), "p0 must not watch")
-		assert.False(t, isInRingSegment(ks, "0", 4, ringSize), "p4 must not watch")
-	}
-}
-
-// TestIsInRingSegment_ReasonableDistribution verifies that load is spread
-// across instances with no instance handling more than 2x the average.
+// TestIsInRingSegment_ReasonableDistribution verifies load is spread across
+// instances without any instance carrying far more than its share.
 func TestIsInRingSegment_ReasonableDistribution(t *testing.T) {
 	const (
-		ringSize     = 5
-		numKeyspaces = 500
+		ringSize         = 8
+		watchersPerShard = 3
+		numKeyspaces     = 1000
 	)
 	counts := make([]int, ringSize)
 	for i := 0; i < numKeyspaces; i++ {
 		ks := fmt.Sprintf("keyspace%d", i)
-		for idx := 0; idx < ringSize; idx++ {
-			if isInRingSegment(ks, "0", idx, ringSize) {
-				counts[idx]++
-			}
+		for idx := range watchersFor(ks, "0", ringSize, watchersPerShard) {
+			counts[idx]++
 		}
 	}
-	// Each instance is primary for ~1/N of shards, so it watches ~3/N of the total.
-	// With 500 keyspaces and 5 replicas, each should watch ~300 (3/5 * 500).
-	expected := numKeyspaces * 3 / ringSize
+	// Each instance watches ~watchersPerShard/ringSize of the fleet.
+	expected := numKeyspaces * watchersPerShard / ringSize
 	for idx, count := range counts {
 		assert.InDelta(t, expected, count, float64(expected)*0.3,
-			"instance %d watches %d shards; expected ~%d ±30%%", idx, count, expected)
+			"instance %d watches %d shards; expected ~%d +/-30%%", idx, count, expected)
 	}
 }
 
-// TestLoadRingAssignmentsFile exercises loadRingAssignmentsFile end to end: a
-// valid file populates bucketAssignments, and each validation branch returns an
-// error and leaves bucketAssignments untouched.
-func TestLoadRingAssignmentsFile(t *testing.T) {
-	const ringSize = 4
-
+func TestValidateRingConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
-		writeFile   bool
-		wantErr     string
-		wantBuckets int // only checked when wantErr == ""
+		name             string
+		ringSize         int
+		ringIndex        int
+		watchersPerShard int
+		wantErr          string
 	}{
-		{
-			name:        "valid",
-			content:     `{"num_buckets": 4, "bucket_assignments": [0, 1, 2, 3]}`,
-			writeFile:   true,
-			wantBuckets: 4,
-		},
-		{
-			name:      "missing file",
-			writeFile: false,
-			wantErr:   "reading ring assignments file",
-		},
-		{
-			name:      "invalid json",
-			content:   `{not valid json`,
-			writeFile: true,
-			wantErr:   "parsing ring assignments file",
-		},
-		{
-			name:      "num_buckets not positive",
-			content:   `{"num_buckets": 0, "bucket_assignments": []}`,
-			writeFile: true,
-			wantErr:   "num_buckets must be > 0",
-		},
-		{
-			name:      "length mismatch",
-			content:   `{"num_buckets": 4, "bucket_assignments": [0, 1]}`,
-			writeFile: true,
-			wantErr:   "does not match num_buckets",
-		},
-		{
-			name:      "partition out of range",
-			content:   `{"num_buckets": 4, "bucket_assignments": [0, 1, 2, 4]}`,
-			writeFile: true,
-			wantErr:   "is out of range",
-		},
-		{
-			name:      "negative partition",
-			content:   `{"num_buckets": 4, "bucket_assignments": [0, 1, 2, -1]}`,
-			writeFile: true,
-			wantErr:   "is out of range",
-		},
+		{name: "valid disabled", ringSize: 1, ringIndex: 0, watchersPerShard: 3},
+		{name: "valid partitioned", ringSize: 8, ringIndex: 7, watchersPerShard: 3},
+		{name: "ring size zero", ringSize: 0, ringIndex: 0, watchersPerShard: 3, wantErr: "--vtorc-ring-size must be >= 1"},
+		{name: "index negative", ringSize: 4, ringIndex: -1, watchersPerShard: 3, wantErr: "out of range"},
+		{name: "index too large", ringSize: 4, ringIndex: 4, watchersPerShard: 3, wantErr: "out of range"},
+		{name: "watchers zero", ringSize: 4, ringIndex: 0, watchersPerShard: 0, wantErr: "--vtorc-ring-watchers-per-shard must be >= 1"},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			orig := bucketAssignments.Load()
-			t.Cleanup(func() { bucketAssignments.Store(orig) })
-			bucketAssignments.Store(nil)
-
-			path := filepath.Join(t.TempDir(), "ring-assignments.json")
-			if tc.writeFile {
-				require.NoError(t, os.WriteFile(path, []byte(tc.content), 0o600))
-			}
-
-			err := loadRingAssignmentsFile(path, ringSize)
-
-			if tc.wantErr != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.wantErr)
-				assert.Nil(t, bucketAssignments.Load(), "bucketAssignments must be untouched on error")
+			err := validateRingConfig(tc.ringSize, tc.ringIndex, tc.watchersPerShard)
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
 				return
 			}
-
-			require.NoError(t, err)
-			ba := bucketAssignments.Load()
-			require.NotNil(t, ba)
-			assert.Len(t, *ba, tc.wantBuckets)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
 		})
+	}
+}
+
+// TestLogRingConfig exercises each branch of logRingConfig for coverage; it
+// asserts the calls do not panic across the disabled, no-op, and partitioned
+// configurations.
+func TestLogRingConfig(t *testing.T) {
+	origSize, origIndex, origWatchers := ringSize, ringIndex, ringWatchersPerShard
+	t.Cleanup(func() {
+		ringSize, ringIndex, ringWatchersPerShard = origSize, origIndex, origWatchers
+	})
+
+	cases := [][3]int{
+		{1, 0, 3}, // disabled
+		{3, 0, 3}, // no-op (ring-size <= watchers)
+		{8, 1, 3}, // partitioned
+	}
+	for _, c := range cases {
+		ringSize, ringIndex, ringWatchersPerShard = c[0], c[1], c[2]
+		assert.NotPanics(t, logRingConfig)
 	}
 }

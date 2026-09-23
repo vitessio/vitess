@@ -89,7 +89,7 @@ func RefreshKeyspaceAndShard(keyspaceName string, shardName string) error {
 // shouldWatchShard returns true if a shard is within the shardsToWatch
 // ranges for it's keyspace.
 func shouldWatchShard(shard *topo.ShardInfo) bool {
-	if ringSize > 1 && !isInRingSegment(shard.Keyspace(), shard.ShardName(), ringIndex, ringSize) {
+	if ringSize > 1 && !isInRingSegment(shard.Keyspace(), shard.ShardName(), ringIndex, ringSize, ringWatchersPerShard) {
 		return false
 	}
 	if len(shardsToWatch) == 0 {
