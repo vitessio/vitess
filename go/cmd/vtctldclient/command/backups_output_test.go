@@ -106,6 +106,63 @@ func TestConsumeBackupStream_JSONEmpty(t *testing.T) {
 	assert.Equal(t, "null", string(got.Manifest))
 }
 
+// A peer predating these fields sends log events only, leaving Status at
+// STATUS_UNSPECIFIED. That must surface as "UNKNOWN", not EMPTY.
+func TestConsumeBackupStream_JSONOlderServerNoStatus(t *testing.T) {
+	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp(), eventResp()}}
+
+	var out, errOut bytes.Buffer
+	status, err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	require.NoError(t, err)
+	assert.Equal(t, tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED, status)
+
+	var got struct {
+		Status     string          `json:"status"`
+		BackupName string          `json:"backup_name"`
+		Manifest   json.RawMessage `json:"manifest"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	assert.Equal(t, "UNKNOWN", got.Status)
+	assert.Empty(t, got.BackupName)
+	assert.Equal(t, "null", string(got.Manifest))
+}
+
+// The half callers feel: if an unknown outcome set the flag, Backup --json
+// against an N-1 peer would exit 2 mid-rolling-upgrade and scripts would skip
+// follow-up work.
+func TestHandleBackupStream_OlderServerIsNotEmpty(t *testing.T) {
+	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp(), eventResp()}}
+
+	require.NoError(t, handleBackupStream(stream, true /* outputJSON */))
+	require.False(t, EmptyBackup(), "STATUS_UNSPECIFIED must not be reported as an empty backup")
+}
+
+// A manifest that is not valid JSON -- truncated read, or an engine that does
+// not write JSON -- must not turn an already-stored backup into a failed
+// command. Report null and keep the status.
+func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
+	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
+		eventResp(),
+		{Manifest: "not json", BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE},
+	}}
+
+	var out, errOut bytes.Buffer
+	status, err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	require.NoError(t, err, "an unparseable manifest must not fail the command")
+	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, status)
+
+	var got struct {
+		Status     string          `json:"status"`
+		BackupName string          `json:"backup_name"`
+		Manifest   json.RawMessage `json:"manifest"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "stdout must still be valid JSON")
+	assert.Equal(t, "USABLE", got.Status)
+	assert.Equal(t, "2026-01-01.000000.zone1-0000000100", got.BackupName)
+	assert.Equal(t, "null", string(got.Manifest))
+	assert.Contains(t, errOut.String(), "not valid JSON")
+}
+
 func TestConsumeBackupStream_TextUsable(t *testing.T) {
 	manifest := `{"BackupName":"2026-01-01.000000.zone1-0000000100"}`
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
@@ -151,12 +208,9 @@ func TestConsumeBackupStream_TextEmpty(t *testing.T) {
 	assert.Empty(t, errOut.String())
 }
 
-// TestHandleBackupStream_EmptyReporting pins the contract between the command and
-// the binaries: an empty backup in --json mode is a success that is reported
-// out-of-band via EmptyBackup (which main maps to EmptyBackupExitCode), never an
-// error -- returning an error would make cobra skip the root command's
-// PersistentPostRunE cleanup. Without --json it stays a plain success and does
-// not set the flag.
+// An empty backup in --json mode is a success reported via EmptyBackup, never an
+// error -- an error would make cobra skip PersistentPostRunE. Without --json it
+// stays a plain success and does not set the flag.
 func TestHandleBackupStream_EmptyReporting(t *testing.T) {
 	emptyStream := func() *fakeBackupStream {
 		return &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{

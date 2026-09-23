@@ -153,6 +153,7 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 **Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
 #### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
 
 The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. Each message on the stream is either a log-event message (as before) or a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
@@ -633,6 +634,7 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
 #### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
 
 The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream:
