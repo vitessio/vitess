@@ -478,7 +478,7 @@ See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
 A new VTOrc flag, `--emergency-reparent-require-primary-position` (default off), makes `EmergencyReparentShard` require that the new primary has received the last `gtid_executed` VTOrc stored for the failed primary. If no replica has received it, the failover fails with `FAILED_PRECONDITION` and the recovery audit names the position and the most advanced replica positions. The requirement applies only to keyspaces with a semi-sync durability policy. It applies also when semi-sync was not active on the primary at the last poll. Clients received a commit acknowledgement for those transactions, so a replica without them is not a safe promotion candidate.
 
-The requirement covers only primaries that this VTOrc process has polled. VTOrc keeps its state in memory by default. If VTOrc restarts after the primary fails, or the primary fails before its first poll, VTOrc has no stored GTID set and runs the failover without the requirement. The recovery audit records a warning when this occurs. Run more than one VTOrc per shard, or set `--sqlite-data-file` to persistent storage, to keep the requirement across VTOrc restarts.
+The requirement covers only primaries that this VTOrc process has polled. VTOrc does not keep its stored instance data across a restart. If VTOrc restarts after the primary fails, or the primary fails before its first poll, VTOrc has no stored GTID set and runs the failover without the requirement. The recovery audit records a warning when this occurs. To keep the requirement when one VTOrc restarts, run more than one VTOrc per shard.
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
