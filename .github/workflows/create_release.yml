@@ -28,7 +28,7 @@ jobs:
         cache: 'false'
 
     - name: Tune the OS
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Get dependencies
       run: |
