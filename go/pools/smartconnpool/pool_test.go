@@ -820,6 +820,40 @@ func TestSetCapacityRejectedOnClosedPool(t *testing.T) {
 	require.EqualValues(t, 0, p.Capacity())
 }
 
+// TestReserveSlotAfterCapacityDrop covers a Get whose getNew compared active
+// with capacity before a SetCapacity or Close lowered capacity to 0, and whose
+// reservation lands after that drain already saw no active connections: the
+// drain does not wait for the slot, so the reservation must not claim it.
+func TestReserveSlotAfterCapacityDrop(t *testing.T) {
+	lowerCapacity := map[string]func(t *testing.T, p *ConnPool[*TestConn]){
+		"SetCapacity": func(t *testing.T, p *ConnPool[*TestConn]) {
+			require.NoError(t, p.SetCapacity(t.Context(), 0))
+		},
+		"CloseWithContext": func(t *testing.T, p *ConnPool[*TestConn]) {
+			require.NoError(t, p.CloseWithContext(t.Context()))
+		},
+	}
+	for name, lower := range lowerCapacity {
+		t.Run(name, func(t *testing.T) {
+			var state TestState
+			p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+			t.Cleanup(p.Close)
+
+			// the Get loaded active (0) and saw it below capacity (1)
+			open := p.Active()
+			require.Less(t, open, p.Capacity())
+
+			lower(t, p)
+
+			if p.reserveSlot(open) {
+				p.closedConn() // give the slot back so the pool can close
+				assert.Fail(t, "claimed a slot the drain did not wait for")
+			}
+			assert.Zero(t, p.Active())
+		})
+	}
+}
+
 func TestConnReopen(t *testing.T) {
 	var state TestState
 
