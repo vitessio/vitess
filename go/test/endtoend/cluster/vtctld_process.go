@@ -50,6 +50,7 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
+<<<<<<< HEAD
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
 	vtctldVer, err := GetMajorVersion(vtctld.Binary)
 	if err != nil {
@@ -57,8 +58,18 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	}
 	_ = createDirectory(vtctld.LogDir, 0700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
+||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
+func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
+	_ = createDirectory(vtctld.LogDir, 0o700)
+	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
+=======
+func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
+	_ = createDirectory(vtctld.LogDir, 0o700)
+	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
+>>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
+<<<<<<< HEAD
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vtctld.TopoImplementation,
 		"--topo_global_server_address", vtctld.TopoGlobalAddress,
@@ -70,6 +81,26 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--log_dir", vtctld.LogDir,
 		"--port", fmt.Sprintf("%d", vtctld.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
+||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
+		"--topo-implementation", vtctld.TopoImplementation,
+		"--topo-global-server-address", vtctld.TopoGlobalAddress,
+		"--topo-global-root", vtctld.TopoGlobalRoot,
+		"--cell", cell,
+		"--service-map", vtctld.ServiceMap,
+		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
+		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
+		"--port", strconv.Itoa(vtctld.Port),
+		"--grpc-port", strconv.Itoa(vtctld.GrpcPort),
+=======
+		"--topo-implementation", vtctld.TopoImplementation,
+		"--topo-global-server-address", vtctld.TopoGlobalAddress,
+		"--topo-global-root", vtctld.TopoGlobalRoot,
+		"--service-map", vtctld.ServiceMap,
+		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
+		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
+		"--port", strconv.Itoa(vtctld.Port),
+		"--grpc-port", strconv.Itoa(vtctld.GrpcPort),
+>>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
 	)

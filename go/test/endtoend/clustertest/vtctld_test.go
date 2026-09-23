@@ -18,11 +18,9 @@ limitations under the License.
 package clustertest
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -42,21 +40,17 @@ var (
 )
 
 func TestVtctldProcess(t *testing.T) {
-	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
-	testURL(t, url, "keyspace url")
-
 	healthCheckURL := fmt.Sprintf("http://%s:%d/debug/health", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testURL(t, healthCheckURL, "vtctld health check url")
 
-	url = fmt.Sprintf("http://%s:%d/api/topodata/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
-	testTopoDataAPI(t, url)
-
+	testNoHTTPAPI(t)
 	testGetTablets(t)
 	testTabletStatus(t)
 	testExecuteAsDba(t)
 	testExecuteAsApp(t)
 }
 
+<<<<<<< HEAD
 func testTopoDataAPI(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
@@ -77,6 +71,37 @@ func testTopoDataAPI(t *testing.T, url string) {
 	childrenGot := fmt.Sprintf("%s", children)
 	assert.Contains(t, childrenGot, "global")
 	assert.Contains(t, childrenGot, clusterInstance.Cell)
+||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
+func testTopoDataAPI(t *testing.T, url string) {
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, 200, resp.StatusCode)
+
+	resultMap := make(map[string]any)
+	respByte, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(respByte, &resultMap)
+	require.NoError(t, err)
+
+	errorValue := reflect.ValueOf(resultMap["Error"])
+	assert.Empty(t, errorValue.String())
+
+	assert.Contains(t, resultMap, "Children")
+	children := reflect.ValueOf(resultMap["Children"])
+	childrenGot := fmt.Sprintf("%s", children)
+	assert.Contains(t, childrenGot, "global")
+	assert.Contains(t, childrenGot, clusterInstance.Cell)
+=======
+// testNoHTTPAPI checks that vtctld does not serve the HTTP API that its web
+// UI used, which was removed: it served topology data, arbitrary vtctl
+// commands, and more over plain HTTP without a consistent ACL check.
+func testNoHTTPAPI(t *testing.T) {
+	for _, path := range []string{"/api/keyspaces/", "/api/topodata/", "/api/vtctl/"} {
+		url := fmt.Sprintf("http://%s:%d%s", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort, path)
+		assert.Equal(t, http.StatusNotFound, getStatusForURL(url), "%s must not be served", url)
+	}
+>>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
 }
 
 func testGetTablets(t *testing.T) {

@@ -18,17 +18,27 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-cell=${CELL:-'test'}
 grpc_port=15999
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
 vtctld \
  $TOPOLOGY_FLAGS \
+<<<<<<< HEAD
  --cell $cell \
  --service_map 'grpc-vtctl,grpc-vtctld' \
  --backup_storage_implementation file \
  --file_backup_storage_root $VTDATAROOT/backups \
+||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
+ --cell $cell \
+ --service-map 'grpc-vtctl,grpc-vtctld' \
+ --backup-storage-implementation file \
+ --file-backup-storage-root $VTDATAROOT/backups \
+=======
+ --service-map 'grpc-vtctl,grpc-vtctld' \
+ --backup-storage-implementation file \
+ --file-backup-storage-root $VTDATAROOT/backups \
+>>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
  --log_dir $VTDATAROOT/tmp \
  --port $vtctld_web_port \
  --grpc_port $grpc_port \

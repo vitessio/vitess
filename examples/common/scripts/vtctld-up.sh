@@ -18,13 +18,13 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-cell=${CELL:-'test'}
 grpc_port=15999
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtctld \
+<<<<<<< HEAD
  $TOPOLOGY_FLAGS \
  --cell $cell \
  --service-map 'grpc-vtctl,grpc-vtctld' \
@@ -36,6 +36,32 @@ vtctld \
  --pid-file $VTDATAROOT/tmp/vtctld.pid \
  --pprof-http \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
+||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
+   $TOPOLOGY_FLAGS \
+   --cell $cell \
+   --service-map 'grpc-vtctl,grpc-vtctld' \
+   --backup-storage-implementation file \
+   --file-backup-storage-root $VTDATAROOT/backups \
+   --port $vtctld_web_port \
+   --grpc-port $grpc_port \
+   --pid-file $VTDATAROOT/tmp/vtctld.pid \
+   --pprof-http \
+   --log-format text \
+   ${VTCTLD_EXTRA_FLAGS:-} \
+   >$VTDATAROOT/tmp/vtctld.out 2>&1 &
+=======
+   $TOPOLOGY_FLAGS \
+   --service-map 'grpc-vtctl,grpc-vtctld' \
+   --backup-storage-implementation file \
+   --file-backup-storage-root $VTDATAROOT/backups \
+   --port $vtctld_web_port \
+   --grpc-port $grpc_port \
+   --pid-file $VTDATAROOT/tmp/vtctld.pid \
+   --pprof-http \
+   --log-format text \
+   ${VTCTLD_EXTRA_FLAGS:-} \
+   >$VTDATAROOT/tmp/vtctld.out 2>&1 &
+>>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
 
 echo "Curling \"http://${hostname}:${vtctld_web_port}/debug/status\" to check if vtctld is up"
 
