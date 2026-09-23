@@ -58,7 +58,8 @@ func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position,
 // data across a restart, and a VTOrc that restarts after the primary fails can
 // never poll it again. An error there would block every failover that such a
 // VTOrc runs, so ERS runs without the requirement and the audit records a
-// warning.
+// warning. Other VTOrcs do not share their stored sets, so a restarted VTOrc
+// can run the failover before one that has the set.
 func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logger) (replication.Position, error) {
 	if !config.EmergencyReparentRequirePrimaryPosition() {
 		return replication.Position{}, nil
