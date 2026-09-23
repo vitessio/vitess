@@ -138,6 +138,9 @@ jobs:
         run: exit 1
 
       - name: Harden the runner (Audit all outbound calls)
+        # Legs with no relevant changes only report their check name; they skip
+        # every step that follows, so there is nothing to audit.
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
