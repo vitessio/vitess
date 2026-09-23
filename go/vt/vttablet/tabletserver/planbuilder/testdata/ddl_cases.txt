@@ -210,6 +210,10 @@
     {
       "TableName": "a",
       "Role": 2
+    },
+    {
+      "TableName": "asdasd",
+      "Role": 0
     }
   ],
   "FullQuery": "create view a as select * from asdasd"

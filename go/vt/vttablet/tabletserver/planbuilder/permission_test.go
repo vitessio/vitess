@@ -116,19 +116,44 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
-		input:  "describe select * from t",
-		output: nil,
+		// A plain EXPLAIN, in any format, and DESCRIBE carry the explained
+		// statement's permissions: MySQL reads const tables and evaluates
+		// uncorrelated subqueries while it optimizes, and the plan shows the
+		// outcome ("Impossible WHERE"), so an EXPLAIN answers a yes/no
+		// question about the data. This is also the shape VEXPLAIN MYSQLPLAN
+		// issues against every resolved shard.
+		input: "describe select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
 	}, {
-		// A plain EXPLAIN, in any format, carries no table permissions, so
-		// its per-table ACL is never checked. This is the shape VEXPLAIN
-		// MYSQLPLAN issues against every resolved shard; the empty result
-		// documents that those EXPLAINs are not ACL-checked on the explained
-		// table (see the 25.0 summary).
-		input:  "explain format = json select * from t",
-		output: nil,
+		input: "explain format = json select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
 	}, {
-		input:  "explain format = tree select * from t",
-		output: nil,
+		input: "explain format = tree select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain select 1 from dual where (select v from secret where id = 1) = 'guess'",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain update t set a = 1 where id in (select id from s)",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "s",
+			Role:      tableacl.READER,
+		}},
 	}, {
 		// EXPLAIN ANALYZE executes the statement it explains, so it carries
 		// that statement's permissions, the top-level split between READER
@@ -806,11 +831,38 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.ADMIN,
 		}},
 	}, {
-		// CREATE VIEW reads nothing at creation time.
+		// CREATE VIEW reads nothing at creation time, but the view reads its
+		// source tables as the tablet's MySQL user whenever it is queried,
+		// and the ACL then sees only the view's name, so the source is
+		// checked when the view is defined, as MySQL requires SELECT on it.
 		input: "create view v as select id from secret",
 		output: []Permission{{
 			TableName: "v",
 			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "create or replace view v as select a.id from a join secret b on a.id = b.id",
+		output: []Permission{{
+			TableName: "v",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "a",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "alter view v as select id from secret",
+		output: []Permission{{
+			TableName: "v",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
 		}},
 	}}
 

@@ -76,21 +76,30 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, nil, permissions)
 		}
 		// CREATE TABLE ... AS SELECT copies the selected rows when it runs, so
-		// the source tables are read. (CREATE VIEW ... AS SELECT reads nothing
-		// at creation.) A CREATE TABLE the parser could only partially parse
+		// the source tables are read. A CREATE TABLE the parser could only partially parse
 		// keeps just the prefix it understood and is forwarded to MySQL as the
 		// client's raw text, so its body is opaque, and some opaque bodies
 		// copy rows (`(select ...)`, `AS TABLE t`, an EXCEPT source the parser
 		// truncated). Its table set is therefore undetermined and the executor
 		// fails closed on it under strict table ACL; a valid statement in
 		// syntax the grammar lacks is denied along with them.
-		if create, ok := node.(*sqlparser.CreateTable); ok {
+		switch ddl := node.(type) {
+		case *sqlparser.CreateTable:
 			switch {
-			case !create.IsFullyParsed():
+			case !ddl.IsFullyParsed():
 				tablesUndetermined = true
-			case create.Select != nil:
-				permissions = buildSubqueryPermissions(create.Select, tableacl.READER, permissions)
+			case ddl.Select != nil:
+				permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
 			}
+		case *sqlparser.CreateView:
+			// A view reads nothing when it is defined, but it reads its
+			// source tables as the tablet's MySQL user every time it is
+			// queried, and the ACL then sees only the view's name. So the
+			// source is checked here, as MySQL requires SELECT on it to
+			// define the view.
+			permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
+		case *sqlparser.AlterView:
+			permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
 		}
 	case
 		*sqlparser.AlterMigration,
@@ -122,12 +131,14 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		// subqueries in its rows.
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.ExplainStmt:
-		// EXPLAIN ANALYZE executes the statement it explains where MySQL
-		// supports that, so it needs that statement's permissions. A plain
-		// EXPLAIN only plans it and stays unchecked, as DESCRIBE does.
-		if node.Type == sqlparser.AnalyzeType {
-			permissions, tablesUndetermined = BuildPermissions(node.Statement)
-		}
+		// An EXPLAIN carries the permissions of the statement it explains,
+		// whatever its format, as MySQL requires the explained statement's
+		// privileges. EXPLAIN ANALYZE executes the statement. A plain EXPLAIN
+		// or DESCRIBE reads too: MySQL reads const tables and evaluates
+		// uncorrelated subqueries while it optimizes, and the plan shows the
+		// outcome ("Impossible WHERE"), which answers a yes/no question about
+		// the data.
+		permissions, tablesUndetermined = BuildPermissions(node.Statement)
 	case *sqlparser.Show:
 		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
 		// subquery in it, so those reads are checked. The SHOW's own subject

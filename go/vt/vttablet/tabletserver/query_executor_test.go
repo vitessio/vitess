@@ -1295,7 +1295,8 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
-	db.AddQueryPattern("(?is)explain analyze .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)create view .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)explain .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)show variables .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)set @v = .*", &sqltypes.Result{})
 
@@ -1316,6 +1317,8 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false, false},
 		{"create table with a parenthesized select", "create table ct (select pk from test_table)", planbuilder.PlanDDL, true, false},
 		{"explain analyze select", "explain analyze select pk from test_table", planbuilder.PlanSelect, false, false},
+		{"explain select", "explain select pk from test_table", planbuilder.PlanSelect, false, false},
+		{"create view as select", "create view ct as select pk from test_table", planbuilder.PlanDDL, false, false},
 		{"show with a subquery in its filter", "show variables where Variable_name in (select email from test_table)", planbuilder.PlanShow, false, false},
 		{"set with a subquery", "set @v = (select email from test_table limit 1)", planbuilder.PlanSet, false, true},
 	}

@@ -129,7 +129,12 @@ func TestTableACL(t *testing.T) {
 	}, {
 		query: "explain analyze select key1 from vitess_acl_read_only",
 	}, {
+		// A plain EXPLAIN reads too: MySQL evaluates parts of the statement
+		// while it optimizes and the plan shows the outcome.
 		query: "explain select key1 from vitess_acl_no_access",
+		err:   aclErr,
+	}, {
+		query: "explain format = tree select key1 from vitess_acl_read_only",
 	}, {
 		query: "show tables where Tables_in_vttest in (select 'x' from vitess_acl_no_access)",
 		err:   aclErr,
