@@ -1,6 +1,7 @@
 name: vtop_example
 
-permissions: read-all
+permissions:
+  contents: read
 
 on:
   push:
@@ -15,30 +16,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: VTop Example
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
-
+  # Path filtering runs once here, on a GitHub-hosted runner, so that the
+  # job below (on a large runner) is not started at all when nothing relevant
+  # changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
 
       - name: Check for changes in relevant files
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: changes
         with:
           token: ""
@@ -61,46 +54,70 @@ jobs:
               - 'test/**'
               - '.github/workflows/vtop_example.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-go/action.yml'
+
+  build:
+    needs: changes
+    # Runs when the gate found relevant changes, and also when the gate itself
+    # failed, so that failure is reported instead of silently skipping a
+    # required status check.
+    if: ${{ !cancelled() && (needs.changes.result == 'failure' || (needs.changes.outputs.end_to_end == 'true')) }}
+    name: VTop Example
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Fail if the gate job failed
+        if: needs.changes.result != 'success'
+        run: exit 1
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
 
       - name: Set up Go
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Tune the OS
-        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
-        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 8
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
       - name: Get dependencies
-        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
         run: |
           # Install everything we need, and configure
           sudo apt-get install -y make
-          go mod download
 
       # needed for vtctldclient
       - name: Build vitess
-        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 10
         run: |
           make build
 
       - name: Install kubectl & kind
-        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
         run: |
           make install_kubectl_kind
 
       - name: vtop_example
-        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 60
         run: |
           source build.env

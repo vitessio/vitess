@@ -34,7 +34,7 @@ export interface ActionPanelProps {
     loadedText: string;
     mutation: UseMutationResult;
     title: string;
-    warnings?: React.ReactNodeArray;
+    warnings?: React.ReactNode[];
     body?: React.ReactNode;
 }
 /**

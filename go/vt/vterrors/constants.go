@@ -38,6 +38,14 @@ const (
 	// WrongTablet for invalid tablet type error
 	WrongTablet = "wrong tablet type"
 
+	// WrongKeyspaceShard is the format for a tablet rejecting a target whose
+	// keyspace or shard does not match its own; RxWrongKeyspaceShard matches
+	// it. Sharing the definition here keeps the producer (the tablet's target
+	// validation) and the consumer (vtgate's stale-target classification) on
+	// one message shape across the RPC boundary, which a Go error sentinel
+	// cannot cross.
+	WrongKeyspaceShard = "invalid %s %v does not match expected %v"
+
 	// TxKillerRollback purpose when acquire lock on connection for rolling back transaction.
 	TxKillerRollback = "in use: for tx killer rollback"
 
@@ -56,6 +64,10 @@ const GTIDSetMismatch = "GTIDSet Mismatch"
 
 // RxWrongTablet regex for invalid tablet type error
 var RxWrongTablet = regexp.MustCompile("(wrong|invalid) tablet type")
+
+// RxWrongKeyspaceShard matches WrongKeyspaceShard errors: a tablet rejecting a
+// target whose keyspace or shard does not match its own.
+var RxWrongKeyspaceShard = regexp.MustCompile("invalid (keyspace|shard) .* does not match expected")
 
 // TxClosed regex for connection closed
 var TxClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found|in use: for tx killer rollback)")

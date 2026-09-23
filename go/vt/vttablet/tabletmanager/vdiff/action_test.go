@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,12 +28,40 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func TestVDiffSummaryQuery(t *testing.T) {
+	const (
+		fullReportExpr    = `vdt.report as report`
+		summaryReportExpr = `JSON_REMOVE(vdt.report, '$.MismatchedRowsSample', '$.ExtraRowsSourceSample', '$.ExtraRowsTargetSample') as report`
+	)
+
+	full := vdiffSummaryQuery(false)
+	summary := vdiffSummaryQuery(true)
+
+	require.Contains(t, full, "%a", "bind placeholders must be preserved for ParseAndBind")
+	require.Contains(t, summary, "%a", "bind placeholders must be preserved for ParseAndBind")
+
+	require.Contains(t, full, fullReportExpr, "full query must select the stored report as-is")
+	require.NotContains(t, full, "JSON_REMOVE", "full query must not strip the report")
+	require.Contains(t, summary, summaryReportExpr, "summary-only query must strip the row-sample arrays from the report")
+
+	for _, sample := range []string{"MismatchedRowsSample", "ExtraRowsSourceSample", "ExtraRowsTargetSample"} {
+		require.Contains(t, summaryReportExpr, sample, "expected sample array %q to be stripped", sample)
+	}
+
+	require.Equal(t,
+		full,
+		strings.Replace(summary, summaryReportExpr, fullReportExpr, 1),
+		"summary-only must differ from the full query only in the report select-expression",
+	)
+}
 
 func TestPerformVDiffAction(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -46,6 +75,17 @@ func TestPerformVDiffAction(t *testing.T) {
 		query  string
 		result *sqltypes.Result // Optional if you need a non-empty result
 	}
+
+	boundSummaryQuery := func(noSamples bool) string {
+		q, err := sqlparser.ParseAndBind(vdiffSummaryQuery(noSamples),
+			sqltypes.Int64BindVariable(1),
+			sqltypes.StringBindVariable(vdiffDBName))
+		require.NoError(t, err)
+		return q
+	}
+	vdiffByUUIDQuery := fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s and db_name = %s",
+		encodeString(keyspace), encodeString(workflow), encodeString(uuid), encodeString(vdiffDBName))
+	vdiffIDResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1")
 
 	tests := []struct {
 		name          string
@@ -304,6 +344,38 @@ func TestPerformVDiffAction(t *testing.T) {
 						encodeString(keyspace), encodeString(workflow), encodeString(vdiffDBName), maxVDiffsToReport),
 					result: noResults,
 				},
+			},
+		},
+		{
+			name: "show by uuid full report",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ShowAction),
+				ActionArg: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{NoSamples: false},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{query: vdiffByUUIDQuery, result: vdiffIDResult},
+				{query: boundSummaryQuery(false), result: noResults},
+			},
+		},
+		{
+			name: "show by uuid no samples",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ShowAction),
+				ActionArg: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{NoSamples: true},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{query: vdiffByUUIDQuery, result: vdiffIDResult},
+				{query: boundSummaryQuery(true), result: noResults},
 			},
 		},
 	}

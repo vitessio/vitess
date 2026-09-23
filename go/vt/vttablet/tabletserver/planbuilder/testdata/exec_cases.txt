@@ -146,6 +146,21 @@
   "NextCount": "1"
 }
 
+# nextval wrapped in a CTE of the same name still allocates from the real
+# sequence, so the permission is on the sequence, not the CTE's tables
+"with seq as (select * from a) (select next value from seq) limit 1"
+{
+  "PlanID": "Nextval",
+  "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 1
+    }
+  ],
+  "NextCount": "1"
+}
+
 # sequence with number
 "select next 10 values from seq"
 {
@@ -802,14 +817,16 @@ options:PassthroughDMLs
 "repair a"
 {
   "PlanID": "OtherAdmin",
-  "TableName": ""
+  "TableName": "",
+  "TablesUndetermined": true
 }
 
 # optimize
 "optimize a"
 {
   "PlanID": "OtherAdmin",
-  "TableName": ""
+  "TableName": "",
+  "TablesUndetermined": true
 }
 
 # syntax error
@@ -876,7 +893,8 @@ options:PassthroughDMLs
 "load data infile 'x.txt' into table a"
 {
     "PlanID":"Load",
-    "TableName":""
+    "TableName":"",
+    "TablesUndetermined":true
 }
 
 # alter view
@@ -967,7 +985,8 @@ options:PassthroughDMLs
 {
   "PlanID": "CallProcedure",
   "TableName": "",
-  "FullQuery": "call getAllTheThings()"
+  "FullQuery": "call getAllTheThings()",
+  "TablesUndetermined": true
 }
 
 # create table with function as a default value

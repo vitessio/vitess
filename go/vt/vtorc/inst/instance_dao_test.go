@@ -851,9 +851,9 @@ func TestExpireTableData(t *testing.T) {
 			timestampColumn:  "detection_timestamp",
 			expectedRowCount: 2,
 			insertQuery: `INSERT INTO recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) VALUES
-(1, DATETIME('now', '-3 DAY'),'a','a','a','a'),
-(2, DATETIME('now', '-5 DAY'),'a','a','a','a'),
-(3, DATETIME('now', '-15 DAY'),'a','a','a','a')`,
+(1, DATETIME('now', '-3 DAY'),'alias1','a','a','a'),
+(2, DATETIME('now', '-5 DAY'),'alias2','a','a','a'),
+(3, DATETIME('now', '-15 DAY'),'alias3','a','a','a')`,
 		},
 	}
 	for _, tt := range tests {

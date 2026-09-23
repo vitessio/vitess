@@ -140,6 +140,23 @@ type Handler interface {
 	Env() *vtenv.Environment
 }
 
+// ConnActivityObserver is an optional interface a Handler may additionally
+// implement to observe every command a connection receives — including the
+// ones the server answers locally (COM_PING, COM_SET_OPTION, and the
+// prepared-statement bookkeeping commands), which never reach the Handler's
+// own methods. MySQL counts any command as connection activity, restarting
+// the connection's idle wait_timeout clock; a handler mirroring that
+// semantic needs to see the locally answered commands too. It is a
+// separate, optional interface — rather than a Handler method — so that
+// adding it is not a breaking change for existing Handler implementations.
+//
+// ConnActivity is called from the connection's serving goroutine as each
+// command is dispatched, before it is handled and whatever its outcome;
+// implementations must not block.
+type ConnActivityObserver interface {
+	ConnActivity(c *Conn)
+}
+
 // UnimplementedHandler implemnts all of the optional callbacks so as to satisy
 // the Handler interface. Intended to be embedded into your custom Handler
 // implementation without needing to define every callback and to help be forwards

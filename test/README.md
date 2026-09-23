@@ -15,7 +15,7 @@ To add a new end-to-end (e2e) test (also called _cluster end to end_ tests):
 
 Available `Needs` values:
 * `xtrabackup` - Install Percona Server and XtraBackup
-* `minio` - Install Minio S3 server  
+* `microceph` - Install MicroCeph with an S3-compatible RGW; exports AWS_* variables pointing at it
 * `consul` - Run `make tools` for Consul/ZooKeeper
 * `larger-runner` - Use 16-core runner
 * `memory-check` - Verify 15GB+ RAM

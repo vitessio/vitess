@@ -23,7 +23,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -44,7 +44,7 @@ jobs:
 
     - name: Check for changes in files relevant to code coverage
       if: steps.mode.outputs.is_full_run != 'true'
-      uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
@@ -57,12 +57,12 @@ jobs:
         predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
             - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     - name: Set up Go
       if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
-      uses: ./.github/actions/setup-go
+      uses: $/.github/actions/setup-go
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -113,12 +113,12 @@ jobs:
     - name: Tune the OS
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       timeout-minutes: 8
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
@@ -130,8 +130,6 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
-
-        go mod download
 
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')

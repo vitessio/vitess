@@ -15,7 +15,7 @@
  */
 import cx from 'classnames';
 
-interface Props {
+interface Props extends React.PropsWithChildren {
     className?: string;
 }
 

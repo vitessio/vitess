@@ -199,15 +199,13 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	ins := dmlOp.(*operators.Insert)
 	eins := &engine.InsertSelect{
-		InsertCommon: engine.InsertCommon{
-			Keyspace:          rb.Routing.Keyspace(),
-			TableName:         ins.VTable.Name.String(),
-			Ignore:            ins.Ignore,
-			ForceNonStreaming: op.ForceNonStreaming,
-			Generate:          autoIncGenerate(ins.AutoIncrement),
-			ColVindexes:       ins.ColVindexes,
-			FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
-		},
+		Keyspace:          rb.Routing.Keyspace(),
+		TableName:         ins.VTable.Name.String(),
+		Ignore:            ins.Ignore,
+		ForceNonStreaming: op.ForceNonStreaming,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 		VindexValueOffset: ins.VindexValueOffset,
 	}
 

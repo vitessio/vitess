@@ -41,6 +41,13 @@ var (
 	ErrNoPrimaryStatus = errors.New("no master status")
 )
 
+// UnsupportedCommand is the sentinel returned by flavor command constructors
+// for statements the flavor cannot provide (e.g. the file-position flavor has
+// no replication-thread commands). It is not executable SQL: executing it
+// fails with a syntax error, so callers that must tolerate such flavors check
+// for it before executing a flavor-provided command.
+const UnsupportedCommand = "unsupported"
+
 const (
 	// mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
 	// versions, to work around replication bugs.
@@ -102,6 +109,9 @@ type flavor interface {
 
 	// startSQLThreadCommand returns the command to start the replica's SQL thread only.
 	startSQLThreadCommand() string
+
+	// startIOThreadCommand returns the command to start the replica's IO thread only.
+	startIOThreadCommand() string
 
 	// sendBinlogDumpCommand sends the COM_BINLOG_DUMP packet to start
 	// dumping binlogs from the specified file and position.
@@ -364,6 +374,11 @@ func (c *Conn) StopSQLThreadCommand() string {
 // StartSQLThreadCommand returns the command to start the replica's SQL thread.
 func (c *Conn) StartSQLThreadCommand() string {
 	return c.flavor.startSQLThreadCommand()
+}
+
+// StartIOThreadCommand returns the command to start the replica's IO thread.
+func (c *Conn) StartIOThreadCommand() string {
+	return c.flavor.startIOThreadCommand()
 }
 
 // SendBinlogDumpCommand sends the COM_BINLOG_DUMP command to start

@@ -396,6 +396,7 @@ type Tablet struct {
 	// about which tablet should be the primary, such as via Vitess
 	// replication-management commands like PlannedReparentShard,
 	// EmergencyReparentShard, and TabletExternallyReparented.
+	//
 	PrimaryTermStartTime *vttime.Time `protobuf:"bytes,14,opt,name=primary_term_start_time,json=primaryTermStartTime,proto3" json:"primary_term_start_time,omitempty"`
 	// default_conn_collation is the default connection collation used by this tablet.
 	DefaultConnCollation uint32 `protobuf:"varint,16,opt,name=default_conn_collation,json=defaultConnCollation,proto3" json:"default_conn_collation,omitempty"`

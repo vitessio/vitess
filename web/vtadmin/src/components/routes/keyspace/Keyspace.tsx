@@ -33,13 +33,13 @@ import { KeyspaceVSchema } from './KeyspaceVSchema';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 import { Code } from '../../Code';
 
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     name: string;
-}
+};
 
 export const Keyspace = () => {
-    const { clusterID, name } = useParams<RouteParams>();
+    const { clusterID, name } = useParams<RouteParams>() as RouteParams;
     const { search } = useLocation();
 
     useDocumentTitle(`${name} (${clusterID})`);

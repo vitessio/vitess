@@ -769,6 +769,10 @@ message VDiffReportOptions {
   string format = 3;
   int64 max_sample_rows = 4;
   int64 row_diff_column_truncate_at = 5;
+  // no_samples strips the row-sample arrays from the per-table diff report
+  // (keeping the scalar counters), avoiding gRPC message-size limits on diffs
+  // with large blob/JSON rows.
+  bool no_samples = 6;
 }
 
 message VDiffCoreOptions {

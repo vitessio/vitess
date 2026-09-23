@@ -370,7 +370,7 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			os.Exit(1)
 		}
 
-		serverName := strings.Split(addr, ":")[0]
+		serverName, _, _ := strings.Cut(addr, ":")
 
 		log.Info(fmt.Sprintf("Using TLS ZK, connecting to %v server name %v", addr, serverName))
 		cert, err := tls.LoadX509KeyPair(certPath, keyPath)

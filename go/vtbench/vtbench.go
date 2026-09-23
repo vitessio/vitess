@@ -260,8 +260,7 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 // classification of a *sqlerror.SQLError when present so that the
 // per-protocol error summary remains accurate for the mysql protocol.
 func errorCode(err error) vtrpcpb.Code {
-	var sqlErr *sqlerror.SQLError
-	if errors.As(err, &sqlErr) {
+	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok {
 		return sqlErr.VtRpcErrorCode()
 	}
 	return vterrors.Code(err)

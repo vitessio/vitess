@@ -181,7 +181,7 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	if cmd.ProcessState != nil && cmd.ProcessState.Sys() != nil {
+	if cmd.ProcessState != nil {
 		result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
 	} else {
 		result.ExitStatus = HOOK_CANNOT_GET_EXIT_STATUS
@@ -239,7 +239,7 @@ func (hook *Hook) ExecuteAsWritePipe(out io.Writer) (io.WriteCloser, WaitFunc, i
 	err = cmd.Start()
 	if err != nil {
 		status = HOOK_CANNOT_GET_EXIT_STATUS
-		if cmd.ProcessState != nil && cmd.ProcessState.Sys() != nil {
+		if cmd.ProcessState != nil {
 			status = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
 		}
 		return nil, nil, status, err
@@ -278,7 +278,7 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 	err = cmd.Start()
 	if err != nil {
 		status = HOOK_CANNOT_GET_EXIT_STATUS
-		if cmd.ProcessState != nil && cmd.ProcessState.Sys() != nil {
+		if cmd.ProcessState != nil {
 			status = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
 		}
 		return nil, nil, status, err

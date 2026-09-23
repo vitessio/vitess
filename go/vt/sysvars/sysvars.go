@@ -60,6 +60,7 @@ var (
 	ForeignKeyChecks = "foreign_key_checks"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
+	SQLMode                     = SystemVariable{Name: "sql_mode", SupportSetVar: true}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
@@ -222,7 +223,7 @@ var (
 		{Name: "show_old_temporals", IsBoolean: true},
 		{Name: "sort_buffer_size", SupportSetVar: true},
 		{Name: "sql_big_selects", IsBoolean: true, SupportSetVar: true},
-		{Name: "sql_mode", SupportSetVar: true},
+		SQLMode,
 		{Name: "sql_notes", IsBoolean: true},
 		{Name: "sql_quote_show_create", IsBoolean: true},
 		{Name: "sql_safe_updates", IsBoolean: true, SupportSetVar: true},

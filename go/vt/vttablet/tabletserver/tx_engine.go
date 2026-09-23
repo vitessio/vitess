@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
@@ -299,7 +300,7 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 	defer span.Finish()
 	var query string
 	var err error
-	connID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
+	connID, err := te.txFinish(ctx, transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
 		query, err = te.txPool.Commit(ctx, conn)
 		return err
 	})
@@ -312,13 +313,13 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, e
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
-	return te.txFinish(transactionID, tx.TxRollback, func(conn *StatefulConnection) error {
+	return te.txFinish(ctx, transactionID, tx.TxRollback, func(conn *StatefulConnection) error {
 		return te.txPool.Rollback(ctx, conn)
 	})
 }
 
-func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
-	conn, err := te.txPool.GetAndLock(transactionID, reason.String())
+func (te *TxEngine) txFinish(ctx context.Context, transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
+	conn, err := te.txPool.GetAndLock(ctx, transactionID, reason.String())
 	if err != nil {
 		return 0, err
 	}
@@ -503,7 +504,7 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 
 	for _, stmt := range preparedTx.Queries {
 		conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
-		if _, err = conn.Exec(ctx, stmt, 1, false); err != nil {
+		if _, err = conn.Exec(ctx, stmt, 1, false, false /* keepConnOnTimeout */); err != nil {
 			te.txPool.RollbackAndRelease(ctx, conn)
 			return
 		}
@@ -626,6 +627,12 @@ func (te *TxEngine) stopTransactionWatcher() {
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
+	// The pre-queries are executed directly on the reserved connection, without the
+	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run here —
+	// before any connection is acquired or state is changed.
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+		return 0, "", err
+	}
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
 	if err != nil {
 		return 0, "", err
@@ -652,6 +659,10 @@ var noop = func(int) {}
 func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
+	// see ReserveBegin: validate before any connection is acquired or tainted
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+		return 0, err
+	}
 	if txID == 0 {
 		err := te.isTxPoolAvailable(noop)
 		if err != nil {
@@ -665,7 +676,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 		return conn.ReservedID(), nil
 	}
 
-	conn, err := te.txPool.GetAndLock(txID, "to reserve")
+	conn, err := te.txPool.GetAndLock(ctx, txID, "to reserve")
 	if err != nil {
 		return 0, err
 	}
@@ -699,7 +710,7 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 		return err
 	}
 	for _, query := range preQueries {
-		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
+		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/, false /* keepConnOnTimeout */)
 		if err != nil {
 			conn.Releasef("error during connection setup: %s\n%v", query, err)
 			return err
@@ -709,8 +720,8 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 }
 
 // Release closes the underlying connection.
-func (te *TxEngine) Release(connID int64) error {
-	conn, err := te.txPool.GetAndLock(connID, "for release")
+func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+	conn, err := te.txPool.GetAndLock(ctx, connID, "for release")
 	if err != nil {
 		return err
 	}
@@ -729,8 +740,13 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 	}
 
 	// If we have a settings query that we need to apply, we do that before starting the transaction.
+	// This is a fresh dba connection being set up; it is discarded whole on
+	// any failure, so an interruption may kill the connection.
 	if settingsQuery != "" {
 		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
+			// The caller bails out on any error, so close the fresh
+			// connection here or it leaks.
+			dbConn.Close()
 			return nil, err
 		}
 	}
@@ -742,8 +758,11 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 		env: te.env,
 	}
 
-	_, _, err = te.txPool.begin(ctx, nil, false, sc)
-	return sc, err
+	if _, _, err = te.txPool.begin(ctx, nil, false, sc); err != nil {
+		sc.Close()
+		return nil, err
+	}
+	return sc, nil
 }
 
 // IsTwoPCAllowed checks if TwoPC is allowed.
