@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -274,6 +275,33 @@ func TestExternalCompressors(t *testing.T) {
 			decompressor.Close()
 			assert.Equal(t, data, decompressed.Bytes())
 		})
+	}
+}
+
+// TestExternalCompressorCloseStopsWaitingForOrphanedOutput closes an
+// external compressor whose process exits on its own but leaves a child
+// behind that still holds its stdout and stderr open. Close must not wait
+// for that child to exit: it stops waiting for the output once closeTimeout
+// has passed after the process exited, and reports that it did.
+func TestExternalCompressorCloseStopsWaitingForOrphanedOutput(t *testing.T) {
+	if _, err := validateExternalCmd("sh"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	oldTimeout := closeTimeout
+	t.Cleanup(func() { closeTimeout = oldTimeout })
+	closeTimeout = 100 * time.Millisecond
+
+	var compressed bytes.Buffer
+	compressor, err := newExternalCompressor(t.Context(), "sh -c 'sleep 30 & exit 0'", &compressed, logutil.NewMemoryLogger())
+	require.NoError(t, err)
+
+	closed := make(chan error, 1)
+	go func() { closed <- compressor.Close() }()
+	select {
+	case err := <-closed:
+		require.ErrorIs(t, err, exec.ErrWaitDelay)
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "Close waited for the orphaned child")
 	}
 }
 

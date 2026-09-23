@@ -32,8 +32,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
-	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -784,17 +784,17 @@ func TestRestoreFileChunkDecompressorCloseNotRetried(t *testing.T) {
 	assert.NotContains(t, err.Error(), "hash mismatch")
 }
 
-// TestBackupFileCompressorCloseAbandonedIsFatal backs up a file through an
-// external compressor whose Close never returns: `sleep` neither exits nor
-// closes its stderr, so the compressor's Close blocks waiting for it and the
-// TimeoutCloser gives up. The abandoned Close may still be writing into this
-// attempt's buffer and destination, so the error must carry
-// FAILED_PRECONDITION to stop the caller from retrying the file, and not a
-// context code, which the dispatch would retry.
-func TestBackupFileCompressorCloseAbandonedIsFatal(t *testing.T) {
+// TestBackupFileCompressorCloseStopsHungCommand backs up a file through an
+// external compressor whose process never exits: `sleep` ignores its closed
+// stdin. The compressor's Close must kill the process once closeTimeout has
+// passed, wait for it, and return an error that says so, leaving nothing
+// running that could still write into this attempt's destination. The error
+// must not carry FAILED_PRECONDITION, so the caller retries the file.
+func TestBackupFileCompressorCloseStopsHungCommand(t *testing.T) {
 	if _, err := validateExternalCmd("sleep"); err != nil {
 		t.Skip("Command not available in this host:", err)
 	}
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(path.Join(tmpDir, "source.txt"), []byte("test content"), 0o644))
 
@@ -824,21 +824,23 @@ func TestBackupFileCompressorCloseAbandonedIsFatal(t *testing.T) {
 	err := be.backupFile(t.Context(), params, bh, fe, "0", -1)
 
 	require.ErrorContains(t, err, "failed to close compressor")
-	require.ErrorContains(t, err, ioutil.ErrCloseAbandoned.Error())
-	assert.True(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "an abandoned compressor close must be fatal, got: %v", err)
+	require.ErrorContains(t, err, "did not finish within 100ms and was stopped")
+	require.ErrorContains(t, err, "signal: killed")
+	assert.False(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "a stopped compressor must leave the file retryable, got: %v", err)
 }
 
-// TestRestoreFileDecompressorCloseAbandonedRetries restores a file through
-// an external decompressor whose Close never returns: the shell closes its
-// stdout so the copy finishes, then replaces itself with a `sleep` that
-// keeps stderr open, so the decompressor's Close blocks and the
-// TimeoutCloser gives up. Unlike the compressor, a stale decompressor shares
-// nothing with the retry, so the error must come back without
-// FAILED_PRECONDITION and the caller's per-file retry gets its turn.
-func TestRestoreFileDecompressorCloseAbandonedRetries(t *testing.T) {
+// TestRestoreFileDecompressorCloseStopsHungCommand restores a file through
+// an external decompressor whose process never exits: the shell closes its
+// stdout so the copy finishes, then replaces itself with a `sleep`. The
+// decompressor's Close must kill the process once closeTimeout has passed,
+// wait for it, and return an error that says so, before the hash is
+// compared. The error must not carry FAILED_PRECONDITION, so the caller
+// retries the file.
+func TestRestoreFileDecompressorCloseStopsHungCommand(t *testing.T) {
 	if _, err := validateExternalCmd("sh"); err != nil {
 		t.Skip("Command not available in this host:", err)
 	}
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 	tmpDir := t.TempDir()
 
 	oldCmd := ExternalDecompressorCmd
@@ -870,8 +872,9 @@ func TestRestoreFileDecompressorCloseAbandonedRetries(t *testing.T) {
 	err := be.restoreFile(t.Context(), params, bh, fe, bm, "0")
 
 	require.ErrorContains(t, err, "failed to close decompressor")
-	require.ErrorContains(t, err, ioutil.ErrCloseAbandoned.Error())
-	assert.False(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "an abandoned decompressor close must stay retryable, got: %v", err)
+	require.ErrorContains(t, err, "did not finish within 100ms and was stopped")
+	require.ErrorContains(t, err, "signal: killed")
+	assert.False(t, hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION), "a stopped decompressor must leave the file retryable, got: %v", err)
 	assert.NotContains(t, err.Error(), "hash mismatch")
 }
 

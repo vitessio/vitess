@@ -1111,7 +1111,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
 			writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
 
-			closer := ioutil.NewTimeoutCloser(cancelableCtx, compressor, closeTimeout)
 			defer func() {
 				params.Logger.Infof("Closing compressor for file: %s %s", label, retryStr)
 				closeCompressorAt := time.Now()
@@ -1122,17 +1121,15 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				// concurrent mode, and an external compressor's process has
 				// already exited. The file is retried as a whole by the caller
 				// instead.
-				if cerr := closer.Close(); cerr != nil {
-					if errors.Is(cerr, ioutil.ErrCloseAbandoned) {
-						// The compressor's Close is still running and may still
-						// be flushing into this attempt's buffer and destination
-						// while they are closed below. The retry would write the
-						// same destination name, so nothing under it can be
-						// trusted any more: fail the backup instead.
-						cerr = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close compressor %v within %v: %v", label, closeTimeout, cerr)
-					} else {
-						cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
-					}
+				//
+				// Nor does the close need a timeout of its own. An external
+				// compressor kills its process when it has not finished within
+				// closeTimeout, and a builtin compressor only blocks for as long
+				// as a write to the destination does, which is closed without a
+				// timeout as well. Either way the close has returned, with
+				// nothing still writing, before the destination is closed below.
+				if cerr := compressor.Close(); cerr != nil {
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
 					return
@@ -1609,7 +1606,6 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 		return nil, nil, vterrors.Wrap(err, "can't create decompressor")
 	}
 
-	closer := ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout)
 	decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
 	wrappedReader := ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
@@ -1624,13 +1620,10 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 			// A decompressor is closed once, without closeWithRetry: its Close
 			// reports the state of the stream it has read, and closing again
 			// cannot change that. The file is retried as a whole by the caller
-			// instead. That holds for an abandoned Close too
-			// (ioutil.ErrCloseAbandoned): a decompressor never writes the
-			// destination, the source it may still be reading is this
-			// attempt's own and is closed by the caller, the retry opens a
-			// fresh one, and an external process is killed with the caller's
-			// context. Nothing the retry uses is shared with the stale Close.
-			cerr = closer.Close()
+			// instead. As with the compressor, the close needs no timeout of
+			// its own: an external decompressor kills its process when it has
+			// not finished within closeTimeout.
+			cerr = decompressor.Close()
 			if cerr != nil {
 				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 				params.Logger.Error(cerr)

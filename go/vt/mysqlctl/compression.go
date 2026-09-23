@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/google/shlex"
 	"github.com/klauspost/compress/zstd"
@@ -167,6 +168,77 @@ func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 	return exec.CommandContext(ctx, cmdPath, cmdArgs[1:]...), nil
 }
 
+// errCloseTimeout is the cause with which an external command's context is
+// canceled, killing the process, when the command has not finished within
+// closeTimeout of being closed.
+var errCloseTimeout = errors.New("external command did not finish")
+
+// externalCmd is the process behind an external compressor or decompressor.
+// Closing it waits for the process to finish, and kills the process when it
+// has not finished within closeTimeout, so that nothing it started is still
+// running once the close returns.
+type externalCmd struct {
+	cmd *exec.Cmd
+	// ctx is the command's context. Canceling it with stop kills the process.
+	ctx  context.Context
+	stop context.CancelCauseFunc
+	// stderr carries the process's stderr to a goroutine that logs it line by
+	// line; stderrDone is marked done when that goroutine returns.
+	stderr     *io.PipeWriter
+	stderrDone sync.WaitGroup
+}
+
+func newExternalCmd(ctx context.Context, cmdStr string) (*externalCmd, error) {
+	cmdCtx, stop := context.WithCancelCause(ctx)
+	cmd, err := prepareExternalCmd(cmdCtx, cmdStr)
+	if err != nil {
+		stop(nil)
+		return nil, err
+	}
+	// A process can exit, or be killed, while a child it started still holds
+	// its stdout or stderr open. WaitDelay bounds how long Wait waits for
+	// those, once the process has exited or its context is done.
+	cmd.WaitDelay = closeTimeout
+	return &externalCmd{cmd: cmd, ctx: cmdCtx, stop: stop}, nil
+}
+
+// start starts the process and logs its stderr, prefixed with name.
+func (e *externalCmd) start(name string, logger logutil.Logger) error {
+	// The stderr is handed to the command as a writer rather than read from
+	// cmd.StderrPipe, so that Wait waits for it to be copied, within
+	// WaitDelay, and no line is lost to Wait closing the pipe early.
+	stderrReader, stderrWriter := io.Pipe()
+	e.cmd.Stderr = stderrWriter
+	e.stderr = stderrWriter
+	if err := e.cmd.Start(); err != nil {
+		e.stop(nil)
+		return err
+	}
+	e.stderrDone.Go(func() {
+		scanLinesToLogger(name+" stderr", stderrReader, logger, func() {})
+		// Keep draining when the scanner stops early, on a line too long for
+		// it for example, so that the process never blocks on its stderr.
+		_, _ = io.Copy(io.Discard, stderrReader)
+	})
+	return nil
+}
+
+// wait waits for the process to exit and its output to be copied. When that
+// has not happened within closeTimeout, the process is killed and waited for,
+// and the error says so.
+func (e *externalCmd) wait() error {
+	timer := time.AfterFunc(closeTimeout, func() { e.stop(errCloseTimeout) })
+	err := e.cmd.Wait()
+	timer.Stop()
+	e.stop(nil)
+	e.stderr.Close()
+	e.stderrDone.Wait()
+	if err != nil && errors.Is(context.Cause(e.ctx), errCloseTimeout) {
+		return fmt.Errorf("%w within %v and was stopped: %w", errCloseTimeout, closeTimeout, err)
+	}
+	return err
+}
+
 // This returns a writer that writes the compressed output of the external command to the provided writer.
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
 	logger.Infof("Compressing using external command: %q", cmdStr)
@@ -175,29 +247,20 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 		return nil, err
 	}
 
-	cmd, err := prepareExternalCmd(ctx, cmdStr)
+	extCmd, err := newExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
-	compressor := &externalCompressor{cmd: cmd}
-	cmd.Stdout = writer
-	cmdIn, err := cmd.StdinPipe()
+	extCmd.cmd.Stdout = writer
+	stdin, err := extCmd.cmd.StdinPipe()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "cannot create external ompressor stdin pipe")
+		extCmd.stop(nil)
+		return nil, vterrors.Wrap(err, "cannot create external compressor stdin pipe")
 	}
-	compressor.stdin = cmdIn
-	cmdErr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, vterrors.Wrap(err, "cannot create external ompressor stderr pipe")
+	if err := extCmd.start("compressor", logger); err != nil {
+		return nil, vterrors.Wrap(err, "can't start external compressor")
 	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, vterrors.Wrap(err, "can't start external decompressor")
-	}
-
-	compressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the writer
-	go scanLinesToLogger("compressor stderr", cmdErr, logger, compressor.wg.Done)
-	return compressor, nil
+	return &externalCompressor{externalCmd: extCmd, stdin: stdin}, nil
 }
 
 // This returns a reader that reads the compressed input and passes it to the external command to be decompressed. Calls to its
@@ -205,29 +268,20 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
 	logger.Infof("Decompressing using external command: %q", cmdStr)
 
-	cmd, err := prepareExternalCmd(ctx, cmdStr)
+	extCmd, err := newExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
-	decompressor := &externalDecompressor{cmd: cmd}
-	cmd.Stdin = reader
-	cmdOut, err := cmd.StdoutPipe()
+	extCmd.cmd.Stdin = reader
+	stdout, err := extCmd.cmd.StdoutPipe()
 	if err != nil {
+		extCmd.stop(nil)
 		return nil, vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
 	}
-	decompressor.stdout = cmdOut
-	cmdErr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
-	}
-
-	if err := cmd.Start(); err != nil {
+	if err := extCmd.start("decompressor", logger); err != nil {
 		return nil, vterrors.Wrap(err, "can't start external decompressor")
 	}
-
-	decompressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the reader
-	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
-	return decompressor, nil
+	return &externalDecompressor{externalCmd: extCmd, stdout: stdout}, nil
 }
 
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
@@ -339,40 +393,34 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 
 // This struct wraps the underlying exec.Cmd and implements the io.WriteCloser interface.
 type externalCompressor struct {
-	cmd   *exec.Cmd
+	*externalCmd
 	stdin io.WriteCloser
-	wg    sync.WaitGroup
 }
 
 func (e *externalCompressor) Write(p []byte) (n int, err error) {
 	return e.stdin.Write(p)
 }
 
+// Close closes the process's stdin and waits for the process to finish,
+// killing it when it has not finished within closeTimeout.
 func (e *externalCompressor) Close() error {
-	if err := e.stdin.Close(); err != nil {
-		return err
-	}
-
-	// wait for the stderr to finish reading as well
-	e.wg.Wait()
-	return e.cmd.Wait()
+	err := e.stdin.Close()
+	return errors.Join(err, e.wait())
 }
 
 // This struct wraps the underlying exec.Cmd and implements the io.ReadCloser interface.
 type externalDecompressor struct {
-	cmd    *exec.Cmd
+	*externalCmd
 	stdout io.ReadCloser
-	wg     sync.WaitGroup
 }
 
 func (e *externalDecompressor) Read(p []byte) (n int, err error) {
 	return e.stdout.Read(p)
 }
 
+// Close waits for the process to finish, killing it when it has not finished
+// within closeTimeout. exec.Cmd.Wait closes the stdout pipe, so Close does not
+// close it directly.
 func (e *externalDecompressor) Close() error {
-	// wait for the stderr to finish reading as well
-	e.wg.Wait()
-
-	// exec.Cmd.Wait() will also close the stdout pipe, so we don't need to call it directly
-	return e.cmd.Wait()
+	return e.wait()
 }
