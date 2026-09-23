@@ -286,26 +286,20 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		// can depend on connection state, and the tablet refuses a lock
 		// function such as get_lock() outside a reserved connection, so the
 		// evaluation runs on the connection the SET is then applied to.
+		// When the evaluation is refused, by the table ACL on a subquery or
+		// by the sql_mode judgment, a session that was not reserved before
+		// is unmarked again, unless a connection was reserved along the way:
+		// the tablet reserves one before retrying a query it first refused
+		// for lacking it, and a failed reservation is still recorded in the
+		// session, so the mark must then stay with it.
+		wasReserved := vcursor.Session().InReservedConn()
 		vcursor.Session().NeedsReservedConn()
-		var value sqltypes.Value
-		if svs.Name == "sql_mode" {
-			qr, err := execShard(ctx, nil /*primitive*/, vcursor, sqlModeJudgmentQuery(svs.Expr), env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
-			if err != nil {
-				return err
+		value, err := svs.evaluateOnShard(ctx, vcursor, env, rss[0])
+		if err != nil {
+			if !wasReserved && len(vcursor.Session().ShardSession()) == 0 {
+				vcursor.Session().ResetReservedConn()
 			}
-			_, value, err = sqlModeChangedValue(qr)
-			if err != nil {
-				return err
-			}
-		} else {
-			qr, err := execShard(ctx, nil /*primitive*/, vcursor, fmt.Sprintf("select %s from dual", svs.Expr), env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
-			if err != nil {
-				return err
-			}
-			if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result evaluating %s: %d rows", svs.Name, len(qr.Rows))
-			}
-			value = qr.Rows[0][0]
+			return err
 		}
 		var buf strings.Builder
 		value.EncodeSQL(&buf)
@@ -340,6 +334,28 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 }
 
 // execSetStatement executes `set <name> = <value>` on the given shard sessions.
+// evaluateOnShard evaluates a targeted SET's expression on the target shard and
+// returns the value the SET applies and the session stores. sql_mode gets the
+// judgment an untargeted SET's value gets, evaluated there.
+func (svs *SysVarReservedConn) evaluateOnShard(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv, rs *srvtopo.ResolvedShard) (sqltypes.Value, error) {
+	if svs.Name == "sql_mode" {
+		qr, err := execShard(ctx, nil /*primitive*/, vcursor, sqlModeJudgmentQuery(svs.Expr), env.BindVars, rs, false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+		if err != nil {
+			return sqltypes.Value{}, err
+		}
+		_, value, err := sqlModeChangedValue(qr)
+		return value, err
+	}
+	qr, err := execShard(ctx, nil /*primitive*/, vcursor, fmt.Sprintf("select %s from dual", svs.Expr), env.BindVars, rs, false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result evaluating %s: %d rows", svs.Name, len(qr.Rows))
+	}
+	return qr.Rows[0][0], nil
+}
+
 func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv, value string) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {

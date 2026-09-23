@@ -349,6 +349,28 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+			`Reset Reserved Conn`,
+		},
+	}, {
+		// the same failure on a session that already holds a shard session,
+		// as after a reservation the tablet made before refusing the query,
+		// keeps the mark: the reservation is recorded in the session
+		testName: "targeted set evaluation failure keeps the mark of a session with a shard session",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		shardSession:  []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		execErr:       errors.New("some random error"),
+		expectedError: "some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		},
 	}, {
 		// the evaluation returns one value; anything else cannot be applied or
@@ -375,6 +397,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+			`Reset Reserved Conn`,
 		},
 	}, {
 		// a targeted session's SET gets the same sql_mode judgment as an untargeted
@@ -401,6 +424,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
+			`Reset Reserved Conn`,
 		},
 	}, {
 		// the SET carries the judged value rather than the expression: evaluating the
