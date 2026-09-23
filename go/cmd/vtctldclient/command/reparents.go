@@ -326,7 +326,7 @@ func init() {
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
-	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.RequiredPosition, "required-position", "", "Minimum MySQL GTID set, for example <uuid>:1-100, that the new primary must have received, applied or in its relay log. Fails if no candidate has received it. MySQL GTID shards only.")
+	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.RequiredPosition, "required-position", "", "Minimum MySQL GTID set, for example <uuid>:1-100, that the new primary must have. This includes both applied transactions and received transactions still in the relay log. Fails if no candidate has received it. MySQL GTID shards only.")
 	Root.AddCommand(EmergencyReparentShard)
 
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "Time to wait for replicas to catch up in reparenting.")
