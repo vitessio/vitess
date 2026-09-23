@@ -4344,11 +4344,10 @@ type EmergencyReparentShardRequest struct {
 	// are detected. NewPrimary is required and must be an upfront undominated candidate.
 	// Transactions only present on losing histories will not be preserved.
 	AllowSplitBrainPromotion bool `protobuf:"varint,9,opt,name=allow_split_brain_promotion,json=allowSplitBrainPromotion,proto3" json:"allow_split_brain_promotion,omitempty"`
-	// RequiredPosition is the position the new primary must have received, applied
-	// or in its relay log. It accepts a MySQL GTID set with or without the MySQL56/
-	// prefix (for example <uuid>:1-100). The reparent fails if no candidate has
-	// received it. The check supports MySQL GTID shards only. Empty means no
-	// requirement.
+	// RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
+	// that the new primary must have received, applied or in its relay log. The
+	// reparent fails if no candidate has received it. The check supports MySQL
+	// GTID shards only. Empty means no requirement.
 	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
