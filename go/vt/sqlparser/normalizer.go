@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -199,14 +198,8 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		nz.hasStarInSelect = true
 		// No rewriting needed for prepare or execute statements.
 		return false
-	case *ShowBasic:
-		nz.rewriteShowBasic(node)
 	}
-	b := nz.err == nil
-	if !b {
-		fmt.Println(1)
-	}
-	return b
+	return nz.err == nil
 }
 
 // noteAliasedExprName tracks expressions without aliases to add alias if expression is rewritten

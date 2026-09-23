@@ -235,7 +235,7 @@
     "comment": "show variables on a targeted session substitutes the variables VTGate owns",
     "query": "show variables",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "SHOW",
       "Original": "show variables",
       "Instructions": {
@@ -258,7 +258,7 @@
     "comment": "show global variables on a targeted session substitutes the server identity",
     "query": "show global variables",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "SHOW",
       "Original": "show global variables",
       "Instructions": {
