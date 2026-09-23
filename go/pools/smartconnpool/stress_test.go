@@ -1480,3 +1480,59 @@ func waitForStressTraffic(t *testing.T, cycle int, wg *errgroup.Group, timeout t
 	}
 	require.NoErrorf(t, err, "cycle %d: traffic worker failed", cycle)
 }
+
+// TestStressCloseDuringGetNew races Gets that open new connections against
+// CloseWithContext on a fresh pool, cycle after cycle. A Get whose capacity
+// check in getNew passed before Close lowered capacity must not reserve a slot
+// after Close's drain saw no active connections, so a Close that returned nil
+// must leave no active connection behind, and no connection may be dialed
+// after it returned. The race window is a few instructions wide, so this test
+// catches a regression only probabilistically; TestReserveSlotAfterCapacityDrop
+// is the deterministic check of the reservation itself, and this test drives
+// the whole Get / Close path.
+func TestStressCloseDuringGetNew(t *testing.T) {
+	const (
+		Duration     = 5 * time.Second
+		NumWorkers   = 8
+		CloseTimeout = 30 * time.Second
+	)
+
+	deadline := time.Now().Add(Duration)
+	for cycle := 0; time.Now().Before(deadline); cycle++ {
+		var (
+			closeReturned   atomic.Bool
+			dialsAfterClose atomic.Int64
+		)
+		connect := func(_ context.Context) (*StressConn, error) {
+			if closeReturned.Load() {
+				dialsAfterClose.Add(1)
+			}
+			return &StressConn{}, nil
+		}
+		pool := NewPool[*StressConn](&Config[*StressConn]{Capacity: 1}).Open(connect, nil)
+
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for range NumWorkers {
+			wg.Go(func() {
+				<-start
+				if conn, err := pool.Get(t.Context(), nil); err == nil {
+					conn.Recycle()
+				}
+			})
+		}
+		close(start)
+
+		ctx, cancel := context.WithTimeout(t.Context(), CloseTimeout)
+		err := pool.CloseWithContext(ctx)
+		cancel()
+		closeReturned.Store(true)
+		activeAfterClose := pool.Active()
+		wg.Wait()
+
+		require.NoErrorf(t, err, "cycle %d: CloseWithContext failed", cycle)
+		require.Zerof(t, activeAfterClose, "cycle %d: CloseWithContext returned with active connections", cycle)
+		require.Zerof(t, dialsAfterClose.Load(), "cycle %d: connections dialed after CloseWithContext returned", cycle)
+		require.Zerof(t, pool.Active(), "cycle %d: active should be 0 once the Gets are done", cycle)
+	}
+}

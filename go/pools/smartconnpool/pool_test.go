@@ -835,99 +835,38 @@ func TestSetCapacityRejectedOnClosedPool(t *testing.T) {
 	require.EqualValues(t, 0, p.Capacity())
 }
 
-// pauseGetNewBeforeCAS installs testHookBeforeGetNewCAS so that the next getNew
-// blocks after its capacity check and before its CAS. It returns a func that
-// waits until a getNew is paused there, and one that lets it continue.
-func pauseGetNewBeforeCAS(t *testing.T) (waitPaused func(), resume func()) {
-	var paused atomic.Bool
-	release := make(chan struct{})
-	testHookBeforeGetNewCAS = func() {
-		paused.Store(true)
-		<-release
+// TestReserveSlotAfterCapacityDrop covers a Get whose getNew compared active
+// with capacity before a SetCapacity or Close lowered capacity to 0, and whose
+// reservation lands after that drain already saw no active connections: the
+// drain does not wait for the slot, so the reservation must not claim it.
+func TestReserveSlotAfterCapacityDrop(t *testing.T) {
+	lowerCapacity := map[string]func(t *testing.T, p *ConnPool[*TestConn]){
+		"SetCapacity": func(t *testing.T, p *ConnPool[*TestConn]) {
+			require.NoError(t, p.SetCapacity(t.Context(), 0))
+		},
+		"CloseWithContext": func(t *testing.T, p *ConnPool[*TestConn]) {
+			require.NoError(t, p.CloseWithContext(t.Context()))
+		},
 	}
-	t.Cleanup(func() { testHookBeforeGetNewCAS = func() {} })
+	for name, lower := range lowerCapacity {
+		t.Run(name, func(t *testing.T) {
+			var state TestState
+			p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+			t.Cleanup(p.Close)
 
-	var once sync.Once
-	resume = func() { once.Do(func() { close(release) }) }
-	t.Cleanup(resume)
+			// the Get loaded active (0) and saw it below capacity (1)
+			open := p.Active()
+			require.Less(t, open, p.Capacity())
 
-	waitPaused = func() {
-		require.Eventually(t, paused.Load, 30*time.Second, time.Millisecond)
+			lower(t, p)
+
+			if p.reserveSlot(open) {
+				p.closedConn() // give the slot back so the pool can close
+				assert.Fail(t, "claimed a slot the drain did not wait for")
+			}
+			assert.Zero(t, p.Active())
+		})
 	}
-	return waitPaused, resume
-}
-
-// TestCloseDuringGetNewDoesNotDialAfterClose covers a Get whose capacity check
-// passed before Close lowered capacity to 0 and whose CAS lands after Close's
-// drain saw no active connections. That Get must not open a connection after
-// Close has returned.
-func TestCloseDuringGetNewDoesNotDialAfterClose(t *testing.T) {
-	var state TestState
-	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
-	waitPaused, resume := pauseGetNewBeforeCAS(t)
-
-	errs := make(chan error, 1)
-	go func() {
-		conn, err := p.Get(t.Context(), nil)
-		if conn != nil {
-			conn.Recycle()
-		}
-		errs <- err
-	}()
-	waitPaused()
-
-	require.NoError(t, p.CloseWithContext(t.Context()))
-	resume()
-
-	require.ErrorIs(t, <-errs, ErrConnPoolClosed)
-	assert.Zero(t, state.lastID.Load(), "Get opened a connection after Close returned")
-	assert.Zero(t, p.Active())
-}
-
-// TestSetCapacityDuringGetNewDoesNotExceedCapacity covers a Get whose capacity
-// check passed before SetCapacity lowered capacity to 0 and whose CAS lands
-// after SetCapacity's drain saw no active connections. That Get must not be
-// handed a new connection beyond the lowered capacity; it waits instead.
-func TestSetCapacityDuringGetNewDoesNotExceedCapacity(t *testing.T) {
-	var state TestState
-	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
-	t.Cleanup(p.Close)
-	waitPaused, resume := pauseGetNewBeforeCAS(t)
-
-	type result struct {
-		conn *Pooled[*TestConn]
-		err  error
-	}
-	results := make(chan result, 1)
-	go func() {
-		conn, err := p.Get(t.Context(), nil)
-		results <- result{conn, err}
-	}()
-	waitPaused()
-
-	require.NoError(t, p.SetCapacity(t.Context(), 0))
-	resume()
-
-	// the Get either returns or ends up waiting for a connection
-	require.Eventually(t, func() bool {
-		return len(results) > 0 || p.wait.waiting() > 0
-	}, 30*time.Second, time.Millisecond)
-	select {
-	case res := <-results:
-		if res.conn != nil {
-			res.conn.Recycle()
-		}
-		require.FailNow(t, "Get was handed a connection beyond capacity 0", "err: %v", res.err)
-	default:
-	}
-	assert.Zero(t, state.lastID.Load())
-	assert.Zero(t, p.Active())
-
-	// Close wakes the waiting Get
-	p.Close()
-	res := <-results
-	assert.Nil(t, res.conn)
-	assert.Error(t, res.err)
 }
 
 func TestConnReopen(t *testing.T) {
