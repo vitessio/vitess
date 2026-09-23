@@ -15,17 +15,17 @@ jobs:
     name: Check Make VTAdmin Web Proto
     runs-on: ubuntu-24.04
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-      with:
-        egress-policy: audit
-
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
           echo "skipping CI due to the 'Skip CI' label"
           exit 1
         fi
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
 
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

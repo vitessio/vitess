@@ -124,11 +124,6 @@ jobs:
     runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && (github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || 'ubuntu-24.04' }}
 
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
       - name: Skip CI
         run: |
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
@@ -140,6 +135,11 @@ jobs:
         # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
         if: needs.changes.result != 'success'
         run: exit 1
+
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
       - name: Check out code
         if: needs.changes.outputs.unit_tests == 'true'

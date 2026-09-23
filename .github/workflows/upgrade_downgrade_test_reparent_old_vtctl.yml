@@ -83,14 +83,11 @@ jobs:
     if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true')) }}
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Reparent Old Vtctl
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    # The large runner is only claimed when the tests will actually run; a
+    # failed or cancelled gate and the 'Skip CI' label only report a failure.
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-      with:
-        egress-policy: audit
-
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
@@ -101,6 +98,11 @@ jobs:
     - name: Fail if the gate job failed
       if: needs.changes.result != 'success'
       run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
 
     - name: Check out commit's code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
