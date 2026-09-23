@@ -462,7 +462,7 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 #### <a id="ers-required-position"/>`EmergencyReparentShard` can require a position on the new primary</a>
 
-`EmergencyReparentShard` (ERS) can now require that the new primary has received a given position. A new `--required-position` flag, and a `required_position` field on the `EmergencyReparentShard` RPC, names that position. The new primary must have it applied or still in its relay log. The flag accepts a MySQL GTID set with or without the `MySQL56/` prefix.
+`EmergencyReparentShard` (ERS) can now require that the new primary has received a given position. A new `--required-position` flag, and a `required_position` field on the `EmergencyReparentShard` RPC, names that position. The new primary must have it applied or still in its relay log.
 
 Use this when you know a position that the new primary must not lose, for example the last `gtid_executed` of the failed primary. ERS compares the candidates only to each other. When every candidate lost the same received transactions, for example after a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, the candidates look fully applied, and ERS alone cannot see that they are behind.
 
