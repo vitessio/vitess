@@ -4149,6 +4149,52 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	input:  "with x as (select 1) (select * from x)",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) ((select * from x))",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with recursive x as (select 1) (select * from x)",
+	output: "with recursive x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) (select * from x union select 2)",
+	output: "with x as (select 1 from dual) select * from x union select 2 from dual",
+}, {
+	input:  "with x as (select 1) (values row(1))",
+	output: "with x as (select 1 from dual) values row(1)",
+}, {
+	input:  "with x as (select 1) ((select 2) union (select 3))",
+	output: "with x as (select 1 from dual) select 2 from dual union select 3 from dual",
+}, {
+	// A parenthesized query expression is its own scope: when it carries its
+	// own WITH clause, MySQL keeps the inner clause and ignores the outer one.
+	input:  "with x as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from y) limit 1",
+	output: "with y as (select 2 from dual) select * from y limit 1",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from y) order by 1 limit 1",
+	output: "with y as (select 2 from dual) select * from y order by 1 asc limit 1",
+}, {
+	input:  "with x as (select 1) ((with y as (select 2) select * from y))",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	// The outer CTE is not in scope inside the parentheses, so x resolves to a
+	// base table rather than to the outer definition.
+	input:  "with x as (select 1) (with y as (select 2) select * from x)",
+	output: "with y as (select 2 from dual) select * from x",
+}, {
+	input:  "with y as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1 as a) (with y as (select 2 as a) select * from y union select * from x)",
+	output: "with y as (select 2 as a from dual) select * from y union select * from x",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) values row(1))",
+	output: "with y as (select 2 from dual) values row(1)",
 }}
 
 func TestValid(t *testing.T) {
