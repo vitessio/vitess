@@ -119,6 +119,11 @@ var alreadyCancelled = func() context.Context {
 	return ctx
 }()
 
+// testHookBeforeGetNewCAS runs in getNew between the capacity check and the
+// CAS that reserves the new connection's slot. Tests replace it to pause a
+// Get inside that window.
+var testHookBeforeGetNewCAS = func() {}
+
 type Config[C Connection] struct {
 	Capacity        int64
 	MaxIdleCount    int64
@@ -676,7 +681,15 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 			return nil, nil
 		}
 
+		testHookBeforeGetNewCAS()
 		if pool.active.CompareAndSwap(open, open+1) {
+			// capacity may have dropped between the check above and the CAS;
+			// a setCapacity drain that already saw active <= newcap would not
+			// wait for us, so give the slot back before dialing
+			if open >= pool.capacity.Load() {
+				pool.closedConn()
+				return nil, nil
+			}
 			conn, err := pool.connNew(ctx)
 			if err != nil {
 				pool.closedConn()
