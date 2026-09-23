@@ -138,7 +138,7 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Get dependencies
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')

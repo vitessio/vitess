@@ -37,7 +37,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Generate error codes
         run: |

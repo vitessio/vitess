@@ -25,14 +25,8 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
-<<<<<<< HEAD
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
-||||||| parent of 220f74fd88 (CI Improvements from CNCF Staff (#21164))
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-=======
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
->>>>>>> 220f74fd88 (CI Improvements from CNCF Staff (#21164))
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0

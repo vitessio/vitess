@@ -65,11 +65,11 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
