@@ -27,11 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-// storedPrimaryPosition returns the last gtid_executed VTOrc stored for the
-// primary as a position, or a zero position when VTOrc has no record of it.
+// storedPrimaryPosition returns the gtid_executed that VTOrc last stored for
+// the primary at alias, or a zero position when VTOrc has none.
 func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position, error) {
-	// Read by alias. ReadInstance joins on hostname and port, which a graceful
-	// vttablet shutdown clears.
 	executedGtidSet, err := inst.ReadExecutedGtidSet(alias)
 	if err != nil {
 		return replication.Position{}, vterrors.Wrapf(err, "cannot read the stored GTID set of %s", topoproto.TabletAliasString(alias))
@@ -49,24 +47,15 @@ func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position,
 	return position, nil
 }
 
-// requiredPositionForRecovery returns the position ERS must require when it
-// recovers tablet, or a zero position when the recovery needs none. It audits
-// the decision through logger. A read failure is an error. The operator asked
-// for the requirement, and an unguarded ERS is worse than no ERS.
-//
-// A missing stored set is not an error. VTOrc does not keep its stored instance
-// data across a restart, and a VTOrc that restarts after the primary fails can
-// never poll it again. An error there would block every failover that such a
-// VTOrc runs, so ERS runs without the requirement and the audit records a
-// warning. Other VTOrcs do not share their stored sets, so a restarted VTOrc
-// can run the failover before one that has the set.
+// requiredPositionForRecovery returns the position that ERS must require to
+// recover tablet, or a zero position when the recovery needs none. The
+// requirement keeps ERS from promoting a replica that is missing transactions
+// VTOrc saw on the failed primary.
 func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logger) (replication.Position, error) {
 	if !config.EmergencyReparentRequirePrimaryPosition() {
 		return replication.Position{}, nil
 	}
 
-	// A recovery analyzed on a replica, such as PrimaryTabletDeleted, has no
-	// stored primary to read.
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		logger.Infof("required position: none, the analyzed tablet is not the primary")
 		return replication.Position{}, nil
@@ -78,7 +67,6 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 		return replication.Position{}, vterrors.Wrapf(err, "cannot read the durability policy of keyspace %s", tablet.Keyspace)
 	}
 
-	// Without semi-sync the primary can hold transactions no replica received.
 	if !policy.HasSemiSync(durability) {
 		logger.Infof("required position: none, the durability policy has no semi-sync")
 		return replication.Position{}, nil
@@ -90,6 +78,8 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 		return replication.Position{}, err
 	}
 
+	// Run ERS without the requirement when VTOrc has no stored set. A VTOrc that
+	// restarted after the primary failed can never poll it.
 	if position.IsZero() {
 		logger.Warningf("required position: none, VTOrc has no stored GTID set for the primary, ERS runs without the requirement")
 		return replication.Position{}, nil
