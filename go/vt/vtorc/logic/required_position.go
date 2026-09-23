@@ -54,10 +54,11 @@ func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position,
 // the decision through logger. A read failure is an error. The operator asked
 // for the requirement, and an unguarded ERS is worse than no ERS.
 //
-// A missing stored set is not an error. VTOrc keeps its state in memory by
-// default, and a VTOrc that restarts after the primary fails can never poll it
-// again. An error there would block every failover that such a VTOrc runs, so
-// ERS runs without the requirement and the audit records a warning.
+// A missing stored set is not an error. VTOrc does not keep its stored instance
+// data across a restart, and a VTOrc that restarts after the primary fails can
+// never poll it again. An error there would block every failover that such a
+// VTOrc runs, so ERS runs without the requirement and the audit records a
+// warning.
 func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logger) (replication.Position, error) {
 	if !config.EmergencyReparentRequirePrimaryPosition() {
 		return replication.Position{}, nil

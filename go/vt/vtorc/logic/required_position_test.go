@@ -57,7 +57,7 @@ func saveRequiredPositionFixture(t *testing.T, durability string, tabletType top
 	require.NoError(t, inst.SaveTablet(tablet))
 	require.NoError(t, inst.WriteInstance(&inst.Instance{
 		InstanceAlias:   tablet.Alias,
-		TabletType:      topodatapb.TabletType_PRIMARY,
+		TabletType:      tabletType,
 		Hostname:        tablet.MysqlHostname,
 		Port:            int(tablet.MysqlPort),
 		ExecutedGtidSet: executedGtidSet,
