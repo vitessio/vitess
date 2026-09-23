@@ -75,6 +75,10 @@ type (
 		ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error)
 		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error)
 		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error
+		// ValidateSessionSettings runs a trivial query on the shard, outside the session's
+		// transaction and reserved connections, on a connection that carries the session's
+		// system variables as settings, so that the shard rejects a value it does not accept.
+		ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)

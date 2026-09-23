@@ -978,6 +978,21 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	return qr, vterrors.Aggregate(errs)
 }
 
+// ValidateSessionSettings is part of the engine.VCursor interface. The query runs in a
+// copy of the session without its transaction and shard sessions, marked as needing a
+// reserved connection, so that the shard receives the session's system variables as
+// settings. VTTablet applies them to a connection from its settings pool, which fails
+// on a value MySQL rejects, and serves the query there without reserving a connection.
+func (vc *VCursorImpl) ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error {
+	session := NewAutocommitSession(vc.SafeSession.Session)
+	session.SetReservedConn(true)
+	rss := []*srvtopo.ResolvedShard{rs}
+	queries := []*querypb.BoundQuery{{Sql: "select 1 from dual"}}
+	_, errs := vc.executor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, session, false /*autocommit*/, vc.ignoreMaxMemoryRows, vc.observer, false /*fetchLastInsertID*/)
+	vc.logShardsQueried(nil /*primitive*/, len(rss))
+	return vterrors.Aggregate(errs)
+}
+
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, 1)

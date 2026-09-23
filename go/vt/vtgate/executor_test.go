@@ -2585,6 +2585,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	sbc1WantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV},
+		{Sql: "set sql_mode = ''", BindVariables: emptyBV},
+		{Sql: "select 1 from dual", BindVariables: emptyBV},
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
@@ -2926,9 +2928,12 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			},
 			expectedQueries: [][]string{
 				{
-					// the assignment is evaluated outside the transaction, so the shard
-					// joins it with the first insert, whose reservation carries the value
+					// the assignment is evaluated and the value validated outside the
+					// transaction, so the shard joins it with the first insert, whose
+					// reservation carries the value
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"set time_zone = '+08:00'",
+					"select 1 from dual",
 					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (1)",
 					"insert into user_extra(user_id) values (2)",

@@ -883,3 +883,28 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 		assert.False(t, inTx, "expected RELEASE SAVEPOINT to not start a transaction")
 	})
 }
+
+// TestSetSysVarRejectedValue checks that a SET whose value MySQL rejects fails on the SET
+// itself, in an untargeted and in a shard-targeted session, both for a variable carried in
+// the session's settings and for one carried as a SET_VAR hint, which MySQL would otherwise
+// ignore with a warning. The session keeps its previous value and keeps working.
+func TestSetSysVarRejectedValue(t *testing.T) {
+	for _, target := range []string{keyspaceName, keyspaceName + ":-80"} {
+		t.Run(target, func(t *testing.T) {
+			conn, err := mysql.Connect(t.Context(), &vtParams)
+			require.NoError(t, err)
+			defer conn.Close()
+			utils.Exec(t, conn, "use `"+target+"`")
+
+			utils.Exec(t, conn, "set time_zone = '+08:00'")
+			_, err = utils.ExecAllowError(t, conn, "set time_zone = 'No/Such_Zone'")
+			require.ErrorContains(t, err, "Unknown or incorrect time zone")
+			utils.AssertMatches(t, conn, "select @@time_zone", `[[VARCHAR("+08:00")]]`)
+
+			_, err = utils.ExecAllowError(t, conn, "set optimizer_switch = 'bogus=on'")
+			require.ErrorContains(t, err, "can't be set to the value of 'bogus=on'")
+
+			utils.AssertMatches(t, conn, "select count(*) from test where id = -1", `[[INT64(0)]]`)
+		})
+	}
+}

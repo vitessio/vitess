@@ -421,6 +421,10 @@ func (t *noopVCursor) AutocommitApproval() bool {
 	panic("unimplemented")
 }
 
+func (t *noopVCursor) ValidateSessionSettings(context.Context, *srvtopo.ResolvedShard) error {
+	panic("unimplemented")
+}
+
 func (t *noopVCursor) ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
@@ -485,6 +489,9 @@ type loggingVCursor struct {
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
 	multiShardErrs []error
+
+	// validateSettingsErr is returned from ValidateSessionSettings
+	validateSettingsErr error
 
 	log []string
 	mu  sync.Mutex
@@ -727,6 +734,17 @@ func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, _ Primitive, que
 	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ExecuteStandalone %s %v %s %s", query, deprecatedPrintBindVars(bindvars), rs.Target.Keyspace, rs.Target.Shard))
 	return f.nextResult()
+}
+
+func (f *loggingVCursor) ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.log = append(f.log, fmt.Sprintf("ValidateSessionSettings %s.%s", rs.Target.Keyspace, rs.Target.Shard))
+	if ctx.Value(IgnoreReserveTxn) != nil {
+		// the validation must carry the session's settings, which IgnoreReserveTxn drops
+		f.log = append(f.log, "IgnoreReserveTxn")
+	}
+	return f.validateSettingsErr
 }
 
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {

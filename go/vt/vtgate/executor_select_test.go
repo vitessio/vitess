@@ -192,6 +192,8 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set sql_mode = 'only_full_group_by'"},
+		{Sql: "select 1 from dual"},
 		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
@@ -225,6 +227,8 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set sql_mode = 'only_full_group_by'"},
+		{Sql: "select 1 from dual"},
 		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
@@ -284,6 +288,8 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set sql_mode = 'only_full_group_by'"},
+		{Sql: "select 1 from dual"},
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
@@ -314,6 +320,8 @@ func TestSetSystemVariables(t *testing.T) {
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set sql_mode = 'only_full_group_by'"},
+		{Sql: "select 1 from dual"},
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
@@ -343,6 +351,8 @@ func TestSetSystemVariables(t *testing.T) {
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select 0 from dual where @@sql_safe_updates != 0"},
+		{Sql: "set sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
+		{Sql: "select 1 from dual"},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
@@ -393,6 +403,8 @@ func TestSetSystemVariables(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
+		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
+		{Sql: "select 1 from dual"},
 		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		// we don't need the set_var since we are in a reserved connection, but since the plan is in the cache, we'll use it
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') SET_VAR(sql_safe_updates = '0') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
@@ -441,6 +453,8 @@ func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new"},
+		{Sql: "set sql_mode = ''"},
+		{Sql: "select 1 from dual"},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -449,6 +463,8 @@ func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new"},
+		{Sql: "set sql_mode = ''"},
+		{Sql: "select 1 from dual"},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ age, city + :vtg1 /* INT64 */, weight_string(age) from `user` group by age, weight_string(age) order by age asc", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
@@ -4747,6 +4763,9 @@ func TestSysVarGlobalAndSession(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "uint64"), "40"),
+		// the shard validates the new value: the settings, then the query carrying them
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.innodb_lock_wait_timeout", "uint64"), "20"),
 	})

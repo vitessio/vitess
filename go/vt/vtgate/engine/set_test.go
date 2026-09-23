@@ -88,6 +88,7 @@ func TestSetTable(t *testing.T) {
 		systemVariables  map[string]string
 		inReservedConn   bool
 		resultErr        error
+		validateErr      error
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -303,6 +304,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
 			"IgnoreReserveTxn",
 			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.DestinationShard(20-)",
 			`Needs Reserved Conn`,
 		},
 	}, {
@@ -342,8 +344,9 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
 			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
 			"IgnoreReserveTxn",
-			`SET_VAR can be used`,
 			`SysVar set with (x,123456)`,
+			`SET_VAR can be used`,
+			"ValidateSessionSettings ks.DestinationShard(20-)",
 		},
 	}, {
 		// a target spanning several shards is judged on its first shard; the value
@@ -366,6 +369,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
 			"IgnoreReserveTxn",
 			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.-20",
 			`Needs Reserved Conn`,
 		},
 	}, {
@@ -494,6 +498,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
 			"IgnoreReserveTxn",
 			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.-20",
 			`Needs Reserved Conn`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -605,6 +610,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE' new {} false false`,
 			"IgnoreReserveTxn",
 			"SysVar set with (sql_mode,'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -626,6 +632,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,NO_ZERO_DATE' new {} false false`,
 			"IgnoreReserveTxn",
 			"SysVar set with (sql_mode,'no_zero_date,NO_ZERO_DATE')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -665,6 +672,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
 			"IgnoreReserveTxn",
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -684,8 +692,9 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 			"IgnoreReserveTxn",
-			"SET_VAR can be used",
 			"SysVar set with (sql_mode,'')",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -705,8 +714,9 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
 			"IgnoreReserveTxn",
-			"SET_VAR can be used",
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -726,8 +736,9 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 			"IgnoreReserveTxn",
-			"SET_VAR can be used",
 			"SysVar set with (sql_mode,'')",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -748,6 +759,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
 			"IgnoreReserveTxn",
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -997,6 +1009,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
 			"IgnoreReserveTxn",
 			"SysVar set with (default_week_format,'a')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
@@ -1125,12 +1138,68 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select 0 from dual {} false false`,
 			"IgnoreReserveTxn",
-			"SET_VAR can be used",
 			"SysVar set with (sql_safe_updates,0)",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"),
 			"0",
 		)},
+	}, {
+		// no shard session receives a set, so the target shard validates the value, which
+		// it rejects: the SET fails and the session neither keeps the value nor is marked
+		// as needing a reserved connection
+		testName: "targeted set rejected by the target shard leaves the session untouched",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("20-"),
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id", "int64"),
+			"123456",
+		)},
+		validateErr:   errors.New("bad value"),
+		expectedError: "bad value",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			"IgnoreReserveTxn",
+			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.DestinationShard(20-)",
+			`SysVar removed (x)`,
+		},
+	}, {
+		// MySQL ignores a SET_VAR hint whose value it rejects, so the shard validates the
+		// value on the SET; a rejected value restores the one the session held
+		testName:     "SET_VAR sysvar rejected by the shard restores the held value - MySQL80",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_safe_updates",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "7",
+				SupportSetVar: true,
+			},
+		},
+		systemVariables: map[string]string{"sql_safe_updates": "1"},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"),
+			"7",
+		)},
+		validateErr:   errors.New("bad value"),
+		expectedError: "bad value",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select 7 from dual {} false false`,
+			"IgnoreReserveTxn",
+			"SysVar set with (sql_safe_updates,7)",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
+			"SysVar set with (sql_safe_updates,1)",
+		},
 	}}
 
 	for _, tc := range tests {
@@ -1157,6 +1226,8 @@ func TestSetTable(t *testing.T) {
 				systemVariables: tc.systemVariables,
 				inReservedConn:  tc.inReservedConn,
 				resultErr:       tc.resultErr,
+
+				validateSettingsErr: tc.validateErr,
 			}
 			// a query that must not depend on the session's reserved connection or
 			// transaction is visible in the log, right after the query itself

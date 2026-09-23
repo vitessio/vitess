@@ -681,6 +681,9 @@ func TestSetVarShowVariables(t *testing.T) {
 		// select query result for checking any change in system settings
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|only_full_group_by"),
+		// the shard validates the new value: the settings, then the query carrying them
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("set", "int64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
 		// show query result
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
@@ -819,7 +822,8 @@ func TestExecutorTimeZone(t *testing.T) {
 }
 
 // TestSetVarTargetedSession checks that a shard-targeted session's SET is carried the
-// way an untargeted session's is: judged on the target shard, stored in the session, and
+// way an untargeted session's is: judged on the target shard, validated there on a
+// connection that carries the value in its settings, stored in the session, and
 // delivered as a SET_VAR hint or through the settings the session sends with its
 // queries, never by executing a SET of its own on a reserved connection.
 func TestSetVarTargetedSession(t *testing.T) {
@@ -836,21 +840,25 @@ func TestSetVarTargetedSession(t *testing.T) {
 		return sqls
 	}
 
-	// a SET_VAR-capable variable is judged on the target shard and rides on the hint
+	// a SET_VAR-capable variable is judged and validated on the target shard, and rides on the hint
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 		"|only_full_group_by")})
 	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"select @@sql_mode orig, 'only_full_group_by' new"}, shardSaw())
+	assert.Equal(t, []string{
+		"select @@sql_mode orig, 'only_full_group_by' new",
+		"set sql_mode = 'only_full_group_by'",
+		"select 1 from dual",
+	}, shardSaw())
 	assert.Equal(t, map[string]string{"sql_mode": "'only_full_group_by'"}, session.SystemVariables)
 	assert.False(t, session.InReservedConn(), "a SET_VAR-capable variable must not pin the session to a reserved connection")
-	assert.EqualValues(t, 0, sbc1.ReserveCount.Load(), "the target shard must not be reserved")
+	assert.Empty(t, session.ShardSessions, "the SET must not leave the session holding a connection to the target shard")
 
 	_, err = executorExecSession(ctx, executor, session, "select id from t1", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ id from t1"}, shardSaw())
-	assert.EqualValues(t, 0, sbc1.ReserveCount.Load())
+	assert.Empty(t, session.ShardSessions)
 
 	// a variable without SET_VAR support marks the session as reserved, and the shard
 	// receives the stored settings with the next query rather than a SET of its own
@@ -859,17 +867,20 @@ func TestSetVarTargetedSession(t *testing.T) {
 		"0")})
 	_, err = executorExecSession(ctx, executor, session, "set @@sql_notes = 0", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"select 0 from dual where @@sql_notes != 0"}, shardSaw())
+	assert.Equal(t, []string{
+		"select 0 from dual where @@sql_notes != 0",
+		"set sql_mode = 'only_full_group_by', sql_notes = 0",
+		"select 1 from dual",
+	}, shardSaw())
 	assert.True(t, session.InReservedConn())
-	assert.EqualValues(t, 0, sbc1.ReserveCount.Load(), "the SET itself must not reserve the target shard")
+	assert.Empty(t, session.ShardSessions, "the SET itself must not reserve the target shard")
 
 	_, err = executorExecSession(ctx, executor, session, "select col from t1", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"set sql_mode = 'only_full_group_by', sql_notes = 0",
 		"select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ col from t1",
-	}, shardSaw())
-	assert.EqualValues(t, 1, sbc1.ReserveCount.Load(), "the settings travel with the first query to the shard")
+	}, shardSaw(), "the settings travel with the first query to the shard")
 }
 
 // TestSetSysVarRecoversSessionWithRejectedStoredValue checks that a corrective SET gets
@@ -891,9 +902,12 @@ func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
 	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 'good'", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "'good'", session.SystemVariables["default_week_format"])
-	assert.EqualValues(t, 0, lookup.ReserveCount.Load(), "evaluating the assignment must not reserve a connection")
+	assert.Empty(t, session.ShardSessions, "the SET must not reserve a connection")
+	// the shard validates the corrected value, not the rejected one
 	utils.MustMatch(t, []*querypb.BoundQuery{
 		{Sql: "select 'good' from dual", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
 	}, lookup.Queries)
 	lookup.Queries = nil
 
