@@ -1483,29 +1483,43 @@ func waitForStressTraffic(t *testing.T, cycle int, wg *errgroup.Group, timeout t
 
 // TestStressCloseDuringGetNew races Gets that open new connections against
 // CloseWithContext on a fresh pool, cycle after cycle. A Get whose capacity
-// check in getNew passed before Close lowered capacity must not reserve a slot
-// after Close's drain saw no active connections, so a Close that returned nil
-// must leave no active connection behind, and no connection may be dialed
-// after it returned. The race window is a few instructions wide, so this test
-// catches a regression only probabilistically; TestReserveSlotAfterCapacityDrop
-// is the deterministic check of the reservation itself, and this test drives
-// the whole Get / Close path.
+// check in getNew passed before Close lowered capacity may still reserve a
+// slot after Close's drain saw no active connections, but it must give that
+// slot back before dialing: every dial has to hold a slot the drain waits for.
+// So when Close returns no connection may still be being dialed, and none may
+// be dialed afterwards. Active() read right after Close can briefly be 1 while
+// such a Get gives its slot back, so it is only checked once the Gets are done.
+// Dials that start after Close has begun are slowed down, so a dial that Close
+// did not wait for is still running when Close returns. The race window in
+// getNew is a few instructions wide, so this test catches a regression
+// probabilistically; TestReserveSlotAfterCapacityDrop is the deterministic
+// check of the reservation itself.
 func TestStressCloseDuringGetNew(t *testing.T) {
 	const (
 		Duration     = 5 * time.Second
 		NumWorkers   = 8
 		CloseTimeout = 30 * time.Second
+		// dials that start once Close has begun take this long, so a dial
+		// that Close did not wait for is still running when Close returns
+		SlowDial = time.Millisecond
 	)
 
 	deadline := time.Now().Add(Duration)
 	for cycle := 0; time.Now().Before(deadline); cycle++ {
 		var (
+			closeStarted    atomic.Bool
 			closeReturned   atomic.Bool
+			dialing         atomic.Int64
 			dialsAfterClose atomic.Int64
 		)
 		connect := func(_ context.Context) (*StressConn, error) {
+			dialing.Add(1)
+			defer dialing.Add(-1)
 			if closeReturned.Load() {
 				dialsAfterClose.Add(1)
+			}
+			if closeStarted.Load() {
+				time.Sleep(SlowDial)
 			}
 			return &StressConn{}, nil
 		}
@@ -1524,14 +1538,15 @@ func TestStressCloseDuringGetNew(t *testing.T) {
 		close(start)
 
 		ctx, cancel := context.WithTimeout(t.Context(), CloseTimeout)
+		closeStarted.Store(true)
 		err := pool.CloseWithContext(ctx)
 		cancel()
 		closeReturned.Store(true)
-		activeAfterClose := pool.Active()
+		dialingAtClose := dialing.Load()
 		wg.Wait()
 
 		require.NoErrorf(t, err, "cycle %d: CloseWithContext failed", cycle)
-		require.Zerof(t, activeAfterClose, "cycle %d: CloseWithContext returned with active connections", cycle)
+		require.Zerof(t, dialingAtClose, "cycle %d: a connection was still being dialed when CloseWithContext returned", cycle)
 		require.Zerof(t, dialsAfterClose.Load(), "cycle %d: connections dialed after CloseWithContext returned", cycle)
 		require.Zerof(t, pool.Active(), "cycle %d: active should be 0 once the Gets are done", cycle)
 	}
