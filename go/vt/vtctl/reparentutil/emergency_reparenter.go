@@ -70,8 +70,9 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
-	// RequiredPosition is the position the promoted tablet must have received,
-	// applied or in its relay log. Zero means no requirement.
+	// RequiredPosition is the minimum combined position that the promoted tablet
+	// must have. This includes both applied transactions and received transactions
+	// still in the relay log. Zero means no requirement.
 	RequiredPosition replication.Position
 
 	// Private options managed internally. We use value passing to avoid leaking

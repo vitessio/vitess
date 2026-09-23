@@ -366,6 +366,6 @@ func TestERSRequiredPositionRejectsUnsupportedFlavors(t *testing.T) {
 	fixture.expectNoStops()
 
 	_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-	require.ErrorContains(t, err, "required position must be a MySQL56 GTID position, got "+mariadb)
+	require.ErrorContains(t, err, "required position must be a MySQL GTID position, got "+mariadb)
 	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 }

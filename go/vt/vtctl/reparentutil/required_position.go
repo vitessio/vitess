@@ -33,7 +33,7 @@ func validateRequiredPositionFlavor(required replication.Position) error {
 	}
 
 	if !required.MatchesFlavor(replication.Mysql56FlavorID) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "required position must be a MySQL56 GTID position, got %s", replication.EncodePosition(required))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "required position must be a MySQL GTID position, got %s", replication.EncodePosition(required))
 	}
 
 	return nil
