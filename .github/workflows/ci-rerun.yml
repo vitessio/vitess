@@ -96,6 +96,13 @@ jobs:
               const title = pr.title.length > 60 ? pr.title.slice(0, 60) + '...' : pr.title;
               core.info(`Processing PR #${pr.number}: ${title} (${sha.slice(0, 8)})`);
 
+              // 'Skip CI' makes the workflows fail on purpose; rerunning them
+              // only burns runners until the attempt cap.
+              if (pr.labels.some(label => label.name === 'Skip CI')) {
+                core.info(`  Skipping PR #${pr.number} — has the 'Skip CI' label`);
+                continue;
+              }
+
               // Get workflow runs for this PR's HEAD SHA.
               const { data: runsData } = await github.rest.actions.listWorkflowRunsForRepo({
                 owner,
