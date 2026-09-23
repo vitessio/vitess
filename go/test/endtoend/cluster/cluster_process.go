@@ -268,7 +268,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port: %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
-	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
+	if err = cluster.VtctldProcess.Setup(cluster.VtctldExtraArgs...); err != nil {
 		log.Error(err.Error())
 		return
 	}
