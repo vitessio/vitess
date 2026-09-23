@@ -43,20 +43,16 @@ import (
 // keep exiting 0 for an empty backup, preserving pre-existing behaviour.
 const EmptyBackupExitCode = 2
 
-// emptyBackup records whether the Backup/BackupShard run that just completed was
-// an empty (no-op) incremental backup in --json mode.
 var emptyBackup bool
 
 // EmptyBackup reports whether the Backup/BackupShard command that just ran
 // completed with no new data to back up in --json mode. Callers map it to
 // EmptyBackupExitCode once Root.Execute has returned.
 //
-// An empty backup is reported out-of-band rather than as an error from RunE
-// because it is a success, not a failure. cobra returns from (*Command).execute
-// as soon as RunE reports an error, before it walks the PersistentPostRunE
-// chain, so returning a sentinel error here would silently skip the root
-// command's cleanup: cancelling the command context, closing the client, running
-// the onTerm hooks and flushing traces.
+// It is reported out-of-band rather than as an error from RunE because cobra
+// returns from (*Command).execute as soon as RunE errors, before walking the
+// PersistentPostRunE chain -- a sentinel error would silently skip the root
+// command's cleanup (context cancel, client close, onTerm hooks, trace flush).
 func EmptyBackup() bool { return emptyBackup }
 
 // backupOutputHelp documents the backup output modes. It is shared by the
@@ -241,33 +237,24 @@ type backupResponseStream interface {
 type backupJSONOutput struct {
 	// Status is the terminal outcome: "USABLE", "EMPTY", or "UNKNOWN".
 	Status string `json:"status"`
-	// BackupName identifies the backup that was created. It is surfaced as a
-	// typed field so callers that only need to identify the backup do not have
-	// to parse the manifest -- and because some engines do not record a name in
-	// their MANIFEST at all. Empty for an empty backup.
+	// BackupName is typed separately from the manifest because some engines do
+	// not record a name in their MANIFEST at all. Empty for an empty backup.
 	BackupName string `json:"backup_name"`
-	// Manifest is the backup's MANIFEST as raw JSON, or null for an empty backup
-	// or when talking to an older server that does not return it.
+	// Manifest is null for an empty backup, or when talking to an older server
+	// that does not return it.
 	Manifest json.RawMessage `json:"manifest"`
 }
 
 // handleBackupStream drains a Backup/BackupShard stream, printing progress and,
-// on completion, the backup's MANIFEST and outcome. In --json mode, when the
-// backup is an empty (no-op) incremental backup it records that fact via
-// EmptyBackup, which the binaries translate into EmptyBackupExitCode so callers
-// can skip follow-up work by checking $?.
-//
-// It returns nil for an empty backup rather than a sentinel error so that cobra
-// runs the root command's PersistentPostRunE cleanup; see EmptyBackup.
+// on completion, the backup's MANIFEST and outcome. An empty incremental backup
+// is a success reported via EmptyBackup, not an error -- see EmptyBackup for why.
 func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
 	status, err := consumeBackupStream(stream, outputJSON, os.Stdout, os.Stderr)
 	if err != nil {
 		return err
 	}
-	// The distinct exit code for an empty incremental backup is opt-in via
-	// --json, so existing (non-JSON) callers keep seeing a zero exit code and
-	// their scripts are unaffected. Assign unconditionally so a later run in the
-	// same process cannot observe a stale value.
+	// Assigned unconditionally so a later run in the same process cannot observe
+	// a stale value.
 	emptyBackup = outputJSON && status == tabletmanagerdatapb.BackupResponse_EMPTY
 	return nil
 }

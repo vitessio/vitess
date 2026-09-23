@@ -1497,12 +1497,10 @@ type backupJSONOutput struct {
 // parseBackupJSONOutput extracts the JSON object printed by "vtctldclient Backup --json".
 // ExecuteCommandWithOutput returns stdout and stderr combined, and in JSON mode the log
 // events go to stderr, so the whole output cannot be unmarshalled. The JSON object is
-// printed last, by json.MarshalIndent with a two space indent, so we decode starting at
-// the opening brace of its first field.
+// printed last, by json.MarshalIndent with a two space indent, so we scan from the end
+// for the opening brace of its first field -- a log line containing the same marker
+// must not win.
 func parseBackupJSONOutput(t *testing.T, output string) *backupJSONOutput {
-	// output is combined stdout+stderr (ExecuteCommandWithOutput), and log events
-	// are free-text -- use LastIndex so a coincidental log line containing this
-	// marker can't be mistaken for the JSON object, which is always printed last.
 	idx := strings.LastIndex(output, "{\n  \"status\"")
 	require.GreaterOrEqualf(t, idx, 0, "no backup JSON object in output: %v", output)
 

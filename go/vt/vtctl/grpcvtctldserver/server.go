@@ -572,10 +572,8 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 				BackupName:  tmResp.BackupName,
 			}
 			if err := stream.Send(resp); err != nil {
-				// Deliberately omit resp.Manifest from this log line: on the
-				// terminal message it is the entire backup MANIFEST, which can be
-				// megabytes on a shard with many files -- and an oversized message
-				// is one likely reason Send would fail in the first place.
+				// resp.Manifest is deliberately omitted: it can be megabytes, and
+				// an oversized message is a likely reason Send failed here.
 				logger.Errorf("failed to send stream response (tablet=%v keyspace=%v shard=%v status=%v backup_name=%v): %v",
 					topoproto.TabletAliasString(resp.TabletAlias), resp.Keyspace, resp.Shard, resp.Status, resp.BackupName, err)
 			}
