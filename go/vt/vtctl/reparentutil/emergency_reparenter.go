@@ -372,7 +372,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Check the survivors of split-brain handling before the first relay log wait.
-	// If none received the position, a wait cannot help and leaves replication stopped.
+	// If none received the position, a wait cannot help and keeps replication stopped until it times out.
 	if err := checkRequiredPosition(opts.RequiredPosition, validCandidates); err != nil {
 		// Report the leaders the override discarded. One of them may have the position.
 		if splitBrainOverrideActive {
