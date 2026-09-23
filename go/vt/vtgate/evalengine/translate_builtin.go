@@ -204,11 +204,9 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &ArithmeticExpr{
-			BinaryExpr: BinaryExpr{
-				Left:  args[0],
-				Right: args[1],
-			},
-			Op: &opArithMod{},
+			Left:  args[0],
+			Right: args[1],
+			Op:    &opArithMod{},
 		}, nil
 	case "log2":
 		if len(args) != 1 {
@@ -706,10 +704,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			return nil, err
 		}
 		return &builtinJSONExtract{
-			CallExpr: CallExpr{
-				Arguments: args,
-				Method:    "JSON_EXTRACT",
-			},
+			Arguments: args,
+			Method:    "JSON_EXTRACT",
 		}, nil
 
 	case *sqlparser.JSONRemoveExpr:
@@ -718,10 +714,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			return nil, err
 		}
 		return &builtinJSONRemove{
-			CallExpr: CallExpr{
-				Arguments: args,
-				Method:    "JSON_REMOVE",
-			},
+			Arguments: args,
+			Method:    "JSON_REMOVE",
 		}, nil
 
 	case *sqlparser.JSONUnquoteExpr:
@@ -730,10 +724,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			return nil, err
 		}
 		return &builtinJSONUnquote{
-			CallExpr: CallExpr{
-				Arguments: []IR{arg},
-				Method:    "JSON_UNQUOTE",
-			},
+			Arguments: []IR{arg},
+			Method:    "JSON_UNQUOTE",
 		}, nil
 
 	case *sqlparser.JSONObjectExpr:
@@ -750,10 +742,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			args = append(args, key, val)
 		}
 		return &builtinJSONObject{
-			CallExpr: CallExpr{
-				Arguments: args,
-				Method:    "JSON_OBJECT",
-			},
+			Arguments: args,
+			Method:    "JSON_OBJECT",
 		}, nil
 
 	case *sqlparser.JSONArrayExpr:
@@ -761,10 +751,10 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &builtinJSONArray{CallExpr: CallExpr{
+		return &builtinJSONArray{
 			Arguments: args,
 			Method:    "JSON_ARRAY",
-		}}, nil
+		}, nil
 
 	case *sqlparser.JSONContainsPathExpr:
 		exprs := make([]sqlparser.Expr, 0, 2+len(call.PathList))
@@ -774,10 +764,10 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &builtinJSONContainsPath{CallExpr: CallExpr{
+		return &builtinJSONContainsPath{
 			Arguments: args,
 			Method:    "JSON_CONTAINS_PATH",
-		}}, nil
+		}, nil
 
 	case *sqlparser.JSONKeysExpr:
 		var args []IR
@@ -795,10 +785,10 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			args = append(args, path)
 		}
 
-		return &builtinJSONKeys{CallExpr: CallExpr{
+		return &builtinJSONKeys{
 			Arguments: args,
 			Method:    "JSON_KEYS",
-		}}, nil
+		}, nil
 
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {
@@ -943,8 +933,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 
 		return &builtinRegexpLike{
-			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_LIKE"},
-			Negate:   false,
+			Arguments: args, Method: "REGEXP_LIKE",
+			Negate: false,
 		}, nil
 
 	case *sqlparser.RegexpInstrExpr:
@@ -993,7 +983,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 
 		return &builtinRegexpInstr{
-			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_INSTR"},
+			Arguments: args, Method: "REGEXP_INSTR",
 		}, nil
 
 	case *sqlparser.RegexpSubstrExpr:
@@ -1034,7 +1024,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 
 		return &builtinRegexpSubstr{
-			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_SUBSTR"},
+			Arguments: args, Method: "REGEXP_SUBSTR",
 		}, nil
 
 	case *sqlparser.RegexpReplaceExpr:
@@ -1080,7 +1070,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 
 		return &builtinRegexpReplace{
-			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_REPLACE"},
+			Arguments: args, Method: "REGEXP_REPLACE",
 		}, nil
 
 	case *sqlparser.InsertExpr:
@@ -1148,10 +1138,8 @@ func builtinJSONExtractUnquoteRewrite(left IR, right IR) (IR, error) {
 		return nil, err
 	}
 	return &builtinJSONUnquote{
-		CallExpr: CallExpr{
-			Arguments: []IR{extract},
-			Method:    "JSON_UNQUOTE",
-		},
+		Arguments: []IR{extract},
+		Method:    "JSON_UNQUOTE",
 	}, nil
 }
 
@@ -1160,10 +1148,8 @@ func builtinJSONExtractRewrite(left IR, right IR) (IR, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lhs of a JSON extract operator must be a column")
 	}
 	return &builtinJSONExtract{
-		CallExpr: CallExpr{
-			Arguments: []IR{left, right},
-			Method:    "JSON_EXTRACT",
-		},
+		Arguments: []IR{left, right},
+		Method:    "JSON_EXTRACT",
 	}, nil
 }
 
@@ -1204,11 +1190,9 @@ func builtinNullIfRewrite(args []IR) (IR, error) {
 	return &CaseExpr{
 		cases: []WhenThen{{
 			when: &ComparisonExpr{
-				BinaryExpr: BinaryExpr{
-					Left:  args[0],
-					Right: args[1],
-				},
-				Op: compareEQ{},
+				Left:  args[0],
+				Right: args[1],
+				Op:    compareEQ{},
 			},
 			then: NullExpr,
 		}},

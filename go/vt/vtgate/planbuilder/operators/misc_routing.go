@@ -29,6 +29,11 @@ type (
 	// Can be merged with any other route going to the same keyspace
 	NoneRouting struct {
 		keyspace *vindexes.Keyspace
+
+		// inferredKeyspace is set when the routing this replaced had no keyspace
+		// of its own (information_schema, dual): keyspace is then only a
+		// placeholder giving the engine route a target, not a genuine read.
+		inferredKeyspace bool
 	}
 
 	// TargetedRouting is used when the user has used syntax to target the

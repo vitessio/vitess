@@ -32,16 +32,12 @@ func newBenchStaticAuthPlugin(numEntries int, hashed bool, password string) *Sta
 	entries := make([]staticAuthEntry, 0, numEntries)
 	for i := 0; i < numEntries-1; i++ {
 		entries = append(entries, staticAuthEntry{
-			StaticAuthConfigEntry: StaticAuthConfigEntry{
-				Username: fmt.Sprintf("other_user_%d", i),
-				Password: "other_password",
-			},
+			Username: fmt.Sprintf("other_user_%d", i),
+			Password: "other_password",
 		})
 	}
 	target := staticAuthEntry{
-		StaticAuthConfigEntry: StaticAuthConfigEntry{
-			Username: "bench_user",
-		},
+		Username: "bench_user",
 	}
 	if hashed {
 		stage1 := sha256.Sum256([]byte(password))

@@ -572,9 +572,7 @@ func pkInfo(parentTable *vindexes.BaseTable, pCols []string, cCols []string) vin
 
 func makeTableCollector(si SchemaInformation, tables ...TableInfo) *tableCollector {
 	return &tableCollector{
-		earlyTableCollector: earlyTableCollector{
-			Tables: tables,
-			si:     si,
-		},
+		Tables: tables,
+		si:     si,
 	}
 }

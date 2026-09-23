@@ -67,9 +67,7 @@ type GaugeDuration struct {
 // NewGaugeDuration returns a new GaugeDuration.
 func NewGaugeDuration(name, help string) *GaugeDuration {
 	gd := &GaugeDuration{
-		CounterDuration: CounterDuration{
-			help: help,
-		},
+		help: help,
 	}
 	publish(name, gd)
 	return gd
@@ -124,10 +122,8 @@ type GaugeDurationFunc struct {
 // publishes it if name is set.
 func NewGaugeDurationFunc(name string, help string, f func() time.Duration) *GaugeDurationFunc {
 	gf := &GaugeDurationFunc{
-		CounterDurationFunc: CounterDurationFunc{
-			F:    f,
-			help: help,
-		},
+		F:    f,
+		help: help,
 	}
 
 	if name != "" {

@@ -46,7 +46,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
 
         let response = null;
         try {
-            response = await global.fetch(url, opts);
+            response = await globalThis.fetch(url, opts);
         } catch {
             // Capture fetch() promise rejections and rethrow as HttpFetchError.
             // fetch() promises will reject with a TypeError when a network error is

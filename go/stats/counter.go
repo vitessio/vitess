@@ -128,7 +128,7 @@ type Gauge struct {
 
 // NewGauge creates a new Gauge and publishes it if name is set.
 func NewGauge(name string, help string) *Gauge {
-	v := &Gauge{Counter: Counter{help: help}}
+	v := &Gauge{help: help}
 
 	if name != "" {
 		publish(name, v)
@@ -158,10 +158,8 @@ type GaugeFunc struct {
 // set.
 func NewGaugeFunc(name string, help string, f func() int64) *GaugeFunc {
 	i := &GaugeFunc{
-		CounterFunc: CounterFunc{
-			F:    f,
-			help: help,
-		},
+		F:    f,
+		help: help,
 	}
 
 	if name != "" {

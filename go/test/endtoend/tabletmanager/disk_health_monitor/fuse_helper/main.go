@@ -103,7 +103,7 @@ type gatedNode struct {
 }
 
 func newGatedNode(rootData *fs.LoopbackRoot, _ *fs.Inode, _ string, _ *syscall.Stat_t) fs.InodeEmbedder {
-	return &gatedNode{LoopbackNode: fs.LoopbackNode{RootData: rootData}}
+	return &gatedNode{RootData: rootData}
 }
 
 func (n *gatedNode) Create(ctx context.Context, name string, flags, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
@@ -178,16 +178,14 @@ func main() {
 	root := &fs.LoopbackRoot{
 		Path:    *backing,
 		Dev:     uint64(st.Dev),
-		NewNode: newGatedNode,
+		NewNode: newGatedNode, //nolint:staticcheck // SA1019: migrating to NodeWrapChilder is a larger change for this test helper
 	}
 	rootNode := newGatedNode(root, nil, "", &st)
 	root.RootNode = rootNode
 
 	opts := &fs.Options{
-		MountOptions: fuse.MountOptions{
-			FsName: *backing,
-			Name:   "vitess-disk-health-monitor-test",
-		},
+		FsName: *backing,
+		Name:   "vitess-disk-health-monitor-test",
 	}
 
 	server, err := fs.Mount(*mountPoint, rootNode, opts)

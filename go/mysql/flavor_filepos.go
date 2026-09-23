@@ -96,31 +96,35 @@ func (flv *filePosFlavor) serverUUID(c *Conn) (string, error) {
 }
 
 func (flv *filePosFlavor) startReplicationCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 func (flv *filePosFlavor) resetReplicationCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 func (flv *filePosFlavor) restartReplicationCommands() []string {
-	return []string{"unsupported"}
+	return []string{UnsupportedCommand}
 }
 
 func (flv *filePosFlavor) stopReplicationCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 func (flv *filePosFlavor) stopIOThreadCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 func (flv *filePosFlavor) stopSQLThreadCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 func (flv *filePosFlavor) startSQLThreadCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
+}
+
+func (flv *filePosFlavor) startIOThreadCommand() string {
+	return UnsupportedCommand
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
@@ -223,32 +227,32 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 // resetReplicationCommands is part of the Flavor interface.
 func (flv *filePosFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{
-		"unsupported",
+		UnsupportedCommand,
 	}
 }
 
 // resetReplicationParametersCommands is part of the Flavor interface.
 func (flv *filePosFlavor) resetReplicationParametersCommands(c *Conn) []string {
 	return []string{
-		"unsupported",
+		UnsupportedCommand,
 	}
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) setReplicationPositionCommands(pos replication.Position) []string {
 	return []string{
-		"unsupported",
+		UnsupportedCommand,
 	}
 }
 
 // setReplicationSourceCommand is part of the Flavor interface.
 func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 // resetBinaryLogsCommand is part of the Flavor interface.
 func (flv *filePosFlavor) resetBinaryLogsCommand() string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 // status is part of the Flavor interface.
@@ -352,11 +356,11 @@ func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos re
 }
 
 func (*filePosFlavor) startReplicationUntilAfter(pos replication.Position) string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 func (*filePosFlavor) startSQLThreadUntilAfter(pos replication.Position) string {
-	return "unsupported"
+	return UnsupportedCommand
 }
 
 // baseShowTables is part of the Flavor interface.
@@ -400,7 +404,7 @@ func (f *filePosFlavor) supportsCapability(capability capabilities.FlavorCapabil
 }
 
 func (*filePosFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position) []string {
-	return []string{"unsupported"}
+	return []string{UnsupportedCommand}
 }
 
 func (*filePosFlavor) binlogReplicatedUpdates() string {

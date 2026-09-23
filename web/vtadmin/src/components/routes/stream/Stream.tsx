@@ -28,17 +28,17 @@ import { TabContainer } from '../../tabs/TabContainer';
 import { Tab } from '../../tabs/Tab';
 import { Code } from '../../Code';
 
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     keyspace: string;
     streamID: string;
     tabletCell: string;
     tabletUID: string;
     workflowName: string;
-}
+};
 
 export const Stream = () => {
-    const params = useParams<RouteParams>();
+    const params = useParams<RouteParams>() as RouteParams;
     const { data: workflow } = useWorkflow({
         clusterID: params.clusterID,
         keyspace: params.keyspace,

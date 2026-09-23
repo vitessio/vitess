@@ -49,9 +49,7 @@ type StaticFileDiscovery struct {
 // NewStaticFile returns a StaticFileDiscovery for the given cluster.
 func NewStaticFile(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error) {
 	disco := &StaticFileDiscovery{
-		JSONDiscovery: JSONDiscovery{
-			cluster: cluster,
-		},
+		cluster: cluster,
 	}
 
 	filePath := flags.String("path", "", "path to the service discovery JSON config file")

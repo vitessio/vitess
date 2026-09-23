@@ -67,6 +67,8 @@ func TestUnionDistinct(t *testing.T) {
 			mcmp.AssertMatchesNoOrder("select id1, id2 from t1 union select 827, 452 union select id3,id4 from t2",
 				"[[INT64(4) INT64(4)] [INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(827) INT64(452)] [INT64(2) INT64(3)] [INT64(3) INT64(4)] [INT64(5) INT64(5)]]")
 			mcmp.AssertMatches("select 1 from dual where 1 IN (select 1 as col union select 2)", "[[INT64(1)]]")
+			mcmp.AssertMatches("select 1 from dual union select id1 from t1 where id1 in (null)", "[[INT64(1)]]")
+			mcmp.AssertMatches("select id1 from t1 where id1 in (null) union select 1 from dual", "[[INT64(1)]]")
 			mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
 			mcmp.AssertMatches(`SELECT 5 from t1 UNION SELECT 6 from t1`, `[[INT64(5)] [INT64(6)]]`)
 			mcmp.AssertMatchesNoOrder(`SELECT id1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)

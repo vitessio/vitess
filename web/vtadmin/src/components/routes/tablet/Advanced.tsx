@@ -230,11 +230,11 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         title="Delete Tablet"
                         warnings={[
                             primary && (
-                                <>
+                                <React.Fragment key="primary-warning">
                                     Tablet {alias} is the primary tablet. Flag{' '}
                                     <span className="font-mono bg-red-100 p-1 text-sm">-allow_primary=true</span> will
                                     be applied in order to delete the primary tablet.
-                                </>
+                                </React.Fragment>
                             ),
                         ]}
                     />

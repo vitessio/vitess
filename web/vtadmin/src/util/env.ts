@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-export const env: () => Vite.ImportMetaEnv = () => {
+export const env: () => ImportMetaEnv = () => {
     return { ...window.env, ...import.meta.env };
 };
 

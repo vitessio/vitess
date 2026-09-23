@@ -32,7 +32,9 @@ func (noopTracingServer) FromContext(context.Context) (Span, bool) { return nil,
 func (noopTracingServer) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
 	return NoopSpan{}, ctx, nil
 }
+
 func (noopTracingServer) NewContext(parent context.Context, _ Span) context.Context { return parent }
+
 func (noopTracingServer) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 }
 

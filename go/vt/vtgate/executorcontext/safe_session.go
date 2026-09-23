@@ -81,6 +81,20 @@ type (
 		parser  *sqlparser.Parser
 	}
 
+	// ShardSessionSnapshot is a point-in-time copy of one shard session's
+	// routing and state fields, taken under the session mutex. Unlike the
+	// live *vtgatepb.Session_ShardSession — whose TransactionId and
+	// ReservedId the executor mutates in place as queries run — a snapshot
+	// is safe to read from another goroutine. The Target and TabletAlias
+	// protos are shared by pointer: they are never mutated in place, only
+	// replaced wholesale.
+	ShardSessionSnapshot struct {
+		Target        *querypb.Target
+		TabletAlias   *topodatapb.TabletAlias
+		TransactionID int64
+		ReservedID    int64
+	}
+
 	// autocommitState keeps track of whether a single round-trip
 	// commit to vttablet is possible. It starts as autocommitable
 	// if we started a transaction because of the autocommit flag
@@ -427,6 +441,28 @@ func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardS
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
+}
+
+// ShardSessionSnapshots returns per-shard-session snapshots of ShardSessions
+// (the only list that can hold temporary tables, and the one the keepalive
+// sweeper registers), copied field by field under the session mutex. Callers
+// that read shard-session state from a goroutine running concurrently with
+// query execution (which updates TransactionId and ReservedId on the live
+// protos) must use this instead of the ShardSessionsFor* accessors, whose
+// returned protos are shared and racy.
+func (session *SafeSession) ShardSessionSnapshots() []ShardSessionSnapshot {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	snapshots := make([]ShardSessionSnapshot, 0, len(session.ShardSessions))
+	for _, ss := range session.ShardSessions {
+		snapshots = append(snapshots, ShardSessionSnapshot{
+			Target:        ss.GetTarget(),
+			TabletAlias:   ss.GetTabletAlias(),
+			TransactionID: ss.GetTransactionId(),
+			ReservedID:    ss.GetReservedId(),
+		})
+	}
+	return snapshots
 }
 
 // ShardSessionsForReleaseAll returns a snapshot of all shard sessions including LockSession for ReleaseAll.
@@ -956,6 +992,27 @@ func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 		session.Options = &querypb.ExecuteOptions{}
 	}
 	return session.Options
+}
+
+// HasCreatedTempTables reports whether the session has created temporary
+// tables. It reads under the session mutex: the temp-table refresh ticker
+// calls this concurrently with the command execution that marks temp-table
+// creation via SetHasCreatedTempTables.
+func (session *SafeSession) HasCreatedTempTables() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.Options.GetHasCreatedTempTables()
+}
+
+// SetHasCreatedTempTables marks that the session has created temporary
+// tables. It writes under the session mutex: see HasCreatedTempTables.
+func (session *SafeSession) SetHasCreatedTempTables() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.Options == nil {
+		session.Options = &querypb.ExecuteOptions{}
+	}
+	session.Options.HasCreatedTempTables = true
 }
 
 func (session *SafeSession) CachePlan() bool {
