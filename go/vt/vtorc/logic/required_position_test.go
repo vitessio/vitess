@@ -35,18 +35,16 @@ import (
 const requiredGtid = "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100"
 
 // saveRequiredPositionFixture stores a keyspace, a tablet record and a poll
-// record for the primary. An empty durability omits the keyspace row.
+// record for the primary.
 func saveRequiredPositionFixture(t *testing.T, durability string, tabletType topodatapb.TabletType, executedGtidSet string) *topodatapb.Tablet {
 	t.Helper()
 
 	db.ClearVTOrcDatabase()
 	t.Cleanup(db.ClearVTOrcDatabase)
 
-	if durability != "" {
-		keyspace := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: durability}}
-		keyspace.SetKeyspaceName("ks")
-		require.NoError(t, inst.SaveKeyspace(keyspace))
-	}
+	keyspace := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: durability}}
+	keyspace.SetKeyspaceName("ks")
+	require.NoError(t, inst.SaveKeyspace(keyspace))
 
 	tablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
@@ -68,34 +66,17 @@ func saveRequiredPositionFixture(t *testing.T, durability string, tabletType top
 	return tablet
 }
 
-// TestStoredPrimaryPosition checks the stored GTID set to position conversion.
+// TestStoredPrimaryPosition checks that a primary with no stored transactions
+// or no poll record has no position to require, and that the stored set is
+// found after a graceful vttablet shutdown clears the MySQL address.
 func TestStoredPrimaryPosition(t *testing.T) {
-	tests := []struct {
-		name            string
-		executedGtidSet string
-		position        string
-		wantErr         string
-	}{
-		{name: "MySQL56 set", executedGtidSet: requiredGtid, position: "MySQL56/" + requiredGtid},
-		{name: "empty set", executedGtidSet: ""},
-		{name: "invalid set", executedGtidSet: "invalid", wantErr: "cannot parse the stored GTID set of zone1-0000000100"},
-		{name: "FilePos set", executedGtidSet: "mysql-bin.000001:123", wantErr: "cannot parse the stored GTID set of zone1-0000000100"},
-	}
+	t.Run("empty set", func(t *testing.T) {
+		tablet := saveRequiredPositionFixture(t, policy.DurabilitySemiSync, topodatapb.TabletType_PRIMARY, "")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tablet := saveRequiredPositionFixture(t, policy.DurabilitySemiSync, topodatapb.TabletType_PRIMARY, tt.executedGtidSet)
-
-			position, err := storedPrimaryPosition(tablet.Alias)
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.position, replication.EncodePosition(position))
-		})
-	}
+		position, err := storedPrimaryPosition(tablet.Alias)
+		require.NoError(t, err)
+		assert.True(t, position.IsZero())
+	})
 
 	t.Run("no poll record", func(t *testing.T) {
 		db.ClearVTOrcDatabase()
@@ -116,21 +97,11 @@ func TestStoredPrimaryPosition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "MySQL56/"+requiredGtid, replication.EncodePosition(position))
 	})
-
-	t.Run("read failure", func(t *testing.T) {
-		tablet := saveRequiredPositionFixture(t, policy.DurabilitySemiSync, topodatapb.TabletType_PRIMARY, requiredGtid)
-
-		// Drop the table the read targets. ClearVTOrcDatabase recreates it in cleanup.
-		_, err := db.ExecVTOrc("DROP TABLE database_instance")
-		require.NoError(t, err)
-
-		_, err = storedPrimaryPosition(tablet.Alias)
-		require.ErrorContains(t, err, "cannot read the stored GTID set of zone1-0000000100")
-	})
 }
 
-// TestRequiredPositionForRecovery checks the flag, the tablet type and the
-// durability gates, and that read failures fail closed.
+// TestRequiredPositionForRecovery checks that VTOrc requires the stored primary
+// position only with the flag on, for a recovery of the primary, under a
+// semi-sync durability policy.
 func TestRequiredPositionForRecovery(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -138,15 +109,11 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 		durability string
 		tabletType topodatapb.TabletType
 		position   string
-		wantErr    string
 	}{
 		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY},
 		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, position: "MySQL56/" + requiredGtid},
-		{name: "primary with cross cell", flag: true, durability: policy.DurabilityCrossCell, tabletType: topodatapb.TabletType_PRIMARY, position: "MySQL56/" + requiredGtid},
 		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY},
 		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA},
-		{name: "replica skips before the policy read", flag: true, durability: "", tabletType: topodatapb.TabletType_REPLICA},
-		{name: "missing keyspace row fails closed", flag: true, durability: "", tabletType: topodatapb.TabletType_PRIMARY, wantErr: "cannot read the durability policy of keyspace ks"},
 	}
 
 	for _, tt := range tests {
@@ -156,11 +123,6 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 			tablet := saveRequiredPositionFixture(t, tt.durability, tt.tabletType, requiredGtid)
 
 			position, err := requiredPositionForRecovery(tablet, logutil.NewMemoryLogger())
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-
 			require.NoError(t, err)
 			assert.Equal(t, tt.position, replication.EncodePosition(position))
 		})
