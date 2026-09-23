@@ -32,12 +32,12 @@ import (
 func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position, error) {
 	// Read by alias. ReadInstance joins on hostname and port, which a graceful
 	// vttablet shutdown clears.
-	executedGtidSet, found, err := inst.ReadExecutedGtidSet(alias)
+	executedGtidSet, err := inst.ReadExecutedGtidSet(alias)
 	if err != nil {
 		return replication.Position{}, vterrors.Wrapf(err, "cannot read the stored GTID set of %s", topoproto.TabletAliasString(alias))
 	}
 
-	if !found || executedGtidSet == "" {
+	if executedGtidSet == "" {
 		return replication.Position{}, nil
 	}
 
