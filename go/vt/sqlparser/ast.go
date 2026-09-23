@@ -86,6 +86,7 @@ type (
 
 	Withable interface {
 		SetWith(with *With)
+		GetWith() *With
 	}
 
 	Distinctable interface {
