@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,7 +60,7 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
-			query, resetQuery, err := BuildSettingQuery(tc.settings, parser)
+			query, resetQuery, err := BuildSettingQuery(tc.settings, parser, false)
 			if tc.expectedErr != "" {
 				require.EqualError(t, err, tc.expectedErr)
 				return
@@ -77,7 +78,7 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	query, resetQuery, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser)
+	query, resetQuery, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
 	assert.Contains(t, query, "sql_mode = 'STRICT_TRANS_TABLES'")
 	assert.Contains(t, resetQuery, "sql_mode = replace(replace(replace(replace(replace(replace(replace(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')")
@@ -91,7 +92,7 @@ func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser)
+	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser, false)
 	require.NoError(t, err)
 	assert.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
 }
@@ -199,43 +200,49 @@ func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 // A connection setting is applied to the connection with no table ACL check, so
 // a subquery in one would read tables unchecked. Settings carry constants (vtgate
 // evaluates a SET's expression on a shard and sends the value), so both the
-// settings-pool path and the reservation path reject a subquery upfront.
+// settings-pool path and the reservation path reject a subquery upfront under
+// strict table ACL. Without it there is nothing to protect, and a vtgate from
+// before the value was sent still sends a targeted session's SET expression as
+// written, so the setting is accepted as it always was.
 func TestSettingsRejectSubqueries(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
 	tests := []struct {
 		setting  string
-		rejected bool
+		subquery bool
 	}{
-		{setting: "set @@sql_select_limit = (select if(v = 'x', 1, 2) from secret where id = 1)", rejected: true},
-		{setting: "set @@sql_safe_updates = exists (select 1 from secret)", rejected: true},
-		{setting: "set @@sql_select_limit = 1 + (select count(*) from secret)", rejected: true},
-		{setting: "set @@sql_select_limit = if((select v from secret limit 1) = 'x', 1, 2)", rejected: true},
+		{setting: "set @@sql_select_limit = (select if(v = 'x', 1, 2) from secret where id = 1)", subquery: true},
+		{setting: "set @@sql_safe_updates = exists (select 1 from secret)", subquery: true},
+		{setting: "set @@sql_select_limit = 1 + (select count(*) from secret)", subquery: true},
+		{setting: "set @@sql_select_limit = if((select v from secret limit 1) = 'x', 1, 2)", subquery: true},
 		{setting: "set @@sql_select_limit = 10"},
 		{setting: "set @@sql_select_limit = default"},
 		// a non-constant expression that reads no table is not this check's concern
 		{setting: "set @@sql_select_limit = 1 + 1"},
 	}
-	for _, tc := range tests {
-		t.Run(tc.setting, func(t *testing.T) {
-			settings := []string{"set @@sql_safe_updates = 1", tc.setting}
-			expectedErr := "connection setting must not contain a subquery: " + tc.setting
+	for _, strictTableACL := range []bool{true, false} {
+		for _, tc := range tests {
+			t.Run(fmt.Sprintf("strict=%t %s", strictTableACL, tc.setting), func(t *testing.T) {
+				settings := []string{"set @@sql_safe_updates = 1", tc.setting}
+				expectedErr := "connection setting must not contain a subquery: " + tc.setting
+				rejected := tc.subquery && strictTableACL
 
-			query, resetQuery, err := BuildSettingQuery(settings, parser)
-			if tc.rejected {
-				require.EqualError(t, err, expectedErr)
-			} else {
-				require.NoError(t, err)
-				assert.NotEmpty(t, query)
-				assert.NotEmpty(t, resetQuery)
-			}
+				query, resetQuery, err := BuildSettingQuery(settings, parser, strictTableACL)
+				if rejected {
+					require.EqualError(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+					assert.NotEmpty(t, query)
+					assert.NotEmpty(t, resetQuery)
+				}
 
-			err = ValidateSettingsSQLMode(settings, parser)
-			if tc.rejected {
-				require.EqualError(t, err, expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
-		})
+				err = ValidateSettingsSQLMode(settings, parser, strictTableACL)
+				if rejected {
+					require.EqualError(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
 	}
 }

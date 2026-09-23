@@ -550,7 +550,7 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
+		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser(), qe.strictTableACL)
 		if err != nil {
 			return nil, err
 		}

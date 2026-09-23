@@ -2638,20 +2638,52 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"select 1 from dual"})
 	require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
 
-	// a setting is applied with no table ACL check, so one that would read a
-	// table through a subquery is rejected before it reaches the backend
-	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
-	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
-	require.EqualError(t, err, "connection setting must not contain a subquery: "+subquerySetting)
-	_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
-	require.EqualError(t, err, "connection setting must not contain a subquery: "+subquerySetting)
-	assert.Zero(t, db.GetQueryCalledNum(subquerySetting), "a rejected setting must not reach the backend")
-
 	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
 	db.AddQuery(validSetting, &sqltypes.Result{})
 	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{validSetting})
 	require.NoError(t, err)
 	require.NoError(t, tsv.te.Release(ctx, connID))
+}
+
+// A setting is applied with no table ACL check, so under strict table ACL one
+// that would read a table through a subquery is rejected before it reaches the
+// backend, on the settings-pool path and on the reservation path alike. Without
+// strict table ACL there is nothing for the check to protect, and a vtgate from
+// before the value was sent still sends a targeted session's SET expression as
+// written, so the setting is accepted as it always was.
+func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
+	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
+	settingErr := "connection setting must not contain a subquery: " + subquerySetting
+
+	t.Run("strict table ACL rejects", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+		ctx := t.Context()
+		tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+		defer tsv.StopService()
+
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
+		require.EqualError(t, err, settingErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
+		require.EqualError(t, err, settingErr)
+		assert.Zero(t, db.GetQueryCalledNum(subquerySetting), "a rejected setting must not reach the backend")
+	})
+
+	t.Run("without strict table ACL the setting is applied", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+		ctx := t.Context()
+		tsv := newTestTabletServer(ctx, noFlags, db)
+		defer tsv.StopService()
+		db.AddQuery(subquerySetting, &sqltypes.Result{})
+
+		connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
+		require.NoError(t, err)
+		require.NoError(t, tsv.te.Release(ctx, connID))
+		assert.Equal(t, 1, db.GetQueryCalledNum(subquerySetting), "the setting is applied to the reserved connection")
+		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
+		require.NoError(t, err)
+	})
 }
 
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
