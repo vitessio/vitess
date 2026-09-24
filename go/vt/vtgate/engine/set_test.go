@@ -230,7 +230,9 @@ func TestSetTable(t *testing.T) {
 			"1",
 		)},
 	}, {
-		testName: "sysvar set without destination",
+		// the session replays the stored text as a connection setting, so the
+		// value is stored, not the expression
+		testName: "targeted set evaluates the expression and stores the value",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
@@ -239,13 +241,254 @@ func TestSetTable(t *testing.T) {
 				Expr:              "dummy_expr",
 			},
 		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"dummy_expr",
+				"int64",
+			),
+			"123456",
+		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
+<<<<<<< HEAD
 			`SysVar set with (x,dummy_expr)`,
 			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+			`SysVar set with (x,dummy_expr)`,
 		},
 	}, {
+		// a failed targeted SET must not leave its value in the session, where the
+		// settings transport would replay it on every subsequent query
+		testName: "targeted set failure does not store the value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		execErr:       errors.New("some random error"),
+		expectedError: "some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+=======
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+			`SysVar set with (x,123456)`,
+		},
+	}, {
+		// the expression is evaluated on the reserved connection the SET is then
+		// applied to: the tablet refuses a lock function outside a reserved
+		// connection, and the lock get_lock() takes must be held by the
+		// connection the session keeps, as it was when the SET carried the
+		// expression itself
+		testName: "targeted set evaluates a lock function on the reserved connection",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "get_lock('x', 0)",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"get_lock('x', 0)",
+				"int64",
+			),
+			"1",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select get_lock('x', 0) from dual {} false false`,
+			`ExecuteMultiShard ks.-20: set x = 1 {} false false`,
+			`SysVar set with (x,1)`,
+		},
+	}, {
+		// a targeted SET whose evaluation fails must not leave its value in the
+		// session, where the settings transport would replay it on every
+		// subsequent query (TestSysVarSetErr covers the SET itself failing)
+		testName: "targeted set evaluation failure does not store the value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		execErr:       errors.New("some random error"),
+		expectedError: "some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+			`Reset Reserved Conn`,
+		},
+	}, {
+		// the same failure on a session that already holds a shard session,
+		// as after a reservation the tablet made before refusing the query,
+		// keeps the mark: the reservation is recorded in the session
+		testName: "targeted set evaluation failure keeps the mark of a session with a shard session",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		shardSession:  []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		execErr:       errors.New("some random error"),
+		expectedError: "some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+		},
+	}, {
+		// the evaluation returns one value; anything else cannot be applied or
+		// stored and fails rather than pass the expression through
+		testName: "targeted set rejects an evaluation that is not a single value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"dummy_expr",
+				"int64",
+			),
+			"1",
+			"2",
+		)},
+		expectedError: "unexpected result evaluating x: 2 rows",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+			`Reset Reserved Conn`,
+>>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+		},
+	}, {
+<<<<<<< HEAD
+||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+		// a targeted session's SET gets the same sql_mode judgment as an untargeted
+		// one; a non-constant expression is evaluated on the target shard and judged
+		// before any state changes
+		testName: "targeted sql_mode judges a non-constant value on the target shard",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('AN', 'SI')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"STRICT_TRANS_TABLES|ANSI",
+		)},
+		expectedError: "setting the ANSI sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
+		},
+	}, {
+		// the SET carries the judged value rather than the expression: evaluating the
+		// expression a second time could apply a value the session never judged
+		testName: "targeted sql_mode applies and stores the judged value, not the expression",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('STRICT_TRANS', '_TABLES')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"NO_ZERO_DATE|STRICT_TRANS_TABLES",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
+		},
+	}, {
+=======
+		// a targeted session's SET gets the same sql_mode judgment as an untargeted
+		// one; a non-constant expression is evaluated on the target shard and judged
+		// before any state changes
+		testName: "targeted sql_mode judges a non-constant value on the target shard",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('AN', 'SI')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"STRICT_TRANS_TABLES|ANSI",
+		)},
+		expectedError: "setting the ANSI sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
+			`Reset Reserved Conn`,
+		},
+	}, {
+		// the SET carries the judged value rather than the expression: evaluating the
+		// expression a second time could apply a value the session never judged
+		testName: "targeted sql_mode applies and stores the judged value, not the expression",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('STRICT_TRANS', '_TABLES')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"NO_ZERO_DATE|STRICT_TRANS_TABLES",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
+		},
+	}, {
+>>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 		testName: "sysvar set not modifying setting",
 		setOps: []SetOp{
 			&SysVarReservedConn{
@@ -606,11 +849,25 @@ func TestSysVarSetErr(t *testing.T) {
 		},
 	}
 
+<<<<<<< HEAD
+||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+	// the failed SET must not leave its value in the session: no "SysVar set with"
+=======
+	// the evaluation succeeds and the SET itself fails: it must not leave its
+	// value in the session, so no "SysVar set with"
+>>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		"Needs Reserved Conn",
+<<<<<<< HEAD
 		"SysVar set with (x,dummy_expr)",
 		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+=======
+		`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
+		`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+>>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 	}
 
 	set := &Set{
@@ -618,8 +875,11 @@ func TestSysVarSetErr(t *testing.T) {
 		Input: &SingleRow{},
 	}
 	vc := &loggingVCursor{
-		shards:         []string{"-20", "20-"},
-		multiShardErrs: []error{errors.New("error")},
+		shards: []string{"-20", "20-"},
+		// the first result answers the evaluation; the nil entry makes the SET
+		// return resultErr
+		results:   []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("dummy_expr", "int64"), "123456"), nil},
+		resultErr: errors.New("error"),
 	}
 	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
