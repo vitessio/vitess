@@ -7,6 +7,10 @@ on:
     tags: '**'
   pull_request:
     branches: '**'
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'e2e_race')
+  cancel-in-progress: true
+
 permissions: read-all
 jobs:
 
@@ -45,6 +49,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/e2e_race.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -55,11 +60,11 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
@@ -72,8 +77,6 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils
         
         sudo service etcd stop
-
-        go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'

@@ -18,6 +18,7 @@ jobs:
         branch: [ main, release-22.0, release-21.0, release-20.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Check out code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

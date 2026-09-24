@@ -12,31 +12,51 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Online DDL flow')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 # This test ensures that our Online DDL + VReplication + throttler components
 # work using primary and replica vttablets built on different versions.
 
 jobs:
 
-  upgrade_downgrade_test:
-    timeout-minutes: 60
-    name: Run Upgrade Downgrade Test - Online DDL flow
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
+  # Path filtering and release-branch discovery run once here, on a
+  # GitHub-hosted runner, so that the test job below (on a large runner) is not
+  # started at all when nothing relevant changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
+      previous_release_ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+      next_release_ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
     steps:
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out commit's code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
+        # Full history is needed to list the release branches.
         fetch-depth: 0
         persist-credentials: 'false'
+
+    - name: Set output with latest release branch
+      id: output-previous-release-ref
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        REF: ${{ github.ref }}
+      run: |
+        previous_release_ref=$(./tools/get_previous_release.sh "$BASE_REF" "$REF")
+        echo $previous_release_ref
+        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
+    - name: Set output with next release branch
+      id: output-next-release-ref
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        REF: ${{ github.ref }}
+      run: |
+        next_release_ref=$(./tools/get_next_release.sh "$BASE_REF" "$REF")
+        echo $next_release_ref
+        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
@@ -59,46 +79,48 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
-    - name: Set output with latest release branch
-      if: steps.changes.outputs.end_to_end == 'true'
-      id: output-previous-release-ref
-      env:
-        BASE_REF: ${{ github.base_ref }}
-        REF: ${{ github.ref }}
-      run: |
-        previous_release_ref=$(./tools/get_previous_release.sh "$BASE_REF" "$REF")
-        echo $previous_release_ref
-        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+  upgrade_downgrade_test:
+    needs: changes
+    # Runs when the gate found relevant changes, and also when the gate itself
+    # failed, so that failure is reported instead of silently skipping a
+    # required status check.
+    if: ${{ !cancelled() && (needs.changes.result == 'failure' || (needs.changes.outputs.end_to_end == 'true')) }}
+    timeout-minutes: 60
+    name: Run Upgrade Downgrade Test - Online DDL flow
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
-    - name: Set output with next release branch
-      if: steps.changes.outputs.end_to_end == 'true'
-      id: output-next-release-ref
-      env:
-        BASE_REF: ${{ github.base_ref }}
-        REF: ${{ github.ref }}
+    steps:
+    - name: Skip CI
       run: |
-        next_release_ref=$(./tools/get_next_release.sh "$BASE_REF" "$REF")
-        echo $next_release_ref
-        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Fail if the gate job failed
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Check out commit's code
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Set up python
-      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
@@ -108,27 +130,19 @@ jobs:
         sudo service etcd stop
 
     # Checkout to the last release of Vitess
-    - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
-      if: steps.changes.outputs.end_to_end == 'true'
+    - name: Check out last version's code (${{ needs.changes.outputs.previous_release_ref }})
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
-        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        ref: ${{ needs.changes.outputs.previous_release_ref }}
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the last release
-      if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        go mod download
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
 
     - name: Building last release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building last release: $(git rev-parse HEAD)"
@@ -139,27 +153,19 @@ jobs:
         rm -Rf bin/*
 
     # Checkout to the next release of Vitess
-    - name: Check out next version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
-      if: steps.changes.outputs.end_to_end == 'true'
+    - name: Check out next version's code (${{ needs.changes.outputs.next_release_ref }})
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
-        ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
+        ref: ${{ needs.changes.outputs.next_release_ref }}
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the next release
-      if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        go mod download
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
 
     - name: Building next release's binaries
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building next release: $(git rev-parse HEAD)"
@@ -171,25 +177,18 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for this commit
-      if: steps.changes.outputs.end_to_end == 'true'
-      run: |
-        go mod download
+        # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
+        # must not be the one saving the branch caches; restore on PRs only.
+        cache: ${{ github.event_name == 'pull_request' }}
 
     - name: Building the binaries for this commit
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         echo "building this SHA: $(git rev-parse HEAD)"
@@ -200,7 +199,6 @@ jobs:
 
     # Copy vttablet and related binaries under new names
     - name: Use current version Vtctl, and other version VTTablet
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -216,7 +214,6 @@ jobs:
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n-1
     - name: Run Online DDL tests (primary=N, replica=N-1)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -228,7 +225,6 @@ jobs:
 
     # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N-1, replica=N)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -240,7 +236,6 @@ jobs:
 
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N+1, replica=N)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -252,7 +247,6 @@ jobs:
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n+1
     - name: Run Online DDL tests (primary=N, replica=N+1)
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

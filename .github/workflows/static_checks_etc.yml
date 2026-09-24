@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: '**'
 
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Static Code Checks, Etc.')
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:
@@ -130,7 +134,7 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Run go fmt
         if: steps.changes.outputs.go_files == 'true'
@@ -154,7 +158,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
-          go mod download
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
