@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/google/shlex"
+
+	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 var (
@@ -207,13 +210,22 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 }
 
 // ValidateSessionVariable ensures a variable name is safe to interpolate as a
-// MySQL system variable identifier.
+// MySQL system variable identifier, and validates the values of variables Vitess
+// has an opinion about.
 func ValidateSessionVariable(variable SessionVariable) error {
 	if !sessionVariableNameRegexp.MatchString(variable.Name) {
 		return fmt.Errorf("invalid session variable name: %q", variable.Name)
 	}
 	if _, ok := deniedSessionVariables[strings.ToLower(variable.Name)]; ok {
 		return fmt.Errorf("session variable %q is not allowed", variable.Name)
+	}
+	if strings.ToLower(variable.Name) == "sql_mode" {
+		// The migration statements executed under this variable are Vitess-formatted
+		// SQL, so modes that change how SQL text is interpreted are rejected the same
+		// way a vtgate session rejects them (see sqlmode.Validate).
+		if _, err := sqlmode.Validate(sqltypes.NewVarChar(variable.Value)); err != nil {
+			return err
+		}
 	}
 	return nil
 }

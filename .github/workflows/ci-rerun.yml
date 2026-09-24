@@ -29,12 +29,13 @@ jobs:
   rerun-failed:
     name: Rerun Failed CI Jobs
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       actions: write
       pull-requests: read
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
@@ -94,6 +95,13 @@ jobs:
               const sha = pr.head.sha;
               const title = pr.title.length > 60 ? pr.title.slice(0, 60) + '...' : pr.title;
               core.info(`Processing PR #${pr.number}: ${title} (${sha.slice(0, 8)})`);
+
+              // 'Skip CI' makes the workflows fail on purpose; rerunning them
+              // only burns runners until the attempt cap.
+              if (pr.labels.some(label => label.name === 'Skip CI')) {
+                core.info(`  Skipping PR #${pr.number} — has the 'Skip CI' label`);
+                continue;
+              }
 
               // Get workflow runs for this PR's HEAD SHA.
               const { data: runsData } = await github.rest.actions.listWorkflowRunsForRepo({

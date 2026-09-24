@@ -17,7 +17,9 @@ limitations under the License.
 package dbconfigs
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"os"
 	"syscall"
 	"testing"
@@ -28,7 +30,14 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/yaml2"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestInit(t *testing.T) {
@@ -338,4 +347,113 @@ dba:
 	err = yaml2.Unmarshal(inBytes, &gotdb)
 	require.NoError(t, err)
 	assert.Equal(t, &db, &gotdb)
+}
+
+// TestConnectorConnectNeutralizesSQLMode verifies the neutralization runs at the
+// connector layer — the single choke point every Vitess-created MySQL connection goes
+// through — so no caller can dial a connection that lexes Vitess-formatted SQL under
+// the server's global lexer modes.
+func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	connector := New(db.ConnParams())
+	conn, err := connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+}
+
+// stallingHandler completes the handshake but never answers a query until released,
+// standing in for a backend that stalls after the connection is established.
+type stallingHandler struct {
+	mysql.UnimplementedHandler
+	release chan struct{}
+	onQuery func()
+}
+
+func (h *stallingHandler) ComQuery(*mysql.Conn, string, func(*sqltypes.Result) error) error {
+	if h.onQuery != nil {
+		h.onQuery()
+	}
+	<-h.release
+	return nil
+}
+
+func (h *stallingHandler) ComQueryMulti(*mysql.Conn, string, func(sqltypes.QueryResponse, bool, bool) error) error {
+	<-h.release
+	return nil
+}
+
+func (h *stallingHandler) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, error) {
+	return nil, 0, nil
+}
+
+func (h *stallingHandler) ComStmtExecute(*mysql.Conn, *mysql.PrepareData, func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (h *stallingHandler) ComRegisterReplica(*mysql.Conn, string, uint16, string, string) error {
+	return nil
+}
+
+func (h *stallingHandler) ComBinlogDump(*mysql.Conn, string, uint32) error { return nil }
+
+func (h *stallingHandler) ComBinlogDumpGTID(*mysql.Conn, string, uint64, replication.GTIDSet, uint16) error {
+	return nil
+}
+
+func (h *stallingHandler) WarningCount(*mysql.Conn) uint16 { return 0 }
+
+func (h *stallingHandler) Env() *vtenv.Environment { return vtenv.NewTestEnv() }
+
+func newStallingServer(t *testing.T) (*stallingHandler, *mysql.ConnParams) {
+	t.Helper()
+	h := &stallingHandler{release: make(chan struct{})}
+	t.Cleanup(func() { close(h.release) })
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), h, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	t.Cleanup(listener.Close)
+	go listener.Accept()
+	addr := listener.Addr().(*net.TCPAddr)
+	return h, &mysql.ConnParams{Host: addr.IP.String(), Port: addr.Port, Uname: "user"}
+}
+
+// TestConnectorConnectSetupBoundedByContext verifies the connection setup query stays
+// bounded by the caller's context and by ConnectTimeoutMs: a backend that completes the
+// handshake and then stalls must not hang Connect.
+func TestConnectorConnectSetupBoundedByContext(t *testing.T) {
+	t.Run("context deadline", func(t *testing.T) {
+		_, params := newStallingServer(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		t.Cleanup(cancel)
+
+		connector := New(params)
+		conn, err := connector.Connect(ctx)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.Nil(t, conn)
+	})
+
+	t.Run("context canceled during the query", func(t *testing.T) {
+		h, params := newStallingServer(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		h.onQuery = cancel
+
+		connector := New(params)
+		conn, err := connector.Connect(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, conn)
+	})
+
+	t.Run("connect timeout", func(t *testing.T) {
+		_, params := newStallingServer(t)
+		params.ConnectTimeoutMs = 200
+
+		connector := New(params)
+		conn, err := connector.Connect(t.Context())
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.Nil(t, conn)
+	})
 }

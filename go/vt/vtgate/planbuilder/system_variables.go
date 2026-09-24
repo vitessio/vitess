@@ -82,6 +82,10 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		pc.initForSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)
 		pc.initForSettings(sysvars.NotSupported, buildNotSupported)
 		pc.initForSettings(sysvars.VitessAware, buildSetOpVitessAware)
+		// sql_mode assignments get MySQL-faithful validation of constant values at
+		// planning time, so an invalid or unsupported value fails the SET before any
+		// assignment executes, regardless of whether system settings are enabled.
+		pc.funcs[sysvars.SQLMode.Name] = validateSQLModePlan(pc.funcs[sysvars.SQLMode.Name])
 	})
 }
 

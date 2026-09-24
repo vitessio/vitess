@@ -724,8 +724,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
+		// The replacement is the same workflow: it keeps the stream's
+		// options (its per-workflow configuration overrides).
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
-			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, "")
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, params["options"])
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Error(fmt.Sprintf("transitionJournal: %v", err))

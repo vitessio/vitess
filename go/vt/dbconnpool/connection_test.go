@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
@@ -60,4 +61,19 @@ func TestExecuteStreamFetchCarriesOKPacket(t *testing.T) {
 	assert.EqualValues(t, 7, got.RowsAffected, "streamed OK packet must carry RowsAffected to the callback")
 	assert.EqualValues(t, 99, got.InsertID, "streamed OK packet must carry InsertID to the callback")
 	assert.True(t, got.InsertIDChanged)
+}
+
+// TestNewDBConnectionNeutralizesSQLMode verifies every new connection strips lexer
+// modes from the session sql_mode inherited from the server's global value, so
+// Vitess-formatted SQL is always lexed under default rules regardless of the
+// backend's configuration.
+func TestNewDBConnectionNeutralizesSQLMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	conn, err := NewDBConnection(t.Context(), dbconfigs.New(db.ConnParams()))
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
 }

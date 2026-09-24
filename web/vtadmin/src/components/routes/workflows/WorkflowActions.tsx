@@ -464,7 +464,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                                 </p>
                             </div>
                             <Toggle
-                                enabled={cancelWorkflowOptions.keepData}
+                                enabled={!!cancelWorkflowOptions.keepData}
                                 data-testid="toggle-keep-data"
                                 onChange={() =>
                                     setCancelWorkflowOptions((prevOptions) => ({
@@ -518,7 +518,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                                 </p>
                             </div>
                             <Toggle
-                                enabled={completeMoveTablesOptions.keepData}
+                                enabled={!!completeMoveTablesOptions.keepData}
                                 data-testid="toggle-keep-data"
                                 onChange={() =>
                                     setCompleteMoveTablesOptions((prevOptions) => ({

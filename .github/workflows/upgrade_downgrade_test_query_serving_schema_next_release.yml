@@ -12,34 +12,28 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Schema) Next Release')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
 
-  upgrade_downgrade_test:
-    timeout-minutes: 60
-    name: Run Upgrade Downgrade Test - Query Serving (Schema) Next Release
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
-
+  # Path filtering and release-branch discovery run once here, on a
+  # GitHub-hosted runner, so that the test job below (on a large runner) is not
+  # started at all when nothing relevant changed or there is no next release.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
+      next_release_ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out commit's code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        # Full history is needed to list the release branches.
         fetch-depth: 0
         persist-credentials: 'false'
 
@@ -54,8 +48,7 @@ jobs:
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
-      if: steps.output-next-release-ref.outputs.next_release_ref != ''
-      uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
@@ -79,26 +72,58 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_query_serving_schema_next_release.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
+
+  upgrade_downgrade_test:
+    needs: changes
+    # Runs when the gate found relevant changes. Also runs when the gate did not
+    # succeed (it failed, or was cancelled by its timeout) or the PR has the
+    # 'Skip CI' label, so that those fail this job instead of silently skipping
+    # a required status check.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true' && needs.changes.outputs.next_release_ref != '')) }}
+    timeout-minutes: 60
+    name: Run Upgrade Downgrade Test - Query Serving (Schema) Next Release
+    # The large runner is only claimed when the tests will actually run; a
+    # failed or cancelled gate and the 'Skip CI' label only report a failure.
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Fail if the gate job failed
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Check out commit's code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
 
     - name: Tune the OS
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Set up python
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
     - name: Setup MySQL
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get base dependencies
       timeout-minutes: 10
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
@@ -108,28 +133,19 @@ jobs:
         sudo service etcd stop
 
     # Checkout to the next release of Vitess
-    - name: Check out other version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+    - name: Check out other version's code (${{ needs.changes.outputs.next_release_ref }})
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
+        ref: ${{ needs.changes.outputs.next_release_ref }}
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for the next release
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-      run: |
-        go mod download
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
 
     - name: Building next release's binaries
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -140,26 +156,18 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Get dependencies for this commit
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-      run: |
-        go mod download
+        # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
+        # must not be the one saving the branch caches; restore on PRs only.
+        cache: ${{ github.event_name == 'pull_request' }}
 
     - name: Building the binaries for this commit
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -168,14 +176,12 @@ jobs:
         cp -R bin /tmp/vitess-build-current/
 
     - name: Convert ErrorContains checks to Error checks
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/EqualError/Error/g' {} +
 
     # Swap the binaries in the bin. Use vtgate version n+1 and keep vttablet at version n
     - name: Use next release's VTGate
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -185,7 +191,6 @@ jobs:
 
     # Running a test with vtgate at version n+1 and vttablet at version n
     - name: Run query serving tests (vtgate=N+1, vttablet=N)
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -195,7 +200,6 @@ jobs:
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n+1
     - name: Use current version VTGate, and other version VTTablet
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -209,7 +213,6 @@ jobs:
 
     # Running a test with vtgate at version n and vttablet at version n+1
     - name: Run query serving tests (vtgate=N, vttablet=N+1)
-      if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

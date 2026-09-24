@@ -298,6 +298,17 @@ type (
 		description() PrimitiveDescription
 	}
 
+	// MultiShardPerShardExecutor is an optional interface a VCursor may implement
+	// to run one read query per shard and get each shard's result back separately
+	// (rather than merged, as ExecuteMultiShard returns them). VEXPLAIN MYSQLPLAN
+	// type-asserts to this interface to run EXPLAIN FORMAT=JSON against every
+	// resolved shard and attribute each plan to its shard. Its shard queries are
+	// counted in the normal ShardQueries stats. It is kept separate from VCursor so
+	// that adding it does not break out-of-tree VCursor implementations.
+	MultiShardPerShardExecutor interface {
+		ExecuteMultiShardPerShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error)
+	}
+
 	// noInputs default implementation for Primitives that are leaves
 	noInputs struct{}
 
