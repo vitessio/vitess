@@ -404,7 +404,6 @@ func TestServerTLSEnabled(t *testing.T) {
 // a server configured with a CRL, through real TLS handshakes: on
 // full and resumed handshakes, and with certificates presented beyond
 // the verified chain.
-
 func TestServerConfigCRL(t *testing.T) {
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)

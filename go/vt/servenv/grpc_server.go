@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net"
 	"os"
@@ -217,7 +218,7 @@ func createGRPCServer() {
 
 	tlsEnabled, err := vttls.ServerTLSEnabled(gRPCCert, gRPCKey, gRPCCRL)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to configure gRPC TLS: %v", err))
+		log.Error("Failed to configure gRPC TLS", slog.Any("error", err))
 		os.Exit(1)
 	}
 
