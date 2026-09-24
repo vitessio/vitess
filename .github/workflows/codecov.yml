@@ -52,6 +52,7 @@ jobs:
           changed_files:
             - .github/workflows/codecov.yml
             - .github/actions/setup-mysql/action.yml
+            - .github/actions/setup-go/action.yml
             - 'go/**'
             - go.mod
             - go.sum
@@ -109,11 +110,11 @@ jobs:
 
     - name: Tune the OS
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
@@ -124,8 +125,6 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
-
-        go mod download
 
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')

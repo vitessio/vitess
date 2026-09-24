@@ -43,7 +43,7 @@ jobs:
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
 
       - name: Tune the OS
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -58,7 +58,7 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Setup MySQL
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 

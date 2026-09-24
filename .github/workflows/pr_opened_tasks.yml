@@ -15,6 +15,7 @@ jobs:
   check_labels:
     name: Check for Backport or Forwardport labels
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       skip: ${{ steps.check_labels.outputs.skip }}
 
@@ -53,6 +54,7 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'
 
@@ -82,6 +84,7 @@ jobs:
   add_initial_labels:
     name: Add Initial Labels
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'
 
@@ -109,6 +112,7 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Run actions/labeler
         uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1

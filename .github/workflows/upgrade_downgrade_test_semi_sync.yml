@@ -73,7 +73,7 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Set up python
         if: steps.changes.outputs.end_to_end == 'true'
@@ -81,13 +81,13 @@ jobs:
 
       - name: Setup MySQL
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
       - name: Setup Percona Apt repository
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-percona-repo
+        uses: $/.github/actions/setup-percona-repo
 
       - name: Get base dependencies
         timeout-minutes: 10

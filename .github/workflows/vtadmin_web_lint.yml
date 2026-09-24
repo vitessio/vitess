@@ -40,7 +40,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Tune the OS
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:

@@ -25,6 +25,7 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
       - name: Harden the runner (Audit all outbound calls)
