@@ -751,3 +751,91 @@ func TestExecutorTimeZone(t *testing.T) {
 
 	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
 }
+
+// TestSetVarTargetedSession checks that a shard-targeted session's SET is carried the
+// way an untargeted session's is: judged on the target shard, stored in the session, and
+// delivered as a SET_VAR hint or through the settings the session sends with its
+// queries, never by executing a SET of its own on a reserved connection.
+func TestSetVarTargetedSession(t *testing.T) {
+	executor, sbc1, _, _, ctx := createCustomExecutor(t, "{}", "8.0.0")
+	executor.config.Normalize = true
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestSharded + ":-20"})
+	shardSaw := func() []string {
+		var sqls []string
+		for _, q := range sbc1.Queries {
+			sqls = append(sqls, q.Sql)
+		}
+		sbc1.Queries = nil
+		return sqls
+	}
+
+	// a SET_VAR-capable variable is judged on the target shard and rides on the hint
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+		"|only_full_group_by")})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"select @@sql_mode orig, 'only_full_group_by' new"}, shardSaw())
+	assert.Equal(t, map[string]string{"sql_mode": "'only_full_group_by'"}, session.SystemVariables)
+	assert.False(t, session.InReservedConn(), "a SET_VAR-capable variable must not pin the session to a reserved connection")
+	assert.EqualValues(t, 0, sbc1.ReserveCount.Load(), "the target shard must not be reserved")
+
+	_, err = executorExecSession(ctx, executor, session, "select id from t1", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ id from t1"}, shardSaw())
+	assert.EqualValues(t, 0, sbc1.ReserveCount.Load())
+
+	// a variable without SET_VAR support marks the session as reserved, and the shard
+	// receives the stored settings with the next query rather than a SET of its own
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("new", "int64"),
+		"0")})
+	_, err = executorExecSession(ctx, executor, session, "set @@sql_notes = 0", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"select 0 from dual where @@sql_notes != 0"}, shardSaw())
+	assert.True(t, session.InReservedConn())
+	assert.EqualValues(t, 0, sbc1.ReserveCount.Load(), "the SET itself must not reserve the target shard")
+
+	_, err = executorExecSession(ctx, executor, session, "select col from t1", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"set sql_mode = 'only_full_group_by', sql_notes = 0",
+		"select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ col from t1",
+	}, shardSaw())
+	assert.EqualValues(t, 1, sbc1.ReserveCount.Load(), "the settings travel with the first query to the shard")
+}
+
+// TestSetSysVarRecoversSessionWithRejectedStoredValue checks that a corrective SET gets
+// through a session whose stored value the shard rejects: the assignment is evaluated
+// outside the reserved connection, so the rejected pre-query does not precede it, and the
+// next query carries the corrected value.
+func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	// A session whose stored value the shard rejects: every reservation fails on
+	// the pre-query, so nothing that needs the reserved connection can run.
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		InReservedConn:       true,
+		SystemVariables:      map[string]string{"default_week_format": "'bad'"},
+	})
+
+	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"), "good")})
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 'good'", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	assert.Equal(t, "'good'", session.SystemVariables["default_week_format"])
+	assert.EqualValues(t, 0, lookup.ReserveCount.Load(), "evaluating the assignment must not reserve a connection")
+	utils.MustMatch(t, []*querypb.BoundQuery{
+		{Sql: "select 'good' from dual", BindVariables: map[string]*querypb.BindVariable{}},
+	}, lookup.Queries)
+	lookup.Queries = nil
+
+	// The next query reserves a connection whose settings carry the corrected value.
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	utils.MustMatch(t, []*querypb.BoundQuery{
+		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+	}, lookup.Queries)
+}
