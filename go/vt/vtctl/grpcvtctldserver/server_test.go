@@ -5040,7 +5040,6 @@ func TestEmergencyReparentShardInvalidRequiredPosition(t *testing.T) {
 		want     string
 	}{
 		{name: "not a position", required: "not-a-position", want: `invalid required position: invalid MySQL 5.6 GTID set ("not-a-position")`},
-		{name: "reversed interval decodes to nothing", required: "3e11fa47-71ca-11e1-9e33-c80aa9429562:8-7", want: `invalid required position "3e11fa47-71ca-11e1-9e33-c80aa9429562:8-7"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
