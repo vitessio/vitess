@@ -395,3 +395,17 @@ func TestERSRequiredPositionRejectsUnsupportedFlavors(t *testing.T) {
 	require.ErrorContains(t, err, "required position must be a MySQL GTID position, got "+mariadb)
 	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 }
+
+// TestERSRequiredPositionRejectsEmptySet checks that a required position that
+// decodes to an empty GTID set, which would disable the check, fails before
+// replication is stopped. The parser drops a reversed interval without error.
+func TestERSRequiredPositionRejectsEmptySet(t *testing.T) {
+	fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
+		behind: requiredLow, applied: requiredHigh, received: requiredHigh, required: "MySQL56/" + requiredUUID + ":8-7",
+	})
+	fixture.expectNoStops()
+
+	_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
+	require.ErrorContains(t, err, "required position is an empty GTID set")
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+}

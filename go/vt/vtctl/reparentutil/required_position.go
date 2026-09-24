@@ -26,7 +26,8 @@ import (
 )
 
 // validateRequiredPositionFlavor returns an INVALID_ARGUMENT error if required
-// is not a MySQL56 position.
+// is set but is not a non-empty MySQL56 position. An empty set would silently
+// disable the check.
 func validateRequiredPositionFlavor(required replication.Position) error {
 	if required.GTIDSet == nil {
 		return nil
@@ -34,6 +35,10 @@ func validateRequiredPositionFlavor(required replication.Position) error {
 
 	if !required.MatchesFlavor(replication.Mysql56FlavorID) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "required position must be a MySQL GTID position, got %s", replication.EncodePosition(required))
+	}
+
+	if required.IsZero() {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "required position is an empty GTID set")
 	}
 
 	return nil
