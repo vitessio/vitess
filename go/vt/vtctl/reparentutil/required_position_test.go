@@ -365,8 +365,7 @@ func TestERSRequiredPositionKeepsDetectionErrors(t *testing.T) {
 }
 
 // TestERSRequiredPositionRejectsUnsupportedShards checks that a required
-// position on a non GTID shard fails before any relay log wait. The per flavor
-// rules are covered by TestValidateRequiredPosition.
+// position on a non GTID shard fails before any relay log wait.
 func TestERSRequiredPositionRejectsUnsupportedShards(t *testing.T) {
 	const filePos = "FilePos/mysql-bin.000001:20"
 	fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
@@ -382,8 +381,8 @@ func TestERSRequiredPositionRejectsUnsupportedShards(t *testing.T) {
 }
 
 // TestERSRequiredPositionRejectsUnsupportedFlavors checks that a required
-// position that is not a MySQL56 position fails before replication is stopped.
-// The per flavor rules are covered by TestValidateRequiredPositionFlavor.
+// position that is not a MySQL GTID position fails before replication is
+// stopped.
 func TestERSRequiredPositionRejectsUnsupportedFlavors(t *testing.T) {
 	const mariadb = "MariaDB/0-1-20"
 	fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
