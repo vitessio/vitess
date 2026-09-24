@@ -2,29 +2,34 @@ name: Code Coverage
 on:
   schedule:
     - cron: '0 0 * * 6'  # Saturday midnight UTC
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: '**'
+  # No push trigger: a push has no pull request base to diff against, so push
+  # runs only ever failed (on Go changes) or skipped the upload.
   pull_request:
     branches: '**'
 concurrency:
   group: format('{0}-{1}-{2}', ${{ github.ref }}, ${{ github.event_name }}, 'Code Coverage')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
-  test:
+  # Path filtering and changed-package detection run here, on a GitHub-hosted
+  # runner, so that the coverage job below (on a large runner) is not started
+  # at all when there is nothing to measure. Code Coverage is not a required
+  # check, so skipping it at the job level reports nothing misleading.
+  changes:
     if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
-    name: Code Coverage
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
-
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      is_full_run: ${{ steps.mode.outputs.is_full_run }}
+      packages: ${{ steps.packages.outputs.packages }}
     steps:
     - name: Check out code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
+        # Full history is needed to diff the pull request's base and head.
         fetch-depth: 0
         persist-credentials: 'false'
 
@@ -53,8 +58,9 @@ jobs:
             - go.sum
             - Makefile
 
+    # Needed by `go list` in the next step.
     - name: Set up Go
-      if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version-file: go.mod
@@ -99,22 +105,39 @@ jobs:
 
         echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
 
+  test:
+    needs: changes
+    if: needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != ''
+    name: Code Coverage
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
+
+    - name: Set up Go
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      with:
+        go-version-file: go.mod
+        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+        cache-dependency-path: |
+          go.sum
+          tools/**/go.sum
+
     - name: Set up python
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
 
     - name: Tune the OS
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -126,16 +149,14 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
     - name: Run make tools
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       run: |
         make tools
 
     - name: Run coverage tests
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       timeout-minutes: 60
       env:
-        IS_FULL_RUN: ${{ steps.mode.outputs.is_full_run }}
-        COVERAGE_PACKAGES: ${{ steps.packages.outputs.packages }}
+        IS_FULL_RUN: ${{ needs.changes.outputs.is_full_run }}
+        COVERAGE_PACKAGES: ${{ needs.changes.outputs.packages }}
       run: |
         set -exo pipefail
         export VTDATAROOT="/tmp/"
@@ -149,12 +170,11 @@ jobs:
         fi
 
     - name: Upload coverage reports
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
       with:
         files: coverage.out
         fail_ci_if_error: true
         verbose: true
-        flags: ${{ steps.mode.outputs.is_full_run != 'true' && 'partial' || '' }}
+        flags: ${{ needs.changes.outputs.is_full_run != 'true' && 'partial' || '' }}
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
