@@ -60,8 +60,7 @@ jobs:
 
     # Needed by `go list` in the next step.
     - name: Set up Go
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
+      if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version-file: go.mod
@@ -69,13 +68,6 @@ jobs:
         cache-dependency-path: |
           go.sum
           tools/**/go.sum
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
-      uses: $/.github/actions/setup-go
-=======
-      if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
-      uses: $/.github/actions/setup-go
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -120,63 +112,32 @@ jobs:
     runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-      with:
-        egress-policy: audit
-
     - name: Check out code
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
 
     - name: Set up Go
-      uses: $/.github/actions/setup-go
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+      with:
+        go-version-file: go.mod
+        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+        cache-dependency-path: |
+          go.sum
+          tools/**/go.sum
 
     - name: Set up python
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-=======
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
 
     - name: Tune the OS
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      timeout-minutes: 5
-=======
-      timeout-minutes: 5
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      timeout-minutes: 8
-=======
-      timeout-minutes: 8
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      timeout-minutes: 5
-=======
-      timeout-minutes: 5
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -188,14 +149,6 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
     - name: Run make tools
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      timeout-minutes: 10
-=======
-      timeout-minutes: 10
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
       run: |
         make tools
 
@@ -217,15 +170,7 @@ jobs:
         fi
 
     - name: Upload coverage reports
-<<<<<<< HEAD
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-      if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
-=======
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
       with:
         files: coverage.out
         fail_ci_if_error: true

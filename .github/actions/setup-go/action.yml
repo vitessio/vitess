@@ -20,7 +20,6 @@ runs:
       if: inputs.cache == 'true' && (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main'))
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
-<<<<<<< HEAD
         # Same paths cached by actions/setup-go internally.
         path: |
           ~/go/pkg/mod
@@ -29,83 +28,3 @@ runs:
         key: go-${{ steps.setup-go.outputs.go-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
         restore-keys: |
           go-${{ steps.setup-go.outputs.go-version }}-${{ runner.os }}-${{ runner.arch }}-
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-        path: ~/go/pkg/mod
-        key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
-
-    - name: Cache Go build cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.cache/go-build
-        key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
-
-    # Download the root module and every tool module, so a saved module cache
-    # always contains the full dependency set its key covers, no matter which
-    # job saves it first; the tool modules are otherwise only fetched on first
-    # use. On a cache hit this is a fast no-op. Retried because
-    # proxy.golang.org occasionally drops connections mid-download.
-    - name: Download Go modules
-      shell: bash
-      run: |
-        download() {
-          go mod download || return 1
-          local modfile
-          for modfile in tools/*/go.mod; do
-            go mod download -modfile="${modfile}" || return 1
-          done
-        }
-
-        for attempt in 1 2 3; do
-          if download; then
-            break
-          fi
-          if [ "${attempt}" = 3 ]; then
-            echo "go mod download failed after ${attempt} attempts"
-            exit 1
-          fi
-          echo "go mod download failed (attempt ${attempt}); retrying"
-          sleep 10
-        done
-=======
-        path: ~/go/pkg/mod
-        key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
-
-    - name: Cache Go build cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.cache/go-build
-        key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
-
-    # Download the root module and every tool module, so a saved module cache
-    # always contains the full dependency set its key covers, no matter which
-    # job saves it first; the tool modules are otherwise only fetched on first
-    # use. On a cache hit this is a fast no-op. Retried because
-    # proxy.golang.org occasionally drops connections mid-download.
-    - name: Download Go modules
-      shell: bash
-      run: |
-        download() {
-          go mod download || return 1
-          local modfile
-          for modfile in tools/*/go.mod; do
-            # Older release trees, which the upgrade/downgrade workflows also
-            # set up, have no tool modules; the unmatched glob stays literal.
-            [ -f "${modfile}" ] || continue
-            go mod download -modfile="${modfile}" || return 1
-          done
-        }
-
-        for attempt in 1 2 3; do
-          if download; then
-            break
-          fi
-          if [ "${attempt}" = 3 ]; then
-            echo "go mod download failed after ${attempt} attempts"
-            exit 1
-          fi
-          echo "go mod download failed (attempt ${attempt}); retrying"
-          sleep 10
-        done
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
