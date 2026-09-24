@@ -98,6 +98,6 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 		return replication.Position{}, nil
 	}
 
-	logger.Infof("required position: %s", replication.EncodePosition(position))
+	logger.Infof("required position: %s", position.String())
 	return position, nil
 }
