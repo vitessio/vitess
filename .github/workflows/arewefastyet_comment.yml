@@ -4,7 +4,7 @@ name: arewefastyet comment
 permissions: read-all
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] never checks out or runs PR code
     types: [labeled]
 
 jobs:
