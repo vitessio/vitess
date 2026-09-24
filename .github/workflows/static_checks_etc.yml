@@ -38,7 +38,11 @@ jobs:
         with:
           persist-credentials: 'false'
 
+      # Only uploads dependency data for FOSSA's license tracking; the policy
+      # check (skip-test) is off, so a pull request gains nothing from it.
+      # Pushes keep main, the release branches and the tags scanned.
       - name: Run FOSSA scan and upload build data
+        if: github.event_name == 'push'
         timeout-minutes: 5
         uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
         with:

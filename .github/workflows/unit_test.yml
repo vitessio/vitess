@@ -120,8 +120,9 @@ jobs:
     name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }}${{ matrix.arch && format('_{0}', matrix.arch) || '' }})"
     # When nothing relevant changed the legs still run (so their required
     # status checks are reported), but on a GitHub-hosted runner with every
-    # step below skipped.
-    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && (github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || 'ubuntu-24.04' }}
+    # step below skipped. The 'Skip CI' label also gets the small runner, since
+    # the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
