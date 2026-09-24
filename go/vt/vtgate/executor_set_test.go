@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -750,4 +751,62 @@ func TestExecutorTimeZone(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
+}
+
+func TestSetSysVarRejectedValueIsNotStored(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+
+	// The variable needs a reserved connection. The shard accepts the validation
+	// query but rejects the SET itself, as MySQL does for an invalid value.
+	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"), "bad")})
+	// The sandbox runs the pre-query through Execute too and ignores its error, so
+	// both the pre-query and the statement must fail for the error to surface.
+	lookup.MustFailExecute[sqlparser.StmtSet] = 2
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 'bad'", map[string]*querypb.BindVariable{}, false)
+	require.Error(t, err)
+	assert.NotContains(t, session.SystemVariables, "default_week_format")
+	// The value is in the settings of the connection reserved for the SET, so the
+	// shard validates it there as well as on the statement.
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select 'bad' from dual where @@default_week_format != 'bad'"},
+		{Sql: "set default_week_format = 'bad'", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 'bad'", BindVariables: map[string]*querypb.BindVariable{}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
+	lookup.Queries = nil
+
+	// Later queries carry no trace of the rejected value.
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
+}
+
+func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	// A session whose stored value the shard rejects: every reservation fails on
+	// the pre-query, so nothing that needs the reserved connection can run.
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		InReservedConn:       true,
+		SystemVariables:      map[string]string{"default_week_format": "'bad'"},
+	})
+
+	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"), "good")})
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 'good'", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	assert.Equal(t, "'good'", session.SystemVariables["default_week_format"])
+
+	// The evaluation runs outside the reserved connection, so no pre-query precedes
+	// it, and the reservation for the SET already carries the corrected value.
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select 'good' from dual"},
+		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
 }

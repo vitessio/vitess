@@ -699,6 +699,13 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
+// RemoveSystemVariable drops a system variable from the session.
+func (session *SafeSession) RemoveSystemVariable(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	delete(session.SystemVariables, name)
+}
+
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
 // This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
 // will be skipped.
