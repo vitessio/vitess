@@ -482,6 +482,7 @@ Use this to prevent the promotion of a stale replica when every replica lost the
 
 The feature is opt-in and disabled by default. Set `--emergency-reparent-require-primary-position` on VTOrc. VTOrc then passes the stored set to ERS when all of these are true:
 
+- The shard uses MySQL GTIDs. VTOrc passes no position for a MariaDB or file position shard.
 - The keyspace durability policy uses semi-sync. Without semi-sync, the primary can have transactions that no replica received, and the policy accepts their loss.
 - VTOrc has a stored set for the primary. See the limitation below.
 
