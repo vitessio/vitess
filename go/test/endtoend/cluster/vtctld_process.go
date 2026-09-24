@@ -51,46 +51,22 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
-<<<<<<< HEAD
-func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
+func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
 	vtctldVer, err := GetMajorVersion(vtctld.Binary)
 	if err != nil {
 		return err
 	}
-||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
-func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
-=======
-func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
->>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-<<<<<<< HEAD
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vtctld.TopoImplementation,
 		"--topo_global_server_address", vtctld.TopoGlobalAddress,
 		"--topo_global_root", vtctld.TopoGlobalRoot,
-		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
-||||||| parent of 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
-		"--topo-implementation", vtctld.TopoImplementation,
-		"--topo-global-server-address", vtctld.TopoGlobalAddress,
-		"--topo-global-root", vtctld.TopoGlobalRoot,
-		"--cell", cell,
-		"--service-map", vtctld.ServiceMap,
-		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
-		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
-=======
-		"--topo-implementation", vtctld.TopoImplementation,
-		"--topo-global-server-address", vtctld.TopoGlobalAddress,
-		"--topo-global-root", vtctld.TopoGlobalRoot,
-		"--service-map", vtctld.ServiceMap,
-		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
-		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
->>>>>>> 9962cc6337 (vtctld: Remove the unused legacy HTTP API served under `/api/` (#21171))
 		"--port", strconv.Itoa(vtctld.Port),
 		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
