@@ -50,6 +50,13 @@ const (
 	requiredAdvancedAlias = "zone1-0000000102"
 )
 
+// gtidSet returns the GTID set of encoded without the flavor prefix, as the
+// required position errors print it.
+func gtidSet(t *testing.T, encoded string) string {
+	t.Helper()
+	return requiredPosition(t, encoded).String()
+}
+
 // requiredPosition decodes encoded and stops the test on error.
 func requiredPosition(t *testing.T, encoded string) replication.Position {
 	t.Helper()
@@ -267,8 +274,8 @@ func TestERSRequiredPositionFailsBeforeAnyWait(t *testing.T) {
 	fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-	require.ErrorContains(t, err, "no candidate received required position "+requiredMissing)
-	require.ErrorContains(t, err, requiredAdvancedAlias+"="+requiredHigh)
+	require.ErrorContains(t, err, "no candidate received required position "+gtidSet(t, requiredMissing))
+	require.ErrorContains(t, err, requiredAdvancedAlias+"="+gtidSet(t, requiredHigh))
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 }
 
@@ -288,7 +295,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-		require.ErrorContains(t, err, "most advanced received positions: "+requiredBehindAlias+"="+divergent)
+		require.ErrorContains(t, err, "most advanced received positions: "+requiredBehindAlias+"="+gtidSet(t, divergent))
 		require.ErrorContains(t, err, "split-brain override discarded the other leading candidates")
 		require.ErrorContains(t, err, requiredAdvancedAlias)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
@@ -307,7 +314,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-		require.ErrorContains(t, err, "no remaining candidate received required position "+requiredHigh+": most advanced received positions: "+requiredBehindAlias+"="+requiredLow)
+		require.ErrorContains(t, err, "no remaining candidate received required position "+gtidSet(t, requiredHigh)+": most advanced received positions: "+requiredBehindAlias+"="+gtidSet(t, requiredLow))
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 
@@ -333,7 +340,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-		require.ErrorContains(t, err, "no remaining candidate received required position "+requiredHigh+": most advanced received positions: "+requiredBehindAlias+"="+requiredLow)
+		require.ErrorContains(t, err, "no remaining candidate received required position "+gtidSet(t, requiredHigh)+": most advanced received positions: "+requiredBehindAlias+"="+gtidSet(t, requiredLow))
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 }

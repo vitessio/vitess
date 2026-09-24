@@ -72,7 +72,7 @@ func checkRequiredPosition(required replication.Position, candidates map[string]
 		best = append(best, "none")
 	}
 
-	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no %s received required position %s: most advanced received positions: %s", noun, replication.EncodePosition(required), strings.Join(best, ", "))
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no %s received required position %s: most advanced received positions: %s", noun, required.String(), strings.Join(best, ", "))
 }
 
 // mostAdvancedReceivedPositions returns every Combined position that no other
@@ -108,5 +108,5 @@ func formatReceivedPosition(position replication.Position) string {
 		return "<zero>"
 	}
 
-	return replication.EncodePosition(position)
+	return position.String()
 }
