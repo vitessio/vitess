@@ -109,17 +109,19 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      # Real runs fan out fully. When nothing relevant changed (or the gate
-      # failed) the legs only report a status, so trickle them through a few
-      # at a time instead of claiming one runner per shard at once.
-      max-parallel: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && fromJson(needs.generate-matrix.outputs.shard_count) || 8 }}
+      # Real runs fan out fully. When nothing relevant changed, the gate
+      # failed, or the PR has the 'Skip CI' label, the legs only report a
+      # status, so trickle them through a few at a time instead of claiming one
+      # runner per shard at once.
+      max-parallel: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && fromJson(needs.generate-matrix.outputs.shard_count) || 8 }}
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
     name: Run endtoend tests on Cluster (${{ matrix.shard }})
     # When nothing relevant changed the shards still run (so their required
     # status checks are reported), but on a GitHub-hosted runner with every
-    # step below skipped.
-    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    # step below skipped. The 'Skip CI' label also gets the small runner, since
+    # the shards then only fail at that step.
+    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
