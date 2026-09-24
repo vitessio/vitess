@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -356,7 +357,17 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: defaultValue})
+			resetExpr := sqlparser.Expr(defaultValue)
+			switch sysVar.Name.Lowered() {
+			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
+				// MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` (and
+				// unique_checks) sets the session value to the opposite of the global
+				// value, so `default` would hand the next caller a connection with the
+				// checks off. Restore the global value explicitly, which is what DEFAULT
+				// means for a session variable.
+				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
+			}
+			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}
 	}
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
