@@ -463,11 +463,6 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 	defer dbConn.Recycle()
 
-<<<<<<< HEAD
-	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
-||||||| parent of ea4a61357a (VTTablet: Discard the pooled connection after CALL so procedure session state cannot leak (#21062))
-	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
-=======
 	if qre.plan.PlanID == p.PlanCallProc {
 		// The connection is never reused after a CALL (see execCallProc),
 		// whatever the outcome: a transaction the procedure leaked dies with it
@@ -476,8 +471,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		// before the stream runs so a callback panic cannot recycle it dirty.
 		defer qre.discardPooledConnAfterCall(dbConn)
 	}
-	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
->>>>>>> ea4a61357a (VTTablet: Discard the pooled connection after CALL so procedure session state cannot leak (#21062))
+	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			return err
