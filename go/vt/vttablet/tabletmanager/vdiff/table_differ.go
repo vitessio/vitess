@@ -20,13 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-<<<<<<< HEAD
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-	"math/rand/v2"
-=======
-	"log/slog"
-	"math/rand/v2"
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
 	"slices"
 	"strings"
 	"sync"
@@ -585,16 +578,8 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
-<<<<<<< HEAD
 			log.Infof("Flagging mismatch for %s: %+v", td.table.Name, dr)
-			if err := updateTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-			log.Info(fmt.Sprintf("Flagging mismatch in vdiff %s for %s: %+v", td.wd.ct.uuid, td.table.Name, dr))
-			if err := updateTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
-=======
-			log.Info(fmt.Sprintf("Flagging mismatch in vdiff %s for %s: %+v", td.wd.ct.uuid, td.table.Name, dr))
 			if err := setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, true); err != nil {
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
 				return nil, err
 			}
 		}
@@ -1044,25 +1029,13 @@ func (td *tableDiffer) getSourcePKCols() error {
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-<<<<<<< HEAD
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
-=======
-			sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
+			sourceTableName, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
-<<<<<<< HEAD
 		log.Warningf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.wd.ct.workflow)
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
-=======
-		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
+			sourceTableName, topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.wd.ct.workflow)
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
@@ -1075,48 +1048,22 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-<<<<<<< HEAD
-					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
-=======
-					topoproto.TabletAliasString(sourceTablet.Alias), sourceTableName)
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
+					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), sourceTableName)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
 		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), sourceTableName)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-<<<<<<< HEAD
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
-=======
-				sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
+				sourceTableName, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 		}
 		if len(pkeCols) > 0 {
-<<<<<<< HEAD
-			log.Infof("Using primary key equivalent columns %+v for table %s", pkeCols, td.table.Name)
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
-=======
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, sourceTableName, td.wd.ct.uuid))
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
+			log.Infof("Using primary key equivalent columns %+v for table %s", pkeCols, sourceTableName)
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
-<<<<<<< HEAD
-			log.Infof("Using all columns as a substitute primary key for table %s", td.table.Name)
-			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
-||||||| parent of f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", td.table.Name, td.wd.ct.uuid))
-			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
-=======
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
+			log.Infof("Using all columns as a substitute primary key for table %s", sourceTableName)
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
->>>>>>> f7a50d16cc (fix(vdiff): map source PK columns to their SELECT positions in getSourcePKCols (#20603))
 		}
 	}
 
@@ -1154,9 +1101,8 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if td.lastSourcePK != nil &&
 		(!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) ||
 			!td.loadedSourceCheckpointMatches(indices)) {
-		log.Info("restarting table instead of resuming; its persisted source checkpoint does not match how this code projects the source primary key and cannot be safely reused",
-			slog.String("table", td.table.Name),
-			slog.String("vdiff", td.wd.ct.uuid))
+		log.Infof("Restarting table %s in vdiff %s instead of resuming; its persisted source checkpoint does not match how this code projects the source primary key and cannot be safely reused",
+			td.table.Name, td.wd.ct.uuid)
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.tablePlan.sourcePkCols = nil
 		td.lastSourcePK = nil
