@@ -17,6 +17,9 @@ limitations under the License.
 package logic
 
 import (
+	"errors"
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -27,8 +30,13 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
+// errStoredSetNotMySQLGTID reports a stored GTID set that is not a MySQL GTID
+// set, such as the position of a MariaDB or file position shard.
+var errStoredSetNotMySQLGTID = errors.New("the stored GTID set is not a MySQL GTID set")
+
 // storedPrimaryPosition returns the gtid_executed that VTOrc last stored for
-// the primary at alias, or a zero position when VTOrc has none.
+// the primary at alias, or a zero position when VTOrc has none. It returns
+// errStoredSetNotMySQLGTID when the stored set is not a MySQL GTID set.
 func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position, error) {
 	executedGtidSet, err := inst.ReadExecutedGtidSet(alias)
 	if err != nil {
@@ -41,7 +49,7 @@ func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position,
 
 	position, err := replication.ParsePosition(replication.Mysql56FlavorID, executedGtidSet)
 	if err != nil {
-		return replication.Position{}, vterrors.Wrapf(err, "cannot parse the stored GTID set of %s", topoproto.TabletAliasString(alias))
+		return replication.Position{}, fmt.Errorf("%w: %s: %v", errStoredSetNotMySQLGTID, topoproto.TabletAliasString(alias), err)
 	}
 
 	return position, nil
@@ -73,6 +81,11 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 	}
 
 	position, err := storedPrimaryPosition(tablet.Alias)
+	if errors.Is(err, errStoredSetNotMySQLGTID) {
+		logger.Warningf("required position: none, %v, ERS runs without the requirement", err)
+		return replication.Position{}, nil
+	}
+
 	if err != nil {
 		logger.Errorf("required position: cannot read it, aborting ERS: %v", err)
 		return replication.Position{}, err

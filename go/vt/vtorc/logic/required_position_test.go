@@ -100,27 +100,30 @@ func TestStoredPrimaryPosition(t *testing.T) {
 }
 
 // TestRequiredPositionForRecovery checks that VTOrc requires the stored primary
-// position only with the flag on, for a recovery of the primary, under a
-// semi-sync durability policy.
+// position only with the flag on, for a recovery of the primary of a MySQL GTID
+// shard, under a semi-sync durability policy.
 func TestRequiredPositionForRecovery(t *testing.T) {
 	tests := []struct {
 		name       string
 		flag       bool
 		durability string
 		tabletType topodatapb.TabletType
+		storedSet  string
 		position   string
 	}{
-		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY},
-		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, position: "MySQL56/" + requiredGtid},
-		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY},
-		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA},
+		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
+		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid},
+		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
+		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid},
+		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100"},
+		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config.SetEmergencyReparentRequirePrimaryPosition(tt.flag)
 			t.Cleanup(func() { config.SetEmergencyReparentRequirePrimaryPosition(false) })
-			tablet := saveRequiredPositionFixture(t, tt.durability, tt.tabletType, requiredGtid)
+			tablet := saveRequiredPositionFixture(t, tt.durability, tt.tabletType, tt.storedSet)
 
 			position, err := requiredPositionForRecovery(tablet, logutil.NewMemoryLogger())
 			require.NoError(t, err)
