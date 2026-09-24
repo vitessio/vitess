@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -131,4 +132,24 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 			assert.Equal(t, tt.position, replication.EncodePosition(position))
 		})
 	}
+}
+
+// TestRequiredPositionAbortCountsAsAttempted checks that an ERS recovery that
+// aborts because it cannot read the requirement reports the recovery as
+// attempted, so the caller counts it as a failed recovery.
+func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+	config.SetEmergencyReparentRequirePrimaryPosition(true)
+	t.Cleanup(func() { config.SetEmergencyReparentRequirePrimaryPosition(false) })
+
+	// Save the primary without a keyspace row. The durability read then fails.
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{Alias: alias, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "0"}))
+	entry := &inst.DetectionAnalysis{AnalyzedInstanceAlias: alias, Analysis: inst.DeadPrimary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
+	require.NoError(t, InsertRecoveryDetection(entry))
+
+	recoveryAttempted, _, err := runEmergencyReparentOp(t.Context(), entry, "RecoverDeadPrimary", false, log.NewPrefixedLogger("test"))
+	require.ErrorContains(t, err, "cannot read the durability policy of keyspace ks")
+	assert.True(t, recoveryAttempted)
 }
