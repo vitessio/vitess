@@ -472,6 +472,7 @@
         "Query": "select id from `user` where id in (null) union select 1 from dual"
       },
       "TablesUsed": [
+        "main.dual",
         "user.user"
       ]
     }
@@ -494,6 +495,7 @@
         "Query": "select 1 from dual union select id from `user` where id in (null)"
       },
       "TablesUsed": [
+        "main.dual",
         "user.user"
       ]
     }
@@ -540,6 +542,7 @@
         ]
       },
       "TablesUsed": [
+        "main.dual",
         "ordering.order_event",
         "user.user"
       ]
@@ -707,6 +710,7 @@
         ]
       },
       "TablesUsed": [
+        "main.dual",
         "ordering.order_event",
         "user.user"
       ]
@@ -715,46 +719,38 @@
   },
   {
     "comment": "a dual-derived none routing that absorbed a real table only merges into that table's keyspace",
-    "query": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select id from user",
+    "query": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union all select id from user",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select id from user",
+      "Original": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union all select id from user",
       "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:1)"
-        ],
-        "ResultColumns": 1,
+        "OperatorType": "Concatenate",
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "None",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select dt.c0 as col, weight_string(dt.c0) from (select u.col from unsharded as u, (select 1 from dual where 1 != 1) as x where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as col, weight_string(dt.c0) from (select distinct u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x) as dt(c0)"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "None",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select u.col from (select 1 from dual where 1 != 1) as x, unsharded as u where 1 != 1",
+            "Query": "select u.col from (select 1 from dual where 1 in (null)) as x, unsharded as u"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
           }
         ]
       },
       "TablesUsed": [
+        "main.dual",
         "main.unsharded",
         "user.user"
       ]
@@ -778,6 +774,7 @@
         "Query": "select u.col from unsharded as u, (select 1 from dual where 1 in (null)) as x union select col2 from unsharded_auto"
       },
       "TablesUsed": [
+        "main.dual",
         "main.unsharded",
         "main.unsharded_auto"
       ]
@@ -870,7 +867,10 @@
             ]
           }
         ]
-      }
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
     }
   },
   {
@@ -2833,6 +2833,7 @@
         ]
       },
       "TablesUsed": [
+        "main.dual",
         "user.user"
       ]
     }
@@ -2863,6 +2864,7 @@
         ]
       },
       "TablesUsed": [
+        "main.dual",
         "user.user"
       ]
     }
