@@ -141,6 +141,10 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// and later will try pushing the column instead.
 		// TODO: this should be handled better by pushing the function down.
 		return errAbortAggrPushing
+	case opcode.AggregateJSONArrayAgg, opcode.AggregateJSONObjectAgg:
+		// The JSON aggregation functions cannot (yet) be evaluated at the vtgate level,
+		// so if the aggregation cannot be pushed under the join we must fail the query.
+		panic(vterrors.VT12001(fmt.Sprintf("aggregation function '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original))))
 	case opcode.AggregateUnassigned:
 		panic(vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original))))
 	case opcode.AggregateGtid:

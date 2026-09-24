@@ -141,6 +141,16 @@ func aggregateTheAggregate(a *Aggregator, i int) {
 		// Think of it as we are SUMming together a bunch of distributed COUNTs.
 		aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
 		a.Aggregations[i] = aggr
+	case opcode.AggregateJSONArrayAgg:
+		// Each shard produces a complete JSON array for its rows. Above the Route we
+		// merge the per-shard arrays by concatenating their elements.
+		aggr.OpCode = opcode.AggregateJSONArrayMerge
+		a.Aggregations[i] = aggr
+	case opcode.AggregateJSONObjectAgg:
+		// Each shard produces a complete JSON object for its rows. Above the Route we
+		// merge the per-shard objects, later duplicate keys overwriting earlier ones.
+		aggr.OpCode = opcode.AggregateJSONObjectMerge
+		a.Aggregations[i] = aggr
 	}
 }
 
