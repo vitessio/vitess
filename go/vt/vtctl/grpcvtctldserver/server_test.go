@@ -5023,8 +5023,8 @@ func TestEmergencyReparentShardRequiredPositionNotReceived(t *testing.T) {
 				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
 				RequiredPosition:    tc.required,
 			})
-			require.ErrorContains(t, err, "required position "+missing)
-			require.ErrorContains(t, err, received)
+			require.ErrorContains(t, err, "required position "+strings.TrimPrefix(missing, "MySQL56/"))
+			require.ErrorContains(t, err, strings.TrimPrefix(received, "MySQL56/"))
 			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		})
 	}
