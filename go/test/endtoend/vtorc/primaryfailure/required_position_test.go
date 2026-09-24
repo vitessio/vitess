@@ -121,8 +121,8 @@ func TestRequiredPositionRejectsLostRelayLogs(t *testing.T) {
 
 	utils.EnableGlobalRecoveries(t, vtorc)
 
-	requiredLine := "required position: MySQL56/" + position
-	failureLine := "required position MySQL56/" + position
+	requiredLine := "required position: " + position
+	failureLine := "required position " + position
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		steps, readErr := readVTOrcTable(vtorc, "topology_recovery_steps")
 		require.NoError(c, readErr)

@@ -166,7 +166,7 @@ func TestDownPrimary(t *testing.T) {
 			messages = append(messages, step.GetString("message"))
 		}
 
-		assert.Contains(c, strings.Join(messages, "\n"), "required position: MySQL56/")
+		assert.Regexp(c, `required position: [0-9a-f-]{36}:`, strings.Join(messages, "\n"))
 	}, 30*time.Second, time.Second)
 
 	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
