@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -356,22 +357,6 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-<<<<<<< HEAD
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: defaultValue})
-||||||| parent of fa82ccf56a (vttablet: reset foreign_key_checks and unique_checks settings to the global value (#21167))
-			resetExpr := sqlparser.Expr(defaultValue)
-			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
-				// `default` would re-inherit the server's global sql_mode including its
-				// lexer modes, undoing the neutralization every Vitess-created
-				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
-				// the neutralized global instead
-				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
-				if err != nil {
-					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
-				}
-			}
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
-=======
 			resetExpr := sqlparser.Expr(defaultValue)
 			switch sysVar.Name.Lowered() {
 			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
@@ -381,18 +366,8 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 				// checks off. Restore the global value explicitly, which is what DEFAULT
 				// means for a session variable.
 				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
-			case sysvars.SQLMode.Name:
-				// `default` would re-inherit the server's global sql_mode including its
-				// lexer modes, undoing the neutralization every Vitess-created
-				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
-				// the neutralized global instead
-				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
-				if err != nil {
-					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
-				}
 			}
 			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
->>>>>>> fa82ccf56a (vttablet: reset foreign_key_checks and unique_checks settings to the global value (#21167))
 		}
 	}
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
