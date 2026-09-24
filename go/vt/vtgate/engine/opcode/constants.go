@@ -79,7 +79,16 @@ const (
 	AggregateAvg
 	AggregateUDF      // This is an opcode used to represent UDFs
 	AggregateConstant // This is an opcode used to represent constants that are not grouped
-	_NumOfOpCodes     // This line must be last of the opcodes!
+	// AggregateJSONArrayAgg and AggregateJSONObjectAgg represent the JSON aggregation
+	// functions as written by the user. They are only ever executed by MySQL: the planner
+	// either pushes the whole aggregation below a Route, or fails the query.
+	AggregateJSONArrayAgg
+	AggregateJSONObjectAgg
+	// AggregateJSONArrayMerge and AggregateJSONObjectMerge merge the per-shard results of a
+	// pushed-down json_arrayagg/json_objectagg at the vtgate level.
+	AggregateJSONArrayMerge
+	AggregateJSONObjectMerge
+	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -99,6 +108,8 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"any_value":      AggregateAnyValue,
 	"group_concat":   AggregateGroupConcat,
 	"constant_aggr":  AggregateGroupConcat,
+	"json_arrayagg":  AggregateJSONArrayAgg,
+	"json_objectagg": AggregateJSONObjectAgg,
 }
 
 var AggregateName = map[AggregateOpcode]string{
@@ -114,6 +125,11 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateAnyValue:      "any_value",
 	AggregateAvg:           "avg",
 	AggregateConstant:      "constant_aggr",
+
+	AggregateJSONArrayAgg:    "json_arrayagg",
+	AggregateJSONObjectAgg:   "json_objectagg",
+	AggregateJSONArrayMerge:  "json_arrayagg_merge",
+	AggregateJSONObjectMerge: "json_objectagg_merge",
 }
 
 func (code AggregateOpcode) String() string {
@@ -159,6 +175,9 @@ func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 		return sqltypes.VarChar
 	case AggregateUDF, AggregateConstant: // TODO: we can probably figure out the type here
 		return sqltypes.Unknown
+	case AggregateJSONArrayAgg, AggregateJSONObjectAgg, AggregateJSONArrayMerge, AggregateJSONObjectMerge:
+		// The JSON aggregation functions always return JSON, regardless of the input type.
+		return sqltypes.TypeJSON
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}
