@@ -175,8 +175,10 @@ var errCloseTimeout = errors.New("external command did not finish")
 
 // externalCmd is the process behind an external compressor or decompressor.
 // Closing it waits for the process to finish, and kills the process when it
-// has not finished within closeTimeout, so that nothing it started is still
-// running once the close returns.
+// has not finished within closeTimeout, so that the process is no longer
+// running once the close returns. Only the process itself is killed: a child
+// it started that still holds its stdout or stderr open is no longer waited
+// for once WaitDelay has passed, and keeps running.
 type externalCmd struct {
 	cmd *exec.Cmd
 	// ctx is the command's context. Canceling it with stop kills the process.
