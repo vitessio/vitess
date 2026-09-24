@@ -52,13 +52,7 @@ type Metrics struct {
 	idleClosed           atomic.Int64
 	diffSetting          atomic.Int64
 	resetSetting         atomic.Int64
-<<<<<<< HEAD
-||||||| parent of ea4a61357a (VTTablet: Discard the pooled connection after CALL so procedure session state cannot leak (#21062))
-	waiterCapRejected    atomic.Int64
-=======
 	discardedByCaller    atomic.Int64
-	waiterCapRejected    atomic.Int64
->>>>>>> ea4a61357a (VTTablet: Discard the pooled connection after CALL so procedure session state cannot leak (#21062))
 }
 
 func (m *Metrics) MaxLifetimeClosed() int64 {
@@ -93,24 +87,12 @@ func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
 }
 
-<<<<<<< HEAD
-||||||| parent of ea4a61357a (VTTablet: Discard the pooled connection after CALL so procedure session state cannot leak (#21062))
-func (m *Metrics) WaiterCapRejected() int64 {
-	return m.waiterCapRejected.Load()
-}
-
-=======
 // DiscardedByCallerCount is the number of pooled connections a borrower
 // discarded (see Pooled.Discard) instead of returning them to the pool.
 func (m *Metrics) DiscardedByCallerCount() int64 {
 	return m.discardedByCaller.Load()
 }
 
-func (m *Metrics) WaiterCapRejected() int64 {
-	return m.waiterCapRejected.Load()
-}
-
->>>>>>> ea4a61357a (VTTablet: Discard the pooled connection after CALL so procedure session state cannot leak (#21062))
 type (
 	Connector[C Connection] func(ctx context.Context) (C, error)
 	RefreshCheck            func() (bool, error)
