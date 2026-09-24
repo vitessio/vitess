@@ -486,7 +486,8 @@ export const useVSchema = (
 export const useTransactions = (
     params: FetchTransactionsParams,
     options?:
-        Omit<UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error>, 'queryKey' | 'queryFn'> | undefined
+        | Omit<UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error>, 'queryKey' | 'queryFn'>
+        | undefined
 ) => {
     return useQuery({ queryKey: ['transactions', params], queryFn: () => fetchTransactions(params), ...options });
 };

@@ -112,54 +112,10 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
                             enterFrom="opacity-0"
                             enterTo="opacity-100"
                         >
-<<<<<<< HEAD
-                            {data && <SuccessState />}
-                            {error && <FailState />}
-||||||| parent of a66cfb242c (vtadmin: catch up with react-query, react-router and headlessui (#21131))
-                            {data && (
-                                <div className="w-full flex flex-col justify-center items-center">
-                                    <span className="flex h-12 w-12 relative items-center justify-center">
-                                        <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
-                                    </span>
-                                    <div className="text-lg mt-3 font-bold">{successTitle || 'Success!'}</div>
-                                    <div className="text-sm">{successDescription}</div>
-                                </div>
-                            )}
-                            {error && (
-                                <div className="w-full flex flex-col justify-center items-center">
-                                    <span className="flex h-12 w-12 relative items-center justify-center">
-                                        <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
-                                    </span>
-                                    <div className="text-lg mt-3 font-bold">{errorTitle || 'Error'}</div>
-                                    <div className="text-sm">
-                                        {errorDescription}: {error?.message}
-                                    </div>
-                                </div>
-                            )}
-=======
                             <div className="absolute">
-                                {data && (
-                                    <div className="w-full flex flex-col justify-center items-center">
-                                        <span className="flex h-12 w-12 relative items-center justify-center">
-                                            <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
-                                        </span>
-                                        <div className="text-lg mt-3 font-bold">{successTitle || 'Success!'}</div>
-                                        <div className="text-sm">{successDescription}</div>
-                                    </div>
-                                )}
-                                {error && (
-                                    <div className="w-full flex flex-col justify-center items-center">
-                                        <span className="flex h-12 w-12 relative items-center justify-center">
-                                            <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
-                                        </span>
-                                        <div className="text-lg mt-3 font-bold">{errorTitle || 'Error'}</div>
-                                        <div className="text-sm">
-                                            {errorDescription}: {error?.message}
-                                        </div>
-                                    </div>
-                                )}
+                                {data && <SuccessState />}
+                                {error && <FailState />}
                             </div>
->>>>>>> a66cfb242c (vtadmin: catch up with react-query, react-router and headlessui (#21131))
                         </Transition>
                     )}
                 </div>
