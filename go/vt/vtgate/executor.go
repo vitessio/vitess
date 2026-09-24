@@ -386,34 +386,13 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
-<<<<<<< HEAD
-||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
-		updateLogStats := func() {
-			logStats.StmtType = plan.QueryType.String()
-			logStats.PlanType = plan.Type.String()
-			logStats.TablesUsed = plan.TablesUsed
-			executedRoot := vc.ExecutedPrimitive()
-			if executedRoot == nil {
-				executedRoot = plan.Instructions
-			}
-			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
-			logStats.TabletType = vc.TabletType().String()
-			logStats.ExecuteTime = time.Since(execStart)
-			logStats.ActiveKeyspace = vc.GetKeyspace()
-
-			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
-		}
-
-=======
 		updateLogStats := func(err error) {
-			logStats.StmtType = plan.QueryType.String()
-			logStats.PlanType = plan.Type.String()
 			logStats.TabletType = vc.TabletType().String()
 			logStats.ExecuteTime = time.Since(execStart)
 			logStats.ActiveKeyspace = vc.GetKeyspace()
 
-			// On error, leave the tables, routing indexes and row counts unset so the
-			// per-table counters are not incremented, matching the buffered Execute path.
+			// On error, leave the tables and row counts unset so the per-table
+			// counters are not incremented, matching the buffered Execute path.
 			var tablesUsed []string
 			var errCount uint64
 			if err != nil {
@@ -426,18 +405,12 @@ func (e *Executor) StreamExecute(
 				srr.mu.Unlock()
 				logStats.TablesUsed = plan.TablesUsed
 				tablesUsed = plan.TablesUsed
-				executedRoot := vc.ExecutedPrimitive()
-				if executedRoot == nil {
-					executedRoot = plan.Instructions
-				}
-				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 			}
 
 			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
 			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 		}
 
->>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
 			// Record query stats for a failed row-returning query before any
@@ -456,12 +429,6 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
-<<<<<<< HEAD
-||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
-			updateLogStats()
-=======
-			updateLogStats(nil)
->>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 			return nil
 		}
 
@@ -482,18 +449,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-<<<<<<< HEAD
-		logStats.TablesUsed = plan.TablesUsed
-		logStats.TabletType = vc.TabletType().String()
-		logStats.ExecuteTime = time.Since(execStart)
-		logStats.ActiveKeyspace = vc.GetKeyspace()
-
-		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
-||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
-		updateLogStats()
-=======
 		updateLogStats(nil)
->>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 
 		return err
 	}
