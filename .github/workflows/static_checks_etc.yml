@@ -42,16 +42,8 @@ jobs:
       # check (skip-test) is off, so a pull request gains nothing from it.
       # Pushes keep main, the release branches and the tags scanned.
       - name: Run FOSSA scan and upload build data
-<<<<<<< HEAD
-        uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
-||||||| parent of 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
-        timeout-minutes: 5
-        uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
-=======
         if: github.event_name == 'push'
-        timeout-minutes: 5
-        uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
->>>>>>> 38d6627b56 (CI: close gaps in the #21164 gating and stop spending runners on no-op work (#21181))
+        uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
