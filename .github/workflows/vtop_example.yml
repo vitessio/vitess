@@ -55,12 +55,15 @@ jobs:
 
   build:
     needs: changes
-    # Runs when the gate found relevant changes, and also when the gate itself
-    # failed, so that failure is reported instead of silently skipping a
-    # required status check.
-    if: ${{ !cancelled() && (needs.changes.result == 'failure' || (needs.changes.outputs.end_to_end == 'true')) }}
+    # Runs when the gate found relevant changes. Also runs when the gate did not
+    # succeed (it failed, or was cancelled by its timeout) or the PR has the
+    # 'Skip CI' label, so that those fail this job instead of silently skipping
+    # a required status check.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true')) }}
     name: VTop Example
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
+    # The large runner is only claimed when the tests will actually run; a
+    # failed or cancelled gate and the 'Skip CI' label only report a failure.
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

@@ -63,8 +63,9 @@ jobs:
     name: Local example using ${{ matrix.topo }} on Ubuntu
     # When nothing relevant changed the legs still run (so their required
     # status checks are reported), but on a GitHub-hosted runner with every
-    # step below skipped.
-    runs-on: ${{ needs.changes.outputs.examples == 'true' && (github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || 'ubuntu-24.04' }}
+    # step below skipped. The 'Skip CI' label also gets the small runner, since
+    # the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || 'ubuntu-24.04' }}
     strategy:
       matrix:
         topo: [etcd, zk2]
