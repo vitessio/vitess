@@ -54,9 +54,9 @@ func validateRequiredPosition(required replication.Position, isGTIDBased bool) e
 }
 
 // checkRequiredPosition returns a FAILED_PRECONDITION error if no candidate has
-// received required. The error lists the most advanced received positions. A
-// zero required position disables the check.
-func checkRequiredPosition(required replication.Position, candidates map[string]*RelayLogPositions) error {
+// received required. The error names the candidates as noun and lists the most
+// advanced received positions. A zero required position disables the check.
+func checkRequiredPosition(required replication.Position, candidates map[string]*RelayLogPositions, noun string) error {
 	if required.IsZero() {
 		return nil
 	}
@@ -72,7 +72,7 @@ func checkRequiredPosition(required replication.Position, candidates map[string]
 		best = append(best, "none")
 	}
 
-	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no candidate received required position %s: most advanced received positions: %s", replication.EncodePosition(required), strings.Join(best, ", "))
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no %s received required position %s: most advanced received positions: %s", noun, replication.EncodePosition(required), strings.Join(best, ", "))
 }
 
 // mostAdvancedReceivedPositions returns every Combined position that no other

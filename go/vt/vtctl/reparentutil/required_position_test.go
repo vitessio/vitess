@@ -64,7 +64,7 @@ func TestCheckRequiredPosition(t *testing.T) {
 	candidates := map[string]*RelayLogPositions{"a": {
 		Executed: requiredPosition(t, requiredLow), Combined: requiredPosition(t, requiredHigh),
 	}}
-	require.NoError(t, checkRequiredPosition(requiredPosition(t, requiredHigh), candidates))
+	require.NoError(t, checkRequiredPosition(requiredPosition(t, requiredHigh), candidates, "candidate"))
 }
 
 // requiredPositionFixture holds an ERS setup with a lagging replica at index 0
@@ -307,7 +307,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-		require.ErrorContains(t, err, "most advanced received positions: "+requiredBehindAlias+"="+requiredLow)
+		require.ErrorContains(t, err, "no remaining candidate received required position "+requiredHigh+": most advanced received positions: "+requiredBehindAlias+"="+requiredLow)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 
@@ -333,9 +333,28 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-		require.ErrorContains(t, err, "most advanced received positions: "+requiredBehindAlias+"="+requiredLow)
+		require.ErrorContains(t, err, "no remaining candidate received required position "+requiredHigh+": most advanced received positions: "+requiredBehindAlias+"="+requiredLow)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
+}
+
+// TestERSRequiredPositionKeepsDetectionErrors checks that when errant GTID
+// detection removes every candidate, ERS reports the detection error and not a
+// missing required position.
+func TestERSRequiredPositionKeepsDetectionErrors(t *testing.T) {
+	advanced := "MySQL56/5e11fa47-71ca-11e1-9e33-c80aa9429562:1-3," + requiredUUID + ":1-20"
+	behind := "MySQL56/4e11fa47-71ca-11e1-9e33-c80aa9429562:1-5," + requiredUUID + ":1-10"
+	fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
+		behind: behind, applied: advanced, received: advanced, required: requiredHigh,
+	})
+	fixture.expectStops()
+	fixture.tmc.EXPECT().WaitForPosition(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	fixture.expectJournal(map[string]int32{requiredBehindAlias: 1, requiredAdvancedAlias: 1}, nil)
+	fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
+	require.ErrorContains(t, err, "suspected split-brain")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 }
 
 // TestERSRequiredPositionRejectsUnsupportedShards checks that a required

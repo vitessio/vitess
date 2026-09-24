@@ -374,7 +374,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check the survivors of split-brain handling before the first relay log wait.
 	// If none received the position, a wait cannot help and keeps replication stopped until it times out.
-	if err := checkRequiredPosition(opts.RequiredPosition, validCandidates); err != nil {
+	if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "candidate"); err != nil {
 		// Report the leaders the override discarded. One of them may have the position.
 		if splitBrainOverrideActive {
 			return vterrors.Wrapf(err, "requested primary %s does not have the required position and the split-brain override discarded the other leading candidates (%s)", topoproto.TabletAliasString(opts.NewPrimaryAlias), leadingPositions)
@@ -437,9 +437,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// Check the required position before the rescue wait. The first detection
-		// pass can remove the only candidate that has it.
-		if err := checkRequiredPosition(opts.RequiredPosition, validCandidates); err != nil {
-			return err
+		// pass can remove the only candidate that has it. Skip the check when the
+		// pass removed every candidate. The split-brain and errant GTID checks below
+		// report the cause.
+		if len(validCandidates) > 0 {
+			if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "remaining candidate"); err != nil {
+				return err
+			}
 		}
 
 		// A candidate accepted without any evidence may be a blind spot of our own
@@ -518,7 +522,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 		// Check the required position before the rewait. The second detection
 		// pass can remove the only candidate that has it.
-		if err := checkRequiredPosition(opts.RequiredPosition, validCandidates); err != nil {
+		if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "remaining candidate"); err != nil {
 			return err
 		}
 
