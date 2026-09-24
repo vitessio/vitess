@@ -46,6 +46,10 @@ var Cases = []TestCase{
 	{Run: LargeDecimals},
 	{Run: LargeIntegers},
 	{Run: DecimalClamping},
+	{Run: JSONNumberComparison},
+	{Run: JSONTimeComparison},
+	{Run: JSONDoubleConversion},
+	{Run: JSONTextDoubles},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -911,6 +915,88 @@ func DecimalClamping(yield Query) {
 				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil, false)
 			}
 		}
+	}
+}
+
+// JSONNumberComparison pins how JSON numbers compare. MySQL fixes a number's
+// form when the document is built rather than when it is compared, so
+// 9007199254740992.1 and 9007199254740993.0 are both the double
+// 9007199254740992 and equal to that integer, while 9007199254740993 stayed an
+// integer that no double holds and equals neither.
+func JSONNumberComparison(yield Query) {
+	numbers := []string{
+		"1", "1.0", "1e0", "2", "0", "-0", "0.0", "-1", "-1.0",
+		"9007199254740992", "9007199254740992.0", "9007199254740992.1", "9007199254740993", "9007199254740993.0",
+		"0.1", "0.10000000000000000000001",
+		"123456789012345678901234567890", "123456789012345678901234567891",
+		"9223372036854775807", "9223372036854775808",
+		"18446744073709551615", "18446744073709551616",
+		"1e308", "1.5", "1.50",
+		"9.373401039503115", "9.373401039503114", "7.952458273698010123097", "7.95245827369801",
+		"1.0000000000000002", "1.0000000000000003", "1.0000000000000004", "1.00000000000000030000",
+		"10000000000000003e-16", "0.12345678901234567", "1.4334335999999999", "1.4334336",
+		"5.6843418860808027e-14", "5.684341886080803e-14",
+	}
+
+	for _, lhs := range numbers {
+		for _, rhs := range numbers {
+			yield(fmt.Sprintf("CAST('%s' AS JSON) = CAST('%s' AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST('%s' AS JSON) < CAST('%s' AS JSON)", lhs, rhs), nil, false)
+		}
+	}
+}
+
+// JSONTimeComparison covers times carried in a JSON document, including the
+// negative zero, written or rounded to, that MySQL reads as plain zero.
+func JSONTimeComparison(yield Query) {
+	times := []string{"'00:00:00'", "'-00:00:00'", "'-00:00:00.4'", "'10:00:00'", "'-10:00:00'", "'00:00:01'", "'-00:00:01'"}
+
+	for _, lhs := range times {
+		for _, rhs := range times {
+			yield(fmt.Sprintf("CAST(CAST(%s AS TIME) AS JSON) = CAST(CAST(%s AS TIME) AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(CAST(%s AS TIME) AS JSON) < CAST(CAST(%s AS TIME) AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS TIME) = CAST(%s AS TIME)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS TIME) < CAST(%s AS TIME)", lhs, rhs), nil, false)
+		}
+	}
+}
+
+// JSONDoubleConversion covers doubles that the conversion to JSON prints in
+// exponent form, which MySQL keeps as doubles that compare by value.
+func JSONDoubleConversion(yield Query) {
+	for _, d := range []string{"1e20", "1.5e15", "1e15", "1e-20", "123456789012345678e0", "-1e20"} {
+		yield(fmt.Sprintf("CAST(%s AS JSON)", d), nil, false)
+		yield(fmt.Sprintf("CAST(%s AS JSON) = CAST(%s AS JSON)", d, d), nil, false)
+		yield(fmt.Sprintf("JSON_ARRAY(%s)", d), nil, false)
+	}
+	yield("CAST(1e20 AS JSON) = CAST(100000000000000000000 AS JSON)", nil, false)
+	yield("CAST(1e20 AS JSON) = CAST('100000000000000000000' AS JSON)", nil, false)
+}
+
+// JSONTextDoubles covers doubles written out in JSON text. MySQL often reads
+// them to a double other than the correctly rounded one, and then prints and
+// compares the double it read, while a double written as SQL is read
+// correctly: the same spelling can hold two different values. UNHEX reads the
+// document's text, which is the double as MySQL prints it.
+func JSONTextDoubles(yield Query) {
+	for _, num := range []string{
+		"9.373401039503115", "907820456.6878871", "-97850197.21336927", "22323.780221271709",
+		"7.952458273698010123097", "-5001678.8730277932907349979", "32682596125924014.99384040696476537",
+		"0.00000000000056378173515265162148", "-85542944950666963514162118608", "9495784086192452298075156",
+		"685276831e210", "4.54827886204e-225", "9.755003974708891e271", "0.00000000000000000000021059834276",
+		"-682093.3194e-224", "0.00000000000009739818150763633668228E+293", "4107408810066.08607026258e-01",
+		"18446744073709551616", "1.0", "1e2", "-0.0", "0.1", "9007199254740992.1", "92851060.59457423",
+		"0.9999999999999999", "0.9999999999999999e5",
+	} {
+		double := num
+		if !strings.ContainsAny(num, "eE") {
+			double += "e0"
+		}
+		yield(fmt.Sprintf("CAST('[%s]' AS JSON)", num), nil, false)
+		yield(fmt.Sprintf("JSON_EXTRACT('[%s]', '$[0]') + 0", num), nil, false)
+		yield(fmt.Sprintf("CAST('%s' AS JSON) = CAST(%s AS JSON)", num, double), nil, false)
+		yield(fmt.Sprintf("JSON_EXTRACT('[%s]', '$[0]') = %s", num, double), nil, false)
+		yield(fmt.Sprintf("UNHEX(CAST('%s' AS JSON))", num), nil, false)
 	}
 }
 

@@ -5,7 +5,7 @@ Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip.
 
 Parts of parser.go are derived from RapidJSON 1.1.0, the JSON parser MySQL
 parses documents with, so that Vitess accepts exactly the documents MySQL does:
-mysqlNumberFits follows GenericReader::ParseNumber in
+mysqlDouble follows GenericReader::ParseNumber in
 include/rapidjson/reader.h, scaleByPow10 and movePoint follow
 StrtodNormalPrecision and FastPath in include/rapidjson/internal/strtod.h, and
 the pow10 table holds the same values as Pow10 in

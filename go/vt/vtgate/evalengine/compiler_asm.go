@@ -893,7 +893,7 @@ func (asm *assembler) Convert_fB(offset int) {
 func (asm *assembler) Convert_fj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset].(*evalFloat)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_fj(arg)
+		env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvert_fj(arg)
 		return 1
 	}, "CONV FLOAT64(SP-%d), JSON")
 }
