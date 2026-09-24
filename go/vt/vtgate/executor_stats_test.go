@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -79,45 +80,6 @@ func TestQueryExecutionsByTable_OnError(t *testing.T) {
 		"queryExecutionsByTable counter should not be incremented on execution error")
 }
 
-<<<<<<< HEAD
-||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
-func TestSlowQueriesCounter(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-
-	oldThreshold := slowQueryThreshold
-	slowQueryThreshold = time.Hour
-	t.Cleanup(func() {
-		slowQueryThreshold = oldThreshold
-		sbc1.ExecDelayResponse = 0
-	})
-
-	sbc1.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-	})
-
-	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestSharded})
-	initialCount := getTotalSlowQueryCount()
-
-	_, err := executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, initialCount, getTotalSlowQueryCount(), "fast query should not increment slow query count")
-
-	sbc1.ExecDelayResponse = 20 * time.Millisecond
-	slowQueryThreshold = 5 * time.Millisecond
-	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "slow query should increment slow query count")
-
-	sbc1.ExecDelayResponse = 20 * time.Millisecond
-	slowQueryThreshold = 0
-	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "disabled slow query threshold should not increment slow query count")
-}
-
-=======
 // TestQueryExecutions_StreamOnError verifies that the streaming path records the
 // per-plan QueryExecutions counter even when a row-returning query fails, while
 // leaving the per-table QueryExecutionsByTable counter untouched — matching the
@@ -205,60 +167,12 @@ func TestQueryExecutions_StreamOnFinalSendError(t *testing.T) {
 		"per-table QueryExecutionsByTable must not be incremented when the final send fails")
 }
 
-func TestSlowQueriesCounter(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-
-	oldThreshold := slowQueryThreshold
-	slowQueryThreshold = time.Hour
-	t.Cleanup(func() {
-		slowQueryThreshold = oldThreshold
-		sbc1.ExecDelayResponse = 0
-	})
-
-	sbc1.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-	})
-
-	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestSharded})
-	initialCount := getTotalSlowQueryCount()
-
-	_, err := executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, initialCount, getTotalSlowQueryCount(), "fast query should not increment slow query count")
-
-	sbc1.ExecDelayResponse = 20 * time.Millisecond
-	slowQueryThreshold = 5 * time.Millisecond
-	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "slow query should increment slow query count")
-
-	sbc1.ExecDelayResponse = 20 * time.Millisecond
-	slowQueryThreshold = 0
-	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "disabled slow query threshold should not increment slow query count")
-}
-
->>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
 // getCurrentQueryExecutionsByTableCounts returns the current values of all queryExecutionsByTable counters
 func getCurrentQueryExecutionsByTableCounts() map[string]int64 {
 	// queryExecutionsByTable is a global variable, so we can use its Counts() method
 	// to get all counter values. The keys are already formatted as "query.table"
 	return queryExecutionsByTable.Counts()
 }
-<<<<<<< HEAD
-||||||| parent of 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
-
-func getTotalSlowQueryCount() int64 {
-	var total int64
-	for _, count := range slowQueries.Counts() {
-		total += count
-	}
-	return total
-}
-=======
 
 func getTotalQueryExecutionsCount() int64 {
 	var total int64
@@ -275,12 +189,3 @@ func getTotalQueryExecutionsByTableCount() int64 {
 	}
 	return total
 }
-
-func getTotalSlowQueryCount() int64 {
-	var total int64
-	for _, count := range slowQueries.Counts() {
-		total += count
-	}
-	return total
-}
->>>>>>> 8055e6946d (vtgate: report RowsAffected for stored-procedure calls over the streaming path (#20402))
