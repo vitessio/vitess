@@ -628,9 +628,9 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	// The pre-queries are executed directly on the reserved connection, without the
-	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run here —
+	// settings pool's BuildSettingQuery pass, so the settings validation must run here —
 	// before any connection is acquired or state is changed.
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
 		return 0, "", err
 	}
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -660,7 +660,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
 	// see ReserveBegin: validate before any connection is acquired or tainted
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
 		return 0, err
 	}
 	if txID == 0 {
