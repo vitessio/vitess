@@ -239,8 +239,10 @@ func TestApplyChangePartialLegacyInsertBitmapShort(t *testing.T) {
 	tp.Stats = binlogplayer.NewStats()
 
 	after := &querypb.Row{Lengths: []int64{-1, 1, 3, 1}, Values: []byte("1aaa1")}
-	// Source table order (id, blb, val): fewer bits than the target has columns.
-	legacy := bitmap(true, false, true)
+	// All bits present but fewer than the target has columns: the INSERT
+	// completeness check must not fire, so the generators still report
+	// INTERNAL for the layout mismatch.
+	legacy := bitmap(true, true, true)
 	require.Greater(t, len(tp.TablePlanBuilder.colExprs), int(legacy.Count))
 
 	_, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: after, DataColumns: legacy})
@@ -261,6 +263,54 @@ func TestApplyChangePartialLegacyInsertBitmapShort(t *testing.T) {
 	)
 	_, err = tp.TablePlanBuilder.generatePartialSelectPart(buf, bvf, legacy)
 	require.ErrorContains(t, err, "unable to create partial insert query for dst")
+}
+
+// TestApplyChangePartialInsertAbsentColumnRejected confirms that a partial
+// INSERT (after-only RowChange) fails closed when a non-generated target
+// expression is absent. An UPDATE that enters an in_keyrange filter is
+// delivered that way; under NOBLOB the unchanged BLOB is omitted. There is
+// no existing target row to keep, so omitting the column would insert
+// defaults/NULL. The UPDATE path still leaves the omitted column alone.
+func TestApplyChangePartialInsertAbsentColumnRejected(t *testing.T) {
+	tp := buildTestTablePlan(t, "dst",
+		"select blb, id, convert(val using utf8mb4) as val2, 1 as c from src",
+		[]*querypb.Field{
+			{Name: "blb", Type: querypb.Type_BLOB},
+			{Name: "id", Type: querypb.Type_INT32},
+			{Name: "val", Type: querypb.Type_VARBINARY},
+			{Name: "1", Type: querypb.Type_INT64},
+		})
+	tp.Stats = binlogplayer.NewStats()
+
+	after := &querypb.Row{Lengths: []int64{-1, 1, 3, 1}, Values: []byte("1aaa1")}
+	// Streamed order (blb, id, val, 1): only the blob is absent.
+	blobOmitted := bitmap(false, true, true, true)
+
+	t.Run("after-only with omitted blob: rejected", func(t *testing.T) {
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			After: after, AfterDataColumns: blobOmitted,
+		})
+		require.ErrorContains(t, err, "missing a needed value for dst.blb")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Empty(t, executed, "must not emit a partial INSERT that drops the blob")
+	})
+
+	t.Run("full after image: inserted", func(t *testing.T) {
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			After:            &querypb.Row{Lengths: []int64{5, 1, 3, 1}, Values: []byte("blob11aaa1")},
+			AfterDataColumns: bitmap(true, true, true, true),
+		})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert into dst(blb,id,val2,c) values (_binary'blob1',1,convert(_binary'aaa' using utf8mb4),1)"}, executed)
+	})
+
+	t.Run("update with omitted blob: still a no-op omit", func(t *testing.T) {
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before: after, After: after, AfterDataColumns: blobOmitted,
+		})
+		require.NoError(t, err)
+		require.Equal(t, []string{"update dst set val2=convert(_binary'aaa' using utf8mb4), c=1 where id=1"}, executed)
+	})
 }
 
 // TestApplyChangePartialNoWritableColumns confirms that a partial UPDATE whose

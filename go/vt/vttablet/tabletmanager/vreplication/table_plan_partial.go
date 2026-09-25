@@ -411,9 +411,39 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	return buf.ParsedQuery(), nil
 }
 
+// checkPartialInsertComplete rejects a partial INSERT when any non-generated
+// target expression is absent from the after-image bitmap. applyChange treats
+// !before && after as an insert, which is also how an UPDATE that enters an
+// in_keyrange filter is delivered. Under NOBLOB the unchanged BLOB/TEXT bits
+// are clear: that is correct for UPDATEs (leave the existing target value),
+// but a partial INSERT has no row to keep, so those columns would become
+// defaults/NULL. True INSERTs under NOBLOB still send a full after image.
+// Generated columns are omitted from INSERT statements already. Out-of-range
+// indexes are a bitmap/layout mismatch and are left to the generators.
+func (tp *TablePlan) checkPartialInsertComplete(dataColumns *binlogdatapb.RowChange_Bitmap) error {
+	if tp.TablePlanBuilder == nil {
+		return nil
+	}
+	for i, cexpr := range tp.TablePlanBuilder.colExprs {
+		if cexpr.isGenerated {
+			continue
+		}
+		if int64(i) >= dataColumns.Count {
+			return nil
+		}
+		if !isBitSet(dataColumns.Cols, i) {
+			return tp.missingValueError(cexpr)
+		}
+	}
+	return nil
+}
+
 func (tp *TablePlan) getPartialInsertQuery(rowChange *binlogdatapb.RowChange) (*sqlparser.ParsedQuery, error) {
 	dataColumns, err := tp.partialQueryDataColumns(rowChange)
 	if err != nil {
+		return nil, err
+	}
+	if err := tp.checkPartialInsertComplete(dataColumns); err != nil {
 		return nil, err
 	}
 	key := hex.EncodeToString(dataColumns.Cols)
