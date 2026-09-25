@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -399,7 +400,7 @@ func locateFile(name string) string {
 func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser)
+	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser, false)
 	require.NoError(t, err)
 	require.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
 }
@@ -411,7 +412,57 @@ func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 func TestBuildSettingQueryResetRestoresGlobalForeignKeyAndUniqueChecks(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	_, resetQuery, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser)
+	_, resetQuery, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
 	require.Equal(t, "set @@foreign_key_checks = @@global.foreign_key_checks, @@unique_checks = @@global.unique_checks, sql_safe_updates = default", resetQuery)
+}
+
+func TestSettingsRejectSubqueries(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	tests := []struct {
+		setting  string
+		subquery bool
+	}{
+		{setting: "set @@sql_select_limit = (select if(v = 'x', 1, 2) from secret where id = 1)", subquery: true},
+		{setting: "set @@sql_safe_updates = exists (select 1 from secret)", subquery: true},
+		{setting: "set @@sql_select_limit = 1 + (select count(*) from secret)", subquery: true},
+		{setting: "set @@sql_select_limit = if((select v from secret limit 1) = 'x', 1, 2)", subquery: true},
+		{setting: "set @@sql_select_limit = 10"},
+		{setting: "set @@sql_select_limit = default"},
+		// a non-constant expression that reads no table is not this check's concern
+		{setting: "set @@sql_select_limit = 1 + 1"},
+	}
+	for _, strictTableACL := range []bool{true, false} {
+		for _, tc := range tests {
+			t.Run(fmt.Sprintf("strict=%t %s", strictTableACL, tc.setting), func(t *testing.T) {
+				settings := []string{"set @@sql_safe_updates = 1", tc.setting}
+				expectedErr := "connection setting must not contain a subquery: " + tc.setting
+				rejected := tc.subquery && strictTableACL
+
+				query, resetQuery, err := BuildSettingQuery(settings, parser, strictTableACL)
+				if rejected {
+					require.EqualError(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+					assert.NotEmpty(t, query)
+					assert.NotEmpty(t, resetQuery)
+				}
+
+				err = ValidateSettings(settings, parser, strictTableACL)
+				if rejected {
+					require.EqualError(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+				}
+
+				// a dry run finds the setting without rejecting it
+				wantFound := ""
+				if tc.subquery {
+					wantFound = tc.setting
+				}
+				assert.Equal(t, wantFound, SettingWithSubquery(settings, parser))
+			})
+		}
+	}
 }

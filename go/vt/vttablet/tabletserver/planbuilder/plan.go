@@ -164,10 +164,11 @@ type Plan struct {
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
 	// TablesUndetermined is set for a statement whose tables the parser
-	// discards (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA): Permissions is empty
-	// because none could be derived, not because the statement touches no
-	// table. Under strict table ACL the executor denies such a statement
-	// rather than skip the check.
+	// discards or leaves opaque (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a
+	// partially parsed CREATE TABLE): Permissions does not cover everything
+	// the statement touches, whether it is empty or names the tables the
+	// parser did keep. Under strict table ACL the executor denies such a
+	// statement rather than skip the check.
 	TablesUndetermined bool
 
 	// FullQuery will be set for all plans.
@@ -334,8 +335,78 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 	return found
 }
 
-// BuildSettingQuery builds a query for system settings.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, err error) {
+// ValidateSettings validates connection settings that are applied without going
+// through BuildSettingQuery: a true reservation executes its settings directly
+// on the tainted connection. When rejectSubqueries is set, like
+// BuildSettingQuery, it refuses a setting with a subquery, see
+// rejectSettingSubqueries, and a setting it cannot inspect for one. Otherwise it
+// accepts every setting, as the reservation path always did.
+func ValidateSettings(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
+	if !rejectSubqueries {
+		return nil
+	}
+	for _, setting := range settings {
+		stmt, err := parser.Parse(setting)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
+		}
+		set, ok := stmt.(*sqlparser.Set)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+		}
+		if err := rejectSettingSubqueries(set, setting); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rejectSettingSubqueries refuses a connection setting whose expressions embed
+// a subquery. A setting is applied to the connection with no table ACL check,
+// so the tables a subquery reads would go unchecked. Settings carry constants:
+// vtgate evaluates a SET's expression on a shard, where the tablet checks it
+// like any read, and sends the value. The check only runs where strict table
+// ACL is enforced, not in a dry run: without enforcement there is nothing for
+// it to protect, and a vtgate from before the value was sent still sends a
+// targeted session's SET expression as written, which would break for nothing.
+func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
+	if hasSubquery(set) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
+	}
+	return nil
+}
+
+// SettingWithSubquery returns the first of the connection settings whose
+// expressions embed a subquery, which strict table ACL refuses (see
+// rejectSettingSubqueries), or "" when there is none. A setting that does not
+// parse as a SET statement is skipped: the settings validation reports it.
+func SettingWithSubquery(settings []string, parser *sqlparser.Parser) string {
+	for _, setting := range settings {
+		stmt, err := parser.Parse(setting)
+		if err != nil {
+			continue
+		}
+		if set, ok := stmt.(*sqlparser.Set); ok && hasSubquery(set) {
+			return setting
+		}
+	}
+	return ""
+}
+
+func hasSubquery(set *sqlparser.Set) bool {
+	var found bool
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			found = true
+		}
+		return !found, nil
+	}, set)
+	return found
+}
+
+// BuildSettingQuery builds a query for system settings. When rejectSubqueries
+// is set, a setting with a subquery is refused, see rejectSettingSubqueries.
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
@@ -350,6 +421,13 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+		}
+		// settings are applied with no verification and no table ACL check, so a
+		// subquery is refused where the ACL is enforced
+		if rejectSubqueries {
+			if err := rejectSettingSubqueries(set, setting); err != nil {
+				return "", "", err
+			}
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {

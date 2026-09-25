@@ -262,9 +262,42 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		if err != nil {
 			return err
 		}
+		// A targeted session's SET is evaluated once on the target shard, like
+		// an untargeted one's, and the value is what the SET applies and the
+		// session stores. The session replays the stored text as a connection
+		// setting on every reserved connection, where an expression would be
+		// re-evaluated each time and a subquery would read tables outside the
+		// table ACL.
+		//
+		// The connection is reserved before the expression is evaluated, as
+		// it was before the SET carried the expression itself: an expression
+		// can depend on connection state, and the tablet refuses a lock
+		// function such as get_lock() outside a reserved connection, so the
+		// evaluation runs on the connection the SET is then applied to.
+		// When the evaluation is refused, by the table ACL on a subquery for
+		// example, a session that was not reserved before is unmarked again,
+		// unless a connection was reserved along the way:
+		// the tablet reserves one before retrying a query it first refused
+		// for lacking it, and a failed reservation is still recorded in the
+		// session, so the mark must then stay with it.
+		wasReserved := vcursor.Session().InReservedConn()
 		vcursor.Session().NeedsReservedConn()
-		vcursor.Session().SetSysVar(svs.Name, svs.Expr)
-		return svs.execSetStatement(ctx, vcursor, rss, env)
+		value, err := svs.evaluateOnShard(ctx, vcursor, env, rss[0])
+		if err != nil {
+			if !wasReserved && len(vcursor.Session().ShardSession()) == 0 {
+				vcursor.Session().ResetReservedConn()
+			}
+			return err
+		}
+		var buf strings.Builder
+		value.EncodeSQL(&buf)
+		storedValue := buf.String()
+		if err := svs.execSetStatement(ctx, vcursor, rss, env, storedValue); err != nil {
+			// the statement failed, so the session must not store its value
+			return err
+		}
+		vcursor.Session().SetSysVar(svs.Name, storedValue)
+		return nil
 	}
 	needReservedConn, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
 	if err != nil {
@@ -279,14 +312,28 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 	if len(rss) == 0 {
 		return nil
 	}
-	return svs.execSetStatement(ctx, vcursor, rss, env)
+	return svs.execSetStatement(ctx, vcursor, rss, env, svs.Expr)
 }
 
-func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv) error {
+// evaluateOnShard evaluates a targeted SET's expression on the target shard and
+// returns the value the SET applies and the session stores.
+func (svs *SysVarReservedConn) evaluateOnShard(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv, rs *srvtopo.ResolvedShard) (sqltypes.Value, error) {
+	qr, err := execShard(ctx, nil /*primitive*/, vcursor, fmt.Sprintf("select %s from dual", svs.Expr), env.BindVars, rs, false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result evaluating %s: %d rows", svs.Name, len(qr.Rows))
+	}
+	return qr.Rows[0][0], nil
+}
+
+// execSetStatement executes `set <name> = <value>` on the given shard sessions.
+func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv, value string) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set %s = %s", svs.Name, value),
 			BindVariables: env.BindVars,
 		}
 	}
