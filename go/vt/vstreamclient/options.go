@@ -1,0 +1,326 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vstreamclient
+
+import (
+	"math"
+	"os"
+	"slices"
+	"strings"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqlescape"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+var (
+	// DefaultMinFlushDuration is the default minimum duration between flushes, used if not explicitly
+	// set using WithMinFlushDuration. This can be safely modified if needed before calling New.
+	DefaultMinFlushDuration = 30 * time.Second
+
+	// DefaultMaxRowsPerFlush is the default number of rows to buffer per table, used if not explicitly
+	// set in the table configuration. This same number is also used to chunk rows when calling flush.
+	// This can be safely modified if needed before calling New.
+	DefaultMaxRowsPerFlush = 1000
+
+	// DefaultGracefulShutdownWaitDur is the default duration to wait for the stream to gracefully shutdown after
+	// receiving a shutdown signal, used if not explicitly set using WithGracefulShutdownChan or
+	// WithGracefulShutdownSignals. This can be safely modified if needed before calling New.
+	DefaultGracefulShutdownWaitDur = 5 * time.Second
+
+	// DefaultStartupTimeout is how long the client waits for the first event after Run starts before it
+	// shuts itself down with ErrStartupTimeout. The effective timeout is never shorter than the
+	// heartbeat liveness window (heartbeat interval times DefaultHeartbeatTimeoutMultiplier), since an
+	// idle stream may not deliver its first event until the first heartbeat. This can be safely
+	// modified if needed before calling New.
+	DefaultStartupTimeout = 5 * time.Minute
+
+	// DefaultHeartbeatTimeoutMultiplier controls the liveness window as a multiple of the heartbeat
+	// interval: once the first event has been received, if no event (including heartbeats) is received
+	// for that window, the client shuts itself down with ErrHeartbeatTimeout. This can be safely
+	// modified if needed before calling New.
+	DefaultHeartbeatTimeoutMultiplier = 10
+)
+
+// Option is a function that can be used to configure a VStreamClient
+type Option func(v *VStreamClient) error
+
+// WithMinFlushDuration sets the minimum duration between flushes. This is useful for ensuring that data
+// isn't flushed too often, which can be inefficient. The default is 30 seconds.
+func WithMinFlushDuration(d time.Duration) Option {
+	return func(v *VStreamClient) error {
+		if d <= 0 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: minimum flush duration must be positive, got %s", d.String())
+		}
+
+		v.cfg.minFlushDuration = d
+		return nil
+	}
+}
+
+// WithHeartbeatSeconds sets the heartbeat interval in seconds. It overrides the
+// HeartbeatInterval in WithFlags regardless of the order the options are supplied.
+func WithHeartbeatSeconds(seconds int) Option {
+	return func(v *VStreamClient) error {
+		if seconds <= 0 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: heartbeat seconds must be positive, got %d", seconds)
+		}
+
+		if uint64(seconds) > math.MaxUint32 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: heartbeat seconds must be %d or less, got %d", uint64(math.MaxUint32), seconds)
+		}
+
+		v.cfg.heartbeatSeconds = seconds
+		return nil
+	}
+}
+
+func WithTimeLocation(loc *time.Location) Option {
+	return func(v *VStreamClient) error {
+		if loc == nil {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: time location cannot be nil")
+		}
+
+		v.cfg.timeLocation = loc
+		return nil
+	}
+}
+
+// WithTabletType overrides the tablet type used when opening the VStream.
+// The default is REPLICA.
+func WithTabletType(tabletType topodatapb.TabletType) Option {
+	return func(v *VStreamClient) error {
+		if tabletType == topodatapb.TabletType_UNKNOWN {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: tablet type cannot be UNKNOWN")
+		}
+
+		v.cfg.tabletType = tabletType
+		return nil
+	}
+}
+
+// WithGracefulShutdownChan triggers GracefulShutdown when the provided channel is closed.
+// A common pattern is to pass a channel derived from signal.Notify or signal.NotifyContext.
+func WithGracefulShutdownChan(ch <-chan struct{}, wait time.Duration) Option {
+	return func(v *VStreamClient) error {
+		if ch == nil {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown channel is required")
+		}
+		if wait <= 0 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown wait must be positive, got %s", wait)
+		}
+
+		v.cfg.gracefulShutdownChan = ch
+		v.cfg.gracefulShutdownWaitDur = wait
+		return nil
+	}
+}
+
+// WithGracefulShutdownSignals triggers GracefulShutdown when one of the provided
+// OS signals is received. A common pattern is to pass os.Interrupt and syscall.SIGTERM.
+func WithGracefulShutdownSignals(wait time.Duration, signals ...os.Signal) Option {
+	return func(v *VStreamClient) error {
+		if len(signals) == 0 {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown signals are required")
+		}
+		if wait <= 0 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown wait must be positive, got %s", wait)
+		}
+
+		v.cfg.gracefulShutdownSignals = append([]os.Signal(nil), signals...)
+		v.cfg.gracefulShutdownWaitDur = wait
+		return nil
+	}
+}
+
+func WithStateTable(keyspace, table string) Option {
+	return func(v *VStreamClient) error {
+		if table == "" {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table name is required")
+		}
+
+		v.cfg.vgtidStateKeyspace = sqlescape.EscapeID(keyspace)
+		v.cfg.vgtidStateTable = sqlescape.EscapeID(table)
+		return nil
+	}
+}
+
+func (v *VStreamClient) validateStateTable() error {
+	if v.cfg.vgtidStateKeyspace == "" || v.cfg.vgtidStateTable == "" {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table not configured (use WithStateTable)")
+	}
+	keyspace, err := sqlescape.UnescapeID(v.cfg.vgtidStateKeyspace)
+	if err != nil {
+		return vterrors.Wrap(err, "vstreamclient: invalid state keyspace")
+	}
+	sharded, ok := v.shardedByKeyspace[keyspace]
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found in vschema", keyspace)
+	}
+	if sharded {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
+	}
+	for _, table := range v.tables {
+		if table.Keyspace == keyspace {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state keyspace %s is also a streamed source keyspace; store checkpoints in a keyspace that is not being streamed", keyspace)
+		}
+	}
+	return nil
+}
+
+// WithSkipRowImageCheck disables the verification that every source shard uses
+// binlog_row_image=FULL. Use this only when the probe cannot run (e.g. restricted permissions)
+// and you have verified FULL out of band: with NOBLOB or MINIMAL row images, omitted delete
+// before-image values are indistinguishable from SQL NULL and silently corrupt nullable fields.
+func WithSkipRowImageCheck() Option {
+	return func(v *VStreamClient) error {
+		v.cfg.skipRowImageCheck = true
+		return nil
+	}
+}
+
+// DefaultFlags returns a default set of flags for a VStreamClient, safe to use in most cases, but can be customized
+func DefaultFlags() *vtgatepb.VStreamFlags {
+	return &vtgatepb.VStreamFlags{
+		HeartbeatInterval: 1,
+		// Keep keyspace in TableName so multiple-keyspace streams disambiguate tables.
+		ExcludeKeyspaceFromTableName: false,
+	}
+}
+
+// WithFlags configures the VStream flags. WithHeartbeatSeconds overrides its
+// HeartbeatInterval regardless of option order; other flags are preserved.
+func WithFlags(flags *vtgatepb.VStreamFlags) Option {
+	return func(v *VStreamClient) error {
+		if flags == nil {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: flags cannot be nil")
+		}
+		if flags.StreamKeyspaceHeartbeats {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: StreamKeyspaceHeartbeats is not supported: it streams internal sidecar heartbeat table events that have no TableConfig")
+		}
+
+		// clone so later caller mutations can't change stream behavior or bypass the validation above
+		v.cfg.flags = proto.Clone(flags).(*vtgatepb.VStreamFlags)
+		return nil
+	}
+}
+
+// WithEventFunc provides for custom event handling functions for specific event types. Only one function
+// can be registered per event type, and it is called before the default event handling function. Returning
+// an error from the custom function will exit the stream before the default function is called.
+func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
+	return func(v *VStreamClient) error {
+		if len(eventTypes) == 0 {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: no event types provided")
+		}
+
+		if fn == nil {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: event func cannot be nil")
+		}
+
+		if v.cfg.eventFuncs == nil {
+			v.cfg.eventFuncs = make(map[binlogdatapb.VEventType]EventFunc)
+		}
+
+		for _, eventType := range eventTypes {
+			if _, ok := v.cfg.eventFuncs[eventType]; ok {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: event type %s already has a function", eventType.String())
+			}
+
+			v.cfg.eventFuncs[eventType] = fn
+		}
+
+		return nil
+	}
+}
+
+// WithStartingVGtid sets the starting VGtid for the VStreamClient. This is useful for resuming a stream from a
+// specific point, vs what might be stored in the state table.
+//
+// The position is persisted with copy_completed=true and becomes the durable restart point, so it
+// is validated strictly: every shard gtid must be a parseable, concrete position (symbolic
+// positions like "current" are resolved afresh by VTGate on every run, which would silently skip
+// rows delivered between a crash and the restart), must belong to a configured source keyspace,
+// and together they must cover every shard of every configured source keyspace, since VTGate only
+// opens streams for the listed shards.
+func WithStartingVGtid(vgtid *binlogdatapb.VGtid) Option {
+	return func(v *VStreamClient) error {
+		if vgtid == nil || len(vgtid.ShardGtids) == 0 {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid must include at least one shard gtid")
+		}
+
+		seen := make(map[string]bool, len(vgtid.ShardGtids))
+		for _, shardGtid := range vgtid.ShardGtids {
+			if shardGtid == nil || shardGtid.Keyspace == "" || shardGtid.Shard == "" {
+				return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: every starting shard gtid must name a keyspace and shard")
+			}
+			if len(shardGtid.TablePKs) != 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s contains TablePKs; copy cursors are not supported", shardGtid.Keyspace, shardGtid.Shard)
+			}
+			if shardGtid.Gtid == "" || strings.EqualFold(shardGtid.Gtid, "current") {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s must be a concrete position, got %q: symbolic or empty positions cannot be persisted as a restart point", shardGtid.Keyspace, shardGtid.Shard, shardGtid.Gtid)
+			}
+			if _, err := replication.DecodePosition(shardGtid.Gtid); err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s is not a parseable position: %v", shardGtid.Keyspace, shardGtid.Shard, err)
+			}
+			key := shardGtid.Keyspace + "/" + shardGtid.Shard
+			if seen[key] {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s more than once", key)
+			}
+			seen[key] = true
+		}
+
+		// clone so later caller mutations can't change or race with client state
+		v.latestVgtid = proto.Clone(vgtid).(*binlogdatapb.VGtid)
+		return nil
+	}
+}
+
+func (v *VStreamClient) validateStartingVGtid() error {
+	if v.latestVgtid == nil {
+		return nil
+	}
+	configuredKeyspaces := make(map[string]bool, len(v.tables))
+	for _, table := range v.tables {
+		configuredKeyspaces[table.Keyspace] = true
+	}
+	seen := make(map[string]bool, len(v.latestVgtid.ShardGtids))
+	for _, shardGtid := range v.latestVgtid.ShardGtids {
+		if !configuredKeyspaces[shardGtid.Keyspace] {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names keyspace %s, which is not a configured source keyspace", shardGtid.Keyspace)
+		}
+		if !slices.Contains(v.shardsByKeyspace[shardGtid.Keyspace], shardGtid.Shard) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s/%s, which does not exist in the cluster", shardGtid.Keyspace, shardGtid.Shard)
+		}
+		seen[shardGtid.Keyspace+"/"+shardGtid.Shard] = true
+	}
+	for keyspace := range configuredKeyspaces {
+		for _, shard := range v.shardsByKeyspace[keyspace] {
+			if !seen[keyspace+"/"+shard] {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid does not cover shard %s/%s; every shard of every configured source keyspace needs a position", keyspace, shard)
+			}
+		}
+	}
+	return nil
+}
