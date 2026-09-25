@@ -5,6 +5,8 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+    - **[Security](#security)**
+        - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
@@ -23,9 +25,11 @@
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
+        - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [information_schema queries with IN predicates route correctly](#information-schema-in-routing)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
         - [Temp-table idle timeout gives gRPC API sessions MySQL-equivalent temp-table lifetime](#vttablet-temp-table-idle-timeout)
@@ -51,15 +55,36 @@
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
+        - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
+        - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
+        - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
+        - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+    - **[VTAdmin](#minor-changes-vtadmin)**
+        - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+        - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
 
 ## <a id="major-changes"/>Major Changes</a>
+
+### <a id="security"/>Security</a>
+
+#### <a id="vtctld-http-api-removed"/>Legacy vtctld HTTP API removed</a>
+
+The HTTP API that vtctld served under `/api/` has been removed because it was dead code that exposed a security attack surface. It was built for the vtctld web UI, which VTAdmin replaced in v16, and nothing has served or called it since; VTAdmin reaches vtctld over gRPC. What remained was an unauthenticated HTTP surface that served topology data, tablet health, arbitrary vtctl commands, schema changes, and keyspace and shard validations, with `--security-policy` coverage that varied from one endpoint to the next. Removing it removes that surface, rather than patching it endpoint by endpoint.
+
+The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keyspace`, `tablets`, `topodata`, `vtctl`, `schema/apply`, and `features`, and the keyspace, shard, and tablet action endpoints behind them. The `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` flags of vtctld and vtcombo that configured the API are now deprecated no-ops, so that a process started with them keeps starting, and will be removed in v26.
+
+**Migration**: use `vtctldclient`, or the `VtctldServer` gRPC service it calls, for anything a script did against `/api/`. Remove `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` from vtctld and vtcombo startup arguments. The `/debug/health` and `/debug/status` endpoints are unchanged.
+
+**Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
+
+See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
 
 ### <a id="new-support"/>New Support</a>
 
@@ -164,6 +189,10 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 
 **Impact**: Remove any usage of the `--vreplication-enable-http-log` flag from VTTablet startup scripts or configuration.
 
+The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
+
+**Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
+
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
 The `SelectStream` query plan type no longer exists: statements served over the streaming path now produce the same plan types as buffered execution (`Select`, `Show`, `SelectLockFunc`, ...), so query rules keyed on those concrete plan names now apply to both execution paths.
@@ -220,6 +249,14 @@ As part of this change, vreplication terminal errors are now classified in their
 
 See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
+#### <a id="vstream-before-data-columns"/>VStream: `before_data_columns` bitmap for partial before images</a>
+
+When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that are not part of the primary key from the before image of UPDATE and DELETE row events, whether or not they changed. The vstreamer already signaled this for the after image via `RowChange.data_columns`, but the before image carried no such information, so VStream consumers could not tell an omitted column apart from a `NULL`.
+
+`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
+
+See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
 #### <a id="vtgate-logstats-ingress-bytes"/>Ingress bytes in query LogStats</a>
@@ -255,6 +292,39 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="information-schema-in-routing"/>`information_schema` queries with IN predicates route correctly</a>
+
+An `IN` predicate on `table_schema` or `table_name` in an `information_schema`
+query previously bypassed schema-name routing entirely and silently returned
+an empty or incomplete result (issue #20878) — the form ORMs such as Rails
+now generate. A single-valued `IN` (a literal list of one, a bound list with
+one value, or a prepared statement's `IN (?)`) now routes exactly like the
+equivalent `=` predicate, including routed-table handling for `table_name`.
+A multi-value `IN` list routes when it names exactly one schema (duplicates and
+`NULL` elements do not count). A list naming more than one schema — in any of
+those forms, or an `OR` of schema equalities, which plans identically — cannot
+be routed to a single keyspace and now fails with an explicit `VT12001` error
+instead of returning wrong rows. Multi-value `table_name` lists are unaffected
+and keep working as plain filters, and a list containing `database()` or
+`schema()` is left for the tablet to evaluate, as `= database()` always has been.
+
+One narrow shape that previously worked is currently rejected as well: a
+multi-value `IN` list naming only system schemas (e.g. `table_schema IN
+('information_schema', 'performance_schema')`) now returns the same `VT12001`,
+because the routing rewrite cannot carry a multi-schema filter. Split the
+query per schema or use equality predicates as a workaround; issue #20974
+tracks restoring support for that shape.
+
+Two `=` behaviors change as well. Contradictory predicates on the same
+table-name column (`table_name = 'a' AND table_name = 'b'`) previously collapsed
+to the last value and returned its rows; they now return the empty result they
+describe. A query with several table-name predicates naming routed tables
+(routing rules, or tables mid-`MoveTables`) previously honored only whichever
+predicate it evaluated first and left the other names unrewritten. Every routed
+name is now rewritten, so tables in one keyspace return complete results, and
+tables in different keyspaces fail with an explicit `cannot send the query to
+multiple keyspace` error instead of routing unpredictably.
 
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
@@ -544,6 +614,40 @@ change with `--session-variable`.
 
 See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
 
+#### <a id="vttablet-table-acl-undetermined-table-set"/>Table ACL: statements whose tables cannot be determined are denied under strict table ACL</a>
+
+Under strict table ACL (`--queryserver-config-strict-table-acl`), vttablet checks a statement against the tables its planner derives for it. `DO`, `CALL`, `REPAIR`, `OPTIMIZE` and `LOAD DATA` are parsed into nodes that discard their table-bearing text, so no permission was derived for them and the check had nothing to enforce: any authenticated caller could run them against tables the ACL denies, with vttablet's own MySQL privileges — a `DO` carrying a table-reading subquery or a `CALL` into a procedure body to read, and a server-side `LOAD DATA INFILE` to write. See [GHSA-w6mx-2f8x-pqf4](https://github.com/vitessio/vitess/security/advisories/GHSA-w6mx-2f8x-pqf4).
+
+vttablet now fails closed: when it cannot determine a statement's tables, it denies the statement under strict table ACL rather than skip the check. With strict table ACL on, these five statements are denied for every caller outside the exempt ACL (`--queryserver-config-acl-exempt-acl`), including callers whose table grants would otherwise have sufficed, since the tablet cannot confirm which tables the statement touches. Operators who need them should issue them as a caller in the exempt ACL. With dry-run (`--queryserver-config-enable-table-acl-dry-run`) the denial is only recorded and the statement runs. Nothing changes with strict table ACL off.
+
+These denials have no table to name, so they are counted under a new `TableName` label, `undetermined-table-set` (with an empty `TableGroup`), in `TableACLDenied`. With dry-run on, every non-exempt `DO`, `CALL`, `REPAIR`, `OPTIMIZE` and `LOAD DATA` from a request carrying a caller id increments `TableACLPseudoDenied` under that label whether or not strict table ACL is on, so operators sizing a strict-ACL rollout will see a new series appear.
+
+The exported `planbuilder.BuildPermissions` now returns a second result, `tablesUndetermined bool`, alongside the permissions. This breaks any out-of-tree caller on purpose: a one-result compatibility wrapper would keep returning "no permissions" for exactly these statements with no way to learn the table set was undetermined, so a caller left on it would silently keep the behavior this fix closes. Callers should take the new result and deny the statement when it is true.
+
+This covers statements. A stored **function** invoked inside an expression (`SELECT f()`, a `WHERE` clause, a `SET` in DML) is not `CALL`ed, so it still runs its body with vttablet's MySQL privileges while the ACL checks only the tables the statement itself names; Vitess does not parse `CREATE FUNCTION`, so this applies to functions defined directly in MySQL. That gap is tracked in [#21134](https://github.com/vitessio/vitess/issues/21134). Reads embedded in statements the planner does parse — `CREATE TABLE ... AS SELECT`, `EXPLAIN ANALYZE`, `SHOW ... WHERE`, `SET` — are covered by [#21139](https://github.com/vitessio/vitess/pull/21139).
+
+See [#21053](https://github.com/vitessio/vitess/pull/21053) for details.
+
+#### <a id="vttablet-table-acl-embedded-reads"/>Table ACL: reads embedded in non-SELECT statements are now checked</a>
+
+This completes the fix for [GHSA-w6mx-2f8x-pqf4](https://github.com/vitessio/vitess/security/advisories/GHSA-w6mx-2f8x-pqf4) begun [above](#vttablet-table-acl-undetermined-table-set): that change fails closed on statements whose tables the parser discards; this one derives permissions for the reads embedded in four statement types the planner does parse but never checked, so a caller with no grant on a table could read it through them. Each is now checked like a plain `SELECT` of the same tables, under strict table ACL (`--queryserver-config-strict-table-acl`), with the same dry-run and exempt-ACL behavior as any other table ACL check:
+
+- `CREATE TABLE ... AS SELECT` requires `READER` on the tables the `SELECT` reads (through CTEs, joins and unions included), in addition to `ADMIN` on the table it creates. `CREATE VIEW ... AS SELECT` and `ALTER VIEW ... AS SELECT` require the same `READER` on their source tables: a view reads nothing when it is defined, but it reads its sources as the tablet's MySQL user whenever it is queried, and the ACL then sees only the view's name, so the source is checked when the view is defined, as MySQL requires `SELECT` on it.
+- `EXPLAIN`, in any format, and `DESCRIBE <statement>` now require the explained statement's permissions, `WRITER` on the target of a DML included, as MySQL requires the explained statement's privileges. `EXPLAIN ANALYZE` executes the statement, and a plain `EXPLAIN` reads too: MySQL reads single-row tables and evaluates uncorrelated subqueries while it optimizes, and the plan shows the outcome (`Impossible WHERE`), so an `EXPLAIN` answers a yes/no question about the data. This covers the `EXPLAIN` that `VEXPLAIN MYSQLPLAN` sends to each shard.
+- `SHOW ... WHERE <expr>` requires `READER` on the tables read by any subquery in the filter, which MySQL evaluates. The `SHOW`'s own subject (the table of `SHOW COLUMNS FROM t`) remains unchecked. This covers `SHOW VITESS_MIGRATIONS ... WHERE` as well.
+- `SET` requires `READER` on the tables read by any subquery in its expressions.
+
+A `CREATE TABLE` that vttablet's parser cannot fully parse is forwarded to MySQL as the client's raw text, with only the `CREATE TABLE <name>` prefix known to the planner. Some such statements copy rows from a table the planner never sees (`CREATE TABLE t (SELECT ...)`, `CREATE TABLE t AS TABLE src`, an `EXCEPT` or `INTERSECT` source), and the planner cannot tell them from a valid statement in syntax Vitess lacks. Every partially parsed `CREATE TABLE` is therefore treated as a statement whose tables cannot be determined and denied the same way, for callers outside the exempt ACL; a `CREATE TABLE` in syntax vttablet does not parse must be issued by a caller in the exempt ACL. Parsing these sources is tracked in [#21138](https://github.com/vitessio/vitess/issues/21138).
+
+A statement flagged this way now has the permissions the planner did derive checked first, so a caller lacking `ADMIN` on the table a partial `CREATE TABLE` creates is denied on that table by name, and a dry run records both that denial and the undetermined one.
+
+Connection settings — the SET statements vtgate attaches to a session's queries, and the pre-queries of a reservation — are applied to a connection with no table ACL check. Under strict table ACL, vttablet now rejects a setting whose expressions contain a subquery: settings carry constants, and vtgate only sends values. Without strict table ACL the setting is accepted as before, since there is nothing for the check to protect. To make settings constants for every session, a `SET` of a system variable in a targeted session (`use ks:-80`) is now evaluated once on the target shard, with the tablet checking the read, and the resulting value is what the session applies and stores, matching an untargeted session. Previously such a session stored the expression as written and re-evaluated it on every reserved connection; as a side effect, `SELECT @@var` after a non-constant targeted `SET` now returns the value instead of failing to evaluate the stored text. Each targeted `SET` costs one additional round trip to the shard.
+
+**Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
+
+See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
 #### <a id="vtctld-version-aware-reparent"/>MySQL version-aware reparent candidate election</a>
@@ -611,6 +715,20 @@ The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`)
 
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
 
+#### <a id="backup-lz4-v4"/>lz4 engine: library upgrade and `--compression-level` mapping</a>
+
+The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `pierrec/lz4` v2. The frame format is unchanged, so backups written by older Vitess versions remain restorable and backups written by this version are restorable by older versions.
+
+The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
+
+See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+### <a id="minor-changes-vtadmin"/>VTAdmin</a>
+
+#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
+
+Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+
 ### <a id="minor-changes-general"/>General</a>
 
 #### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
@@ -623,3 +741,50 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+#### <a id="vttablet-s3-parallel-downloads"/>Parallel S3 downloads during restore</a>
+
+S3 backup restores can now use the AWS SDK v2 transfer manager for parallel downloads. Each file is fetched via concurrent byte-range GETs instead of a single sequential stream, which should reduce restore wall-clock time for large backups.
+
+The feature is opt-in and disabled by default: set `--s3-backup-download-concurrency` to a value greater than 1 to enable parallel downloads. With the default value of 1, the restore path is unchanged (a single `GetObject` call per file, no `HeadObject`, no ranged GETs).
+
+**When enabled (`--s3-backup-download-concurrency` > 1):**
+
+- A `HeadObject` call is issued per file to determine object size before downloading. This includes MANIFEST reads during backup selection, adding one extra round trip per candidate backup.
+- Downloads use ranged GETs sized by `--s3-backup-download-part-size` (default 8 MiB) with the configured number of parallel workers per file.
+- `AWS:Request:Send` stats are recorded per API call, so with parallel downloads they become per-part rather than per-file. Existing dashboards using this metric will see higher counts.
+- Per-file memory is guarded at 1 GiB (SDK buffer + read buffer). Configurations exceeding this fail fast at storage initialization.
+
+**New flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--s3-backup-download-part-size` | `8388608` (8 MiB) | Part size in bytes for parallel S3 downloads. |
+| `--s3-backup-download-concurrency` | `1` | Number of parallel goroutines per file download. Set > 1 to enable parallel byte-range GETs. |
+
+**CPU note (when parallel downloads are enabled):** The SDK transfer manager's dispatch loop busy-spins while a download window is in flight, consuming meaningful CPU even when the workload is network-bound. With `--restore-concurrency=4` (the default), up to 4 busy-spinning goroutines (one per file) compete with decompression for CPU. This is upstream SDK behaviour.
+
+See [#20225](https://github.com/vitessio/vitess/pull/20225) for details.
+
+#### <a id="vttls-crl-fail-closed"/>Connections whose certificate revocation cannot be checked against a configured CRL are rejected</a>
+
+The certificate revocation lists configured with `--grpc-crl`, `--mysql-server-ssl-crl`, `--tablet-grpc-crl`, `--vtgate-grpc-crl`, and the other `*-crl` flags are now enforced in every SSL mode and on resumed TLS sessions, see [GHSA-fxqj-c35w-x6rq](https://github.com/vitessio/vitess/security/advisories/GHSA-fxqj-c35w-x6rq). A CRL is held against the peer's verified certificate chain: each certificate of the chain, except the trust anchor it ends at, is looked up in the CRLs signed by its issuer, the next certificate of the chain. In the `preferred` and `required` SSL modes, where the server's certificate chain is otherwise not verified, a client with a CRL now builds that chain to the configured CA, or to the system roots when no CA is configured, and rejects the connection when that chain cannot be built or verified rather than leave the CRL unchecked: for example, a client in `required` mode with a CRL but no CA file, connecting to a server whose certificate a private CA issued; a client with a CRL and the root CA configured, connecting to a server that presents its certificate without the intermediate CA that issued it; or a client with a CRL connecting to a server whose certificate has expired or is not valid for server authentication, which those modes accept without a CRL. To keep such connections working, configure the CA that the server's chain leads to, have the server present its whole chain and a valid certificate, or drop the CRL.
+
+Along with that:
+
+- A peer passes when any of its verified chains holds no revoked certificate, as verification itself accepts the peer on any valid chain; every chain used to have to be clean. An intermediate CA cross-signed by two roots and revoked by one of them, as during a CA rollover, still carries the peer through the other root.
+- A trust anchor, that is, a CA certificate in the CA file that a chain ends at, is trusted as configured and not checked against a CRL of its own issuer, unless that issuer is in the CA file as well and its CRL lists the anchor, or the anchor was issued, through CA certificates in the CA file, under one so listed: every chain that ends at such an anchor is then rejected, whether or not the peer presents it, and a warning names the CA certificate when the configuration is built. An intermediate CA configured without its root is not checked against the root's CRL.
+- When a CRL file holds several complete CRLs from one issuer, only the newest applies, as a complete CRL supersedes the ones issued before it; they used to be combined.
+- A CRL only applies when the certificate of its issuer in the chain validates it. A CA that signs its CRLs with a separate certificate under the same name is therefore not supported.
+- A gRPC client with a CRL configured (`--tablet-grpc-crl`, `--vtgate-grpc-crl`, `--vtctld-grpc-crl`, and the other `*-grpc-crl` flags) but neither a client certificate nor a CA now connects with TLS, verifying the server against the system roots, rather than in plaintext with the CRL silently ignored. Configure the CA along with the CRL, or drop the CRL.
+
+Several configurations that used to connect with the CRL silently ignored are now refused when the TLS configuration is built, at startup, since the CRL cannot be applied as configured:
+
+- A server-side CRL (`--grpc-crl`, `--mysql-server-ssl-crl`) without the matching CA (`--grpc-ca`, `--mysql-server-ssl-ca`): without a CA no client certificate is requested, so the CRL could not apply. Configure the CA, or drop the CRL.
+- A `*-crl` file that holds no CRL. Point the flag at a file with at least one `X509 CRL` block, or drop the flag.
+- A CRL that the certificate of its issuer in the CA file does not validate: one whose signature does not verify against that certificate, or one signed by the key of a CA certificate that is not allowed to sign CRLs, that is, without the `cRLSign` key usage. Re-issue the CRL, or the CA certificate with `cRLSign`. When such an issuer is only found in a peer's chain, as an intermediate CA the peer presents, that peer's connections are rejected instead. A CRL whose authority key identifier names another key than the CA certificate's, as the CRL of a re-keyed CA's predecessor does, is not held against that CA's certificates; one that names another key while the certificate's key signed it is refused, since it would otherwise be passed over. Re-issue such a CRL with the certificate's subject key identifier as its authority key identifier.
+- A CRL signed with an algorithm that is not supported.
+- A CRL signed by a CA certificate in the CA file whose issuer name is encoded differently from that certificate's subject, as a CRL written by another tool than the CA's can be: the names are matched byte for byte, so the CRL would not be applied. Re-issue the CRL with the certificate's subject as its issuer.
+- A delta CRL, an indirect CRL, or a CRL that its issuing distribution point limits to end-entity certificates, to CA certificates, to attribute certificates, or to some revocation reasons: only complete CRLs are supported. A CRL that names its distribution point without limiting itself otherwise is accepted, and every such partition of an issuer's CRL is applied.
+- A CRL that carries a critical extension other than the issuing distribution point, on the list or on an entry.
+- A CRL whose `thisUpdate` lies more than five minutes in the future, so that a CRL staged ahead of time cannot supersede the current one. Provide the current CRL, and check the clocks.

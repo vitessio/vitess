@@ -655,11 +655,13 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 
 	// If we have a transaction id, stream on the txPool connection; otherwise
 	// stream on a stream pool connection. Each branch holds the concrete
-	// connection it must clean up. For a stored procedure call, a mid-stream
-	// error closes that connection — it may have left trailing resultsets or the
-	// final OK packet unread, or already be killed, and the client is gone, so we
-	// close rather than attempt a drain-and-recover — while a clean stream runs
-	// the post-stream safety checks.
+	// connection it must clean up. For a stored procedure call on the
+	// transaction connection, a mid-stream error closes that connection — it may
+	// have left trailing resultsets or the final OK packet unread, or already be
+	// killed, and the client is gone, so we close rather than attempt a
+	// drain-and-recover — while a clean stream runs the post-stream safety
+	// checks. A stored procedure call on a pooled connection always costs the
+	// connection, whatever the outcome (see execCallProc).
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {
@@ -712,26 +714,27 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	}
 	defer dbConn.Recycle()
 
+	if qre.plan.PlanID == p.PlanCallProc {
+		// The connection is never reused after a CALL (see execCallProc),
+		// whatever the outcome: a transaction the procedure leaked dies with it
+		// (the CALL still reports it, as the client's procedure is at fault),
+		// and a mid-stream error may have left it with unread packets. Deferred
+		// before the stream runs so a callback panic cannot recycle it dirty.
+		defer qre.discardPooledConnAfterCall(dbConn)
+	}
 	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
-			dbConn.Close()
 			return err
 		}
 		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
 		if err != nil {
-			dbConn.Close()
 			return err
-		}
-		// The procedure must not leak a transaction onto the pooled connection.
-		leakedTx := trailing.IsInTransaction()
-		if leakedTx {
-			dbConn.Close()
 		}
 		if multipleResultsets {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
-		if leakedTx {
+		if trailing.IsInTransaction() {
 			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return nil
@@ -925,6 +928,21 @@ func (qre *QueryExecutor) checkPermissions() error {
 		}
 	}
 
+	// Fail closed for a statement whose table set the planner could not
+	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a partially parsed
+	// CREATE TABLE). It is forwarded to MySQL as opaque text and can still
+	// read or modify tables the permissions above do not name, so the
+	// per-table loop alone would let any authenticated caller run it under
+	// strict table ACL. It runs after the loop so that a caller is denied on
+	// a table the planner did derive by name, and a dry run records it. The
+	// planner flags such statements in the one switch that must account for
+	// every statement type (BuildPermissions), so this needs no list of its
+	// own. The exempt ACL applied above stays as the escape hatch for
+	// operators who need these statements.
+	if qre.plan.TablesUndetermined {
+		return qre.checkUndeterminedTableAccess(callerID)
+	}
+
 	return nil
 }
 
@@ -941,12 +959,8 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		}
 
 		if qre.tsv.qe.strictTableACL {
-			groupStr := ""
-			if len(callerID.Groups) > 0 {
-				groupStr = fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
-			}
 			aclState = acl.ACLDenied
-			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, groupStr, tableName)
+			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID), tableName)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
@@ -954,6 +968,44 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	}
 	aclState = acl.ACLAllow
 	return nil
+}
+
+// checkUndeterminedTableAccess enforces table ACL for a statement whose table
+// set could not be determined at planning time (see checkPermissions). It
+// mirrors checkAccess's dry-run and stats handling, but denies unconditionally
+// under strict table ACL: the tables the planner did derive have already been
+// checked, no grant can cover the ones it could not, and the caller has
+// already been shown to be non-exempt.
+func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
+	var aclState acl.ACLState
+	defer func() {
+		// There is no table to name; label the denial so operators can tell
+		// it apart from a per-table one in the TableACL* counters. The label
+		// carries hyphens so that no unquoted table name can share the series.
+		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
+		qre.recordACLStats(statsKey, aclState)
+	}()
+
+	if qre.tsv.qe.enableTableACLDryRun {
+		aclState = acl.ACLPseudoDenied
+		return nil
+	}
+	if !qre.tsv.qe.strictTableACL {
+		return nil
+	}
+	aclState = acl.ACLDenied
+	errStr := fmt.Sprintf("%s command denied to user '%s'%s for a table set that cannot be determined (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID))
+	qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
+	return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
+}
+
+// aclGroupsSuffix renders the caller's groups for an ACL denial message, so
+// operators who manage the ACL by group can see which ones the caller carried.
+func aclGroupsSuffix(callerID *querypb.VTGateCallerID) string {
+	if len(callerID.Groups) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
 }
 
 func (qre *QueryExecutor) generateACLStatsKey(tableName string, authorized *tableacl.ACLResult, callerID *querypb.VTGateCallerID) []string {
@@ -1512,8 +1564,21 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	defer conn.Recycle()
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
+		// Nothing reached MySQL, so the connection's session is untouched.
 		return nil, err
 	}
+	// A procedure body can leave session state behind (SET SESSION, a temporary
+	// table) that the tablet's statement classification cannot see, and a pooled
+	// connection is shared with every later borrower: the connection is closed
+	// rather than returned to the pool, whatever the CALL's outcome. Closing is
+	// the one cleanup that restores every piece of a fresh connection's state —
+	// COM_RESET_CONNECTION restores globals, losing the negotiated charset and
+	// anything init_connect applied. The recycle that follows then opens the
+	// replacement synchronously, before this returns: the CALL request pays for
+	// the connect and session setup, and it runs on the pool's lifetime context
+	// rather than this request's, so a cancelled or timed-out CALL still waits
+	// for it and only --db-connect-timeout-ms bounds the wait.
+	defer qre.discardPooledConnAfterCall(conn)
 
 	qr, err := qre.execDBConn(conn.Conn, sql, true)
 	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
@@ -1524,7 +1589,6 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	}
 	if !qr.IsMoreResultsExists() {
 		if qr.IsInTransaction() {
-			conn.Close()
 			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return qr, nil
@@ -1534,6 +1598,23 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+// discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
+// execCallProc) so it is not reused; Discard counts the loss on the pool that
+// owns the connection, and on no pool for the appdebug user's standalone one.
+// A timed-out CALL is discarded like any other: KILL QUERY leaves the
+// connection open, and this policy is what then closes it. Skipped only for a
+// connection something else already closed — a kill that had to escalate to
+// the connection, or a reconnect that already failed — since that loss is not
+// this policy's to report. A connection the server dropped mid-query comes
+// back with the client-side flag still clear, and is discarded here like any
+// other.
+func (qre *QueryExecutor) discardPooledConnAfterCall(conn *connpool.PooledConn) {
+	if conn.Conn.IsClosed() {
+		return
+	}
+	conn.Discard()
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {

@@ -21,7 +21,6 @@ vtctld \
 	--grpc-port 15999
 
 Flags:
-      --action-timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --azblob-backup-account-key-file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
       --azblob-backup-buffer-size int                                    The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
@@ -42,7 +41,6 @@ Flags:
       --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
-      --cell string                                                      cell to use
       --ceph-backup-storage-config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -107,13 +105,14 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
-      --proxy-tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
       --s3-backup-aws-endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3-backup-aws-min-partsize int                                   Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3-backup-aws-region string                                      AWS region to use. (default "us-east-1")
       --s3-backup-aws-retries int                                        AWS request retries. (default -1)
+      --s3-backup-download-concurrency int                               Number of parallel goroutines for S3 downloads. Set > 1 to enable parallel byte-range GETs via the transfer manager (recommended: 2-10). (default 1)
+      --s3-backup-download-part-size int                                 Part size in bytes for parallel S3 downloads via transfer manager. (default 8388608)
       --s3-backup-force-path-style                                       force the s3 path style.
       --s3-backup-log-level string                                       determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
       --s3-backup-server-side-encryption string                          server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
@@ -141,7 +140,6 @@ Flags:
       --tablet-grpc-crl string                                           the server crl to use to validate server certificates when connecting
       --tablet-grpc-key string                                           the key to use to connect
       --tablet-grpc-server-name string                                   the server name to use to validate server certificate
-      --tablet-health-keep-alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
       --tablet-manager-grpc-ca string                                    the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                                  the cert to use to connect
       --tablet-manager-grpc-concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)

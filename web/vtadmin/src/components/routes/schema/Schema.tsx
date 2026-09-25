@@ -28,14 +28,14 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { Tooltip } from '../../tooltip/Tooltip';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     keyspace: string;
     table: string;
-}
+};
 
 export const Schema = () => {
-    const { clusterID, keyspace, table } = useParams<RouteParams>();
+    const { clusterID, keyspace, table } = useParams<RouteParams>() as RouteParams;
     useDocumentTitle(`${table} (${keyspace})`);
 
     const { data, error, isError, isLoading, isSuccess } = useSchema({ clusterID, keyspace, table });

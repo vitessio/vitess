@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -74,7 +75,7 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
-			query, resetQuery, err := BuildSettingQuery(tc.settings, parser)
+			query, resetQuery, err := BuildSettingQuery(tc.settings, parser, false)
 			if tc.expectedErr != "" {
 				require.EqualError(t, err, tc.expectedErr)
 				return
@@ -92,11 +93,35 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	query, resetQuery, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser)
+	query, resetQuery, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
 	assert.Contains(t, query, "sql_mode = 'STRICT_TRANS_TABLES'")
 	assert.Contains(t, resetQuery, "sql_mode = replace(replace(replace(replace(replace(replace(replace(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')")
-	assert.Contains(t, resetQuery, "sql_safe_updates = 'default'")
+	assert.Contains(t, resetQuery, "sql_safe_updates = default")
+}
+
+// Every setting other than sql_mode, foreign_key_checks and unique_checks is reset with
+// the DEFAULT keyword. MySQL accepts `SET var = DEFAULT` for any system variable and
+// rejects the string 'default' for most of them, so the reset must use the keyword for
+// the pool to be able to reuse the connection rather than replace it.
+func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	_, resetQuery, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser, false)
+	require.NoError(t, err)
+	assert.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
+}
+
+// MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` and the same for
+// unique_checks set the session value to the opposite of the global value on every
+// MySQL version, so a `default` reset would hand the next caller a pooled connection
+// with the checks off. The reset restores the global value explicitly instead.
+func TestBuildSettingQueryResetRestoresGlobalForeignKeyAndUniqueChecks(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	_, resetQuery, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser, false)
+	require.NoError(t, err)
+	assert.Equal(t, "set @@foreign_key_checks = @@global.foreign_key_checks, @@unique_checks = @@global.unique_checks, sql_safe_updates = default", resetQuery)
 }
 
 func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
@@ -221,5 +246,55 @@ func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 			require.NoError(t, err)
 			assert.Contains(t, plan.FullQuery.Query, "SET_VAR(sql_mode", "the hint must reach MySQL verbatim")
 		})
+	}
+}
+
+// A connection setting is applied to the connection with no table ACL check, so
+// a subquery in one would read tables unchecked. Settings carry constants (vtgate
+// evaluates a SET's expression on a shard and sends the value), so both the
+// settings-pool path and the reservation path reject a subquery upfront under
+// strict table ACL. Without it there is nothing to protect, and a vtgate from
+// before the value was sent still sends a targeted session's SET expression as
+// written, so the setting is accepted as it always was.
+func TestSettingsRejectSubqueries(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+
+	tests := []struct {
+		setting  string
+		subquery bool
+	}{
+		{setting: "set @@sql_select_limit = (select if(v = 'x', 1, 2) from secret where id = 1)", subquery: true},
+		{setting: "set @@sql_safe_updates = exists (select 1 from secret)", subquery: true},
+		{setting: "set @@sql_select_limit = 1 + (select count(*) from secret)", subquery: true},
+		{setting: "set @@sql_select_limit = if((select v from secret limit 1) = 'x', 1, 2)", subquery: true},
+		{setting: "set @@sql_select_limit = 10"},
+		{setting: "set @@sql_select_limit = default"},
+		// a non-constant expression that reads no table is not this check's concern
+		{setting: "set @@sql_select_limit = 1 + 1"},
+	}
+	for _, strictTableACL := range []bool{true, false} {
+		for _, tc := range tests {
+			t.Run(fmt.Sprintf("strict=%t %s", strictTableACL, tc.setting), func(t *testing.T) {
+				settings := []string{"set @@sql_safe_updates = 1", tc.setting}
+				expectedErr := "connection setting must not contain a subquery: " + tc.setting
+				rejected := tc.subquery && strictTableACL
+
+				query, resetQuery, err := BuildSettingQuery(settings, parser, strictTableACL)
+				if rejected {
+					require.EqualError(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+					assert.NotEmpty(t, query)
+					assert.NotEmpty(t, resetQuery)
+				}
+
+				err = ValidateSettingsSQLMode(settings, parser, strictTableACL)
+				if rejected {
+					require.EqualError(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
 	}
 }

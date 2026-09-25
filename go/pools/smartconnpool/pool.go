@@ -57,6 +57,7 @@ type Metrics struct {
 	idleClosed           atomic.Int64
 	diffSetting          atomic.Int64
 	resetSetting         atomic.Int64
+	discardedByCaller    atomic.Int64
 	waiterCapRejected    atomic.Int64
 }
 
@@ -90,6 +91,12 @@ func (m *Metrics) DiffSettingCount() int64 {
 
 func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
+}
+
+// DiscardedByCallerCount is the number of pooled connections a borrower
+// discarded (see Pooled.Discard) instead of returning them to the pool.
+func (m *Metrics) DiscardedByCallerCount() int64 {
+	return m.discardedByCaller.Load()
 }
 
 func (m *Metrics) WaiterCapRejected() int64 {
@@ -676,7 +683,7 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 			return nil, nil
 		}
 
-		if pool.active.CompareAndSwap(open, open+1) {
+		if pool.reserveSlot(open) {
 			conn, err := pool.connNew(ctx)
 			if err != nil {
 				pool.closedConn()
@@ -690,6 +697,22 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 			return conn, nil
 		}
 	}
+}
+
+// reserveSlot claims the active slot after open for a new connection. The
+// caller checked open against capacity, but capacity may have dropped since,
+// and a setCapacity drain that already saw active <= capacity would not wait
+// for this slot, so it is given back when it no longer fits. It returns false
+// when the slot was not claimed; the caller then reloads active and capacity.
+func (pool *ConnPool[C]) reserveSlot(open int64) bool {
+	if !pool.active.CompareAndSwap(open, open+1) {
+		return false
+	}
+	if open >= pool.capacity.Load() {
+		pool.closedConn()
+		return false
+	}
+	return true
 }
 
 // get returns a pooled connection with no Setting applied
@@ -1060,5 +1083,8 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	})
 	stats.NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", func() int64 {
 		return pool.Metrics.ResetSettingCount()
+	})
+	stats.NewCounterFunc(name+"DiscardedByCaller", "Number of connections a borrower closed instead of returning them to the pool", func() int64 {
+		return pool.Metrics.DiscardedByCallerCount()
 	})
 }

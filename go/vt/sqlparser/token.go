@@ -202,12 +202,14 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					return tkn.scanBitLiteral()
 				}
 			}
-			// N\'literal' is used to create a string in the national character set
+			// N'literal' is a string in the national character set. MySQL
+			// recognizes the introducer only before a single quote: N"…" is the
+			// identifier N followed by a double-quoted token, whatever the mode
+			// makes of that token.
 			if ch == 'N' || ch == 'n' {
-				nxt := tkn.peek(1)
-				if nxt == '\'' || nxt == '"' {
+				if tkn.peek(1) == '\'' {
 					tkn.skip(2)
-					return tkn.scanString(nxt, NCHAR_STRING)
+					return tkn.scanString('\'', NCHAR_STRING)
 				}
 			}
 			return tkn.scanIdentifier(false)

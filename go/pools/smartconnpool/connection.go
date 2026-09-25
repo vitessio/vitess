@@ -43,6 +43,18 @@ func (dbc *Pooled[C]) Close() {
 	dbc.Conn.Close()
 }
 
+// Discard closes the connection so the Recycle that follows opens a
+// replacement instead of returning this one to the pool, and counts the loss
+// on the pool that owns it. A connection with no pool (a standalone one handed
+// out for the appdebug user, or one taken out of its pool by Taint) is closed
+// but not counted: no pool member was lost.
+func (dbc *Pooled[C]) Discard() {
+	dbc.Close()
+	if dbc.pool != nil {
+		dbc.pool.Metrics.discardedByCaller.Add(1)
+	}
+}
+
 func (dbc *Pooled[C]) Recycle() {
 	switch {
 	case dbc.pool == nil:

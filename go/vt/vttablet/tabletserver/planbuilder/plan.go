@@ -186,6 +186,13 @@ type Plan struct {
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
+	// TablesUndetermined is set for a statement whose tables the parser
+	// discards or leaves opaque (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a
+	// partially parsed CREATE TABLE): Permissions does not cover everything
+	// the statement touches, whether it is empty or names the tables the
+	// parser did keep. Under strict table ACL the executor denies such a
+	// statement rather than skip the check.
+	TablesUndetermined bool
 
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
@@ -346,7 +353,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 		}
 	}
 	plan.AllTables = lookupAllTables(statement, tables)
-	plan.Permissions = BuildPermissions(statement)
+	plan.Permissions, plan.TablesUndetermined = BuildPermissions(statement)
 	return plan, nil
 }
 
@@ -404,14 +411,15 @@ func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	return mutating, acquiring
 }
 
-// BuildSettingQuery builds a query for system settings.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, err error) {
+// BuildSettingQuery builds a query for system settings. Under strict table
+// ACL a setting with a subquery is refused, see rejectSettingSubqueries.
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableACL bool) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
-	lDefault := sqlparser.NewStrLiteral("default")
+	defaultValue := &sqlparser.Default{}
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
@@ -421,8 +429,14 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-		// settings are applied with no verification afterwards, so sql_mode values
-		// must be constants that can be judged here; vtgates only render constants
+		// settings are applied with no verification and no table ACL check, so a
+		// subquery is refused where the ACL is enforced, and sql_mode values must
+		// be constants that can be judged here
+		if strictTableACL {
+			if err := rejectSettingSubqueries(set, setting); err != nil {
+				return "", "", err
+			}
+		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
 		}
@@ -432,8 +446,16 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-			resetExpr := sqlparser.Expr(lDefault)
-			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
+			resetExpr := sqlparser.Expr(defaultValue)
+			switch sysVar.Name.Lowered() {
+			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
+				// MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` (and
+				// unique_checks) sets the session value to the opposite of the global
+				// value, so `default` would hand the next caller a connection with the
+				// checks off. Restore the global value explicitly, which is what DEFAULT
+				// means for a session variable.
+				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
+			case sysvars.SQLMode.Name:
 				// `default` would re-inherit the server's global sql_mode including its
 				// lexer modes, undoing the neutralization every Vitess-created
 				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
