@@ -19,7 +19,11 @@
 ## Release compatibility
 
 - Changes must remain compatible with Vitess versions one major release before and one major release after the current version.
-- Stage breaking changes across releases: deprecate and warn first, change the default in the next major release, and remove the old behavior in the following major release.
+- Deprecation requires advance warning. Use as many release phases as provide real compatibility value:
+  - Command-line flags require three releases because removing a still-configured flag prevents the binary from starting: release N warns, release N+1 keeps accepting the flag as a no-op, and release N+2 removes it.
+  - Behavior or default changes that can preserve the old behavior behind a compatibility flag also use three releases: release N announces and warns with the default unchanged, release N+1 may flip the default while preserving the old behavior behind the deprecated flag, and release N+2 removes the flag and old behavior.
+  - Other removals may use two releases when a third phase has no practical compatibility benefit: release N warns, and release N+1 removes or fails fast as unsupported. This requires explicit maintainer agreement.
+  - Never remove or change a default in the same release that introduces the deprecation warning.
 
 ## Formatting
 
