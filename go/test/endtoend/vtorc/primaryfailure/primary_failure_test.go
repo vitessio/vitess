@@ -71,7 +71,7 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s", "--emergency-reparent-require-primary-position"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -107,6 +107,21 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 	waitForReceivedPosition(t, curPrimary, crossCellReplica)
 
+	// Wait for a stored primary position. The failover then has a requirement to enforce.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		rows, err := readVTOrcTable(vtOrcProcess, "database_instance")
+		require.NoError(c, err)
+
+		for _, row := range rows {
+			if row.GetString("alias") == curPrimary.Alias {
+				assert.NotEmpty(c, row.GetString("executed_gtid_set"))
+				return
+			}
+		}
+
+		require.Fail(c, "primary is missing from database_instance")
+	}, 30*time.Second, time.Second)
+
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 0, true)
 	// Make the rdonly vttablet unavailable
@@ -141,6 +156,19 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		steps, err := readVTOrcTable(vtOrcProcess, "topology_recovery_steps")
+		require.NoError(c, err)
+
+		var messages []string
+		for _, step := range steps {
+			messages = append(messages, step.GetString("message"))
+		}
+
+		assert.Regexp(c, `required position: [0-9a-f-]{36}:`, strings.Join(messages, "\n"))
+	}, 30*time.Second, time.Second)
+
 	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
 		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
 		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")

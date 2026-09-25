@@ -745,6 +745,20 @@ func ReadInstance(tabletAlias *topodatapb.TabletAlias) (*Instance, bool, error) 
 	return instances[0], true, nil
 }
 
+// ReadExecutedGtidSet returns the stored executed GTID set of a tablet, or an
+// empty string when the tablet has no row in database_instance.
+func ReadExecutedGtidSet(tabletAlias *topodatapb.TabletAlias) (string, error) {
+	var executedGtidSet string
+	query := `SELECT executed_gtid_set FROM database_instance WHERE alias = ?`
+	args := sqlutils.Args(topoproto.TabletAliasString(tabletAlias))
+	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
+		executedGtidSet = m.GetString("executed_gtid_set")
+		return nil
+	})
+
+	return executedGtidSet, err
+}
+
 // ReadProblemInstances reads all instances with problems
 func ReadProblemInstances(keyspace, shard string) ([]*Instance, error) {
 	condition := `
