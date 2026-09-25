@@ -20,7 +20,11 @@ type Charset interface {
 	Name() string
 	SupportsSupplementaryChars() bool
 	IsSuperset(other Charset) bool
+	// MaxWidth and MinWidth are the widths, in bytes, of the longest and the
+	// shortest character of the charset; ASCII characters always have the
+	// minimum width.
 	MaxWidth() int
+	MinWidth() int
 
 	EncodeRune([]byte, rune) int
 	// DecodeRune decodes the first rune in the input and returns it along with
