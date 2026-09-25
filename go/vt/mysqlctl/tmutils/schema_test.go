@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 var basicTable1 = &tabletmanagerdatapb.TableDefinition{
@@ -249,6 +250,80 @@ func TestSchemaDiff(t *testing.T) {
 
 	sd2.TableDefinitions = append(sd2.TableDefinitions, &tabletmanagerdatapb.TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"schemas differ on table table2:\nsd1: schema2\n differs from:\nsd2: schema3"})
+}
+
+func TestSchemaDiffSemanticallyEquivalentTables(t *testing.T) {
+	left := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name: "t",
+				Schema: "CREATE TABLE `t` (\n" +
+					"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+					"  `note` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+				Type: TableBaseTable,
+			},
+		},
+	}
+
+	right := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name: "t",
+				Schema: "CREATE TABLE `t` (\n" +
+					"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+					"  `note` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+				Type: TableBaseTable,
+			},
+		},
+	}
+
+	actual := DiffSchemaToArrayWithEnvironment(
+		schemadiff.NewTestEnv(),
+		"source",
+		left,
+		"destination",
+		right,
+	)
+	require.Empty(t, actual)
+}
+
+func TestSchemaDiffDetectsDirectionalDifference(t *testing.T) {
+	left := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name: "t",
+				Schema: "CREATE TABLE `t` (\n" +
+					"  `id` bigint NOT NULL\n" +
+					") ENGINE=InnoDB TABLESPACE `ts`",
+				Type: TableBaseTable,
+			},
+		},
+	}
+
+	right := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name: "t",
+				Schema: "CREATE TABLE `t` (\n" +
+					"  `id` bigint NOT NULL\n" +
+					") ENGINE=InnoDB",
+				Type: TableBaseTable,
+			},
+		},
+	}
+
+	actual := DiffSchemaToArrayWithEnvironment(
+		schemadiff.NewTestEnv(),
+		"source",
+		left,
+		"destination",
+		right,
+	)
+
+	require.Len(t, actual, 1)
+	require.Contains(t, actual[0], "schemas differ on table t")
 }
 
 func TestTableFilter(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -214,6 +215,10 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 // DiffSchema generates a report on what's different between two SchemaDefinitions
 // including views, but Vitess internal tables are ignored.
 func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition, er concurrency.ErrorRecorder) {
+	diffSchema(nil, leftName, left, rightName, right, er)
+}
+
+func diffSchema(env *schemadiff.Environment, leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left == nil && right == nil {
 		return
 	}
@@ -246,8 +251,35 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 			continue
 		}
 
-		// same name, let's see content
-		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
+		// Same name: compare base-table definitions semantically when an
+		// environment is available.
+		schemasDiffer := left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema
+		if schemasDiffer &&
+			env != nil &&
+			left.TableDefinitions[leftIndex].Type == TableBaseTable &&
+			right.TableDefinitions[rightIndex].Type == TableBaseTable {
+			forwardDiff, forwardErr := schemadiff.DiffCreateTablesQueries(
+				env,
+				left.TableDefinitions[leftIndex].Schema,
+				right.TableDefinitions[rightIndex].Schema,
+				schemadiff.EmptyDiffHints(),
+			)
+			if forwardErr == nil && (forwardDiff == nil || forwardDiff.IsEmpty()) {
+				// schemadiff is directional and may omit some dropped table options,
+				// so require the reverse comparison to be empty as well.
+				reverseDiff, reverseErr := schemadiff.DiffCreateTablesQueries(
+					env,
+					right.TableDefinitions[rightIndex].Schema,
+					left.TableDefinitions[leftIndex].Schema,
+					schemadiff.EmptyDiffHints(),
+				)
+				if reverseErr == nil && (reverseDiff == nil || reverseDiff.IsEmpty()) {
+					schemasDiffer = false
+				}
+			}
+		}
+
+		if schemasDiffer {
 			if !schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
 				er.RecordError(fmt.Errorf("schemas differ on table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Schema, rightName, right.TableDefinitions[rightIndex].Schema))
 			}
@@ -287,10 +319,20 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 	}
 }
 
-// DiffSchemaToArray diffs two schemas and return the schema diffs if there is any.
-func DiffSchemaToArray(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition) (result []string) {
+// DiffSchemaToArray diffs two schemas and returns the schema diffs, if any.
+func DiffSchemaToArray(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition) []string {
+	return diffSchemaToArray(nil, leftName, left, rightName, right)
+}
+
+// DiffSchemaToArrayWithEnvironment diffs two schemas using schemadiff for
+// semantically comparing base-table definitions.
+func DiffSchemaToArrayWithEnvironment(env *schemadiff.Environment, leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition) []string {
+	return diffSchemaToArray(env, leftName, left, rightName, right)
+}
+
+func diffSchemaToArray(env *schemadiff.Environment, leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition) []string {
 	er := concurrency.AllErrorRecorder{}
-	DiffSchema(leftName, left, rightName, right, &er)
+	diffSchema(env, leftName, left, rightName, right, &er)
 	if er.HasErrors() {
 		return er.ErrorStrings()
 	}
