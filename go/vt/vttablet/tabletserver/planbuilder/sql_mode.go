@@ -45,13 +45,14 @@ import (
 // it does for clients that send the hint to it directly. The hint's effect on execution
 // is a vtgate concern.
 
-// ValidateSettingsSQLMode mirrors BuildSettingQuery's sql_mode validation for settings
-// that are applied without going through BuildSettingQuery — a true reservation executes
-// its settings directly on the tainted connection. Like BuildSettingQuery, every setting
-// must parse as a SET statement, and sql_mode values must be constants: the settings
-// paths apply their statements with no verification afterwards, so a value that cannot
-// be judged upfront is rejected rather than applied unchecked.
-func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error {
+// ValidateSettingsSQLMode mirrors BuildSettingQuery's validation for settings that are
+// applied without going through BuildSettingQuery — a true reservation executes its
+// settings directly on the tainted connection. Like BuildSettingQuery, every setting
+// must parse as a SET statement, with no subquery under strict table ACL, and
+// sql_mode values must be constants: the settings paths apply their statements with
+// no verification afterwards, so a value that cannot be judged upfront is rejected
+// rather than applied unchecked.
+func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, strictTableACL bool) error {
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
@@ -61,9 +62,36 @@ func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error 
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
 		}
+		if strictTableACL {
+			if err := rejectSettingSubqueries(set, setting); err != nil {
+				return err
+			}
+		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rejectSettingSubqueries refuses a connection setting whose expressions embed
+// a subquery. A setting is applied to the connection with no table ACL check,
+// so the tables a subquery reads would go unchecked. Settings carry constants:
+// vtgate evaluates a SET's expression on a shard, where the tablet checks it
+// like any read, and sends the value. The check only runs under strict table
+// ACL: without it there is nothing for it to protect, and a vtgate from
+// before the value was sent still sends a targeted session's SET expression
+// as written, which would break for nothing.
+func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
+	var found bool
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			found = true
+		}
+		return !found, nil
+	}, set)
+	if found {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
 	}
 	return nil
 }

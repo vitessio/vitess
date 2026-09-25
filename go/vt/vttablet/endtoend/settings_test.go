@@ -51,6 +51,61 @@ func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 	}
 }
 
+// A connection that carried `foreign_key_checks = 0` and `unique_checks = 0` as
+// settings must serve the next settingless caller with both checks on. MySQL
+// Bug#121262 makes `SET ... = DEFAULT` set both to 0, so the reset restores the global
+// value explicitly.
+func TestSettingsResetRestoresForeignKeyChecks(t *testing.T) {
+	resetTxConnPool(t)
+
+	// hold every connection but one, so the settingless transaction below can only be
+	// served by the connection that carried the settings
+	txPoolSize := framework.Server.Config().TxPool.Size
+	holders := make([]*framework.QueryClient, 0, txPoolSize-1)
+	for range txPoolSize - 1 {
+		holder := framework.NewClient()
+		_, err := holder.BeginExecute("select 1", nil, nil)
+		require.NoError(t, err)
+		holders = append(holders, holder)
+	}
+	t.Cleanup(func() {
+		for _, holder := range holders {
+			assert.NoError(t, holder.Release())
+		}
+	})
+
+	client := framework.NewClient()
+	t.Cleanup(func() {
+		// the test rolls back both transactions; release only what a failure left behind
+		if client.TransactionID() != 0 || client.ReservedID() != 0 {
+			assert.NoError(t, client.Release())
+		}
+	})
+
+	query := "select connection_id(), @@foreign_key_checks, @@unique_checks"
+	settings := []string{"set @@foreign_key_checks = 0, @@unique_checks = 0"}
+
+	// take a transaction connection with the settings applied and release it: the
+	// pool files it under the setting
+	withSettings, err := client.ReserveBeginExecute(query, settings, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+	require.Len(t, withSettings.Rows, 1)
+	connID := withSettings.Rows[0][0].ToString()
+	assert.Equal(t, "0", withSettings.Rows[0][1].ToString())
+	assert.Equal(t, "0", withSettings.Rows[0][2].ToString())
+
+	// a settingless transaction reuses the released connection; it must see the
+	// checks on again
+	fresh, err := client.BeginExecute(query, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+	require.Len(t, fresh.Rows, 1)
+	require.Equal(t, connID, fresh.Rows[0][0].ToString(), "the test needs the pool to hand out the same connection")
+	assert.Equal(t, "1", fresh.Rows[0][1].ToString(), "foreign_key_checks after the reset")
+	assert.Equal(t, "1", fresh.Rows[0][2].ToString(), "unique_checks after the reset")
+}
+
 func TestSetttingsReuseConnWithSettings(t *testing.T) {
 	resetTxConnPool(t)
 

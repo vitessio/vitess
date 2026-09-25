@@ -46,13 +46,15 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtcombo"
-	"vitess.io/vitess/go/vt/vtctld"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	// Imported for the flags its init registers for vtcombo.
+	_ "vitess.io/vitess/go/vt/vtctld"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -175,8 +177,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	cmd.Flags().Set("cells-to-watch", strings.Join(tpb.Cells, ","))
 
-	// vtctld UI requires the cell flag
-	cmd.Flags().Set("cell", tpb.Cells[0])
 	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
 		cmd.Flags().Set("log_dir", "$VTDATAROOT/tmp")
 	}
@@ -337,12 +337,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// pass nil for healthcheck, it will get created
 	vtg := vtgate.Init(ctx, env, nil, resilientServer, tpb.Cells[0], tabletTypes, plannerVersion)
-
-	// vtctld configuration and init
-	err = vtctld.InitVtctld(env, ts)
-	if err != nil {
-		return err
-	}
 
 	if vschemaPersistenceDir != "" && !externalTopoServer {
 		startVschemaWatcher(ctx, vschemaPersistenceDir, ts)

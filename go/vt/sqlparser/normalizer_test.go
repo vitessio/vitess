@@ -863,27 +863,12 @@ func TestRewrites(in *testing.T) {
 		queryTimeout:                true,
 		transactionTimeout:          true,
 	}, {
-		in:                          "SHOW GLOBAL VARIABLES",
-		expected:                    "SHOW GLOBAL VARIABLES",
-		autocommit:                  true,
-		foreignKeyChecks:            true,
-		clientFoundRows:             true,
-		skipQueryPlanCache:          true,
-		sqlSelectLimit:              true,
-		transactionMode:             true,
-		workload:                    true,
-		version:                     true,
-		versionComment:              true,
-		ddlStrategy:                 true,
-		migrationContext:            true,
-		sessionUUID:                 true,
-		sessionEnableSystemSettings: true,
-		rawGTID:                     true,
-		rawTimeout:                  true,
-		sessTrackGTID:               true,
-		socket:                      true,
-		queryTimeout:                true,
-		transactionTimeout:          true,
+		// the global scope reports global values: only the server identity is substituted
+		in:             "SHOW GLOBAL VARIABLES",
+		expected:       "SHOW GLOBAL VARIABLES",
+		version:        true,
+		versionComment: true,
+		socket:         true,
 	}}
 	parser := NewTestParser()
 	for _, tc := range tests {
