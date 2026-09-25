@@ -5,6 +5,7 @@ linters:
   default: none
   enable:
     - bodyclose
+    - contextcheck
     - copyloopvar
     - depguard
     - errcheck
@@ -155,14 +156,32 @@ linters:
       - legacy
       - std-error-handling
     rules:
-      # prealloc is enabled for all non-test code.
-      # Test code and test-only paths are permanently excluded.
+      # Test files are permanently excluded from contextcheck and prealloc.
       - linters:
+          - contextcheck
           - prealloc
         path: _test\.go$
       - linters:
           - prealloc
         path: ^go/(test|tools|vt/vttablet/endtoend)/
+      - linters:
+          - contextcheck
+        path: ^go/(test|tools|vt/(binlog/binlogplayertest|topo/test|vtadmin/testutil|vttablet/(endtoend|tabletconntest|tabletserver/vstreamer/testenv)|vttest))/
+      # contextcheck is being enabled incrementally, package by package.
+      # These paths will be handled in follow-up changes.
+      - linters:
+          - contextcheck
+        path: ^go/(vtbench|vt/(discovery|schemamanager|topo|topotools|vtcombo|vtexplain|vtgate|vtorc|vttablet))/
+      - linters:
+          - contextcheck
+        path: ^go/(cmd/vtexplain|vt/(vtctl/(reparentutil|workflow)|vtctld))/
+      - linters:
+          - contextcheck
+        path: ^go/vt/(mysqlctl/(builtinbackupengine|mysqlshellbackupengine|query)|wrangler/(traffic_switcher|vdiff|vexec|vexec_plan))\.go$
+      - linters:
+          - contextcheck
+        path: ^go/vt/vtadmin/api\.go$
+        text: ^Function `(Run|Stop)->
       - linters:
           - errcheck
         path: ^go/vt/proto/
