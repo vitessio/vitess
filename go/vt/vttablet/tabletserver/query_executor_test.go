@@ -2699,6 +2699,16 @@ func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+
+	// the dry run logs the setting it lets through, and with
+	// --sanitize-log-messages only the variables it sets, never its values
+	t.Run("the dry run log of a setting is sanitized", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+		secretSetting := "set @@sql_select_limit = (select count(*) from test_table where token = 'secret')"
+		assert.Equal(t, secretSetting, settingForLog(secretSetting, false, parser))
+		assert.Equal(t, "set @@sql_select_limit [values REDACTED]", settingForLog(secretSetting, true, parser))
+		assert.Equal(t, "[REDACTED]", settingForLog("not a setting 'secret'", true, parser))
+	})
 }
 
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {

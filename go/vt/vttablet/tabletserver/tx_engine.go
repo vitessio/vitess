@@ -629,7 +629,7 @@ func (te *TxEngine) stopTransactionWatcher() {
 func (te *TxEngine) validateSettings(preQueries []string) error {
 	parser := te.env.Environment().Parser()
 	cfg := te.env.Config()
-	rejectSubqueries := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun)
+	rejectSubqueries := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun, cfg.SanitizeLogMessages)
 	return planbuilder.ValidateSettingsSQLMode(preQueries, parser, rejectSubqueries)
 }
 
