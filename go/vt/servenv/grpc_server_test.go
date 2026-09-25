@@ -19,6 +19,7 @@ package servenv
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -32,8 +33,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"vitess.io/vitess/go/vt/log"
@@ -41,6 +46,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 // TestGRPCServerOptionalTLSWarning checks what a server with optional TLS
@@ -330,6 +336,48 @@ func runIngressStatsTestRPC(t *testing.T, ingressBytes *uint64) {
 	t.Cleanup(func() { conn.Close() })
 
 	require.NoError(t, conn.Invoke(context.Background(), "/test.IngressStats/Check", &emptypb.Empty{}, &emptypb.Empty{}))
+}
+
+// TestGRPCServerCredsReload checks that a gRPC server serves the
+// certificate it reloaded to connections established after the reload.
+func TestGRPCServerCredsReload(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, oldCerts)
+
+	creds, reloader, err := newGRPCServerCreds(files, false)
+	require.NoError(t, err)
+	server := grpc.NewServer(grpc.Creds(creds))
+	healthpb.RegisterHealthServer(server, health.NewServer())
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go server.Serve(ln)
+	t.Cleanup(server.Stop)
+
+	// servedCert makes a call as a client of certs and returns the
+	// certificate the server presented.
+	servedCert := func(certs tlstest.ClientServerKeyPairs) []byte {
+		t.Helper()
+		config, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		conn, err := grpc.NewClient(ln.Addr().String(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		require.NoError(t, err)
+		defer conn.Close()
+		var p peer.Peer
+		_, err = healthpb.NewHealthClient(conn).Check(t.Context(), &healthpb.HealthCheckRequest{}, grpc.Peer(&p))
+		require.NoError(t, err)
+		info, ok := p.AuthInfo.(credentials.TLSInfo)
+		require.True(t, ok)
+		require.Equal(t, "h2", info.State.NegotiatedProtocol)
+		return info.State.PeerCertificates[0].Raw
+	}
+
+	require.Equal(t, readCert(t, oldCerts.ServerCert).Raw, servedCert(oldCerts))
+
+	installTLSFiles(t, files, newCerts)
+	require.NoError(t, reloader.Reload(true))
+	require.Equal(t, readCert(t, newCerts.ServerCert).Raw, servedCert(newCerts))
 }
 
 func getFreePort() int {
