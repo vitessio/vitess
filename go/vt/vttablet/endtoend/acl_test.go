@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -144,24 +145,10 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range execCases {
 		_, err := client.Execute(tcase.query, nil)
 		if tcase.err == "" {
-<<<<<<< HEAD
-			if err != nil {
-				t.Error(err)
-			}
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-			require.NoError(t, err)
-=======
-			require.NoError(t, err, tcase.query)
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+			assert.NoError(t, err, tcase.query)
 			continue
 		}
-<<<<<<< HEAD
-		assert.ErrorContains(t, err, tcase.err)
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-		require.ErrorContains(t, err, tcase.err)
-=======
-		require.ErrorContains(t, err, tcase.err, tcase.query)
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+		assert.ErrorContains(t, err, tcase.err, tcase.query)
 	}
 
 	// A SET statement runs on a reserved connection and is checked on the

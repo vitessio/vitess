@@ -66,11 +66,6 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "set a=1",
 		output: nil,
 	}, {
-<<<<<<< HEAD
-		input:  "show variable like 'a%'",
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-		input:  "show variables like 'a%'",
-=======
 		// A SET forwards its expressions to MySQL, which evaluates any
 		// subquery in them, so those reads are checked.
 		input: "set @v = (select v from secret limit 1)",
@@ -88,24 +83,13 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
-		input:  "show variables like 'a%'",
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
+		input:  "show variable like 'a%'",
 		output: nil,
 	}, {
 		// A WHERE with no subquery reads nothing.
 		input:  "show variables where Variable_name like 'a%'",
 		output: nil,
 	}, {
-<<<<<<< HEAD
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-		// EXPLAIN carries no table permissions, so its per-table ACL is never
-		// checked. This is the shape VEXPLAIN MYSQLPLAN issues against every
-		// resolved shard; the empty result documents that those EXPLAINs are not
-		// ACL-checked on the explained table (see the 25.0 summary).
-		input:  "explain format = json select * from t",
-		output: nil,
-	}, {
-=======
 		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
 		// subquery in it, so those reads are checked. The SHOW's own subject
 		// (the table of SHOW COLUMNS FROM t) stays unchecked as before.
@@ -156,6 +140,9 @@ func TestBuildPermissions(t *testing.T) {
 	}, {
 		input: "explain select 1 from dual where (select v from secret where id = 1) = 'guess'",
 		output: []Permission{{
+			TableName: "dual",
+			Role:      tableacl.READER,
+		}, {
 			TableName: "secret",
 			Role:      tableacl.READER,
 		}},
@@ -216,7 +203,6 @@ func TestBuildPermissions(t *testing.T) {
 		// A bare CREATE TABLE is a partial parse (the grammar keeps only the
 		// prefix), indistinguishable from `create table t (select ...)`, so it
 		// is flagged; MySQL rejects the bare form anyway.
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 		input: "create table t",
 		output: []Permission{{
 			TableName: "t",

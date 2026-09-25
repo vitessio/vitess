@@ -353,26 +353,13 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-<<<<<<< HEAD
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-		// settings are applied with no verification afterwards, so sql_mode values
-		// must be constants that can be judged here; vtgates only render constants
-		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return "", "", err
-		}
-=======
-		// settings are applied with no verification and no table ACL check, so a
-		// subquery is refused where the ACL is enforced, and sql_mode values must
-		// be constants that can be judged here
+		// settings are applied with no table ACL check, so a subquery is refused
+		// where the ACL is enforced
 		if strictTableACL {
 			if err := rejectSettingSubqueries(set, setting); err != nil {
 				return "", "", err
 			}
 		}
-		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return "", "", err
-		}
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
 			sysVar := sExpr.Var
@@ -393,4 +380,52 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 		}
 	}
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
+}
+
+// ValidateSettings mirrors BuildSettingQuery's subquery check for settings that
+// are applied without going through BuildSettingQuery — a true reservation
+// executes its settings directly on the tainted connection. Under strict table
+// ACL every setting must parse as a SET statement with no subquery, since a
+// setting that cannot be judged is rejected rather than applied unchecked.
+// Without strict table ACL the settings are applied as they always were.
+func ValidateSettings(settings []string, parser *sqlparser.Parser, strictTableACL bool) error {
+	if !strictTableACL {
+		return nil
+	}
+	for _, setting := range settings {
+		stmt, err := parser.Parse(setting)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
+		}
+		set, ok := stmt.(*sqlparser.Set)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+		}
+		if err := rejectSettingSubqueries(set, setting); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rejectSettingSubqueries refuses a connection setting whose expressions embed
+// a subquery. A setting is applied to the connection with no table ACL check,
+// so the tables a subquery reads would go unchecked. Settings carry constants:
+// vtgate evaluates a SET's expression on a shard, where the tablet checks it
+// like any read, and sends the value. The check only runs under strict table
+// ACL: without it there is nothing for it to protect, and a vtgate from
+// before the value was sent still sends a targeted session's SET expression
+// as written, which would break for nothing.
+func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
+	var found bool
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			found = true
+		}
+		return !found, nil
+	}, set)
+	if found {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
+	}
+	return nil
 }
