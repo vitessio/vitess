@@ -18,6 +18,7 @@ package semisyncmonitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -54,9 +55,15 @@ func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
 		},
 	}
 	monitor := NewMonitor(config, exporter)
+	// The exporter hands the same counter to every monitor it creates, so
+	// tests that look at it need to start from a clean slate.
+	monitor.errorCount.Reset()
 	monitor.mu.Lock()
 	defer monitor.mu.Unlock()
 	monitor.isOpen = true
+	// The pool is opened on the connector the monitor uses in production, which
+	// does not negotiate multi statement support, so a monitor that started
+	// batching again would fail these tests.
 	monitor.appPool.Open(config.DB.AppWithDB())
 	return db, monitor
 }
@@ -431,13 +438,35 @@ func TestMonitorClearAllData(t *testing.T) {
 		waitUntilWritingStopped(t, m)
 	}()
 	db.SetNeverFail(true)
-	// ExecuteFetchMulti will execute each statement separately, so we need to add both queries.
 	db.AddQuery("SET SESSION lock_wait_timeout=5", &sqltypes.Result{})
 	db.AddQuery("truncate table _vt.semisync_heartbeat", &sqltypes.Result{})
 	m.clearAllData()
-	ql := db.QueryLog()
-	require.Contains(t, ql, "set session lock_wait_timeout=5")
-	require.Contains(t, ql, "truncate table _vt.semisync_heartbeat")
+	// The lock wait timeout is set before, and as a statement of its own, the
+	// TRUNCATE it is meant to bound. A batch would be counted under the joined
+	// query instead.
+	require.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout=5"))
+	require.Equal(t, 1, db.GetQueryCalledNum("truncate table _vt.semisync_heartbeat"))
+	require.Contains(t, db.QueryLog(), "set session lock_wait_timeout=5;truncate table _vt.semisync_heartbeat")
+}
+
+// TestMonitorClearAllDataLockWaitTimeoutFails tests that the table is not
+// cleared if the lock wait timeout could not be set.
+func TestMonitorClearAllDataLockWaitTimeoutFails(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	db, m := createFakeDBAndMonitor(t)
+	defer db.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
+	db.SetNeverFail(true)
+	db.AddRejectedQuery("SET SESSION lock_wait_timeout=5", errors.New("session is gone"))
+	db.AddQuery("truncate table _vt.semisync_heartbeat", &sqltypes.Result{})
+
+	m.clearAllData()
+
+	require.NotContains(t, db.QueryLog(), "truncate table _vt.semisync_heartbeat")
+	require.EqualValues(t, 1, m.errorCount.Get())
 }
 
 // TestMonitorWaitMechanism tests that the wait mechanism works as intended.
@@ -625,7 +654,6 @@ func TestMonitorWrite(t *testing.T) {
 				waitUntilWritingStopped(t, m)
 			}()
 			db.SetNeverFail(true)
-			// ExecuteFetchMulti will execute each statement separately, so we need to add both queries.
 			db.AddQuery("SET SESSION lock_wait_timeout=5", &sqltypes.Result{})
 			db.AddQuery("insert into _vt.semisync_heartbeat (ts) values (now())", &sqltypes.Result{})
 			m.mu.Lock()
@@ -639,13 +667,43 @@ func TestMonitorWrite(t *testing.T) {
 			m.mu.Unlock()
 			queryLog := db.QueryLog()
 			if tt.shouldWrite {
-				require.Contains(t, queryLog, "set session lock_wait_timeout=5")
-				require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat (ts) values (now())")
+				// The lock wait timeout is set before, and as a statement of
+				// its own, the write it is meant to bound. A batch would be
+				// counted under the joined query instead.
+				require.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout=5"))
+				require.Equal(t, 1, db.GetQueryCalledNum("insert into _vt.semisync_heartbeat (ts) values (now())"))
+				require.Contains(t, queryLog, "set session lock_wait_timeout=5;insert into _vt.semisync_heartbeat (ts) values (now())")
 			} else {
 				require.Empty(t, queryLog)
 			}
 		})
 	}
+}
+
+// TestMonitorWriteLockWaitTimeoutFails tests that no heartbeat is written if
+// the lock wait timeout could not be set, since it is what keeps the write from
+// blocking on a lock instead of on a semi-sync ACK.
+func TestMonitorWriteLockWaitTimeoutFails(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	db, m := createFakeDBAndMonitor(t)
+	defer db.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
+	db.SetNeverFail(true)
+	db.AddRejectedQuery("SET SESSION lock_wait_timeout=5", errors.New("session is gone"))
+	db.AddQuery("insert into _vt.semisync_heartbeat (ts) values (now())", &sqltypes.Result{})
+	m.setIsBlocked(true)
+
+	m.write()
+
+	require.NotContains(t, db.QueryLog(), "insert into _vt.semisync_heartbeat (ts) values (now())")
+	require.EqualValues(t, 1, m.errorCount.Get())
+	// A write that never ran says nothing about being blocked on semi-sync.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	require.True(t, m.isBlocked)
 }
 
 // TestMonitorWriteBlocked tests the write function when the writes are blocked.
@@ -665,7 +723,7 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	require.Equal(t, 0, m.inProgressWriteCount)
 	m.mu.Unlock()
 
-	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query and INSERT query.
+	// The monitor sends the SET and the INSERT as separate statements.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 	// Block the INSERT so we have a deterministic window in which write() is in
@@ -769,7 +827,7 @@ func TestStartWrites(t *testing.T) {
 		"Rpl_semi_sync_source_wait_sessions|2",
 		"Rpl_semi_sync_source_yes_tx|100"))
 
-	// ExecuteFetchMulti will execute each statement separately.
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
@@ -824,7 +882,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 		"Rpl_semi_sync_source_wait_sessions|0",
 		"Rpl_semi_sync_source_yes_tx|10"))
 
-	// ExecuteFetchMulti will execute each statement separately.
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
@@ -936,7 +994,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	handler.semisyncBlocked.Store(false) // Initially unblocked
 	db.Handler = handler
 
-	// ExecuteFetchMulti will execute each statement separately
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
@@ -1112,7 +1170,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 	handler.semisyncBlocked.Store(false) // Initially unblocked
 	db.Handler = handler
 
-	// ExecuteFetchMulti will execute each statement separately
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})

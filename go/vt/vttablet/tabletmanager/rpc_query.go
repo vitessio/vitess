@@ -200,6 +200,20 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err != nil {
 		return nil, err
 	}
+
+	// Only a request that really carries several statements may send them in a
+	// single query. Everything else runs on a connection that cannot: that
+	// includes ExecuteFetchAsDba, whose validateQueries rejects a request with
+	// more than one statement before we get here. The capability is asked for
+	// as late as possible, so that only the batch itself runs with it, and the
+	// connection is ours alone and closed on return, so it never outlives this
+	// request.
+	if len(queries) > 1 {
+		if err := conn.SetMultiStatements(true); err != nil {
+			return nil, err
+		}
+	}
+
 	results := make([]*querypb.QueryResult, 0, len(queries))
 	result, more, err := conn.ExecuteFetchMulti(uq, maxRows, true /*wantFields*/)
 	if err == nil {

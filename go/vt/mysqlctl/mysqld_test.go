@@ -328,6 +328,51 @@ func TestGetDbaConnection(t *testing.T) {
 	defer conn.Close()
 }
 
+// TestExecuteMysqlScript checks that a script runs as the batch of statements
+// it is, whether or not its connection parameters ask for multi statement
+// support.
+func TestExecuteMysqlScript(t *testing.T) {
+	const script = "create table t1 (id int primary key);create table t2 (id int primary key)"
+	statements := []string{"create table t1 (id int primary key)", "create table t2 (id int primary key)"}
+
+	testCases := []struct {
+		name                  string
+		enableMultiStatements bool
+	}{{
+		name: "connection without multi statement support",
+		// What the dba configuration hands out: the script path has to ask
+		// for the capability itself.
+		enableMultiStatements: false,
+	}, {
+		name: "connection with multi statement support",
+		// What mysqld bootstrap hands out: the capability is already there.
+		enableMultiStatements: true,
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+
+			params := *db.ConnParams()
+			params.EnableMultiStatements = tc.enableMultiStatements
+
+			testMysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+			defer testMysqld.Close()
+
+			require.NoError(t, testMysqld.executeMysqlScript(t.Context(), &params, script))
+
+			// Each statement of the script must reach the server on its own. A
+			// script that was sent without the capability is counted under the
+			// joined query.
+			for _, statement := range statements {
+				require.Equal(t, 1, db.GetQueryCalledNum(statement), "statement %q was not executed on its own, query log: %v", statement, db.QueryLog())
+			}
+		})
+	}
+}
+
 func TestGetVersionString(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

@@ -97,25 +97,124 @@ func TestComInitDB(t *testing.T) {
 	assert.Equal(t, "my_db", db, "parseComInitDB returned unexpected data: %v", db)
 }
 
-func TestComSetOption(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
-	}()
+// expectComSetOption reads a COM_SET_OPTION packet on sConn, checks that it
+// carries the expected operand, and then sends the given response.
+func expectComSetOption(t *testing.T, sConn *Conn, operand uint16, respond func() error) {
+	t.Helper()
 
-	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
-		require.NoError(t, err)
-	}
+	// A server starts a new packet sequence for every command it reads.
+	sConn.sequence = 0
+
 	data, err := sConn.ReadPacket()
 	require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
 	require.NotEmptyf(t, data, "sConn.ReadPacket - ComSetOption failed: %v", data)
 	require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
-	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
+	require.Equal(t, operand, operation, "parseComSetOption returned unexpected data: %v", operation)
+	require.NoError(t, respond())
+}
+
+func TestSetMultiStatements(t *testing.T) {
+	t.Run("toggles the capability", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		for _, on := range []bool{true, true, false, true} {
+			operand := multiStatementsOff
+			if on {
+				operand = multiStatementsOn
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- cConn.SetMultiStatements(on)
+			}()
+			expectComSetOption(t, sConn, operand, func() error {
+				return sConn.writeEndResult(false, 0, 0, 0)
+			})
+			require.NoError(t, <-errCh)
+
+			if on {
+				require.NotZero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must be set after enabling it")
+			} else {
+				require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must be cleared after disabling it")
+			}
+		}
+	})
+
+	t.Run("starts a new packet sequence", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		// Simulate a connection on which a command has already been run.
+		cConn.sequence = 5
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cConn.SetMultiStatements(true)
+		}()
+		// The server rejects the packet if it does not start a new sequence.
+		expectComSetOption(t, sConn, multiStatementsOn, func() error {
+			return sConn.writeEndResult(false, 0, 0, 0)
+		})
+		require.NoError(t, <-errCh)
+	})
+
+	t.Run("keeps the connection usable when the server refuses", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cConn.SetMultiStatements(true)
+		}()
+		expectComSetOption(t, sConn, multiStatementsOn, func() error {
+			return sConn.writeErrorPacket(sqlerror.ERUnknownComError, sqlerror.SSNetError, "unknown command")
+		})
+
+		err := <-errCh
+		require.ErrorContains(t, err, "unknown command")
+		require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must stay unset when the server refuses")
+		require.False(t, cConn.IsClosed(), "connection must stay usable when the server refuses")
+	})
+
+	t.Run("closes the connection when the response is lost", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cConn.SetMultiStatements(true)
+		}()
+
+		data, err := sConn.ReadPacket()
+		require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
+		require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
+		// Drop the connection instead of answering: the client cannot know
+		// whether the server applied the option.
+		sConn.Close()
+
+		require.Error(t, <-errCh)
+		require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must stay unset when the response is lost")
+		require.True(t, cConn.IsClosed(), "connection must be closed when the response is lost")
+	})
 }
 
 func TestComStmtPrepare(t *testing.T) {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"syscall"
 	"testing"
 	"time"
@@ -229,6 +230,46 @@ func TestUseTCP(t *testing.T) {
 		Charset:    collations.CollationUtf8mb3ID,
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
+}
+
+// TestMultiStatementsAreNotNegotiated makes sure that none of the connections a
+// tablet hands out can execute several statements in a single query. The few
+// senders that send batches ask for the capability on the connection they own,
+// for as long as they own it.
+func TestMultiStatementsAreNotNegotiated(t *testing.T) {
+	dbConfigs := DBConfigs{
+		Host:    "a",
+		Port:    1,
+		Socket:  "b",
+		Charset: "utf8mb4",
+		App:     UserConfig{User: "app"},
+		Dba:     UserConfig{User: "dba"},
+	}
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+
+	// Walk the connectors off the type rather than off a list kept by hand, so
+	// that a connector added later cannot be quietly left out.
+	configs := reflect.ValueOf(&dbConfigs)
+	connectorType := reflect.TypeFor[Connector]()
+	found := 0
+	for i := range configs.NumMethod() {
+		// A connector getter takes nothing but its receiver and returns a
+		// Connector.
+		method := configs.Type().Method(i)
+		if method.Type.NumIn() != 1 || method.Type.NumOut() != 1 || method.Type.Out(0) != connectorType {
+			continue
+		}
+		found++
+		t.Run(method.Name, func(t *testing.T) {
+			connector := configs.Method(i).Call(nil)[0].Interface().(Connector)
+			params, err := connector.MysqlParams()
+			require.NoError(t, err)
+			require.False(t, params.EnableMultiStatements, "the connection from %s must not negotiate multi statements", method.Name)
+		})
+	}
+	// Without this the sweep above silently stops testing anything if the
+	// connectors ever stop looking like connectors.
+	require.Equal(t, 11, found, "expected to find every connector on DBConfigs")
 }
 
 func TestAccessors(t *testing.T) {

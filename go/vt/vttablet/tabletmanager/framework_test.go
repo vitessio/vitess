@@ -175,6 +175,9 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 
 	vrdbClient := binlogplayer.NewMockDBClient(t)
 	vrdbClient.Tag = fmt.Sprintf("tablet:%d", id)
+	// These tablets run a vplayer, which asks the connection to match the
+	// batching it was configured for.
+	vrdbClient.AllowMultiStatements = true
 	tenv.tmc.tablets[id] = &fakeTabletConn{
 		tablet:     tablet,
 		vrdbClient: vrdbClient,

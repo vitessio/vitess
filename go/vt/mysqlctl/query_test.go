@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 	"time"
@@ -32,6 +33,96 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 )
+
+// TestExecuteSuperQueryListMulti checks that an entry of the list may hold
+// several statements, which is what operator written SQL such as the init SQL of
+// a backup does, and that such an entry neither fails nor stops the entry after
+// it.
+func TestExecuteSuperQueryListMulti(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	params := *db.ConnParams()
+	testMysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+	defer testMysqld.Close()
+
+	require.NoError(t, testMysqld.ExecuteSuperQueryListMulti(t.Context(), []string{
+		"set global read_only=off;set global super_read_only=off",
+		"optimize no_write_to_binlog table mysql.gtid_executed",
+	}))
+
+	// Every statement has to reach the server on its own. An entry holding
+	// several would otherwise arrive as a single query that the server cannot
+	// parse, which is also what would keep the entry after it from running.
+	for _, statement := range []string{
+		"set global read_only=off",
+		"set global super_read_only=off",
+		"optimize no_write_to_binlog table mysql.gtid_executed",
+	} {
+		require.Equal(t, 1, db.GetQueryCalledNum(statement), "statement %q did not reach the server on its own, query log: %v", statement, db.QueryLog())
+	}
+
+	// The connection is discarded rather than handed back to the dba pool: it can
+	// send a batch, which nothing else drawing on the pool expects, and operator
+	// written SQL may have changed session state such as sql_mode. The pool opens
+	// a replacement for a discarded connection, which is observable through the
+	// neutralization statement every new connection runs: one for the connection
+	// the list ran on, and one for its replacement.
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery),
+		"the connection went back to the dba pool instead of being discarded")
+
+	conn, err := getPoolReconnect(t.Context(), testMysqld.dbaPool)
+	require.NoError(t, err)
+	t.Cleanup(conn.Recycle)
+
+	// An exchange already in flight is interrupted by killing it and, if that
+	// does not bring it back, by closing the connection underneath it. Without
+	// the second half a server that answers nothing holds the caller for as long
+	// as it likes.
+	t.Run("a stuck exchange is interrupted", func(t *testing.T) {
+		killGraceTimeout = 100 * time.Millisecond
+		t.Cleanup(func() { killGraceTimeout = 5 * time.Second })
+
+		conn, err := getPoolReconnect(t.Context(), testMysqld.dbaPool)
+		require.NoError(t, err)
+		t.Cleanup(conn.Recycle)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		running := make(chan struct{})
+		go func() {
+			<-running
+			cancel()
+		}()
+
+		err = testMysqld.executeWithContext(ctx, conn, comSetOption, func() error {
+			close(running)
+			// Stand in for a read the server never answers: it comes back when
+			// the connection is closed, and not before.
+			for !conn.Conn.IsClosed() {
+				time.Sleep(time.Millisecond)
+			}
+			return errors.New("connection closed underneath the exchange")
+		})
+		require.ErrorIs(t, err, context.Canceled)
+		require.True(t, conn.Conn.IsClosed(), "the connection has to be closed to interrupt the exchange")
+	})
+
+	// The capability exchanges are a blocking write and read each, so they run
+	// under the caller's context like the queries do.
+	t.Run("a done context stops an exchange before it starts", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		ran := false
+		err := testMysqld.executeWithContext(ctx, conn, comSetOption, func() error {
+			ran = true
+			return nil
+		})
+		require.ErrorIs(t, err, context.Canceled)
+		require.False(t, ran)
+	})
+}
 
 // TestExecuteFetchContextTimeoutRedactsQuery verifies that when a query is
 // killed because its context expired, the query logged on the kill path has

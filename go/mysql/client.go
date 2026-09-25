@@ -237,6 +237,14 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 	if !params.DisableClientDeprecateEOF {
 		c.Capabilities = capabilities & CapabilityClientDeprecateEOF
 	}
+	// Both handshake response packets advertise multi statement support only
+	// when it was asked for, so remember what we are about to send. The server
+	// has to offer it for the exchange to mean anything, so this records what
+	// was negotiated rather than what was asked for, like the flag above: a
+	// caller that reads it back learns whether the connection can send a batch.
+	if params.EnableMultiStatements {
+		c.Capabilities |= capabilities & CapabilityClientMultiStatements
+	}
 
 	// Handle switch to SSL if necessary.
 	if params.SslEnabled() {
@@ -489,6 +497,9 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		// If the server supported
 		// CapabilityClientSessionTrack, we also support it.
 		c.Capabilities&CapabilityClientSessionTrack |
+		// If the caller asked for multi statement support and the
+		// server supported it, we ask for it.
+		c.Capabilities&CapabilityClientMultiStatements |
 		// Pass-through ClientFoundRows flag.
 		CapabilityClientFoundRows&uint32(params.Flags)
 
@@ -526,7 +537,6 @@ const CapabilityFlags uint32 = CapabilityClientLongPassword |
 	CapabilityClientProtocol41 |
 	CapabilityClientTransactions |
 	CapabilityClientSecureConnection |
-	CapabilityClientMultiStatements |
 	CapabilityClientMultiResults |
 	CapabilityClientPluginAuth |
 	CapabilityClientPluginAuthLenencClientData
@@ -547,9 +557,10 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		CapabilityClientFoundRows&uint32(params.Flags) |
 		// If the server supported
 		// CapabilityClientSessionTrack, we also support it.
-		c.Capabilities&CapabilityClientSessionTrack
-
-	// FIXME(alainjobart) add multi statement.
+		c.Capabilities&CapabilityClientSessionTrack |
+		// If the caller asked for multi statement support and the
+		// server supported it, we ask for it.
+		c.Capabilities&CapabilityClientMultiStatements
 
 	length := 4 + // Client capability flags.
 		4 + // Max-packet size.

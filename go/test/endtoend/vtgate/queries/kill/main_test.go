@@ -85,6 +85,8 @@ func TestMain(m *testing.M) {
 		}
 
 		vtParams = clusterInstance.GetVTParams(ks)
+		// dropData loads the schema as one batch of statements.
+		vtParams.EnableMultiStatements = true
 
 		return m.Run()
 	}()

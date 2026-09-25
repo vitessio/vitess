@@ -1118,7 +1118,9 @@ func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T)
 		Port:  addr.Port,
 		Uname: "user1",
 		Pass:  "password1",
-		Flags: mysql.CapabilityClientMultiStatements,
+		// Only CapabilityClientFoundRows is passed through from Flags, so this
+		// is what asks the handshake for multi statement support.
+		EnableMultiStatements: true,
 	}
 
 	conn, err := mysql.Connect(t.Context(), params)
@@ -1259,7 +1261,9 @@ func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 		Port:  addr.Port,
 		Uname: "user1",
 		Pass:  "password1",
-		Flags: mysql.CapabilityClientMultiStatements,
+		// Only CapabilityClientFoundRows is passed through from Flags, so this
+		// is what asks the handshake for multi statement support.
+		EnableMultiStatements: true,
 	}
 
 	conn, err := mysql.Connect(t.Context(), params)
@@ -1357,7 +1361,9 @@ func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.
 		Port:  addr.Port,
 		Uname: "user1",
 		Pass:  "password1",
-		Flags: mysql.CapabilityClientMultiStatements,
+		// Only CapabilityClientFoundRows is passed through from Flags, so this
+		// is what asks the handshake for multi statement support.
+		EnableMultiStatements: true,
 	}
 
 	conn, err := mysql.Connect(t.Context(), params)
@@ -3652,7 +3658,9 @@ func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
 		Port:  addr.Port,
 		Uname: "user1",
 		Pass:  "password1",
-		Flags: mysql.CapabilityClientMultiStatements,
+		// Only CapabilityClientFoundRows is passed through from Flags, so this
+		// is what asks the handshake for multi statement support.
+		EnableMultiStatements: true,
 	}
 
 	conn, err := mysql.Connect(t.Context(), params)

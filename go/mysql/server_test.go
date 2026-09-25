@@ -553,6 +553,88 @@ func TestClientFoundRows(t *testing.T) {
 	c.Close()
 }
 
+func TestClientMultiStatements(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	// Test without the flag: the capability must not be negotiated.
+	c, err := Connect(ctx, params)
+	require.NoError(t, err, "Connect failed")
+	require.Zero(t, th.LastConn().Capabilities&CapabilityClientMultiStatements, "MultiStatements must not be negotiated by default, server capabilities: %x", th.LastConn().Capabilities)
+	require.Zero(t, c.Capabilities&CapabilityClientMultiStatements, "MultiStatements must not be recorded by default, client capabilities: %x", c.Capabilities)
+	c.Close()
+
+	// Test with the flag.
+	params.EnableMultiStatements = true
+	c, err = Connect(ctx, params)
+	require.NoError(t, err, "Connect failed")
+	require.NotZero(t, th.LastConn().Capabilities&CapabilityClientMultiStatements, "MultiStatements must be negotiated when requested, server capabilities: %x", th.LastConn().Capabilities)
+	require.NotZero(t, c.Capabilities&CapabilityClientMultiStatements, "MultiStatements must be recorded when requested, client capabilities: %x", c.Capabilities)
+	c.Close()
+}
+
+func TestClientSetMultiStatements(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	c, err := Connect(ctx, params)
+	require.NoError(t, err, "Connect failed")
+	defer c.Close()
+
+	require.NoError(t, c.SetMultiStatements(true))
+	require.NotZero(t, th.LastConn().Capabilities&CapabilityClientMultiStatements, "server capabilities: %x", th.LastConn().Capabilities)
+	require.NotZero(t, c.Capabilities&CapabilityClientMultiStatements, "client capabilities: %x", c.Capabilities)
+
+	// The connection keeps working after the option was set.
+	result, err := c.ExecuteFetch("select rows", 10000, true)
+	require.NoError(t, err, "ExecuteFetch failed")
+	utils.MustMatch(t, result, selectRowsResult)
+
+	require.NoError(t, c.SetMultiStatements(false))
+	require.Zero(t, th.LastConn().Capabilities&CapabilityClientMultiStatements, "server capabilities: %x", th.LastConn().Capabilities)
+	require.Zero(t, c.Capabilities&CapabilityClientMultiStatements, "client capabilities: %x", c.Capabilities)
+}
+
 func TestConnAttrs(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
@@ -1587,10 +1669,7 @@ func TestListenerShutdown(t *testing.T) {
 	// A locally answered non-ping command is activity too: COM_SET_OPTION
 	// never reaches the handler's own methods, but MySQL counts it against
 	// the idle wait like any other command.
-	conn.sequence = 0
-	require.NoError(t, conn.writeComSetOption(0))
-	_, err = conn.ReadPacket()
-	require.NoError(t, err)
+	require.NoError(t, conn.SetMultiStatements(true))
 	require.Equal(t, 2, th.Activity(), "the handler must observe a locally answered COM_SET_OPTION")
 
 	l.Shutdown()
