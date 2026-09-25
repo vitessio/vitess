@@ -104,7 +104,7 @@ func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 func TestBuildSettingQueryResetRestoresGlobalForeignKeyAndUniqueChecks(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	_, resetQuery, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser)
+	_, resetQuery, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
 	assert.Equal(t, "set @@foreign_key_checks = @@global.foreign_key_checks, @@unique_checks = @@global.unique_checks, sql_safe_updates = default", resetQuery)
 }
