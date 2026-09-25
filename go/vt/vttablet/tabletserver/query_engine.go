@@ -550,13 +550,32 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser(), qe.strictTableACL)
+		parser := qe.env.Environment().Parser()
+		rejectSubqueries := settingsRejectSubqueries(settings, parser, qe.strictTableACL, qe.enableTableACLDryRun)
+		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, parser, rejectSubqueries)
 		if err != nil {
 			return nil, err
 		}
 		return smartconnpool.NewSetting(query, resetQuery), nil
 	})
 	return connSetting, err
+}
+
+var logSettingSubqueryDryRun = logutil.NewThrottledLogger("SettingSubqueryDryRun", 1*time.Minute)
+
+// settingsRejectSubqueries reports whether connection settings with a subquery
+// are refused. They are under strict table ACL, as a setting is applied with no
+// table ACL check (see planbuilder.SettingWithSubquery). A dry run lets them
+// through, as it does any request the table ACL would deny, and logs the
+// setting that the ACL would refuse without it.
+func settingsRejectSubqueries(settings []string, parser *sqlparser.Parser, strictTableACL, dryRun bool) bool {
+	if !dryRun {
+		return strictTableACL
+	}
+	if setting := planbuilder.SettingWithSubquery(settings, parser); setting != "" {
+		logSettingSubqueryDryRun.Warningf("table ACL dry run: allowing a connection setting with a subquery, which strict table ACL rejects: %s", parser.TruncateForLog(setting))
+	}
+	return false
 }
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
