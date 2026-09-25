@@ -68,6 +68,7 @@
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+        - [ORCA load reports now include QPS](#grpc-orca-qps)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -765,6 +766,16 @@ The feature is opt-in and disabled by default: set `--s3-backup-download-concurr
 **CPU note (when parallel downloads are enabled):** The SDK transfer manager's dispatch loop busy-spins while a download window is in flight, consuming meaningful CPU even when the workload is network-bound. With `--restore-concurrency=4` (the default), up to 4 busy-spinning goroutines (one per file) compete with decompression for CPU. This is upstream SDK behaviour.
 
 See [#20225](https://github.com/vitessio/vitess/pull/20225) for details.
+
+#### <a id="grpc-orca-qps"/>ORCA load reports now include QPS</a>
+
+When `--grpc-enable-orca-metrics` is enabled, the ORCA (Open Request Cost Aggregation) load reports a Vitess gRPC server sends to clients now include a queries-per-second (QPS) value alongside CPU and memory utilization. Standard gRPC weighted round robin (WRR) load balancers ([gRFC A58](https://github.com/grpc/proposal/blob/master/A58-client-side-weighted-round-robin-lb-policy.md)) weight each backend by QPS divided by CPU utilization, and treat a backend that reports zero QPS as having no load data. Before this change, clients had to use a custom load balancer to route on Vitess utilization reports; now the stock WRR policy uses them directly.
+
+The reported QPS is the number of gRPC messages the server sent per second since the previous report, which is refreshed every 30 seconds. A unary call counts as one message, and a stream such as `VStream` counts each message it sends, so long-lived streams contribute to load in proportion to the work they do. All sent messages are counted, including internal traffic such as health checks, on the assumption that equivalent servers (for example, tablets in the same shard) carry similar internal traffic.
+
+If you already run clients with a WRR policy against servers that have `--grpc-enable-orca-metrics` enabled, expect those clients to start weighting traffic by server load after upgrading instead of distributing it evenly.
+
+See [#21233](https://github.com/vitessio/vitess/pull/21233) for details.
 
 #### <a id="vttls-crl-fail-closed"/>Connections whose certificate revocation cannot be checked against a configured CRL are rejected</a>
 
