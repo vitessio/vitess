@@ -142,24 +142,24 @@
     }
   },
   {
-    "comment": "an unquoted mode name is the equivalent string; rendered without the backticks the formatter adds for a keyword",
-    "query": "set @@sql_mode = TRADITIONAL",
+    "comment": "an identifier value is rendered from its own text, without the backticks the formatter adds for a keyword",
+    "query": "set @@time_zone = SYSTEM",
     "plan": {
       "Type": "MultiShard",
       "QueryType": "SET",
-      "Original": "set @@sql_mode = TRADITIONAL",
+      "Original": "set @@time_zone = SYSTEM",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
             "Type": "SysVarSet",
-            "Name": "sql_mode",
+            "Name": "time_zone",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
-            "Expr": "'TRADITIONAL'",
-            "SupportSetVar": true
+            "Expr": "'SYSTEM'",
+            "SupportSetVar": false
           }
         ],
         "Inputs": [

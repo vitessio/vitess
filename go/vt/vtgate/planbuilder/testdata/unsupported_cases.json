@@ -475,6 +475,11 @@
     "plan": "setting the ANSI sql_mode is unsupported"
   },
   {
+    "comment": "a back-quoted on or off is a mode name like any other, not the boolean keyword",
+    "query": "set sql_mode = `off`",
+    "plan": "Variable 'sql_mode' can't be set to the value of 'off'"
+  },
+  {
     "comment": "a qualified name is never a mode name; MySQL rejects it as the wrong argument type",
     "query": "set sql_mode = t.TRADITIONAL",
     "plan": "Incorrect argument type to variable 'sql_mode'"

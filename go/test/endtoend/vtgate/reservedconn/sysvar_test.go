@@ -51,9 +51,9 @@ func TestSetSysVarSingle(t *testing.T) {
 		expr:     "@charvar",
 		expected: []string{`[[VARCHAR("utf8mb4")]]`, `[[VARCHAR("utf8")]]`},
 	}, {
-		name:     "sql_mode", // use reserved conn; an unquoted mode name is the equivalent string
-		expr:     "TRADITIONAL",
-		expected: []string{`[[VARCHAR("TRADITIONAL")]]`},
+		name:     "time_zone", // use reserved conn; an identifier value is the string of its name, keyword or not
+		expr:     "SYSTEM",
+		expected: []string{`[[VARCHAR("SYSTEM")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     "''",
