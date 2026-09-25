@@ -61,6 +61,15 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	// Consistent hash ring configuration. When ringSize > 1, each VTOrc
+	// instance watches only the keyspace/shards for which it ranks among the
+	// top ringWatchersPerShard instances under rendezvous hashing. Populated
+	// from the --vtorc-ring-* flags. ringSize defaults to 1 (disabled) so entry
+	// points that do not register these flags via the CLI behave as before.
+	ringSize             = 1
+	ringIndex            int
+	ringWatchersPerShard = 3
+
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
@@ -84,6 +93,23 @@ func init() {
 		[]string{"Keyspace", "Shard"},
 		getEmergencyReparentShardDisabledStats,
 	)
+	stats.NewGaugeFunc("VtorcRingSize", "Configured consistent hash ring size (1 = disabled)", func() int64 {
+		return int64(ringSize)
+	})
+	stats.NewGaugeFunc("VtorcRingIndex", "Consistent hash ring index for this VTOrc instance", func() int64 {
+		return int64(ringIndex)
+	})
+	stats.NewGaugeFunc("VtorcRingWatchersPerShard", "Number of VTOrc instances that watch each shard under the consistent hash ring", func() int64 {
+		return int64(ringWatchersPerShard)
+	})
+	stats.NewGaugeFunc("KeyspaceShardsWatched", "Number of distinct keyspace/shard pairs currently tracked by this VTOrc instance", func() int64 {
+		shardStats, err := inst.ReadKeyspaceShardStats()
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to read keyspace shard stats for KeyspaceShardsWatched: %+v", err))
+			return 0
+		}
+		return int64(len(shardStats))
+	})
 }
 
 // getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
@@ -128,6 +154,9 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &clustersToWatch, "clusters-to-watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells in which VTOrc skips recovery actions when the analyzed tablet is in one of these cells. For ClusterHasNoPrimary (no primary exists in the shard), recovery is suppressed only when every cell that has tablets in the shard is listed; a partial deny-list lets the initial election proceed. Detection still happens and discovery still spans all cells. Cells are validated against the topology at startup. Example: \"cell1,cell2\"")
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
+	utils.SetFlagIntVar(fs, &ringSize, "vtorc-ring-size", 1, "Total number of VTOrc instances in the consistent hash ring. 1 (the default) disables partitioning and watches the full fleet. When greater than --vtorc-ring-watchers-per-shard, each shard is watched by only the top --vtorc-ring-watchers-per-shard instances chosen by rendezvous hashing, reducing per-instance load.")
+	utils.SetFlagIntVar(fs, &ringIndex, "vtorc-ring-index", 0, "Zero-based ordinal of this VTOrc instance within the consistent hash ring. Must be in the range [0, vtorc-ring-size).")
+	utils.SetFlagIntVar(fs, &ringWatchersPerShard, "vtorc-ring-watchers-per-shard", 3, "Number of VTOrc instances that watch each shard (the rendezvous-hashing top-k). Must be >= 1. Defaults to 3 for three-way coverage. Ring sizes <= this value watch the full fleet.")
 }
 
 // validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
@@ -207,6 +236,9 @@ func initializeShardsToWatch() error {
 
 // shouldWatchTablet checks if the given tablet is part of the watch list.
 func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
+	if ringSize > 1 && !isInRingSegment(tablet.GetKeyspace(), tablet.GetShard(), ringIndex, ringSize, ringWatchersPerShard) {
+		return false
+	}
 	// If we are watching all keyspaces, then we want to watch this tablet too.
 	if len(shardsToWatch) == 0 {
 		return true
@@ -228,6 +260,35 @@ func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
 	return false
 }
 
+// validateRingConfig checks the --vtorc-ring-* flag values. It is separated
+// from OpenTabletDiscovery so it can be unit-tested without starting discovery.
+func validateRingConfig(ringSize, ringIndex, watchersPerShard int) error {
+	if ringSize < 1 {
+		return fmt.Errorf("--vtorc-ring-size must be >= 1, got %d", ringSize)
+	}
+	if ringIndex < 0 || ringIndex >= ringSize {
+		return fmt.Errorf("--vtorc-ring-index %d is out of range [0, %d)", ringIndex, ringSize)
+	}
+	if watchersPerShard < 1 {
+		return fmt.Errorf("--vtorc-ring-watchers-per-shard must be >= 1, got %d", watchersPerShard)
+	}
+	return nil
+}
+
+// logRingConfig emits an Info log summarising the current ring configuration.
+func logRingConfig() {
+	if ringSize <= 1 {
+		return
+	}
+	if ringSize <= ringWatchersPerShard {
+		log.Info(fmt.Sprintf("VTOrc ring: size %d, index %d, %d watchers/shard — no partitioning effect (ring-size <= watchers-per-shard), every instance watches every shard",
+			ringSize, ringIndex, ringWatchersPerShard))
+		return
+	}
+	log.Info(fmt.Sprintf("VTOrc ring: size %d, index %d, %d watchers/shard — each instance watches ~%d/%d of the fleet",
+		ringSize, ringIndex, ringWatchersPerShard, ringWatchersPerShard, ringSize))
+}
+
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
 func OpenTabletDiscovery() <-chan time.Time {
@@ -243,6 +304,12 @@ func OpenTabletDiscovery() <-chan time.Time {
 		log.Error(fmt.Sprintf("Error parsing --clusters-to-watch: %v", err))
 		os.Exit(1)
 	}
+	// Validate the consistent hash ring flags.
+	if err := validateRingConfig(ringSize, ringIndex, ringWatchersPerShard); err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+	logRingConfig()
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)

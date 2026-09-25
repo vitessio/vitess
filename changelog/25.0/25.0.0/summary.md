@@ -20,6 +20,8 @@
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [Consistent hash ring to partition shard monitoring across instances](#vtorc-consistent-hash-ring)
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
@@ -207,6 +209,20 @@ Both compatibility behaviors will be removed in v26, along with the `SelectStrea
 **Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above, and re-key `OtherRead` rules meant to gate streamed `ANALYZE` on the `Select` plan or a `Query` pattern. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-consistent-hash-ring"/>Consistent hash ring to partition shard monitoring across instances</a>
+
+VTOrc can now split shard-monitoring responsibility across a pool of instances using rendezvous (highest-random-weight) hashing, so each instance watches only a deterministic slice of the fleet instead of the entire topology. It is controlled by three new flags:
+
+- `--vtorc-ring-size` (default `1`, disabled): total number of VTOrc instances in the ring.
+- `--vtorc-ring-index`: this instance's 0-based position in the ring.
+- `--vtorc-ring-watchers-per-shard` (default `3`): number of instances that watch each shard.
+
+Each shard is watched by the `--vtorc-ring-watchers-per-shard` highest-ranked instances under rendezvous hashing of `keyspace/shard`, giving that many watchers per shard for HA. Because rendezvous weights are independent of the ring membership, growing or shrinking the ring only moves a shard between at most one old and one new watcher — so a rolling resize keeps at least `watchers-per-shard - 1` live watchers on every shard at all times, with no staging window or coverage gap. Ring sizes at or below `--vtorc-ring-watchers-per-shard` are a no-op (every instance watches every shard); the default `--vtorc-ring-size=1` preserves the existing behavior of watching the entire topology.
+
+See [#21121](https://github.com/vitessio/vitess/pull/21121) for details.
 
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
 

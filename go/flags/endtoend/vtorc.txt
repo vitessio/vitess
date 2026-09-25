@@ -115,4 +115,7 @@ Flags:
       --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
   -v, --version                                                     print binary version
+      --vtorc-ring-index int                                        Zero-based ordinal of this VTOrc instance within the consistent hash ring. Must be in the range [0, vtorc-ring-size).
+      --vtorc-ring-size int                                         Total number of VTOrc instances in the consistent hash ring. 1 (the default) disables partitioning and watches the full fleet. When greater than --vtorc-ring-watchers-per-shard, each shard is watched by only the top --vtorc-ring-watchers-per-shard instances chosen by rendezvous hashing, reducing per-instance load. (default 1)
+      --vtorc-ring-watchers-per-shard int                           Number of VTOrc instances that watch each shard (the rendezvous-hashing top-k). Must be >= 1. Defaults to 3 for three-way coverage. Ring sizes <= this value watch the full fleet. (default 3)
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)
