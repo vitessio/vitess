@@ -4344,8 +4344,14 @@ type EmergencyReparentShardRequest struct {
 	// are detected. NewPrimary is required and must be an upfront undominated candidate.
 	// Transactions only present on losing histories will not be preserved.
 	AllowSplitBrainPromotion bool `protobuf:"varint,9,opt,name=allow_split_brain_promotion,json=allowSplitBrainPromotion,proto3" json:"allow_split_brain_promotion,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
+	// that the new primary must have. This includes both applied transactions and
+	// received transactions still in the relay log. The reparent fails if no
+	// candidate has received it. The check supports MySQL GTID shards only. Empty
+	// means no requirement.
+	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4439,6 +4445,13 @@ func (x *EmergencyReparentShardRequest) GetAllowSplitBrainPromotion() bool {
 		return x.AllowSplitBrainPromotion
 	}
 	return false
+}
+
+func (x *EmergencyReparentShardRequest) GetRequiredPosition() string {
+	if x != nil {
+		return x.RequiredPosition
+	}
+	return ""
 }
 
 type EmergencyReparentShardResponse struct {
@@ -17865,7 +17878,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\x82\x04\n" +
+	"\x15DeleteTabletsResponse\"\xaf\x04\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17876,7 +17889,9 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x1cprevent_cross_cell_promotion\x18\x06 \x01(\bR\x19preventCrossCellPromotion\x12/\n" +
 	"\x14wait_for_all_tablets\x18\a \x01(\bR\x11waitForAllTablets\x12@\n" +
 	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12=\n" +
-	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\"\xbc\x01\n" +
+	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\x12+\n" +
+	"\x11required_position\x18\n" +
+	" \x01(\tR\x10requiredPosition\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +
