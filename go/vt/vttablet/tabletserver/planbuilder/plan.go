@@ -411,9 +411,9 @@ func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	return mutating, acquiring
 }
 
-// BuildSettingQuery builds a query for system settings. Under strict table
-// ACL a setting with a subquery is refused, see rejectSettingSubqueries.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableACL bool) (query string, resetQuery string, err error) {
+// BuildSettingQuery builds a query for system settings. When rejectSubqueries
+// is set, a setting with a subquery is refused, see rejectSettingSubqueries.
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
@@ -432,7 +432,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 		// settings are applied with no verification and no table ACL check, so a
 		// subquery is refused where the ACL is enforced, and sql_mode values must
 		// be constants that can be judged here
-		if strictTableACL {
+		if rejectSubqueries {
 			if err := rejectSettingSubqueries(set, setting); err != nil {
 				return "", "", err
 			}
