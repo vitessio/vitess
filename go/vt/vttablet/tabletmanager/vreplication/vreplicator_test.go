@@ -793,7 +793,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		// stalledKill simulates a stalled DBA connection setup during
 		// the kill attempt. The attempt must fail once its timeout
 		// expires -- rather than blocking forever -- after which the
-		// in-flight action is simply left to complete.
+		// connection executing the actions is abandoned: the actions
+		// return promptly while the in-flight ALTER runs on as an
+		// orphan, and re-running the actions later reconciles it.
 		stalledKill bool
 	}{
 		{
@@ -913,7 +915,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 			if tc.stalledKill {
 				// The kill attempt is bounded, so the stalled connection
 				// setup must fail on its own once the attempt's timeout
-				// expires.
+				// expires...
 				require.Eventually(t, func() bool {
 					select {
 					case <-killAttemptDone:
@@ -922,11 +924,10 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 						return false
 					}
 				}, 30*time.Second, 10*time.Millisecond)
-				// The kill failed and there are no retries, so the ALTER
-				// remains; unlock the table to let it -- and with it the
-				// post copy actions -- complete.
-				_, err = dbaconn.ExecuteFetch("unlock tables", 1)
-				require.NoError(t, err)
+				// ...after which the connection executing the actions is
+				// abandoned, so the actions return promptly below even
+				// though the table is still locked and the ALTER still
+				// blocked on it.
 			}
 
 			// Wait for execPostCopyActions to return. Use a generous
@@ -941,50 +942,57 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				}
 			}, 30*time.Second, 10*time.Millisecond)
 			actionErr := <-errCh
-			if tc.stalledKill {
-				// The actions completed normally after the failed kill.
-				require.NoError(t, actionErr)
-			} else {
-				require.Error(t, actionErr)
-				if !tc.interruptBeforeStart {
-					assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
-						"unexpected error: %v", actionErr)
-				}
+			require.Error(t, actionErr)
+			if !tc.interruptBeforeStart && !tc.stalledKill {
+				assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
+					"unexpected error: %v", actionErr)
 			}
 
 			_, err = dbaconn.ExecuteFetch("unlock tables", 1)
 			require.NoError(t, err)
 
-			currentDDL := getCurrentDDL(tableName)
 			if tc.stalledKill {
-				// Confirm that the ALTER to re-add the secondary keys
-				// succeeded as it was never killed.
-				assert.False(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
-					"Expected the secondary keys to have been re-added, got: %s", forError(currentDDL))
+				// The orphaned ALTER was never killed and completes once
+				// the table is unlocked.
+				require.Eventually(t, func() bool {
+					req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+					sd, err := env.Mysqld.GetSchema(ctx, dbName, req)
+					if err != nil || len(sd.TableDefinitions) != 1 {
+						return false
+					}
+					return !strings.EqualFold(stripCruft(withoutPKs), stripCruft(removeVersionDifferences(sd.TableDefinitions[0].Schema)))
+				}, 30*time.Second, 50*time.Millisecond, "expected the secondary keys to have been re-added by the orphaned ALTER")
 			} else {
 				// Confirm that the ALTER to re-add the secondary keys
 				// did not succeed.
+				currentDDL := getCurrentDDL(tableName)
 				assert.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
 					"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
+
+				// Confirm that we successfully attempted to kill it.
+				query := "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
+				res, err := dbaconn.ExecuteFetch(query, 1)
+				require.NoError(t, err)
+				assert.Len(t, res.Rows, 1)
+				// TODO: figure out why the KILL never shows up...
+				// require.Equal(t, "1", res.Rows[0][0].ToString())
 			}
 
-			// Confirm that we successfully attempted to kill it.
-			query := "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
-			res, err := dbaconn.ExecuteFetch(query, 1)
+			// Confirm that the post copy action record still exists
+			// so it will later be retried.
+			res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
 			require.NoError(t, err)
-			assert.Len(t, res.Rows, 1)
-			// TODO: figure out why the KILL never shows up...
-			// require.Equal(t, "1", res.Rows[0][0].ToString())
+			require.Len(t, res.Rows, 1)
 
-			res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
-			require.NoError(t, err)
 			if tc.stalledKill {
-				// The completed actions deleted their record.
+				// The retry -- when the workflow is restarted -- finds the
+				// keys already added by the orphaned ALTER, reconciles the
+				// duplicate key error against the schema, and completes,
+				// deleting the record.
+				require.NoError(t, vr.execPostCopyActions(ctx, ctx, tableName))
+				res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
+				require.NoError(t, err)
 				require.Empty(t, res.Rows)
-			} else {
-				// Confirm that the post copy action record still exists
-				// so it will later be retried.
-				require.Len(t, res.Rows, 1)
 			}
 		})
 	}
