@@ -1,0 +1,231 @@
+diff --git a/go/vt/vttablet/tabletserver/throttle/client.go b/go/vt/vttablet/tabletserver/throttle/client.go
+index 5bed60c..876faf1 100644
+--- a/go/vt/vttablet/tabletserver/throttle/client.go
++++ b/go/vt/vttablet/tabletserver/throttle/client.go
+@@ -55,11 +55,15 @@ type Client struct {
+ 	appName   throttlerapp.Name
+ 	flags     CheckFlags
+ 
++	// lastSuccessfulThrottleMu serializes actual throttler checks (the slow path of ThrottleCheckOK), so that
++	// concurrent callers with a stale cache entry do not all check the throttler at once.
++	// It is not taken on the fast path.
+ 	lastSuccessfulThrottleMu sync.Mutex
+-	// lastSuccessfulThrottle records the latest tick (value of `throttleTicks`) when the throttler was
+-	// satisfied for a given metric. This makes it possible to potentially skip a throttler check.
+-	// key is the app name.
+-	lastSuccessfulThrottle map[string]int64
++	// lastSuccessfulThrottle records, per app name (string key, *atomic.Int64 value), the latest tick (value
++	// of `throttleTicks`) when the throttler was satisfied. This makes it possible to potentially skip a
++	// throttler check. Lookups are lock free, so that callers which check the throttler per row or per
++	// event (e.g. the rowstreamer, vstreamer and vplayer, which share a client) do not contend on a mutex.
++	lastSuccessfulThrottle sync.Map
+ }
+ 
+ // NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
+@@ -72,22 +76,32 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, scope
+ 		flags: CheckFlags{
+ 			Scope: scope,
+ 		},
+-		lastSuccessfulThrottle: make(map[string]int64),
+ 	}
+ }
+ 
+-// clearSuccessfulResultsCache clears lastSuccessfulThrottleMu, so that the next check will be fresh.
++// lastSuccessfulTick returns the tick holder of the given app, creating it if needed.
++func (c *Client) lastSuccessfulTick(appName string) *atomic.Int64 {
++	if tick, ok := c.lastSuccessfulThrottle.Load(appName); ok {
++		return tick.(*atomic.Int64)
++	}
++	tick, _ := c.lastSuccessfulThrottle.LoadOrStore(appName, new(atomic.Int64))
++	return tick.(*atomic.Int64)
++}
++
++// clearSuccessfulResultsCache clears lastSuccessfulThrottle, so that the next check will be fresh.
+ func (c *Client) clearSuccessfulResultsCache() {
+ 	c.lastSuccessfulThrottleMu.Lock()
+ 	defer c.lastSuccessfulThrottleMu.Unlock()
+-	c.lastSuccessfulThrottle = make(map[string]int64)
++	c.lastSuccessfulThrottle.Range(func(_, tick any) bool {
++		tick.(*atomic.Int64).Store(0)
++		return true
++	})
+ }
+ 
+ // ThrottleCheckOK checks the throttler, and returns 'true' when the throttler is satisfied.
+ // It does not sleep.
+ // The function caches results for a brief amount of time, hence it's safe and efficient to
+-// be called very frequently.
+-// The function is not thread safe.
++// be called very frequently, including concurrently.
+ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (checkResult *CheckResult, throttleCheckOK bool) {
+ 	if c == nil {
+ 		// no client
+@@ -102,10 +116,15 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
+ 	if overrideAppName != "" {
+ 		checkApp = overrideAppName
+ 	}
++	lastSuccessfulTick := c.lastSuccessfulTick(checkApp.String())
++	if lastSuccessfulTick.Load() >= atomic.LoadInt64(&throttleTicks) {
++		// if last check was OK just very recently there is no need to check again
++		return emptyCheckResult, true
++	}
+ 	c.lastSuccessfulThrottleMu.Lock()
+ 	defer c.lastSuccessfulThrottleMu.Unlock()
+-	if c.lastSuccessfulThrottle[checkApp.String()] >= atomic.LoadInt64(&throttleTicks) {
+-		// if last check was OK just very recently there is no need to check again
++	if lastSuccessfulTick.Load() >= atomic.LoadInt64(&throttleTicks) {
++		// another caller checked the throttler successfully while we were waiting for the lock
+ 		return emptyCheckResult, true
+ 	}
+ 	// It's time to run a throttler check
+@@ -118,7 +137,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
+ 			return checkResult, false
+ 		}
+ 	}
+-	c.lastSuccessfulThrottle[checkApp.String()] = atomic.LoadInt64(&throttleTicks)
++	lastSuccessfulTick.Store(atomic.LoadInt64(&throttleTicks))
+ 	return checkResult, true
+ }
+ 
+diff --git a/go/vt/vttablet/tabletserver/throttle/client_test.go b/go/vt/vttablet/tabletserver/throttle/client_test.go
+new file mode 100644
+index 0000000..aad20be
+--- /dev/null
++++ b/go/vt/vttablet/tabletserver/throttle/client_test.go
+@@ -0,0 +1,136 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package throttle
++
++import (
++	"math"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
++	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
++)
++
++// checkOKAsync runs ThrottleCheckOK in a goroutine and returns a channel that receives its result.
++func checkOKAsync(t *testing.T, client *Client, appName throttlerapp.Name) <-chan bool {
++	done := make(chan bool, 1)
++	go func() {
++		_, ok := client.ThrottleCheckOK(t.Context(), appName)
++		done <- ok
++	}()
++	return done
++}
++
++// TestThrottleCheckOKFreshResultDoesNotLock verifies that a still-fresh successful check is served
++// without taking the client's mutex, which is held while the throttler is actually checked. Callers
++// that check the throttler per row or per event (rowstreamer, vstreamer, vplayer) share one client,
++// so they must not serialize on that mutex.
++func TestThrottleCheckOKFreshResultDoesNotLock(t *testing.T) {
++	// A throttler that is not running always responds OK.
++	client := NewBackgroundClient(&Throttler{}, throttlerapp.RowStreamerName, base.UndefinedScope)
++	_, ok := client.ThrottleCheckOK(t.Context(), "")
++	require.True(t, ok)
++	// Make the cached success fresh for good, so that the background ticker cannot make it stale.
++	client.lastSuccessfulTick(throttlerapp.RowStreamerName.String()).Store(math.MaxInt64)
++
++	client.lastSuccessfulThrottleMu.Lock()
++	t.Cleanup(client.lastSuccessfulThrottleMu.Unlock)
++
++	done := checkOKAsync(t, client, "")
++	select {
++	case ok := <-done:
++		assert.True(t, ok)
++	case <-time.After(30 * time.Second):
++		require.Fail(t, "ThrottleCheckOK blocked on the client mutex despite a fresh successful check")
++	}
++}
++
++// TestThrottleCheckOKStaleResultChecksThrottler verifies that the lock-free fast path is only taken
++// for the same app and the same tick: another app, or the same app after the tick has advanced,
++// must go through an actual (mutex-serialized) throttler check.
++func TestThrottleCheckOKStaleResultChecksThrottler(t *testing.T) {
++	client := NewBackgroundClient(&Throttler{}, throttlerapp.RowStreamerName, base.UndefinedScope)
++	_, ok := client.ThrottleCheckOK(t.Context(), "")
++	require.True(t, ok)
++
++	assertBlockedUntilUnlocked := func(appName throttlerapp.Name) {
++		client.lastSuccessfulThrottleMu.Lock()
++		done := checkOKAsync(t, client, appName)
++		select {
++		case <-done:
++			client.lastSuccessfulThrottleMu.Unlock()
++			require.Fail(t, "ThrottleCheckOK did not check the throttler", "app: %v", appName)
++		case <-time.After(50 * time.Millisecond):
++		}
++		client.lastSuccessfulThrottleMu.Unlock()
++		select {
++		case ok := <-done:
++			assert.True(t, ok)
++		case <-time.After(30 * time.Second):
++			require.Fail(t, "ThrottleCheckOK did not return", "app: %v", appName)
++		}
++	}
++
++	// A different app has no cached success.
++	assertBlockedUntilUnlocked(throttlerapp.VPlayerName)
++	// The success of the default app goes stale once the tick advances.
++	atomic.AddInt64(&throttleTicks, 1)
++	assertBlockedUntilUnlocked("")
++	// Clearing the cache makes the next check fresh.
++	client.lastSuccessfulTick(throttlerapp.RowStreamerName.String()).Store(math.MaxInt64)
++	client.clearSuccessfulResultsCache()
++	assertBlockedUntilUnlocked("")
++}
++
++func BenchmarkThrottleCheckOK(b *testing.B) {
++	client := NewBackgroundClient(&Throttler{}, throttlerapp.VStreamerName, base.UndefinedScope)
++	ctx := b.Context()
++	// Keep the cached successes fresh so that we measure the fast path.
++	for _, appName := range []throttlerapp.Name{throttlerapp.RowStreamerName, "vplayer:some-workflow-name:0123456789abcdef"} {
++		_, ok := client.ThrottleCheckOK(ctx, appName)
++		require.True(b, ok)
++		client.lastSuccessfulTick(appName.String()).Store(math.MaxInt64)
++	}
++
++	b.Run("serial", func(b *testing.B) {
++		for b.Loop() {
++			if _, ok := client.ThrottleCheckOK(ctx, throttlerapp.RowStreamerName); !ok {
++				b.Fatal("throttled")
++			}
++		}
++	})
++	b.Run("serial-long-name", func(b *testing.B) {
++		for b.Loop() {
++			if _, ok := client.ThrottleCheckOK(ctx, "vplayer:some-workflow-name:0123456789abcdef"); !ok {
++				b.Fatal("throttled")
++			}
++		}
++	})
++	b.Run("parallel", func(b *testing.B) {
++		b.RunParallel(func(pb *testing.PB) {
++			for pb.Next() {
++				if _, ok := client.ThrottleCheckOK(ctx, throttlerapp.RowStreamerName); !ok {
++					b.Fatal("throttled")
++				}
++			}
++		})
++	})
++}

@@ -1,0 +1,275 @@
+diff --git a/go/mysql/conn.go b/go/mysql/conn.go
+index abe3e61..4384fea 100644
+--- a/go/mysql/conn.go
++++ b/go/mysql/conn.go
+@@ -151,7 +151,10 @@ type Conn struct {
+ 	bufferedReader *bufio.Reader
+ 	flushTimer     *time.Timer
+ 	flushDelay     time.Duration
+-	header         [PacketHeaderSize]byte
++	// flushPending is true while flushTimer is armed for data written to
++	// bufferedWriter that has not been flushed yet. Protected by bufMu.
++	flushPending bool
++	header       [PacketHeaderSize]byte
+ 
+ 	// Keep track of how and of the buffer we allocated for an
+ 	// ephemeral packet on the read and write sides.
+@@ -392,9 +395,7 @@ func (c *Conn) endWriterBuffering() error {
+ 		c.bufferedWriter = nil
+ 	}()
+ 
+-	if c.flushTimer != nil {
+-		c.flushTimer.Stop()
+-	}
++	c.stopFlushTimer()
+ 	return c.bufferedWriter.Flush()
+ }
+ 
+@@ -408,9 +409,7 @@ func (c *Conn) FlushWriteBuffer() error {
+ 		return nil
+ 	}
+ 
+-	if c.flushTimer != nil {
+-		c.flushTimer.Stop()
+-	}
++	c.stopFlushTimer()
+ 	return c.bufferedWriter.Flush()
+ }
+ 
+@@ -486,23 +485,46 @@ func (c *Conn) returnReader() {
+ 	readersPool.Put(c.bufferedReader)
+ }
+ 
+-// startFlushTimer must be called while holding lock on bufMu.
++// startFlushTimer arms the flush timer after data was written to the
++// buffered writer, unless it is already armed. Buffered data is therefore
++// flushed at most flushDelay after the first write that followed the
++// previous flush, even if the writer keeps writing.
++// It must be called while holding lock on bufMu.
+ func (c *Conn) startFlushTimer() {
++	if c.flushPending {
++		// Re-arming the timer on every packet is comparatively expensive
++		// and would postpone the flush indefinitely for a steady stream.
++		return
++	}
++	c.flushPending = true
+ 	if c.flushTimer == nil {
+-		c.flushTimer = time.AfterFunc(c.flushDelay, func() {
+-			c.bufMu.Lock()
+-			defer c.bufMu.Unlock()
+-
+-			if c.bufferedWriter == nil {
+-				return
+-			}
+-			c.bufferedWriter.Flush()
+-		})
++		c.flushTimer = time.AfterFunc(c.flushDelay, c.onFlushTimer)
+ 	} else {
+ 		c.flushTimer.Reset(c.flushDelay)
+ 	}
+ }
+ 
++// onFlushTimer runs when the flush timer fires.
++func (c *Conn) onFlushTimer() {
++	c.bufMu.Lock()
++	defer c.bufMu.Unlock()
++
++	c.flushPending = false
++	if c.bufferedWriter == nil {
++		return
++	}
++	c.bufferedWriter.Flush()
++}
++
++// stopFlushTimer disarms the flush timer before an explicit flush.
++// It must be called while holding lock on bufMu.
++func (c *Conn) stopFlushTimer() {
++	c.flushPending = false
++	if c.flushTimer != nil {
++		c.flushTimer.Stop()
++	}
++}
++
+ // Buffered returns the number of bytes that can be read from the buffered reader
+ // without blocking on the underlying connection.
+ func (c *Conn) Buffered() int {
+diff --git a/go/mysql/conn_flush_test.go b/go/mysql/conn_flush_test.go
+new file mode 100644
+index 0000000..3f5b78a
+--- /dev/null
++++ b/go/mysql/conn_flush_test.go
+@@ -0,0 +1,174 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package mysql
++
++import (
++	"net"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++)
++
++// recordingConn is a net.Conn that discards writes but records how many
++// Write calls reached it and how many bytes they carried. It is safe for
++// concurrent use because the flush timer writes from its own goroutine.
++type recordingConn struct {
++	net.Conn // nil; only Write and Close are used.
++
++	mu         sync.Mutex
++	writes     int
++	bytes      int
++	firstWrite int
++}
++
++func (r *recordingConn) Write(b []byte) (int, error) {
++	r.mu.Lock()
++	if r.writes == 0 {
++		r.firstWrite = len(b)
++	}
++	r.writes++
++	r.bytes += len(b)
++	r.mu.Unlock()
++	return len(b), nil
++}
++
++func (r *recordingConn) Close() error { return nil }
++
++func (r *recordingConn) stats() (writes, bytes int) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	return r.writes, r.bytes
++}
++
++// TestFlushTimerFlushesIdleBuffer checks that buffered data is flushed by the
++// flush timer once the writer goes idle, without an explicit flush.
++func TestFlushTimerFlushesIdleBuffer(t *testing.T) {
++	rc := &recordingConn{}
++	c := newConn(rc, 50*time.Millisecond, 0)
++	c.startWriterBuffering()
++	t.Cleanup(func() { _ = c.endWriterBuffering() })
++
++	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("abc")}
++	require.NoError(t, c.writeRow(row))
++	require.NoError(t, c.writeRow(row))
++
++	assert.Eventually(t, func() bool {
++		_, n := rc.stats()
++		return n > 0
++	}, 30*time.Second, 5*time.Millisecond)
++
++	writes, _ := rc.stats()
++	assert.Equal(t, 1, writes, "both rows must be flushed together by a single timer flush")
++
++	// A later write after the timer fired must re-arm the timer.
++	require.NoError(t, c.writeRow(row))
++	assert.Eventually(t, func() bool {
++		w, _ := rc.stats()
++		return w == 2
++	}, 30*time.Second, 5*time.Millisecond)
++}
++
++// TestFlushTimerBoundsLatencyWhileStreaming checks that buffered data is
++// flushed within roughly one flush delay of being written even when the
++// writer keeps writing more often than the flush delay, and that the timer
++// does not flush once per packet.
++func TestFlushTimerBoundsLatencyWhileStreaming(t *testing.T) {
++	const delay = 50 * time.Millisecond
++	rc := &recordingConn{}
++	c := newConn(rc, delay, 0)
++	c.startWriterBuffering()
++	t.Cleanup(func() { _ = c.endWriterBuffering() })
++
++	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("abc")}
++	packets := 0
++	start := time.Now()
++	// Write a small row every millisecond; the buffer never fills up, so any
++	// flush observed here comes from the flush timer.
++	for {
++		require.NoError(t, c.writeRow(row))
++		packets++
++		if w, _ := rc.stats(); w > 0 {
++			break
++		}
++		require.Less(t, time.Since(start), 30*time.Second, "flush timer never fired while streaming")
++		time.Sleep(time.Millisecond)
++	}
++	rc.mu.Lock()
++	firstWrite := rc.firstWrite
++	rc.mu.Unlock()
++	// A full buffer is flushed by bufio itself; the flush timer must have
++	// fired well before that, instead of being pushed back by every write.
++	assert.Less(t, firstWrite, connBufferSize, "first flush came from a full buffer after %d packets, not from the flush timer", packets)
++
++	// Keep streaming for a few more flush delays: the number of flushes must
++	// stay in the order of elapsed/delay, not in the order of packets written.
++	for range 200 {
++		require.NoError(t, c.writeRow(row))
++		packets++
++		time.Sleep(time.Millisecond)
++	}
++	writes, _ := rc.stats()
++	elapsed := time.Since(start)
++	assert.LessOrEqual(t, writes, int(elapsed/delay)+1, "flush storm: %d writes for %d packets in %v", writes, packets, elapsed)
++}
++
++// BenchmarkBufferedWriteRows writes 1000 small rows through the buffered
++// writer, which is the path used for every result set sent by a server.
++func BenchmarkBufferedWriteRows(b *testing.B) {
++	rc := &recordingConn{}
++	c := newConn(rc, DefaultFlushDelay, 0)
++	row := []sqltypes.Value{sqltypes.NewInt64(12345), sqltypes.NewVarChar("some short value")}
++	b.ReportAllocs()
++	for b.Loop() {
++		c.startWriterBuffering()
++		for range 1000 {
++			if err := c.writeRow(row); err != nil {
++				b.Fatal(err)
++			}
++		}
++		if err := c.endWriterBuffering(); err != nil {
++			b.Fatal(err)
++		}
++	}
++}
++
++// BenchmarkBufferedWriteRowsParallel is BenchmarkBufferedWriteRows with one
++// connection per goroutine, to include contention on the runtime timers.
++func BenchmarkBufferedWriteRowsParallel(b *testing.B) {
++	row := []sqltypes.Value{sqltypes.NewInt64(12345), sqltypes.NewVarChar("some short value")}
++	b.RunParallel(func(pb *testing.PB) {
++		c := newConn(&recordingConn{}, DefaultFlushDelay, 0)
++		for pb.Next() {
++			c.startWriterBuffering()
++			for range 1000 {
++				if err := c.writeRow(row); err != nil {
++					b.Error(err)
++					return
++				}
++			}
++			if err := c.endWriterBuffering(); err != nil {
++				b.Error(err)
++				return
++			}
++		}
++	})
++}

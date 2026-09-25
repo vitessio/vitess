@@ -1,0 +1,124 @@
+diff --git a/go/cache/theine/sketch.go b/go/cache/theine/sketch.go
+index 7d241d9..97af2f1 100644
+--- a/go/cache/theine/sketch.go
++++ b/go/cache/theine/sketch.go
+@@ -30,12 +30,15 @@ func NewCountMinSketch() *CountMinSketch {
+ 	return new
+ }
+ 
+-// indexOf return table index and counter index together
++// indexOf return table index and counter index together.
++// Each of the four rows uses its own byte of h: bit 0 selects one of the two
++// table words of the row and bits 1-4 select one of its sixteen counters, so
++// that the word and the counter within it are chosen independently.
+ func (s *CountMinSketch) indexOf(h uint64, block uint64, offset uint8) (uint, uint) {
+-	counterHash := h + uint64(1+offset)*(h>>32)
++	ch := h >> (offset << 3)
+ 	// max block + 7(8 * 8 bytes), fit 64 bytes cache line
+-	index := block + counterHash&1 + uint64(offset<<1)
+-	return uint(index), uint((counterHash & 0xF) << 2)
++	index := block + ch&1 + uint64(offset<<1)
++	return uint(index), uint(((ch >> 1) & 0xF) << 2)
+ }
+ 
+ func (s *CountMinSketch) inc(index uint, offset uint) bool {
+@@ -71,9 +74,13 @@ func (s *CountMinSketch) Add(h uint64) bool {
+ 	return false
+ }
+ 
++// resetMask clears the high bit of each 4-bit counter after a right shift,
++// so that the low bit of a counter does not leak into its neighbour.
++const resetMask = 0x7777777777777777
++
+ func (s *CountMinSketch) reset() {
+ 	for i := range s.Table {
+-		s.Table[i] = s.Table[i] >> 1
++		s.Table[i] = (s.Table[i] >> 1) & resetMask
+ 	}
+ 	s.Additions = s.Additions >> 1
+ }
+@@ -131,7 +138,7 @@ func spread(h uint64) uint64 {
+ }
+ 
+ func rehash(h uint64) uint64 {
+-	h *= 0x31848bab
+-	h ^= h >> 14
++	h *= 0x94d049bb133111eb
++	h ^= h >> 31
+ 	return h
+ }
+diff --git a/go/cache/theine/sketch_test.go b/go/cache/theine/sketch_test.go
+index 91d19ae..f33544f 100644
+--- a/go/cache/theine/sketch_test.go
++++ b/go/cache/theine/sketch_test.go
+@@ -68,3 +68,70 @@ func TestSketch(t *testing.T) {
+ 	sketch.reset()
+ 	require.Equal(t, a>>1, sketch.Additions)
+ }
++
++// TestSketchResetHalvesEachCounter verifies that reset halves every 4-bit
++// counter independently. Each uint64 in the table packs sixteen counters, so
++// a plain right shift would move the low bit of each counter into the high
++// bit of its neighbour and make a zero counter read 8 after a reset.
++func TestSketchResetHalvesEachCounter(t *testing.T) {
++	sketch := NewCountMinSketch()
++	sketch.EnsureCapacity(1024)
++	for i := range sketch.Table {
++		sketch.Table[i] = 0x0123456789abcdef
++	}
++	sketch.reset()
++	for i := range sketch.Table {
++		require.Equal(t, uint64(0x0011223344556677), sketch.Table[i], "table index %d", i)
++	}
++}
++
++// TestSketchUsesAllCounters verifies that the choice of the table word and
++// the choice of the counter within that word are independent, so every one of
++// the sixteen counters of every word is used.
++func TestSketchUsesAllCounters(t *testing.T) {
++	sketch := NewCountMinSketch()
++	sketch.EnsureCapacity(1024)
++	// override sampleSize so Add does not reset on its own
++	sketch.SampleSize = 1 << 30
++
++	for i := range 100000 {
++		sketch.Add(xxhash.Sum64String(fmt.Sprintf("key:%d", i)))
++	}
++	for i, word := range sketch.Table {
++		for c := range 16 {
++			require.NotZero(t, (word>>(c*4))&0xF, "table index %d, counter %d", i, c)
++		}
++	}
++}
++
++// TestSketchResetEstimates verifies that, across repeated resets, the estimate
++// of every key is exactly half (rounded down) of its estimate before each
++// reset, so keys that were never added never gain a frequency.
++func TestSketchResetEstimates(t *testing.T) {
++	sketch := NewCountMinSketch()
++	sketch.EnsureCapacity(1024)
++	// override sampleSize so Add does not reset on its own
++	sketch.SampleSize = 1 << 30
++
++	keys := make([]uint64, 4000)
++	for i := range keys {
++		keys[i] = xxhash.Sum64String(fmt.Sprintf("key:%d", i))
++	}
++	// only the first half of the keys is ever added
++	for i, keyh := range keys[:len(keys)/2] {
++		for range i%7 + 1 {
++			sketch.Add(keyh)
++		}
++	}
++
++	before := make([]uint, len(keys))
++	for round := range 6 {
++		for i, keyh := range keys {
++			before[i] = sketch.Estimate(keyh)
++		}
++		sketch.reset()
++		for i, keyh := range keys {
++			require.Equal(t, before[i]>>1, sketch.Estimate(keyh), "round %d, key %d", round, i)
++		}
++	}
++}

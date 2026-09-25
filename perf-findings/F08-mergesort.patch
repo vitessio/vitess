@@ -1,0 +1,866 @@
+diff --git a/go/vt/vtgate/engine/merge_sort.go b/go/vt/vtgate/engine/merge_sort.go
+index 83dae7f..a282440 100644
+--- a/go/vt/vtgate/engine/merge_sort.go
++++ b/go/vt/vtgate/engine/merge_sort.go
+@@ -19,6 +19,7 @@ package engine
+ import (
+ 	"context"
+ 	"io"
++	"slices"
+ 
+ 	"vitess.io/vitess/go/mysql/sqlerror"
+ 	"vitess.io/vitess/go/sqltypes"
+@@ -98,10 +99,12 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
+ 	}
+ 
+ 	var errs []error
+-	// Prime the merge tree. One element must be pulled from each stream.
++	// Prime the merge tree. One chunk must be pulled from each stream, and
++	// the first row of that chunk is pushed onto the tree.
++	cursors := make([]streamCursor, len(handles))
+ 	for i, handle := range handles {
+ 		select {
+-		case row, ok := <-handle.row:
++		case chunk, ok := <-handle.rows:
+ 			if !ok {
+ 				if handle.err != nil {
+ 					if ms.ScatterErrorsAsWarnings {
+@@ -114,37 +117,71 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
+ 				// If so, don't add anything to the heap.
+ 				continue
+ 			}
+-			merge.Push(row, i)
++			cursors[i] = streamCursor{rows: chunk, pos: 1}
++			merge.Push(chunk[0], i)
+ 		case <-ctx.Done():
+ 			return ctx.Err()
+ 		}
+ 	}
+ 	merge.Init()
+ 
+-	// Iterate one row at a time:
+-	// Pop a row from the merge tree and send it out.
+-	// Then pull the next row from the stream the popped
+-	// row came from and replace it in the tree, or remove
+-	// it if the stream is exhausted.
++	// Pop rows from the merge tree and batch them into results of up to
++	// mergeSortBatchSize rows. After a row is taken, the next row of the
++	// same stream replaces it in the tree. Rows are taken from the stream's
++	// current chunk until it is exhausted, and only then is the next chunk
++	// pulled from the stream's channel. Any pending output is flushed before
++	// blocking on a stream so that rows are not held back while a shard is
++	// slow, and so that consumers such as Limit can terminate early.
++	//
++	// A new rows slice is allocated for each result because the callback
++	// may retain it. Its capacity is the size of the previous result, as
++	// results are small when the merger often has to wait for the streams.
++	var out [][]sqltypes.Value
++	outCap := 1
++	flush := func() error {
++		if len(out) == 0 {
++			return nil
++		}
++		qr := &sqltypes.Result{Rows: out}
++		outCap = len(out)
++		out = nil
++		return callback(qr)
++	}
+ 	for merge.Len() != 0 {
+ 		row, stream := merge.Peek()
+-		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{row}}); err != nil {
+-			return err
++		if out == nil {
++			out = make([][]sqltypes.Value, 0, outCap)
+ 		}
+-
+-		select {
+-		case row, ok := <-handles[stream].row:
+-			if !ok {
+-				if handles[stream].err != nil {
+-					return handles[stream].err
+-				}
+-				merge.Pop()
+-				continue
++		out = append(out, row)
++		if len(out) == mergeSortBatchSize {
++			if err := flush(); err != nil {
++				return err
+ 			}
+-			merge.ReplaceMin(row, stream)
+-		case <-ctx.Done():
+-			return ctx.Err()
+ 		}
++
++		cur := &cursors[stream]
++		if cur.pos < len(cur.rows) {
++			merge.ReplaceMin(cur.rows[cur.pos], stream)
++			cur.pos++
++			continue
++		}
++
++		// The current chunk of this stream is exhausted: fetch the next one,
++		// flushing pending output first if we'd have to wait for it.
++		next, ok, err := ms.nextChunk(ctx, handles[stream], flush)
++		if err != nil {
++			return err
++		}
++		if !ok {
++			*cur = streamCursor{}
++			merge.Pop()
++			continue
++		}
++		*cur = streamCursor{rows: next, pos: 1}
++		merge.ReplaceMin(next[0], stream)
++	}
++	if err := flush(); err != nil {
++		return err
+ 	}
+ 
+ 	err = vterrors.Aggregate(errs)
+@@ -200,21 +237,59 @@ func (ms *MergeSort) description() PrimitiveDescription {
+ 	}
+ }
+ 
++// mergeSortBatchSize is the maximum number of rows that MergeSort sends
++// downstream in a single result.
++const mergeSortBatchSize = 256
++
++// streamCursor tracks the position of the merger in the current chunk of rows
++// received from a stream.
++type streamCursor struct {
++	rows [][]sqltypes.Value
++	pos  int
++}
++
++// nextChunk returns the next non-empty chunk of rows from the stream. If no
++// chunk is immediately available, flush is called before blocking. It returns
++// false if the stream ended without error.
++func (ms *MergeSort) nextChunk(ctx context.Context, handle *streamHandle, flush func() error) ([][]sqltypes.Value, bool, error) {
++	select {
++	case chunk, ok := <-handle.rows:
++		return handle.chunkResult(chunk, ok)
++	default:
++	}
++	if err := flush(); err != nil {
++		return nil, false, err
++	}
++	select {
++	case chunk, ok := <-handle.rows:
++		return handle.chunkResult(chunk, ok)
++	case <-ctx.Done():
++		return nil, false, ctx.Err()
++	}
++}
++
++func (handle *streamHandle) chunkResult(chunk [][]sqltypes.Value, ok bool) ([][]sqltypes.Value, bool, error) {
++	if !ok {
++		return nil, false, handle.err
++	}
++	return chunk, true, nil
++}
++
+ // streamHandle is the rendez-vous point between each stream and the merge-sorter.
+ // The fields channel is used by the stream to transmit the field info, which
+-// is the first packet. Following this, the stream sends each row to the row
+-// channel. At the end of the stream, fields and row are closed. If there
+-// was an error, err is set before the channels are closed. The MergeSort
+-// routine that pulls the rows out of each streamHandle can abort the stream
+-// by calling canceling the context.
++// is the first packet. Following this, the stream sends the rows of each
++// result it receives to the rows channel as a single non-empty chunk. At the
++// end of the stream, fields and rows are closed. If there was an error, err
++// is set before the channels are closed. The MergeSort routine that pulls the
++// rows out of each streamHandle can abort the stream by canceling the context.
+ type streamHandle struct {
+ 	fields    chan []*querypb.Field
+ 	fieldSeen bool
+-	row       chan []sqltypes.Value
++	rows      chan [][]sqltypes.Value
+ 	err       error
+ }
+ 
+-// runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
++// runOneStream starts a streaming query on one shard, and returns a streamHandle for it.
+ func runOneStream(
+ 	ctx context.Context,
+ 	vcursor VCursor,
+@@ -224,12 +299,12 @@ func runOneStream(
+ ) *streamHandle {
+ 	handle := &streamHandle{
+ 		fields: make(chan []*querypb.Field, 1),
+-		row:    make(chan []sqltypes.Value, 10),
++		rows:   make(chan [][]sqltypes.Value, 1),
+ 	}
+ 
+ 	go func() {
+ 		defer close(handle.fields)
+-		defer close(handle.row)
++		defer close(handle.rows)
+ 
+ 		handle.err = input.StreamExecute(ctx, vcursor, bindVars, wantfields, fetchLastInsertID, func(qr *sqltypes.Result) error {
+ 			if !handle.fieldSeen && len(qr.Fields) != 0 {
+@@ -241,12 +316,17 @@ func runOneStream(
+ 				}
+ 			}
+ 
+-			for _, row := range qr.Rows {
+-				select {
+-				case handle.row <- row:
+-				case <-ctx.Done():
+-					return io.EOF
+-				}
++			if len(qr.Rows) == 0 {
++				return nil
++			}
++			// The rows slice must be copied: the sender may reuse it once the
++			// callback returns (e.g. vttablet's pooled stream results when
++			// vtgate and vttablet run in the same process). The rows
++			// themselves are not reused.
++			select {
++			case handle.rows <- slices.Clone(qr.Rows):
++			case <-ctx.Done():
++				return io.EOF
+ 			}
+ 			return nil
+ 		})
+diff --git a/go/vt/vtgate/engine/merge_sort_bench_test.go b/go/vt/vtgate/engine/merge_sort_bench_test.go
+new file mode 100644
+index 0000000..3d3cde8
+--- /dev/null
++++ b/go/vt/vtgate/engine/merge_sort_bench_test.go
+@@ -0,0 +1,81 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package engine
++
++import (
++	"fmt"
++	"testing"
++
++	"vitess.io/vitess/go/sqltypes"
++)
++
++// BenchmarkMergeSort merges `shards` sorted streams of `rows` rows each, which
++// every shard sends in results of `chunk` rows.
++func BenchmarkMergeSort(b *testing.B) {
++	fields := sqltypes.MakeTestFields("id|col", "int64|varchar")
++	for _, shards := range []int{4, 16} {
++		for _, chunk := range []int{1, 256} {
++			const rows = 10000
++			prims := make([]StreamExecutor, 0, shards)
++			for s := range shards {
++				sr := &shardResult{results: []*sqltypes.Result{{Fields: fields}}}
++				var qr *sqltypes.Result
++				for i := range rows {
++					if qr == nil {
++						qr = &sqltypes.Result{}
++						sr.results = append(sr.results, qr)
++					}
++					qr.Rows = append(qr.Rows, []sqltypes.Value{sqltypes.NewInt64(int64(i*shards + s)), sqltypes.NewVarChar("abcdefgh")})
++					if len(qr.Rows) == chunk {
++						qr = nil
++					}
++				}
++				prims = append(prims, sr)
++			}
++			run := func(b *testing.B, exec func(callback func(*sqltypes.Result) error) error) {
++				b.ReportAllocs()
++				for b.Loop() {
++					n := 0
++					err := exec(func(qr *sqltypes.Result) error {
++						n += len(qr.Rows)
++						return nil
++					})
++					if err != nil {
++						b.Fatal(err)
++					}
++					if n != shards*rows {
++						b.Fatalf("got %d rows, want %d", n, shards*rows)
++					}
++				}
++				b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*shards*rows), "ns/row")
++			}
++			name := fmt.Sprintf("shards=%d/chunk=%d", shards, chunk)
++			b.Run("impl=old/"+name, func(b *testing.B) {
++				ms := &mergeSortOld{Primitives: prims, OrderBy: int64OrderBy}
++				run(b, func(cb func(*sqltypes.Result) error) error {
++					return ms.TryStreamExecute(b.Context(), &noopVCursor{}, nil, true, cb)
++				})
++			})
++			b.Run("impl=new/"+name, func(b *testing.B) {
++				ms := &MergeSort{Primitives: prims, OrderBy: int64OrderBy}
++				run(b, func(cb func(*sqltypes.Result) error) error {
++					return ms.TryStreamExecute(b.Context(), &noopVCursor{}, nil, true, cb)
++				})
++			})
++		}
++	}
++}
+diff --git a/go/vt/vtgate/engine/merge_sort_old_bench_test.go b/go/vt/vtgate/engine/merge_sort_old_bench_test.go
+new file mode 100644
+index 0000000..5f5bd7d
+--- /dev/null
++++ b/go/vt/vtgate/engine/merge_sort_old_bench_test.go
+@@ -0,0 +1,211 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package engine
++
++import (
++	"context"
++	"io"
++
++	"vitess.io/vitess/go/mysql/sqlerror"
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	"vitess.io/vitess/go/vt/vterrors"
++	"vitess.io/vitess/go/vt/vtgate/evalengine"
++)
++
++// mergeSortOld is a copy of the previous row-at-a-time MergeSort
++// implementation, kept only as an A/B baseline for benchmarks.
++type mergeSortOld MergeSort
++
++// TryStreamExecute performs a streaming exec.
++func (ms *mergeSortOld) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
++	defer evalengine.PanicHandler(&err)
++
++	var cancel context.CancelFunc
++	ctx, cancel = context.WithCancel(ctx)
++	defer cancel()
++	gotFields := wantfields
++	handles := make([]*streamHandleOld, len(ms.Primitives))
++	for i, input := range ms.Primitives {
++		handles[i] = runOneStreamOld(ctx, vcursor, input, bindVars, gotFields, ms.FetchLastInsertID)
++		if !ms.ScatterErrorsAsWarnings {
++			// we only need the fields from the first input, unless we allow ScatterErrorsAsWarnings.
++			// in that case, we need to ask all the inputs for fields - we don't know which will return anything
++			gotFields = false
++		}
++	}
++
++	merge := &evalengine.Merger{
++		Compare: ms.OrderBy,
++	}
++
++	if wantfields {
++		fields, err := ms.getStreamingFields(handles)
++		if err != nil {
++			return err
++		}
++		if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
++			return err
++		}
++	}
++
++	var errs []error
++	// Prime the merge tree. One element must be pulled from each stream.
++	for i, handle := range handles {
++		select {
++		case row, ok := <-handle.row:
++			if !ok {
++				if handle.err != nil {
++					if ms.ScatterErrorsAsWarnings {
++						errs = append(errs, handle.err)
++						break
++					}
++					return handle.err
++				}
++				// It's possible that a stream returns no rows.
++				// If so, don't add anything to the heap.
++				continue
++			}
++			merge.Push(row, i)
++		case <-ctx.Done():
++			return ctx.Err()
++		}
++	}
++	merge.Init()
++
++	// Iterate one row at a time:
++	// Pop a row from the merge tree and send it out.
++	// Then pull the next row from the stream the popped
++	// row came from and replace it in the tree, or remove
++	// it if the stream is exhausted.
++	for merge.Len() != 0 {
++		row, stream := merge.Peek()
++		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{row}}); err != nil {
++			return err
++		}
++
++		select {
++		case row, ok := <-handles[stream].row:
++			if !ok {
++				if handles[stream].err != nil {
++					return handles[stream].err
++				}
++				merge.Pop()
++				continue
++			}
++			merge.ReplaceMin(row, stream)
++		case <-ctx.Done():
++			return ctx.Err()
++		}
++	}
++
++	err = vterrors.Aggregate(errs)
++	if err != nil && ms.ScatterErrorsAsWarnings && len(errs) < len(handles) {
++		// we got errors, but not all shards failed, so we can hide the error and just warn instead
++		partialSuccessScatterQueries.Add(1)
++		sErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
++		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
++		return nil
++	}
++	return err
++}
++
++func (ms *mergeSortOld) getStreamingFields(handles []*streamHandleOld) ([]*querypb.Field, error) {
++	var fields []*querypb.Field
++
++	if ms.ScatterErrorsAsWarnings {
++		for _, handle := range handles {
++			// Fetch field info from just one stream.
++			fields = <-handle.fields
++			// If fields is nil, it means there was an error.
++			if fields != nil {
++				break
++			}
++		}
++	} else {
++		// Fetch field info from just one stream.
++		fields = <-handles[0].fields
++	}
++	if fields == nil {
++		// something went wrong. need to figure out where the error can be
++		if !ms.ScatterErrorsAsWarnings {
++			return nil, handles[0].err
++		}
++
++		var errs []error
++		for _, handle := range handles {
++			errs = append(errs, handle.err)
++		}
++		return nil, vterrors.Aggregate(errs)
++	}
++	return fields, nil
++}
++
++// streamHandleOld is the rendez-vous point between each stream and the merge-sorter.
++// The fields channel is used by the stream to transmit the field info, which
++// is the first packet. Following this, the stream sends each row to the row
++// channel. At the end of the stream, fields and row are closed. If there
++// was an error, err is set before the channels are closed. The MergeSort
++// routine that pulls the rows out of each streamHandleOld can abort the stream
++// by calling canceling the context.
++type streamHandleOld struct {
++	fields    chan []*querypb.Field
++	fieldSeen bool
++	row       chan []sqltypes.Value
++	err       error
++}
++
++// runOneStreamOld starts a streaming query on one shard, and returns a streamHandleOld for it.
++func runOneStreamOld(
++	ctx context.Context,
++	vcursor VCursor,
++	input StreamExecutor,
++	bindVars map[string]*querypb.BindVariable,
++	wantfields, fetchLastInsertID bool,
++) *streamHandleOld {
++	handle := &streamHandleOld{
++		fields: make(chan []*querypb.Field, 1),
++		row:    make(chan []sqltypes.Value, 10),
++	}
++
++	go func() {
++		defer close(handle.fields)
++		defer close(handle.row)
++
++		handle.err = input.StreamExecute(ctx, vcursor, bindVars, wantfields, fetchLastInsertID, func(qr *sqltypes.Result) error {
++			if !handle.fieldSeen && len(qr.Fields) != 0 {
++				handle.fieldSeen = true
++				select {
++				case handle.fields <- qr.Fields:
++				case <-ctx.Done():
++					return io.EOF
++				}
++			}
++
++			for _, row := range qr.Rows {
++				select {
++				case handle.row <- row:
++				case <-ctx.Done():
++					return io.EOF
++				}
++			}
++			return nil
++		})
++	}()
++
++	return handle
++}
+diff --git a/go/vt/vtgate/engine/merge_sort_test.go b/go/vt/vtgate/engine/merge_sort_test.go
+index 6089028..e14efe0 100644
+--- a/go/vt/vtgate/engine/merge_sort_test.go
++++ b/go/vt/vtgate/engine/merge_sort_test.go
+@@ -19,7 +19,10 @@ package engine
+ import (
+ 	"context"
+ 	"errors"
++	"io"
++	"sync"
+ 	"testing"
++	"time"
+ 
+ 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+ 
+@@ -67,27 +70,21 @@ func TestMergeSortNormal(t *testing.T) {
+ 
+ 	var results []*sqltypes.Result
+ 	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+-		results = append(results, qr)
++		results = coalesceRowResults(results, qr)
+ 		return nil
+ 	})
+ 	require.NoError(t, err)
+ 
+-	// Results are returned one row at a time.
++	// Rows may be batched into results arbitrarily, so they are
++	// coalesced before comparison.
+ 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+ 		"1|a",
+-		"---",
+ 		"2|b",
+-		"---",
+ 		"3|c",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"6|f",
+-		"---",
+ 		"7|g",
+-		"---",
+ 		"8|h",
+ 	)
+ 	utils.MustMatch(t, wantResults, results)
+@@ -125,27 +122,21 @@ func TestMergeSortWeightString(t *testing.T) {
+ 
+ 	var results []*sqltypes.Result
+ 	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+-		results = append(results, qr)
++		results = coalesceRowResults(results, qr)
+ 		return nil
+ 	})
+ 	require.NoError(t, err)
+ 
+-	// Results are returned one row at a time.
++	// Rows may be batched into results arbitrarily, so they are
++	// coalesced before comparison.
+ 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+ 		"1|a",
+-		"---",
+ 		"2|b",
+-		"---",
+ 		"3|c",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"6|f",
+-		"---",
+ 		"7|g",
+-		"---",
+ 		"8|h",
+ 	)
+ 	utils.MustMatch(t, wantResults, results)
+@@ -187,27 +178,21 @@ func TestMergeSortCollation(t *testing.T) {
+ 
+ 	var results []*sqltypes.Result
+ 	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+-		results = append(results, qr)
++		results = coalesceRowResults(results, qr)
+ 		return nil
+ 	})
+ 	require.NoError(t, err)
+ 
+-	// Results are returned one row at a time.
++	// Rows may be batched into results arbitrarily, so they are
++	// coalesced before comparison.
+ 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+ 		"a",
+-		"---",
+ 		"c",
+-		"---",
+ 		"c",
+-		"---",
+ 		"cs",
+-		"---",
+ 		"cs",
+-		"---",
+ 		"d",
+-		"---",
+ 		"d",
+-		"---",
+ 		"lu",
+ 	)
+ 	utils.MustMatch(t, wantResults, results)
+@@ -248,27 +233,21 @@ func TestMergeSortDescending(t *testing.T) {
+ 
+ 	var results []*sqltypes.Result
+ 	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+-		results = append(results, qr)
++		results = coalesceRowResults(results, qr)
+ 		return nil
+ 	})
+ 	require.NoError(t, err)
+ 
+-	// Results are returned one row at a time.
++	// Rows may be batched into results arbitrarily, so they are
++	// coalesced before comparison.
+ 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+ 		"8|h",
+-		"---",
+ 		"7|g",
+-		"---",
+ 		"6|f",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"3|c",
+-		"---",
+ 		"2|b",
+-		"---",
+ 		"1|a",
+ 	)
+ 	utils.MustMatch(t, wantResults, results)
+@@ -298,19 +277,17 @@ func TestMergeSortEmptyResults(t *testing.T) {
+ 
+ 	var results []*sqltypes.Result
+ 	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+-		results = append(results, qr)
++		results = coalesceRowResults(results, qr)
+ 		return nil
+ 	})
+ 	require.NoError(t, err)
+ 
+-	// Results are returned one row at a time.
++	// Rows may be batched into results arbitrarily, so they are
++	// coalesced before comparison.
+ 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+ 		"1|a",
+-		"---",
+ 		"4|d",
+-		"---",
+ 		"6|f",
+-		"---",
+ 		"7|g",
+ 	)
+ 	utils.MustMatch(t, wantResults, results)
+@@ -419,3 +396,174 @@ func (sr *shardResult) StreamExecute(_ context.Context, _ VCursor, _ map[string]
+ 	}
+ 	return sr.sendErr
+ }
++
++// coalesceRowResults appends qr to results, merging its rows into the last
++// result if both only contain rows. MergeSort batches rows depending on the
++// timing of its input streams, so tests compare the coalesced rows.
++func coalesceRowResults(results []*sqltypes.Result, qr *sqltypes.Result) []*sqltypes.Result {
++	if len(results) > 0 && len(qr.Fields) == 0 && len(results[len(results)-1].Fields) == 0 {
++		last := results[len(results)-1]
++		last.Rows = append(last.Rows, qr.Rows...)
++		return results
++	}
++	return append(results, qr)
++}
++
++// reusingShardResult streams rows through a single result whose rows slice
++// is reused after each callback returns, like vttablet's pooled stream
++// results do when vtgate and vttablet run in the same process.
++type reusingShardResult struct {
++	shardRoute
++
++	fields []*querypb.Field
++	ids    []int64
++	chunk  int
++}
++
++func (sr *reusingShardResult) StreamExecute(_ context.Context, _ VCursor, _ map[string]*querypb.BindVariable, _ bool, _ bool, callback func(*sqltypes.Result) error) error {
++	if err := callback(&sqltypes.Result{Fields: sr.fields}); err != nil {
++		return err
++	}
++	qr := &sqltypes.Result{Rows: make([][]sqltypes.Value, 0, sr.chunk)}
++	for i, id := range sr.ids {
++		qr.Rows = append(qr.Rows, []sqltypes.Value{sqltypes.NewInt64(id)})
++		if len(qr.Rows) == sr.chunk || i == len(sr.ids)-1 {
++			if err := callback(qr); err != nil {
++				return err
++			}
++			// Overwrite the rows slice in place, as a pooled result would be.
++			for j := range qr.Rows {
++				qr.Rows[j] = []sqltypes.Value{sqltypes.NewInt64(-1)}
++			}
++			qr.Rows = qr.Rows[:0]
++		}
++	}
++	return nil
++}
++
++var int64OrderBy = evalengine.Comparison{{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.Int64, collations.Unknown)}}
++
++// TestMergeSortManyRows tests that a large number of rows from several shards,
++// sent in chunks whose rows slice is reused by the sender, are merged in order
++// and are returned in results of at most mergeSortBatchSize rows.
++func TestMergeSortManyRows(t *testing.T) {
++	fields := sqltypes.MakeTestFields("id", "int64")
++	const shards, rowsPerShard = 5, 1000
++	prims := make([]StreamExecutor, 0, shards)
++	for s := range shards {
++		ids := make([]int64, 0, rowsPerShard)
++		for i := range rowsPerShard {
++			ids = append(ids, int64(i*shards+s))
++		}
++		prims = append(prims, &reusingShardResult{fields: fields, ids: ids, chunk: 37 + s})
++	}
++	ms := MergeSort{Primitives: prims, OrderBy: int64OrderBy}
++
++	var got []int64
++	err := ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
++		require.LessOrEqual(t, len(qr.Rows), mergeSortBatchSize)
++		for _, row := range qr.Rows {
++			v, err := row[0].ToInt64()
++			require.NoError(t, err)
++			got = append(got, v)
++		}
++		return nil
++	})
++	require.NoError(t, err)
++	require.Len(t, got, shards*rowsPerShard)
++	for i, v := range got {
++		require.EqualValues(t, i, v)
++	}
++}
++
++// blockingShardResult sends each of its rows in a separate result. Before
++// sending a row after the first, it waits until the consumer of the merged
++// stream has received the previous row.
++type blockingShardResult struct {
++	shardRoute
++
++	fields []*querypb.Field
++	ids    []int64
++	seen   func(id int64) chan struct{}
++}
++
++func (sr *blockingShardResult) StreamExecute(ctx context.Context, _ VCursor, _ map[string]*querypb.BindVariable, _ bool, _ bool, callback func(*sqltypes.Result) error) error {
++	if err := callback(&sqltypes.Result{Fields: sr.fields}); err != nil {
++		return err
++	}
++	for i, id := range sr.ids {
++		if i > 0 {
++			select {
++			case <-sr.seen(sr.ids[i-1]):
++			case <-ctx.Done():
++				return ctx.Err()
++			}
++		}
++		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(id)}}}); err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++// TestMergeSortFlushesBeforeWaiting tests that MergeSort sends the rows it has
++// merged so far before it waits for more rows from a shard, so that a slow
++// shard doesn't hold back rows that can already be returned.
++func TestMergeSortFlushesBeforeWaiting(t *testing.T) {
++	fields := sqltypes.MakeTestFields("id", "int64")
++	var mu sync.Mutex
++	seenCh := map[int64]chan struct{}{}
++	seen := func(id int64) chan struct{} {
++		mu.Lock()
++		defer mu.Unlock()
++		ch, ok := seenCh[id]
++		if !ok {
++			ch = make(chan struct{})
++			seenCh[id] = ch
++		}
++		return ch
++	}
++	ms := MergeSort{
++		Primitives: []StreamExecutor{
++			&blockingShardResult{fields: fields, ids: []int64{1, 3, 5}, seen: seen},
++			&blockingShardResult{fields: fields, ids: []int64{2, 4, 6}, seen: seen},
++		},
++		OrderBy: int64OrderBy,
++	}
++
++	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancel()
++	var got []int64
++	err := ms.TryStreamExecute(ctx, &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
++		for _, row := range qr.Rows {
++			v, err := row[0].ToInt64()
++			require.NoError(t, err)
++			got = append(got, v)
++			close(seen(v))
++		}
++		return nil
++	})
++	require.NoError(t, err)
++	require.Equal(t, []int64{1, 2, 3, 4, 5, 6}, got)
++}
++
++// TestMergeSortStopsOnCallbackError tests that MergeSort stops as soon as the
++// callback returns an error, e.g. io.EOF from a Limit that has enough rows.
++func TestMergeSortStopsOnCallbackError(t *testing.T) {
++	fields := sqltypes.MakeTestFields("id", "int64")
++	ids := make([]int64, 10*mergeSortBatchSize)
++	for i := range ids {
++		ids[i] = int64(i)
++	}
++	ms := MergeSort{
++		Primitives: []StreamExecutor{&reusingShardResult{fields: fields, ids: ids, chunk: 100}},
++		OrderBy:    int64OrderBy,
++	}
++	calls := 0
++	err := ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
++		calls++
++		return io.EOF
++	})
++	require.ErrorIs(t, err, io.EOF)
++	require.Equal(t, 1, calls)
++}

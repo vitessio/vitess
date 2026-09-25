@@ -1,0 +1,602 @@
+diff --git a/go/mysql/binlog_event.go b/go/mysql/binlog_event.go
+index 6fd7e03..9b6c3c0 100644
+--- a/go/mysql/binlog_event.go
++++ b/go/mysql/binlog_event.go
+@@ -18,6 +18,7 @@ package mysql
+ 
+ import (
+ 	"fmt"
++	"math/bits"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/mysql/replication"
+@@ -346,11 +347,14 @@ func (b *Bitmap) Set(index int, value bool) {
+ // Note values that are not used may be set to 0 or 1,
+ // hence the non-efficient logic.
+ func (b *Bitmap) BitCount() int {
++	full := b.count / 8
+ 	sum := 0
+-	for i := range b.count {
+-		if b.Bit(i) {
+-			sum++
+-		}
++	for _, x := range b.data[:full] {
++		sum += bits.OnesCount8(x)
++	}
++	if rem := b.count % 8; rem != 0 {
++		// Mask off the unused high bits of the last byte.
++		sum += bits.OnesCount8(b.data[full] & (1<<rem - 1))
+ 	}
+ 	return sum
+ }
+diff --git a/go/mysql/conn.go b/go/mysql/conn.go
+index abe3e61..42dd8ec 100644
+--- a/go/mysql/conn.go
++++ b/go/mysql/conn.go
+@@ -857,11 +857,10 @@ func (c *Conn) writePacket(data []byte) error {
+ 				// The packet we just sent had exactly
+ 				// MaxPacketSize size, we need to
+ 				// sent a zero-size packet too.
+-				header[0] = 0
+-				header[1] = 0
+-				header[2] = 0
+-				header[3] = c.sequence
+-				if n, err := w.Write(header[:]); err != nil {
++				// Use a separate slice here so that the header array
++				// above does not escape to the heap on every call.
++				emptyHeader := []byte{0, 0, 0, c.sequence}
++				if n, err := w.Write(emptyHeader); err != nil {
+ 					return vterrors.Wrapf(err, "Write(empty header) failed")
+ 				} else if n != PacketHeaderSize {
+ 					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
+diff --git a/go/mysql/zz_f30_bench_test.go b/go/mysql/zz_f30_bench_test.go
+new file mode 100644
+index 0000000..778901e
+--- /dev/null
++++ b/go/mysql/zz_f30_bench_test.go
+@@ -0,0 +1,53 @@
++package mysql
++
++import (
++	"net"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++type f30DiscardConn struct{ net.Conn }
++
++func (f30DiscardConn) Write(b []byte) (int, error) { return len(b), nil }
++func (f30DiscardConn) Close() error                { return nil }
++
++func BenchmarkF30WritePacket(b *testing.B) {
++	c := newConn(f30DiscardConn{}, 0, 0)
++	c.startWriterBuffering()
++	data := make([]byte, 4+100)
++	b.ReportAllocs()
++	for b.Loop() {
++		if err := c.writePacket(data); err != nil {
++			b.Fatal(err)
++		}
++	}
++}
++
++func TestF30WritePacketNoAlloc(t *testing.T) {
++	c := newConn(f30DiscardConn{}, 0, 0)
++	c.startWriterBuffering()
++	data := make([]byte, 4+100)
++	require.Zero(t, testing.AllocsPerRun(100, func() {
++		require.NoError(t, c.writePacket(data))
++	}))
++}
++
++func TestF30BitmapBitCountEquivalence(t *testing.T) {
++	for count := 0; count <= 70; count++ {
++		for _, fill := range []byte{0x00, 0xff, 0xa5, 0x5a} {
++			data := make([]byte, (count+7)/8)
++			for i := range data {
++				data[i] = fill ^ byte(i*37)
++			}
++			bm, _ := newBitmap(data, 0, count)
++			want := 0
++			for i := range count {
++				if bm.Bit(i) {
++					want++
++				}
++			}
++			require.Equal(t, want, bm.BitCount(), "count=%d fill=%x", count, fill)
++		}
++	}
++}
+diff --git a/go/stats/histogram.go b/go/stats/histogram.go
+index b90d6db..0fb50f8 100644
+--- a/go/stats/histogram.go
++++ b/go/stats/histogram.go
+@@ -17,8 +17,6 @@ limitations under the License.
+ package stats
+ 
+ import (
+-	"bytes"
+-	"fmt"
+ 	"strconv"
+ 	"sync/atomic"
+ )
+@@ -109,18 +107,29 @@ func (h *Histogram) String() string {
+ // Note that sum of all buckets may not be equal to the total temporarily,
+ // because Add() increments bucket and total with two atomic operations.
+ func (h *Histogram) MarshalJSON() ([]byte, error) {
+-	b := bytes.NewBuffer(make([]byte, 0, 4096))
+-	fmt.Fprintf(b, "{")
++	b := make([]byte, 0, 32*(len(h.labels)+2))
++	b = append(b, '{')
+ 	totalCount := int64(0)
+ 	for i, label := range h.labels {
+ 		count := h.buckets[i].Load()
+ 		totalCount += count
+-		fmt.Fprintf(b, "\"%v\": %v, ", label, count)
++		b = appendHistogramEntry(b, label, count)
++		b = append(b, ", "...)
+ 	}
+-	fmt.Fprintf(b, "\"%s\": %v, ", h.countLabel, totalCount)
+-	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total.Load())
+-	fmt.Fprintf(b, "}")
+-	return b.Bytes(), nil
++	b = appendHistogramEntry(b, h.countLabel, totalCount)
++	b = append(b, ", "...)
++	b = appendHistogramEntry(b, h.totalLabel, h.total.Load())
++	b = append(b, '}')
++	return b, nil
++}
++
++// appendHistogramEntry appends `"label": value` to b. As before, the label
++// is not escaped.
++func appendHistogramEntry(b []byte, label string, value int64) []byte {
++	b = append(b, '"')
++	b = append(b, label...)
++	b = append(b, `": `...)
++	return strconv.AppendInt(b, value, 10)
+ }
+ 
+ // Counts returns a map from labels to the current count in the Histogram for that label.
+diff --git a/go/stats/timings.go b/go/stats/timings.go
+index a1f30f5..d45be27 100644
+--- a/go/stats/timings.go
++++ b/go/stats/timings.go
+@@ -64,11 +64,11 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
+ 
+ // Reset will clear histograms and counters: used during testing
+ func (t *Timings) Reset() {
+-	t.mu.RLock()
++	t.mu.Lock()
+ 	t.histograms = make(map[string]*Histogram)
+ 	t.totalCount.Store(0)
+ 	t.totalTime.Store(0)
+-	t.mu.RUnlock()
++	t.mu.Unlock()
+ }
+ 
+ // Add will add a new value to the named histogram.
+diff --git a/go/stats/zz_f30_bench_test.go b/go/stats/zz_f30_bench_test.go
+new file mode 100644
+index 0000000..871dd97
+--- /dev/null
++++ b/go/stats/zz_f30_bench_test.go
+@@ -0,0 +1,73 @@
++package stats
++
++import (
++	"bytes"
++	"fmt"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++)
++
++func histMarshalOld(h *Histogram) []byte {
++	b := bytes.NewBuffer(make([]byte, 0, 4096))
++	fmt.Fprintf(b, "{")
++	totalCount := int64(0)
++	for i, label := range h.labels {
++		count := h.buckets[i].Load()
++		totalCount += count
++		fmt.Fprintf(b, "\"%v\": %v, ", label, count)
++	}
++	fmt.Fprintf(b, "\"%s\": %v, ", h.countLabel, totalCount)
++	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total.Load())
++	fmt.Fprintf(b, "}")
++	return b.Bytes()
++}
++
++func f30Hist() *Histogram {
++	h := NewGenericHistogram("", "", []int64{500000, 1000000, 5000000, 10000000, 50000000, 100000000, 500000000, 1000000000, 5000000000, 10000000000}, []string{"500000", "1000000", "5000000", "10000000", "50000000", "100000000", "500000000", "1000000000", "5000000000", "10000000000", "inf"}, "Count", "Time")
++	for i := int64(0); i < 1000; i++ {
++		h.Add(i * i * 12345)
++		h.Add(-i)
++	}
++	return h
++}
++
++func TestF30HistogramMarshalEquivalence(t *testing.T) {
++	h := f30Hist()
++	got, err := h.MarshalJSON()
++	assert.NoError(t, err)
++	assert.Equal(t, string(histMarshalOld(h)), string(got))
++}
++
++// TestF30TimingsResetConcurrentAdd must be run with -race: Reset used to
++// replace the histograms map while holding only the read lock.
++func TestF30TimingsResetConcurrentAdd(t *testing.T) {
++	tm := NewTimings("", "", "")
++	done := make(chan struct{})
++	go func() {
++		defer close(done)
++		for range 1000 {
++			tm.Add("a", 1)
++		}
++	}()
++	for range 1000 {
++		tm.Reset()
++	}
++	<-done
++}
++
++func BenchmarkF30HistMarshalOld(b *testing.B) {
++	h := f30Hist()
++	b.ReportAllocs()
++	for b.Loop() {
++		histMarshalOld(h)
++	}
++}
++
++func BenchmarkF30HistMarshalNew(b *testing.B) {
++	h := f30Hist()
++	b.ReportAllocs()
++	for b.Loop() {
++		_, _ = h.MarshalJSON()
++	}
++}
+diff --git a/go/vt/key/destination.go b/go/vt/key/destination.go
+index 7f190c5..a3945f6 100644
+--- a/go/vt/key/destination.go
++++ b/go/vt/key/destination.go
+@@ -19,7 +19,7 @@ package key
+ import (
+ 	"encoding/hex"
+ 	"math/rand/v2"
+-	"sort"
++	"slices"
+ 	"strings"
+ 
+ 	"vitess.io/vitess/go/vt/vterrors"
+@@ -126,9 +126,14 @@ func (d DestinationExactKeyRange) String() string {
+ }
+ 
+ func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
+-	sort.SliceStable(allShards, func(i, j int) bool {
+-		return KeyRangeLess(allShards[i].GetKeyRange(), allShards[j].GetKeyRange())
+-	})
++	// allShards is usually shared, cached topo state: never sort it in place.
++	cmp := func(a, b *topodatapb.ShardReference) int {
++		return KeyRangeCompare(a.GetKeyRange(), b.GetKeyRange())
++	}
++	if !slices.IsSortedFunc(allShards, cmp) {
++		allShards = slices.Clone(allShards)
++		slices.SortStableFunc(allShards, cmp)
++	}
+ 
+ 	shardnum := 0
+ 	for shardnum < len(allShards) {
+diff --git a/go/vt/key/zz_f30_test.go b/go/vt/key/zz_f30_test.go
+new file mode 100644
+index 0000000..f188f9e
+--- /dev/null
++++ b/go/vt/key/zz_f30_test.go
+@@ -0,0 +1,29 @@
++package key
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++)
++
++// TestF30ExactKeyRangeDoesNotMutateShards checks that resolving an exact key
++// range does not reorder the (shared, cached) shard list it is given.
++func TestF30ExactKeyRangeDoesNotMutateShards(t *testing.T) {
++	shards := []*topodatapb.ShardReference{
++		{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}}},
++		{Name: "-40", KeyRange: &topodatapb.KeyRange{End: []byte{0x40}}},
++		{Name: "40-80", KeyRange: &topodatapb.KeyRange{Start: []byte{0x40}, End: []byte{0x80}}},
++	}
++	orig := append([]*topodatapb.ShardReference(nil), shards...)
++	var got []string
++	err := DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{End: []byte{0x80}}}.Resolve(shards, func(shard string) error {
++		got = append(got, shard)
++		return nil
++	})
++	require.NoError(t, err)
++	assert.Equal(t, []string{"-40", "40-80"}, got)
++	assert.Equal(t, orig, shards)
++}
+diff --git a/go/vt/sqlparser/analyzer.go b/go/vt/sqlparser/analyzer.go
+index e62bd06..27e8f9d 100644
+--- a/go/vt/sqlparser/analyzer.go
++++ b/go/vt/sqlparser/analyzer.go
+@@ -23,6 +23,9 @@ import (
+ 	"fmt"
+ 	"strings"
+ 	"unicode"
++	"unicode/utf8"
++
++	"vitess.io/vitess/go/hack"
+ )
+ 
+ // StatementType encodes the type of a SQL statement
+@@ -183,7 +186,10 @@ func Preview(sql string) StatementType {
+ 		firstWord = firstWord[:end]
+ 	}
+ 	// Comparison is done in order of priority.
+-	loweredFirstWord := strings.ToLower(firstWord)
++	// Lowercase into a stack buffer to avoid allocating for the common
++	// uppercase case (e.g. "SELECT").
++	var firstWordBuf [previewMaxKeywordLen]byte
++	loweredFirstWord := previewToLower(firstWordBuf[:], firstWord)
+ 	switch loweredFirstWord {
+ 	case "select":
+ 		return StmtSelect
+@@ -214,7 +220,8 @@ func Preview(sql string) StatementType {
+ 	// For instance, we don't want: "BEGIN JUNK" to be parsed
+ 	// as StmtBegin.
+ 	trimmedNoComments, _ := SplitMarginComments(trimmed)
+-	switch strings.ToLower(trimmedNoComments) {
++	var stmtBuf [previewMaxKeywordLen]byte
++	switch previewToLower(stmtBuf[:], trimmedNoComments) {
+ 	case "begin", "start transaction":
+ 		return StmtBegin
+ 	case "commit":
+@@ -251,6 +258,41 @@ func Preview(sql string) StatementType {
+ 	return StmtUnknown
+ }
+ 
++// previewMaxKeywordLen is the length of the longest keyword that Preview
++// compares against ("start transaction").
++const previewMaxKeywordLen = len("start transaction")
++
++// previewToLower returns s lowercased, like strings.ToLower, but without
++// allocating when s is ASCII. buf is used as scratch space for the result,
++// which is only valid until buf is modified. ASCII strings longer than buf
++// cannot match any keyword and yield "".
++func previewToLower(buf []byte, s string) string {
++	hasUpper := false
++	for i := 0; i < len(s); i++ {
++		c := s[i]
++		if c >= utf8.RuneSelf {
++			// Keep the exact Unicode semantics of strings.ToLower
++			// (e.g. the Kelvin sign lowercases to 'k').
++			return strings.ToLower(s)
++		}
++		hasUpper = hasUpper || ('A' <= c && c <= 'Z')
++	}
++	if !hasUpper {
++		return s
++	}
++	if len(s) > len(buf) {
++		return ""
++	}
++	for i := 0; i < len(s); i++ {
++		c := s[i]
++		if 'A' <= c && c <= 'Z' {
++			c += 'a' - 'A'
++		}
++		buf[i] = c
++	}
++	return hack.String(buf[:len(s)])
++}
++
+ func (s StatementType) String() string {
+ 	switch s {
+ 	case StmtSelect:
+diff --git a/go/vt/sqlparser/zz_f30_bench_test.go b/go/vt/sqlparser/zz_f30_bench_test.go
+new file mode 100644
+index 0000000..2f7cdae
+--- /dev/null
++++ b/go/vt/sqlparser/zz_f30_bench_test.go
+@@ -0,0 +1,129 @@
++package sqlparser
++
++import (
++	"strings"
++	"testing"
++	"unicode"
++
++	"github.com/stretchr/testify/assert"
++)
++
++func previewOld(sql string) StatementType {
++	trimmed := StripLeadingComments(sql)
++	if strings.Index(trimmed, "/*!") == 0 {
++		return StmtComment
++	}
++	isNotLetter := func(r rune) bool { return !unicode.IsLetter(r) }
++	firstWord := strings.TrimLeftFunc(trimmed, isNotLetter)
++	if end := strings.IndexFunc(firstWord, unicode.IsSpace); end != -1 {
++		firstWord = firstWord[:end]
++	}
++	loweredFirstWord := strings.ToLower(firstWord)
++	switch loweredFirstWord {
++	case "select":
++		return StmtSelect
++	case "stream":
++		return StmtStream
++	case "vstream":
++		return StmtVStream
++	case "revert":
++		return StmtMigration
++	case "insert":
++		return StmtInsert
++	case "replace":
++		return StmtReplace
++	case "update":
++		return StmtUpdate
++	case "delete":
++		return StmtDelete
++	case "savepoint":
++		return StmtSavepoint
++	case "lock":
++		return StmtLockTables
++	case "unlock":
++		return StmtUnlockTables
++	}
++	trimmedNoComments, _ := SplitMarginComments(trimmed)
++	switch strings.ToLower(trimmedNoComments) {
++	case "begin", "start transaction":
++		return StmtBegin
++	case "commit":
++		return StmtCommit
++	case "rollback":
++		return StmtRollback
++	}
++	switch loweredFirstWord {
++	case "create", "alter", "rename", "drop", "truncate":
++		return StmtDDL
++	case "flush":
++		return StmtFlush
++	case "set":
++		return StmtSet
++	case "show":
++		return StmtShow
++	case "use":
++		return StmtUse
++	case "describe", "desc", "explain":
++		return StmtExplain
++	case "repair", "optimize":
++		return StmtOther
++	case "analyze":
++		return StmtAnalyze
++	case "grant", "revoke":
++		return StmtPriv
++	case "release":
++		return StmtRelease
++	case "rollback":
++		return StmtSRollback
++	case "kill":
++		return StmtKill
++	}
++	return StmtUnknown
++}
++
++var f30Queries = []string{
++	"SELECT id, name FROM users WHERE id = 1",
++	"select id, name from users where id = 1",
++	"/* comment */ INSERT INTO t (a) VALUES (1)",
++	"UPDATE t SET a = 1 WHERE id = 2",
++	"SET @@session.autocommit = 1",
++	"BEGIN", "COMMIT", "Start Transaction", "ROLLBACK", "rollback to x",
++	"Kill 1", "ſelect", "SÉLECT", "SELECTSELECTSELECTSELECT x",
++	"SHOW TABLES", "  /* a */ -- b\n commit /* c */", "",
++	"(SELECT 1)", "START TRANSACTIONS", "start  transaction",
++}
++
++func TestF30PreviewEquivalence(t *testing.T) {
++	for _, q := range f30Queries {
++		assert.Equal(t, previewOld(q), Preview(q), q)
++	}
++}
++
++func FuzzF30Preview(f *testing.F) {
++	for _, q := range f30Queries {
++		f.Add(q)
++	}
++	f.Fuzz(func(t *testing.T, q string) {
++		if previewOld(q) != Preview(q) {
++			t.Fatalf("mismatch for %q", q)
++		}
++	})
++}
++
++func BenchmarkF30PreviewOld(b *testing.B) {
++	b.ReportAllocs()
++	for b.Loop() {
++		for _, q := range f30Queries[:5] {
++			previewOld(q)
++		}
++	}
++}
++
++func BenchmarkF30PreviewNew(b *testing.B) {
++	b.ReportAllocs()
++	for b.Loop() {
++		for _, q := range f30Queries[:5] {
++			Preview(q)
++		}
++	}
++}
+diff --git a/go/vt/topo/topoproto/tablet.go b/go/vt/topo/topoproto/tablet.go
+index 4a7eac0..00c16cd 100644
+--- a/go/vt/topo/topoproto/tablet.go
++++ b/go/vt/topo/topoproto/tablet.go
+@@ -78,7 +78,18 @@ func TabletAliasString(ta *topodatapb.TabletAlias) string {
+ 	if ta == nil {
+ 		return "<nil>"
+ 	}
+-	return fmt.Sprintf("%v-%010d", ta.Cell, ta.Uid)
++	// Equivalent to fmt.Sprintf("%v-%010d", ta.Cell, ta.Uid), with one allocation.
++	var num [10]byte // Uid is a uint32: at most 10 digits.
++	digits := strconv.AppendUint(num[:0], uint64(ta.Uid), 10)
++	var b strings.Builder
++	b.Grow(len(ta.Cell) + 1 + len(num))
++	b.WriteString(ta.Cell)
++	b.WriteByte('-')
++	for range len(num) - len(digits) {
++		b.WriteByte('0')
++	}
++	b.Write(digits)
++	return b.String()
+ }
+ 
+ const tabletAliasFormat = "^(?P<cell>[-_.a-zA-Z0-9]+)-(?P<uid>[0-9]+)$"
+diff --git a/go/vt/topo/topoproto/zz_f30_bench_test.go b/go/vt/topo/topoproto/zz_f30_bench_test.go
+new file mode 100644
+index 0000000..4dcd41d
+--- /dev/null
++++ b/go/vt/topo/topoproto/zz_f30_bench_test.go
+@@ -0,0 +1,36 @@
++package topoproto
++
++import (
++	"fmt"
++	"math"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++)
++
++func TestF30TabletAliasStringEquivalence(t *testing.T) {
++	for _, cell := range []string{"", "zone1", "us-east-1a", "c_ell.x"} {
++		for _, uid := range []uint32{0, 1, 9, 10, 100, 12345, 999999999, 1000000000, math.MaxUint32} {
++			ta := &topodatapb.TabletAlias{Cell: cell, Uid: uid}
++			assert.Equal(t, fmt.Sprintf("%v-%010d", ta.Cell, ta.Uid), TabletAliasString(ta))
++		}
++	}
++}
++
++var f30Alias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
++
++func BenchmarkF30TabletAliasStringOld(b *testing.B) {
++	b.ReportAllocs()
++	for b.Loop() {
++		_ = fmt.Sprintf("%v-%010d", f30Alias.Cell, f30Alias.Uid)
++	}
++}
++
++func BenchmarkF30TabletAliasStringNew(b *testing.B) {
++	b.ReportAllocs()
++	for b.Loop() {
++		_ = TabletAliasString(f30Alias)
++	}
++}

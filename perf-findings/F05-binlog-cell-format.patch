@@ -1,0 +1,1852 @@
+diff --git a/go/mysql/binlog/rbr.go b/go/mysql/binlog/rbr.go
+index 42cdd52..26a2e79 100644
+--- a/go/mysql/binlog/rbr.go
++++ b/go/mysql/binlog/rbr.go
+@@ -17,9 +17,7 @@ limitations under the License.
+ package binlog
+ 
+ import (
+-	"bytes"
+ 	"encoding/binary"
+-	"fmt"
+ 	"math"
+ 	"strconv"
+ 	"strings"
+@@ -156,18 +154,125 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
+ 	}
+ }
+ 
+-// printTimestamp is a helper method to append a timestamp into a bytes.Buffer,
+-// and return the Buffer.
+-func printTimestamp(v uint32) *bytes.Buffer {
+-	if v == 0 {
+-		return bytes.NewBuffer(ZeroTimestamp)
++// digitPairs holds the two-digit decimal representations of 00 to 99.
++const digitPairs = "00010203040506070809" +
++	"10111213141516171819" +
++	"20212223242526272829" +
++	"30313233343536373839" +
++	"40414243444546474849" +
++	"50515253545556575859" +
++	"60616263646566676869" +
++	"70717273747576777879" +
++	"80818283848586878889" +
++	"90919293949596979899"
++
++// appendUintPadded appends v in base 10, left-padded with zeroes to at least
++// width digits. It produces the same output as fmt's "%0*d" (and "%.*d") verbs
++// for non-negative values: a value with more digits than width is not truncated.
++func appendUintPadded(b []byte, v uint64, width int) []byte {
++	if width == 2 && v < 100 {
++		return append(b, digitPairs[v*2], digitPairs[v*2+1])
++	}
++	var buf [20]byte
++	i := len(buf)
++	for v >= 100 {
++		q := v / 100
++		r := v - q*100
++		i -= 2
++		buf[i], buf[i+1] = digitPairs[r*2], digitPairs[r*2+1]
++		v = q
++	}
++	if v >= 10 {
++		i -= 2
++		buf[i], buf[i+1] = digitPairs[v*2], digitPairs[v*2+1]
++	} else {
++		i--
++		buf[i] = byte('0' + v)
++	}
++	for n := len(buf) - i; n < width; n++ {
++		b = append(b, '0')
+ 	}
++	return append(b, buf[i:]...)
++}
++
++// appendIntPadded is the signed version of appendUintPadded, and produces the
++// same output as fmt's "%0*d" verb: the sign counts towards the width.
++func appendIntPadded(b []byte, v int64, width int) []byte {
++	if v < 0 {
++		return appendUintPadded(append(b, '-'), uint64(-v), width-1)
++	}
++	return appendUintPadded(b, uint64(v), width)
++}
+ 
++// appendDate appends a date as YYYY-MM-DD.
++func appendDate(b []byte, year, month, day uint64) []byte {
++	b = appendUintPadded(b, year, 4)
++	b = append(b, '-')
++	b = appendUintPadded(b, month, 2)
++	b = append(b, '-')
++	return appendUintPadded(b, day, 2)
++}
++
++// appendClock appends a time of day as HH:MM:SS.
++func appendClock(b []byte, hour, minute, second uint64) []byte {
++	b = appendUintPadded(b, hour, 2)
++	b = append(b, ':')
++	b = appendUintPadded(b, minute, 2)
++	b = append(b, ':')
++	return appendUintPadded(b, second, 2)
++}
++
++// appendTimestamp appends the UTC representation of a TIMESTAMP value,
++// expressed in seconds since the epoch, as YYYY-MM-DD HH:MM:SS.
++func appendTimestamp(b []byte, v uint32) []byte {
++	if v == 0 {
++		return append(b, ZeroTimestamp...)
++	}
+ 	t := time.Unix(int64(v), 0).UTC()
++	year, month, day := t.Date()
++	hour, minute, second := t.Clock()
++	b = appendDate(b, uint64(year), uint64(month), uint64(day))
++	b = append(b, ' ')
++	return appendClock(b, uint64(hour), uint64(minute), uint64(second))
++}
+ 
+-	result := &bytes.Buffer{}
+-	result.Write(t.AppendFormat(nil, sqltypes.TimestampFormat))
+-	return result
++// readFractionalSeconds reads the fractional seconds part of a TIMESTAMP2,
++// DATETIME2 or TIME2 value, which uses (fsp+1)/2 big endian bytes to store
++// fsp digits. It returns the raw stored value, the number of bytes it takes,
++// and the number of digits to print. An odd fsp stores one extra digit, which
++// the caller has to drop by dividing by 10. It returns a zero width when fsp
++// is not in the [1, 6] range.
++func readFractionalSeconds(data []byte, pos int, fsp uint16) (raw uint64, size int, width int) {
++	switch fsp {
++	case 1, 2:
++		return uint64(data[pos]), 1, int(fsp)
++	case 3, 4:
++		return uint64(data[pos])<<8 | uint64(data[pos+1]), 2, int(fsp)
++	case 5, 6:
++		return uint64(data[pos])<<16 | uint64(data[pos+1])<<8 | uint64(data[pos+2]), 3, int(fsp)
++	}
++	return 0, 0, 0
++}
++
++// appendFractionalSeconds appends the fractional seconds part as read by
++// readFractionalSeconds, including the leading dot, if width is not zero.
++func appendFractionalSeconds(b []byte, raw uint64, width int) []byte {
++	if width == 0 {
++		return b
++	}
++	if width%2 == 1 {
++		raw /= 10
++	}
++	return appendUintPadded(append(b, '.'), raw, width)
++}
++
++// fractionalSecondsLen returns the length of the formatted fractional seconds
++// part for the given width, including the leading dot.
++func fractionalSecondsLen(width int) int {
++	if width == 0 {
++		return 0
++	}
++	return width + 1
+ }
+ 
+ // CellValue returns the data for a cell as a sqltypes.Value, and how
+@@ -236,9 +341,8 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 			strconv.AppendFloat(nil, fval, 'E', -1, 64)), 8, nil
+ 	case TypeTimestamp:
+ 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
+-		txt := printTimestamp(val)
+ 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-			txt.Bytes()), 4, nil
++			appendTimestamp(make([]byte, 0, len(ZeroTimestamp)), val)), 4, nil
+ 	case TypeLongLong:
+ 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
+ 		if sqltypes.IsSigned(field.Type) {
+@@ -255,7 +359,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 		month := val >> 5 & 15
+ 		year := val >> 9
+ 		return sqltypes.MakeTrusted(querypb.Type_DATE,
+-			fmt.Appendf(nil, "%04d-%02d-%02d", year, month, day)), 3, nil
++			appendDate(make([]byte, 0, 10), uint64(year), uint64(month), uint64(day))), 3, nil
+ 	case TypeTime:
+ 		var hour, minute, second int32
+ 		if data[pos+2]&128 > 0 {
+@@ -275,8 +379,13 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 			minute = (val % 10000) / 100
+ 			second = val % 100
+ 		}
+-		return sqltypes.MakeTrusted(querypb.Type_TIME,
+-			fmt.Appendf(nil, "%02d:%02d:%02d", hour, minute, second)), 3, nil
++		// hour may be negative, minute and second are never negative.
++		txt := appendIntPadded(make([]byte, 0, len("-838:59:59")), int64(hour), 2)
++		txt = append(txt, ':')
++		txt = appendIntPadded(txt, int64(minute), 2)
++		txt = append(txt, ':')
++		txt = appendIntPadded(txt, int64(second), 2)
++		return sqltypes.MakeTrusted(querypb.Type_TIME, txt), 3, nil
+ 	case TypeDateTime:
+ 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
+ 		d := val / 1000000
+@@ -287,8 +396,10 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 		hour := t / 10000
+ 		minute := (t % 10000) / 100
+ 		second := t % 100
+-		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-			fmt.Appendf(nil, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)), 8, nil
++		txt := appendDate(make([]byte, 0, 19), year, month, day)
++		txt = append(txt, ' ')
++		txt = appendClock(txt, hour, minute, second)
++		return sqltypes.MakeTrusted(querypb.Type_DATETIME, txt), 8, nil
+ 	case TypeVarchar, TypeVarString:
+ 		// We trust that typ is compatible with the field.Type
+ 		// Length is encoded in 1 or 2 bytes.
+@@ -313,47 +424,11 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 			data[pos:pos+l]), l, nil
+ 	case TypeTimestamp2:
+ 		second := binary.BigEndian.Uint32(data[pos : pos+4])
+-		txt := printTimestamp(second)
+-		switch metadata {
+-		case 1:
+-			decimals := int(data[pos+4])
+-			fmt.Fprintf(txt, ".%01d", decimals/10)
+-			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-				txt.Bytes()), 5, nil
+-		case 2:
+-			decimals := int(data[pos+4])
+-			fmt.Fprintf(txt, ".%02d", decimals)
+-			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-				txt.Bytes()), 5, nil
+-		case 3:
+-			decimals := int(data[pos+4])<<8 +
+-				int(data[pos+5])
+-			fmt.Fprintf(txt, ".%03d", decimals/10)
+-			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-				txt.Bytes()), 6, nil
+-		case 4:
+-			decimals := int(data[pos+4])<<8 +
+-				int(data[pos+5])
+-			fmt.Fprintf(txt, ".%04d", decimals)
+-			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-				txt.Bytes()), 6, nil
+-		case 5:
+-			decimals := int(data[pos+4])<<16 +
+-				int(data[pos+5])<<8 +
+-				int(data[pos+6])
+-			fmt.Fprintf(txt, ".%05d", decimals/10)
+-			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-				txt.Bytes()), 7, nil
+-		case 6:
+-			decimals := int(data[pos+4])<<16 +
+-				int(data[pos+5])<<8 +
+-				int(data[pos+6])
+-			fmt.Fprintf(txt, ".%06d", decimals)
+-			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-				txt.Bytes()), 7, nil
+-		}
+-		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+-			txt.Bytes()), 4, nil
++		frac, fracSize, width := readFractionalSeconds(data, pos+4, metadata)
++		txt := make([]byte, 0, len(ZeroTimestamp)+fractionalSecondsLen(width))
++		txt = appendTimestamp(txt, second)
++		txt = appendFractionalSeconds(txt, frac, width)
++		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP, txt), 4 + fracSize, nil
+ 	case TypeDateTime2:
+ 		ymdhms := (uint64(data[pos])<<32 |
+ 			uint64(data[pos+1])<<24 |
+@@ -372,282 +447,53 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 		minute := (hms >> 6) % (1 << 6)
+ 		hour := hms >> 12
+ 
+-		txt := &bytes.Buffer{}
+-		fmt.Fprintf(txt, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
+-
+-		switch metadata {
+-		case 1:
+-			decimals := int(data[pos+5])
+-			fmt.Fprintf(txt, ".%01d", decimals/10)
+-			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-				txt.Bytes()), 6, nil
+-		case 2:
+-			decimals := int(data[pos+5])
+-			fmt.Fprintf(txt, ".%02d", decimals)
+-			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-				txt.Bytes()), 6, nil
+-		case 3:
+-			decimals := int(data[pos+5])<<8 +
+-				int(data[pos+6])
+-			fmt.Fprintf(txt, ".%03d", decimals/10)
+-			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-				txt.Bytes()), 7, nil
+-		case 4:
+-			decimals := int(data[pos+5])<<8 +
+-				int(data[pos+6])
+-			fmt.Fprintf(txt, ".%04d", decimals)
+-			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-				txt.Bytes()), 7, nil
+-		case 5:
+-			decimals := int(data[pos+5])<<16 +
+-				int(data[pos+6])<<8 +
+-				int(data[pos+7])
+-			fmt.Fprintf(txt, ".%05d", decimals/10)
+-			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-				txt.Bytes()), 8, nil
+-		case 6:
+-			decimals := int(data[pos+5])<<16 +
+-				int(data[pos+6])<<8 +
+-				int(data[pos+7])
+-			fmt.Fprintf(txt, ".%06d", decimals)
+-			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-				txt.Bytes()), 8, nil
+-		}
+-		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+-			txt.Bytes()), 5, nil
++		frac, fracSize, width := readFractionalSeconds(data, pos+5, metadata)
++		txt := make([]byte, 0, 19+fractionalSecondsLen(width))
++		txt = appendDate(txt, year, month, day)
++		txt = append(txt, ' ')
++		txt = appendClock(txt, hour, minute, second)
++		txt = appendFractionalSeconds(txt, frac, width)
++		return sqltypes.MakeTrusted(querypb.Type_DATETIME, txt), 5 + fracSize, nil
+ 	case TypeTime2:
+ 		hms := (int64(data[pos])<<16 |
+ 			int64(data[pos+1])<<8 |
+ 			int64(data[pos+2])) - 0x800000
+-		sign := ""
+-		if hms < 0 {
++		negative := hms < 0
++		if negative {
+ 			hms = -hms
+-			sign = "-"
+ 		}
+ 
+-		fracStr := ""
+-		switch metadata {
+-		case 1:
+-			frac := int(data[pos+3])
+-			if sign == "-" && frac != 0 {
+-				hms--
+-				frac = 0x100 - frac
+-			}
+-			fracStr = fmt.Sprintf(".%.1d", frac/10)
+-		case 2:
+-			frac := int(data[pos+3])
+-			if sign == "-" && frac != 0 {
+-				hms--
+-				frac = 0x100 - frac
+-			}
+-			fracStr = fmt.Sprintf(".%.2d", frac)
+-		case 3:
+-			frac := int(data[pos+3])<<8 |
+-				int(data[pos+4])
+-			if sign == "-" && frac != 0 {
+-				hms--
+-				frac = 0x10000 - frac
+-			}
+-			fracStr = fmt.Sprintf(".%.3d", frac/10)
+-		case 4:
+-			frac := int(data[pos+3])<<8 |
+-				int(data[pos+4])
+-			if sign == "-" && frac != 0 {
+-				hms--
+-				frac = 0x10000 - frac
+-			}
+-			fracStr = fmt.Sprintf(".%.4d", frac)
+-		case 5:
+-			frac := int(data[pos+3])<<16 |
+-				int(data[pos+4])<<8 |
+-				int(data[pos+5])
+-			if sign == "-" && frac != 0 {
+-				hms--
+-				frac = 0x1000000 - frac
+-			}
+-			fracStr = fmt.Sprintf(".%.5d", frac/10)
+-		case 6:
+-			frac := int(data[pos+3])<<16 |
+-				int(data[pos+4])<<8 |
+-				int(data[pos+5])
+-			if sign == "-" && frac != 0 {
+-				hms--
+-				frac = 0x1000000 - frac
+-			}
+-			fracStr = fmt.Sprintf(".%.6d", frac)
++		frac, fracSize, width := readFractionalSeconds(data, pos+3, metadata)
++		if negative && frac != 0 {
++			// The fractional part of a negative value is stored as its
++			// complement, and borrows one second from the integral part.
++			hms--
++			frac = 1<<(8*fracSize) - frac
+ 		}
+ 
+ 		hour := (hms >> 12) % (1 << 10)
+ 		minute := (hms >> 6) % (1 << 6)
+ 		second := hms % (1 << 6)
+-		return sqltypes.MakeTrusted(querypb.Type_TIME,
+-			fmt.Appendf(nil, "%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr)), 3 + (int(metadata)+1)/2, nil
+-
+-	case TypeNewDecimal:
+-		precision := int(metadata >> 8) // total digits number
+-		scale := int(metadata & 0xff)   // number of fractional digits
+-		intg := precision - scale       // number of full digits
+-		intg0 := intg / 9               // number of 32-bits digits
+-		intg0x := intg - intg0*9        // leftover full digits
+-		frac0 := scale / 9              // number of 32 bits fractionals
+-		frac0x := scale - frac0*9       // leftover fractionals
+-
+-		l := intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x]
+-
+-		// Copy the data so we can change it. Otherwise
+-		// decoding is just too hard.
+-		d := make([]byte, l)
+-		copy(d, data[pos:pos+l])
+-
+-		txt := &bytes.Buffer{}
+-
+-		isNegative := (d[0] & 0x80) == 0
+-		d[0] ^= 0x80 // First bit is inverted.
+-		if isNegative {
+-			// Negative numbers are just inverted bytes.
+-			txt.WriteByte('-')
+-			for i := range d {
+-				d[i] ^= 0xff
+-			}
+-		}
+ 
+-		// first we have the leftover full digits
+-		var val uint32
+-		switch dig2bytes[intg0x] {
+-		case 0:
+-			// nothing to do
+-		case 1:
+-			// one byte, up to two digits
+-			val = uint32(d[0])
+-		case 2:
+-			// two bytes, up to 4 digits
+-			val = uint32(d[0])<<8 +
+-				uint32(d[1])
+-		case 3:
+-			// 3 bytes, up to 6 digits
+-			val = uint32(d[0])<<16 +
+-				uint32(d[1])<<8 +
+-				uint32(d[2])
+-		case 4:
+-			// 4 bytes, up to 8 digits (9 digits would be a full)
+-			val = uint32(d[0])<<24 +
+-				uint32(d[1])<<16 +
+-				uint32(d[2])<<8 +
+-				uint32(d[3])
+-		}
+-		pos = dig2bytes[intg0x]
+-		if val > 0 {
+-			txt.Write(strconv.AppendUint(nil, uint64(val), 10))
++		size := len("00:00:00") + fractionalSecondsLen(width)
++		if negative {
++			size++
+ 		}
+-
+-		// now the full digits, 32 bits each, 9 digits
+-		for range intg0 {
+-			val = binary.BigEndian.Uint32(d[pos : pos+4])
+-			fmt.Fprintf(txt, "%09d", val)
+-			pos += 4
+-		}
+-
+-		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
+-		trimPrecedingZeroes := func(b []byte) []byte {
+-			isNegative := b[0] == '-'
+-			if isNegative {
+-				b = b[1:]
+-			}
+-			i := 0
+-			for i < len(b) && b[i] == '0' {
+-				i++
+-			}
+-			b = b[i:]
+-			// Ensure at least one digit precedes the decimal point so values
+-			// like 0.1 round-trip as "0.1" instead of ".1" (invalid JSON when
+-			// the decimal appears inside a JSON column), and so a fully zero
+-			// integral part collapses to "0" rather than "" or a run of zeroes.
+-			needLeadingZero := len(b) == 0 || b[0] == '.'
+-
+-			size := len(b)
+-			if isNegative {
+-				size++
+-			}
+-			if needLeadingZero {
++		if hour >= 100 {
++			size++
++			if hour >= 1000 {
+ 				size++
+ 			}
+-			out := make([]byte, 0, size)
+-			if isNegative {
+-				out = append(out, '-')
+-			}
+-			if needLeadingZero {
+-				out = append(out, '0')
+-			}
+-			return append(out, b...)
+-		}
+-
+-		// now see if we have a fraction
+-		if scale == 0 {
+-			// When the field is a DECIMAL using a scale of 0, e.g.
+-			// DECIMAL(5,0), a binlogged value of 0 is almost treated
+-			// like the NULL byte and we get a 0 byte length value.
+-			// In this case let's return the correct value of 0.
+-			if txt.Len() == 0 {
+-				txt.WriteRune('0')
+-			}
+-
+-			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+-				trimPrecedingZeroes(txt.Bytes())), l, nil
+-		}
+-		txt.WriteByte('.')
+-
+-		// now the full fractional digits
+-		for range frac0 {
+-			val = binary.BigEndian.Uint32(d[pos : pos+4])
+-			fmt.Fprintf(txt, "%09d", val)
+-			pos += 4
+ 		}
+-
+-		// then the partial fractional digits
+-		switch dig2bytes[frac0x] {
+-		case 0:
+-			// Nothing to do
+-		case 1:
+-			// one byte, 1 or 2 digits
+-			val = uint32(d[pos])
+-			if frac0x == 1 {
+-				fmt.Fprintf(txt, "%1d", val)
+-			} else {
+-				fmt.Fprintf(txt, "%02d", val)
+-			}
+-		case 2:
+-			// two bytes, 3 or 4 digits
+-			val = uint32(d[pos])<<8 +
+-				uint32(d[pos+1])
+-			if frac0x == 3 {
+-				fmt.Fprintf(txt, "%03d", val)
+-			} else {
+-				fmt.Fprintf(txt, "%04d", val)
+-			}
+-		case 3:
+-			// 3 bytes, 5 or 6 digits
+-			val = uint32(d[pos])<<16 +
+-				uint32(d[pos+1])<<8 +
+-				uint32(d[pos+2])
+-			if frac0x == 5 {
+-				fmt.Fprintf(txt, "%05d", val)
+-			} else {
+-				fmt.Fprintf(txt, "%06d", val)
+-			}
+-		case 4:
+-			// 4 bytes, 7 or 8 digits (9 digits would be a full)
+-			val = uint32(d[pos])<<24 +
+-				uint32(d[pos+1])<<16 +
+-				uint32(d[pos+2])<<8 +
+-				uint32(d[pos+3])
+-			if frac0x == 7 {
+-				fmt.Fprintf(txt, "%07d", val)
+-			} else {
+-				fmt.Fprintf(txt, "%08d", val)
+-			}
++		txt := make([]byte, 0, size)
++		if negative {
++			txt = append(txt, '-')
+ 		}
+-
+-		return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimPrecedingZeroes(txt.Bytes())), l, nil
++		txt = appendClock(txt, uint64(hour), uint64(minute), uint64(second))
++		txt = appendFractionalSeconds(txt, frac, width)
++		return sqltypes.MakeTrusted(querypb.Type_TIME, txt), 3 + (int(metadata)+1)/2, nil
++	case TypeNewDecimal:
++		return decimalCellValue(data, pos, metadata)
+ 
+ 	case TypeEnum:
+ 		switch metadata & 0xff {
+@@ -809,3 +655,170 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
+ 		return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported type %v", typ)
+ 	}
+ }
++
++// maxDecimalBinarySize is the binary size of the largest DECIMAL column that
++// MySQL supports: DECIMAL(65, 28) and DECIMAL(65, 30) use 30 bytes.
++const maxDecimalBinarySize = 32
++
++// maxDecimalTextSize covers the text representation of the largest DECIMAL
++// column that MySQL supports: a sign, 65 digits and a decimal point.
++const maxDecimalTextSize = 80
++
++// decimalCellValue decodes a DECIMAL value, stored in MySQL's binary format,
++// and returns its text representation and how many bytes it takes.
++func decimalCellValue(data []byte, pos int, metadata uint16) (sqltypes.Value, int, error) {
++	precision := int(metadata >> 8) // total digits number
++	scale := int(metadata & 0xff)   // number of fractional digits
++	intg := precision - scale       // number of full digits
++	intg0 := intg / 9               // number of 32-bits digits
++	intg0x := intg - intg0*9        // leftover full digits
++	frac0 := scale / 9              // number of 32 bits fractionals
++	frac0x := scale - frac0*9       // leftover fractionals
++
++	l := intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x]
++
++	// Copy the data so we can change it. Otherwise
++	// decoding is just too hard.
++	var dbuf [maxDecimalBinarySize]byte
++	var d []byte
++	if l <= len(dbuf) {
++		d = dbuf[:l]
++	} else {
++		d = make([]byte, l)
++	}
++	copy(d, data[pos:pos+l])
++
++	var tbuf [maxDecimalTextSize]byte
++	txt := tbuf[:0]
++
++	isNegative := (d[0] & 0x80) == 0
++	d[0] ^= 0x80 // First bit is inverted.
++	if isNegative {
++		// Negative numbers are just inverted bytes.
++		txt = append(txt, '-')
++		for i := range d {
++			d[i] ^= 0xff
++		}
++	}
++
++	// first we have the leftover full digits
++	var val uint32
++	switch dig2bytes[intg0x] {
++	case 0:
++		// nothing to do
++	case 1:
++		// one byte, up to two digits
++		val = uint32(d[0])
++	case 2:
++		// two bytes, up to 4 digits
++		val = uint32(d[0])<<8 +
++			uint32(d[1])
++	case 3:
++		// 3 bytes, up to 6 digits
++		val = uint32(d[0])<<16 +
++			uint32(d[1])<<8 +
++			uint32(d[2])
++	case 4:
++		// 4 bytes, up to 8 digits (9 digits would be a full)
++		val = uint32(d[0])<<24 +
++			uint32(d[1])<<16 +
++			uint32(d[2])<<8 +
++			uint32(d[3])
++	}
++	pos = dig2bytes[intg0x]
++	if val > 0 {
++		txt = strconv.AppendUint(txt, uint64(val), 10)
++	}
++
++	// now the full digits, 32 bits each, 9 digits
++	for range intg0 {
++		txt = appendUintPadded(txt, uint64(binary.BigEndian.Uint32(d[pos:pos+4])), 9)
++		pos += 4
++	}
++
++	// now see if we have a fraction
++	if scale == 0 {
++		// When the field is a DECIMAL using a scale of 0, e.g.
++		// DECIMAL(5,0), a binlogged value of 0 is almost treated
++		// like the NULL byte and we get a 0 byte length value.
++		// In this case let's return the correct value of 0.
++		if len(txt) == 0 {
++			txt = append(txt, '0')
++		}
++
++		return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
++			trimDecimalLeadingZeroes(txt)), l, nil
++	}
++	txt = append(txt, '.')
++
++	// now the full fractional digits
++	for range frac0 {
++		txt = appendUintPadded(txt, uint64(binary.BigEndian.Uint32(d[pos:pos+4])), 9)
++		pos += 4
++	}
++
++	// then the partial fractional digits, zero padded to frac0x digits
++	switch dig2bytes[frac0x] {
++	case 0:
++		// Nothing to do
++	case 1:
++		// one byte, 1 or 2 digits
++		val = uint32(d[pos])
++	case 2:
++		// two bytes, 3 or 4 digits
++		val = uint32(d[pos])<<8 +
++			uint32(d[pos+1])
++	case 3:
++		// 3 bytes, 5 or 6 digits
++		val = uint32(d[pos])<<16 +
++			uint32(d[pos+1])<<8 +
++			uint32(d[pos+2])
++	case 4:
++		// 4 bytes, 7 or 8 digits (9 digits would be a full)
++		val = uint32(d[pos])<<24 +
++			uint32(d[pos+1])<<16 +
++			uint32(d[pos+2])<<8 +
++			uint32(d[pos+3])
++	}
++	if frac0x > 0 {
++		txt = appendUintPadded(txt, uint64(val), frac0x)
++	}
++
++	return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimDecimalLeadingZeroes(txt)), l, nil
++}
++
++// trimDecimalLeadingZeroes removes preceding 0s from the integral part of a
++// decimal, otherwise we get "000000000001.23" instead of "1.23". It returns
++// a newly allocated slice, so b can be a temporary buffer.
++func trimDecimalLeadingZeroes(b []byte) []byte {
++	isNegative := b[0] == '-'
++	if isNegative {
++		b = b[1:]
++	}
++	i := 0
++	for i < len(b) && b[i] == '0' {
++		i++
++	}
++	b = b[i:]
++	// Ensure at least one digit precedes the decimal point so values
++	// like 0.1 round-trip as "0.1" instead of ".1" (invalid JSON when
++	// the decimal appears inside a JSON column), and so a fully zero
++	// integral part collapses to "0" rather than "" or a run of zeroes.
++	needLeadingZero := len(b) == 0 || b[0] == '.'
++
++	size := len(b)
++	if isNegative {
++		size++
++	}
++	if needLeadingZero {
++		size++
++	}
++	out := make([]byte, 0, size)
++	if isNegative {
++		out = append(out, '-')
++	}
++	if needLeadingZero {
++		out = append(out, '0')
++	}
++	return append(out, b...)
++}
+diff --git a/go/mysql/binlog/rbr_format_test.go b/go/mysql/binlog/rbr_format_test.go
+new file mode 100644
+index 0000000..759b615
+--- /dev/null
++++ b/go/mysql/binlog/rbr_format_test.go
+@@ -0,0 +1,404 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package binlog
++
++import (
++	"encoding/binary"
++	"fmt"
++	"math/rand/v2"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++type cellResult struct {
++	typ      querypb.Type
++	raw      string
++	length   int
++	err      string
++	panicked bool
++}
++
++func callCellValue(fn func([]byte, int, byte, uint16, *querypb.Field, bool) (sqltypes.Value, int, error), data []byte, pos int, typ byte, metadata uint16) (res cellResult) {
++	defer func() {
++		if r := recover(); r != nil {
++			res = cellResult{panicked: true}
++		}
++	}()
++	v, l, err := fn(data, pos, typ, metadata, &querypb.Field{Type: querypb.Type_UINT64}, false)
++	res = cellResult{typ: v.Type(), raw: string(v.Raw()), length: l}
++	if err != nil {
++		res.err = err.Error()
++	}
++	return res
++}
++
++func requireSameCellValue(t *testing.T, data []byte, typ byte, metadata uint16) {
++	// Pad the data on both sides, so we make sure the 'pos' field works.
++	padded := make([]byte, len(data)+2)
++	padded[0] = 0x5a
++	padded[len(padded)-1] = 0xa5
++	copy(padded[1:], data)
++	want := callCellValue(cellValueReference, padded, 1, typ, metadata)
++	got := callCellValue(CellValue, padded, 1, typ, metadata)
++	if want != got {
++		require.Equal(t, want, got, "type %d, metadata %#04x, data %x", typ, metadata, data)
++	}
++}
++
++func randomBytes(r *rand.Rand, n int) []byte {
++	b := make([]byte, n)
++	for i := range b {
++		switch r.IntN(8) {
++		case 0:
++			b[i] = 0
++		case 1:
++			b[i] = 0xff
++		case 2:
++			b[i] = 0x80
++		case 3:
++			b[i] = 0x7f
++		default:
++			b[i] = byte(r.Uint32())
++		}
++	}
++	return b
++}
++
++// TestCellValueTemporalFormatEquivalence checks that the temporal formatters
++// produce byte-identical output to the previous fmt-based implementation,
++// for valid values and for arbitrary bytes.
++func TestCellValueTemporalFormatEquivalence(t *testing.T) {
++	r := rand.New(rand.NewPCG(1, 2))
++	const iterations = 20000
++
++	fixedPatterns := func(n int) [][]byte {
++		var out [][]byte
++		for _, fill := range []byte{0x00, 0xff, 0x80, 0x7f, 0x01, 0xfe} {
++			b := make([]byte, n)
++			for i := range b {
++				b[i] = fill
++			}
++			out = append(out, b)
++			c := make([]byte, n)
++			copy(c, b)
++			c[0] ^= 0x80
++			out = append(out, c)
++		}
++		return out
++	}
++
++	for _, typ := range []byte{TypeDate, TypeNewDate, TypeTime, TypeDateTime, TypeTimestamp} {
++		t.Run(fmt.Sprintf("type-%d", typ), func(t *testing.T) {
++			n, err := CellLength(nil, 0, typ, 0)
++			require.NoError(t, err)
++			for _, b := range fixedPatterns(n) {
++				requireSameCellValue(t, b, typ, 0)
++			}
++			for range iterations {
++				requireSameCellValue(t, randomBytes(r, n), typ, 0)
++			}
++		})
++	}
++
++	t.Run("valid-time", func(t *testing.T) {
++		for range iterations {
++			v := int32(r.IntN(8385960))
++			if r.IntN(2) == 0 {
++				v = -v
++			}
++			var b [4]byte
++			binary.LittleEndian.PutUint32(b[:], uint32(v))
++			requireSameCellValue(t, b[:3], TypeTime, 0)
++		}
++	})
++
++	t.Run("valid-datetime", func(t *testing.T) {
++		for range iterations {
++			v := uint64(r.IntN(10000))*10000000000 + uint64(r.IntN(13))*100000000 + uint64(r.IntN(32))*1000000 +
++				uint64(r.IntN(24))*10000 + uint64(r.IntN(60))*100 + uint64(r.IntN(60))
++			var b [8]byte
++			binary.LittleEndian.PutUint64(b[:], v)
++			requireSameCellValue(t, b[:], TypeDateTime, 0)
++		}
++	})
++
++	t.Run("timestamp-every-day", func(t *testing.T) {
++		// Every day that a TIMESTAMP can represent, at a random time.
++		for day := uint32(0); day <= 0xffffffff/86400; day++ {
++			v := day*86400 + uint32(r.IntN(86400))
++			if day == 0xffffffff/86400 {
++				v = 0xffffffff
++			}
++			var b [4]byte
++			binary.LittleEndian.PutUint32(b[:], v)
++			requireSameCellValue(t, b[:], TypeTimestamp, 0)
++			binary.BigEndian.PutUint32(b[:], v)
++			requireSameCellValue(t, append(b[:], 0x12, 0x34, 0x56), TypeTimestamp2, uint16(day%7))
++		}
++	})
++
++	for _, typ := range []byte{TypeTimestamp2, TypeDateTime2, TypeTime2} {
++		// Metadata values above 6 are invalid, but make sure they behave the same.
++		for metadata := uint16(0); metadata <= 8; metadata++ {
++			t.Run(fmt.Sprintf("type-%d-fsp-%d", typ, metadata), func(t *testing.T) {
++				n, err := CellLength(nil, 0, typ, metadata)
++				require.NoError(t, err)
++				for _, b := range fixedPatterns(n) {
++					requireSameCellValue(t, b, typ, metadata)
++				}
++				for range iterations {
++					requireSameCellValue(t, randomBytes(r, n), typ, metadata)
++				}
++			})
++		}
++	}
++
++	t.Run("valid-datetime2", func(t *testing.T) {
++		for range iterations {
++			ym := uint64(r.IntN(10000))*13 + uint64(r.IntN(13))
++			ymd := ym<<5 | uint64(r.IntN(32))
++			hms := uint64(r.IntN(24))<<12 | uint64(r.IntN(60))<<6 | uint64(r.IntN(60))
++			v := (ymd<<17 | hms) + 0x8000000000
++			fsp := uint16(r.IntN(7))
++			n := (int(fsp) + 1) / 2
++			b := []byte{byte(v >> 32), byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}
++			frac := uint32(r.IntN(1000000))
++			fb := make([]byte, n)
++			for i := n - 1; i >= 0; i-- {
++				fb[i] = byte(frac % 100)
++				frac /= 100
++			}
++			requireSameCellValue(t, append(b, fb...), TypeDateTime2, fsp)
++		}
++	})
++
++	t.Run("valid-time2", func(t *testing.T) {
++		for range iterations {
++			hms := int64(r.IntN(839))<<12 | int64(r.IntN(60))<<6 | int64(r.IntN(60))
++			fsp := uint16(r.IntN(7))
++			n := (int(fsp) + 1) / 2
++			frac := int64(0)
++			if n > 0 {
++				frac = int64(r.IntN(1 << (8 * n)))
++			}
++			packed := hms<<(8*n) | frac
++			if r.IntN(2) == 0 {
++				packed = -packed
++			}
++			packed += 0x800000 << (8 * n)
++			b := make([]byte, 3+n)
++			for i := len(b) - 1; i >= 0; i-- {
++				b[i] = byte(packed)
++				packed >>= 8
++			}
++			requireSameCellValue(t, b, TypeTime2, fsp)
++		}
++	})
++}
++
++// encodeDecimal returns a random value in MySQL's binary DECIMAL format.
++// Digit groups are valid most of the time, and often zero, to exercise the
++// trimming of leading zeroes.
++func encodeDecimal(r *rand.Rand, precision, scale int) []byte {
++	intg := precision - scale
++	intg0, intg0x := intg/9, intg%9
++	frac0, frac0x := scale/9, scale%9
++	pow10 := func(n int) uint32 {
++		p := uint32(1)
++		for range n {
++			p *= 10
++		}
++		return p
++	}
++	group := func(digits int) uint32 {
++		switch r.IntN(4) {
++		case 0:
++			return 0
++		case 1:
++			return pow10(digits) - 1
++		default:
++			return r.Uint32N(pow10(digits))
++		}
++	}
++	var out []byte
++	put := func(v uint32, size int) {
++		for i := size - 1; i >= 0; i-- {
++			out = append(out, byte(v>>(8*i)))
++		}
++	}
++	put(group(intg0x), dig2bytes[intg0x])
++	for range intg0 {
++		put(group(9), 4)
++	}
++	for range frac0 {
++		put(group(9), 4)
++	}
++	put(group(frac0x), dig2bytes[frac0x])
++	if len(out) == 0 {
++		return out
++	}
++	if r.IntN(2) == 0 {
++		for i := range out {
++			out[i] ^= 0xff
++		}
++	}
++	out[0] ^= 0x80
++	return out
++}
++
++// TestCellValueDecimalFormatEquivalence checks that the DECIMAL formatter
++// produces byte-identical output to the previous fmt-based implementation,
++// for every precision and scale that MySQL supports.
++func TestCellValueDecimalFormatEquivalence(t *testing.T) {
++	r := rand.New(rand.NewPCG(3, 4))
++	for precision := 1; precision <= 65; precision++ {
++		for scale := 0; scale <= min(precision, 30); scale++ {
++			metadata := uint16(precision)<<8 | uint16(scale)
++			n, err := CellLength(nil, 0, TypeNewDecimal, metadata)
++			require.NoError(t, err)
++			for _, fill := range []byte{0x00, 0xff, 0x80, 0x7f} {
++				b := make([]byte, n)
++				for i := range b {
++					b[i] = fill
++				}
++				requireSameCellValue(t, b, TypeNewDecimal, metadata)
++			}
++			for range 300 {
++				requireSameCellValue(t, encodeDecimal(r, precision, scale), TypeNewDecimal, metadata)
++				requireSameCellValue(t, randomBytes(r, n), TypeNewDecimal, metadata)
++			}
++		}
++	}
++	// Metadata that MySQL never produces, including binary values that do
++	// not fit in the stack buffers.
++	for _, metadata := range []uint16{0, 0x0000 | 0, 90<<8 | 0, 200<<8 | 30, 255<<8 | 255, 255<<8 | 0, 100<<8 | 60} {
++		n, err := CellLength(nil, 0, TypeNewDecimal, metadata)
++		require.NoError(t, err)
++		for range 300 {
++			requireSameCellValue(t, randomBytes(r, n), TypeNewDecimal, metadata)
++		}
++	}
++}
++
++// FuzzCellValueFormat checks that the temporal and DECIMAL formatters produce
++// byte-identical output to the previous fmt-based implementation.
++func FuzzCellValueFormat(f *testing.F) {
++	f.Add(byte(TypeDateTime2), uint16(6), []byte{0x99, 0xb4, 0x2a, 0x7b, 0x5e, 0x0f, 0x42, 0x3f})
++	f.Add(byte(TypeNewDecimal), uint16(19<<8|4), []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0xd2, 0x00, 0x00})
++	f.Fuzz(func(t *testing.T, typIndex byte, metadata uint16, data []byte) {
++		types := []byte{TypeDate, TypeNewDate, TypeTime, TypeDateTime, TypeTimestamp, TypeTimestamp2, TypeDateTime2, TypeTime2, TypeNewDecimal}
++		typ := types[int(typIndex)%len(types)]
++		if typ == TypeNewDecimal && int(metadata&0xff) > int(metadata>>8) {
++			metadata = metadata&0xff00 | metadata>>8
++		}
++		requireSameCellValue(t, data, typ, metadata)
++	})
++}
++
++type benchCell struct {
++	name     string
++	typ      byte
++	metadata uint16
++	field    querypb.Type
++	data     []byte
++}
++
++func benchCells() []benchCell {
++	return []benchCell{
++		{"INT", TypeLong, 0, querypb.Type_INT32, []byte{0x39, 0x30, 0x00, 0x00}},
++		{"BIGINT", TypeLongLong, 0, querypb.Type_INT64, []byte{0x15, 0xcd, 0x5b, 0x07, 0x00, 0x00, 0x00, 0x00}},
++		{"VARCHAR", TypeVarchar, 255, querypb.Type_VARCHAR, append([]byte{11}, "hello world"...)},
++		{"DATE", TypeDate, 0, querypb.Type_DATE, []byte{0x6c, 0xd3, 0x0f}},
++		{"TIME2_0", TypeTime2, 0, querypb.Type_TIME, []byte{0x80, 0xc7, 0x8e}},
++		{"TIME2_6", TypeTime2, 6, querypb.Type_TIME, []byte{0x7f, 0x38, 0x71, 0xfe, 0x1d, 0xc0}},
++		{"DATETIME2_0", TypeDateTime2, 0, querypb.Type_DATETIME, []byte{0x99, 0xb4, 0x2a, 0x7b, 0x5e}},
++		{"DATETIME2_3", TypeDateTime2, 3, querypb.Type_DATETIME, []byte{0x99, 0xb4, 0x2a, 0x7b, 0x5e, 0x04, 0xd2}},
++		{"DATETIME2_6", TypeDateTime2, 6, querypb.Type_DATETIME, []byte{0x99, 0xb4, 0x2a, 0x7b, 0x5e, 0x0f, 0x42, 0x3f}},
++		{"TIMESTAMP2_0", TypeTimestamp2, 0, querypb.Type_TIMESTAMP, []byte{0x67, 0xd1, 0xae, 0xf0}},
++		{"TIMESTAMP2_6", TypeTimestamp2, 6, querypb.Type_TIMESTAMP, []byte{0x67, 0xd1, 0xae, 0xf0, 0x0f, 0x42, 0x3f}},
++		{"DECIMAL_10_2", TypeNewDecimal, 10<<8 | 2, querypb.Type_DECIMAL, []byte{0x80, 0x01, 0xe2, 0x40, 0x2d}},
++		{"DECIMAL_19_4", TypeNewDecimal, 19<<8 | 4, querypb.Type_DECIMAL, []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x04, 0xd2, 0x16, 0x2e}},
++		{"DECIMAL_65_30", TypeNewDecimal, 65<<8 | 30, querypb.Type_DECIMAL, encodeDecimal(rand.New(rand.NewPCG(5, 6)), 65, 30)},
++	}
++}
++
++var cellValueImpls = []struct {
++	name string
++	fn   func([]byte, int, byte, uint16, *querypb.Field, bool) (sqltypes.Value, int, error)
++}{{"old", cellValueReference}, {"new", CellValue}}
++
++func BenchmarkCellValueFormat(b *testing.B) {
++	for _, c := range benchCells() {
++		field := &querypb.Field{Type: c.field}
++		for _, impl := range cellValueImpls {
++			b.Run(fmt.Sprintf("type=%s/impl=%s", c.name, impl.name), func(b *testing.B) {
++				b.ReportAllocs()
++				v, l, err := impl.fn(c.data, 0, c.typ, c.metadata, field, false)
++				if err != nil || l != len(c.data) {
++					b.Fatalf("CellValue(%s) = %v, %d, %v", c.name, v, l, err)
++				}
++				for b.Loop() {
++					_, _, _ = impl.fn(c.data, 0, c.typ, c.metadata, field, false)
++				}
++			})
++		}
++	}
++}
++
++// BenchmarkCellValueRow decodes a row that mixes integer, string, temporal
++// and DECIMAL columns, as the vstreamer does for every row event.
++func BenchmarkCellValueRow(b *testing.B) {
++	var types []byte
++	var metadata []uint16
++	var fields []*querypb.Field
++	var data []byte
++	cells := benchCells()
++	for _, name := range []string{"BIGINT", "INT", "VARCHAR", "VARCHAR", "DECIMAL_10_2", "DECIMAL_19_4", "DATE", "DATETIME2_0", "DATETIME2_6", "TIMESTAMP2_0", "INT"} {
++		for _, c := range cells {
++			if c.name == name {
++				types = append(types, c.typ)
++				metadata = append(metadata, c.metadata)
++				fields = append(fields, &querypb.Field{Type: c.field})
++				data = append(data, c.data...)
++			}
++		}
++	}
++	values := make([]sqltypes.Value, len(types))
++	for _, impl := range cellValueImpls {
++		b.Run("impl="+impl.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				pos := 0
++				for i := range types {
++					v, l, err := impl.fn(data, pos, types[i], metadata[i], fields[i], false)
++					if err != nil {
++						b.Fatal(err)
++					}
++					values[i] = v
++					pos += l
++				}
++				if pos != len(data) {
++					b.Fatalf("decoded %d bytes out of %d", pos, len(data))
++				}
++			}
++		})
++	}
++}
+diff --git a/go/mysql/binlog/rbr_reference_test.go b/go/mysql/binlog/rbr_reference_test.go
+new file mode 100644
+index 0000000..a37dfd2
+--- /dev/null
++++ b/go/mysql/binlog/rbr_reference_test.go
+@@ -0,0 +1,691 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package binlog
++
++import (
++	"bytes"
++	"encoding/binary"
++	"fmt"
++	"math"
++	"strconv"
++	"strings"
++	"time"
++
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/vterrors"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
++)
++
++// This file keeps a verbatim copy of the previous fmt-based CellValue
++// implementation, so that the optimized formatters can be checked for
++// byte-identical output and benchmarked against it.
++
++// printTimestampReference is a helper method to append a timestamp into a bytes.Buffer,
++// and return the Buffer.
++func printTimestampReference(v uint32) *bytes.Buffer {
++	if v == 0 {
++		return bytes.NewBuffer(ZeroTimestamp)
++	}
++
++	t := time.Unix(int64(v), 0).UTC()
++
++	result := &bytes.Buffer{}
++	result.Write(t.AppendFormat(nil, sqltypes.TimestampFormat))
++	return result
++}
++
++// cellValueReference returns the data for a cell as a sqltypes.Value, and how
++// many bytes it takes. It uses source type in querypb.Type and vitess type
++// byte to determine general shared aspects of types and the querypb.Field to
++// determine other info specifically about its underlying column (SQL column
++// type, column length, charset, etc)
++func cellValueReference(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field, partialJSON bool) (sqltypes.Value, int, error) {
++	switch typ {
++	case TypeTiny:
++		if sqltypes.IsSigned(field.Type) {
++			return sqltypes.MakeTrusted(querypb.Type_INT8,
++				strconv.AppendInt(nil, int64(int8(data[pos])), 10)), 1, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_UINT8,
++			strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
++	case TypeYear:
++		val := data[pos]
++		if val == 0 {
++			return sqltypes.MakeTrusted(querypb.Type_YEAR,
++				[]byte{'0', '0', '0', '0'}), 1, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_YEAR,
++			strconv.AppendUint(nil, uint64(data[pos])+1900, 10)), 1, nil
++	case TypeShort:
++		val := binary.LittleEndian.Uint16(data[pos : pos+2])
++		if sqltypes.IsSigned(field.Type) {
++			return sqltypes.MakeTrusted(querypb.Type_INT16,
++				strconv.AppendInt(nil, int64(int16(val)), 10)), 2, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_UINT16,
++			strconv.AppendUint(nil, uint64(val), 10)), 2, nil
++	case TypeInt24:
++		if sqltypes.IsSigned(field.Type) && data[pos+2]&128 > 0 {
++			// Negative number, have to extend the sign.
++			val := int32(uint32(data[pos]) +
++				uint32(data[pos+1])<<8 +
++				uint32(data[pos+2])<<16 +
++				uint32(255)<<24)
++			return sqltypes.MakeTrusted(querypb.Type_INT24,
++				strconv.AppendInt(nil, int64(val), 10)), 3, nil
++		}
++		// Positive number.
++		val := uint64(data[pos]) +
++			uint64(data[pos+1])<<8 +
++			uint64(data[pos+2])<<16
++		return sqltypes.MakeTrusted(querypb.Type_UINT24,
++			strconv.AppendUint(nil, val, 10)), 3, nil
++	case TypeLong:
++		val := binary.LittleEndian.Uint32(data[pos : pos+4])
++		if sqltypes.IsSigned(field.Type) {
++			return sqltypes.MakeTrusted(querypb.Type_INT32,
++				strconv.AppendInt(nil, int64(int32(val)), 10)), 4, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_UINT32,
++			strconv.AppendUint(nil, uint64(val), 10)), 4, nil
++	case TypeFloat:
++		val := binary.LittleEndian.Uint32(data[pos : pos+4])
++		fval := math.Float32frombits(val)
++		return sqltypes.MakeTrusted(querypb.Type_FLOAT32,
++			strconv.AppendFloat(nil, float64(fval), 'E', -1, 32)), 4, nil
++	case TypeDouble:
++		val := binary.LittleEndian.Uint64(data[pos : pos+8])
++		fval := math.Float64frombits(val)
++		return sqltypes.MakeTrusted(querypb.Type_FLOAT64,
++			strconv.AppendFloat(nil, fval, 'E', -1, 64)), 8, nil
++	case TypeTimestamp:
++		val := binary.LittleEndian.Uint32(data[pos : pos+4])
++		txt := printTimestampReference(val)
++		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++			txt.Bytes()), 4, nil
++	case TypeLongLong:
++		val := binary.LittleEndian.Uint64(data[pos : pos+8])
++		if sqltypes.IsSigned(field.Type) {
++			return sqltypes.MakeTrusted(querypb.Type_INT64,
++				strconv.AppendInt(nil, int64(val), 10)), 8, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_UINT64,
++			strconv.AppendUint(nil, val, 10)), 8, nil
++	case TypeDate, TypeNewDate:
++		val := uint32(data[pos]) +
++			uint32(data[pos+1])<<8 +
++			uint32(data[pos+2])<<16
++		day := val & 31
++		month := val >> 5 & 15
++		year := val >> 9
++		return sqltypes.MakeTrusted(querypb.Type_DATE,
++			fmt.Appendf(nil, "%04d-%02d-%02d", year, month, day)), 3, nil
++	case TypeTime:
++		var hour, minute, second int32
++		if data[pos+2]&128 > 0 {
++			// Negative number, have to extend the sign.
++			val := int32(uint32(data[pos]) +
++				uint32(data[pos+1])<<8 +
++				uint32(data[pos+2])<<16 +
++				uint32(255)<<24)
++			hour = val / 10000
++			minute = -((val % 10000) / 100)
++			second = -(val % 100)
++		} else {
++			val := int32(data[pos]) +
++				int32(data[pos+1])<<8 +
++				int32(data[pos+2])<<16
++			hour = val / 10000
++			minute = (val % 10000) / 100
++			second = val % 100
++		}
++		return sqltypes.MakeTrusted(querypb.Type_TIME,
++			fmt.Appendf(nil, "%02d:%02d:%02d", hour, minute, second)), 3, nil
++	case TypeDateTime:
++		val := binary.LittleEndian.Uint64(data[pos : pos+8])
++		d := val / 1000000
++		t := val % 1000000
++		year := d / 10000
++		month := (d % 10000) / 100
++		day := d % 100
++		hour := t / 10000
++		minute := (t % 10000) / 100
++		second := t % 100
++		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++			fmt.Appendf(nil, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)), 8, nil
++	case TypeVarchar, TypeVarString:
++		// We trust that typ is compatible with the field.Type
++		// Length is encoded in 1 or 2 bytes.
++		typeToUse := querypb.Type_VARCHAR
++		if field.Type == querypb.Type_VARBINARY || field.Type == querypb.Type_BINARY || field.Type == querypb.Type_BLOB {
++			typeToUse = field.Type
++		}
++		if metadata > 255 {
++			l := int(uint64(data[pos]) |
++				uint64(data[pos+1])<<8)
++			return sqltypes.MakeTrusted(typeToUse,
++				data[pos+2:pos+2+l]), l + 2, nil
++		}
++		l := int(data[pos])
++		return sqltypes.MakeTrusted(typeToUse,
++			data[pos+1:pos+1+l]), l + 1, nil
++	case TypeBit:
++		// The contents is just the bytes, quoted.
++		nbits := ((metadata >> 8) * 8) + (metadata & 0xFF)
++		l := (int(nbits) + 7) / 8
++		return sqltypes.MakeTrusted(querypb.Type_BIT,
++			data[pos:pos+l]), l, nil
++	case TypeTimestamp2:
++		second := binary.BigEndian.Uint32(data[pos : pos+4])
++		txt := printTimestampReference(second)
++		switch metadata {
++		case 1:
++			decimals := int(data[pos+4])
++			fmt.Fprintf(txt, ".%01d", decimals/10)
++			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++				txt.Bytes()), 5, nil
++		case 2:
++			decimals := int(data[pos+4])
++			fmt.Fprintf(txt, ".%02d", decimals)
++			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++				txt.Bytes()), 5, nil
++		case 3:
++			decimals := int(data[pos+4])<<8 +
++				int(data[pos+5])
++			fmt.Fprintf(txt, ".%03d", decimals/10)
++			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++				txt.Bytes()), 6, nil
++		case 4:
++			decimals := int(data[pos+4])<<8 +
++				int(data[pos+5])
++			fmt.Fprintf(txt, ".%04d", decimals)
++			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++				txt.Bytes()), 6, nil
++		case 5:
++			decimals := int(data[pos+4])<<16 +
++				int(data[pos+5])<<8 +
++				int(data[pos+6])
++			fmt.Fprintf(txt, ".%05d", decimals/10)
++			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++				txt.Bytes()), 7, nil
++		case 6:
++			decimals := int(data[pos+4])<<16 +
++				int(data[pos+5])<<8 +
++				int(data[pos+6])
++			fmt.Fprintf(txt, ".%06d", decimals)
++			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++				txt.Bytes()), 7, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
++			txt.Bytes()), 4, nil
++	case TypeDateTime2:
++		ymdhms := (uint64(data[pos])<<32 |
++			uint64(data[pos+1])<<24 |
++			uint64(data[pos+2])<<16 |
++			uint64(data[pos+3])<<8 |
++			uint64(data[pos+4])) - uint64(0x8000000000)
++		ymd := ymdhms >> 17
++		ym := ymd >> 5
++		hms := ymdhms % (1 << 17)
++
++		day := ymd % (1 << 5)
++		month := ym % 13
++		year := ym / 13
++
++		second := hms % (1 << 6)
++		minute := (hms >> 6) % (1 << 6)
++		hour := hms >> 12
++
++		txt := &bytes.Buffer{}
++		fmt.Fprintf(txt, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
++
++		switch metadata {
++		case 1:
++			decimals := int(data[pos+5])
++			fmt.Fprintf(txt, ".%01d", decimals/10)
++			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++				txt.Bytes()), 6, nil
++		case 2:
++			decimals := int(data[pos+5])
++			fmt.Fprintf(txt, ".%02d", decimals)
++			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++				txt.Bytes()), 6, nil
++		case 3:
++			decimals := int(data[pos+5])<<8 +
++				int(data[pos+6])
++			fmt.Fprintf(txt, ".%03d", decimals/10)
++			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++				txt.Bytes()), 7, nil
++		case 4:
++			decimals := int(data[pos+5])<<8 +
++				int(data[pos+6])
++			fmt.Fprintf(txt, ".%04d", decimals)
++			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++				txt.Bytes()), 7, nil
++		case 5:
++			decimals := int(data[pos+5])<<16 +
++				int(data[pos+6])<<8 +
++				int(data[pos+7])
++			fmt.Fprintf(txt, ".%05d", decimals/10)
++			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++				txt.Bytes()), 8, nil
++		case 6:
++			decimals := int(data[pos+5])<<16 +
++				int(data[pos+6])<<8 +
++				int(data[pos+7])
++			fmt.Fprintf(txt, ".%06d", decimals)
++			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++				txt.Bytes()), 8, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
++			txt.Bytes()), 5, nil
++	case TypeTime2:
++		hms := (int64(data[pos])<<16 |
++			int64(data[pos+1])<<8 |
++			int64(data[pos+2])) - 0x800000
++		sign := ""
++		if hms < 0 {
++			hms = -hms
++			sign = "-"
++		}
++
++		fracStr := ""
++		switch metadata {
++		case 1:
++			frac := int(data[pos+3])
++			if sign == "-" && frac != 0 {
++				hms--
++				frac = 0x100 - frac
++			}
++			fracStr = fmt.Sprintf(".%.1d", frac/10)
++		case 2:
++			frac := int(data[pos+3])
++			if sign == "-" && frac != 0 {
++				hms--
++				frac = 0x100 - frac
++			}
++			fracStr = fmt.Sprintf(".%.2d", frac)
++		case 3:
++			frac := int(data[pos+3])<<8 |
++				int(data[pos+4])
++			if sign == "-" && frac != 0 {
++				hms--
++				frac = 0x10000 - frac
++			}
++			fracStr = fmt.Sprintf(".%.3d", frac/10)
++		case 4:
++			frac := int(data[pos+3])<<8 |
++				int(data[pos+4])
++			if sign == "-" && frac != 0 {
++				hms--
++				frac = 0x10000 - frac
++			}
++			fracStr = fmt.Sprintf(".%.4d", frac)
++		case 5:
++			frac := int(data[pos+3])<<16 |
++				int(data[pos+4])<<8 |
++				int(data[pos+5])
++			if sign == "-" && frac != 0 {
++				hms--
++				frac = 0x1000000 - frac
++			}
++			fracStr = fmt.Sprintf(".%.5d", frac/10)
++		case 6:
++			frac := int(data[pos+3])<<16 |
++				int(data[pos+4])<<8 |
++				int(data[pos+5])
++			if sign == "-" && frac != 0 {
++				hms--
++				frac = 0x1000000 - frac
++			}
++			fracStr = fmt.Sprintf(".%.6d", frac)
++		}
++
++		hour := (hms >> 12) % (1 << 10)
++		minute := (hms >> 6) % (1 << 6)
++		second := hms % (1 << 6)
++		return sqltypes.MakeTrusted(querypb.Type_TIME,
++			fmt.Appendf(nil, "%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr)), 3 + (int(metadata)+1)/2, nil
++
++	case TypeNewDecimal:
++		precision := int(metadata >> 8) // total digits number
++		scale := int(metadata & 0xff)   // number of fractional digits
++		intg := precision - scale       // number of full digits
++		intg0 := intg / 9               // number of 32-bits digits
++		intg0x := intg - intg0*9        // leftover full digits
++		frac0 := scale / 9              // number of 32 bits fractionals
++		frac0x := scale - frac0*9       // leftover fractionals
++
++		l := intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x]
++
++		// Copy the data so we can change it. Otherwise
++		// decoding is just too hard.
++		d := make([]byte, l)
++		copy(d, data[pos:pos+l])
++
++		txt := &bytes.Buffer{}
++
++		isNegative := (d[0] & 0x80) == 0
++		d[0] ^= 0x80 // First bit is inverted.
++		if isNegative {
++			// Negative numbers are just inverted bytes.
++			txt.WriteByte('-')
++			for i := range d {
++				d[i] ^= 0xff
++			}
++		}
++
++		// first we have the leftover full digits
++		var val uint32
++		switch dig2bytes[intg0x] {
++		case 0:
++			// nothing to do
++		case 1:
++			// one byte, up to two digits
++			val = uint32(d[0])
++		case 2:
++			// two bytes, up to 4 digits
++			val = uint32(d[0])<<8 +
++				uint32(d[1])
++		case 3:
++			// 3 bytes, up to 6 digits
++			val = uint32(d[0])<<16 +
++				uint32(d[1])<<8 +
++				uint32(d[2])
++		case 4:
++			// 4 bytes, up to 8 digits (9 digits would be a full)
++			val = uint32(d[0])<<24 +
++				uint32(d[1])<<16 +
++				uint32(d[2])<<8 +
++				uint32(d[3])
++		}
++		pos = dig2bytes[intg0x]
++		if val > 0 {
++			txt.Write(strconv.AppendUint(nil, uint64(val), 10))
++		}
++
++		// now the full digits, 32 bits each, 9 digits
++		for range intg0 {
++			val = binary.BigEndian.Uint32(d[pos : pos+4])
++			fmt.Fprintf(txt, "%09d", val)
++			pos += 4
++		}
++
++		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
++		trimPrecedingZeroes := func(b []byte) []byte {
++			isNegative := b[0] == '-'
++			if isNegative {
++				b = b[1:]
++			}
++			i := 0
++			for i < len(b) && b[i] == '0' {
++				i++
++			}
++			b = b[i:]
++			// Ensure at least one digit precedes the decimal point so values
++			// like 0.1 round-trip as "0.1" instead of ".1" (invalid JSON when
++			// the decimal appears inside a JSON column), and so a fully zero
++			// integral part collapses to "0" rather than "" or a run of zeroes.
++			needLeadingZero := len(b) == 0 || b[0] == '.'
++
++			size := len(b)
++			if isNegative {
++				size++
++			}
++			if needLeadingZero {
++				size++
++			}
++			out := make([]byte, 0, size)
++			if isNegative {
++				out = append(out, '-')
++			}
++			if needLeadingZero {
++				out = append(out, '0')
++			}
++			return append(out, b...)
++		}
++
++		// now see if we have a fraction
++		if scale == 0 {
++			// When the field is a DECIMAL using a scale of 0, e.g.
++			// DECIMAL(5,0), a binlogged value of 0 is almost treated
++			// like the NULL byte and we get a 0 byte length value.
++			// In this case let's return the correct value of 0.
++			if txt.Len() == 0 {
++				txt.WriteRune('0')
++			}
++
++			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
++				trimPrecedingZeroes(txt.Bytes())), l, nil
++		}
++		txt.WriteByte('.')
++
++		// now the full fractional digits
++		for range frac0 {
++			val = binary.BigEndian.Uint32(d[pos : pos+4])
++			fmt.Fprintf(txt, "%09d", val)
++			pos += 4
++		}
++
++		// then the partial fractional digits
++		switch dig2bytes[frac0x] {
++		case 0:
++			// Nothing to do
++		case 1:
++			// one byte, 1 or 2 digits
++			val = uint32(d[pos])
++			if frac0x == 1 {
++				fmt.Fprintf(txt, "%1d", val)
++			} else {
++				fmt.Fprintf(txt, "%02d", val)
++			}
++		case 2:
++			// two bytes, 3 or 4 digits
++			val = uint32(d[pos])<<8 +
++				uint32(d[pos+1])
++			if frac0x == 3 {
++				fmt.Fprintf(txt, "%03d", val)
++			} else {
++				fmt.Fprintf(txt, "%04d", val)
++			}
++		case 3:
++			// 3 bytes, 5 or 6 digits
++			val = uint32(d[pos])<<16 +
++				uint32(d[pos+1])<<8 +
++				uint32(d[pos+2])
++			if frac0x == 5 {
++				fmt.Fprintf(txt, "%05d", val)
++			} else {
++				fmt.Fprintf(txt, "%06d", val)
++			}
++		case 4:
++			// 4 bytes, 7 or 8 digits (9 digits would be a full)
++			val = uint32(d[pos])<<24 +
++				uint32(d[pos+1])<<16 +
++				uint32(d[pos+2])<<8 +
++				uint32(d[pos+3])
++			if frac0x == 7 {
++				fmt.Fprintf(txt, "%07d", val)
++			} else {
++				fmt.Fprintf(txt, "%08d", val)
++			}
++		}
++
++		return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimPrecedingZeroes(txt.Bytes())), l, nil
++
++	case TypeEnum:
++		switch metadata & 0xff {
++		case 1:
++			// One byte storage.
++			return sqltypes.MakeTrusted(querypb.Type_ENUM,
++				strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
++		case 2:
++			// Two bytes storage.
++			val := binary.LittleEndian.Uint16(data[pos : pos+2])
++			return sqltypes.MakeTrusted(querypb.Type_ENUM,
++				strconv.AppendUint(nil, uint64(val), 10)), 2, nil
++		default:
++			return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
++		}
++
++	case TypeSet:
++		l := int(metadata & 0xff)
++		return sqltypes.MakeTrusted(querypb.Type_SET,
++			data[pos:pos+l]), l, nil
++
++	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeVector:
++		// Only TypeBlob and TypeVector is used in binary logs,
++		// but supports others just in case.
++		l := 0
++		switch metadata {
++		case 1:
++			l = int(uint32(data[pos]))
++		case 2:
++			l = int(uint32(data[pos]) |
++				uint32(data[pos+1])<<8)
++		case 3:
++			l = int(uint32(data[pos]) |
++				uint32(data[pos+1])<<8 |
++				uint32(data[pos+2])<<16)
++		case 4:
++			l = int(uint32(data[pos]) |
++				uint32(data[pos+1])<<8 |
++				uint32(data[pos+2])<<16 |
++				uint32(data[pos+3])<<24)
++		default:
++			return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
++		}
++		pos += int(metadata)
++
++		// For JSON, we parse the data, and emit SQL.
++		if typ == TypeJSON {
++			jsonData := data[pos : pos+l]
++			if partialJSON {
++				val, err := ParseBinaryJSONDiff(jsonData)
++				if err != nil {
++					panic(err)
++				}
++				return val, l + int(metadata), nil
++			}
++			jsonVal, err := ParseBinaryJSON(jsonData)
++			if err != nil {
++				panic(err)
++			}
++			d := jsonVal.MarshalTo(nil)
++			return sqltypes.MakeTrusted(sqltypes.Expression,
++				d), l + int(metadata), nil
++		}
++
++		return sqltypes.MakeTrusted(querypb.Type_VARBINARY,
++			data[pos:pos+l]), l + int(metadata), nil
++
++	case TypeString:
++		// This may do String, Enum, and Set. The type is in
++		// metadata. If it's a string, then there will be more bits.
++		t := metadata >> 8
++		if t == TypeEnum {
++			// We don't know the string values. So just use the
++			// numbers.
++			switch metadata & 0xff {
++			case 1:
++				// One byte storage.
++				return sqltypes.MakeTrusted(querypb.Type_UINT8,
++					strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
++			case 2:
++				// Two bytes storage.
++				val := binary.LittleEndian.Uint16(data[pos : pos+2])
++				return sqltypes.MakeTrusted(querypb.Type_UINT16,
++					strconv.AppendUint(nil, uint64(val), 10)), 2, nil
++			default:
++				return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
++			}
++		}
++		if t == TypeSet {
++			// We don't know the set values. So just use the
++			// numbers.
++			l := int(metadata & 0xff)
++			var val uint64
++			for i := range l {
++				val += uint64(data[pos+i]) << (uint(i) * 8)
++			}
++			return sqltypes.MakeTrusted(querypb.Type_UINT64,
++				strconv.AppendUint(nil, uint64(val), 10)), l, nil
++		}
++		// This is a real string. The length is weird.
++		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
++		// Length is encoded in 1 or 2 bytes.
++		if max > 255 {
++			// This code path exists due to https://bugs.mysql.com/bug.php?id=37426.
++			// CHAR types need to allocate 3 bytes per char. So, the length for CHAR(255)
++			// cannot be represented in 1 byte. This also means that this rule does not
++			// apply to BINARY data.
++			l := int(uint64(data[pos]) |
++				uint64(data[pos+1])<<8)
++			return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
++				data[pos+2:pos+2+l]), l + 2, nil
++		}
++		l := int(data[pos])
++		mdata := data[pos+1 : pos+1+l]
++		if sqltypes.IsBinary(field.Type) {
++			// For binary(n) column types, mysql pads the data on the right with nulls. However the binlog event contains
++			// the data without this padding. This causes several issues:
++			//    * if a binary(n) column is part of the sharding key, the keyspace_id() returned during the copy phase
++			//      (where the value is the result of a mysql query) is different from the one during replication
++			//      (where the value is the one from the binlogs)
++			//    * mysql where clause comparisons do not do the right thing without padding
++			// So for fixed length BINARY columns we right-pad it with nulls if necessary to match what MySQL returns.
++			// Because CHAR columns with a binary collation (e.g. utf8mb4_bin) have the same metadata as a BINARY column
++			// in binlog events, we also need to check for this case based on the underlying column type.
++			if l < max && strings.HasPrefix(strings.ToLower(field.ColumnType), "binary") {
++				paddedData := make([]byte, max)
++				copy(paddedData[:l], mdata)
++				mdata = paddedData
++			}
++			return sqltypes.MakeTrusted(querypb.Type_BINARY, mdata), l + 1, nil
++		}
++		return sqltypes.MakeTrusted(querypb.Type_VARCHAR, mdata), l + 1, nil
++
++	case TypeGeometry:
++		l := 0
++		switch metadata {
++		case 1:
++			l = int(uint32(data[pos]))
++		case 2:
++			l = int(uint32(data[pos]) |
++				uint32(data[pos+1])<<8)
++		case 3:
++			l = int(uint32(data[pos]) |
++				uint32(data[pos+1])<<8 |
++				uint32(data[pos+2])<<16)
++		case 4:
++			l = int(uint32(data[pos]) |
++				uint32(data[pos+1])<<8 |
++				uint32(data[pos+2])<<16 |
++				uint32(data[pos+3])<<24)
++		default:
++			return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
++		}
++		pos += int(metadata)
++		return sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
++			data[pos:pos+l]), l + int(metadata), nil
++
++	default:
++		return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported type %v", typ)
++	}
++}
+diff --git a/go/mysql/binlog/rbr_test.go b/go/mysql/binlog/rbr_test.go
+index ec32724..40c5499 100644
+--- a/go/mysql/binlog/rbr_test.go
++++ b/go/mysql/binlog/rbr_test.go
+@@ -621,6 +621,6 @@ func TestCellLengthAndData(t *testing.T) {
+ func TestPrintTimestamp(t *testing.T) {
+ 	var timestamp uint32 = 1741794544
+ 
+-	result := printTimestamp(timestamp).String()
++	result := string(appendTimestamp(nil, timestamp))
+ 	assert.Equal(t, "2025-03-12 15:49:04", result)
+ }

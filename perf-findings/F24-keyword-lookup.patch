@@ -1,0 +1,321 @@
+diff --git a/go/vt/sqlparser/ast_funcs.go b/go/vt/sqlparser/ast_funcs.go
+index 9ac2f88..5137b4e 100644
+--- a/go/vt/sqlparser/ast_funcs.go
++++ b/go/vt/sqlparser/ast_funcs.go
+@@ -1146,8 +1146,7 @@ func formatID(buf *TrackedBuffer, original string, at AtCount) {
+ 		buf.WriteString(original)
+ 		return
+ 	}
+-	_, isKeyword := keywordLookupTable.LookupString(original)
+-	if buf.escape == escapeAllIdentifiers || isKeyword || containEscapableChars(original, at) {
++	if buf.escape == escapeAllIdentifiers || isKeyword(original) || containEscapableChars(original, at) {
+ 		writeEscapedString(buf, original)
+ 	} else {
+ 		buf.WriteString(original)
+diff --git a/go/vt/sqlparser/keywords.go b/go/vt/sqlparser/keywords.go
+index 42c873e..f81c3fc 100644
+--- a/go/vt/sqlparser/keywords.go
++++ b/go/vt/sqlparser/keywords.go
+@@ -18,6 +18,7 @@ package sqlparser
+ 
+ import (
+ 	"fmt"
++	"math"
+ 	"strings"
+ )
+ 
+@@ -26,25 +27,6 @@ type keyword struct {
+ 	id   int
+ }
+ 
+-func (k *keyword) match(input []byte) bool {
+-	if len(input) != len(k.name) {
+-		return false
+-	}
+-	for i, c := range input {
+-		if 'A' <= c && c <= 'Z' {
+-			c += 'a' - 'A'
+-		}
+-		if k.name[i] != c {
+-			return false
+-		}
+-	}
+-	return true
+-}
+-
+-func (k *keyword) matchStr(input string) bool {
+-	return keywordASCIIMatch(input, k.name)
+-}
+-
+ func keywordASCIIMatch(input string, expected string) bool {
+ 	if len(input) != len(expected) {
+ 		return false
+@@ -837,34 +819,106 @@ var (
+ 	keywordVals    = map[string]int{}
+ )
+ 
+-// keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
++// keywordLookupTable maps **case insensitive** keyword names to their ids.
++// Case folding is ASCII only.
+ var keywordLookupTable *caseInsensitiveTable
+ 
++const (
++	// caseInsensitiveTableBits sizes the open addressing table. 2048 slots keep the
++	// load factor under 0.4 for the ~760 keywords, so most lookups touch one slot.
++	caseInsensitiveTableBits = 11
++	caseInsensitiveTableMask = 1<<caseInsensitiveTableBits - 1
++
++	// keywordKeyBits is the number of low bits of a slot that hold the keywordKey;
++	// the bits above hold the 1-based index of the keyword.
++	keywordKeyBits = 40
++	keywordKeyMask = 1<<keywordKeyBits - 1
++)
++
++// caseInsensitiveTable is an open addressing hash table with linear probing.
++// It is keyed on keywordKey, a summary of a name that is much cheaper to compute
++// than a hash of the whole name: a lookup only compares the whole name once its
++// length and its first and last two bytes match a keyword.
+ type caseInsensitiveTable struct {
+-	h map[uint64]keyword
++	// slots holds keywordKey(kw.name) | (index of kw in keywords + 1) << keywordKeyBits,
++	// or 0 for an empty slot.
++	slots    [caseInsensitiveTableMask + 1]uint64
++	keywords []keyword
++	minLen   int
++	maxLen   int
++}
++
++// keywordKey packs the length and the first two and last two bytes of s into 40 bits.
++// It ORs every byte with 0x20, which maps an ASCII upper case letter to its lower case
++// form; the other bytes that this maps onto each other are told apart by the exact
++// comparison that follows every key match. len(s) must be between 2 and 255.
++func keywordKey(s string) uint64 {
++	n := len(s)
++	return uint64(n) |
++		uint64(s[0]|0x20)<<8 |
++		uint64(s[1]|0x20)<<16 |
++		uint64(s[n-2]|0x20)<<24 |
++		uint64(s[n-1]|0x20)<<32
++}
++
++func keywordSlot(key uint64) uint64 {
++	return (key * 0x9e3779b97f4a7c15) >> (64 - caseInsensitiveTableBits)
+ }
+ 
+ func buildCaseInsensitiveTable(keywords []keyword) *caseInsensitiveTable {
++	if 2*len(keywords) > caseInsensitiveTableMask {
++		panic("too many keywords for caseInsensitiveTable")
++	}
+ 	table := &caseInsensitiveTable{
+-		h: make(map[uint64]keyword, len(keywords)),
++		keywords: keywords,
++		minLen:   math.MaxInt,
+ 	}
+ 
+-	for _, kw := range keywords {
+-		hash := fnv1aIstr(offset64, kw.name)
+-		if _, exists := table.h[hash]; exists {
+-			panic("collision in caseInsensitiveTable")
++	for idx, kw := range keywords {
++		if len(kw.name) < 2 || len(kw.name) > 255 {
++			panic(fmt.Sprintf("keyword %q has an unsupported length", kw.name))
++		}
++		table.minLen = min(table.minLen, len(kw.name))
++		table.maxLen = max(table.maxLen, len(kw.name))
++		if _, found := table.LookupString(kw.name); found {
++			panic(fmt.Sprintf("duplicate keyword %q in caseInsensitiveTable", kw.name))
++		}
++
++		key := keywordKey(kw.name)
++		i := keywordSlot(key)
++		for table.slots[i] != 0 {
++			i = (i + 1) & caseInsensitiveTableMask
+ 		}
+-		table.h[hash] = kw
++		table.slots[i] = key | uint64(idx+1)<<keywordKeyBits
+ 	}
+ 	return table
+ }
+ 
+ func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
+-	hash := fnv1aIstr(offset64, name)
+-	if candidate, ok := cit.h[hash]; ok {
+-		return candidate.id, candidate.matchStr(name)
++	// The table only holds names of at least two bytes; checking for that here as well
++	// lets the compiler drop the bounds checks in keywordKey.
++	if len(name) < 2 || len(name) < cit.minLen || len(name) > cit.maxLen {
++		return 0, false
+ 	}
+-	return 0, false
++	key := keywordKey(name)
++	for i := keywordSlot(key); ; i = (i + 1) & caseInsensitiveTableMask {
++		slot := cit.slots[i]
++		if slot == 0 {
++			return 0, false
++		}
++		if slot&keywordKeyMask == key {
++			kw := &cit.keywords[slot>>keywordKeyBits-1]
++			if keywordASCIIMatch(name, kw.name) {
++				return kw.id, true
++			}
++		}
++	}
++}
++
++// isKeyword reports whether name is a keyword, in any ASCII case.
++func isKeyword(name string) bool {
++	_, found := keywordLookupTable.LookupString(name)
++	return found
+ }
+ 
+ func init() {
+@@ -890,19 +944,3 @@ func KeywordString(id int) string {
+ 	}
+ 	return str
+ }
+-
+-const (
+-	offset64 = uint64(14695981039346656037)
+-	prime64  = uint64(1099511628211)
+-)
+-
+-func fnv1aIstr(h uint64, s string) uint64 {
+-	for i := 0; i < len(s); i++ {
+-		c := s[i]
+-		if 'A' <= c && c <= 'Z' {
+-			c += 'a' - 'A'
+-		}
+-		h = (h ^ uint64(c)) * prime64
+-	}
+-	return h
+-}
+diff --git a/go/vt/sqlparser/keywords_test.go b/go/vt/sqlparser/keywords_test.go
+index cf439b4..ac44c09 100644
+--- a/go/vt/sqlparser/keywords_test.go
++++ b/go/vt/sqlparser/keywords_test.go
+@@ -19,6 +19,7 @@ package sqlparser
+ import (
+ 	"bufio"
+ 	"fmt"
++	"math/rand/v2"
+ 	"os"
+ 	"path"
+ 	"strings"
+@@ -68,3 +69,117 @@ func TestCompatibility(t *testing.T) {
+ 		assert.NoErrorf(t, err, "%s is not compatible with mysql", word)
+ 	}
+ }
++
++// asciiLower lowercases the ASCII letters of s and leaves every other byte as is,
++// which is the case folding that keyword lookups use.
++func asciiLower(s string) string {
++	b := []byte(s)
++	for i, c := range b {
++		if 'A' <= c && c <= 'Z' {
++			b[i] = c + 'a' - 'A'
++		}
++	}
++	return string(b)
++}
++
++// TestKeywordLookupMatchesReference checks keywordLookupTable against a plain map of
++// the keywords for every keyword in many spellings, for near misses of every keyword,
++// and for random identifiers.
++func TestKeywordLookupMatchesReference(t *testing.T) {
++	reference := make(map[string]int, len(keywords))
++	for _, kw := range keywords {
++		reference[kw.name] = kw.id
++	}
++	checked := 0
++	check := func(name string) {
++		checked++
++		wantID, wantFound := reference[asciiLower(name)]
++		gotID, gotFound := keywordLookupTable.LookupString(name)
++		if gotFound != wantFound || gotID != wantID {
++			require.Failf(t, "lookup mismatch", "LookupString(%q) = (%d, %v), want (%d, %v)", name, gotID, gotFound, wantID, wantFound)
++		}
++	}
++
++	rng := rand.New(rand.NewPCG(1, 2))
++	// Bytes that equal a keyword byte once ORed with 0x20 without being its upper case
++	// form, and non-ASCII bytes.
++	lookalikes := []byte{0x7f, 0x10, 0x19, '@', '[', ']', '^', 0xc0, 0xe1, 0xff, '$', '0', 'Z'}
++	for _, kw := range keywords {
++		name := kw.name
++		check(name)
++		check(strings.ToUpper(name))
++		// Every combination of upper and lower case for short keywords, random ones for long keywords.
++		if len(name) <= 12 {
++			for mask := 0; mask < 1<<len(name); mask++ {
++				b := []byte(name)
++				for i := range b {
++					if mask&(1<<i) != 0 {
++						b[i] = strings.ToUpper(string(b[i]))[0]
++					}
++				}
++				check(string(b))
++			}
++		} else {
++			for range 256 {
++				b := []byte(name)
++				for i := range b {
++					if rng.IntN(2) == 0 {
++						b[i] = strings.ToUpper(string(b[i]))[0]
++					}
++				}
++				check(string(b))
++			}
++		}
++		// Near misses: every byte replaced, and the name shortened and extended.
++		for i := range len(name) {
++			for _, c := range lookalikes {
++				b := []byte(name)
++				b[i] = c
++				check(string(b))
++			}
++		}
++		check(name[1:])
++		check(name[:len(name)-1])
++		check(name + "x")
++		check("x" + name)
++		check(name + "_")
++		check(name + "K") // KELVIN SIGN lowercases to 'k' in Unicode, but not in ASCII
++	}
++
++	const identChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$"
++	for range 200_000 {
++		b := make([]byte, 1+rng.IntN(40))
++		for i := range b {
++			b[i] = identChars[rng.IntN(len(identChars))]
++		}
++		check(string(b))
++	}
++	for _, name := range []string{"", "a", "k", "K", "é", "sélect", "select\x00", "\x00", strings.Repeat("a", 300)} {
++		check(name)
++	}
++	t.Logf("checked %d names", checked)
++}
++
++var keywordLookupBenchmarks = []struct {
++	name  string
++	names []string
++}{
++	{"keywords", []string{"select", "FROM", "where", "AND", "order", "by", "Limit", "group", "join", "on", "in", "is", "null", "as", "insert", "into", "values", "update", "set", "delete"}},
++	{"long_keywords", []string{"current_timestamp", "SQL_CALC_FOUND_ROWS", "st_linestringfromtext", "character_set_client", "localtimestamp", "straight_join"}},
++	{"short_idents", []string{"id", "t", "a", "b", "c1", "x", "u", "ts", "name", "col", "val", "pk"}},
++	{"idents", []string{"user_id", "customer", "OrderLines", "created_at", "tenant_id", "shipment", "amount", "Warehouse", "district", "status"}},
++	{"long_idents", []string{"customer_order_total_amount", "a_very_long_column_name_that_is_not_a_keyword_at_all", "shipping_address_line_two", "is_primary_contact_for_account"}},
++	{"lookalikes", []string{"selects", "fromm", "wher", "orders", "limits", "groups", "joined", "values2", "updates"}},
++}
++
++func BenchmarkKeywordLookup(b *testing.B) {
++	for _, bm := range keywordLookupBenchmarks {
++		b.Run(bm.name, func(b *testing.B) {
++			for b.Loop() {
++				for _, n := range bm.names {
++					keywordLookupTable.LookupString(n)
++				}
++			}
++		})
++	}
++}

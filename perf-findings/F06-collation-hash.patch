@@ -1,0 +1,927 @@
+diff --git a/go/mysql/collations/colldata/8bit.go b/go/mysql/collations/colldata/8bit.go
+index 05936e2..0a66ac8 100644
+--- a/go/mysql/collations/colldata/8bit.go
++++ b/go/mysql/collations/colldata/8bit.go
+@@ -97,12 +97,7 @@ func (c *Collation_8bit_bin) Hash(hasher *vthash.Hasher, src []byte, numCodepoin
+ 
+ 	tocopy := min(len(src), numCodepoints)
+ 	hasher.Write(src[:tocopy])
+-
+-	numCodepoints -= tocopy
+-	for numCodepoints > 0 {
+-		hasher.Write8(' ')
+-		numCodepoints--
+-	}
++	hashPadding8(hasher, ' ', numCodepoints-tocopy)
+ }
+ 
+ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
+@@ -209,16 +204,19 @@ func (c *Collation_8bit_simple_ci) Hash(hasher *vthash.Hasher, src []byte, numCo
+ 	}
+ 
+ 	hasher.Write64(uint64(c.id))
+-	for _, ch := range src[:tocopy] {
+-		hasher.Write8(sortOrder[ch])
++
++	var buf [64]byte
++	for src = src[:tocopy]; len(src) > 0; {
++		chunk := buf[:min(len(src), len(buf))]
++		for i := range chunk {
++			chunk[i] = sortOrder[src[i]]
++		}
++		_, _ = hasher.Write(chunk)
++		src = src[len(chunk):]
+ 	}
+ 
+ 	if numCodepoints > 0 {
+-		numCodepoints -= tocopy
+-		for numCodepoints > 0 {
+-			hasher.Write8(' ')
+-			numCodepoints--
+-		}
++		hashPadding8(hasher, ' ', numCodepoints-tocopy)
+ 	}
+ }
+ 
+diff --git a/go/mysql/collations/colldata/benchmarks_test.go b/go/mysql/collations/colldata/benchmarks_test.go
+index bdd8bba..dc158ec 100644
+--- a/go/mysql/collations/colldata/benchmarks_test.go
++++ b/go/mysql/collations/colldata/benchmarks_test.go
+@@ -150,6 +150,41 @@ func BenchmarkCollationHash(b *testing.B) {
+ 	}
+ }
+ 
++// BenchmarkCollationHashValues hashes short and medium strings, the typical
++// size of the values that vtgate hashes one at a time for hash joins and
++// DISTINCT.
++func BenchmarkCollationHashValues(b *testing.B) {
++	inputs := []struct {
++		name string
++		data string
++	}{
++		{"ascii8", "abcdefgh"},
++		{"ascii44", "The quick brown fox jumps over the lazy dog!"},
++		{"latin8", "dög über"},
++		{"latin44", "Thé quick brówn fox jumps över the lazy dög"},
++	}
++	names := []string{
++		"latin1_swedish_ci", "utf8mb4_general_ci", "utf8mb4_bin",
++		"utf8mb4_unicode_ci", "utf8mb4_0900_ai_ci",
++	}
++	for _, name := range names {
++		coll := benchCollation(b, name)
++		for _, in := range inputs {
++			data, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(in.data))
++			if err != nil {
++				b.Fatal(err)
++			}
++			b.Run(name+"/"+in.name, func(b *testing.B) {
++				for b.Loop() {
++					hasher := vthash.New()
++					coll.Hash(&hasher, data, 0)
++					_ = hasher.Sum128()
++				}
++			})
++		}
++	}
++}
++
+ func BenchmarkWildcardLiteral(b *testing.B) {
+ 	for _, name := range benchCollationNames {
+ 		coll := benchCollation(b, name)
+diff --git a/go/mysql/collations/colldata/hash_test.go b/go/mysql/collations/colldata/hash_test.go
+new file mode 100644
+index 0000000..b35c41a
+--- /dev/null
++++ b/go/mysql/collations/colldata/hash_test.go
+@@ -0,0 +1,193 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package colldata
++
++import (
++	"math"
++	"math/bits"
++	"math/rand/v2"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/mysql/collations/charset"
++	"vitess.io/vitess/go/vt/vthash"
++)
++
++// referenceHash hashes src the way the collations did before their weights
++// were batched: one hasher write per codepoint. It returns false for the
++// collations whose Hash does not write per-codepoint weights.
++func referenceHash(coll Collation, hasher *vthash.Hasher, src []byte, numCodepoints int) bool {
++	switch c := coll.(type) {
++	case *Collation_8bit_simple_ci:
++		tocopy := len(src)
++		if numCodepoints > 0 {
++			tocopy = min(tocopy, numCodepoints)
++		}
++		hasher.Write64(uint64(c.id))
++		for _, ch := range src[:tocopy] {
++			hasher.Write8(c.sort[ch])
++		}
++		for n := numCodepoints - tocopy; numCodepoints > 0 && n > 0; n-- {
++			hasher.Write8(' ')
++		}
++	case *Collation_unicode_general_ci:
++		hasher.Write64(uint64(c.id))
++		left := numCodepoints
++		if left == 0 {
++			left = math.MaxInt32
++		}
++		for left > 0 {
++			r, width, ok := c.charset.DecodeRune(src)
++			if !ok {
++				break
++			}
++			src = src[width:]
++			hasher.Write16(bits.ReverseBytes16(uint16(c.unicase.unicodeSort(r))))
++			left--
++		}
++		for ; numCodepoints > 0 && left > 0; left-- {
++			hasher.Write16(bits.ReverseBytes16(0x0020))
++		}
++	case *Collation_unicode_bin:
++		hasher.Write64(uint64(c.id))
++		left := numCodepoints
++		if left == 0 {
++			left = math.MaxInt32
++		}
++		supplementary := c.charset.SupportsSupplementaryChars()
++		for left > 0 {
++			r, width, ok := c.charset.DecodeRune(src)
++			if !ok {
++				break
++			}
++			src = src[width:]
++			if supplementary {
++				hasher.Write32(bits.ReverseBytes32(uint32(r)))
++			} else {
++				hasher.Write16(bits.ReverseBytes16(uint16(r)))
++			}
++			left--
++		}
++		for ; numCodepoints > 0 && left > 0; left-- {
++			if supplementary {
++				hasher.Write32(bits.ReverseBytes32(0x20))
++			} else {
++				hasher.Write16(bits.ReverseBytes16(0x20))
++			}
++		}
++	case *Collation_uca_legacy:
++		it := c.uca.Iterator(src)
++		hasher.Write64(uint64(c.id))
++		for {
++			w, ok := it.Next()
++			if !ok {
++				break
++			}
++			hasher.Write16(bits.ReverseBytes16(w))
++		}
++		if numCodepoints > 0 {
++			numCodepoints -= it.Length()
++			for ; numCodepoints > 0; numCodepoints-- {
++				hasher.Write16(bits.ReverseBytes16(c.uca.WeightForSpace()))
++			}
++		}
++	case *Collation_multibyte:
++		hasher.Write64(uint64(c.id))
++		left := numCodepoints
++		if left == 0 {
++			left = math.MaxInt32
++		}
++		for len(src) > 0 && left > 0 {
++			w := src[0]
++			if w <= 127 {
++				if c.sort != nil {
++					w = c.sort[w]
++				}
++				hasher.Write8(w)
++				src = src[1:]
++			} else {
++				_, width, _ := c.charset.DecodeRune(src)
++				hasher.Write(src[:width])
++				src = src[width:]
++			}
++			left--
++		}
++		for ; numCodepoints > 0 && left > 0; left-- {
++			hasher.Write8(' ')
++		}
++	default:
++		return false
++	}
++	return true
++}
++
++// TestHashMatchesPerCodepointHash checks that batching the collation weights
++// before hashing them does not change any hash: vtgate compares these hashes
++// for hash joins and DISTINCT, and they must stay stable.
++func TestHashMatchesPerCodepointHash(t *testing.T) {
++	rng := rand.New(rand.NewPCG(1, 2))
++	corpus := []string{
++		"", "a", "abc   ", "The quick brown fox jumps over the lazy dog!",
++		"Thé quick brówn fox jumps över the lazy dög", "日本語のテキストと漢字が混ざった文字列",
++		"😀 emoji 𝄞 clef", "\xff\xfea\x80", strings.Repeat("x", 100), strings.Repeat("ä", 70),
++	}
++	for range 100 {
++		// Mostly ASCII text with some non-ASCII codepoints and invalid bytes.
++		var sb strings.Builder
++		for range rng.IntN(150) {
++			switch rng.IntN(8) {
++			case 0:
++				sb.WriteRune(rune(0x80 + rng.IntN(0x780)))
++			case 1:
++				sb.WriteRune(rune(0x800 + rng.IntN(0xD000)))
++			case 2:
++				sb.WriteRune(rune(0x10000 + rng.IntN(0x10000)))
++			case 3:
++				sb.WriteByte(byte(0x80 + rng.IntN(0x80)))
++			default:
++				sb.WriteByte(byte(rng.IntN(0x80)))
++			}
++		}
++		corpus = append(corpus, sb.String())
++	}
++
++	var tested int
++	for _, coll := range All(collations.MySQL8()) {
++		for _, text := range corpus {
++			inputs := [][]byte{[]byte(text)}
++			if native, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(text)); err == nil {
++				inputs = append(inputs, native)
++			}
++			for _, src := range inputs {
++				for _, numCodepoints := range []int{0, 1, 7, 40, 200} {
++					want := vthash.New()
++					if !referenceHash(coll, &want, src, numCodepoints) {
++						continue
++					}
++					got := vthash.New()
++					coll.Hash(&got, src, numCodepoints)
++					require.Equal(t, want.Sum128(), got.Sum128(), "collation %s, input %q, numCodepoints %d", coll.Name(), src, numCodepoints)
++					tested++
++				}
++			}
++		}
++	}
++	require.Positive(t, tested)
++}
+diff --git a/go/mysql/collations/colldata/hashbuf.go b/go/mysql/collations/colldata/hashbuf.go
+new file mode 100644
+index 0000000..08164f5
+--- /dev/null
++++ b/go/mysql/collations/colldata/hashbuf.go
+@@ -0,0 +1,86 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package colldata
++
++import (
++	"encoding/binary"
++
++	"vitess.io/vitess/go/vt/vthash"
++)
++
++// hashBuffer batches the weights that a collation feeds to a hasher, so that
++// they reach the hasher in blocks instead of one codepoint at a time. The
++// hasher consumes a byte stream, so the resulting hash does not depend on how
++// the weights are batched: it is identical to writing each weight separately.
++// A hashBuffer must be flushed once all the weights have been written.
++type hashBuffer struct {
++	buf [64]byte
++	n   int
++}
++
++// flush is kept out of line so that the write helpers below stay inlinable.
++//
++//go:noinline
++func (b *hashBuffer) flush(hasher *vthash.Hasher) {
++	_, _ = hasher.Write(b.buf[:b.n])
++	b.n = 0
++}
++
++func (b *hashBuffer) write8(hasher *vthash.Hasher, w byte) {
++	if b.n >= len(b.buf) {
++		b.flush(hasher)
++	}
++	b.buf[b.n] = w
++	b.n++
++}
++
++// write16 writes w in big-endian order, the same bytes as
++// hasher.Write16(bits.ReverseBytes16(w)).
++func (b *hashBuffer) write16(hasher *vthash.Hasher, w uint16) {
++	if b.n > len(b.buf)-2 {
++		b.flush(hasher)
++	}
++	binary.BigEndian.PutUint16(b.buf[b.n:], w)
++	b.n += 2
++}
++
++// write32 writes w in big-endian order, the same bytes as
++// hasher.Write32(bits.ReverseBytes32(w)).
++func (b *hashBuffer) write32(hasher *vthash.Hasher, w uint32) {
++	if b.n > len(b.buf)-4 {
++		b.flush(hasher)
++	}
++	binary.BigEndian.PutUint32(b.buf[b.n:], w)
++	b.n += 4
++}
++
++// hashPadding8 writes count copies of the byte pad to the hasher.
++func hashPadding8(hasher *vthash.Hasher, pad byte, count int) {
++	var b hashBuffer
++	for ; count > 0; count-- {
++		b.write8(hasher, pad)
++	}
++	b.flush(hasher)
++}
++
++// writeBytes writes p, which must be at most len(b.buf) bytes long.
++func (b *hashBuffer) writeBytes(hasher *vthash.Hasher, p []byte) {
++	if b.n > len(b.buf)-len(p) {
++		b.flush(hasher)
++	}
++	b.n += copy(b.buf[b.n:], p)
++}
+diff --git a/go/mysql/collations/colldata/multibyte.go b/go/mysql/collations/colldata/multibyte.go
+index 6ffa012..1c23d46 100644
+--- a/go/mysql/collations/colldata/multibyte.go
++++ b/go/mysql/collations/colldata/multibyte.go
+@@ -156,27 +156,29 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
+ 	if left == 0 {
+ 		left = math.MaxInt32
+ 	}
++	var buf hashBuffer
+ 	for len(src) > 0 && left > 0 {
+ 		w := src[0]
+ 		if w <= 127 {
+ 			if sortOrder != nil {
+ 				w = sortOrder[w]
+ 			}
+-			hasher.Write8(w)
++			buf.write8(hasher, w)
+ 			src = src[1:]
+ 		} else {
+ 			_, width, _ := cs.DecodeRune(src)
+-			hasher.Write(src[:width])
++			buf.writeBytes(hasher, src[:width])
+ 			src = src[width:]
+ 		}
+ 		left--
+ 	}
+ 	if numCodepoints > 0 {
+ 		for left > 0 {
+-			hasher.Write8(' ')
++			buf.write8(hasher, ' ')
+ 			left--
+ 		}
+ 	}
++	buf.flush(hasher)
+ }
+ 
+ func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
+diff --git a/go/mysql/collations/colldata/uca.go b/go/mysql/collations/colldata/uca.go
+index 43904a2..c6ddfa1 100644
+--- a/go/mysql/collations/colldata/uca.go
++++ b/go/mysql/collations/colldata/uca.go
+@@ -19,7 +19,6 @@ package colldata
+ import (
+ 	"bytes"
+ 	"encoding/binary"
+-	"math/bits"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/mysql/collations/charset"
+@@ -202,13 +201,15 @@ func (c *Collation_utf8mb4_uca_0900) Hash(hasher *vthash.Hasher, src []byte, _ i
+ 		return
+ 	}
+ 
++	var buf hashBuffer
+ 	for {
+ 		w, ok := it.Next()
+ 		if !ok {
+ 			break
+ 		}
+-		hasher.Write16(bits.ReverseBytes16(w))
++		buf.write16(hasher, w)
+ 	}
++	buf.flush(hasher)
+ }
+ 
+ func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
+@@ -379,22 +380,24 @@ func (c *Collation_uca_legacy) Hash(hasher *vthash.Hasher, src []byte, numCodepo
+ 	it := c.uca.Iterator(src)
+ 
+ 	hasher.Write64(uint64(c.id))
++	var buf hashBuffer
+ 	for {
+ 		w, ok := it.Next()
+ 		if !ok {
+ 			break
+ 		}
+-		hasher.Write16(bits.ReverseBytes16(w))
++		buf.write16(hasher, w)
+ 	}
+ 
+ 	if numCodepoints > 0 {
+-		weightForSpace := bits.ReverseBytes16(c.uca.WeightForSpace())
++		weightForSpace := c.uca.WeightForSpace()
+ 		numCodepoints -= it.Length()
+ 		for numCodepoints > 0 {
+-			hasher.Write16(weightForSpace)
++			buf.write16(hasher, weightForSpace)
+ 			numCodepoints--
+ 		}
+ 	}
++	buf.flush(hasher)
+ }
+ 
+ func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
+diff --git a/go/mysql/collations/colldata/unicase.go b/go/mysql/collations/colldata/unicase.go
+index 91b0537..b8fd04b 100644
+--- a/go/mysql/collations/colldata/unicase.go
++++ b/go/mysql/collations/colldata/unicase.go
+@@ -17,6 +17,9 @@ limitations under the License.
+ package colldata
+ 
+ import (
++	"sync"
++	"unicode/utf8"
++
+ 	"vitess.io/vitess/go/mysql/collations/charset"
+ )
+ 
+@@ -28,6 +31,20 @@ type UnicaseInfo struct {
+ 	MaxChar   rune
+ 	Page      []*[]UnicaseChar
+ 	LowerSort bool
++
++	asciiOnce sync.Once
++	ascii     [utf8.RuneSelf]uint16
++}
++
++// asciiSort returns the (16-bit) unicodeSort weights of all the ASCII
++// codepoints, computed once.
++func (info *UnicaseInfo) asciiSort() *[utf8.RuneSelf]uint16 {
++	info.asciiOnce.Do(func() {
++		for cp := range info.ascii {
++			info.ascii[cp] = uint16(info.unicodeSort(rune(cp)))
++		}
++	})
++	return &info.ascii
+ }
+ 
+ func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
+diff --git a/go/mysql/collations/colldata/unicode.go b/go/mysql/collations/colldata/unicode.go
+index 8dba199..c04a3b6 100644
+--- a/go/mysql/collations/colldata/unicode.go
++++ b/go/mysql/collations/colldata/unicode.go
+@@ -19,7 +19,7 @@ package colldata
+ import (
+ 	"bytes"
+ 	"math"
+-	"math/bits"
++	"unicode/utf8"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/mysql/collations/charset"
+@@ -134,22 +134,71 @@ func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, n
+ 		left = math.MaxInt32
+ 	}
+ 
+-	for left > 0 {
+-		r, width, ok := cs.DecodeRune(src)
+-		if !ok {
+-			break
++	var buf hashBuffer
++	if isUTF8(cs) {
++		// In UTF-8, every byte below 0x80 is a whole ASCII codepoint: hash
++		// runs of them with a lookup table, without decoding runes.
++		ascii := unicaseInfo.asciiSort()
++		for {
++			n := asciiPrefixLen(src, left)
++			for _, ch := range src[:n] {
++				buf.write16(hasher, ascii[ch&(utf8.RuneSelf-1)])
++			}
++			src = src[n:]
++			left -= n
++			if left == 0 {
++				break
++			}
++			r, width, ok := cs.DecodeRune(src)
++			if !ok {
++				break
++			}
++			src = src[width:]
++			buf.write16(hasher, uint16(unicaseInfo.unicodeSort(r)))
++			left--
++		}
++	} else {
++		for left > 0 {
++			r, width, ok := cs.DecodeRune(src)
++			if !ok {
++				break
++			}
++			src = src[width:]
++			buf.write16(hasher, uint16(unicaseInfo.unicodeSort(r)))
++			left--
+ 		}
+-		src = src[width:]
+-		hasher.Write16(bits.ReverseBytes16(uint16(unicaseInfo.unicodeSort(r))))
+-		left--
+ 	}
+ 
+ 	if numCodepoints > 0 {
+ 		for left > 0 {
+-			hasher.Write16(bits.ReverseBytes16(0x0020))
++			buf.write16(hasher, 0x0020)
+ 			left--
+ 		}
+ 	}
++	buf.flush(hasher)
++}
++
++// asciiPrefixLen returns the length of the run of ASCII bytes at the start of
++// src, capped to limit.
++func asciiPrefixLen(src []byte, limit int) int {
++	n := min(len(src), limit)
++	for i, ch := range src[:n] {
++		if ch >= utf8.RuneSelf {
++			return i
++		}
++	}
++	return n
++}
++
++// isUTF8 returns whether cs is UTF-8, where bytes below 0x80 always encode a
++// single ASCII codepoint.
++func isUTF8(cs charset.Charset) bool {
++	switch cs.(type) {
++	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
++		return true
++	default:
++		return false
++	}
+ }
+ 
+ func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
+@@ -299,21 +348,37 @@ func (c *Collation_unicode_bin) hashUnicode(hasher *vthash.Hasher, src []byte, n
+ 	if left == 0 {
+ 		left = math.MaxInt32
+ 	}
++	asciiFast := isUTF8(cs)
++
++	var buf hashBuffer
+ 	for left > 0 {
++		if asciiFast {
++			// In UTF-8, every byte below 0x80 is a whole ASCII codepoint.
++			n := asciiPrefixLen(src, left)
++			for _, ch := range src[:n] {
++				buf.write32(hasher, uint32(ch))
++			}
++			src = src[n:]
++			left -= n
++			if left == 0 {
++				break
++			}
++		}
+ 		r, width, ok := cs.DecodeRune(src)
+ 		if !ok {
+ 			break
+ 		}
+ 		src = src[width:]
+-		hasher.Write32(bits.ReverseBytes32(uint32(r)))
++		buf.write32(hasher, uint32(r))
+ 		left--
+ 	}
+ 	if numCodepoints > 0 {
+ 		for left > 0 {
+-			hasher.Write32(bits.ReverseBytes32(0x20))
++			buf.write32(hasher, 0x20)
+ 			left--
+ 		}
+ 	}
++	buf.flush(hasher)
+ }
+ 
+ func (c *Collation_unicode_bin) hashBMP(hasher *vthash.Hasher, src []byte, numCodepoints int) {
+@@ -324,21 +389,37 @@ func (c *Collation_unicode_bin) hashBMP(hasher *vthash.Hasher, src []byte, numCo
+ 	if left == 0 {
+ 		left = math.MaxInt32
+ 	}
++	asciiFast := isUTF8(cs)
++
++	var buf hashBuffer
+ 	for left > 0 {
++		if asciiFast {
++			// In UTF-8, every byte below 0x80 is a whole ASCII codepoint.
++			n := asciiPrefixLen(src, left)
++			for _, ch := range src[:n] {
++				buf.write16(hasher, uint16(ch))
++			}
++			src = src[n:]
++			left -= n
++			if left == 0 {
++				break
++			}
++		}
+ 		r, width, ok := cs.DecodeRune(src)
+ 		if !ok {
+ 			break
+ 		}
+ 		src = src[width:]
+-		hasher.Write16(bits.ReverseBytes16(uint16(r)))
++		buf.write16(hasher, uint16(r))
+ 		left--
+ 	}
+ 	if numCodepoints > 0 {
+ 		for left > 0 {
+-			hasher.Write16(bits.ReverseBytes16(0x20))
++			buf.write16(hasher, 0x20)
+ 			left--
+ 		}
+ 	}
++	buf.flush(hasher)
+ }
+ 
+ func (c *Collation_unicode_bin) WeightStringLen(numBytes int) int {
+diff --git a/go/vt/vtgate/engine/distinct_test.go b/go/vt/vtgate/engine/distinct_test.go
+index c29c950..31e449e 100644
+--- a/go/vt/vtgate/engine/distinct_test.go
++++ b/go/vt/vtgate/engine/distinct_test.go
+@@ -31,6 +31,40 @@ import (
+ 	"vitess.io/vitess/go/sqltypes"
+ )
+ 
++// BenchmarkDistinctProbeText measures the DISTINCT probe table on rows of
++// three text columns.
++func BenchmarkDistinctProbeText(b *testing.B) {
++	for _, collName := range []string{"utf8mb4_general_ci", "utf8mb4_0900_ai_ci"} {
++		collID := collations.MySQL8().LookupByName(collName)
++		var checkCols []CheckCol
++		for i := range 3 {
++			checkCols = append(checkCols, CheckCol{
++				Col:          i,
++				Type:         evalengine.NewTypeEx(sqltypes.VarChar, collID, false, 0, 0, nil),
++				CollationEnv: collations.MySQL8(),
++			})
++		}
++		rows := make([]sqltypes.Row, 1000)
++		for i := range rows {
++			rows[i] = sqltypes.Row{
++				sqltypes.NewVarChar(fmt.Sprintf("customer.%06d@example.com", i)),
++				sqltypes.NewVarChar(fmt.Sprintf("Firstname Lastname %d", i%300)),
++				sqltypes.NewVarChar([]string{"Berlin", "San Francisco", "Tokyo", "São Paulo"}[i%4]),
++			}
++		}
++		b.Run(collName, func(b *testing.B) {
++			for b.Loop() {
++				pt := newProbeTable(checkCols, collations.MySQL8())
++				for _, row := range rows {
++					if _, err := pt.exists(row); err != nil {
++						b.Fatal(err)
++					}
++				}
++			}
++		})
++	}
++}
++
+ func TestDistinct(t *testing.T) {
+ 	type testCase struct {
+ 		testName       string
+diff --git a/go/vt/vtgate/evalengine/api_hash_test.go b/go/vt/vtgate/evalengine/api_hash_test.go
+index f366e1b..2f99ee6 100644
+--- a/go/vt/vtgate/evalengine/api_hash_test.go
++++ b/go/vt/vtgate/evalengine/api_hash_test.go
+@@ -31,6 +31,38 @@ import (
+ 	"vitess.io/vitess/go/vt/vthash"
+ )
+ 
++func BenchmarkNullsafeHashcode128Text(b *testing.B) {
++	values := []struct {
++		name string
++		val  sqltypes.Value
++	}{
++		{"ascii8", sqltypes.NewVarChar("abcdefgh")},
++		{"ascii44", sqltypes.NewVarChar("The quick brown fox jumps over the lazy dog!")},
++		{"latin44", sqltypes.NewVarChar("Thé quick brówn fox jumps över the lazy dög")},
++	}
++	colls := []struct {
++		name string
++		id   collations.ID
++	}{
++		{"utf8mb4_general_ci", collations.MySQL8().LookupByName("utf8mb4_general_ci")},
++		{"utf8mb4_bin", collations.MySQL8().LookupByName("utf8mb4_bin")},
++		{"utf8mb4_0900_ai_ci", collations.CollationUtf8mb4ID},
++	}
++	for _, c := range colls {
++		for _, v := range values {
++			b.Run(c.name+"/"+v.name, func(b *testing.B) {
++				for b.Loop() {
++					h := vthash.New()
++					if err := NullsafeHashcode128(&h, v.val, c.id, sqltypes.VarChar, 0, nil); err != nil {
++						b.Fatal(err)
++					}
++					_ = h.Sum128()
++				}
++			})
++		}
++	}
++}
++
+ func TestHashCodes(t *testing.T) {
+ 	cases := []struct {
+ 		static, dynamic sqltypes.Value
+diff --git a/go/vt/vthash/metro/metro.go b/go/vt/vthash/metro/metro.go
+index 5940b25..b42a65a 100644
+--- a/go/vt/vthash/metro/metro.go
++++ b/go/vt/vthash/metro/metro.go
+@@ -49,27 +49,74 @@ func (m *Metro128) Reset() {
+ 	m.Init(0)
+ }
+ 
++// The WriteN helpers below store small values directly into the pending input
++// block when they fit, instead of going through the generic Write. They feed
++// the exact same byte stream as Write, so the resulting hashes are identical.
++
+ func (m *Metro128) Write8(u uint8) {
+-	scratch := [1]byte{u}
+-	_, _ = m.Write(scratch[:1])
++	fill := m.count & 31
++	m.input[fill] = u
++	m.count++
++	if fill == 31 {
++		m.processInput()
++	}
+ }
+ 
+ func (m *Metro128) Write16(u uint16) {
+-	var scratch [2]byte
+-	binary.LittleEndian.PutUint16(scratch[:2], u)
+-	_, _ = m.Write(scratch[:2])
++	fill := m.count & 31
++	if fill > 30 {
++		var scratch [2]byte
++		binary.LittleEndian.PutUint16(scratch[:2], u)
++		_, _ = m.Write(scratch[:2])
++		return
++	}
++	binary.LittleEndian.PutUint16(m.input[fill:], u)
++	m.count += 2
++	if fill == 30 {
++		m.processInput()
++	}
+ }
+ 
+ func (m *Metro128) Write32(u uint32) {
+-	var scratch [4]byte
+-	binary.LittleEndian.PutUint32(scratch[:4], u)
+-	_, _ = m.Write(scratch[:4])
++	fill := m.count & 31
++	if fill > 28 {
++		var scratch [4]byte
++		binary.LittleEndian.PutUint32(scratch[:4], u)
++		_, _ = m.Write(scratch[:4])
++		return
++	}
++	binary.LittleEndian.PutUint32(m.input[fill:], u)
++	m.count += 4
++	if fill == 28 {
++		m.processInput()
++	}
+ }
+ 
+ func (m *Metro128) Write64(u uint64) {
+-	var scratch [8]byte
+-	binary.LittleEndian.PutUint64(scratch[:8], u)
+-	_, _ = m.Write(scratch[:8])
++	fill := m.count & 31
++	if fill > 24 {
++		var scratch [8]byte
++		binary.LittleEndian.PutUint64(scratch[:8], u)
++		_, _ = m.Write(scratch[:8])
++		return
++	}
++	binary.LittleEndian.PutUint64(m.input[fill:], u)
++	m.count += 8
++	if fill == 24 {
++		m.processInput()
++	}
++}
++
++// processInput mixes a full 32-byte input block into the state.
++func (m *Metro128) processInput() {
++	m.state[0] += binary.LittleEndian.Uint64(m.input[0:8]) * k0
++	m.state[0] = bits.RotateLeft64(m.state[0], -29) + m.state[2]
++	m.state[1] += binary.LittleEndian.Uint64(m.input[8:16]) * k1
++	m.state[1] = bits.RotateLeft64(m.state[1], -29) + m.state[3]
++	m.state[2] += binary.LittleEndian.Uint64(m.input[16:24]) * k2
++	m.state[2] = bits.RotateLeft64(m.state[2], -29) + m.state[0]
++	m.state[3] += binary.LittleEndian.Uint64(m.input[24:32]) * k3
++	m.state[3] = bits.RotateLeft64(m.state[3], -29) + m.state[1]
+ }
+ 
+ func (m *Metro128) WriteString(str string) (int, error) {
+diff --git a/go/vt/vthash/metro/metro_test.go b/go/vt/vthash/metro/metro_test.go
+index 5f9f9bf..866d361 100644
+--- a/go/vt/vthash/metro/metro_test.go
++++ b/go/vt/vthash/metro/metro_test.go
+@@ -17,11 +17,60 @@ limitations under the License.
+ package metro
+ 
+ import (
++	"encoding/binary"
++	"math/rand/v2"
+ 	"testing"
+ 
+ 	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
+ )
+ 
++// TestMetroHashFixedWidthWrites checks that the Write8/16/32/64 helpers hash
++// the same byte stream as a single Write, at every alignment of the pending
++// input block.
++func TestMetroHashFixedWidthWrites(t *testing.T) {
++	rng := rand.New(rand.NewPCG(1, 2))
++	for iter := 0; iter < 2000; iter++ {
++		var m Metro128
++		m.Init(uint64(iter))
++		var stream []byte
++
++		ops := rng.IntN(64)
++		for range ops {
++			switch rng.IntN(5) {
++			case 0:
++				u := uint8(rng.Uint32())
++				m.Write8(u)
++				stream = append(stream, u)
++			case 1:
++				u := uint16(rng.Uint32())
++				m.Write16(u)
++				stream = binary.LittleEndian.AppendUint16(stream, u)
++			case 2:
++				u := rng.Uint32()
++				m.Write32(u)
++				stream = binary.LittleEndian.AppendUint32(stream, u)
++			case 3:
++				u := rng.Uint64()
++				m.Write64(u)
++				stream = binary.LittleEndian.AppendUint64(stream, u)
++			case 4:
++				buf := make([]byte, rng.IntN(70))
++				for i := range buf {
++					buf[i] = byte(rng.Uint32())
++				}
++				_, _ = m.Write(buf)
++				stream = append(stream, buf...)
++			}
++		}
++
++		var want Metro128
++		want.Init(uint64(iter))
++		_, _ = want.Write(stream)
++		require.Equal(t, want.Sum128(), m.Sum128(), "iteration %d, %d bytes", iter, len(stream))
++	}
++}
++
+ func TestMetroHash(t *testing.T) {
+ 	const TestString = "012345678901234567890123456789012345678901234567890123456789012"
+ 

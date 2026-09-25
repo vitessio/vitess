@@ -1,0 +1,430 @@
+diff --git a/go/sqltypes/proto3.go b/go/sqltypes/proto3.go
+index 4b7ef30..07e2fa7 100644
+--- a/go/sqltypes/proto3.go
++++ b/go/sqltypes/proto3.go
+@@ -66,14 +66,51 @@ func RowToProto3Inplace(row []Value, result *querypb.Row) int {
+ }
+ 
+ // RowsToProto3 converts [][]Value to proto3.
++//
++// To keep allocations constant regardless of the number of rows, the returned
++// rows are carved out of shared backing arrays: one []querypb.Row, one []int64
++// for all Lengths and one []byte for all Values. Every per-row sub-slice is
++// capped (3-index slicing) so that appending to one row's Lengths or Values
++// reallocates instead of overwriting the next row. Note that retaining any
++// single returned row keeps the backing arrays of all rows alive.
+ func RowsToProto3(rows [][]Value) []*querypb.Row {
+ 	if len(rows) == 0 {
+ 		return nil
+ 	}
+ 
++	var numCols, numBytes int
++	for _, r := range rows {
++		numCols += len(r)
++		for _, c := range r {
++			if !c.IsNull() {
++				numBytes += c.Len()
++			}
++		}
++	}
++
+ 	result := make([]*querypb.Row, len(rows))
++	protoRows := make([]querypb.Row, len(rows))
++	lengths := make([]int64, numCols)
++	values := make([]byte, numBytes)
++
++	var colOff, byteOff int
+ 	for i, r := range rows {
+-		result[i] = RowToProto3(r)
++		rowLengths := lengths[colOff : colOff+len(r) : colOff+len(r)]
++		rowStart := byteOff
++		for j, c := range r {
++			if c.IsNull() {
++				rowLengths[j] = -1
++				continue
++			}
++			byteOff += copy(values[byteOff:], c.Raw())
++			rowLengths[j] = int64(c.Len())
++		}
++		colOff += len(r)
++
++		row := &protoRows[i]
++		row.Lengths = rowLengths
++		row.Values = values[rowStart:byteOff:byteOff]
++		result[i] = row
+ 	}
+ 	return result
+ }
+@@ -87,9 +124,21 @@ func proto3ToRows(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
+ 		return [][]Value{}
+ 	}
+ 
++	// Allocate the Values of all rows in a single backing array to keep
++	// allocations constant regardless of the number of rows. Every row is
++	// capped (3-index slicing) so that appending to it reallocates instead
++	// of overwriting the next row.
++	var numCols int
++	for _, r := range rows {
++		numCols += len(r.Lengths)
++	}
++	values := make([]Value, numCols)
++
+ 	result := make([][]Value, len(rows))
+ 	for i, r := range rows {
+-		result[i] = MakeRowTrusted(fields, r)
++		n := len(r.Lengths)
++		result[i] = makeRowTrustedInto(fields, r, values[:n:n])
++		values = values[n:]
+ 	}
+ 	return result
+ }
+diff --git a/go/sqltypes/proto3_slab_test.go b/go/sqltypes/proto3_slab_test.go
+new file mode 100644
+index 0000000..20d6ca9
+--- /dev/null
++++ b/go/sqltypes/proto3_slab_test.go
+@@ -0,0 +1,200 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package sqltypes
++
++import (
++	"fmt"
++	"math/rand/v2"
++	"strconv"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"google.golang.org/protobuf/proto"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// rowsToProto3PerRow is the per-row allocating reference implementation.
++func rowsToProto3PerRow(rows [][]Value) []*querypb.Row {
++	if len(rows) == 0 {
++		return nil
++	}
++	result := make([]*querypb.Row, len(rows))
++	for i, r := range rows {
++		result[i] = RowToProto3(r)
++	}
++	return result
++}
++
++// proto3ToRowsPerRow is the per-row allocating reference implementation.
++func proto3ToRowsPerRow(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
++	if len(rows) == 0 {
++		return [][]Value{}
++	}
++	result := make([][]Value, len(rows))
++	for i, r := range rows {
++		result[i] = MakeRowTrusted(fields, r)
++	}
++	return result
++}
++
++func randomSlabResult(rng *rand.Rand, numRows, numCols int) *Result {
++	fields := make([]*querypb.Field, numCols)
++	for i := range fields {
++		fields[i] = &querypb.Field{Name: "c" + strconv.Itoa(i), Type: Int64}
++		if i%2 == 1 {
++			fields[i].Type = VarChar
++		}
++	}
++	rows := make([]Row, numRows)
++	for i := range rows {
++		row := make(Row, numCols)
++		for j := range row {
++			switch rng.IntN(4) {
++			case 0:
++				row[j] = NULL
++			case 1:
++				row[j] = MakeTrusted(fields[j].Type, []byte{})
++			default:
++				if fields[j].Type == Int64 {
++					row[j] = NewInt64(rng.Int64())
++				} else {
++					b := make([]byte, rng.IntN(40))
++					for k := range b {
++						b[k] = byte('a' + rng.IntN(26))
++					}
++					row[j] = NewVarChar(string(b))
++				}
++			}
++		}
++		rows[i] = row
++	}
++	return &Result{Fields: fields, Rows: rows}
++}
++
++func TestRowsToProto3SlabEquivalence(t *testing.T) {
++	rng := rand.New(rand.NewPCG(1, 2))
++	for _, shape := range [][2]int{{1, 0}, {1, 1}, {3, 0}, {1, 5}, {10, 3}, {100, 7}, {500, 1}} {
++		for range 20 {
++			qr := randomSlabResult(rng, shape[0], shape[1])
++
++			got := RowsToProto3(qr.Rows)
++			want := rowsToProto3PerRow(qr.Rows)
++			require.Len(t, got, len(want))
++			for i := range want {
++				require.True(t, proto.Equal(want[i], got[i]), "row %d", i)
++				// Sub-slices must be capped so that appends cannot clobber neighbours.
++				assert.Equal(t, len(got[i].Lengths), cap(got[i].Lengths))
++				assert.Equal(t, len(got[i].Values), cap(got[i].Values))
++				assert.NotNil(t, got[i].Lengths)
++				assert.NotNil(t, got[i].Values)
++			}
++
++			back := proto3ToRows(qr.Fields, got)
++			wantBack := proto3ToRowsPerRow(qr.Fields, want)
++			require.Equal(t, wantBack, back)
++			for i := range back {
++				assert.Equal(t, len(back[i]), cap(back[i]))
++			}
++		}
++	}
++}
++
++func TestRowsToProto3SlabAppendIsolation(t *testing.T) {
++	rows := [][]Value{
++		{NewInt64(1), NewVarChar("ab")},
++		{NewInt64(2), NewVarChar("cd")},
++	}
++	p := RowsToProto3(rows)
++	p[0].Lengths = append(p[0].Lengths, 1)
++	p[0].Values = append(p[0].Values, 'x')
++	assert.Equal(t, []int64{1, 2}, p[1].Lengths)
++	assert.Equal(t, []byte("2cd"), p[1].Values)
++
++	fields := []*querypb.Field{{Type: Int64}, {Type: VarChar}}
++	back := proto3ToRows(fields, RowsToProto3(rows))
++	back[0] = append(back[0], NewInt64(99))
++	assert.Equal(t, Row{NewInt64(2), NewVarChar("cd")}, Row(back[1]))
++}
++
++var slabBenchShapes = [][2]int{{1, 5}, {10, 5}, {100, 5}, {1000, 5}, {10000, 20}}
++
++func BenchmarkRowsToProto3Slab(b *testing.B) {
++	rng := rand.New(rand.NewPCG(3, 4))
++	for _, shape := range slabBenchShapes {
++		qr := makeSlabBenchResult(rng, shape[0], shape[1])
++		name := fmt.Sprintf("rows=%d,cols=%d", shape[0], shape[1])
++		b.Run("old/"+name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				rowsToProto3PerRow(qr.Rows)
++			}
++		})
++		b.Run("new/"+name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				RowsToProto3(qr.Rows)
++			}
++		})
++	}
++}
++
++func BenchmarkProto3ToRowsSlab(b *testing.B) {
++	rng := rand.New(rand.NewPCG(5, 6))
++	for _, shape := range slabBenchShapes {
++		qr := makeSlabBenchResult(rng, shape[0], shape[1])
++		p := rowsToProto3PerRow(qr.Rows)
++		name := fmt.Sprintf("rows=%d,cols=%d", shape[0], shape[1])
++		b.Run("old/"+name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				proto3ToRowsPerRow(qr.Fields, p)
++			}
++		})
++		b.Run("new/"+name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				proto3ToRows(qr.Fields, p)
++			}
++		})
++	}
++}
++
++// makeSlabBenchResult builds a result without NULLs with realistic value sizes.
++func makeSlabBenchResult(rng *rand.Rand, numRows, numCols int) *Result {
++	fields := make([]*querypb.Field, numCols)
++	for i := range fields {
++		fields[i] = &querypb.Field{Name: "c" + strconv.Itoa(i), Type: Int64}
++		if i%2 == 1 {
++			fields[i].Type = VarChar
++		}
++	}
++	rows := make([]Row, numRows)
++	for i := range rows {
++		row := make(Row, numCols)
++		for j := range row {
++			if fields[j].Type == Int64 {
++				row[j] = NewInt64(rng.Int64N(1 << 40))
++			} else {
++				row[j] = NewVarChar(fmt.Sprintf("value-%d-%d", i, j))
++			}
++		}
++		rows[i] = row
++	}
++	return &Result{Fields: fields, Rows: rows}
++}
+diff --git a/go/sqltypes/result.go b/go/sqltypes/result.go
+index d27cc86..6d44761 100644
+--- a/go/sqltypes/result.go
++++ b/go/sqltypes/result.go
+@@ -312,7 +312,12 @@ func hashCodeForRow(val []Value) string {
+ // Every place this function is called, a comment is needed that explains
+ // why it's justified.
+ func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
+-	sqlRow := make([]Value, len(row.Lengths))
++	return makeRowTrustedInto(fields, row, make([]Value, len(row.Lengths)))
++}
++
++// makeRowTrustedInto is like MakeRowTrusted, but stores the values into
++// sqlRow, which must have len(row.Lengths) elements.
++func makeRowTrustedInto(fields []*querypb.Field, row *querypb.Row, sqlRow []Value) []Value {
+ 	var offset int64
+ 	for i, length := range row.Lengths {
+ 		if length < 0 {
+diff --git a/go/vt/vttablet/grpctabletconn/bench_rows_test.go b/go/vt/vttablet/grpctabletconn/bench_rows_test.go
+new file mode 100644
+index 0000000..133f927
+--- /dev/null
++++ b/go/vt/vttablet/grpctabletconn/bench_rows_test.go
+@@ -0,0 +1,120 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package grpctabletconn
++
++import (
++	"context"
++	"fmt"
++	"strconv"
++	"testing"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	"vitess.io/vitess/go/vt/vttablet/queryservice"
++	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
++)
++
++// benchRowsService returns a fixed result from Execute and streams the same
++// rows in chunks of chunkRows from StreamExecute.
++type benchRowsService struct {
++	*tabletconntest.FakeQueryService
++	result    *sqltypes.Result
++	chunkRows int
++}
++
++func (s *benchRowsService) Execute(context.Context, queryservice.Session, *querypb.Target, string, map[string]*querypb.BindVariable, int64, int64, *querypb.ExecuteOptions) (*sqltypes.Result, error) {
++	return s.result, nil
++}
++
++func (s *benchRowsService) StreamExecute(_ context.Context, _ queryservice.Session, _ *querypb.Target, _ string, _ map[string]*querypb.BindVariable, _ int64, _ int64, _ *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
++	if err := callback(&sqltypes.Result{Fields: s.result.Fields}); err != nil {
++		return err
++	}
++	rows := s.result.Rows
++	for len(rows) > 0 {
++		n := min(s.chunkRows, len(rows))
++		if err := callback(&sqltypes.Result{Rows: rows[:n]}); err != nil {
++			return err
++		}
++		rows = rows[n:]
++	}
++	return nil
++}
++
++func makeBenchRowsResult(numRows, numCols int) *sqltypes.Result {
++	fields := make([]*querypb.Field, numCols)
++	for i := range fields {
++		fields[i] = &querypb.Field{Name: "c" + strconv.Itoa(i), Type: sqltypes.Int64}
++		if i%2 == 1 {
++			fields[i].Type = sqltypes.VarChar
++		}
++	}
++	rows := make([]sqltypes.Row, numRows)
++	for i := range rows {
++		row := make(sqltypes.Row, numCols)
++		for j := range row {
++			if fields[j].Type == sqltypes.Int64 {
++				row[j] = sqltypes.NewInt64(int64(i*numCols + j))
++			} else {
++				row[j] = sqltypes.NewVarChar(fmt.Sprintf("value-%d-%d", i, j))
++			}
++		}
++		rows[i] = row
++	}
++	return &sqltypes.Result{Fields: fields, Rows: rows}
++}
++
++// BenchmarkGRPCRows measures Execute and StreamExecute over a loopback gRPC
++// connection, including ResultToProto3 on the server and Proto3ToResult on
++// the client.
++func BenchmarkGRPCRows(b *testing.B) {
++	for _, shape := range [][2]int{{1, 5}, {10, 5}, {1000, 5}, {10000, 20}} {
++		result := makeBenchRowsResult(shape[0], shape[1])
++		service := &benchRowsService{
++			FakeQueryService: tabletconntest.CreateFakeServer(b),
++			result:           result,
++			// Roughly what a 32KiB stream buffer holds for these rows.
++			chunkRows: max(1, 32*1024/(shape[1]*12)),
++		}
++		client := setupBenchGRPC(b, service, 256<<20)
++		target := &querypb.Target{Keyspace: "bench", Shard: "0"}
++		name := fmt.Sprintf("rows=%d,cols=%d", shape[0], shape[1])
++
++		b.Run("Execute/"+name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				qr, err := client.Execute(b.Context(), nil, target, "select", nil, 0, 0, nil)
++				if err != nil || len(qr.Rows) != shape[0] {
++					b.Fatalf("unexpected: %v", err)
++				}
++			}
++		})
++		b.Run("StreamExecute/"+name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				n := 0
++				err := client.StreamExecute(b.Context(), nil, target, "select", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
++					n += len(qr.Rows)
++					return nil
++				})
++				if err != nil || n != shape[0] {
++					b.Fatalf("unexpected: %v %d", err, n)
++				}
++			}
++		})
++	}
++}

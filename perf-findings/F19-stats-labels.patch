@@ -1,0 +1,450 @@
+diff --git a/go/stats/counters.go b/go/stats/counters.go
+index 1046d23..e240893 100644
+--- a/go/stats/counters.go
++++ b/go/stats/counters.go
+@@ -46,7 +46,25 @@ func (c *counters) getOrCreate(key string) *atomic.Int64 {
+ 		return v
+ 	}
+ 	c.mu.RUnlock()
++	return c.create(key)
++}
++
++// getOrCreateBytes is like getOrCreate, but takes the key as a byte slice.
++// The lookup of an existing key does not allocate; the key is only copied
++// into a string when it is inserted. key is not retained.
++func (c *counters) getOrCreateBytes(key []byte) *atomic.Int64 {
++	c.mu.RLock()
++	v, ok := c.counts[string(key)]
++	c.mu.RUnlock()
++	if ok {
++		return v
++	}
++	return c.create(string(key))
++}
+ 
++// create is the slow path of getOrCreate: it takes the write lock and
++// inserts a new counter for key unless another goroutine already did.
++func (c *counters) create(key string) *atomic.Int64 {
+ 	c.mu.Lock()
+ 	defer c.mu.Unlock()
+ 	if v, ok := c.counts[key]; ok {
+@@ -214,7 +232,8 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
+ 	if len(names) != len(mc.labels) {
+ 		panic("CountersWithMultiLabels: wrong number of values in Add")
+ 	}
+-	mc.add(safeJoinLabels(names, mc.combinedLabels), value)
++	var buf [labelKeyBufSize]byte
++	mc.getOrCreateBytes(appendSafeJoinedLabels(buf[:0], names, mc.combinedLabels)).Add(value)
+ }
+ 
+ // Reset resets the value of a named counter back to 0.
+@@ -223,7 +242,8 @@ func (mc *CountersWithMultiLabels) Reset(names []string) {
+ 	if len(names) != len(mc.labels) {
+ 		panic("CountersWithMultiLabels: wrong number of values in Reset")
+ 	}
+-	mc.set(safeJoinLabels(names, mc.combinedLabels), 0)
++	var buf [labelKeyBufSize]byte
++	mc.getOrCreateBytes(appendSafeJoinedLabels(buf[:0], names, mc.combinedLabels)).Store(0)
+ }
+ 
+ // ResetAll clears the counters
+@@ -391,7 +411,8 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
+ 	if len(names) != len(mg.labels) {
+ 		panic("GaugesWithMultiLabels: wrong number of values in Set")
+ 	}
+-	mg.set(safeJoinLabels(names, nil), value)
++	var buf [labelKeyBufSize]byte
++	mg.getOrCreateBytes(appendSafeJoinedLabels(buf[:0], names, nil)).Store(value)
+ }
+ 
+ // ResetKey resets a specific key.
+diff --git a/go/stats/export.go b/go/stats/export.go
+index 94865c2..dd00a93 100644
+--- a/go/stats/export.go
++++ b/go/stats/export.go
+@@ -384,6 +384,11 @@ func IsDimensionCombined(name string) bool {
+ 	return combinedDimensions[name]
+ }
+ 
++// labelKeyBufSize is the size of the stack buffer used to build joined
++// label keys on the hot path (Add/Set/Record of the multi-label stats).
++// Keys longer than this spill to the heap, which is still correct.
++const labelKeyBufSize = 128
++
+ // safeJoinLabels joins the label values with ".", but first replaces any existing
+ // "." characters in the labels with the proper replacement, to avoid issues parsing
+ // them apart later. The function also replaces specific label values with "all"
+@@ -400,64 +405,49 @@ func safeJoinLabels(labels []string, combinedLabels []bool) string {
+ 		return StatsAllStr
+ 	}
+ 
+-	var b strings.Builder
+-	size := len(labels) - 1 // number of separators
+-	for idx, label := range labels {
+-		if combinedLabels != nil && combinedLabels[idx] {
+-			size += len(StatsAllStr)
+-		} else {
+-			size += len(label)
+-		}
+-	}
+-	b.Grow(size)
++	var buf [labelKeyBufSize]byte
++	return string(appendSafeJoinedLabels(buf[:0], labels, combinedLabels))
++}
+ 
++// appendSafeJoinedLabels appends the key that safeJoinLabels would return
++// for the given labels to dst, and returns the extended slice. Hot paths use
++// it with a stack buffer and look the result up with m[string(key)], which
++// the compiler performs without allocating, so that a string key is only
++// allocated the first time a label combination is seen.
++func appendSafeJoinedLabels(dst []byte, labels []string, combinedLabels []bool) []byte {
+ 	for idx, label := range labels {
+ 		if idx > 0 {
+-			b.WriteByte('.')
++			dst = append(dst, '.')
+ 		}
+ 		if combinedLabels != nil && combinedLabels[idx] {
+-			b.WriteString(StatsAllStr)
++			dst = append(dst, StatsAllStr...)
+ 		} else {
+-			appendSafeLabel(&b, label)
++			dst = appendSafeLabel(dst, label)
+ 		}
+ 	}
+-	return b.String()
++	return dst
+ }
+ 
+ // appendSafeLabel is a more efficient version equivalent
+ // to strings.ReplaceAll(label, ".", "_"), but appends into
+-// a strings.Builder.
+-func appendSafeLabel(b *strings.Builder, label string) {
+-	// first quickly check if there are any periods to be replaced
+-	found := false
+-	for i := 0; i < len(label); i++ {
+-		if label[i] == '.' {
+-			found = true
+-			break
+-		}
+-	}
+-	// if there are none, we can just write the label as-is into the
+-	// Builder.
+-	if !found {
+-		b.WriteString(label)
+-		return
+-	}
+-
+-	for i := 0; i < len(label); i++ {
+-		if label[i] == '.' {
+-			b.WriteByte('_')
+-		} else {
+-			b.WriteByte(label[i])
++// a byte slice.
++func appendSafeLabel(dst []byte, label string) []byte {
++	for {
++		i := strings.IndexByte(label, '.')
++		if i < 0 {
++			return append(dst, label...)
+ 		}
++		dst = append(dst, label[:i]...)
++		dst = append(dst, '_')
++		label = label[i+1:]
+ 	}
+ }
+ 
+ func safeLabel(label string) string {
+ 	// XXX: strings.ReplaceAll is optimal in the case where '.' does not
+ 	// exist in the label name, and will return the string as-is without
+-	// allocations. So if we are working with a single label, it's preferrable
+-	// over appendSafeLabel, since appendSafeLabel is required to allocate
+-	// into a strings.Builder.
++	// allocations. So if we are working with a single label and need a
++	// string, it's preferrable over appendSafeLabel.
+ 	return strings.ReplaceAll(label, ".", "_")
+ }
+ 
+diff --git a/go/stats/multilabel_bench_test.go b/go/stats/multilabel_bench_test.go
+new file mode 100644
+index 0000000..ae4fd30
+--- /dev/null
++++ b/go/stats/multilabel_bench_test.go
+@@ -0,0 +1,87 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package stats
++
++import (
++	"strconv"
++	"testing"
++	"time"
++)
++
++var multiLabelBenchKeys = map[int][]string{
++	2: {"Execute", "commerce"},
++	3: {"Execute", "commerce", "PRIMARY"},
++	4: {"Execute", "commerce", "-80", "PRIMARY"},
++}
++
++func multiLabelBenchLabels(n int) []string {
++	labels := make([]string, n)
++	for i := range labels {
++		labels[i] = "l" + strconv.Itoa(i)
++	}
++	return labels
++}
++
++func BenchmarkCountersWithMultiLabelsAdd(b *testing.B) {
++	for _, n := range []int{2, 3, 4} {
++		key := multiLabelBenchKeys[n]
++		labels := multiLabelBenchLabels(n)
++		b.Run(strconv.Itoa(n)+"labels", func(b *testing.B) {
++			c := NewCountersWithMultiLabels("", "help", labels)
++			c.Add(key, 1)
++			b.ReportAllocs()
++			for b.Loop() {
++				c.Add(key, 1)
++			}
++		})
++		b.Run(strconv.Itoa(n)+"labels-parallel", func(b *testing.B) {
++			c := NewCountersWithMultiLabels("", "help", labels)
++			c.Add(key, 1)
++			b.ReportAllocs()
++			b.RunParallel(func(pb *testing.PB) {
++				for pb.Next() {
++					c.Add(key, 1)
++				}
++			})
++		})
++	}
++}
++
++func BenchmarkMultiTimingsAdd(b *testing.B) {
++	for _, n := range []int{2, 3, 4} {
++		key := multiLabelBenchKeys[n]
++		labels := multiLabelBenchLabels(n)
++		b.Run(strconv.Itoa(n)+"labels", func(b *testing.B) {
++			mt := NewMultiTimings("", "help", labels)
++			mt.Add(key, time.Millisecond)
++			b.ReportAllocs()
++			for b.Loop() {
++				mt.Add(key, time.Millisecond)
++			}
++		})
++		b.Run(strconv.Itoa(n)+"labels-parallel", func(b *testing.B) {
++			mt := NewMultiTimings("", "help", labels)
++			mt.Add(key, time.Millisecond)
++			b.ReportAllocs()
++			b.RunParallel(func(pb *testing.PB) {
++				for pb.Next() {
++					mt.Add(key, time.Millisecond)
++				}
++			})
++		})
++	}
++}
+diff --git a/go/stats/multilabel_key_test.go b/go/stats/multilabel_key_test.go
+new file mode 100644
+index 0000000..40dcd39
+--- /dev/null
++++ b/go/stats/multilabel_key_test.go
+@@ -0,0 +1,107 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package stats
++
++import (
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++)
++
++func TestAppendSafeJoinedLabelsMatchesReference(t *testing.T) {
++	reference := func(labels []string, combined []bool) string {
++		parts := make([]string, len(labels))
++		for i, l := range labels {
++			if combined != nil && combined[i] {
++				parts[i] = StatsAllStr
++			} else {
++				parts[i] = strings.ReplaceAll(l, ".", "_")
++			}
++		}
++		return strings.Join(parts, ".")
++	}
++	values := []string{"", ".", "..", "a", "a.", ".a", "a..b", "foo.bar.baz", "PRIMARY", "-80", strings.Repeat("x.", 100)}
++	for _, a := range values {
++		for _, b := range values {
++			for _, c := range values {
++				labels := []string{a, b, c}
++				for _, combined := range [][]bool{nil, {false, false, false}, {true, false, true}, {false, true, false}} {
++					want := reference(labels, combined)
++					assert.Equal(t, want, safeJoinLabels(labels, combined))
++					var buf [labelKeyBufSize]byte
++					assert.Equal(t, want, string(appendSafeJoinedLabels(buf[:0], labels, combined)))
++					// Appending must not clobber existing content of dst.
++					assert.Equal(t, "prefix"+want, string(appendSafeJoinedLabels([]byte("prefix"), labels, combined)))
++				}
++			}
++		}
++	}
++}
++
++func TestMultiLabelUpdatesDoNotAllocate(t *testing.T) {
++	clearStats()
++	key := []string{"Execute", "commerce", "PRIMARY"}
++	c := NewCountersWithMultiLabels("", "help", []string{"a", "b", "c"})
++	g := NewGaugesWithMultiLabels("", "help", []string{"a", "b", "c"})
++	mt := NewMultiTimings("", "help", []string{"a", "b", "c"})
++	c.Add(key, 1)
++	g.Set(key, 1)
++	mt.Add(key, time.Millisecond)
++
++	assert.Zero(t, testing.AllocsPerRun(100, func() { c.Add(key, 1) }))
++	assert.Zero(t, testing.AllocsPerRun(100, func() { c.Reset(key) }))
++	assert.Zero(t, testing.AllocsPerRun(100, func() { g.Set(key, 2) }))
++	assert.Zero(t, testing.AllocsPerRun(100, func() { mt.Add(key, time.Millisecond) }))
++
++	assert.Equal(t, map[string]int64{"Execute.commerce.PRIMARY": 0}, c.Counts())
++	assert.Equal(t, map[string]int64{"Execute.commerce.PRIMARY": 2}, g.Counts())
++	assert.Equal(t, int64(102), mt.Counts()["Execute.commerce.PRIMARY"])
++}
++
++func TestMultiLabelLongKeys(t *testing.T) {
++	clearStats()
++	long := strings.Repeat("k.", labelKeyBufSize)
++	key := []string{long, "commerce", long}
++	safe := strings.ReplaceAll(long, ".", "_")
++	want := safe + ".commerce." + safe
++	c := NewCountersWithMultiLabels("", "help", []string{"a", "b", "c"})
++	mt := NewMultiTimings("", "help", []string{"a", "b", "c"})
++	c.Add(key, 1)
++	c.Add(key, 2)
++	mt.Add(key, time.Millisecond)
++	mt.Record(key, time.Now())
++	assert.Equal(t, map[string]int64{want: 3}, c.Counts())
++	assert.Equal(t, int64(2), mt.Counts()[want])
++}
++
++func TestMultiTimingsTimerHook(t *testing.T) {
++	clearStats()
++	type call struct{ stat, name string }
++	var calls []call
++	RegisterTimerHook(func(stat, name string, _ int64, _ *Timings) {
++		calls = append(calls, call{stat, name})
++	})
++	t.Cleanup(func() { RegisterTimerHook(nil) })
++
++	mt := NewMultiTimings("multiTimingsHook", "help", []string{"a", "b"})
++	mt.Add([]string{"x.y", "z"}, time.Millisecond)
++	mt.Record([]string{"x.y", "z"}, time.Now())
++	assert.Equal(t, []call{{"multiTimingsHook", "x_y.z"}, {"multiTimingsHook", "x_y.z"}}, calls)
++	assert.Equal(t, int64(2), mt.Counts()["x_y.z"])
++}
+diff --git a/go/stats/timings.go b/go/stats/timings.go
+index a1f30f5..7dcd6c1 100644
+--- a/go/stats/timings.go
++++ b/go/stats/timings.go
+@@ -83,18 +83,47 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
+ 
+ 	// Create Histogram if it does not exist.
+ 	if !ok {
+-		t.mu.Lock()
+-		hist, ok = t.histograms[name]
+-		if !ok {
+-			hist = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
+-			t.histograms[name] = hist
+-		}
+-		t.mu.Unlock()
++		hist = t.createHistogram(name)
+ 	}
+ 	if defaultStatsdHook.timerHook != nil && t.name != "" {
+ 		defaultStatsdHook.timerHook(t.name, name, elapsed.Milliseconds(), t)
+ 	}
++	t.record(hist, elapsed)
++}
++
++// addBytes is like Add, but takes the name as a byte slice. Looking up an
++// existing histogram does not allocate; the name is only copied into a
++// string when a new histogram is created or a statsd timer hook needs it.
++// name is not retained.
++func (t *Timings) addBytes(name []byte, elapsed time.Duration) {
++	if t.labelCombined || (defaultStatsdHook.timerHook != nil && t.name != "") {
++		t.Add(string(name), elapsed)
++		return
++	}
++	t.mu.RLock()
++	hist, ok := t.histograms[string(name)]
++	t.mu.RUnlock()
++
++	if !ok {
++		hist = t.createHistogram(string(name))
++	}
++	t.record(hist, elapsed)
++}
++
++// createHistogram returns the histogram for name, creating it under the
++// write lock unless another goroutine already did.
++func (t *Timings) createHistogram(name string) *Histogram {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++	hist, ok := t.histograms[name]
++	if !ok {
++		hist = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
++		t.histograms[name] = hist
++	}
++	return hist
++}
+ 
++func (t *Timings) record(hist *Histogram, elapsed time.Duration) {
+ 	elapsedNs := int64(elapsed)
+ 	hist.Add(elapsedNs)
+ 	t.totalCount.Add(1)
+@@ -232,7 +261,8 @@ func (mt *MultiTimings) Add(names []string, elapsed time.Duration) {
+ 	if len(names) != len(mt.labels) {
+ 		panic("MultiTimings: wrong number of values in Add")
+ 	}
+-	mt.Timings.Add(safeJoinLabels(names, mt.combinedLabels), elapsed)
++	var buf [labelKeyBufSize]byte
++	mt.addBytes(appendSafeJoinedLabels(buf[:0], names, mt.combinedLabels), elapsed)
+ }
+ 
+ // Record is a convenience function that records completion
+@@ -241,7 +271,8 @@ func (mt *MultiTimings) Record(names []string, startTime time.Time) {
+ 	if len(names) != len(mt.labels) {
+ 		panic("MultiTimings: wrong number of values in Record")
+ 	}
+-	mt.Timings.Record(safeJoinLabels(names, mt.combinedLabels), startTime)
++	var buf [labelKeyBufSize]byte
++	mt.addBytes(appendSafeJoinedLabels(buf[:0], names, mt.combinedLabels), time.Since(startTime))
+ }
+ 
+ // Cutoffs returns the cutoffs used in the component histograms.

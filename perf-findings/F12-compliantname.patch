@@ -1,0 +1,264 @@
+diff --git a/go/vt/sqlparser/ast_funcs.go b/go/vt/sqlparser/ast_funcs.go
+index 9ac2f88..5da7d8c 100644
+--- a/go/vt/sqlparser/ast_funcs.go
++++ b/go/vt/sqlparser/ast_funcs.go
+@@ -24,6 +24,7 @@ import (
+ 	"slices"
+ 	"strconv"
+ 	"strings"
++	"unicode/utf8"
+ 
+ 	"vitess.io/vitess/go/mysql/datetime"
+ 	"vitess.io/vitess/go/mysql/decimal"
+@@ -1170,11 +1171,33 @@ func CompliantString(in SQLNode) string {
+ 	return compliantName(s)
+ }
+ 
++// compliantName returns in with every rune that is not allowed in a bind
++// variable name replaced by '_'. A rune is allowed if it is a letter, '_' or
++// '$', or a digit anywhere but at the start. When in is already compliant,
++// which is the common case, it is returned unchanged without allocating.
+ func compliantName(in string) string {
++	for i := 0; i < len(in); i++ {
++		c := in[i]
++		if c >= utf8.RuneSelf {
++			return compliantNameSlow(in, i)
++		}
++		if !isLetter(uint16(c)) && (i == 0 || !isDigit(uint16(c))) {
++			return compliantNameSlow(in, i)
++		}
++	}
++	return in
++}
++
++// compliantNameSlow builds the compliant name for in, whose first prefix bytes
++// are ASCII and already compliant. Runes are checked after truncation to
++// uint16 to match how the tokenizer classifies them.
++func compliantNameSlow(in string, prefix int) string {
+ 	var buf strings.Builder
+-	for i, c := range in {
++	buf.Grow(len(in))
++	buf.WriteString(in[:prefix])
++	for i, c := range in[prefix:] {
+ 		if !isLetter(uint16(c)) {
+-			if i == 0 || !isDigit(uint16(c)) {
++			if prefix+i == 0 || !isDigit(uint16(c)) {
+ 				buf.WriteByte('_')
+ 				continue
+ 			}
+diff --git a/go/vt/sqlparser/compliant_name_test.go b/go/vt/sqlparser/compliant_name_test.go
+new file mode 100644
+index 0000000..26a15dd
+--- /dev/null
++++ b/go/vt/sqlparser/compliant_name_test.go
+@@ -0,0 +1,160 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package sqlparser
++
++import (
++	"strings"
++	"testing"
++	"unsafe"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++)
++
++// referenceCompliantName is the rune-by-rune implementation that compliantName
++// must stay equivalent to.
++func referenceCompliantName(in string) string {
++	var buf strings.Builder
++	for i, c := range in {
++		if !isLetter(uint16(c)) {
++			if i == 0 || !isDigit(uint16(c)) {
++				buf.WriteByte('_')
++				continue
++			}
++		}
++		buf.WriteRune(c)
++	}
++	return buf.String()
++}
++
++var compliantNameCases = []string{
++	"",
++	"a",
++	"_",
++	"$",
++	"1",
++	"a1",
++	"1a",
++	"id",
++	"user_id",
++	"$col",
++	"a.b",
++	".ab",
++	"a b",
++	"a-b",
++	"a`b",
++	"é",
++	"aé1",
++	"1é",
++	"\xff",
++	"a\xffb",
++	"a\xc3",
++	"\U00010061",  // truncates to 'a' as uint16: kept as-is
++	"a\U00010031", // truncates to '1' as uint16: kept after the first rune
++	"\U00010031a", // truncates to '1' as uint16 at the start: replaced
++	"\U0001005f",  // truncates to '_' as uint16: kept as-is
++	"xš",          // 0x161 is not a letter
++	"col\x00umn",
++	"abc\U0001F600",
++}
++
++func TestCompliantNameEquivalence(t *testing.T) {
++	for _, in := range compliantNameCases {
++		assert.Equalf(t, referenceCompliantName(in), compliantName(in), "compliantName(%q)", in)
++	}
++}
++
++func TestCompliantNameNoCopyWhenCompliant(t *testing.T) {
++	in := "user_id1"
++	out := compliantName(in)
++	require.Equal(t, in, out)
++	assert.Equal(t, unsafe.StringData(in), unsafe.StringData(out))
++	assert.Zero(t, testing.AllocsPerRun(10, func() { _ = compliantName(in) }))
++}
++
++func FuzzCompliantName(f *testing.F) {
++	for _, in := range compliantNameCases {
++		f.Add(in)
++	}
++	f.Fuzz(func(t *testing.T, in string) {
++		require.Equal(t, referenceCompliantName(in), compliantName(in))
++	})
++}
++
++func TestReserveVariableSequence(t *testing.T) {
++	r := NewReservedVars("vtg", BindVars{"id": {}, "id2": {}})
++	assert.Equal(t, "id1", r.ReserveVariable("id"))
++	assert.Equal(t, "id3", r.ReserveVariable("id"))
++	assert.Equal(t, "id4", r.ReserveVariable("id"))
++	assert.Equal(t, "name", r.ReserveVariable("name"))
++	assert.Equal(t, "name1", r.ReserveVariable("name"))
++	assert.Equal(t, "", r.ReserveVariable(""))
++	assert.Equal(t, "1", r.ReserveVariable(""))
++}
++
++func TestReserveColNameSequence(t *testing.T) {
++	r := NewReservedVars("vtg", BindVars{"id": {}})
++	assert.Equal(t, "id1", r.ReserveColName(NewColName("id")))
++	assert.Equal(t, "t_id", r.ReserveColName(NewColNameWithQualifier("id", NewTableName("t"))))
++	assert.Equal(t, "t_id1", r.ReserveColName(NewColNameWithQualifier("id", NewTableName("t"))))
++	assert.Equal(t, "_vtg1", r.ReserveColName(NewColName("vtg1")))
++	assert.Equal(t, "a_b", r.ReserveColName(NewColName("a.b")))
++	assert.Equal(t, "a_b1", r.ReserveColName(NewColName("a.b")))
++}
++
++func TestReserveColNameDoesNotAliasQuery(t *testing.T) {
++	sql := "select 1 from t where user_id = 5"
++	stmt, bvs, err := NewTestParser().Parse2(sql)
++	require.NoError(t, err)
++	col := stmt.(*Select).Where.Expr.(*ComparisonExpr).Left.(*ColName)
++
++	r := NewReservedVars("vtg", bvs)
++	name := r.ReserveColName(col)
++	require.Equal(t, "user_id", name)
++
++	start := uintptr(unsafe.Pointer(unsafe.StringData(sql)))
++	p := uintptr(unsafe.Pointer(unsafe.StringData(name)))
++	assert.False(t, p >= start && p < start+uintptr(len(sql)), "bind variable name must not alias the query text")
++}
++
++func BenchmarkCompliantName(b *testing.B) {
++	for _, in := range []string{"c_w_id", "user_id", "a.b"} {
++		b.Run(in, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				_ = compliantName(in)
++			}
++		})
++	}
++}
++
++func BenchmarkReserveColName(b *testing.B) {
++	cols := []*ColName{
++		NewColName("c_w_id"),
++		NewColName("c_d_id"),
++		NewColName("c_id"),
++		NewColNameWithQualifier("w_id", NewTableName("w")),
++	}
++	b.ReportAllocs()
++	for b.Loop() {
++		r := NewReservedVars("vtg", BindVars{"c_id": {}})
++		for _, col := range cols {
++			_ = r.ReserveColName(col)
++		}
++		_ = r.ReserveColName(cols[0])
++	}
++}
+diff --git a/go/vt/sqlparser/reserved_vars.go b/go/vt/sqlparser/reserved_vars.go
+index d224e96..23e58de 100644
+--- a/go/vt/sqlparser/reserved_vars.go
++++ b/go/vt/sqlparser/reserved_vars.go
+@@ -53,26 +53,38 @@ func (r *ReservedVars) ReserveAll(names ...string) bool {
+ // to make it unique.
+ func (r *ReservedVars) ReserveColName(col *ColName) string {
+ 	reserveName := col.CompliantName()
+-	if r.fast && strings.HasPrefix(reserveName, r.prefix) {
++	switch {
++	case r.fast && strings.HasPrefix(reserveName, r.prefix):
+ 		reserveName = "_" + reserveName
++	case col.Qualifier.IsEmpty():
++		// An unqualified compliant name can be the column identifier itself,
++		// which is a substring of the query text. Clone it so that the bind
++		// variable name, which may end up in a cached plan, does not keep the
++		// whole query alive.
++		reserveName = strings.Clone(reserveName)
+ 	}
+ 
+ 	return r.ReserveVariable(reserveName)
+ }
+ 
++// ReserveVariable reserves compliantName, or if it is already taken, the first
++// free name of the form compliantName1, compliantName2, and so on. When
++// compliantName itself is free, it is returned as is.
+ func (r *ReservedVars) ReserveVariable(compliantName string) string {
+-	joinVar := []byte(compliantName)
+-	baseLen := len(joinVar)
+-	i := int64(1)
++	if _, ok := r.reserved[compliantName]; !ok {
++		r.reserved[compliantName] = struct{}{}
++		return compliantName
++	}
+ 
+-	for {
++	var buf [64]byte
++	joinVar := append(buf[:0], compliantName...)
++	for i := int64(1); ; i++ {
++		joinVar = strconv.AppendInt(joinVar[:len(compliantName)], i, 10)
+ 		if _, ok := r.reserved[string(joinVar)]; !ok {
+ 			bvar := string(joinVar)
+ 			r.reserved[bvar] = struct{}{}
+ 			return bvar
+ 		}
+-		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
+-		i++
+ 	}
+ }
+ 

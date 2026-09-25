@@ -1,0 +1,747 @@
+diff --git a/go.mod b/go.mod
+index 2f2ebcf..e1bf23f 100644
+--- a/go.mod
++++ b/go.mod
+@@ -57,7 +57,6 @@ require (
+ 	github.com/patrickmn/go-cache v2.1.0+incompatible
+ 	github.com/pierrec/lz4/v4 v4.1.29
+ 	github.com/pires/go-proxyproto v0.15.0
+-	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
+ 	github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25
+ 	github.com/prometheus/client_golang v1.24.1
+ 	github.com/prometheus/common v0.71.0
+diff --git a/go.sum b/go.sum
+index ad09cea..4d4d913 100644
+--- a/go.sum
++++ b/go.sum
+@@ -383,8 +383,6 @@ github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
+ github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+ github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+-github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a h1:y0OpQ4+5tKxeh9+H+2cVgASl9yMZYV9CILinKOiKafA=
+-github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a/go.mod h1:GJFUzQuXIoB2Kjn1ZfDhJr/42D5nWOqRcIQVgCxTuIE=
+ github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25 h1:S1hI5JiKP7883xBzZAr1ydcxrKNSVNm7+3+JwjxZEsg=
+ github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25/go.mod h1:ZQntvDG8TkPgljxtA0R9frDoND4QORU1VXz015N5Ks4=
+ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+diff --git a/go/vt/mysqlctl/compression.go b/go/vt/mysqlctl/compression.go
+index c58a70a..17f0366 100644
+--- a/go/vt/mysqlctl/compression.go
++++ b/go/vt/mysqlctl/compression.go
+@@ -29,10 +29,10 @@ import (
+ 	"github.com/klauspost/compress/zstd"
+ 	"github.com/klauspost/pgzip"
+ 	"github.com/pierrec/lz4/v4"
+-	"github.com/planetscale/pargzip"
+ 	"github.com/spf13/pflag"
+ 
+ 	"vitess.io/vitess/go/vt/logutil"
++	"vitess.io/vitess/go/vt/mysqlctl/internal/pargzip"
+ 	"vitess.io/vitess/go/vt/servenv"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ )
+diff --git a/go/vt/mysqlctl/internal/pargzip/pargzip.go b/go/vt/mysqlctl/internal/pargzip/pargzip.go
+new file mode 100644
+index 0000000..3fa17a7
+--- /dev/null
++++ b/go/vt/mysqlctl/internal/pargzip/pargzip.go
+@@ -0,0 +1,326 @@
++/*
++Copyright 2026 The Vitess Authors.
++Copyright 2015 The Go Authors. All rights reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++// Copyright 2015 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// Package pargzip contains a parallel gzip writer implementation. It is
++// derived from github.com/planetscale/pargzip (itself a copy of
++// golang.org/x/build/pargzip) and produces byte-for-byte the same output:
++// every chunk of ChunkSize bytes is compressed in parallel into its own
++// independent gzip member, and the members are written in order. Any gzip
++// reader that supports multistream input (compress/gzip, klauspost/pgzip,
++// gzip(1), pigz) can decompress it.
++//
++// Unlike the upstream package, this one reuses its per-chunk state across
++// chunks and across writers: the gzip.Writer (about 1 MiB of compressor
++// state), the compressed output buffer and the uncompressed chunk copy all
++// come from process-wide pools. Upstream allocated all three for every
++// chunk, which made the default backup compressor produce about six bytes of
++// garbage per byte compressed.
++package pargzip
++
++import (
++	"bufio"
++	"bytes"
++	"compress/gzip"
++	"io"
++	"runtime"
++	"sync"
++)
++
++// These constants are copied from the gzip package, so that code that imports
++// pargzip does not also have to import compress/gzip.
++const (
++	NoCompression      = gzip.NoCompression
++	BestSpeed          = gzip.BestSpeed
++	BestCompression    = gzip.BestCompression
++	DefaultCompression = gzip.DefaultCompression
++	HuffmanOnly        = gzip.HuffmanOnly
++)
++
++var (
++	// gzipWriterPools holds idle *gzip.Writer values, one pool per
++	// compression level from HuffmanOnly (-2) through BestCompression (9).
++	gzipWriterPools [BestCompression - HuffmanOnly + 1]sync.Pool
++	// outputBufferPool holds idle *bytes.Buffer values for compressed chunks.
++	outputBufferPool sync.Pool
++	// inputBufferPool holds idle *[]byte values for uncompressed chunks.
++	inputBufferPool sync.Pool
++)
++
++func getGzipWriter(w io.Writer, level int) (*gzip.Writer, error) {
++	if level >= HuffmanOnly && level <= BestCompression {
++		if zw, ok := gzipWriterPools[level-HuffmanOnly].Get().(*gzip.Writer); ok {
++			zw.Reset(w)
++			return zw, nil
++		}
++	}
++	return gzip.NewWriterLevel(w, level)
++}
++
++func putGzipWriter(zw *gzip.Writer, level int) {
++	// Drop the reference to the output buffer before pooling the writer.
++	zw.Reset(io.Discard)
++	gzipWriterPools[level-HuffmanOnly].Put(zw)
++}
++
++func getInputBuffer(p []byte) *[]byte {
++	bp, _ := inputBufferPool.Get().(*[]byte)
++	if bp == nil || cap(*bp) < len(p) {
++		b := make([]byte, 0, len(p))
++		bp = &b
++	}
++	*bp = append((*bp)[:0], p...)
++	return bp
++}
++
++func getOutputBuffer() *bytes.Buffer {
++	if buf, ok := outputBufferPool.Get().(*bytes.Buffer); ok {
++		buf.Reset()
++		return buf
++	}
++	return new(bytes.Buffer)
++}
++
++// A Writer is an io.WriteCloser.
++// Writes to a Writer are compressed and written to w.
++//
++// Any exported fields may only be mutated before the first call to
++// Write.
++type Writer struct {
++	// ChunkSize is the number of bytes to gzip at once.
++	// The default from NewWriter is 1MB.
++	ChunkSize int
++
++	// Parallel is the number of chunks to compress in parallel.
++	// The default from NewWriter is runtime.NumCPU().
++	Parallel int
++
++	// CompressionLevel is the compression level to use for gzip.
++	// The default from NewWriter is DefaultCompression.
++	CompressionLevel int
++
++	w  io.Writer
++	bw *bufio.Writer
++
++	allWritten  chan struct{} // when writing goroutine ends
++	wasWriteErr chan struct{} // closed after 'err' set
++	wroteChunk  bool          // did we ever write any chunks?
++
++	sem    chan bool        // semaphore bounding compressions in flight
++	chunkc chan *writeChunk // closed on Close
++
++	mu     sync.Mutex // guards following
++	closed bool
++	err    error // sticky write error
++}
++
++type writeChunk struct {
++	zw *Writer
++	p  *[]byte // uncompressed, owned by this chunk until compress returns
++
++	compressionLevel int
++
++	donec chan struct{} // closed on completion
++
++	// one of following is set:
++	z   *bytes.Buffer // compressed, owned by this chunk until written
++	err error         // compression error
++}
++
++// compress compresses the chunk. It runs in its own goroutine.
++func (c *writeChunk) compress() (err error) {
++	defer func() {
++		if err != nil {
++			c.err = err
++		}
++		inputBufferPool.Put(c.p)
++		c.p = nil
++		close(c.donec)
++		<-c.zw.sem
++	}()
++	zbuf := getOutputBuffer()
++	zw, err := getGzipWriter(zbuf, c.compressionLevel)
++	if err != nil {
++		outputBufferPool.Put(zbuf)
++		return err
++	}
++	if _, err := zw.Write(*c.p); err != nil {
++		outputBufferPool.Put(zbuf)
++		return err
++	}
++	if err := zw.Close(); err != nil {
++		outputBufferPool.Put(zbuf)
++		return err
++	}
++	putGzipWriter(zw, c.compressionLevel)
++	c.z = zbuf
++	return nil
++}
++
++// NewWriter returns a new Writer.
++// Writes to the returned writer are compressed and written to w.
++//
++// It is the caller's responsibility to call Close on the WriteCloser
++// when done. Writes may be buffered and not flushed until Close.
++//
++// Any fields on Writer may only be modified before the first call to
++// Write.
++func NewWriter(w io.Writer) *Writer {
++	return &Writer{
++		w:           w,
++		allWritten:  make(chan struct{}),
++		wasWriteErr: make(chan struct{}),
++
++		ChunkSize:        1 << 20,
++		Parallel:         runtime.NumCPU(),
++		CompressionLevel: DefaultCompression,
++	}
++}
++
++func (w *Writer) didInit() bool { return w.bw != nil }
++
++func (w *Writer) init() {
++	w.bw = bufio.NewWriterSize(newChunkWriter{w}, w.ChunkSize)
++	w.chunkc = make(chan *writeChunk, w.Parallel+1)
++	w.sem = make(chan bool, w.Parallel)
++	go func() {
++		defer close(w.allWritten)
++		for c := range w.chunkc {
++			if err := w.writeCompressedChunk(c); err != nil {
++				close(w.wasWriteErr)
++				return
++			}
++			if !w.wroteChunk {
++				w.wroteChunk = true
++			}
++		}
++	}()
++}
++
++func (w *Writer) startChunk(p []byte) {
++	w.sem <- true // block until we can begin
++	c := &writeChunk{
++		zw:               w,
++		p:                getInputBuffer(p), // copy, since the bufio.Writer owns the slice
++		donec:            make(chan struct{}),
++		compressionLevel: w.CompressionLevel,
++	}
++	go c.compress() // receives from w.sem
++	select {
++	case w.chunkc <- c:
++	case <-w.wasWriteErr:
++		// Discard chunks that come after any chunk that failed
++		// to write.
++	}
++}
++
++func (w *Writer) writeCompressedChunk(c *writeChunk) (err error) {
++	defer func() {
++		if err != nil {
++			w.mu.Lock()
++			defer w.mu.Unlock()
++			if w.err == nil {
++				w.err = err
++			}
++		}
++	}()
++	<-c.donec
++	if c.err != nil {
++		return c.err
++	}
++	// io.Writer implementations must not retain the slice, so the buffer
++	// can be reused as soon as Write returns.
++	_, err = w.w.Write(c.z.Bytes())
++	outputBufferPool.Put(c.z)
++	c.z = nil
++	return
++}
++
++func (w *Writer) Write(p []byte) (n int, err error) {
++	if !w.didInit() {
++		w.init()
++	}
++	return w.bw.Write(p)
++}
++
++func (w *Writer) Close() error {
++	w.mu.Lock()
++	err, wasClosed := w.err, w.closed
++	w.closed = true
++	w.mu.Unlock()
++	if wasClosed {
++		return nil
++	}
++	if !w.didInit() {
++		// Our Write() method was never called so we have no data,
++		// but we still need to produce a valid gzip header.
++		return w.writeEmptyData()
++	}
++	if err != nil {
++		return err
++	}
++
++	w.bw.Flush()
++	close(w.chunkc)
++	<-w.allWritten // wait for writing goroutine to end
++
++	w.mu.Lock()
++	err = w.err
++	w.mu.Unlock()
++	if err != nil {
++		return err
++	}
++
++	if !w.wroteChunk {
++		// Write() was called at least once, but we never actually produced any
++		// chunks (because we were sent an empty slice). We therefore have no
++		// data, but we still need to produce a valid gzip header.
++		return w.writeEmptyData()
++	}
++
++	return nil
++}
++
++func (w *Writer) writeEmptyData() error {
++	zw, err := gzip.NewWriterLevel(w.w, w.CompressionLevel)
++	if err != nil {
++		return err
++	}
++	return zw.Close()
++}
++
++// newChunkWriter gets large chunks to compress and write to zw.
++type newChunkWriter struct {
++	zw *Writer
++}
++
++func (cw newChunkWriter) Write(p []byte) (n int, err error) {
++	n = len(p)
++	max := cw.zw.ChunkSize
++	for len(p) > 0 {
++		chunk := p
++		if len(chunk) > max {
++			chunk = chunk[:max]
++		}
++		p = p[len(chunk):]
++		cw.zw.startChunk(chunk)
++	}
++	return
++}
+diff --git a/go/vt/mysqlctl/internal/pargzip/pargzip_test.go b/go/vt/mysqlctl/internal/pargzip/pargzip_test.go
+new file mode 100644
+index 0000000..b0777dc
+--- /dev/null
++++ b/go/vt/mysqlctl/internal/pargzip/pargzip_test.go
+@@ -0,0 +1,228 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package pargzip
++
++import (
++	"bufio"
++	"bytes"
++	"compress/gzip"
++	"errors"
++	"fmt"
++	"io"
++	"math/rand/v2"
++	"sync"
++	"testing"
++
++	"github.com/klauspost/pgzip"
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++)
++
++// referenceChunkWriter compresses every piece it receives, split at
++// chunkSize, into its own gzip member with a freshly allocated gzip.Writer.
++type referenceChunkWriter struct {
++	t         *testing.T
++	out       *bytes.Buffer
++	chunkSize int
++	level     int
++}
++
++func (r referenceChunkWriter) Write(p []byte) (int, error) {
++	for off := 0; off < len(p); off += r.chunkSize {
++		zw, err := gzip.NewWriterLevel(r.out, r.level)
++		require.NoError(r.t, err)
++		_, err = zw.Write(p[off:min(off+r.chunkSize, len(p))])
++		require.NoError(r.t, err)
++		require.NoError(r.t, zw.Close())
++	}
++	return len(p), nil
++}
++
++// referenceOutput builds the expected pargzip stream without any pooling or
++// parallelism: the writes go through a bufio.Writer of chunkSize bytes, as in
++// the upstream package, so a write that bypasses the buffer produces a short
++// final chunk exactly where upstream does, and every chunk becomes one
++// independent gzip member.
++func referenceOutput(t *testing.T, data []byte, chunkSize, writeSize, level int) []byte {
++	var out bytes.Buffer
++	if len(data) == 0 {
++		zw, err := gzip.NewWriterLevel(&out, level)
++		require.NoError(t, err)
++		require.NoError(t, zw.Close())
++		return out.Bytes()
++	}
++	bw := bufio.NewWriterSize(referenceChunkWriter{t: t, out: &out, chunkSize: chunkSize, level: level}, chunkSize)
++	for off := 0; off < len(data); off += writeSize {
++		_, err := bw.Write(data[off:min(off+writeSize, len(data))])
++		require.NoError(t, err)
++	}
++	require.NoError(t, bw.Flush())
++	return out.Bytes()
++}
++
++// testData mixes compressible text with incompressible random bytes so that
++// the compressed chunk sizes vary.
++func testData(n int, seed uint64) []byte {
++	rng := rand.New(rand.NewPCG(seed, seed))
++	var b bytes.Buffer
++	for b.Len() < n {
++		if rng.IntN(3) == 0 {
++			for range 512 {
++				b.WriteByte(byte(rng.Uint32()))
++			}
++		} else {
++			fmt.Fprintf(&b, "row %d value %d some repeated text; ", rng.IntN(1000), rng.IntN(50))
++		}
++	}
++	return b.Bytes()[:n]
++}
++
++// TestWriterMatchesReference checks that the output is byte-for-byte the
++// concatenation of independent per-chunk gzip members, across write sizes,
++// chunk sizes and levels, and that reused pooled state never leaks between
++// chunks or writers.
++func TestWriterMatchesReference(t *testing.T) {
++	data := testData(1<<20+12345, 1)
++	for _, level := range []int{HuffmanOnly, DefaultCompression, NoCompression, BestSpeed, BestCompression} {
++		for _, chunkSize := range []int{1, 1000, 250000, 1 << 20} {
++			for _, writeSize := range []int{1, 32 << 10, 1 << 21} {
++				input := data
++				switch {
++				case chunkSize == 1:
++					input = data[:1000] // one gzip member per byte
++				case chunkSize == 1000 || writeSize == 1:
++					input = data[:64<<10]
++				}
++				t.Run(fmt.Sprintf("level=%d/chunk=%d/write=%d", level, chunkSize, writeSize), func(t *testing.T) {
++					var out bytes.Buffer
++					zw := NewWriter(&out)
++					zw.ChunkSize = chunkSize
++					zw.Parallel = 3
++					zw.CompressionLevel = level
++					for off := 0; off < len(input); off += writeSize {
++						n, err := zw.Write(input[off:min(off+writeSize, len(input))])
++						require.NoError(t, err)
++						require.Equal(t, min(writeSize, len(input)-off), n)
++					}
++					require.NoError(t, zw.Close())
++					require.Equal(t, referenceOutput(t, input, chunkSize, writeSize, level), out.Bytes())
++				})
++			}
++		}
++	}
++}
++
++// TestWriterRoundTrip decompresses the output with the readers used at
++// restore time and checks that concurrent writers sharing the pools each
++// produce their own data.
++func TestWriterRoundTrip(t *testing.T) {
++	var wg sync.WaitGroup
++	for i := range 8 {
++		wg.Go(func() {
++			data := testData(1<<20+i*7919, uint64(i))
++			var out bytes.Buffer
++			zw := NewWriter(&out)
++			zw.ChunkSize = 250000
++			zw.Parallel = 2
++			zw.CompressionLevel = BestSpeed
++			_, err := io.Copy(zw, struct{ io.Reader }{bytes.NewReader(data)})
++			assert.NoError(t, err)
++			assert.NoError(t, zw.Close())
++
++			pr, err := pgzip.NewReader(bytes.NewReader(out.Bytes()))
++			if assert.NoError(t, err) {
++				got, err := io.ReadAll(pr)
++				assert.NoError(t, err)
++				assert.Equal(t, data, got)
++			}
++			sr, err := gzip.NewReader(bytes.NewReader(out.Bytes()))
++			if assert.NoError(t, err) {
++				got, err := io.ReadAll(sr)
++				assert.NoError(t, err)
++				assert.Equal(t, data, got)
++			}
++		})
++	}
++	wg.Wait()
++}
++
++func TestWriterEmpty(t *testing.T) {
++	want := referenceOutput(t, nil, 1, 1, BestSpeed)
++
++	var neverWritten bytes.Buffer
++	zw := NewWriter(&neverWritten)
++	zw.CompressionLevel = BestSpeed
++	require.NoError(t, zw.Close())
++	assert.Equal(t, want, neverWritten.Bytes())
++
++	var emptyWrite bytes.Buffer
++	zw = NewWriter(&emptyWrite)
++	zw.CompressionLevel = BestSpeed
++	n, err := zw.Write(nil)
++	require.NoError(t, err)
++	assert.Zero(t, n)
++	require.NoError(t, zw.Close())
++	assert.Equal(t, want, emptyWrite.Bytes())
++
++	// A second Close is a no-op.
++	require.NoError(t, zw.Close())
++	assert.Equal(t, want, emptyWrite.Bytes())
++}
++
++func TestWriterInvalidLevel(t *testing.T) {
++	zw := NewWriter(io.Discard)
++	zw.CompressionLevel = 42
++	_, err := zw.Write([]byte("data"))
++	require.NoError(t, err) // buffered until Close
++	require.Error(t, zw.Close())
++}
++
++type failingWriter struct{ err error }
++
++func (f failingWriter) Write([]byte) (int, error) { return 0, f.err }
++
++func TestWriterPropagatesWriteError(t *testing.T) {
++	errBoom := errors.New("boom")
++	zw := NewWriter(failingWriter{errBoom})
++	zw.ChunkSize = 1000
++	zw.Parallel = 2
++	data := testData(1<<20, 3)
++	var writeErr error
++	for off := 0; off < len(data) && writeErr == nil; off += 4096 {
++		_, writeErr = zw.Write(data[off : off+4096])
++	}
++	closeErr := zw.Close()
++	assert.ErrorIs(t, errors.Join(writeErr, closeErr), errBoom)
++}
++
++func BenchmarkWriter(b *testing.B) {
++	data := testData(16<<20, 4)
++	b.SetBytes(int64(len(data)))
++	b.ReportAllocs()
++	for b.Loop() {
++		zw := NewWriter(io.Discard)
++		zw.ChunkSize = 250000
++		zw.Parallel = 2
++		zw.CompressionLevel = BestSpeed
++		if _, err := io.Copy(zw, struct{ io.Reader }{bytes.NewReader(data)}); err != nil {
++			b.Fatal(err)
++		}
++		if err := zw.Close(); err != nil {
++			b.Fatal(err)
++		}
++	}
++}
+diff --git a/go/vt/mysqlctl/xtrabackupengine.go b/go/vt/mysqlctl/xtrabackupengine.go
+index e7cd3c2..7cb1e4b 100644
+--- a/go/vt/mysqlctl/xtrabackupengine.go
++++ b/go/vt/mysqlctl/xtrabackupengine.go
+@@ -513,9 +513,9 @@ func (be *XtrabackupEngine) backupFiles(
+ 	blockSize := max(int64(xtrabackupStripeBlockSize),
+ 		// Enforce minimum block size.
+ 		1024)
+-	// Add a buffer in front of the raw stdout pipe so io.CopyN() can use the
+-	// buffered reader's WriteTo() method instead of allocating a new buffer
+-	// every time.
++	// Add a buffer in front of the raw stdout pipe so that the unstriped
++	// io.Copy() can use the buffered reader's WriteTo() method, and so that
++	// reads from the pipe are large.
+ 	backupOutBuf := bufio.NewReaderSize(backupOut, int(blockSize))
+ 	if _, err := copyToStripes(destWriters, backupOutBuf, blockSize); err != nil {
+ 		return replicationPosition, vterrors.Wrap(err, "cannot copy output from xtrabackup command")
+@@ -954,6 +954,7 @@ func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (writ
+ 	}
+ 
+ 	// Read blocks from source and round-robin them to destination writers.
++	copier := newBlockCopier(blockSize)
+ 	// Since we put a buffer in front of the destination file, and pargzip has its
+ 	// own buffer as well, we are writing into a buffer either way (whether a
+ 	// compressor is in the chain or not). That means these writes should not
+@@ -962,7 +963,7 @@ func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (writ
+ 	for {
+ 		// Copy blockSize bytes to this writer before rotating to the next one.
+ 		// The only acceptable reason for copying less than blockSize bytes is EOF.
+-		n, err := io.CopyN(writers[destIndex], reader, blockSize)
++		n, err := copier.copyN(writers[destIndex], reader, blockSize)
+ 		written += n
+ 		if err == io.EOF {
+ 			// We're done.
+@@ -982,6 +983,34 @@ func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (writ
+ 	}
+ }
+ 
++// blockCopier copies fixed-size blocks like io.CopyN, but reuses its copy
++// buffer and its io.LimitedReader across calls. io.CopyN allocates both for
++// every call, because an io.LimitedReader has no WriteTo method; with the
++// default 100 KiB stripe block size that is a 32 KiB buffer per block.
++type blockCopier struct {
++	buf []byte
++	lr  io.LimitedReader
++}
++
++func newBlockCopier(blockSize int64) *blockCopier {
++	return &blockCopier{buf: make([]byte, max(1, min(blockSize, 32*1024)))}
++}
++
++// copyN behaves like io.CopyN.
++func (c *blockCopier) copyN(dst io.Writer, src io.Reader, n int64) (written int64, err error) {
++	c.lr.R, c.lr.N = src, n
++	written, err = io.CopyBuffer(dst, &c.lr, c.buf)
++	c.lr.R = nil
++	if written == n {
++		return n, nil
++	}
++	if written < n && err == nil {
++		// src stopped early; must have been EOF.
++		err = io.EOF
++	}
++	return
++}
++
+ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
+ 	if len(readers) == 1 {
+ 		// No striping.
+@@ -1001,10 +1030,11 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
+ 		//   compression is not enabled in order to get any benefit to restore
+ 		//   parallelism from data striping.
+ 		srcIndex := 0
++		copier := newBlockCopier(blockSize)
+ 		for {
+ 			// Copy blockSize bytes from this reader before rotating to the next one.
+ 			// The only acceptable reason for copying less than blockSize bytes is EOF.
+-			n, err := io.CopyN(writer, readers[srcIndex], blockSize)
++			n, err := copier.copyN(writer, readers[srcIndex], blockSize)
+ 			if err != nil {
+ 				// If we failed to copy exactly blockSize bytes for any
+ 				// reason other than EOF, we must abort.
+diff --git a/go/vt/mysqlctl/xtrabackupengine_test.go b/go/vt/mysqlctl/xtrabackupengine_test.go
+index 17cb144..29ec5fa 100644
+--- a/go/vt/mysqlctl/xtrabackupengine_test.go
++++ b/go/vt/mysqlctl/xtrabackupengine_test.go
+@@ -150,6 +150,53 @@ func TestStripeRoundTrip(t *testing.T) {
+ 	test(6000, 7)
+ }
+ 
++// writeOnly hides every method of the wrapped writer except Write, like the
++// gzip compressors that sit in front of each stripe.
++type writeOnly struct{ io.Writer }
++
++// readOnly hides every method of the wrapped reader except Read, like the
++// decompressors that sit behind each stripe.
++type readOnly struct{ io.Reader }
++
++// TestStripeCopyReusesBuffer checks that striping through writers and
++// readers without ReadFrom or WriteTo, which forces the buffered copy path,
++// keeps the data intact and does not allocate a copy buffer per block.
++func TestStripeCopyReusesBuffer(t *testing.T) {
++	const (
++		dataSize  = 1 << 20
++		blockSize = 4096
++		stripes   = 4
++		blocks    = dataSize / blockSize
++	)
++	input := make([]byte, dataSize)
++	rand.Read(input)
++
++	buffers := make([]bytes.Buffer, stripes)
++	writers := make([]io.Writer, stripes)
++	for i := range buffers {
++		buffers[i].Grow(dataSize/stripes + blockSize)
++		writers[i] = writeOnly{&buffers[i]}
++	}
++	allocs := testing.AllocsPerRun(1, func() {
++		for i := range buffers {
++			buffers[i].Reset()
++		}
++		written, err := copyToStripes(writers, readOnly{bytes.NewReader(input)}, blockSize)
++		require.NoError(t, err)
++		require.EqualValues(t, dataSize, written)
++	})
++	// io.CopyN allocated a buffer and an io.LimitedReader for every block.
++	assert.Less(t, allocs, float64(blocks/10))
++
++	readers := make([]io.Reader, stripes)
++	for i := range buffers {
++		readers[i] = readOnly{&buffers[i]}
++	}
++	output, err := io.ReadAll(stripeReader(readers, blockSize))
++	require.NoError(t, err)
++	assert.Equal(t, input, output)
++}
++
+ func TestShouldDrainForBackupXtrabackup(t *testing.T) {
+ 	be := &XtrabackupEngine{}
+ 

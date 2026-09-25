@@ -1,0 +1,475 @@
+diff --git a/go/mysql/encoding.go b/go/mysql/encoding.go
+index 20e09f3..1c3901d 100644
+--- a/go/mysql/encoding.go
++++ b/go/mysql/encoding.go
+@@ -311,6 +311,21 @@ func readLenEncStringAsBytes(data []byte, pos int) ([]byte, int, bool) {
+ 	return data[pos : pos+s], pos + s, true
+ }
+ 
++// readLenEncStringAsBytesCapped is like readLenEncStringAsBytes, but the
++// returned slice has its capacity limited to its length, so that appending to
++// it can never overwrite the bytes that follow it in data.
++func readLenEncStringAsBytesCapped(data []byte, pos int) ([]byte, int, bool) {
++	size, pos, ok := readLenEncInt(data, pos)
++	if !ok {
++		return nil, 0, false
++	}
++	s := int(size)
++	if pos+s-1 >= len(data) {
++		return nil, 0, false
++	}
++	return data[pos : pos+s : pos+s], pos + s, true
++}
++
+ func readLenEncStringAsBytesCopy(data []byte, pos int) ([]byte, int, bool) {
+ 	size, pos, ok := readLenEncInt(data, pos)
+ 	if !ok {
+diff --git a/go/mysql/query.go b/go/mysql/query.go
+index 86db97b..8dd3f0a 100644
+--- a/go/mysql/query.go
++++ b/go/mysql/query.go
+@@ -457,13 +457,27 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result,
+ 
+ 	// read each row until EOF or OK packet.
+ 	for {
+-		data, err := c.readEphemeralPacket()
++		// A row that is kept is read into a buffer of its own, which the
++		// row's values then sub-slice: this costs one allocation per row
++		// instead of one per column value. When the next row cannot be kept
++		// (no rows are wanted, or maxrows is reached), the packet is read into
++		// a pooled ephemeral buffer instead.
++		keepRow := maxrows != FETCH_NO_ROWS && (maxrows == FETCH_ALL_ROWS || len(result.Rows) != maxrows)
++
++		var data []byte
++		if keepRow {
++			data, err = c.readPacket()
++		} else {
++			data, err = c.readEphemeralPacket()
++		}
+ 		if err != nil {
+ 			return nil, false, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+ 		}
+ 
+ 		if c.isEOFPacket(data) {
+-			defer c.recycleReadPacket()
++			if !keepRow {
++				defer c.recycleReadPacket()
++			}
+ 
+ 			// Strip the partial Fields before returning.
+ 			if !wantfields {
+@@ -493,33 +507,31 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result,
+ 			}
+ 			return result, more, warnings, nil
+ 		} else if isErrorPacket(data) {
+-			defer c.recycleReadPacket()
++			if !keepRow {
++				defer c.recycleReadPacket()
++			}
+ 			// Error packet.
+ 			return nil, false, 0, ParseErrorPacket(data)
+ 		}
+ 
+-		if maxrows == FETCH_NO_ROWS {
+-			c.recycleReadPacket()
+-			continue
+-		}
+-
+-		// Check we're not over the limit before we add more.
+-		if maxrows != FETCH_ALL_ROWS && len(result.Rows) == maxrows {
++		if !keepRow {
+ 			c.recycleReadPacket()
++			if maxrows == FETCH_NO_ROWS {
++				continue
++			}
++			// We're over the limit.
+ 			if err := c.drainResults(); err != nil {
+ 				return nil, false, 0, err
+ 			}
+ 			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
+ 		}
+ 
+-		// Regular row.
+-		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
++		// Regular row. The row owns data, and its values sub-slice it.
++		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCapped, nil)
+ 		if err != nil {
+-			c.recycleReadPacket()
+ 			return nil, false, 0, err
+ 		}
+ 		result.Rows = append(result.Rows, row)
+-		c.recycleReadPacket()
+ 	}
+ }
+ 
+diff --git a/go/mysql/read_query_result_ref_test.go b/go/mysql/read_query_result_ref_test.go
+new file mode 100644
+index 0000000..dd6caac
+--- /dev/null
++++ b/go/mysql/read_query_result_ref_test.go
+@@ -0,0 +1,168 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package mysql
++
++import (
++	"bytes"
++
++	"vitess.io/vitess/go/mysql/sqlerror"
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/proto/vtrpc"
++	"vitess.io/vitess/go/vt/vterrors"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// readQueryResultRef is a copy of ReadQueryResult before rows were parsed
++// into a single allocation. With cloneRow=false it copies every column value
++// into its own allocation (the old behavior); with cloneRow=true it clones
++// the ephemeral packet once per row and sub-slices it. It is kept for
++// equivalence tests and A/B benchmarks.
++func (c *Conn) readQueryResultRef(maxrows int, wantfields bool, cloneRow bool) (*sqltypes.Result, bool, uint16, error) {
++	var packetOk PacketOK
++	// Get the result.
++	colNumber, err := c.readComQueryResponse(&packetOk)
++	if err != nil {
++		return nil, false, 0, err
++	}
++	more := packetOk.statusFlags&ServerMoreResultsExists != 0
++	warnings := packetOk.warnings
++	if colNumber == 0 {
++		// OK packet, means no results. Just use the numbers.
++		return &sqltypes.Result{
++			RowsAffected:        packetOk.affectedRows,
++			InsertID:            packetOk.lastInsertID,
++			InsertIDChanged:     packetOk.lastInsertID > 0,
++			SessionStateChanges: packetOk.sessionStateData,
++			StatusFlags:         packetOk.statusFlags,
++			Info:                packetOk.info,
++		}, more, warnings, nil
++	}
++
++	fields := make([]querypb.Field, colNumber)
++	result := &sqltypes.Result{
++		Fields: make([]*querypb.Field, colNumber),
++	}
++
++	// Read column headers. One packet per column.
++	// Build the fields.
++	for i := range colNumber {
++		result.Fields[i] = &fields[i]
++
++		if wantfields {
++			if err := c.readColumnDefinition(result.Fields[i], i); err != nil {
++				return nil, false, 0, err
++			}
++		} else {
++			if err := c.readColumnDefinitionType(result.Fields[i], i); err != nil {
++				return nil, false, 0, err
++			}
++		}
++	}
++
++	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
++		// EOF is only present here if it's not deprecated.
++		data, err := c.readEphemeralPacket()
++		if err != nil {
++			return nil, false, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
++		}
++		if c.isEOFPacket(data) {
++			// This is what we expect.
++			// Warnings and status flags are ignored.
++			c.recycleReadPacket()
++			// goto: read row loop
++		} else if isErrorPacket(data) {
++			defer c.recycleReadPacket()
++			return nil, false, 0, ParseErrorPacket(data)
++		} else {
++			defer c.recycleReadPacket()
++			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
++		}
++	}
++
++	// read each row until EOF or OK packet.
++	for {
++		data, err := c.readEphemeralPacket()
++		if err != nil {
++			return nil, false, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
++		}
++
++		if c.isEOFPacket(data) {
++			defer c.recycleReadPacket()
++
++			// Strip the partial Fields before returning.
++			if !wantfields {
++				result.Fields = nil
++			}
++
++			// The deprecated EOF packets change means that this is either an
++			// EOF packet or an OK packet with the EOF type code.
++			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
++				var statusFlags uint16
++				warnings, statusFlags, err = parseEOFPacket(data)
++				if err != nil {
++					return nil, false, 0, err
++				}
++				more = (statusFlags & ServerMoreResultsExists) != 0
++				result.StatusFlags = statusFlags
++			} else {
++				var packetEof PacketOK
++				if err := c.parseOKPacket(&packetEof, data); err != nil {
++					return nil, false, 0, err
++				}
++				warnings = packetEof.warnings
++				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
++				result.SessionStateChanges = packetEof.sessionStateData
++				result.StatusFlags = packetEof.statusFlags
++				result.Info = packetEof.info
++			}
++			return result, more, warnings, nil
++		} else if isErrorPacket(data) {
++			defer c.recycleReadPacket()
++			// Error packet.
++			return nil, false, 0, ParseErrorPacket(data)
++		}
++
++		if maxrows == FETCH_NO_ROWS {
++			c.recycleReadPacket()
++			continue
++		}
++
++		// Check we're not over the limit before we add more.
++		if maxrows != FETCH_ALL_ROWS && len(result.Rows) == maxrows {
++			c.recycleReadPacket()
++			if err := c.drainResults(); err != nil {
++				return nil, false, 0, err
++			}
++			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
++		}
++
++		// Regular row.
++		var row []sqltypes.Value
++		if cloneRow {
++			row, err = c.parseRow(bytes.Clone(data), result.Fields, readLenEncStringAsBytesCapped, nil)
++		} else {
++			row, err = c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
++		}
++		if err != nil {
++			c.recycleReadPacket()
++			return nil, false, 0, err
++		}
++		result.Rows = append(result.Rows, row)
++		c.recycleReadPacket()
++	}
++}
+diff --git a/go/mysql/read_query_result_test.go b/go/mysql/read_query_result_test.go
+new file mode 100644
+index 0000000..4535651
+--- /dev/null
++++ b/go/mysql/read_query_result_test.go
+@@ -0,0 +1,191 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package mysql
++
++import (
++	"bytes"
++	"fmt"
++	"net"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// bufNetConn is a net.Conn that reads from r and writes to w.
++type bufNetConn struct {
++	net.Conn
++	r *bytes.Reader
++	w *bytes.Buffer
++}
++
++func (b *bufNetConn) Read(p []byte) (int, error)  { return b.r.Read(p) }
++func (b *bufNetConn) Write(p []byte) (int, error) { return b.w.Write(p) }
++func (b *bufNetConn) Close() error                { return nil }
++
++// encodeResultStream returns the wire bytes of a text protocol result set,
++// as a server with the given capabilities would send it.
++func encodeResultStream(t testing.TB, qr *sqltypes.Result, capabilities uint32) []byte {
++	out := &bytes.Buffer{}
++	sc := newConn(&bufNetConn{w: out}, 0, 0)
++	sc.Capabilities = capabilities
++	require.NoError(t, sc.writeFields(qr))
++	require.NoError(t, sc.writeRows(qr))
++	require.NoError(t, sc.writeEndResult(false, 0, 0, 0))
++	return out.Bytes()
++}
++
++// newStreamConn returns a client Conn that reads stream, and a function that
++// rewinds it to the start of stream.
++func newStreamConn(stream []byte, capabilities uint32) (*Conn, func()) {
++	nc := &bufNetConn{r: bytes.NewReader(stream)}
++	c := newConn(nc, 0, 0)
++	c.Capabilities = capabilities
++	return c, func() {
++		nc.r.Reset(stream)
++		c.bufferedReader.Reset(nc)
++		c.sequence = 0
++	}
++}
++
++func makeBenchResult(cols, rows, valLen int) *sqltypes.Result {
++	qr := &sqltypes.Result{}
++	for i := range cols {
++		qr.Fields = append(qr.Fields, &querypb.Field{Name: fmt.Sprintf("c%d", i), Type: sqltypes.VarChar})
++	}
++	for r := range rows {
++		row := make([]sqltypes.Value, cols)
++		for c := range cols {
++			v := strings.Repeat(string(rune('a'+(r+c)%26)), valLen)
++			row[c] = sqltypes.NewVarChar(v)
++		}
++		qr.Rows = append(qr.Rows, row)
++	}
++	return qr
++}
++
++// TestReadQueryResultMatchesReference checks that ReadQueryResult returns the
++// same results and errors as the previous implementation, which copied every
++// column value, for NULL, empty, small and large values, and every maxrows mode.
++func TestReadQueryResultMatchesReference(t *testing.T) {
++	qr := &sqltypes.Result{
++		Fields: []*querypb.Field{
++			{Name: "id", Type: sqltypes.Int64},
++			{Name: "name", Type: sqltypes.VarChar},
++			{Name: "data", Type: sqltypes.Blob},
++		},
++		Rows: [][]sqltypes.Value{
++			{sqltypes.NewInt64(1), sqltypes.NewVarChar("a"), sqltypes.NULL},
++			{sqltypes.NewInt64(2), sqltypes.NewVarChar(""), sqltypes.MakeTrusted(sqltypes.Blob, []byte{})},
++			{sqltypes.NULL, sqltypes.NULL, sqltypes.NULL},
++			{sqltypes.NewInt64(4), sqltypes.NewVarChar(strings.Repeat("x", 300)), sqltypes.MakeTrusted(sqltypes.Blob, bytes.Repeat([]byte{0xfb}, 70000))},
++		},
++	}
++	for _, capabilities := range []uint32{0, CapabilityClientDeprecateEOF} {
++		stream := encodeResultStream(t, qr, capabilities)
++		for _, maxrows := range []int{FETCH_ALL_ROWS, FETCH_NO_ROWS, 0, 1, 3, 4, 10} {
++			for _, wantfields := range []bool{false, true} {
++				t.Run(fmt.Sprintf("caps=%d/maxrows=%d/wantfields=%v", capabilities, maxrows, wantfields), func(t *testing.T) {
++					c, rewind := newStreamConn(stream, capabilities)
++					rewind()
++					want, wantMore, wantWarnings, wantErr := c.readQueryResultRef(maxrows, wantfields, false)
++					rewind()
++					got, gotMore, gotWarnings, gotErr := c.ReadQueryResult(maxrows, wantfields)
++					if wantErr != nil {
++						require.EqualError(t, gotErr, wantErr.Error())
++						return
++					}
++					require.NoError(t, gotErr)
++					assert.Equal(t, wantMore, gotMore)
++					assert.Equal(t, wantWarnings, gotWarnings)
++					require.Equal(t, want, got)
++					for i, row := range got.Rows {
++						for j, v := range row {
++							assert.Equal(t, want.Rows[i][j].IsNull(), v.IsNull(), "row %d col %d", i, j)
++						}
++					}
++				})
++			}
++		}
++	}
++}
++
++// TestReadQueryResultValuesDoNotAlias checks that a value returned by
++// ReadQueryResult has its capacity limited to its length, so that appending
++// to one value cannot overwrite the value that follows it in the same row.
++func TestReadQueryResultValuesDoNotAlias(t *testing.T) {
++	qr := makeBenchResult(3, 2, 4)
++	stream := encodeResultStream(t, qr, 0)
++	c, rewind := newStreamConn(stream, 0)
++	rewind()
++	got, _, _, err := c.ReadQueryResult(FETCH_ALL_ROWS, true)
++	require.NoError(t, err)
++	for _, row := range got.Rows {
++		for _, v := range row {
++			assert.Equal(t, len(v.Raw()), cap(v.Raw()))
++		}
++	}
++	_ = append(got.Rows[0][0].Raw(), "zzzz"...)
++	assert.Equal(t, qr.Rows, got.Rows)
++}
++
++func BenchmarkReadQueryResult(b *testing.B) {
++	cases := []struct {
++		name             string
++		cols, rows, vlen int
++	}{
++		{"narrow3x8_1row", 3, 1, 8},
++		{"narrow3x8_1000rows", 3, 1000, 8},
++		{"wide20x12_1000rows", 20, 1000, 12},
++		{"blob1x64K_20rows", 1, 20, 64 << 10},
++	}
++	impls := []struct {
++		name string
++		read func(c *Conn) (*sqltypes.Result, bool, uint16, error)
++	}{
++		{"impl=copyPerColumn", func(c *Conn) (*sqltypes.Result, bool, uint16, error) {
++			return c.readQueryResultRef(FETCH_ALL_ROWS, false, false)
++		}},
++		{"impl=clonePerRow", func(c *Conn) (*sqltypes.Result, bool, uint16, error) {
++			return c.readQueryResultRef(FETCH_ALL_ROWS, false, true)
++		}},
++		{"impl=ownPacket", func(c *Conn) (*sqltypes.Result, bool, uint16, error) {
++			return c.ReadQueryResult(FETCH_ALL_ROWS, false)
++		}},
++	}
++	for _, tc := range cases {
++		stream := encodeResultStream(b, makeBenchResult(tc.cols, tc.rows, tc.vlen), 0)
++		for _, impl := range impls {
++			b.Run(tc.name+"/"+impl.name, func(b *testing.B) {
++				c, rewind := newStreamConn(stream, 0)
++				b.SetBytes(int64(len(stream)))
++				b.ReportAllocs()
++				for b.Loop() {
++					rewind()
++					qr, _, _, err := impl.read(c)
++					if err != nil || len(qr.Rows) != tc.rows {
++						b.Fatal(err)
++					}
++				}
++			})
++		}
++	}
++}

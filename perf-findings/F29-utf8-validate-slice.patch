@@ -1,0 +1,544 @@
+diff --git a/go/mysql/collations/charset/unicode/utf8.go b/go/mysql/collations/charset/unicode/utf8.go
+index a4bd70c..71ea83f 100644
+--- a/go/mysql/collations/charset/unicode/utf8.go
++++ b/go/mysql/collations/charset/unicode/utf8.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package unicode
+ 
+ import (
++	"encoding/binary"
+ 	"unicode/utf8"
+ 
+ 	"vitess.io/vitess/go/mysql/collations/charset/types"
+@@ -176,8 +177,24 @@ func (Charset_utf8mb3) SupportsSupplementaryChars() bool {
+ 	return false
+ }
+ 
++// Validate returns whether p is a valid utf8mb3 string. This is equivalent to
++// decoding p with DecodeRune until it fails: utf8mb3 is exactly well-formed
++// UTF-8 (no overlong encodings, no surrogates) restricted to sequences of at
++// most 3 bytes. In well-formed UTF-8, a byte >= 0xF0 can only be the leading
++// byte of a 4-byte sequence, so it suffices to reject any such byte.
++func (Charset_utf8mb3) Validate(p []byte) bool {
++	return utf8.Valid(p) && !hasFourByteLead(p)
++}
++
++// Slice returns the runes of src in the range [from, to), with the same
++// semantics as the generic charset.Slice helper: slicing stops at the first
++// invalid sequence.
++func (Charset_utf8mb3) Slice(src []byte, from, to int) []byte {
++	return sliceUTF8(src, from, to, true)
++}
++
+ func (Charset_utf8mb3) Length(src []byte) int {
+-	return utf8.RuneCount(src)
++	return runeCount(src)
+ }
+ 
+ func (Charset_utf8mb3) MaxWidth() int {
+@@ -219,10 +236,115 @@ func (Charset_utf8mb4) Validate(p []byte) bool {
+ 	return utf8.Valid(p)
+ }
+ 
++// Slice returns the runes of src in the range [from, to), with the same
++// semantics as the generic charset.Slice helper: slicing stops at the first
++// invalid sequence.
++func (Charset_utf8mb4) Slice(src []byte, from, to int) []byte {
++	return sliceUTF8(src, from, to, false)
++}
++
+ func (Charset_utf8mb4) Length(src []byte) int {
+-	return utf8.RuneCount(src)
++	return runeCount(src)
+ }
+ 
+ func (Charset_utf8mb4) MaxWidth() int {
+ 	return 4
+ }
++
++const highBits = 0x8080808080808080
++
++// hasFourByteLead returns whether p contains any byte >= 0xF0.
++func hasFourByteLead(p []byte) bool {
++	for len(p) >= 8 {
++		w := binary.LittleEndian.Uint64(p)
++		// The top bit of each byte is set iff its 4 top bits are all set.
++		if w&(w<<1)&(w<<2)&(w<<3)&highBits != 0 {
++			return true
++		}
++		p = p[8:]
++	}
++	for _, c := range p {
++		if c >= 0xF0 {
++			return true
++		}
++	}
++	return false
++}
++
++// asciiPrefixLen returns the number of leading ASCII bytes in p.
++func asciiPrefixLen(p []byte) int {
++	i := 0
++	for ; i+8 <= len(p); i += 8 {
++		if binary.LittleEndian.Uint64(p[i:])&highBits != 0 {
++			break
++		}
++	}
++	for i < len(p) && p[i] < utf8.RuneSelf {
++		i++
++	}
++	return i
++}
++
++// runeCount is equivalent to utf8.RuneCount, but it skips leading ASCII
++// bytes 8 at a time, and it does not allocate: utf8.RuneCount converts the
++// non-ASCII tail of its input to a string, which allocates for inputs
++// longer than 32 bytes.
++func runeCount(p []byte) int {
++	i := asciiPrefixLen(p)
++	n := i
++	for i < len(p) {
++		if p[i] < utf8.RuneSelf {
++			i++
++		} else {
++			_, size := utf8.DecodeRune(p[i:])
++			i += size
++		}
++		n++
++	}
++	return n
++}
++
++// sliceUTF8 implements Slice for utf8mb3 and utf8mb4. It must behave exactly
++// like the generic charset.Slice helper, which decodes at most `to` runes,
++// stops at the first invalid sequence, and returns the bytes of the runes
++// with index in [from, to) that were decoded successfully.
++func sliceUTF8(src []byte, from, to int, mb3 bool) []byte {
++	if to <= 0 {
++		return src[:0]
++	}
++	from = max(from, 0)
++
++	// Fast path: the leading ASCII bytes are one rune each.
++	end := asciiPrefixLen(src[:min(to, len(src))])
++	start := -1
++	if from <= end {
++		start = from
++	}
++
++	for n := end; n < to && end < len(src); n++ {
++		if n == from {
++			start = end
++		}
++		size := 1
++		if src[end] >= utf8.RuneSelf {
++			var ok bool
++			if mb3 {
++				_, size, ok = Charset_utf8mb3{}.DecodeRune(src[end:])
++			} else {
++				var r rune
++				r, size = utf8.DecodeRune(src[end:])
++				ok = r != utf8.RuneError || size > 1
++			}
++			if !ok {
++				break
++			}
++		}
++		end += size
++	}
++
++	if start < 0 {
++		// We stopped before reaching rune `from`.
++		start = end
++	}
++	return src[start:end]
++}
+diff --git a/go/mysql/collations/charset/unicode/utf8_bench_test.go b/go/mysql/collations/charset/unicode/utf8_bench_test.go
+new file mode 100644
+index 0000000..9052e74
+--- /dev/null
++++ b/go/mysql/collations/charset/unicode/utf8_bench_test.go
+@@ -0,0 +1,106 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package unicode
++
++import (
++	"strings"
++	"testing"
++	"unicode/utf8"
++
++	"vitess.io/vitess/go/mysql/collations/charset/types"
++)
++
++var benchInputs = []struct {
++	name string
++	in   []byte
++}{
++	{"ascii20", []byte("abcdefghijklmnopqrst")},
++	{"ascii1k", []byte(strings.Repeat("abcdefghijklmnop", 64))},
++	{"mixed1k", []byte(strings.Repeat("abcdefgh ñandú 日本", 44))},
++}
++
++var (
++	sinkBool  bool
++	sinkBytes []byte
++)
++
++func BenchmarkUTF8mb3Validate(b *testing.B) {
++	cs := Charset_utf8mb3{}
++	for _, in := range benchInputs {
++		b.Run(in.name+"/impl=generic", func(b *testing.B) {
++			b.SetBytes(int64(len(in.in)))
++			var c types.Charset = cs
++			for b.Loop() {
++				sinkBool = genericValidate(c, in.in)
++			}
++		})
++		b.Run(in.name+"/impl=new", func(b *testing.B) {
++			b.SetBytes(int64(len(in.in)))
++			for b.Loop() {
++				sinkBool = cs.Validate(in.in)
++			}
++		})
++	}
++}
++
++func BenchmarkUTF8Slice(b *testing.B) {
++	for _, cs := range []interface {
++		types.Charset
++		Slice([]byte, int, int) []byte
++	}{Charset_utf8mb3{}, Charset_utf8mb4{}} {
++		for _, in := range benchInputs {
++			// SUBSTRING(col, 3, 10) and SUBSTRING(col, n/2) (i.e. up to the end).
++			for _, r := range []struct {
++				name     string
++				from, to int
++			}{{"3-13", 2, 12}, {"half-end", 10, 1 << 20}} {
++				if in.name != "ascii20" {
++					r.from = len(in.in) / 4
++				}
++				b.Run(cs.Name()+"/"+in.name+"/"+r.name+"/impl=generic", func(b *testing.B) {
++					for b.Loop() {
++						sinkBytes = genericSlice(cs, in.in, r.from, r.to)
++					}
++				})
++				b.Run(cs.Name()+"/"+in.name+"/"+r.name+"/impl=new", func(b *testing.B) {
++					for b.Loop() {
++						sinkBytes = cs.Slice(in.in, r.from, r.to)
++					}
++				})
++			}
++		}
++	}
++}
++
++var sinkInt int
++
++func BenchmarkUTF8Length(b *testing.B) {
++	for _, in := range benchInputs {
++		b.Run(in.name+"/impl=generic", func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				sinkInt = utf8.RuneCount(in.in)
++			}
++		})
++		b.Run(in.name+"/impl=new", func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				sinkInt = Charset_utf8mb4{}.Length(in.in)
++			}
++		})
++	}
++}
+diff --git a/go/mysql/collations/charset/unicode/utf8_test.go b/go/mysql/collations/charset/unicode/utf8_test.go
+new file mode 100644
+index 0000000..765357e
+--- /dev/null
++++ b/go/mysql/collations/charset/unicode/utf8_test.go
+@@ -0,0 +1,236 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package unicode
++
++import (
++	"bytes"
++	"math/rand/v2"
++	"testing"
++	"unicode/utf8"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations/charset/types"
++)
++
++// genericValidate is the decoding loop used by charset.Validate for charsets
++// that do not implement Validate themselves.
++func genericValidate(cs types.Charset, input []byte) bool {
++	for len(input) > 0 {
++		_, size, ok := cs.DecodeRune(input)
++		if !ok {
++			return false
++		}
++		input = input[size:]
++	}
++	return true
++}
++
++// genericSlice is the decoding loop used by charset.Slice for charsets
++// that do not implement Slice themselves.
++func genericSlice(cs types.Charset, input []byte, from, to int) []byte {
++	iter := input
++	start := 0
++	for i := range to {
++		_, size, ok := cs.DecodeRune(iter)
++		if !ok {
++			break
++		}
++		if i < from {
++			start += size
++		}
++		iter = iter[size:]
++	}
++	return input[start : len(input)-len(iter)]
++}
++
++// interesting bytes cover every boundary of the UTF-8 lead and continuation byte ranges.
++var interestingBytes = []byte{
++	0x00, 0x41, 0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xBF,
++	0xC0, 0xC1, 0xC2, 0xDF, 0xE0, 0xE1, 0xEC, 0xED, 0xEE, 0xEF,
++	0xF0, 0xF1, 0xF4, 0xF5, 0xF7, 0xF8, 0xFF,
++}
++
++func TestUTF8mb3ValidateExhaustive(t *testing.T) {
++	cs := Charset_utf8mb3{}
++	// Prefixes of different lengths so that the tested bytes land at every
++	// position of an 8-byte word as well as in the scalar tail.
++	prefixes := [][]byte{nil, []byte("abc"), []byte("abcdefg"), []byte("abcdefgh")}
++
++	check := func(buf []byte) {
++		if cs.Validate(buf) != genericValidate(cs, buf) {
++			require.Failf(t, "Validate mismatch", "input %x: Validate=%v, generic=%v", buf, cs.Validate(buf), genericValidate(cs, buf))
++		}
++	}
++
++	// All sequences of 1 to 3 bytes.
++	for _, prefix := range prefixes {
++		buf := append(bytes.Clone(prefix), 0, 0, 0)
++		p := len(prefix)
++		for b0 := range 256 {
++			buf[p] = byte(b0)
++			check(buf[:p+1])
++			for b1 := range 256 {
++				buf[p+1] = byte(b1)
++				check(buf[:p+2])
++				if prefix != nil && len(prefix) != 3 {
++					continue
++				}
++				for b2 := range 256 {
++					buf[p+2] = byte(b2)
++					check(buf[:p+3])
++				}
++			}
++		}
++	}
++
++	// 4-byte sequences: every leading byte, followed by all combinations of interesting bytes.
++	for _, prefix := range prefixes {
++		buf := append(bytes.Clone(prefix), 0, 0, 0, 0)
++		p := len(prefix)
++		for b0 := range 256 {
++			buf[p] = byte(b0)
++			for _, b1 := range interestingBytes {
++				buf[p+1] = b1
++				for _, b2 := range interestingBytes {
++					buf[p+2] = b2
++					for _, b3 := range interestingBytes {
++						buf[p+3] = b3
++						check(buf)
++					}
++				}
++			}
++		}
++	}
++}
++
++func TestUTF8mb3Validate(t *testing.T) {
++	cs := Charset_utf8mb3{}
++	testCases := []struct {
++		in   string
++		want bool
++	}{
++		{"", true},
++		{"hello world, this is ascii", true},
++		{"ñandú 日本語", true},
++		{"\uFFFD", true},
++		{"\xED\x9F\xBF", true},      // U+D7FF
++		{"\xED\xA0\x80", false},     // U+D800 surrogate
++		{"\xED\xBF\xBF", false},     // U+DFFF surrogate
++		{"\xE0\x80\x80", false},     // overlong
++		{"\xC0\x80", false},         // overlong NUL
++		{"\xF0\x9F\x98\x8A", false}, // U+1F60A needs 4 bytes
++		{"abcdefgh\xF0\x9F\x98\x8A", false},
++		{"\xE6\x97", false}, // truncated
++		{"\x80", false},     // lone continuation
++	}
++	for _, tc := range testCases {
++		assert.Equalf(t, tc.want, cs.Validate([]byte(tc.in)), "Validate(%q)", tc.in)
++		assert.Equalf(t, tc.want, genericValidate(cs, []byte(tc.in)), "genericValidate(%q)", tc.in)
++	}
++}
++
++// fragments used to build random, possibly invalid, UTF-8 strings.
++var fragments = [][]byte{
++	[]byte("a"), []byte("0123456789"), []byte("ñ"), []byte("日"), []byte("😊"),
++	[]byte("\uFFFD"),
++	{0xED, 0xA0, 0x80}, // surrogate
++	{0xE0, 0x80, 0x80}, // overlong
++	{0xC0, 0x80},       // overlong
++	{0x80},             // lone continuation
++	{0xE6, 0x97},       // truncated
++	{0xF0, 0x9F},       // truncated
++	{0xFF},
++}
++
++func randomUTF8ish(r *rand.Rand) []byte {
++	var buf []byte
++	n := r.IntN(12)
++	for range n {
++		f := fragments[r.IntN(len(fragments))]
++		// bias towards ASCII so that the fast paths are exercised with long prefixes.
++		if r.IntN(3) == 0 {
++			f = fragments[r.IntN(2)]
++		}
++		buf = append(buf, f...)
++	}
++	return buf
++}
++
++func TestUTF8SliceEquivalence(t *testing.T) {
++	r := rand.New(rand.NewPCG(1, 2))
++	charsets := []interface {
++		types.Charset
++		Slice([]byte, int, int) []byte
++	}{Charset_utf8mb3{}, Charset_utf8mb4{}}
++
++	for range 200000 {
++		in := randomUTF8ish(r)
++		if r.IntN(10) == 0 {
++			in = nil
++		}
++		n := len(in)
++		from := r.IntN(n+6) - 3
++		to := r.IntN(n+6) - 3
++		for _, cs := range charsets {
++			got := cs.Slice(in, from, to)
++			want := genericSlice(cs, in, from, to)
++			if !bytes.Equal(got, want) || cap(got) != cap(want) || (got == nil) != (want == nil) {
++				require.Failf(t, "Slice mismatch", "%s.Slice(%x, %d, %d) = %x (cap %d), want %x (cap %d)",
++					cs.Name(), in, from, to, got, cap(got), want, cap(want))
++			}
++		}
++	}
++}
++
++func TestUTF8mb3ValidateRandom(t *testing.T) {
++	r := rand.New(rand.NewPCG(3, 4))
++	cs := Charset_utf8mb3{}
++	for range 200000 {
++		in := randomUTF8ish(r)
++		require.Equalf(t, genericValidate(cs, in), cs.Validate(in), "Validate(%x)", in)
++	}
++}
++
++func FuzzUTF8Slice(f *testing.F) {
++	for _, frag := range fragments {
++		f.Add(frag, 0, 2)
++	}
++	f.Add([]byte("abcdefghij\xE6\x97\xA5klmnop"), 3, 14)
++	f.Fuzz(func(t *testing.T, in []byte, from, to int) {
++		for _, cs := range []interface {
++			types.Charset
++			Slice([]byte, int, int) []byte
++		}{Charset_utf8mb3{}, Charset_utf8mb4{}} {
++			got := cs.Slice(in, from, to)
++			want := genericSlice(cs, in, from, to)
++			require.Equal(t, want, got)
++			require.Equal(t, cap(want), cap(got))
++		}
++		require.Equal(t, genericValidate(Charset_utf8mb3{}, in), Charset_utf8mb3{}.Validate(in))
++	})
++}
++
++func TestUTF8LengthEquivalence(t *testing.T) {
++	r := rand.New(rand.NewPCG(5, 6))
++	for range 200000 {
++		in := randomUTF8ish(r)
++		require.Equalf(t, utf8.RuneCount(in), Charset_utf8mb3{}.Length(in), "Length(%x)", in)
++		require.Equalf(t, utf8.RuneCount(in), Charset_utf8mb4{}.Length(in), "Length(%x)", in)
++	}
++}
+diff --git a/go/vt/vtgate/evalengine/perf_test.go b/go/vt/vtgate/evalengine/perf_test.go
+index 0cd7be8..f71a4cb 100644
+--- a/go/vt/vtgate/evalengine/perf_test.go
++++ b/go/vt/vtgate/evalengine/perf_test.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package evalengine_test
+ 
+ import (
++	"strings"
+ 	"testing"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+@@ -26,6 +27,9 @@ import (
+ )
+ 
+ func BenchmarkCompilerExpressions(b *testing.B) {
++	ascii1k := strings.Repeat("abcdefghijklmnop", 64)
++	mixed1k := strings.Repeat("abcdefgh ñandú 日本", 44)
++
+ 	testCases := []struct {
+ 		name       string
+ 		expression string
+@@ -36,6 +40,12 @@ func BenchmarkCompilerExpressions(b *testing.B) {
+ 		{"comparison_u64", "column0 = 12", []sqltypes.Value{sqltypes.NewUint64(666)}},
+ 		{"comparison_dec", "column0 = 12", []sqltypes.Value{sqltypes.NewDecimal("420")}},
+ 		{"comparison_f", "column0 = 12", []sqltypes.Value{sqltypes.NewFloat64(420.0)}},
++		{"substring_ascii20", "SUBSTRING(column0, 1, 10)", []sqltypes.Value{sqltypes.NewVarChar("abcdefghijklmnopqrst")}},
++		{"substring_ascii1k", "SUBSTRING(column0, 100)", []sqltypes.Value{sqltypes.NewVarChar(ascii1k)}},
++		{"substring_mixed1k", "SUBSTRING(column0, 100)", []sqltypes.Value{sqltypes.NewVarChar(mixed1k)}},
++		{"left_ascii1k", "LEFT(column0, 10)", []sqltypes.Value{sqltypes.NewVarChar(ascii1k)}},
++		{"convert_utf8mb3_ascii1k", "CONVERT(column0 USING utf8mb3)", []sqltypes.Value{sqltypes.NewVarBinary(ascii1k)}},
++		{"convert_utf8mb3_mixed1k", "CONVERT(column0 USING utf8mb3)", []sqltypes.Value{sqltypes.NewVarBinary(mixed1k)}},
+ 	}
+ 
+ 	venv := vtenv.NewTestEnv()

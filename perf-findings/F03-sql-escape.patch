@@ -1,0 +1,744 @@
+diff --git a/go/sqltypes/value.go b/go/sqltypes/value.go
+index 479e4a5..37b646c 100644
+--- a/go/sqltypes/value.go
++++ b/go/sqltypes/value.go
+@@ -24,9 +24,11 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"math/big"
++	"math/bits"
+ 	"strconv"
+ 	"strings"
+ 	"time"
++	"unicode/utf8"
+ 
+ 	"google.golang.org/protobuf/encoding/protowire"
+ 
+@@ -849,14 +851,25 @@ func (v Value) TinyWeight() uint32 {
+ 	return v.tinyweight
+ }
+ 
++var (
++	binaryPrefix = []byte("_binary")
++	quoteBytes   = []byte{'\''}
++)
++
+ func encodeBinarySQL(val []byte, b BinWriter) {
+-	buf := &bytes2.Buffer{}
+-	encodeBinarySQLBytes2(val, buf)
+-	b.Write(buf.Bytes())
++	switch w := b.(type) {
++	case *strings.Builder:
++		encodeBinarySQLStringBuilder(val, w)
++	case *bytes2.Buffer:
++		encodeBinarySQLBytes2(val, w)
++	default:
++		b.Write(binaryPrefix)
++		encodeBytesSQLWriter(val, b)
++	}
+ }
+ 
+ func encodeBinarySQLBytes2(val []byte, buf *bytes2.Buffer) {
+-	buf.Write([]byte("_binary"))
++	buf.Write(binaryPrefix)
+ 	encodeBytesSQLBytes2(val, buf)
+ }
+ 
+@@ -866,49 +879,105 @@ func encodeBinarySQLStringBuilder(val []byte, buf *strings.Builder) {
+ }
+ 
+ func encodeBytesSQL(val []byte, b BinWriter) {
+-	buf := &bytes2.Buffer{}
+-	encodeBytesSQLBytes2(val, buf)
+-	b.Write(buf.Bytes())
++	switch w := b.(type) {
++	case *strings.Builder:
++		encodeBytesSQLStringBuilder(val, w)
++	case *bytes2.Buffer:
++		encodeBytesSQLBytes2(val, w)
++	default:
++		encodeBytesSQLWriter(val, b)
++	}
++}
++
++// encodeBytesSQLWriter writes the quoted and escaped val straight into b,
++// one Write per run of bytes that need no escaping. BinWriter implementations
++// are expected to be in-memory buffers, so this avoids staging the result in a
++// temporary buffer.
++func encodeBytesSQLWriter(val []byte, b BinWriter) {
++	b.Write(quoteBytes)
++	for i := 0; i < len(val); {
++		j := nextSQLEscape(val, i)
++		if j > i {
++			b.Write(val[i:j])
++		}
++		for ; j < len(val); j++ {
++			if sqlEscapeAt(val, j) == DontEscape {
++				break
++			}
++			b.Write(sqlEscapePairs[val[j]][:])
++		}
++		i = j
++	}
++	b.Write(quoteBytes)
+ }
+ 
+ func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
+ 	buf.WriteByte('\'')
+-	for idx, ch := range val {
+-		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+-		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
+-			buf.WriteByte(ch)
+-			continue
+-		}
+-		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
+-			buf.WriteByte(ch)
+-		} else {
++	for i := 0; i < len(val); {
++		j := nextSQLEscape(val, i)
++		buf.Write(val[i:j])
++		for ; j < len(val); j++ {
++			enc := sqlEscapeAt(val, j)
++			if enc == DontEscape {
++				break
++			}
+ 			buf.WriteByte('\\')
+-			buf.WriteByte(encodedChar)
++			buf.WriteByte(enc)
+ 		}
++		i = j
+ 	}
+ 	buf.WriteByte('\'')
+ }
+ 
+ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
+ 	buf.WriteByte('\'')
+-	for idx, ch := range val {
+-		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+-		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
+-			buf.WriteByte(ch)
+-			continue
+-		}
+-		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
+-			buf.WriteByte(ch)
+-		} else {
++	for i := 0; i < len(val); {
++		j := nextSQLEscape(val, i)
++		buf.Write(val[i:j])
++		for ; j < len(val); j++ {
++			enc := sqlEscapeAt(val, j)
++			if enc == DontEscape {
++				break
++			}
+ 			buf.WriteByte('\\')
+-			buf.WriteByte(encodedChar)
++			buf.WriteByte(enc)
+ 		}
++		i = j
+ 	}
+ 	buf.WriteByte('\'')
+ }
+ 
+ // BufEncodeStringSQL encodes the string into a strings.Builder
+ func BufEncodeStringSQL(buf *strings.Builder, val string) {
++	if !utf8.ValidString(val) {
++		// Invalid UTF-8 sequences have always been replaced with U+FFFD here;
++		// keep doing that for backwards compatibility.
++		bufEncodeInvalidUTF8StringSQL(buf, val)
++		return
++	}
++	// All the bytes that need escaping are ASCII, and in valid UTF-8 an ASCII
++	// byte never appears inside a multi-byte rune, so we can escape byte-wise.
++	buf.WriteByte('\'')
++	for i := 0; i < len(val); {
++		j := nextSQLEscape(val, i)
++		buf.WriteString(val[i:j])
++		for ; j < len(val); j++ {
++			enc := sqlEscapeAt(val, j)
++			if enc == DontEscape {
++				break
++			}
++			buf.WriteByte('\\')
++			buf.WriteByte(enc)
++		}
++		i = j
++	}
++	buf.WriteByte('\'')
++}
++
++// bufEncodeInvalidUTF8StringSQL is the rune-by-rune escaper used by
++// BufEncodeStringSQL for strings that are not valid UTF-8. Iterating over the
++// runes of the string replaces every invalid byte with utf8.RuneError.
++func bufEncodeInvalidUTF8StringSQL(buf *strings.Builder, val string) {
+ 	buf.WriteByte('\'')
+ 	for idx, ch := range val {
+ 		if ch > 255 {
+@@ -933,10 +1002,75 @@ func BufEncodeStringSQL(buf *strings.Builder, val string) {
+ // EncodeStringSQL encodes the string as a SQL string.
+ func EncodeStringSQL(val string) string {
+ 	var buf strings.Builder
++	// Most strings need no escaping: reserve room for the string and its quotes.
++	buf.Grow(len(val) + 2)
+ 	BufEncodeStringSQL(&buf, val)
+ 	return buf.String()
+ }
+ 
++const (
++	swarLSB = 0x0101010101010101
++	swarMSB = 0x8080808080808080
++)
++
++// sqlEscapeAt returns the character that val[i] is escaped with, or DontEscape
++// if it is written as is. A '\\' that is followed by '%' or '_' is not escaped:
++// \\% and \\_ are preserved as is.
++func sqlEscapeAt[T string | []byte](val T, i int) byte {
++	ch := val[i]
++	if ch == '\\' && i+1 < len(val) && (val[i+1] == '%' || val[i+1] == '_') {
++		return DontEscape
++	}
++	return SQLEncodeMap[ch]
++}
++
++// nextSQLEscape returns the index of the first byte in val[i:] that has to be
++// escaped, or len(val) if there is none.
++func nextSQLEscape[T string | []byte](val T, i int) int {
++	for {
++		i = nextSQLEscapeCandidate(val, i)
++		if i >= len(val) || sqlEscapeAt(val, i) != DontEscape {
++			return i
++		}
++		i++
++	}
++}
++
++// nextSQLEscapeCandidate returns the index of the first byte in val[i:] that
++// may need escaping: a byte below 0x20, '\” or '\\'. All the bytes in
++// SQLEncodeMap are in that set. It returns len(val) if there is none.
++func nextSQLEscapeCandidate[T string | []byte](val T, i int) int {
++	// Check 8 bytes at a time (SWAR). For each of the three tests, the lowest
++	// flagged byte is always a true match; bytes flagged above it may be false
++	// positives caused by borrows, which is fine as we only use the lowest one.
++	for ; i+8 <= len(val); i += 8 {
++		b := val[i : i+8]
++		x := uint64(b[0]) | uint64(b[1])<<8 | uint64(b[2])<<16 | uint64(b[3])<<24 |
++			uint64(b[4])<<32 | uint64(b[5])<<40 | uint64(b[6])<<48 | uint64(b[7])<<56
++		// bytes < 0x20
++		ctl := (x - 0x20*swarLSB) &^ x
++		// bytes == '\''
++		q := x ^ ('\'' * swarLSB)
++		q = (q - swarLSB) &^ q
++		// bytes == '\\'
++		bs := x ^ ('\\' * swarLSB)
++		bs = (bs - swarLSB) &^ bs
++		if m := (ctl | q | bs) & swarMSB; m != 0 {
++			return i + bits.TrailingZeros64(m)/8
++		}
++	}
++	for ; i < len(val); i++ {
++		if ch := val[i]; ch < 0x20 || ch == '\'' || ch == '\\' {
++			return i
++		}
++	}
++	return len(val)
++}
++
++// sqlEscapePairs holds the two-byte escape sequence of every byte that
++// SQLEncodeMap escapes.
++var sqlEscapePairs [256][2]byte
++
+ func encodeBytesSQLBits(val []byte, b BinWriter) {
+ 	fmt.Fprint(b, "b'")
+ 	for _, ch := range val {
+@@ -1046,6 +1180,7 @@ func init() {
+ 	for i := range SQLEncodeMap {
+ 		if to, ok := encodeRef[byte(i)]; ok {
+ 			SQLEncodeMap[byte(i)] = to
++			sqlEscapePairs[byte(i)] = [2]byte{'\\', to}
+ 		}
+ 	}
+ 
+diff --git a/go/sqltypes/value_escape_legacy_test.go b/go/sqltypes/value_escape_legacy_test.go
+new file mode 100644
+index 0000000..ddb0440
+--- /dev/null
++++ b/go/sqltypes/value_escape_legacy_test.go
+@@ -0,0 +1,88 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package sqltypes
++
++import (
++	"strings"
++
++	"vitess.io/vitess/go/bytes2"
++)
++
++// The functions in this file are the byte-at-a-time SQL string escapers that
++// the run-copying escapers in value.go replaced. They are kept as the reference
++// implementation for the equivalence fuzz tests and the benchmarks.
++
++func legacyEncodeBytesSQL(val []byte, b BinWriter) {
++	buf := &bytes2.Buffer{}
++	legacyEncodeBytesSQLBytes2(val, buf)
++	b.Write(buf.Bytes())
++}
++
++func legacyEncodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
++	buf.WriteByte('\'')
++	for idx, ch := range val {
++		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
++			buf.WriteByte(ch)
++			continue
++		}
++		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
++			buf.WriteByte(ch)
++		} else {
++			buf.WriteByte('\\')
++			buf.WriteByte(encodedChar)
++		}
++	}
++	buf.WriteByte('\'')
++}
++
++func legacyEncodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
++	buf.WriteByte('\'')
++	for idx, ch := range val {
++		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
++			buf.WriteByte(ch)
++			continue
++		}
++		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
++			buf.WriteByte(ch)
++		} else {
++			buf.WriteByte('\\')
++			buf.WriteByte(encodedChar)
++		}
++	}
++	buf.WriteByte('\'')
++}
++
++func legacyBufEncodeStringSQL(buf *strings.Builder, val string) {
++	buf.WriteByte('\'')
++	for idx, ch := range val {
++		if ch > 255 {
++			buf.WriteRune(ch)
++			continue
++		}
++		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
++			buf.WriteRune(ch)
++			continue
++		}
++		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
++			buf.WriteRune(ch)
++		} else {
++			buf.WriteByte('\\')
++			buf.WriteByte(encodedChar)
++		}
++	}
++	buf.WriteByte('\'')
++}
+diff --git a/go/sqltypes/value_escape_test.go b/go/sqltypes/value_escape_test.go
+new file mode 100644
+index 0000000..6188a54
+--- /dev/null
++++ b/go/sqltypes/value_escape_test.go
+@@ -0,0 +1,304 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package sqltypes
++
++import (
++	"bytes"
++	"math/rand/v2"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/bytes2"
++)
++
++var sqlEscapeSeeds = []string{
++	"",
++	"a",
++	"hello world",
++	"'",
++	"\\",
++	"\\%",
++	"\\_",
++	"\\\\%",
++	"\\\\_",
++	"ab\\",
++	"ab\\%cd\\_ef\\gh",
++	"\x00\b\n\r\t\x1a'\\\"",
++	"\x01\x02\x1f\x7f\x80\xff",
++	"0123456'89abcdef",
++	"01234567\\%9abcdef",
++	"0123456\\%89abcdef",
++	"0123456\\",
++	"héllo wörld",
++	"日本語のテキスト'と\\バックスラッシュ",
++	"\xc3",
++	"\xe6\x97",
++	"abc\xffdef'",
++	"\xed\xa0\x80", // surrogate half
++	"\xf4\x90\x80\x80",
++	strings.Repeat("x", 200) + "'" + strings.Repeat("y", 200),
++	strings.Repeat("\x00", 17),
++	strings.Repeat("é\\%", 11),
++}
++
++// checkSQLEscapeEquivalence checks that every entry point of the SQL string
++// escaper produces the same output as the byte-at-a-time implementation that
++// it replaced.
++func checkSQLEscapeEquivalence(t *testing.T, in []byte) {
++	var want bytes2.Buffer
++	legacyEncodeBytesSQLBytes2(in, &want)
++
++	var got bytes2.Buffer
++	encodeBytesSQLBytes2(in, &got)
++	require.Equal(t, want.String(), got.String(), "encodeBytesSQLBytes2(%q)", in)
++
++	var wantSB, gotSB strings.Builder
++	legacyEncodeBytesSQLStringBuilder(in, &wantSB)
++	encodeBytesSQLStringBuilder(in, &gotSB)
++	require.Equal(t, wantSB.String(), gotSB.String(), "encodeBytesSQLStringBuilder(%q)", in)
++	require.Equal(t, want.String(), gotSB.String())
++
++	// BinWriter path, for the generic writer and the specialized buffers.
++	var wantBW, gotBW bytes.Buffer
++	legacyEncodeBytesSQL(in, &wantBW)
++	encodeBytesSQL(in, &gotBW)
++	require.Equal(t, wantBW.String(), gotBW.String(), "encodeBytesSQL(%q)", in)
++	var gotSB2 strings.Builder
++	encodeBytesSQL(in, &gotSB2)
++	require.Equal(t, want.String(), gotSB2.String())
++
++	// Prefilled buffers, to catch any mixup between the buffer and the value offsets.
++	var pre bytes2.Buffer
++	pre.WriteString("prefix ")
++	encodeBytesSQLBytes2(in, &pre)
++	require.Equal(t, "prefix "+want.String(), pre.String())
++
++	s := string(in)
++	var wantStr, gotStr strings.Builder
++	legacyBufEncodeStringSQL(&wantStr, s)
++	BufEncodeStringSQL(&gotStr, s)
++	require.Equal(t, wantStr.String(), gotStr.String(), "BufEncodeStringSQL(%q)", s)
++	require.Equal(t, wantStr.String(), EncodeStringSQL(s))
++}
++
++func TestSQLEscapeEquivalence(t *testing.T) {
++	for _, seed := range sqlEscapeSeeds {
++		checkSQLEscapeEquivalence(t, []byte(seed))
++	}
++
++	// Every byte value at every position within and around a SWAR word, with
++	// neighbours that exercise the \% and \_ exception.
++	for pos := range 18 {
++		for c := range 256 {
++			for _, next := range []byte{'a', '%', '_', '\\', 0} {
++				in := bytes.Repeat([]byte{'a'}, 18)
++				in[pos] = byte(c)
++				if pos+1 < len(in) {
++					in[pos+1] = next
++				}
++				checkSQLEscapeEquivalence(t, in)
++				checkSQLEscapeEquivalence(t, in[:pos+1])
++			}
++		}
++	}
++
++	// Random inputs drawn from an alphabet that is dense in special bytes.
++	alphabet := []byte("\x00\b\n\r\t\x1a'\\%_\"a\x01\x1f\x7f\x80\xc3\xa9\xe6\x97\xa5\xff")
++	r := rand.New(rand.NewPCG(1, 2))
++	for range 20000 {
++		in := make([]byte, r.IntN(70))
++		for i := range in {
++			in[i] = alphabet[r.IntN(len(alphabet))]
++		}
++		checkSQLEscapeEquivalence(t, in)
++	}
++}
++
++func TestNextSQLEscapeCandidate(t *testing.T) {
++	// The candidate set must include every byte that SQLEncodeMap escapes.
++	for c := range 256 {
++		isCandidate := c < 0x20 || c == '\'' || c == '\\'
++		if SQLEncodeMap[c] != DontEscape {
++			assert.True(t, isCandidate, "byte %#x is escaped but is not a candidate", c)
++		}
++		for pos := range 17 {
++			in := bytes.Repeat([]byte{'a'}, 17)
++			in[pos] = byte(c)
++			want := len(in)
++			if isCandidate {
++				want = pos
++			}
++			assert.Equal(t, want, nextSQLEscapeCandidate(in, 0), "byte %#x at %d", c, pos)
++			assert.Equal(t, want, nextSQLEscapeCandidate(string(in), 0), "byte %#x at %d", c, pos)
++		}
++	}
++}
++
++func FuzzSQLEscapeEquivalence(f *testing.F) {
++	for _, seed := range sqlEscapeSeeds {
++		f.Add([]byte(seed))
++	}
++	f.Fuzz(func(t *testing.T, in []byte) {
++		checkSQLEscapeEquivalence(t, in)
++	})
++}
++
++type sqlEscapeBenchCase struct {
++	name string
++	val  []byte
++}
++
++func sqlEscapeBenchCases() []sqlEscapeBenchCase {
++	text := func(n int) []byte {
++		const words = "the quick brown fox jumps over the lazy dog "
++		return []byte(strings.Repeat(words, n/len(words)+1)[:n])
++	}
++	withEscapes := func(n, every int) []byte {
++		b := text(n)
++		for i := every - 1; i < n; i += every {
++			b[i] = '\''
++		}
++		return b
++	}
++	binary := func(n int) []byte {
++		r := rand.New(rand.NewPCG(3, 4))
++		b := make([]byte, n)
++		for i := range b {
++			b[i] = byte(r.IntN(256))
++		}
++		return b
++	}
++	return []sqlEscapeBenchCase{
++		{"8B", text(8)},
++		{"32B", text(32)},
++		{"128B", text(128)},
++		{"1KiB", text(1024)},
++		{"16KiB", text(16 << 10)},
++		{"1KiB-esc64", withEscapes(1024, 64)},
++		{"1KiB-esc8", withEscapes(1024, 8)},
++		{"1KiB-esc1", withEscapes(1024, 1)},
++		{"1KiB-utf8", []byte(strings.Repeat("héllo wörld 日本 ", 1024/20+1)[:1020])},
++		{"1KiB-binary", binary(1024)},
++	}
++}
++
++func BenchmarkEncodeSQLBytes2(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		b.Run(bc.name, func(b *testing.B) {
++			var buf bytes2.Buffer
++			b.SetBytes(int64(len(bc.val)))
++			for b.Loop() {
++				buf.Reset()
++				encodeBytesSQLBytes2(bc.val, &buf)
++			}
++		})
++	}
++}
++
++func BenchmarkEncodeSQLStringBuilder(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		b.Run(bc.name, func(b *testing.B) {
++			b.SetBytes(int64(len(bc.val)))
++			for b.Loop() {
++				var buf strings.Builder
++				encodeBytesSQLStringBuilder(bc.val, &buf)
++			}
++		})
++	}
++}
++
++func BenchmarkEncodeSQLBinWriter(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		b.Run(bc.name, func(b *testing.B) {
++			var buf bytes.Buffer
++			b.SetBytes(int64(len(bc.val)))
++			for b.Loop() {
++				buf.Reset()
++				encodeBytesSQL(bc.val, &buf)
++			}
++		})
++	}
++}
++
++func BenchmarkEncodeStringSQL(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		s := string(bc.val)
++		b.Run(bc.name, func(b *testing.B) {
++			b.SetBytes(int64(len(s)))
++			for b.Loop() {
++				_ = EncodeStringSQL(s)
++			}
++		})
++	}
++}
++
++// The Legacy benchmarks run the replaced implementations, for A/B comparisons.
++
++func BenchmarkLegacyEncodeSQLBytes2(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		b.Run(bc.name, func(b *testing.B) {
++			var buf bytes2.Buffer
++			b.SetBytes(int64(len(bc.val)))
++			for b.Loop() {
++				buf.Reset()
++				legacyEncodeBytesSQLBytes2(bc.val, &buf)
++			}
++		})
++	}
++}
++
++func BenchmarkLegacyEncodeSQLStringBuilder(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		b.Run(bc.name, func(b *testing.B) {
++			b.SetBytes(int64(len(bc.val)))
++			for b.Loop() {
++				var buf strings.Builder
++				legacyEncodeBytesSQLStringBuilder(bc.val, &buf)
++			}
++		})
++	}
++}
++
++func BenchmarkLegacyEncodeSQLBinWriter(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		b.Run(bc.name, func(b *testing.B) {
++			var buf bytes.Buffer
++			b.SetBytes(int64(len(bc.val)))
++			for b.Loop() {
++				buf.Reset()
++				legacyEncodeBytesSQL(bc.val, &buf)
++			}
++		})
++	}
++}
++
++func BenchmarkLegacyEncodeStringSQL(b *testing.B) {
++	for _, bc := range sqlEscapeBenchCases() {
++		s := string(bc.val)
++		b.Run(bc.name, func(b *testing.B) {
++			b.SetBytes(int64(len(s)))
++			for b.Loop() {
++				var buf strings.Builder
++				legacyBufEncodeStringSQL(&buf, s)
++				_ = buf.String()
++			}
++		})
++	}
++}
+diff --git a/go/vt/sqlparser/parsed_query_test.go b/go/vt/sqlparser/parsed_query_test.go
+index 4b83075..690a38a 100644
+--- a/go/vt/sqlparser/parsed_query_test.go
++++ b/go/vt/sqlparser/parsed_query_test.go
+@@ -17,6 +17,8 @@ limitations under the License.
+ package sqlparser
+ 
+ import (
++	"fmt"
++	"strings"
+ 	"testing"
+ 
+ 	"github.com/stretchr/testify/assert"
+@@ -312,3 +314,67 @@ func createRowTupleBV() *querypb.BindVariable {
+ 		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
+ 	}
+ }
++
++func BenchmarkGenerateQuery(b *testing.B) {
++	parser := NewTestParser()
++	parse := func(sql string) *ParsedQuery {
++		stmt, err := parser.Parse(sql)
++		require.NoError(b, err)
++		return NewParsedQuery(stmt)
++	}
++	text := func(n int) string {
++		const words = "the quick brown fox jumps over the lazy dog "
++		return strings.Repeat(words, n/len(words)+1)[:n]
++	}
++	emails := func(n int) *querypb.BindVariable {
++		values := make([]*querypb.Value, 0, n)
++		for i := range n {
++			values = append(values, &querypb.Value{Type: querypb.Type_VARCHAR, Value: fmt.Appendf(nil, "user-%d@example.com", i)})
++		}
++		return &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: values}
++	}
++
++	cases := []struct {
++		name  string
++		pq    *ParsedQuery
++		binds map[string]*querypb.BindVariable
++	}{{
++		name: "point-select",
++		pq:   parse("select id, name, email from users where tenant_id = :tenant and email = :email"),
++		binds: map[string]*querypb.BindVariable{
++			"tenant": sqltypes.Int64BindVariable(42),
++			"email":  sqltypes.StringBindVariable("someone@example.com"),
++		},
++	}, {
++		name: "in-list-100",
++		pq:   parse("select id from users where email in ::emails"),
++		binds: map[string]*querypb.BindVariable{
++			"emails": emails(100),
++		},
++	}, {
++		name: "insert-4KiB-text",
++		pq:   parse("insert into posts(id, title, body) values (:id, :title, :body)"),
++		binds: map[string]*querypb.BindVariable{
++			"id":    sqltypes.Int64BindVariable(1),
++			"title": sqltypes.StringBindVariable("a title that isn't too long"),
++			"body":  sqltypes.StringBindVariable(text(4096)),
++		},
++	}, {
++		name: "insert-64KiB-blob",
++		pq:   parse("insert into files(id, data) values (:id, :data)"),
++		binds: map[string]*querypb.BindVariable{
++			"id":   sqltypes.Int64BindVariable(1),
++			"data": sqltypes.BytesBindVariable([]byte(text(64 << 10))),
++		},
++	}}
++	for _, tc := range cases {
++		b.Run(tc.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				if _, err := tc.pq.GenerateQuery(tc.binds, nil); err != nil {
++					b.Fatal(err)
++				}
++			}
++		})
++	}
++}

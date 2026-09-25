@@ -1,0 +1,194 @@
+diff --git a/go/sqltypes/value.go b/go/sqltypes/value.go
+index 479e4a5..c006408 100644
+--- a/go/sqltypes/value.go
++++ b/go/sqltypes/value.go
+@@ -937,12 +937,46 @@ func EncodeStringSQL(val string) string {
+ 	return buf.String()
+ }
+ 
+-func encodeBytesSQLBits(val []byte, b BinWriter) {
+-	fmt.Fprint(b, "b'")
++// bitCharsStackSize is the size of the stack buffer used by encodeBytesSQLBits.
++// It fits the b'...' encoding of a value of up to 15 bytes, which covers
++// BIT(64), the widest BIT column that MySQL supports.
++const bitCharsStackSize = 128
++
++// bitChars maps each byte to its 8 binary digits, most significant bit first.
++var bitChars = func() (t [256][8]byte) {
++	for i := range t {
++		for j := range t[i] {
++			t[i][j] = '0' + byte(i>>(7-j))&1
++		}
++	}
++	return t
++}()
++
++// appendBytesSQLBits appends val to dst as a MySQL bit-value literal (b'0101...').
++func appendBytesSQLBits(dst, val []byte) []byte {
++	dst = append(dst, 'b', '\'')
+ 	for _, ch := range val {
+-		fmt.Fprintf(b, "%08b", ch)
++		dst = append(dst, bitChars[ch][:]...)
++	}
++	return append(dst, '\'')
++}
++
++func encodeBytesSQLBits(val []byte, b BinWriter) {
++	// Writing into a stack buffer is only possible when the writer is a
++	// concrete type: passing the buffer to an interface method makes it escape.
++	switch w := b.(type) {
++	case *bytes2.Buffer:
++		var tmp [bitCharsStackSize]byte
++		w.Write(appendBytesSQLBits(tmp[:0], val))
++	case *strings.Builder:
++		var tmp [bitCharsStackSize]byte
++		w.Write(appendBytesSQLBits(tmp[:0], val))
++	case *bytes.Buffer:
++		var tmp [bitCharsStackSize]byte
++		w.Write(appendBytesSQLBits(tmp[:0], val))
++	default:
++		b.Write(appendBytesSQLBits(make([]byte, 0, 3+8*len(val)), val))
+ 	}
+-	fmt.Fprint(b, "'")
+ }
+ 
+ // SQLEncodeMap specifies how to escape binary data with '\'.
+diff --git a/go/sqltypes/value_test.go b/go/sqltypes/value_test.go
+index 2021566..04a2b48 100644
+--- a/go/sqltypes/value_test.go
++++ b/go/sqltypes/value_test.go
+@@ -17,7 +17,10 @@ limitations under the License.
+ package sqltypes
+ 
+ import (
++	"bytes"
++	"fmt"
+ 	"math"
++	"math/rand/v2"
+ 	"strings"
+ 	"testing"
+ 
+@@ -685,6 +688,123 @@ func TestEncodeSQLBytes2(t *testing.T) {
+ 	}
+ }
+ 
++// genericWriter is a BinWriter that is not special-cased by the encoders.
++type genericWriter struct {
++	buf []byte
++}
++
++func (w *genericWriter) Write(b []byte) (int, error) {
++	w.buf = append(w.buf, b...)
++	return len(b), nil
++}
++
++// encodeSQLAllWriters encodes v through every EncodeSQL entry point and writer type,
++// and returns the results keyed by the entry point.
++func encodeSQLAllWriters(v Value) map[string]string {
++	var sb strings.Builder
++	v.EncodeSQL(&sb)
++	var bb bytes.Buffer
++	v.EncodeSQL(&bb)
++	var b2 bytes2.Buffer
++	v.EncodeSQL(&b2)
++	var gw genericWriter
++	v.EncodeSQL(&gw)
++	var sb2 strings.Builder
++	v.EncodeSQLStringBuilder(&sb2)
++	var b22 bytes2.Buffer
++	v.EncodeSQLBytes2(&b22)
++	return map[string]string{
++		"EncodeSQL(*strings.Builder)": sb.String(),
++		"EncodeSQL(*bytes.Buffer)":    bb.String(),
++		"EncodeSQL(*bytes2.Buffer)":   b2.String(),
++		"EncodeSQL(generic)":          string(gw.buf),
++		"EncodeSQLStringBuilder":      sb2.String(),
++		"EncodeSQLBytes2":             b22.String(),
++	}
++}
++
++// expectedBitsSQL is the reference encoding of a BIT value: every byte as 8
++// binary digits, most significant bit first.
++func expectedBitsSQL(val []byte) string {
++	var sb strings.Builder
++	sb.WriteString("b'")
++	for _, ch := range val {
++		fmt.Fprintf(&sb, "%08b", ch)
++	}
++	sb.WriteString("'")
++	return sb.String()
++}
++
++func TestEncodeSQLBits(t *testing.T) {
++	check := func(t *testing.T, val []byte) {
++		want := expectedBitsSQL(val)
++		for name, got := range encodeSQLAllWriters(MakeTrusted(Bit, val)) {
++			require.Equal(t, want, got, "%s(%x)", name, val)
++		}
++	}
++
++	t.Run("empty", func(t *testing.T) {
++		check(t, nil)
++		check(t, []byte{})
++		assert.Equal(t, "b''", encodeSQLAllWriters(MakeTrusted(Bit, nil))["EncodeSQLBytes2"])
++	})
++
++	t.Run("every byte value", func(t *testing.T) {
++		for i := range 256 {
++			check(t, []byte{byte(i)})
++		}
++		assert.Equal(t, "b'0000000110000000'", encodeSQLAllWriters(MakeTrusted(Bit, []byte{0x01, 0x80}))["EncodeSQL(generic)"])
++	})
++
++	t.Run("random lengths", func(t *testing.T) {
++		// Lengths above 15 bytes exceed the stack buffer and exercise the growth path.
++		r := rand.New(rand.NewPCG(1, 2))
++		for n := range 65 {
++			for range 4 {
++				val := make([]byte, n)
++				for i := range val {
++					val[i] = byte(r.Uint32())
++				}
++				check(t, val)
++			}
++		}
++	})
++}
++
++func BenchmarkEncodeSQLBits(b *testing.B) {
++	for _, n := range []int{1, 8} {
++		v := MakeTrusted(Bit, bytes.Repeat([]byte{0xa5}, n))
++		b.Run(fmt.Sprintf("EncodeSQL/strings.Builder/%d", n), func(b *testing.B) {
++			var buf strings.Builder
++			for b.Loop() {
++				buf.Reset()
++				v.EncodeSQL(&buf)
++			}
++		})
++		b.Run(fmt.Sprintf("EncodeSQL/bytes.Buffer/%d", n), func(b *testing.B) {
++			var buf bytes.Buffer
++			for b.Loop() {
++				buf.Reset()
++				v.EncodeSQL(&buf)
++			}
++		})
++		b.Run(fmt.Sprintf("EncodeSQLStringBuilder/%d", n), func(b *testing.B) {
++			var buf strings.Builder
++			for b.Loop() {
++				buf.Reset()
++				v.EncodeSQLStringBuilder(&buf)
++			}
++		})
++		b.Run(fmt.Sprintf("EncodeSQLBytes2/%d", n), func(b *testing.B) {
++			var buf bytes2.Buffer
++			for b.Loop() {
++				buf.Reset()
++				v.EncodeSQLBytes2(&buf)
++			}
++		})
++	}
++}
++
+ func TestIsComparable(t *testing.T) {
+ 	testcases := []struct {
+ 		in    Value

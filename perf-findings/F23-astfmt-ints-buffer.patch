@@ -1,0 +1,613 @@
+diff --git a/go/tools/astfmtgen/main.go b/go/tools/astfmtgen/main.go
+index 10acea7..34ac926 100644
+--- a/go/tools/astfmtgen/main.go
++++ b/go/tools/astfmtgen/main.go
+@@ -101,8 +101,6 @@ func (r *Rewriter) Rewrite() error {
+ 	file := r.pkg.GoFiles[r.astfmt]
+ 	syntax := r.pkg.Syntax[r.astfmt]
+ 
+-	// Add fmt import since %d is handled by calling fmt.Sprintf("%d",...)
+-	astutil.AddImport(r.pkg.Fset, syntax, "fmt")
+ 	astutil.Apply(syntax, r.replaceAstfmtCalls, nil)
+ 
+ 	dirname, _ := path.Split(file)
+@@ -161,6 +159,33 @@ func (r *Rewriter) rewriteLiteral(rcv ast.Expr, method string, arg ast.Expr) ast
+ 	return &ast.ExprStmt{X: expr}
+ }
+ 
++// rewriteInteger rewrites a '%d' directive into an allocation-free call to
++// TrackedBuffer.WriteInt or TrackedBuffer.WriteUint, depending on the signedness
++// of the argument. The argument must have an integer underlying type; this is
++// checked at code generation time.
++func (r *Rewriter) rewriteInteger(rcv ast.Expr, arg ast.Expr) ast.Stmt {
++	argT := r.pkg.TypesInfo.Types[arg].Type
++	if argT == nil {
++		panic("'%d' directive requires an argument with a known type")
++	}
++	basic, ok := argT.Underlying().(*types.Basic)
++	if !ok || basic.Info()&types.IsInteger == 0 {
++		panic(fmt.Sprintf("'%%d' directive requires an integer argument, got %s", argT))
++	}
++
++	method, conv := "WriteInt", types.Typ[types.Int64]
++	if basic.Info()&types.IsUnsigned != 0 {
++		method, conv = "WriteUint", types.Typ[types.Uint64]
++	}
++	if !types.Identical(argT, conv) {
++		arg = &ast.CallExpr{
++			Fun:  &ast.Ident{Name: conv.Name()},
++			Args: []ast.Expr{arg},
++		}
++	}
++	return r.rewriteLiteral(rcv, method, arg)
++}
++
+ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) bool {
+ 	callexpr := expr.Fun.(*ast.SelectorExpr)
+ 	lit := expr.Args[1].(*ast.BasicLit)
+@@ -242,11 +267,7 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr)
+ 			}
+ 			cursor.InsertBefore(&ast.ExprStmt{X: call})
+ 		case 'd':
+-			call := &ast.CallExpr{
+-				Fun:  &ast.Ident{Name: "fmt.Sprintf"},
+-				Args: []ast.Expr{&ast.BasicLit{Value: `"%d"`, Kind: gotoken.STRING}, expr.Args[2+fieldnum]},
+-			}
+-			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteString", call))
++			cursor.InsertBefore(r.rewriteInteger(callexpr.X, expr.Args[2+fieldnum]))
+ 		case 'n': // directive for slices of AST nodes checked at code generation time
+ 			inputExpr := expr.Args[2+fieldnum]
+ 			inputType := r.pkg.TypesInfo.Types[inputExpr].Type
+diff --git a/go/tools/astfmtgen/main_test.go b/go/tools/astfmtgen/main_test.go
+index f0013cf..1d2beca 100644
+--- a/go/tools/astfmtgen/main_test.go
++++ b/go/tools/astfmtgen/main_test.go
+@@ -481,15 +481,55 @@ func TestRewriteAstPrintf_FormatSpecifiers(t *testing.T) {
+ 				&ast.BasicLit{Kind: gotoken.STRING, Value: `"count: %d"`},
+ 				&ast.Ident{Name: "numVal"},
+ 			},
++			setupTypes: func(r *Rewriter, args []ast.Expr) {
++				r.pkg.TypesInfo.Types[args[2]] = types.TypeAndValue{Type: types.Typ[types.Int32]}
++			},
+ 			verifyResult: func(t *testing.T, block *ast.BlockStmt) {
+ 				require.Len(t, block.List, 2)
+-				// Second statement should be WriteString(fmt.Sprintf(...))
++				// Second statement should be WriteInt(int64(numVal))
+ 				stmt2 := block.List[1].(*ast.ExprStmt)
+ 				call2 := stmt2.X.(*ast.CallExpr)
+-				assert.Equal(t, "WriteString", call2.Fun.(*ast.SelectorExpr).Sel.Name)
+-				// The arg should be a call to fmt.Sprintf
+-				sprintfCall := call2.Args[0].(*ast.CallExpr)
+-				assert.Equal(t, "fmt.Sprintf", sprintfCall.Fun.(*ast.Ident).Name)
++				assert.Equal(t, "WriteInt", call2.Fun.(*ast.SelectorExpr).Sel.Name)
++				conv := call2.Args[0].(*ast.CallExpr)
++				assert.Equal(t, "int64", conv.Fun.(*ast.Ident).Name)
++				assert.Equal(t, "numVal", conv.Args[0].(*ast.Ident).Name)
++			},
++		},
++		{
++			name:   "format with %d (int64 argument needs no conversion)",
++			format: `"count: %d"`,
++			args: []ast.Expr{
++				&ast.Ident{Name: "node"},
++				&ast.BasicLit{Kind: gotoken.STRING, Value: `"count: %d"`},
++				&ast.Ident{Name: "numVal"},
++			},
++			setupTypes: func(r *Rewriter, args []ast.Expr) {
++				r.pkg.TypesInfo.Types[args[2]] = types.TypeAndValue{Type: types.Typ[types.Int64]}
++			},
++			verifyResult: func(t *testing.T, block *ast.BlockStmt) {
++				require.Len(t, block.List, 2)
++				call2 := block.List[1].(*ast.ExprStmt).X.(*ast.CallExpr)
++				assert.Equal(t, "WriteInt", call2.Fun.(*ast.SelectorExpr).Sel.Name)
++				assert.Equal(t, "numVal", call2.Args[0].(*ast.Ident).Name)
++			},
++		},
++		{
++			name:   "format with %d (unsigned argument)",
++			format: `"count: %d"`,
++			args: []ast.Expr{
++				&ast.Ident{Name: "node"},
++				&ast.BasicLit{Kind: gotoken.STRING, Value: `"count: %d"`},
++				&ast.Ident{Name: "numVal"},
++			},
++			setupTypes: func(r *Rewriter, args []ast.Expr) {
++				r.pkg.TypesInfo.Types[args[2]] = types.TypeAndValue{Type: types.Typ[types.Uint16]}
++			},
++			verifyResult: func(t *testing.T, block *ast.BlockStmt) {
++				require.Len(t, block.List, 2)
++				call2 := block.List[1].(*ast.ExprStmt).X.(*ast.CallExpr)
++				assert.Equal(t, "WriteUint", call2.Fun.(*ast.SelectorExpr).Sel.Name)
++				conv := call2.Args[0].(*ast.CallExpr)
++				assert.Equal(t, "uint64", conv.Fun.(*ast.Ident).Name)
+ 			},
+ 		},
+ 		{
+@@ -647,7 +687,10 @@ func TestRewriteAstPrintf_MultipleSpecifiers(t *testing.T) {
+ 				&ast.Ident{Name: "nameVal"},
+ 				&ast.Ident{Name: "countVal"},
+ 			},
+-			expectedStmt: 4, // "name: ", nameVal, ", count: ", fmt.Sprintf("%d", countVal)
++			setupTypes: func(r *Rewriter, args []ast.Expr) {
++				r.pkg.TypesInfo.Types[args[3]] = types.TypeAndValue{Type: types.Typ[types.Int]}
++			},
++			expectedStmt: 4, // "name: ", nameVal, ", count: ", WriteInt(int64(countVal))
+ 		},
+ 		{
+ 			name:   "consecutive format specifiers: %s%s",
+@@ -741,6 +784,29 @@ func TestRewriteAstPrintf_PanicCases(t *testing.T) {
+ 			},
+ 			panicMsg: "'%n' directive requires a slice",
+ 		},
++		{
++			name:   "%d with non-integer type",
++			format: `"%d"`,
++			args: []ast.Expr{
++				&ast.Ident{Name: "node"},
++				&ast.BasicLit{Kind: gotoken.STRING, Value: `"%d"`},
++				&ast.Ident{Name: "val"},
++			},
++			setupTypes: func(r *Rewriter, args []ast.Expr) {
++				r.pkg.TypesInfo.Types[args[2]] = types.TypeAndValue{Type: types.Typ[types.String]}
++			},
++			panicMsg: "'%d' directive requires an integer argument, got string",
++		},
++		{
++			name:   "%d with unknown type",
++			format: `"%d"`,
++			args: []ast.Expr{
++				&ast.Ident{Name: "node"},
++				&ast.BasicLit{Kind: gotoken.STRING, Value: `"%d"`},
++				&ast.Ident{Name: "val"},
++			},
++			panicMsg: "'%d' directive requires an argument with a known type",
++		},
+ 		{
+ 			name:   "invalid literal argument (non-unquotable)",
+ 			format: `"test`,
+diff --git a/go/vt/sqlparser/ast_format.go b/go/vt/sqlparser/ast_format.go
+index b2f75ad..597e60e 100644
+--- a/go/vt/sqlparser/ast_format.go
++++ b/go/vt/sqlparser/ast_format.go
+@@ -1651,7 +1651,7 @@ func (node *Argument) Format(buf *TrackedBuffer) {
+ 		// For bind variables that are statically typed, emit their type as an adjacent comment.
+ 		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
+ 		// type safety when using the query as a cache key.
+-		buf.astPrintf(node, " /* %s", node.Type.String())
++		buf.astPrintf(node, " /* %s", typeName(node.Type))
+ 		if node.Size != 0 || node.Scale != 0 {
+ 			buf.astPrintf(node, "(%d", node.Size)
+ 			if node.Scale != 0 {
+diff --git a/go/vt/sqlparser/ast_format_fast.go b/go/vt/sqlparser/ast_format_fast.go
+index e0ce935..205bb6a 100644
+--- a/go/vt/sqlparser/ast_format_fast.go
++++ b/go/vt/sqlparser/ast_format_fast.go
+@@ -18,8 +18,6 @@ limitations under the License.
+ package sqlparser
+ 
+ import (
+-	"fmt"
+-
+ 	"vitess.io/vitess/go/sqltypes"
+ )
+ 
+@@ -703,7 +701,7 @@ func (hcn *HandlerConditionNamed) FormatFast(buf *TrackedBuffer) {
+ 
+ // FormatFast formats the node.
+ func (hcec *HandlerConditionErrorCode) FormatFast(buf *TrackedBuffer) {
+-	buf.WriteString(fmt.Sprintf("%d", hcec.ErrorCode))
++	buf.WriteInt(int64(hcec.ErrorCode))
+ }
+ 
+ // FormatFast formats the node.
+@@ -946,11 +944,11 @@ func (node *PartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
+ 	}
+ 	if node.MaxRows != nil {
+ 		buf.WriteString(" max_rows ")
+-		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
++		buf.WriteInt(int64(*node.MaxRows))
+ 	}
+ 	if node.MinRows != nil {
+ 		buf.WriteString(" min_rows ")
+-		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
++		buf.WriteInt(int64(*node.MinRows))
+ 	}
+ 	if node.TableSpace != "" {
+ 		buf.WriteString(" tablespace ")
+@@ -1000,11 +998,11 @@ func (node *SubPartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
+ 	}
+ 	if node.MaxRows != nil {
+ 		buf.WriteString(" max_rows ")
+-		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
++		buf.WriteInt(int64(*node.MaxRows))
+ 	}
+ 	if node.MinRows != nil {
+ 		buf.WriteString(" min_rows ")
+-		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
++		buf.WriteInt(int64(*node.MinRows))
+ 	}
+ 	if node.TableSpace != "" {
+ 		buf.WriteString(" tablespace ")
+@@ -1049,7 +1047,7 @@ func (node *PartitionOption) FormatFast(buf *TrackedBuffer) {
+ 		buf.WriteString(" key")
+ 		if node.KeyAlgorithm != 0 {
+ 			buf.WriteString(" algorithm = ")
+-			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
++			buf.WriteInt(int64(node.KeyAlgorithm))
+ 		}
+ 		if len(node.ColList) == 0 {
+ 			buf.WriteString(" ()")
+@@ -1072,7 +1070,7 @@ func (node *PartitionOption) FormatFast(buf *TrackedBuffer) {
+ 
+ 	if node.Partitions != -1 {
+ 		buf.WriteString(" partitions ")
+-		buf.WriteString(fmt.Sprintf("%d", node.Partitions))
++		buf.WriteInt(int64(node.Partitions))
+ 	}
+ 	if node.SubPartition != nil {
+ 		buf.WriteByte(' ')
+@@ -1106,7 +1104,7 @@ func (node *SubPartition) FormatFast(buf *TrackedBuffer) {
+ 		buf.WriteString(" key")
+ 		if node.KeyAlgorithm != 0 {
+ 			buf.WriteString(" algorithm = ")
+-			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
++			buf.WriteInt(int64(node.KeyAlgorithm))
+ 		}
+ 		if len(node.ColList) == 0 {
+ 			buf.WriteString(" ()")
+@@ -1118,7 +1116,7 @@ func (node *SubPartition) FormatFast(buf *TrackedBuffer) {
+ 
+ 	if node.SubPartitions != -1 {
+ 		buf.WriteString(" subpartitions ")
+-		buf.WriteString(fmt.Sprintf("%d", node.SubPartitions))
++		buf.WriteInt(int64(node.SubPartitions))
+ 	}
+ }
+ 
+@@ -1185,13 +1183,13 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
+ 
+ 	if ct.Length != nil && ct.Scale != nil {
+ 		buf.WriteByte('(')
+-		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
++		buf.WriteInt(int64(*ct.Length))
+ 		buf.WriteByte(',')
+-		buf.WriteString(fmt.Sprintf("%d", *ct.Scale))
++		buf.WriteInt(int64(*ct.Scale))
+ 		buf.WriteByte(')')
+ 	} else if ct.Length != nil {
+ 		buf.WriteByte('(')
+-		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
++		buf.WriteInt(int64(*ct.Length))
+ 		buf.WriteByte(')')
+ 	}
+ 
+@@ -1389,7 +1387,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
+ 			col.Column.FormatFast(buf)
+ 			if col.Length != nil {
+ 				buf.WriteByte('(')
+-				buf.WriteString(fmt.Sprintf("%d", *col.Length))
++				buf.WriteInt(int64(*col.Length))
+ 				buf.WriteByte(')')
+ 			}
+ 		}
+@@ -2062,9 +2060,9 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
+ 		buf.WriteString("CAST(")
+ 		buf.WriteArg(":", node.Name)
+ 		buf.WriteString(" AS DECIMAL(")
+-		buf.WriteString(fmt.Sprintf("%d", node.Size))
++		buf.WriteInt(int64(node.Size))
+ 		buf.WriteString(", ")
+-		buf.WriteString(fmt.Sprintf("%d", node.Scale))
++		buf.WriteInt(int64(node.Scale))
+ 		buf.WriteString("))")
+ 		return
+ 	case sqltypes.IsUnsigned(node.Type):
+@@ -2091,7 +2089,7 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
+ 			return
+ 		}
+ 		buf.WriteByte('(')
+-		buf.WriteString(fmt.Sprintf("%d", node.Size))
++		buf.WriteInt(int64(node.Size))
+ 		buf.WriteString("))")
+ 		return
+ 	case sqltypes.IsDate(node.Type):
+@@ -2109,7 +2107,7 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
+ 			return
+ 		}
+ 		buf.WriteByte('(')
+-		buf.WriteString(fmt.Sprintf("%d", node.Size))
++		buf.WriteInt(int64(node.Size))
+ 		buf.WriteString("))")
+ 		return
+ 	}
+@@ -2120,13 +2118,13 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
+ 		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
+ 		// type safety when using the query as a cache key.
+ 		buf.WriteString(" /* ")
+-		buf.WriteString(node.Type.String())
++		buf.WriteString(typeName(node.Type))
+ 		if node.Size != 0 || node.Scale != 0 {
+ 			buf.WriteByte('(')
+-			buf.WriteString(fmt.Sprintf("%d", node.Size))
++			buf.WriteInt(int64(node.Size))
+ 			if node.Scale != 0 {
+ 				buf.WriteByte(',')
+-				buf.WriteString(fmt.Sprintf("%d", node.Scale))
++				buf.WriteInt(int64(node.Scale))
+ 			}
+ 			buf.WriteString(")")
+ 		}
+@@ -2420,7 +2418,7 @@ func (node *CurTimeFuncExpr) FormatFast(buf *TrackedBuffer) {
+ 	if node.Fsp > 0 {
+ 		buf.WriteString(node.Name.String())
+ 		buf.WriteByte('(')
+-		buf.WriteString(fmt.Sprintf("%d", node.Fsp))
++		buf.WriteInt(int64(node.Fsp))
+ 		buf.WriteByte(')')
+ 	} else {
+ 		buf.WriteString(node.Name.String())
+@@ -2869,10 +2867,10 @@ func (node *ConvertType) FormatFast(buf *TrackedBuffer) {
+ 	buf.WriteString(node.Type)
+ 	if node.Length != nil {
+ 		buf.WriteByte('(')
+-		buf.WriteString(fmt.Sprintf("%d", *node.Length))
++		buf.WriteInt(int64(*node.Length))
+ 		if node.Scale != nil {
+ 			buf.WriteString(", ")
+-			buf.WriteString(fmt.Sprintf("%d", *node.Scale))
++			buf.WriteInt(int64(*node.Scale))
+ 		}
+ 		buf.WriteByte(')')
+ 	}
+@@ -3860,7 +3858,7 @@ func (node *JtOnResponse) FormatFast(buf *TrackedBuffer) {
+ // FormatFast formats the node.
+ func (node *Offset) FormatFast(buf *TrackedBuffer) {
+ 	buf.WriteByte(':')
+-	buf.WriteString(fmt.Sprintf("%d", node.V))
++	buf.WriteInt(int64(node.V))
+ }
+ 
+ // FormatFast formats the node.
+@@ -4581,5 +4579,5 @@ func (node *Kill) FormatFast(buf *TrackedBuffer) {
+ 	buf.WriteString("kill ")
+ 	buf.WriteString(node.Type.ToString())
+ 	buf.WriteByte(' ')
+-	buf.WriteString(fmt.Sprintf("%d", node.ProcesslistID))
++	buf.WriteUint(node.ProcesslistID)
+ }
+diff --git a/go/vt/sqlparser/ast_funcs.go b/go/vt/sqlparser/ast_funcs.go
+index 9ac2f88..abb8559 100644
+--- a/go/vt/sqlparser/ast_funcs.go
++++ b/go/vt/sqlparser/ast_funcs.go
+@@ -662,6 +662,41 @@ func setLockIfPossible(lexer yyLexer, tblSubquery TableStatement, lock Lock) {
+ 	selStmt.SetLock(lock)
+ }
+ 
++// typeNames caches the protobuf enum names of sqltypes.Type, indexed by the
++// low byte of the type value (the MySQL type id, which is unique across all
++// types; the upper bits are flags). It is built from querypb.Type_name so it
++// always stays in sync with the proto definition.
++var typeNames = func() (names [256]typeNameEntry) {
++	for v, name := range querypb.Type_name {
++		e := &names[v&0xff]
++		switch {
++		case e.typ == sqltypes.Unknown:
++			// slot already disabled by a collision
++		case e.name != "":
++			// Two types share the same low byte: disable this slot so that
++			// typeName falls back to the protobuf lookup for both of them.
++			e.typ, e.name = sqltypes.Unknown, ""
++		default:
++			e.typ, e.name = sqltypes.Type(v), name
++		}
++	}
++	return names
++}()
++
++type typeNameEntry struct {
++	typ  sqltypes.Type
++	name string
++}
++
++// typeName returns the same result as t.String(), but avoids the protobuf
++// reflection lookup for known types.
++func typeName(t sqltypes.Type) string {
++	if e := &typeNames[uint8(t)]; e.typ == t && e.name != "" {
++		return e.name
++	}
++	return t.String()
++}
++
+ func NewTypedArgument(in string, t sqltypes.Type) *Argument {
+ 	return &Argument{Name: in, Type: t}
+ }
+diff --git a/go/vt/sqlparser/tracked_buffer.go b/go/vt/sqlparser/tracked_buffer.go
+index 14fe6fe..4672876 100644
+--- a/go/vt/sqlparser/tracked_buffer.go
++++ b/go/vt/sqlparser/tracked_buffer.go
+@@ -43,6 +43,10 @@ type TrackedBuffer struct {
+ 	literal       func(string) (int, error)
+ 	fast          bool
+ 
++	// skipBindLocations disables tracking of bind variable locations, for
++	// callers that only need the formatted string and never call ParsedQuery.
++	skipBindLocations bool
++
+ 	escape escapeType
+ }
+ 
+@@ -355,10 +359,12 @@ func areBothISExpr(op Expr, val Expr) bool {
+ // tracking information for future substitutions.
+ func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
+ 	length := len(prefix) + len(arg)
+-	buf.bindLocations = append(buf.bindLocations, BindLocation{
+-		Offset: buf.Len(),
+-		Length: length,
+-	})
++	if !buf.skipBindLocations {
++		buf.bindLocations = append(buf.bindLocations, BindLocation{
++			Offset: buf.Len(),
++			Length: length,
++		})
++	}
+ 	buf.Grow(length)
+ 	buf.WriteString(prefix)
+ 	buf.WriteString(arg)
+@@ -366,12 +372,14 @@ func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
+ 
+ // WriteInt writes a signed integer into the buffer.
+ func (buf *TrackedBuffer) WriteInt(v int64) {
+-	buf.WriteString(strconv.FormatInt(v, 10))
++	var scratch [20]byte // len("-9223372036854775808")
++	_, _ = buf.Write(strconv.AppendInt(scratch[:0], v, 10))
+ }
+ 
+ // WriteUint writes an unsigned integer into the buffer.
+ func (buf *TrackedBuffer) WriteUint(v uint64) {
+-	buf.WriteString(strconv.FormatUint(v, 10))
++	var scratch [20]byte // len("18446744073709551615")
++	_, _ = buf.Write(strconv.AppendUint(scratch[:0], v, 10))
+ }
+ 
+ // ParsedQuery returns a ParsedQuery that contains bind
+@@ -394,13 +402,33 @@ func BuildParsedQuery(in string, vars ...any) *ParsedQuery {
+ 
+ // String returns a string representation of an SQLNode.
+ func String(node SQLNode) string {
++	return StringWithSizeHint(node, 0)
++}
++
++// StringWithSizeHint returns a string representation of an SQLNode, like String,
++// but pre-sizes the output buffer to sizeHint bytes. Callers that know the
++// approximate length of the formatted output (e.g. the length of the original
++// SQL text) can use it to avoid repeated buffer growth.
++func StringWithSizeHint(node SQLNode, sizeHint int) string {
+ 	if node == nil {
+ 		return "<nil>"
+ 	}
+ 
+ 	buf := NewTrackedBuffer(nil)
++	// The bind variable locations are only needed by ParsedQuery.
++	buf.skipBindLocations = true
++	if sizeHint > 0 {
++		buf.Grow(sizeHint)
++	}
+ 	node.FormatFast(buf)
+-	return buf.String()
++	s := buf.String()
++	if sizeHint > 0 && buf.Cap()-len(s) > len(s) {
++		// The size hint overshot by more than 2x (e.g. a long IN list that was
++		// collapsed into a single list argument). The result may be retained for
++		// a long time (e.g. in the plan cache), so don't keep the oversized buffer.
++		s = strings.Clone(s)
++	}
++	return s
+ }
+ 
+ // UnescapedString will return a string where no identifiers have been escaped.
+diff --git a/go/vt/sqlparser/tracked_buffer_test.go b/go/vt/sqlparser/tracked_buffer_test.go
+index d798fd7..68f8b7b 100644
+--- a/go/vt/sqlparser/tracked_buffer_test.go
++++ b/go/vt/sqlparser/tracked_buffer_test.go
+@@ -17,10 +17,15 @@ limitations under the License.
+ package sqlparser
+ 
+ import (
++	"math"
++	"strconv"
+ 	"testing"
+ 
+ 	"github.com/stretchr/testify/assert"
+ 	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
+ )
+ 
+ func TestBuildParsedQuery(t *testing.T) {
+@@ -327,3 +332,56 @@ func TestTrackedBufferMyprintf(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestTrackedBufferWriteInt(t *testing.T) {
++	for _, v := range []int64{0, 1, -1, 9, 10, 99, 100, -100, 12345, math.MaxInt32, math.MinInt32, math.MaxInt64, math.MinInt64} {
++		buf := NewTrackedBuffer(nil)
++		buf.WriteInt(v)
++		assert.Equal(t, strconv.FormatInt(v, 10), buf.String())
++	}
++	for _, v := range []uint64{0, 1, 99, 100, 12345, math.MaxUint32, math.MaxUint64} {
++		buf := NewTrackedBuffer(nil)
++		buf.WriteUint(v)
++		assert.Equal(t, strconv.FormatUint(v, 10), buf.String())
++	}
++
++	buf := NewTrackedBuffer(nil)
++	buf.Grow(64)
++	allocs := testing.AllocsPerRun(100, func() {
++		buf.Reset()
++		buf.Grow(64)
++		buf.WriteInt(math.MinInt64)
++		buf.WriteUint(math.MaxUint64)
++	})
++	// Reset drops the underlying buffer, so the only allocation is the Grow.
++	assert.EqualValues(t, 1, allocs)
++}
++
++func TestTypeName(t *testing.T) {
++	for v := range querypb.Type_name {
++		typ := sqltypes.Type(v)
++		assert.Equal(t, typ.String(), typeName(typ), "type %d", v)
++	}
++	// Values that are not valid types must fall back to the protobuf formatting.
++	for _, v := range []int32{1, 255, 256, 257 | 0x10000, 12345, math.MaxInt32} {
++		typ := sqltypes.Type(v)
++		assert.Equal(t, typ.String(), typeName(typ), "type %d", v)
++	}
++}
++
++func TestStringWithSizeHint(t *testing.T) {
++	parser := NewTestParser()
++	for _, sql := range []string{
++		"select 1 from dual",
++		"select * from t where a = :a /* DECIMAL(4,2) */ and b = CAST(:b AS DATETIME(6)) and c in ::c",
++		"kill query 18446744073709551615",
++	} {
++		stmt, err := parser.Parse(sql)
++		require.NoError(t, err)
++		expected := String(stmt)
++		for _, hint := range []int{-1, 0, 1, len(sql), 10 * len(sql)} {
++			assert.Equal(t, expected, StringWithSizeHint(stmt, hint))
++		}
++	}
++	assert.Equal(t, "<nil>", StringWithSizeHint(nil, 10))
++}
+diff --git a/go/vt/vtgate/executor.go b/go/vt/vtgate/executor.go
+index e73e059..2c23e21 100644
+--- a/go/vt/vtgate/executor.go
++++ b/go/vt/vtgate/executor.go
+@@ -1431,7 +1431,13 @@ func (e *Executor) getCachedOrBuildPlan(
+ 	stmt = rewriteASTResult.AST
+ 	bindVarNeeds := rewriteASTResult.BindVarNeeds
+ 	if rewriteASTResult.UpdateQueryFromAST && !preparedPlan {
+-		query = sqlparser.String(stmt)
++		// The normalized query is usually a bit longer than the original one
++		// (bind variables are annotated with their type), so use its length plus
++		// some headroom as a size hint to avoid repeatedly growing the buffer.
++		// The hint is capped because huge queries (e.g. bulk inserts or long IN
++		// lists) often shrink a lot when their literals are replaced by bind
++		// variables.
++		query = sqlparser.StringWithSizeHint(stmt, min(len(query)+len(query)/4+16, maxNormalizedQuerySizeHint))
+ 	}
+ 
+ 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
+@@ -1449,6 +1455,9 @@ func (e *Executor) getCachedOrBuildPlan(
+ 	return plan, false, stmt, err
+ }
+ 
++// maxNormalizedQuerySizeHint caps the buffer pre-allocated when formatting a normalized query.
++const maxNormalizedQuerySizeHint = 64 * 1024
++
+ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
+ 	allDest := getDestinations(ctx, vcursor)
+ 

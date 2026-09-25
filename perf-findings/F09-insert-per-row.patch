@@ -1,0 +1,665 @@
+diff --git a/go/vt/vtgate/engine/cached_size.go b/go/vt/vtgate/engine/cached_size.go
+index 8ee199b..e431e2f 100644
+--- a/go/vt/vtgate/engine/cached_size.go
++++ b/go/vt/vtgate/engine/cached_size.go
+@@ -495,7 +495,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
+ 	}
+ 	size := int64(0)
+ 	if alloc {
+-		size += int64(224)
++		size += int64(256)
+ 	}
+ 	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
+ 	size += cached.InsertCommon.CachedSize(false)
+@@ -536,6 +536,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
+ 	}
+ 	// field Alias string
+ 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
++	// field parts *vitess.io/vitess/go/vt/vtgate/engine.insertShardedParts
++	size += cached.parts.CachedSize(true)
+ 	return size
+ }
+ 
+@@ -1715,6 +1717,62 @@ func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
+ 	return size
+ }
+ 
++func (cached *insertShardedParts) CachedSize(alloc bool) int64 {
++	if cached == nil {
++		return int64(0)
++	}
++	size := int64(0)
++	if alloc {
++		size += int64(112)
++	}
++	// field mids []string
++	{
++		size += hack.RuntimeAllocSize(int64(cap(cached.mids)) * int64(16))
++		for _, elem := range cached.mids {
++			size += hack.RuntimeAllocSize(int64(len(elem)))
++		}
++	}
++	// field midArgs [][]string
++	{
++		size += hack.RuntimeAllocSize(int64(cap(cached.midArgs)) * int64(24))
++		for _, elem := range cached.midArgs {
++			{
++				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
++				for _, elem := range elem {
++					size += hack.RuntimeAllocSize(int64(len(elem)))
++				}
++			}
++		}
++	}
++	// field suffix string
++	size += hack.RuntimeAllocSize(int64(len(cached.suffix)))
++	// field suffixArgs []string
++	{
++		size += hack.RuntimeAllocSize(int64(cap(cached.suffixArgs)) * int64(16))
++		for _, elem := range cached.suffixArgs {
++			size += hack.RuntimeAllocSize(int64(len(elem)))
++		}
++	}
++	// field vindexVarNames [][][]string
++	{
++		size += hack.RuntimeAllocSize(int64(cap(cached.vindexVarNames)) * int64(24))
++		for _, elem := range cached.vindexVarNames {
++			{
++				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(24))
++				for _, elem := range elem {
++					{
++						size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
++						for _, elem := range elem {
++							size += hack.RuntimeAllocSize(int64(len(elem)))
++						}
++					}
++				}
++			}
++		}
++	}
++	return size
++}
++
+ func (cached *percentBasedMirror) CachedSize(alloc bool) int64 {
+ 	if cached == nil {
+ 		return int64(0)
+diff --git a/go/vt/vtgate/engine/insert.go b/go/vt/vtgate/engine/insert.go
+index ca40774..9e8abf8 100644
+--- a/go/vt/vtgate/engine/insert.go
++++ b/go/vt/vtgate/engine/insert.go
+@@ -21,6 +21,7 @@ import (
+ 	"fmt"
+ 	"strconv"
+ 	"strings"
++	"sync"
+ 
+ 	"vitess.io/vitess/go/sqltypes"
+ 	"vitess.io/vitess/go/vt/key"
+@@ -57,6 +58,11 @@ type Insert struct {
+ 
+ 	// Alias represents the row alias with columns if specified in the query.
+ 	Alias string
++
++	// partsOnce guards parts, the plan-constant parts of the sharded query,
++	// which are computed lazily on the first execution.
++	partsOnce sync.Once
++	parts     *insertShardedParts
+ }
+ 
+ // newQueryInsert creates an Insert with a query string. Used in testing.
+@@ -207,6 +213,8 @@ func (ins *Insert) getInsertShardedQueries(
+ 		return nil, nil, err
+ 	}
+ 
++	parts := ins.shardedParts()
++
+ 	// Build 3-d bindvars. Skip rows with nil keyspace ids in case
+ 	// we're executing an insert ignore.
+ 	for vIdx, colVindex := range ins.ColVindexes {
+@@ -216,9 +224,7 @@ func (ins *Insert) getInsertShardedQueries(
+ 				continue
+ 			}
+ 			for colIdx, vindexKey := range rowColumnKeys {
+-				col := colVindex.Columns[colIdx]
+-				name := InsertVarName(col, rowNum)
+-				bindVars[name] = sqltypes.ValueBindVariable(vindexKey)
++				bindVars[parts.vindexVarName(colVindex, vIdx, colIdx, rowNum)] = sqltypes.ValueBindVariable(vindexKey)
+ 			}
+ 		}
+ 	}
+@@ -226,13 +232,17 @@ func (ins *Insert) getInsertShardedQueries(
+ 	// We need to know the keyspace ids and the Mids associated with
+ 	// each RSS.  So we pass the ksid indexes in as ids, and get them back
+ 	// as values. We also skip nil KeyspaceIds, no need to resolve them.
+-	var indexes []*querypb.Value
+-	var destinations []key.ShardDestination
++	// The ids and their textual values are carved out of two shared buffers.
++	indexes := make([]*querypb.Value, 0, len(keyspaceIDs))
++	indexValues := make([]querypb.Value, len(keyspaceIDs))
++	indexDigits := make([]byte, 0, len(keyspaceIDs)*len(strconv.Itoa(len(keyspaceIDs))))
++	destinations := make([]key.ShardDestination, 0, len(keyspaceIDs))
+ 	for i, ksid := range keyspaceIDs {
+ 		if ksid != nil {
+-			indexes = append(indexes, &querypb.Value{
+-				Value: strconv.AppendInt(nil, int64(i), 10),
+-			})
++			start := len(indexDigits)
++			indexDigits = strconv.AppendInt(indexDigits, int64(i), 10)
++			indexValues[i].Value = indexDigits[start:len(indexDigits):len(indexDigits)]
++			indexes = append(indexes, &indexValues[i])
+ 			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
+ 		}
+ 	}
+@@ -249,44 +259,40 @@ func (ins *Insert) getInsertShardedQueries(
+ 
+ 	queries := make([]*querypb.BoundQuery, len(rss))
+ 	for i := range rss {
+-		shardBindVars := map[string]*querypb.BindVariable{}
+-		var mids []string
+-		for _, indexValue := range indexesPerRss[i] {
++		rowIdxs := indexesPerRss[i]
++		// Size the query (including the row separators) and the bind variable map up front.
++		sqlLen := len(ins.Prefix) + len(ins.Alias) + len(parts.suffix) + len(rowIdxs)
++		bvCount := len(parts.suffixArgs)
++		for _, indexValue := range rowIdxs {
+ 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
+-			if keyspaceIDs[index] != nil {
+-				walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+-					var arg string
+-					switch argType := node.(type) {
+-					case *sqlparser.Argument:
+-						arg = argType.Name
+-					case sqlparser.ListArg:
+-						arg = string(argType)
+-					default:
+-						return true, nil
+-					}
+-					bv, exists := bindVars[arg]
+-					if !exists {
+-						return false, vterrors.VT03026(arg)
+-					}
+-					shardBindVars[arg] = bv
+-					return true, nil
+-				}
+-				mids = append(mids, sqlparser.String(ins.Mid[index]))
+-				for _, expr := range ins.Mid[index] {
+-					err = sqlparser.Walk(walkFunc, expr, nil)
+-					if err != nil {
+-						return nil, nil, err
+-					}
+-				}
+-				err = sqlparser.Walk(walkFunc, ins.Suffix, nil)
+-				if err != nil {
++			sqlLen += len(parts.mids[index])
++			bvCount += len(parts.midArgs[index])
++		}
++
++		shardBindVars := make(map[string]*querypb.BindVariable, bvCount)
++		var sql strings.Builder
++		sql.Grow(sqlLen)
++		sql.WriteString(ins.Prefix)
++		for n, indexValue := range rowIdxs {
++			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
++			if n > 0 {
++				sql.WriteByte(',')
++			}
++			sql.WriteString(parts.mids[index])
++			if err := copyInsertBindVars(shardBindVars, bindVars, parts.midArgs[index]); err != nil {
++				return nil, nil, err
++			}
++			// The suffix is the same for every row, so its bind variables only need to be copied once.
++			if n == 0 {
++				if err := copyInsertBindVars(shardBindVars, bindVars, parts.suffixArgs); err != nil {
+ 					return nil, nil, err
+ 				}
+ 			}
+ 		}
+-		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Alias + sqlparser.String(ins.Suffix)
++		sql.WriteString(ins.Alias)
++		sql.WriteString(parts.suffix)
+ 		queries[i] = &querypb.BoundQuery{
+-			Sql:           rewritten,
++			Sql:           sql.String(),
+ 			BindVariables: shardBindVars,
+ 		}
+ 	}
+@@ -294,6 +300,93 @@ func (ins *Insert) getInsertShardedQueries(
+ 	return rss, queries, nil
+ }
+ 
++// copyInsertBindVars copies the named bind variables from bindVars into shardBindVars,
++// failing on the first one that is missing.
++func copyInsertBindVars(shardBindVars, bindVars map[string]*querypb.BindVariable, names []string) error {
++	for _, name := range names {
++		bv, exists := bindVars[name]
++		if !exists {
++			return vterrors.VT03026(name)
++		}
++		shardBindVars[name] = bv
++	}
++	return nil
++}
++
++// insertShardedParts holds the renderings of the sharded insert query that only depend on the plan,
++// so that they are computed once per plan instead of once per row on every execution.
++type insertShardedParts struct {
++	// mids[i] is sqlparser.String(ins.Mid[i]).
++	mids []string
++	// midArgs[i] lists the bind variables referenced by ins.Mid[i], in walk order.
++	midArgs [][]string
++	// suffix is sqlparser.String(ins.Suffix).
++	suffix string
++	// suffixArgs lists the bind variables referenced by ins.Suffix, in walk order.
++	suffixArgs []string
++	// vindexVarNames[vIdx][colIdx][row] is InsertVarName(ins.ColVindexes[vIdx].Columns[colIdx], row).
++	vindexVarNames [][][]string
++}
++
++// shardedParts returns the plan-constant parts of the sharded insert query, computing them on first use.
++// Plans are shared between concurrent executions, so the computation is guarded by a sync.Once.
++func (ins *Insert) shardedParts() *insertShardedParts {
++	ins.partsOnce.Do(func() {
++		ins.parts = buildInsertShardedParts(ins)
++	})
++	return ins.parts
++}
++
++func buildInsertShardedParts(ins *Insert) *insertShardedParts {
++	parts := &insertShardedParts{
++		mids:       make([]string, len(ins.Mid)),
++		midArgs:    make([][]string, len(ins.Mid)),
++		suffix:     sqlparser.String(ins.Suffix),
++		suffixArgs: insertArgNames(ins.Suffix),
++	}
++	for i, row := range ins.Mid {
++		parts.mids[i] = sqlparser.String(row)
++		for _, expr := range row {
++			parts.midArgs[i] = append(parts.midArgs[i], insertArgNames(expr)...)
++		}
++	}
++	parts.vindexVarNames = make([][][]string, len(ins.ColVindexes))
++	for vIdx, colVindex := range ins.ColVindexes {
++		parts.vindexVarNames[vIdx] = make([][]string, len(colVindex.Columns))
++		for colIdx, col := range colVindex.Columns {
++			names := make([]string, len(ins.Mid))
++			for row := range names {
++				names[row] = InsertVarName(col, row)
++			}
++			parts.vindexVarNames[vIdx][colIdx] = names
++		}
++	}
++	return parts
++}
++
++// vindexVarName returns InsertVarName for the given vindex column and row, from the precomputed names when possible.
++func (parts *insertShardedParts) vindexVarName(colVindex *vindexes.ColumnVindex, vIdx, colIdx, row int) string {
++	if vIdx < len(parts.vindexVarNames) && colIdx < len(parts.vindexVarNames[vIdx]) && row < len(parts.vindexVarNames[vIdx][colIdx]) {
++		return parts.vindexVarNames[vIdx][colIdx][row]
++	}
++	return InsertVarName(colVindex.Columns[colIdx], row)
++}
++
++// insertArgNames returns the names of the bind variables referenced by node, in walk order.
++func insertArgNames(node sqlparser.SQLNode) []string {
++	var names []string
++	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
++		switch arg := node.(type) {
++		case *sqlparser.Argument:
++			names = append(names, arg.Name)
++		case sqlparser.ListArg:
++			names = append(names, string(arg))
++		}
++		return true, nil
++	}, node)
++	return names
++}
++
+ func (ins *Insert) buildVindexRowsValues(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([][]sqltypes.Row, error) {
+ 	vindexRowsValues := make([][]sqltypes.Row, len(ins.VindexValues))
+ 	rowCount := 0
+diff --git a/go/vt/vtgate/engine/insert_bench_test.go b/go/vt/vtgate/engine/insert_bench_test.go
+new file mode 100644
+index 0000000..3c2ce7a
+--- /dev/null
++++ b/go/vt/vtgate/engine/insert_bench_test.go
+@@ -0,0 +1,204 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package engine
++
++import (
++	"context"
++	"fmt"
++	"maps"
++	"sync"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/key"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
++	"vitess.io/vitess/go/vt/sqlparser"
++	"vitess.io/vitess/go/vt/srvtopo"
++	"vitess.io/vitess/go/vt/vtgate/evalengine"
++	"vitess.io/vitess/go/vt/vtgate/vindexes"
++)
++
++// benchInsertVCursor resolves keyspace ids onto 4 shards by their first byte,
++// without logging, so that benchmarks measure the Insert primitive itself.
++type benchInsertVCursor struct {
++	noopVCursor
++	shards []*srvtopo.ResolvedShard
++}
++
++func newBenchInsertVCursor() *benchInsertVCursor {
++	vc := &benchInsertVCursor{}
++	for _, shard := range []string{"-40", "40-80", "80-c0", "c0-"} {
++		vc.shards = append(vc.shards, &srvtopo.ResolvedShard{Target: &querypb.Target{Keyspace: "sharded", Shard: shard}})
++	}
++	return vc
++}
++
++func (vc *benchInsertVCursor) ResolveDestinations(_ context.Context, _ string, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
++	values := make([][]*querypb.Value, len(vc.shards))
++	for i, d := range destinations {
++		ksid := d.(key.DestinationKeyspaceID)
++		s := int(ksid[0]) >> 6
++		values[s] = append(values[s], ids[i])
++	}
++	var rss []*srvtopo.ResolvedShard
++	var out [][]*querypb.Value
++	for s, v := range values {
++		if len(v) > 0 {
++			rss = append(rss, vc.shards[s])
++			out = append(out, v)
++		}
++	}
++	return rss, out, nil
++}
++
++func (vc *benchInsertVCursor) ExecuteMultiShard(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool, bool) (*sqltypes.Result, []error) {
++	return &sqltypes.Result{}, nil
++}
++
++// newBenchShardedInsert builds a sharded insert of `rows` rows with `cols` columns each, shaped
++// like a normalized plan: the vindex column is :_id_N, the other columns are :vtgN arguments.
++// It also returns a bind variable map holding all the normalized arguments.
++func newBenchShardedInsert(tb testing.TB, rows, cols int, onDup bool) (*Insert, map[string]*querypb.BindVariable) {
++	invschema := &vschemapb.SrvVSchema{
++		Keyspaces: map[string]*vschemapb.Keyspace{
++			"sharded": {
++				Sharded:  true,
++				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
++				Tables: map[string]*vschemapb.Table{
++					"t1": {ColumnVindexes: []*vschemapb.ColumnVindex{{Name: "hash", Columns: []string{"id"}}}},
++				},
++			},
++		},
++	}
++	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
++	ks := vs.Keyspaces["sharded"]
++	require.NoError(tb, ks.Error)
++
++	bv := map[string]*querypb.BindVariable{}
++	var idExprs []evalengine.Expr
++	mid := make(sqlparser.Values, 0, rows)
++	arg := 1
++	for r := range rows {
++		idArg := fmt.Sprintf("vtg%d", arg)
++		arg++
++		bv[idArg] = sqltypes.Int64BindVariable(int64(r + 1))
++		idExprs = append(idExprs, evalengine.NewBindVar(idArg, evalengine.NewType(sqltypes.Int64, 0)))
++		tuple := sqlparser.ValTuple{sqlparser.NewTypedArgument(fmt.Sprintf("_id_%d", r), sqltypes.Int64)}
++		for range cols - 1 {
++			name := fmt.Sprintf("vtg%d", arg)
++			arg++
++			bv[name] = sqltypes.StringBindVariable("some value")
++			tuple = append(tuple, sqlparser.NewTypedArgument(name, sqltypes.VarChar))
++		}
++		mid = append(mid, tuple)
++	}
++	var suffix sqlparser.OnDup
++	if onDup {
++		bv["upd"] = sqltypes.Int64BindVariable(1)
++		suffix = sqlparser.OnDup{&sqlparser.UpdateExpr{Name: sqlparser.NewColName("c"), Expr: sqlparser.NewArgument("upd")}}
++	}
++	ins := newInsert(InsertSharded, false, ks.Keyspace, [][][]evalengine.Expr{{idExprs}}, ks.Tables["t1"],
++		"insert into t1(id, c1, c2, c3, c4, c5, c6, c7) values ", mid, suffix)
++	return ins, bv
++}
++
++func BenchmarkInsertShardedQueries(b *testing.B) {
++	for _, rows := range []int{1, 100, 1000} {
++		for _, onDup := range []bool{false, true} {
++			ins, bv := newBenchShardedInsert(b, rows, 8, onDup)
++			vc := newBenchInsertVCursor()
++			name := fmt.Sprintf("rows=%d/ondup=%v", rows, onDup)
++			b.Run(name+"/impl=old", func(b *testing.B) {
++				b.ReportAllocs()
++				for b.Loop() {
++					_, _, err := ins.getInsertShardedQueriesOld(b.Context(), vc, bv)
++					if err != nil {
++						b.Fatal(err)
++					}
++				}
++			})
++			b.Run(name+"/impl=new", func(b *testing.B) {
++				b.ReportAllocs()
++				for b.Loop() {
++					_, _, err := ins.getInsertShardedQueries(b.Context(), vc, bv)
++					if err != nil {
++						b.Fatal(err)
++					}
++				}
++			})
++		}
++	}
++}
++
++// TestInsertShardedQueriesMatchOld checks that the precomputed per-plan query parts produce the exact
++// same per-shard queries and bind variables as the original per-execution rendering.
++func TestInsertShardedQueriesMatchOld(t *testing.T) {
++	for _, rows := range []int{1, 7, 100} {
++		for _, onDup := range []bool{false, true} {
++			ins, bv := newBenchShardedInsert(t, rows, 8, onDup)
++			vc := newBenchInsertVCursor()
++			for range 2 { // the second round uses the cached parts
++				rssOld, qOld, err := ins.getInsertShardedQueriesOld(t.Context(), vc, bv)
++				require.NoError(t, err)
++				rssNew, qNew, err := ins.getInsertShardedQueries(t.Context(), vc, bv)
++				require.NoError(t, err)
++				require.Equal(t, rssOld, rssNew)
++				require.Len(t, qNew, len(qOld))
++				for i := range qOld {
++					require.Equal(t, qOld[i].Sql, qNew[i].Sql)
++					require.Equal(t, qOld[i].BindVariables, qNew[i].BindVariables)
++				}
++			}
++		}
++	}
++}
++
++// TestInsertShardedMissingBindVar checks that a bind variable referenced by a row or by the
++// ON DUPLICATE KEY UPDATE suffix, but missing at execution time, is reported as VT03026.
++func TestInsertShardedMissingBindVar(t *testing.T) {
++	for _, missing := range []string{"vtg2", "vtg12", "upd"} {
++		t.Run(missing, func(t *testing.T) {
++			ins, bv := newBenchShardedInsert(t, 3, 4, true)
++			delete(bv, missing)
++			_, err := ins.TryExecute(t.Context(), newBenchInsertVCursor(), bv, false)
++			require.ErrorContains(t, err, fmt.Sprintf("'%s' bind variable does not exists", missing))
++			// The plan-constant parts are cached now; the error must be the same on the next execution.
++			_, err = ins.TryExecute(t.Context(), newBenchInsertVCursor(), bv, false)
++			require.ErrorContains(t, err, fmt.Sprintf("'%s' bind variable does not exists", missing))
++		})
++	}
++}
++
++// TestInsertShardedConcurrentFirstExecution executes a fresh sharded insert plan from several
++// goroutines at once, so that the race detector can check the lazy computation of its query parts.
++func TestInsertShardedConcurrentFirstExecution(t *testing.T) {
++	ins, bv := newBenchShardedInsert(t, 10, 4, true)
++	var wg sync.WaitGroup
++	for range 8 {
++		execBv := maps.Clone(bv)
++		wg.Go(func() {
++			_, queries, err := ins.getInsertShardedQueries(t.Context(), newBenchInsertVCursor(), execBv)
++			assert.NoError(t, err)
++			assert.NotEmpty(t, queries)
++		})
++	}
++	wg.Wait()
++}
+diff --git a/go/vt/vtgate/engine/insert_old_test.go b/go/vt/vtgate/engine/insert_old_test.go
+new file mode 100644
+index 0000000..9dbfe6f
+--- /dev/null
++++ b/go/vt/vtgate/engine/insert_old_test.go
+@@ -0,0 +1,130 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package engine
++
++import (
++	"context"
++	"strconv"
++	"strings"
++
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/key"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
++	"vitess.io/vitess/go/vt/sqlparser"
++	"vitess.io/vitess/go/vt/srvtopo"
++	"vitess.io/vitess/go/vt/vterrors"
++)
++
++// getInsertShardedQueriesOld is a verbatim copy of the pre-optimization implementation, kept for A/B.
++func (ins *Insert) getInsertShardedQueriesOld(
++	ctx context.Context,
++	vcursor VCursor,
++	bindVars map[string]*querypb.BindVariable,
++) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
++	vindexRowsValues, err := ins.buildVindexRowsValues(ctx, vcursor, bindVars)
++	if err != nil {
++		return nil, nil, err
++	}
++
++	if len(vindexRowsValues) == 0 || len(ins.ColVindexes) == 0 {
++		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.TableName)
++	}
++
++	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues)
++	if err != nil {
++		return nil, nil, err
++	}
++
++	for vIdx, colVindex := range ins.ColVindexes {
++		for rowNum, rowColumnKeys := range vindexRowsValues[vIdx] {
++			if keyspaceIDs[rowNum] == nil {
++				continue
++			}
++			for colIdx, vindexKey := range rowColumnKeys {
++				col := colVindex.Columns[colIdx]
++				name := InsertVarName(col, rowNum)
++				bindVars[name] = sqltypes.ValueBindVariable(vindexKey)
++			}
++		}
++	}
++
++	var indexes []*querypb.Value
++	var destinations []key.ShardDestination
++	for i, ksid := range keyspaceIDs {
++		if ksid != nil {
++			indexes = append(indexes, &querypb.Value{
++				Value: strconv.AppendInt(nil, int64(i), 10),
++			})
++			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
++		}
++	}
++	if len(destinations) == 0 {
++		return nil, nil, nil
++	}
++
++	rss, indexesPerRss, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, indexes, destinations)
++	if err != nil {
++		return nil, nil, err
++	}
++
++	queries := make([]*querypb.BoundQuery, len(rss))
++	for i := range rss {
++		shardBindVars := map[string]*querypb.BindVariable{}
++		var mids []string
++		for _, indexValue := range indexesPerRss[i] {
++			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
++			if keyspaceIDs[index] != nil {
++				walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
++					var arg string
++					switch argType := node.(type) {
++					case *sqlparser.Argument:
++						arg = argType.Name
++					case sqlparser.ListArg:
++						arg = string(argType)
++					default:
++						return true, nil
++					}
++					bv, exists := bindVars[arg]
++					if !exists {
++						return false, vterrors.VT03026(arg)
++					}
++					shardBindVars[arg] = bv
++					return true, nil
++				}
++				mids = append(mids, sqlparser.String(ins.Mid[index]))
++				for _, expr := range ins.Mid[index] {
++					err = sqlparser.Walk(walkFunc, expr, nil)
++					if err != nil {
++						return nil, nil, err
++					}
++				}
++				err = sqlparser.Walk(walkFunc, ins.Suffix, nil)
++				if err != nil {
++					return nil, nil, err
++				}
++			}
++		}
++		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Alias + sqlparser.String(ins.Suffix)
++		queries[i] = &querypb.BoundQuery{
++			Sql:           rewritten,
++			BindVariables: shardBindVars,
++		}
++	}
++
++	return rss, queries, nil
++}

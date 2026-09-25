@@ -1,0 +1,771 @@
+diff --git a/go/mysql/collations/charset/convert.go b/go/mysql/collations/charset/convert.go
+index 2bbc703..4289bc0 100644
+--- a/go/mysql/collations/charset/convert.go
++++ b/go/mysql/collations/charset/convert.go
+@@ -17,7 +17,12 @@ limitations under the License.
+ package charset
+ 
+ import (
++	"encoding/binary"
+ 	"fmt"
++	"math/bits"
++	"slices"
++	"sync"
++	"unicode/utf8"
+ 
+ 	"vitess.io/vitess/go/hack"
+ )
+@@ -26,21 +31,171 @@ func failedConversionError(from, to Charset, input []byte) error {
+ 	return fmt.Errorf("Cannot convert string %q from %s to %s", input, from.Name(), to.Name())
+ }
+ 
+-func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
+-	var failed, nDst int
++// asciiDecoder reports whether every byte below 0x80 at a character boundary
++// in the charset decodes as a one-byte character with the same code point.
++func asciiDecoder(cs Charset) bool {
++	switch cs := cs.(type) {
++	case Charset_utf8mb3, Charset_utf8mb4, Charset_latin1,
++		Charset_gb2312, Charset_gb18030, Charset_euckr,
++		Charset_sjis, Charset_cp932, Charset_ujis, Charset_eucjpms:
++		return true
++	case *Charset_8bit:
++		return eightbitASCIIFlags(cs)&asciiDecodes != 0
++	default:
++		return false
++	}
++}
++
++// asciiEncoder reports whether every code point below 0x80 encodes in the
++// charset as the single byte with the same value. Charset_sjis is not an ASCII
++// encoder because it encodes U+005C as 0x815F.
++func asciiEncoder(cs Charset) bool {
++	switch cs := cs.(type) {
++	case Charset_utf8mb3, Charset_utf8mb4, Charset_latin1,
++		Charset_gb2312, Charset_gb18030, Charset_euckr,
++		Charset_cp932, Charset_ujis, Charset_eucjpms:
++		return true
++	case *Charset_8bit:
++		return eightbitASCIIFlags(cs)&asciiEncodes != 0
++	default:
++		return false
++	}
++}
++
++const (
++	asciiDecodes = 1 << iota
++	asciiEncodes
++)
++
++// eightbitASCII caches the ASCII flags of each Charset_8bit. The 8-bit
++// charsets are not all ASCII supersets: swe7, for example, maps several bytes
++// below 0x80 to accented letters.
++var eightbitASCII sync.Map // map[*Charset_8bit]uint8
++
++func eightbitASCIIFlags(cs *Charset_8bit) uint8 {
++	if flags, ok := eightbitASCII.Load(cs); ok {
++		return flags.(uint8)
++	}
++	flags := uint8(asciiDecodes | asciiEncodes)
++	var buf [utf8.UTFMax]byte
++	for c := range utf8.RuneSelf {
++		if cp, width, ok := cs.DecodeRune([]byte{byte(c)}); !ok || width != 1 || cp != rune(c) {
++			flags &^= asciiDecodes
++		}
++		if w := cs.EncodeRune(buf[:], rune(c)); w != 1 || buf[0] != byte(c) {
++			flags &^= asciiEncodes
++		}
++	}
++	eightbitASCII.Store(cs, flags)
++	return flags
++}
++
++const asciiMask = 0x8080808080808080
++
++// asciiPrefix returns the length of the longest prefix of src that only holds
++// bytes below 0x80.
++func asciiPrefix(src []byte) int {
++	i := 0
++	for ; i+8 <= len(src); i += 8 {
++		if w := binary.LittleEndian.Uint64(src[i:]) & asciiMask; w != 0 {
++			return i + bits.TrailingZeros64(w)/8
++		}
++	}
++	for ; i < len(src) && src[i] < utf8.RuneSelf; i++ {
++	}
++	return i
++}
++
++// countNonASCII returns the number of bytes in src that are 0x80 or above.
++func countNonASCII(src []byte) int {
++	n := 0
++	for ; len(src) >= 8; src = src[8:] {
++		n += bits.OnesCount64(binary.LittleEndian.Uint64(src) & asciiMask)
++	}
++	for _, c := range src {
++		n += int(c >> 7)
++	}
++	return n
++}
++
++// convertBuffer returns dst extended to its full capacity, with room for the
++// conversion of src, and the number of bytes of dst already in use.
++//
++// When ascii is true, every source character that starts with a byte below
++// 0x80 is one byte long and becomes one byte, and every other character holds
++// at least one byte of 0x80 or above and becomes at most MaxWidth bytes, so
++// the size below is an upper bound of the output. Otherwise, the size is an
++// upper bound when MaxWidth is 3 or less, and the conversion loop grows the
++// buffer for wider charsets.
++func convertBuffer(dst []byte, dstCharset Charset, src []byte, ascii bool) ([]byte, int) {
++	maxWidth := dstCharset.MaxWidth()
++	var size int
++	switch {
++	case maxWidth <= 1:
++		size = len(src)
++	case ascii:
++		size = len(src) + countNonASCII(src)*(maxWidth-1)
++	default:
++		size = len(src) * min(maxWidth, 3)
++	}
++	// The conversion loop keeps utf8.UTFMax bytes free before each call to
++	// EncodeRune.
++	size += utf8.UTFMax
+ 
+ 	if dst == nil {
+-		dst = make([]byte, len(src)*3)
+-	} else {
+-		nDst = len(dst)
++		return make([]byte, size), 0
++	}
++	nDst := len(dst)
++	if cap(dst)-nDst < size {
++		dst = slices.Grow(dst, size)
++	}
++	return dst[:cap(dst)], nDst
++}
++
++// growConvert returns a copy of dst[:nDst] in a buffer with room for at
++// least utf8.UTFMax more bytes.
++func growConvert(dst []byte, nDst int) []byte {
++	newDst := make([]byte, max(2*len(dst), nDst+utf8.UTFMax))
++	copy(newDst, dst[:nDst])
++	return newDst
++}
++
++// copyASCIIRun copies the bytes below 0x80 at the start of src to
++// dst[nDst:]. It returns the buffer, the new number of bytes in use, and the
++// number of bytes copied. It is kept out of the conversion loops so that the
++// per-character path stays small.
++func copyASCIIRun(dst []byte, nDst int, src []byte) ([]byte, int, int) {
++	n := asciiPrefix(src)
++	if len(dst)-nDst < n {
++		// convertBuffer sized dst for the whole output, so this only
++		// guards against a charset that reports a wrong MaxWidth.
++		dst = slices.Grow(dst[:nDst], n)
+ 		dst = dst[:cap(dst)]
+ 	}
++	return dst, nDst + copy(dst[nDst:], src[:n]), n
++}
++
++func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
++	var failed int
++	original := src
++	ascii := asciiEncoder(dstCharset)
++	dst, nDst := convertBuffer(dst, dstCharset, src, ascii)
+ 
+-	for _, cp := range string(src) {
+-		if len(dst)-nDst < 4 {
+-			newDst := make([]byte, len(dst)*2)
+-			copy(newDst, dst[:nDst])
+-			dst = newDst
++	for len(src) > 0 {
++		if ascii && src[0] < utf8.RuneSelf {
++			var n int
++			dst, nDst, n = copyASCIIRun(dst, nDst, src)
++			src = src[n:]
++			continue
++		}
++
++		// Like ranging over a string, invalid UTF-8 decodes as U+FFFD
++		// with a width of 1, which is not a conversion failure.
++		cp, width := utf8.DecodeRune(src)
++		src = src[width:]
++
++		if len(dst)-nDst < utf8.UTFMax {
++			dst = growConvert(dst, nDst)
+ 		}
+ 		w := dstCharset.EncodeRune(dst[nDst:], cp)
+ 		if w < 0 {
+@@ -53,23 +208,25 @@ func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, er
+ 	}
+ 
+ 	if failed > 0 {
+-		return dst[:nDst], failedConversionError(&Charset_utf8mb4{}, dstCharset, src)
++		return dst[:nDst], failedConversionError(&Charset_utf8mb4{}, dstCharset, original)
+ 	}
+ 	return dst[:nDst], nil
+ }
+ 
+ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]byte, error) {
+-	var failed, nDst int
++	var failed int
+ 	original := src
+-
+-	if dst == nil {
+-		dst = make([]byte, len(src)*3)
+-	} else {
+-		nDst = len(dst)
+-		dst = dst[:cap(dst)]
+-	}
++	ascii := asciiEncoder(dstCharset) && asciiDecoder(srcCharset)
++	dst, nDst := convertBuffer(dst, dstCharset, src, ascii)
+ 
+ 	for len(src) > 0 {
++		if ascii && src[0] < utf8.RuneSelf {
++			var n int
++			dst, nDst, n = copyASCIIRun(dst, nDst, src)
++			src = src[n:]
++			continue
++		}
++
+ 		cp, width, ok := srcCharset.DecodeRune(src)
+ 		if !ok {
+ 			failed++
+@@ -77,10 +234,8 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
+ 		}
+ 		src = src[width:]
+ 
+-		if len(dst)-nDst < 4 {
+-			newDst := make([]byte, len(dst)*2)
+-			copy(newDst, dst[:nDst])
+-			dst = newDst
++		if len(dst)-nDst < utf8.UTFMax {
++			dst = growConvert(dst, nDst)
+ 		}
+ 
+ 		w := dstCharset.EncodeRune(dst[nDst:], cp)
+diff --git a/go/mysql/collations/charset/convert_ascii_test.go b/go/mysql/collations/charset/convert_ascii_test.go
+new file mode 100644
+index 0000000..219b15b
+--- /dev/null
++++ b/go/mysql/collations/charset/convert_ascii_test.go
+@@ -0,0 +1,260 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package charset_test
++
++import (
++	"bytes"
++	"fmt"
++	"math/rand/v2"
++	"strings"
++	"testing"
++	"unicode/utf8"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/mysql/collations/charset"
++	"vitess.io/vitess/go/mysql/collations/colldata"
++)
++
++// allCharsets returns one instance of every charset that a MySQL 8.0
++// collation uses, plus the Unicode charsets that no collation list covers.
++func allCharsets(t testing.TB) []charset.Charset {
++	seen := map[string]bool{}
++	var out []charset.Charset
++	add := func(cs charset.Charset) {
++		if !seen[cs.Name()] {
++			seen[cs.Name()] = true
++			out = append(out, cs)
++		}
++	}
++	for _, coll := range colldata.All(collations.MySQL8()) {
++		add(coll.Charset())
++	}
++	for _, cs := range []charset.Charset{
++		charset.Charset_utf8mb3{},
++		charset.Charset_utf8mb4{},
++		charset.Charset_utf16{},
++		charset.Charset_utf16le{},
++		charset.Charset_ucs2{},
++		charset.Charset_utf32{},
++		charset.Charset_binary{},
++		charset.Charset_latin1{},
++	} {
++		add(cs)
++	}
++	require.Greater(t, len(out), 30)
++	return out
++}
++
++func charsetByName(t testing.TB, name string) charset.Charset {
++	for _, cs := range allCharsets(t) {
++		if cs.Name() == name {
++			return cs
++		}
++	}
++	require.FailNow(t, "missing charset", name)
++	return nil
++}
++
++// TestASCIICompatibility checks every charset that the conversion fast path
++// treats as ASCII compatible against its DecodeRune and EncodeRune.
++func TestASCIICompatibility(t *testing.T) {
++	for _, cs := range allCharsets(t) {
++		decodes, encodes := true, true
++		for c := range byte(utf8.RuneSelf) {
++			// The trailing bytes check that DecodeRune does not look past
++			// an ASCII byte.
++			for _, in := range [][]byte{{c}, {c, 0x80}, {c, 0xA1, 0xA1}, {c, 0xFF}} {
++				cp, width, ok := cs.DecodeRune(in)
++				if !ok || width != 1 || cp != rune(c) {
++					decodes = false
++				}
++			}
++			var buf [utf8.UTFMax]byte
++			if w := cs.EncodeRune(buf[:], rune(c)); w != 1 || buf[0] != c {
++				encodes = false
++			}
++		}
++		if charset.ASCIIDecoder(cs) {
++			assert.True(t, decodes, "%s is not an ASCII decoder", cs.Name())
++		}
++		if charset.ASCIIEncoder(cs) {
++			assert.True(t, encodes, "%s is not an ASCII encoder", cs.Name())
++		}
++	}
++
++	for name, want := range map[string][2]bool{
++		"utf8mb4":  {true, true},
++		"utf8mb3":  {true, true},
++		"latin1":   {true, true},
++		"ascii":    {true, true},
++		"latin2":   {true, true},
++		"cp1251":   {true, true},
++		"gb18030":  {true, true},
++		"gb2312":   {true, true},
++		"euckr":    {true, true},
++		"cp932":    {true, true},
++		"ujis":     {true, true},
++		"eucjpms":  {true, true},
++		"koi8r":    {true, true},
++		"macroman": {true, true},
++		"sjis":     {true, false},
++		"swe7":     {false, false},
++		"utf16":    {false, false},
++		"utf16le":  {false, false},
++		"ucs2":     {false, false},
++		"utf32":    {false, false},
++		"binary":   {false, false},
++	} {
++		cs := charsetByName(t, name)
++		assert.Equal(t, want[0], charset.ASCIIDecoder(cs), "ASCIIDecoder(%s)", name)
++		assert.Equal(t, want[1], charset.ASCIIEncoder(cs), "ASCIIEncoder(%s)", name)
++	}
++}
++
++func TestASCIIPrefix(t *testing.T) {
++	for n := range 40 {
++		for pos := 0; pos <= n; pos++ {
++			in := bytes.Repeat([]byte{'a'}, n)
++			want, wantCount := n, 0
++			if pos < n {
++				in[pos] = 0x80 | byte(pos)
++				want, wantCount = pos, 1
++			}
++			assert.Equal(t, want, charset.ASCIIPrefix(in), "n=%d pos=%d", n, pos)
++			assert.Equal(t, wantCount, charset.CountNonASCII(in), "n=%d pos=%d", n, pos)
++		}
++	}
++	assert.Equal(t, 17, charset.CountNonASCII(bytes.Repeat([]byte{0xFF}, 17)))
++}
++
++var sampleRunes = []rune(
++	"abcdefghijklmnopqrstuvwxyz0123456789 \\~?\x00\x7f" +
++		"àéîõüßÆØÅ€£¥©" +
++		"ĄČĘŁŃŚŹŻ" +
++		"ЖЗИЙКЛМжзий" +
++		"日本語漢字テキストカタカナｱｲｳ" +
++		"中文简体字符" +
++		"한국어글자" +
++		"😀🎉" +
++		"\uFFFD\u2028")
++
++// convertInputs returns inputs in the native encoding of cs: ASCII only,
++// mostly ASCII, mostly non-ASCII, and random bytes that are often invalid.
++func convertInputs(rng *rand.Rand, cs charset.Charset) [][]byte {
++	var inputs [][]byte
++	for _, n := range []int{0, 1, 7, 8, 9, 15, 16, 17, 31, 64, 200} {
++		ascii := make([]byte, n)
++		for i := range ascii {
++			ascii[i] = byte(rng.IntN(utf8.RuneSelf))
++		}
++		inputs = append(inputs, ascii)
++
++		for _, nonASCII := range []int{2, 50} {
++			var sb strings.Builder
++			for range n {
++				if rng.IntN(100) < nonASCII {
++					sb.WriteRune(sampleRunes[rng.IntN(len(sampleRunes))])
++				} else {
++					sb.WriteByte(byte('a' + rng.IntN(26)))
++				}
++			}
++			// Characters that cs cannot encode become '?', which is
++			// what a stored value would hold.
++			native, _ := charset.LegacyConvert(nil, cs, []byte(sb.String()), charset.Charset_utf8mb4{})
++			inputs = append(inputs, native)
++		}
++
++		random := make([]byte, n)
++		for i := range random {
++			if rng.IntN(3) == 0 {
++				random[i] = byte(rng.IntN(256))
++			} else {
++				random[i] = byte(rng.IntN(utf8.RuneSelf))
++			}
++		}
++		inputs = append(inputs, random)
++	}
++	return inputs
++}
++
++func requireSameConversion(t *testing.T, dst []byte, dstCS charset.Charset, src []byte, srcCS charset.Charset) {
++	t.Helper()
++	var legacyDst, newDst []byte
++	if dst != nil {
++		legacyDst = append(make([]byte, 0, cap(dst)), dst...)
++		newDst = append(make([]byte, 0, cap(dst)), dst...)
++	}
++	srcCopy := bytes.Clone(src)
++	want, wantErr := charset.LegacyConvert(legacyDst, dstCS, src, srcCS)
++	got, gotErr := charset.Convert(newDst, dstCS, src, srcCS)
++	msg := fmt.Sprintf("%s -> %s, dst=%q, src=%#v", srcCS.Name(), dstCS.Name(), dst, src)
++	require.Equal(t, srcCopy, src, msg)
++	require.Equal(t, want, got, msg)
++	if wantErr == nil {
++		require.NoError(t, gotErr, msg)
++	} else {
++		require.EqualError(t, gotErr, wantErr.Error(), msg)
++	}
++}
++
++// TestConvertMatchesLegacy compares Convert with the implementation that
++// predates the ASCII fast path, for every pair of charsets.
++func TestConvertMatchesLegacy(t *testing.T) {
++	rng := rand.New(rand.NewPCG(1, 2))
++	css := allCharsets(t)
++	for _, srcCS := range css {
++		inputs := convertInputs(rng, srcCS)
++		for _, dstCS := range css {
++			for _, in := range inputs {
++				requireSameConversion(t, nil, dstCS, in, srcCS)
++			}
++			// Append to a destination with spare capacity.
++			for _, in := range inputs[len(inputs)-8:] {
++				requireSameConversion(t, make([]byte, 3, 8), dstCS, in, srcCS)
++				requireSameConversion(t, []byte("prefix"), dstCS, in, srcCS)
++			}
++		}
++	}
++}
++
++// TestConvertSmallDestination checks that a non-nil destination with less
++// than utf8.UTFMax bytes of capacity works. The legacy implementation panics
++// on it.
++func TestConvertSmallDestination(t *testing.T) {
++	src := []byte("h\xe9llo w\xf6rld")
++	for _, dst := range [][]byte{{}, make([]byte, 1), make([]byte, 0, 1), make([]byte, 2, 3)} {
++		got, err := charset.Convert(dst, charset.Charset_utf8mb4{}, src, charset.Charset_latin1{})
++		require.NoError(t, err)
++		assert.Equal(t, append(bytes.Clone(dst), "héllo wörld"...), got)
++	}
++}
++
++func FuzzConvertMatchesLegacy(f *testing.F) {
++	css := allCharsets(f)
++	f.Add([]byte("hello world"), uint8(0), uint8(1))
++	f.Add([]byte("h\xe9llo \x81\x40 w\xf6rld \xff"), uint8(3), uint8(7))
++	f.Add([]byte("日本語 and ASCII \\ tail"), uint8(5), uint8(2))
++	f.Fuzz(func(t *testing.T, in []byte, from, to uint8) {
++		srcCS := css[int(from)%len(css)]
++		dstCS := css[int(to)%len(css)]
++		requireSameConversion(t, nil, dstCS, in, srcCS)
++		requireSameConversion(t, []byte("prefix"), dstCS, in, srcCS)
++	})
++}
+diff --git a/go/mysql/collations/charset/convert_bench_test.go b/go/mysql/collations/charset/convert_bench_test.go
+new file mode 100644
+index 0000000..1fa2f70
+--- /dev/null
++++ b/go/mysql/collations/charset/convert_bench_test.go
+@@ -0,0 +1,98 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package charset
++
++import (
++	"os"
++	"strings"
++	"testing"
++
++	"vitess.io/vitess/go/mysql/collations/charset/eightbit"
++)
++
++// benchASCII is a stand-in for the ascii charset of colldata, which this
++// package cannot import.
++var benchASCII = func() *Charset_8bit {
++	var toUnicode [256]uint16
++	for i := range 128 {
++		toUnicode[i] = uint16(i)
++	}
++	fromUnicode := make([]byte, 128)
++	for i := range fromUnicode {
++		fromUnicode[i] = byte(i)
++	}
++	return &Charset_8bit{
++		Name_:       "ascii",
++		ToUnicode:   &toUnicode,
++		FromUnicode: []eightbit.UnicodeMapping{{From: 0, To: 127, Range: fromUnicode}},
++	}
++}()
++
++func benchText(size int, nonASCII string) []byte {
++	var sb strings.Builder
++	words := []string{"lorem ", "ipsum ", "dolor ", "sit ", "amet ", "consectetur "}
++	for i := 0; sb.Len() < size; i++ {
++		if nonASCII != "" && i%12 == 1 {
++			sb.WriteString(nonASCII)
++		}
++		sb.WriteString(words[i%len(words)])
++	}
++	return []byte(sb.String())
++}
++
++// BenchmarkConvertPairs runs Convert, or the legacy implementation when
++// CONVERT_IMPL=legacy, so that benchstat can compare two runs.
++func BenchmarkConvertPairs(b *testing.B) {
++	convert := Convert
++	if os.Getenv("CONVERT_IMPL") == "legacy" {
++		convert = legacyConvert
++	}
++	utf8mb4 := Charset_utf8mb4{}
++	cases := []struct {
++		name     string
++		from, to Charset
++		text     string // non-ASCII text mixed into ASCII words
++	}{
++		{"latin1-utf8mb4/ascii", Charset_latin1{}, utf8mb4, ""},
++		{"latin1-utf8mb4/mostly", Charset_latin1{}, utf8mb4, "é"},
++		{"utf8mb4-latin1/ascii", utf8mb4, Charset_latin1{}, ""},
++		{"utf8mb4-latin1/mostly", utf8mb4, Charset_latin1{}, "é"},
++		{"utf8mb4-utf8mb3/mostly", utf8mb4, Charset_utf8mb3{}, "日本"},
++		{"ascii-utf8mb4/ascii", benchASCII, utf8mb4, ""},
++		{"utf8mb4-ascii/ascii", utf8mb4, benchASCII, ""},
++		{"sjis-utf8mb4/cjk", Charset_sjis{}, utf8mb4, "日本語のテキスト"},
++		{"utf16-utf8mb4/ascii", Charset_utf16{}, utf8mb4, ""},
++		{"latin1-utf16/ascii", Charset_latin1{}, Charset_utf16{}, ""},
++	}
++	for _, tc := range cases {
++		for _, size := range []int{10, 1024} {
++			src, err := legacyConvert(nil, tc.from, benchText(size, tc.text), utf8mb4)
++			if err != nil {
++				b.Fatal(err)
++			}
++			b.Run(tc.name+"/"+map[int]string{10: "10B", 1024: "1KB"}[size], func(b *testing.B) {
++				b.ReportAllocs()
++				b.SetBytes(int64(len(src)))
++				for b.Loop() {
++					if _, err := convert(nil, tc.to, src, tc.from); err != nil {
++						b.Fatal(err)
++					}
++				}
++			})
++		}
++	}
++}
+diff --git a/go/mysql/collations/charset/convert_legacy_test.go b/go/mysql/collations/charset/convert_legacy_test.go
+new file mode 100644
+index 0000000..44c8e0b
+--- /dev/null
++++ b/go/mysql/collations/charset/convert_legacy_test.go
+@@ -0,0 +1,115 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package charset
++
++// This file holds a verbatim copy of the conversion routines as they were
++// before the ASCII fast path was added. The equivalence tests and the A/B
++// benchmarks compare the current implementation against it.
++
++func legacyConvertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
++	var failed, nDst int
++
++	if dst == nil {
++		dst = make([]byte, len(src)*3)
++	} else {
++		nDst = len(dst)
++		dst = dst[:cap(dst)]
++	}
++
++	for _, cp := range string(src) {
++		if len(dst)-nDst < 4 {
++			newDst := make([]byte, len(dst)*2)
++			copy(newDst, dst[:nDst])
++			dst = newDst
++		}
++		w := dstCharset.EncodeRune(dst[nDst:], cp)
++		if w < 0 {
++			failed++
++			if w = dstCharset.EncodeRune(dst[nDst:], '?'); w < 0 {
++				break
++			}
++		}
++		nDst += w
++	}
++
++	if failed > 0 {
++		return dst[:nDst], failedConversionError(&Charset_utf8mb4{}, dstCharset, src)
++	}
++	return dst[:nDst], nil
++}
++
++func legacyConvertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]byte, error) {
++	var failed, nDst int
++	original := src
++
++	if dst == nil {
++		dst = make([]byte, len(src)*3)
++	} else {
++		nDst = len(dst)
++		dst = dst[:cap(dst)]
++	}
++
++	for len(src) > 0 {
++		cp, width, ok := srcCharset.DecodeRune(src)
++		if !ok {
++			failed++
++			cp = '?'
++		}
++		src = src[width:]
++
++		if len(dst)-nDst < 4 {
++			newDst := make([]byte, len(dst)*2)
++			copy(newDst, dst[:nDst])
++			dst = newDst
++		}
++
++		w := dstCharset.EncodeRune(dst[nDst:], cp)
++		if w < 0 {
++			failed++
++			w = dstCharset.EncodeRune(dst[nDst:], '?')
++			if w < 0 {
++				break
++			}
++		}
++		nDst += w
++	}
++
++	if failed > 0 {
++		return dst[:nDst], failedConversionError(srcCharset, dstCharset, original)
++	}
++	return dst[:nDst], nil
++}
++
++func legacyConvert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]byte, error) {
++	if dstCharset.IsSuperset(srcCharset) {
++		if dst != nil {
++			return append(dst, src...), nil
++		}
++		return src, nil
++	}
++	if trans, ok := dstCharset.(Convertible); ok {
++		return trans.Convert(dst, src, srcCharset)
++	}
++	switch srcCharset.(type) {
++	case Charset_binary:
++		return ConvertFromBinary(dst, dstCharset, src)
++	case Charset_utf8mb3, Charset_utf8mb4:
++		return legacyConvertFastFromUTF8(dst, dstCharset, src)
++	default:
++		return legacyConvertSlow(dst, dstCharset, src, srcCharset)
++	}
++}
+diff --git a/go/mysql/collations/charset/export_test.go b/go/mysql/collations/charset/export_test.go
+new file mode 100644
+index 0000000..0d67773
+--- /dev/null
++++ b/go/mysql/collations/charset/export_test.go
+@@ -0,0 +1,27 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package charset
++
++// These exports let the external charset_test package, which can import
++// colldata to reach every charset, test the unexported conversion helpers.
++var (
++	LegacyConvert = legacyConvert
++	ASCIIDecoder  = asciiDecoder
++	ASCIIEncoder  = asciiEncoder
++	ASCIIPrefix   = asciiPrefix
++	CountNonASCII = countNonASCII
++)

@@ -1,0 +1,477 @@
+diff --git a/go/mysql/collations/colldata/8bit.go b/go/mysql/collations/colldata/8bit.go
+index 05936e2..8f40c15 100644
+--- a/go/mysql/collations/colldata/8bit.go
++++ b/go/mysql/collations/colldata/8bit.go
+@@ -158,7 +158,12 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
+ 	sortOrder := c.sort
+ 	cmpLen := min(len(left), len(right))
+ 
+-	for i := range cmpLen {
++	// Identical bytes always have identical weights, so skip the common prefix.
++	var start int
++	if cmpLen > 0 && left[0] == right[0] {
++		start, _ = commonPrefix(left, right)
++	}
++	for i := start; i < cmpLen; i++ {
+ 		sortL, sortR := sortOrder[left[i]], sortOrder[right[i]]
+ 		if sortL != sortR {
+ 			return int(sortL) - int(sortR)
+diff --git a/go/mysql/collations/colldata/collate_fastpath_test.go b/go/mysql/collations/colldata/collate_fastpath_test.go
+new file mode 100644
+index 0000000..3bc3a00
+--- /dev/null
++++ b/go/mysql/collations/colldata/collate_fastpath_test.go
+@@ -0,0 +1,299 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package colldata
++
++import (
++	"bytes"
++	"fmt"
++	"math/rand/v2"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/mysql/collations/charset"
++)
++
++// referenceCollate8bitSimpleCI is the straightforward byte-by-byte implementation
++// of Collation_8bit_simple_ci.Collate, without the common prefix skip.
++func referenceCollate8bitSimpleCI(c *Collation_8bit_simple_ci, left, right []byte, rightIsPrefix bool) int {
++	sortOrder := c.sort
++	cmpLen := min(len(left), len(right))
++
++	for i := range cmpLen {
++		sortL, sortR := sortOrder[left[i]], sortOrder[right[i]]
++		if sortL != sortR {
++			return int(sortL) - int(sortR)
++		}
++	}
++	if rightIsPrefix {
++		left = left[:cmpLen]
++	}
++	return len(left) - len(right)
++}
++
++// collatePieces are the building blocks for the random strings in the equivalence
++// tests: ASCII with different cases and trailing spaces, accented Latin, CJK,
++// supplementary characters, and invalid or truncated UTF-8 sequences.
++var collatePieces = [][]byte{
++	[]byte("a"), []byte("A"), []byte("b"), []byte("B"), []byte("z"), []byte(" "), []byte("  "),
++	[]byte("0"), []byte("_"), []byte("\x00"), []byte("\x7f"),
++	[]byte("é"), []byte("É"), []byte("e"), []byte("ß"), []byte("ö"), []byte("Ö"), []byte("ø"),
++	[]byte("日"), []byte("本"), []byte("�"), []byte("￿"),
++	[]byte("😀"), []byte("😁"), []byte("\U00010000"),
++	{0xff},
++	{0x80},
++	{0xbf},
++	{0xc0, 0x80},
++	{0xc3},
++	{0xe6, 0x97},
++	{0xed, 0xa0, 0x80},
++	{0xf0, 0x9f},
++	{0xf4, 0x90, 0x80, 0x80},
++	{0xe0, 0x80, 0xaf},
++	[]byte("The quick brown fox "), []byte("jumps över the lazy dög"), []byte("日本語のテキスト"),
++}
++
++func randomCollateString(rng *rand.Rand) []byte {
++	var out []byte
++	for range rng.IntN(12) {
++		out = append(out, collatePieces[rng.IntN(len(collatePieces))]...)
++	}
++	return out
++}
++
++func randomBytes(rng *rand.Rand) []byte {
++	out := make([]byte, rng.IntN(40))
++	for i := range out {
++		out[i] = byte(rng.Uint32())
++	}
++	return out
++}
++
++// mutate returns a copy of s with a small random edit, so that the two strings share
++// a long prefix and differ at an arbitrary position, possibly inside a rune.
++func mutate(rng *rand.Rand, s []byte) []byte {
++	out := append([]byte{}, s...)
++	switch rng.IntN(6) {
++	case 0:
++		if len(out) > 0 {
++			out[rng.IntN(len(out))] = byte(rng.Uint32())
++		}
++	case 1:
++		if len(out) > 0 {
++			out = out[:rng.IntN(len(out))]
++		}
++	case 2:
++		out = append(out, collatePieces[rng.IntN(len(collatePieces))]...)
++	case 3:
++		out = bytes.ToUpper(out)
++	case 4:
++		pos := rng.IntN(len(out) + 1)
++		piece := collatePieces[rng.IntN(len(collatePieces))]
++		out = append(out[:pos], append(append([]byte{}, piece...), out[pos:]...)...)
++	case 5:
++		out = append(out, ' ')
++	}
++	return out
++}
++
++func collatePairs(t *testing.T, cs charset.Charset, visit func(left, right []byte)) {
++	rng := rand.New(rand.NewPCG(1, 2))
++
++	convert := func(s []byte) []byte {
++		if _, ok := cs.(charset.Charset_utf8mb4); ok {
++			return s
++		}
++		if _, ok := cs.(charset.Charset_utf8mb3); ok {
++			return s
++		}
++		// Encode the valid parts in the target charset, but keep a few raw
++		// invalid inputs too.
++		out, err := charset.ConvertFromUTF8(nil, cs, s)
++		if err != nil {
++			return s
++		}
++		return out
++	}
++
++	var corpus [][]byte
++	for range 200 {
++		corpus = append(corpus, convert(randomCollateString(rng)))
++	}
++	corpus = append(corpus, nil, []byte{}, []byte("abcdefgh"), []byte("abcdefghi"), []byte("ABCDEFGH"))
++
++	for _, l := range corpus {
++		for _, r := range corpus {
++			visit(l, r)
++		}
++	}
++	for range 20000 {
++		base := convert(randomCollateString(rng))
++		visit(base, mutate(rng, base))
++		visit(base, convert(mutate(rng, randomCollateString(rng))))
++		b := randomBytes(rng)
++		visit(b, mutate(rng, b))
++	}
++}
++
++func TestCollateUnicodeGeneralCIFastPathEquivalence(t *testing.T) {
++	var tested int
++	for _, coll := range testall() {
++		c, ok := coll.(*Collation_unicode_general_ci)
++		if !ok {
++			continue
++		}
++		tested++
++		t.Run(c.Name(), func(t *testing.T) {
++			collatePairs(t, c.charset, func(left, right []byte) {
++				for _, isPrefix := range []bool{false, true} {
++					want := c.collateGeneric(left, right, isPrefix)
++					got := c.Collate(left, right, isPrefix)
++					if want != got {
++						require.Equal(t, want, got, "Collate(%q, %q, %v)", left, right, isPrefix)
++					}
++				}
++			})
++		})
++	}
++	assert.Equal(t, 6, tested)
++}
++
++func TestCollate8bitSimpleCIFastPathEquivalence(t *testing.T) {
++	var tested int
++	for _, coll := range testall() {
++		c, ok := coll.(*Collation_8bit_simple_ci)
++		if !ok {
++			continue
++		}
++		tested++
++		t.Run(c.Name(), func(t *testing.T) {
++			collatePairs(t, c.charset, func(left, right []byte) {
++				for _, isPrefix := range []bool{false, true} {
++					want := referenceCollate8bitSimpleCI(c, left, right, isPrefix)
++					got := c.Collate(left, right, isPrefix)
++					if want != got {
++						require.Equal(t, want, got, "Collate(%q, %q, %v)", left, right, isPrefix)
++					}
++				}
++			})
++		})
++	}
++	assert.Positive(t, tested)
++}
++
++func TestCommonPrefix(t *testing.T) {
++	cases := []struct {
++		a, b  string
++		n     int
++		ascii bool
++	}{
++		{"", "", 0, true},
++		{"abc", "", 0, true},
++		{"abcdefgh", "abcdefgh", 8, true},
++		{"abcdefghi", "abcdefgh", 8, true},
++		{"abcdefgXi", "abcdefgYi", 7, true},
++		{"abcdefghijklmnoX", "abcdefghijklmnoY", 15, true},
++		{"éabcdefgX", "éabcdefgY", 9, false},
++		{"abcdefgéX", "abcdefgéY", 9, false},
++		{"abcé", "abcè", 4, false},
++		{"Xé", "Yé", 0, true},
++		{"abcdefghijklmnopé", "abcdefghijklmnopè", 17, false},
++	}
++	for _, tc := range cases {
++		n, ascii := commonPrefix([]byte(tc.a), []byte(tc.b))
++		assert.Equal(t, tc.n, n, "commonPrefix(%q, %q)", tc.a, tc.b)
++		assert.Equal(t, tc.ascii, ascii, "commonPrefix(%q, %q)", tc.a, tc.b)
++	}
++}
++
++func BenchmarkCollateFastPath(b *testing.B) {
++	type input struct {
++		name        string
++		left, right string
++	}
++	mk := func(base string, n int) string {
++		var out []byte
++		for len(out) < n {
++			out = append(out, base...)
++		}
++		return string(out[:n])
++	}
++	var inputs []input
++	for _, n := range []int{8, 44, 256} {
++		ascii := mk("The quick brown fox jumps over the lazy dog. ", n)
++		// accented Latin text, truncated at a rune boundary
++		latin := []rune(mk("Très vite, le renard brun saute par-dessus le chien paresseux. ", n))
++		latinStr := string(latin[:n])
++		inputs = append(inputs,
++			input{fmt.Sprintf("ascii/equal/%d", n), ascii, ascii},
++			input{fmt.Sprintf("ascii/diff-end/%d", n), ascii, ascii[:n-1] + "!"},
++			input{fmt.Sprintf("ascii/diff-start/%d", n), ascii, "!" + ascii[1:]},
++			input{fmt.Sprintf("ascii/case/%d", n), ascii, string(bytes.ToUpper([]byte(ascii)))},
++			input{fmt.Sprintf("latin/equal/%d", n), latinStr, latinStr},
++			input{fmt.Sprintf("latin/diff-end/%d", n), latinStr, latinStr[:len(latinStr)-1] + "!"},
++			input{fmt.Sprintf("latin/case/%d", n), latinStr, string(bytes.ToUpper([]byte(latinStr)))},
++		)
++	}
++
++	general := Lookup(collations.MySQL8().LookupByName("utf8mb4_general_ci")).(*Collation_unicode_general_ci)
++	general3 := Lookup(collations.MySQL8().LookupByName("utf8mb3_general_ci")).(*Collation_unicode_general_ci)
++	latin1 := Lookup(collations.MySQL8().LookupByName("latin1_swedish_ci")).(*Collation_8bit_simple_ci)
++
++	for _, in := range inputs {
++		l, r := []byte(in.left), []byte(in.right)
++		ll, err := charset.ConvertFromUTF8(nil, latin1.charset, l)
++		require.NoError(b, err)
++		rr, err := charset.ConvertFromUTF8(nil, latin1.charset, r)
++		require.NoError(b, err)
++
++		for _, impl := range []string{"old", "new"} {
++			old := impl == "old"
++			b.Run(fmt.Sprintf("coll=utf8mb4_general_ci/in=%s/impl=%s", in.name, impl), func(b *testing.B) {
++				b.SetBytes(int64(len(l)))
++				for b.Loop() {
++					if old {
++						_ = general.collateGeneric(l, r, false)
++					} else {
++						_ = general.Collate(l, r, false)
++					}
++				}
++			})
++			b.Run(fmt.Sprintf("coll=utf8mb3_general_ci/in=%s/impl=%s", in.name, impl), func(b *testing.B) {
++				b.SetBytes(int64(len(l)))
++				for b.Loop() {
++					if old {
++						_ = general3.collateGeneric(l, r, false)
++					} else {
++						_ = general3.Collate(l, r, false)
++					}
++				}
++			})
++			b.Run(fmt.Sprintf("coll=latin1_swedish_ci/in=%s/impl=%s", in.name, impl), func(b *testing.B) {
++				b.SetBytes(int64(len(ll)))
++				for b.Loop() {
++					if old {
++						_ = referenceCollate8bitSimpleCI(latin1, ll, rr, false)
++					} else {
++						_ = latin1.Collate(ll, rr, false)
++					}
++				}
++			})
++		}
++	}
++}
+diff --git a/go/mysql/collations/colldata/unicode.go b/go/mysql/collations/colldata/unicode.go
+index 8dba199..34c5d1e 100644
+--- a/go/mysql/collations/colldata/unicode.go
++++ b/go/mysql/collations/colldata/unicode.go
+@@ -18,8 +18,10 @@ package colldata
+ 
+ import (
+ 	"bytes"
++	"encoding/binary"
+ 	"math"
+ 	"math/bits"
++	"unicode/utf8"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/mysql/collations/charset"
+@@ -50,6 +52,138 @@ func (c *Collation_unicode_general_ci) IsBinary() bool {
+ }
+ 
+ func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool) int {
++	switch c.charset.(type) {
++	case charset.Charset_utf8mb4:
++		return c.collateUTF8(left, right, isPrefix, true)
++	case charset.Charset_utf8mb3:
++		return c.collateUTF8(left, right, isPrefix, false)
++	}
++	return c.collateGeneric(left, right, isPrefix)
++}
++
++// collateUTF8 is the Collate implementation for the utf8mb3 and utf8mb4 charsets.
++// It returns exactly the same results as collateGeneric, but it skips the longest
++// common byte prefix of both strings first, and then decodes the remaining runes
++// without going through the charset interface.
++//
++// Skipping the common prefix is safe because identical bytes decode into identical
++// runes, and hence identical weights, as long as the skipped prefix is valid in the
++// charset and ends at a rune boundary. When the prefix contains an invalid sequence,
++// the generic implementation would fall back to a byte comparison at that point, so
++// we let it handle the input from the start.
++func (c *Collation_unicode_general_ci) collateUTF8(left, right []byte, isPrefix, mb4 bool) int {
++	n, ascii := commonPrefix(left, right)
++
++	// Back up to the start of the rune that contains the first differing byte.
++	for n > 0 && ((n < len(left) && !utf8.RuneStart(left[n])) || (n < len(right) && !utf8.RuneStart(right[n]))) {
++		n--
++	}
++	if !ascii && !validUTF8Prefix(left[:n], mb4) {
++		return c.collateGeneric(left, right, isPrefix)
++	}
++	left = left[n:]
++	right = right[n:]
++
++	unicaseInfo := c.unicase
++	for len(left) > 0 && len(right) > 0 {
++		var (
++			l, r           rune
++			lWidth, rWidth int
++		)
++		if l0, r0 := left[0], right[0]; l0|r0 < utf8.RuneSelf {
++			l, r, lWidth, rWidth = rune(l0), rune(r0), 1, 1
++		} else {
++			var lOK, rOK bool
++			if mb4 {
++				l, lWidth, lOK = charset.Charset_utf8mb4{}.DecodeRune(left)
++				r, rWidth, rOK = charset.Charset_utf8mb4{}.DecodeRune(right)
++			} else {
++				l, lWidth, lOK = charset.Charset_utf8mb3{}.DecodeRune(left)
++				r, rWidth, rOK = charset.Charset_utf8mb3{}.DecodeRune(right)
++			}
++			if !lOK || !rOK {
++				return bytes.Compare(left, right)
++			}
++		}
++
++		if l != r {
++			lRune := unicaseInfo.unicodeSort(l)
++			rRune := unicaseInfo.unicodeSort(r)
++
++			if lRune > rRune {
++				return 1
++			} else if lRune < rRune {
++				return -1
++			}
++		}
++
++		left = left[lWidth:]
++		right = right[rWidth:]
++	}
++	if isPrefix {
++		return len(right)
++	}
++	return len(left) - len(right)
++}
++
++// validUTF8Prefix reports whether p consists only of complete, valid runes
++// as decoded by the utf8mb4 (mb4 == true) or utf8mb3 charsets.
++func validUTF8Prefix(p []byte, mb4 bool) bool {
++	if !utf8.Valid(p) {
++		return false
++	}
++	if !mb4 {
++		// utf8mb3 does not support 4-byte sequences, which all start with a byte >= 0xF0,
++		// i.e. a byte with its 4 high bits set.
++		const hibits = 0x8080808080808080
++		for len(p) >= 8 {
++			x := binary.LittleEndian.Uint64(p)
++			if x&(x<<1)&(x<<2)&(x<<3)&hibits != 0 {
++				return false
++			}
++			p = p[8:]
++		}
++		for _, b := range p {
++			if b >= 0xF0 {
++				return false
++			}
++		}
++	}
++	return true
++}
++
++// commonPrefix returns the length of the longest common prefix of a and b,
++// and whether all the bytes in that prefix are ASCII.
++func commonPrefix(a, b []byte) (n int, ascii bool) {
++	const hibits = 0x8080808080808080
++	var acc uint64
++
++	limit := min(len(a), len(b))
++	a, b = a[:limit], b[:limit]
++	for len(a) >= 8 && len(b) >= 8 {
++		x := binary.LittleEndian.Uint64(a)
++		y := binary.LittleEndian.Uint64(b)
++		if d := x ^ y; d != 0 {
++			eq := bits.TrailingZeros64(d) >> 3
++			acc |= x & (1<<(8*eq) - 1)
++			return n + eq, acc&hibits == 0
++		}
++		acc |= x
++		n += 8
++		a, b = a[8:], b[8:]
++	}
++	for i := range a {
++		if a[i] != b[i] {
++			break
++		}
++		acc |= uint64(a[i])
++		n++
++	}
++	return n, acc&hibits == 0
++}
++
++// collateGeneric is the Collate implementation for all the charsets.
++func (c *Collation_unicode_general_ci) collateGeneric(left, right []byte, isPrefix bool) int {
+ 	unicaseInfo := c.unicase
+ 	cs := c.charset
+ 

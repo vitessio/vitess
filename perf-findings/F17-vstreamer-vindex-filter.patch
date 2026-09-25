@@ -1,0 +1,262 @@
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go b/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
+index a59ac71..e39a048 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
+@@ -320,11 +320,18 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
+ }
+ 
+ // mapValues maps the row values against the plan.
+-// The output of the filtering operation is stored in the 'result' argument because
+-// filtering cannot be performed in-place. The result argument must be a slice of
+-// length equal to ColExprs
+-func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
+-	result := make([]sqltypes.Value, len(plan.ColExprs))
++// Filtering cannot be performed in-place, so the output is stored in buf if it
++// has enough capacity, and in a newly allocated slice otherwise. The returned
++// slice is only valid until buf is passed to mapValues again: callers that reuse
++// buf across rows must copy the values out (e.g. with sqltypes.RowToProto3)
++// before mapping the next row.
++func (plan *Plan) mapValues(values []sqltypes.Value, buf []sqltypes.Value) ([]sqltypes.Value, error) {
++	var result []sqltypes.Value
++	if cap(buf) >= len(plan.ColExprs) {
++		result = buf[:len(plan.ColExprs)]
++	} else {
++		result = make([]sqltypes.Value, len(plan.ColExprs))
++	}
+ 
+ 	for i, colExpr := range plan.ColExprs {
+ 		if colExpr.ColNum == -1 {
+@@ -378,6 +385,28 @@ func (plan *Plan) mapBitmap(source *mysql.Bitmap) *binlogdatapb.RowChange_Bitmap
+ }
+ 
+ func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
++	// Fast path for functional single column vindexes (hash, xxhash, numeric,
++	// binary, unicode_loose_*, ...): for all of them Map is a per-value call
++	// to Hash, so call Hash directly and skip the allocations of the generic
++	// vindexes.Map path. This runs for every before and after image of every
++	// row event, and during a reshard every target shard's stream runs it for
++	// every row of the source shard.
++	// If Hash fails or returns an empty keyspace id, fall back to the generic
++	// path, which returns the same error as before.
++	if len(vindexColumns) == 1 {
++		if hasher, ok := vindex.(vindexes.Hashing); ok {
++			if _, multi := vindex.(vindexes.MultiColumn); !multi {
++				if ksid, err := hasher.Hash(values[vindexColumns[0]]); err == nil && len(ksid) > 0 {
++					return ksid, nil
++				}
++			}
++		}
++	}
++	return getKeyspaceIDSlow(values, vindex, vindexColumns)
++}
++
++// getKeyspaceIDSlow maps the row to a keyspace id using the generic vindexes.Map.
++func getKeyspaceIDSlow(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+ 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
+ 	for _, col := range vindexColumns {
+ 		vindexValues = append(vindexValues, values[col])
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go b/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
+index 439ae56..7b57a21 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
+@@ -1044,3 +1044,85 @@ func TestPlanMapBitmap(t *testing.T) {
+ 		assert.Equal(t, w, got.Cols[i/8]&(1<<(i%8)) != 0, "bit %d", i)
+ 	}
+ }
++
++// TestGetKeyspaceIDHashingFastPath confirms that getKeyspaceID, which calls Hash
++// directly for single column vindexes that implement vindexes.Hashing, returns
++// the same keyspace ids and errors as the generic vindexes.Map path, including
++// for values the vindexes cannot map.
++func TestGetKeyspaceIDHashingFastPath(t *testing.T) {
++	values := []sqltypes.Value{
++		sqltypes.NULL,
++		sqltypes.NewInt64(0),
++		sqltypes.NewInt64(1),
++		sqltypes.NewInt64(-1),
++		sqltypes.NewInt64(9223372036854775807),
++		sqltypes.NewUint64(18446744073709551615),
++		sqltypes.NewInt32(-42),
++		sqltypes.NewFloat64(1.5),
++		sqltypes.NewDecimal("12.00"),
++		sqltypes.NewVarChar(""),
++		sqltypes.NewVarChar("abc"),
++		sqltypes.NewVarChar("ABC  "),
++		sqltypes.NewVarChar("123"),
++		sqltypes.NewVarChar("\xff\xfe"),
++		sqltypes.NewVarBinary("\x00\x01\x02"),
++	}
++	for _, vindexType := range []string{
++		"hash", "xxhash", "numeric", "binary", "binary_md5", "reverse_bits",
++		"unicode_loose_md5", "unicode_loose_xxhash",
++	} {
++		vindex, err := vindexes.CreateVindex(vindexType, vindexType, nil)
++		require.NoError(t, err)
++		_, isHashing := vindex.(vindexes.Hashing)
++		require.True(t, isHashing, "%s must implement vindexes.Hashing to exercise the fast path", vindexType)
++		for _, value := range values {
++			// Put the vindex column in the middle of the row.
++			row := []sqltypes.Value{sqltypes.NewInt64(7), value, sqltypes.NewVarChar("x")}
++			want, wantErr := getKeyspaceIDSlow(row, vindex, []int{1})
++			got, gotErr := getKeyspaceID(row, vindex, []int{1}, nil)
++			if wantErr != nil {
++				assert.EqualError(t, gotErr, wantErr.Error(), "%s(%v)", vindexType, value)
++				continue
++			}
++			require.NoError(t, gotErr, "%s(%v)", vindexType, value)
++			assert.Equal(t, want, got, "%s(%v)", vindexType, value)
++		}
++	}
++}
++
++// TestMapValuesReusesBuffer confirms that mapValues writes every output column
++// when it reuses the caller's buffer, so no value of a previous row leaks into
++// the next one.
++func TestMapValuesReusesBuffer(t *testing.T) {
++	hash, err := vindexes.CreateVindex("hash", "hash", nil)
++	require.NoError(t, err)
++	plan := &Plan{
++		Table: &Table{Name: "t1"},
++		ColExprs: []ColExpr{
++			{ColNum: 1},
++			{ColNum: -1, FixedValue: sqltypes.NewInt64(5)},
++			{ColNum: 0, Vindex: hash, VindexColumns: []int{0}},
++			{ColNum: 0},
++		},
++	}
++	stale := sqltypes.NewVarChar("stale")
++	buf := []sqltypes.Value{stale, stale, stale, stale, stale}
++	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NULL}
++
++	got, err := plan.mapValues(row, buf)
++	require.NoError(t, err)
++	assert.Equal(t, []sqltypes.Value{
++		sqltypes.NULL,
++		sqltypes.NewInt64(5),
++		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x16k@\xb4J\xbaK\xd6")),
++		sqltypes.NewInt64(1),
++	}, got)
++	// The buffer is large enough, so it is reused.
++	assert.Same(t, &buf[0], &got[0])
++
++	// A buffer that is too small is not used.
++	got, err = plan.mapValues(row, buf[:1:1])
++	require.NoError(t, err)
++	assert.Len(t, got, 4)
++	assert.NotSame(t, &buf[0], &got[0])
++}
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
+index 4f0715a..a27ce36 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
+@@ -391,6 +391,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse)
+ 		}
+ 	}
+ 
++	// mapped is reused to map all the rows: RowToProto3Inplace copies the values
++	// out of it before the next row is mapped.
++	var mapped []sqltypes.Value
+ 	charsets := make([]collations.ID, len(rs.plan.Table.Fields))
+ 	for i, fld := range rs.plan.Table.Fields {
+ 		charsets[i] = collations.ID(fld.Charset)
+@@ -470,14 +473,14 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse)
+ 			return err
+ 		}
+ 		if ok {
+-			filtered, err := rs.plan.mapValues(mysqlrow)
++			mapped, err = rs.plan.mapValues(mysqlrow, mapped)
+ 			if err != nil {
+ 				return err
+ 			}
+ 			if rowCount >= len(rows) {
+ 				rows = append(rows, &querypb.Row{})
+ 			}
+-			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
++			byteCount += sqltypes.RowToProto3Inplace(mapped, rows[rowCount])
+ 			rowCount++
+ 		}
+ 
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+index 0c35885..f074f29 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+@@ -115,6 +115,11 @@ type vstreamer struct {
+ type streamerPlan struct {
+ 	*Plan
+ 	TableMap *mysql.TableMap
++
++	// charsets holds the collation of each column of the table, indexed by
++	// column number. It is computed on first use by getValues and shared by
++	// all the row images decoded with this plan.
++	charsets []collations.ID
+ }
+ 
+ // newVStreamer creates a new vstreamer.
+@@ -1209,6 +1214,9 @@ nextrow:
+ //   - if the target is not sharded, pass both images if either after or before passes
+ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+ 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
++	// mapped is reused to map the images of all the rows: RowToProto3 copies the
++	// values out of it before the next image is mapped.
++	var mapped []sqltypes.Value
+ 	for _, row := range rows.Rows {
+ 		// The BEFORE image does not have partial JSON values so we pass an empty bitmap.
+ 		// It can however be a partial row image when binlog_row_image=NOBLOB is used, as
+@@ -1249,11 +1257,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
+ 		rowChange := &binlogdatapb.RowChange{}
+ 		if beforeOK {
+ 			if len(beforeRawValues) > 0 {
+-				beforeValues, err := plan.mapValues(beforeRawValues)
++				beforeValues, err := plan.mapValues(beforeRawValues, mapped)
+ 				if err != nil {
+ 					return nil, err
+ 				}
+ 				rowChange.Before = sqltypes.RowToProto3(beforeValues)
++				mapped = beforeValues
+ 				if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && beforePartial {
+ 					// The bitmap describes the columns as emitted, so project it
+ 					// through the plan the same way the values were.
+@@ -1263,11 +1272,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
+ 		}
+ 		if afterOK {
+ 			if len(afterRawValues) > 0 {
+-				afterValues, err := plan.mapValues(afterRawValues)
++				afterValues, err := plan.mapValues(afterRawValues, mapped)
+ 				if err != nil {
+ 					return nil, err
+ 				}
+ 				rowChange.After = sqltypes.RowToProto3(afterValues)
++				mapped = afterValues
+ 				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
+ 					(row.JSONPartialValues.Count() > 0) {
+ 					// DataColumns is intentionally left in the source table's column
+@@ -1334,7 +1344,15 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
+ 		return nil, nil, false, nil
+ 	}
+ 	values := make([]sqltypes.Value, dataColumns.Count())
+-	charsets := make([]collations.ID, len(values))
++	if plan.charsets == nil {
++		// The collation of a column is constant for the plan. It is only
++		// used to compare non-NULL values, so it does not matter that we
++		// also set it for columns that are NULL or omitted in a row image.
++		plan.charsets = make([]collations.ID, len(plan.Table.Fields))
++		for i, fld := range plan.Table.Fields {
++			plan.charsets[i] = collations.ID(fld.Charset)
++		}
++	}
+ 	valueIndex := 0
+ 	jsonIndex := 0
+ 	pos := 0
+@@ -1392,11 +1410,10 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
+ 			}
+ 		}
+ 
+-		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
+ 		values[colNum] = value
+ 		valueIndex++
+ 	}
+-	return values, charsets, partial, nil
++	return values, plan.charsets, partial, nil
+ }
+ 
+ // addEnumAndSetMappingstoPlan sets up any necessary ENUM and SET integer to string mappings.

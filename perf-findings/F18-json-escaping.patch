@@ -1,0 +1,1045 @@
+diff --git a/go/mysql/binlog/binlog_json_bench_test.go b/go/mysql/binlog/binlog_json_bench_test.go
+new file mode 100644
+index 0000000..91f5a45
+--- /dev/null
++++ b/go/mysql/binlog/binlog_json_bench_test.go
+@@ -0,0 +1,93 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package binlog
++
++import (
++	"encoding/binary"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++// encodeSmallStringObject encodes a flat JSON object whose values are all
++// strings in the MySQL binary JSON format, as found in row events. The
++// encoded object must be smaller than 64KiB.
++func encodeSmallStringObject(keys, vals []string) []byte {
++	n := len(keys)
++	headerLen := 4 + 4*n + 3*n
++	obj := make([]byte, headerLen)
++	binary.LittleEndian.PutUint16(obj[0:], uint16(n))
++	for i, k := range keys {
++		binary.LittleEndian.PutUint16(obj[4+4*i:], uint16(len(obj)))
++		binary.LittleEndian.PutUint16(obj[4+4*i+2:], uint16(len(k)))
++		obj = append(obj, k...)
++	}
++	for i, v := range vals {
++		entry := 4 + 4*n + 3*i
++		obj[entry] = jsonString
++		binary.LittleEndian.PutUint16(obj[entry+1:], uint16(len(obj)))
++		obj = binary.AppendUvarint(obj, uint64(len(v)))
++		obj = append(obj, v...)
++	}
++	binary.LittleEndian.PutUint16(obj[2:], uint16(len(obj)))
++	return append([]byte{jsonSmallObject}, obj...)
++}
++
++// BenchmarkParseBinaryJSONMarshal measures the row event path for a JSON
++// column: decoding the binary JSON and marshaling it back to text JSON.
++func BenchmarkParseBinaryJSONMarshal(b *testing.B) {
++	const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip. "
++	docs := []struct {
++		name string
++		keys []string
++		vals []string
++	}{
++		{
++			"user",
++			[]string{"id", "bio", "name", "email", "status", "address"},
++			[]string{"8c2f5e4a-1b7d-4c9e-a3f0-2d6b8e1c4f7a", lorem[:200], "John Smith", "john.smith@example.com", "active", "123 Main Street, Springfield, IL 62701"},
++		},
++		{
++			"user_escapes",
++			[]string{"id", "bio", "name", "email", "status", "address"},
++			[]string{"8c2f5e4a-1b7d-4c9e-a3f0-2d6b8e1c4f7a", strings.ReplaceAll(lorem[:200], ". ", ".\n"), `John "Johnny" Smith`, "john.smith@example.com", "active", "123 Main Street\nSpringfield, IL 62701"},
++		},
++		{
++			"long_text",
++			[]string{"body", "title"},
++			[]string{strings.Repeat(lorem[:200], 50), "A long article"},
++		},
++	}
++	for _, d := range docs {
++		data := encodeSmallStringObject(d.keys, d.vals)
++		v, err := ParseBinaryJSON(data)
++		require.NoError(b, err)
++		require.Contains(b, string(v.MarshalTo(nil)), `"`+d.keys[1]+`": "`)
++		b.Run(d.name, func(b *testing.B) {
++			b.ReportAllocs()
++			b.SetBytes(int64(len(data)))
++			for b.Loop() {
++				v, err := ParseBinaryJSON(data)
++				if err != nil {
++					b.Fatal(err)
++				}
++				_ = v.MarshalTo(nil)
++			}
++		})
++	}
++}
+diff --git a/go/mysql/json/escape.go b/go/mysql/json/escape.go
+new file mode 100644
+index 0000000..167e43d
+--- /dev/null
++++ b/go/mysql/json/escape.go
+@@ -0,0 +1,188 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package json
++
++import (
++	"math/bits"
++	"unicode/utf8"
++)
++
++// SWAR ("SIMD within a register") helpers that find the next byte of a JSON
++// string that needs special handling, eight bytes at a time.
++//
++// For a word x, ((x - swarLo*n) &^ x) & swarHi has the high bit of a byte set
++// if that byte is < n (for n <= 0x80); with n == 1 it finds zero bytes, so
++// x^(swarLo*c) finds bytes equal to c. A borrow can only produce a false
++// positive in a byte that is more significant than a true positive, so on a
++// little-endian load the lowest set bit is always exact. This also holds for
++// an OR of several such masks.
++const (
++	swarLo = 0x0101010101010101
++	swarHi = 0x8080808080808080
++)
++
++// load64 reads 8 bytes of s starting at i as a little-endian word. The
++// compiler combines the byte loads into a single 64-bit load.
++func load64(s string, i int) uint64 {
++	s = s[i : i+8]
++	return uint64(s[0]) | uint64(s[1])<<8 | uint64(s[2])<<16 | uint64(s[3])<<24 |
++		uint64(s[4])<<32 | uint64(s[5])<<40 | uint64(s[6])<<48 | uint64(s[7])<<56
++}
++
++// quoteOrBackslashMask marks the bytes of x that are '"' or '\\'.
++func quoteOrBackslashMask(x uint64) uint64 {
++	q := x ^ (swarLo * '"')
++	b := x ^ (swarLo * '\\')
++	return ((q - swarLo) &^ q) | ((b - swarLo) &^ b)
++}
++
++// escapeMask marks the bytes of x that are '"', '\\' or control characters
++// (< 0x20), plus the bytes >= 0x80 if highMask is swarHi (it is either 0 or
++// swarHi).
++func escapeMask(x, highMask uint64) uint64 {
++	return (quoteOrBackslashMask(x)|((x-swarLo*0x20)&^x))&swarHi | x&highMask
++}
++
++const (
++	escControl  = 1 // '"', '\\' and control characters
++	escNonASCII = 2 // bytes >= 0x80
++)
++
++// escapeClass classifies each byte for escapeString.
++var escapeClass = func() (t [256]uint8) {
++	for i := range 0x20 {
++		t[i] = escControl
++	}
++	t['"'] = escControl
++	t['\\'] = escControl
++	for i := utf8.RuneSelf; i < len(t); i++ {
++		t[i] = escNonASCII
++	}
++	return
++}()
++
++// nextEscape returns the index of the first byte at or after i that is a
++// '"', '\\' or control character, or also a non-ASCII byte if nonASCII is
++// set. It returns len(s) if there is none.
++func nextEscape(s string, i int, nonASCII bool) int {
++	var highMask uint64
++	if nonASCII {
++		highMask = swarHi
++	}
++	for ; i+8 <= len(s); i += 8 {
++		if m := escapeMask(load64(s, i), highMask); m != 0 {
++			return i + bits.TrailingZeros64(m)>>3
++		}
++	}
++	want := uint8(escControl)
++	if nonASCII {
++		want |= escNonASCII
++	}
++	for ; i < len(s); i++ {
++		if escapeClass[s[i]]&want != 0 {
++			return i
++		}
++	}
++	return i
++}
++
++// nextQuoteOrBackslash returns the index of the first '"' or '\\' in s at or
++// after i, or len(s) if there is none.
++func nextQuoteOrBackslash(s string, i int) int {
++	for ; i+8 <= len(s); i += 8 {
++		if m := quoteOrBackslashMask(load64(s, i)) & swarHi; m != 0 {
++			return i + bits.TrailingZeros64(m)>>3
++		}
++	}
++	for ; i < len(s); i++ {
++		if c := s[i]; c == '"' || c == '\\' {
++			return i
++		}
++	}
++	return i
++}
++
++const hexDigits = "0123456789abcdef"
++
++// utf8 validation state of the remainder of the string in escapeString.
++const (
++	utf8Unknown = iota
++	utf8Valid
++	utf8Invalid
++)
++
++// escapeString appends s as a JSON string to dst and returns the result.
++//
++// The output uses JSON compliant escapes for control bytes and only uses the
++// short escape sequences for \b, \f, \n, \r, and \t. Invalid UTF-8 bytes are
++// replaced by U+FFFD so the JSON output stays valid, the same way a
++// conversion to []rune would.
++//
++// Runs of bytes that need no escaping are copied in bulk; the scan for the
++// next byte that needs attention works on eight bytes at a time. The UTF-8
++// validity of s is only checked once a non-ASCII byte is seen.
++func escapeString(dst []byte, s string) []byte {
++	dst = append(dst, '"')
++	state := utf8Unknown
++	start := 0 // start of the pending run of bytes to copy verbatim
++	i := nextEscape(s, 0, true)
++	for i < len(s) {
++		ch := s[i]
++		if ch >= utf8.RuneSelf {
++			if state == utf8Unknown {
++				if utf8.ValidString(s[i:]) {
++					// Only ASCII bytes need escaping in the rest of s.
++					state = utf8Valid
++					i = nextEscape(s, i, false)
++					continue
++				}
++				state = utf8Invalid
++			}
++			// Replace invalid bytes by U+FFFD, rune by rune.
++			r, size := utf8.DecodeRuneInString(s[i:])
++			if r == utf8.RuneError && size == 1 {
++				dst = append(dst, s[start:i]...)
++				dst = append(dst, "�"...)
++				start = i + 1
++			}
++			i = nextEscape(s, i+size, true)
++			continue
++		}
++		dst = append(dst, s[start:i]...)
++		switch ch {
++		case '"', '\\':
++			dst = append(dst, '\\', ch)
++		case '\b': // 0x08, backspace
++			dst = append(dst, '\\', 'b')
++		case '\f': // 0x0C, form feed
++			dst = append(dst, '\\', 'f')
++		case '\n': // 0x0A, line feed
++			dst = append(dst, '\\', 'n')
++		case '\r': // 0x0D, carriage return
++			dst = append(dst, '\\', 'r')
++		case '\t': // 0x09, horizontal tab
++			dst = append(dst, '\\', 't')
++		default:
++			// Other control characters (0x00-0x1F) use \u00XX escapes.
++			dst = append(dst, '\\', 'u', '0', '0', hexDigits[ch>>4], hexDigits[ch&0x0f])
++		}
++		start = i + 1
++		i = nextEscape(s, start, state != utf8Valid)
++	}
++	dst = append(dst, s[start:]...)
++	return append(dst, '"')
++}
+diff --git a/go/mysql/json/escape_bench_test.go b/go/mysql/json/escape_bench_test.go
+new file mode 100644
+index 0000000..28400bc
+--- /dev/null
++++ b/go/mysql/json/escape_bench_test.go
+@@ -0,0 +1,101 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package json
++
++import (
++	"strings"
++	"testing"
++)
++
++var escapeBenchInputs = []struct {
++	name string
++	s    string
++}{
++	{"short10", "John Smith"},
++	{"medium200", benchLorem[:200]},
++	{"long10K", strings.Repeat(benchLorem[:200], 50)},
++	{"medium200_escapes", strings.ReplaceAll(strings.ReplaceAll(benchLorem[:200], ". ", ".\n"), ",", "\",")},
++	{"long10K_escapes", strings.Repeat(strings.ReplaceAll(benchLorem[:200], ". ", ".\n"), 50)},
++	{"medium_cjk", strings.Repeat("日本語のテキスト、", 8)},
++	{"medium_invalid_utf8", "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et" + "\xff" + "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et"},
++}
++
++func BenchmarkEscapeString(b *testing.B) {
++	for _, in := range escapeBenchInputs {
++		b.Run(in.name+"/ref", func(b *testing.B) {
++			dst := make([]byte, 0, 4*len(in.s)+2)
++			b.SetBytes(int64(len(in.s)))
++			for b.Loop() {
++				dst = escapeStringRef(dst[:0], in.s)
++			}
++		})
++		b.Run(in.name+"/new", func(b *testing.B) {
++			dst := make([]byte, 0, 4*len(in.s)+2)
++			b.SetBytes(int64(len(in.s)))
++			for b.Loop() {
++				dst = escapeString(dst[:0], in.s)
++			}
++		})
++	}
++}
++
++func BenchmarkUnescapeJSON(b *testing.B) {
++	for _, in := range escapeBenchInputs {
++		esc := escapeString(nil, in.s)
++		esc = esc[1 : len(esc)-1]
++		b.Run(in.name+"/ref", func(b *testing.B) {
++			dst := make([]byte, 0, len(esc))
++			b.SetBytes(int64(len(esc)))
++			for b.Loop() {
++				dst, _ = unescapeJSONRef(dst[:0], esc)
++			}
++		})
++		b.Run(in.name+"/new", func(b *testing.B) {
++			dst := make([]byte, 0, len(esc))
++			b.SetBytes(int64(len(esc)))
++			for b.Loop() {
++				dst, _ = unescapeJSON(dst[:0], esc)
++			}
++		})
++	}
++}
++
++func BenchmarkScanJSONString(b *testing.B) {
++	for _, in := range escapeBenchInputs {
++		esc := escapeString(nil, in.s)
++		b.Run(in.name+"/ref", func(b *testing.B) {
++			b.SetBytes(int64(len(esc)))
++			for b.Loop() {
++				_, _, _ = scanJSONStringRef(esc, 1)
++			}
++		})
++		b.Run(in.name+"/new", func(b *testing.B) {
++			b.SetBytes(int64(len(esc)))
++			s := string(esc)
++			for b.Loop() {
++				pos := 1
++				for {
++					pos = nextQuoteOrBackslash(s, pos)
++					if s[pos] == '"' {
++						break
++					}
++					pos += 2
++				}
++			}
++		})
++	}
++}
+diff --git a/go/mysql/json/escape_old_test.go b/go/mysql/json/escape_old_test.go
+new file mode 100644
+index 0000000..1f484f8
+--- /dev/null
++++ b/go/mysql/json/escape_old_test.go
+@@ -0,0 +1,170 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package json
++
++import (
++	"errors"
++	"fmt"
++	"strings"
++	"unicode/utf16"
++	"unicode/utf8"
++)
++
++// This file keeps the previous byte-at-a-time implementations of the JSON
++// string escaping helpers as a reference for equivalence tests and A/B
++// benchmarks.
++
++func escapeStringRef(dst []byte, s string) []byte {
++	if !utf8.ValidString(s) {
++		s = string([]rune(s))
++	}
++	if !hasSpecialCharsRef(s) {
++		dst = append(dst, '"')
++		dst = append(dst, s...)
++		dst = append(dst, '"')
++		return dst
++	}
++	dst = append(dst, '"')
++	for i := 0; i < len(s); i++ {
++		ch := s[i]
++		switch ch {
++		case '"', '\\':
++			dst = append(dst, '\\', ch)
++		case '\b':
++			dst = append(dst, '\\', 'b')
++		case '\f':
++			dst = append(dst, '\\', 'f')
++		case '\n':
++			dst = append(dst, '\\', 'n')
++		case '\r':
++			dst = append(dst, '\\', 'r')
++		case '\t':
++			dst = append(dst, '\\', 't')
++		default:
++			if ch < 0x20 {
++				dst = append(dst, '\\', 'u', '0', '0', hexDigits[ch>>4], hexDigits[ch&0x0f])
++				continue
++			}
++			dst = append(dst, ch)
++		}
++	}
++	dst = append(dst, '"')
++	return dst
++}
++
++func hasSpecialCharsRef(s string) bool {
++	if strings.IndexByte(s, '"') >= 0 || strings.IndexByte(s, '\\') >= 0 {
++		return true
++	}
++	for i := range len(s) {
++		if s[i] < 0x20 {
++			return true
++		}
++	}
++	return false
++}
++
++// scanJSONStringRef is the previous closing-quote scan of
++// sqlWriter.writeStringContent. data[pos] is the first byte after the
++// opening quote. It returns the index of the closing quote and whether an
++// escape sequence was seen.
++func scanJSONStringRef(data []byte, pos int) (int, bool, error) {
++	hasEscape := false
++	for pos < len(data) {
++		ch := data[pos]
++		if ch == '\\' {
++			if pos+1 >= len(data) {
++				return 0, false, errors.New("unterminated string in JSON")
++			}
++			hasEscape = true
++			pos += 2
++			continue
++		}
++		if ch == '"' {
++			break
++		}
++		pos++
++	}
++	if pos >= len(data) {
++		return 0, false, errors.New("unterminated string in JSON")
++	}
++	return pos, hasEscape, nil
++}
++
++func unescapeJSONRef(dst, src []byte) ([]byte, error) {
++	i := 0
++	for i < len(src) {
++		if src[i] != '\\' {
++			dst = append(dst, src[i])
++			i++
++			continue
++		}
++		if i+1 >= len(src) {
++			return dst, errors.New("truncated escape sequence in JSON string")
++		}
++		i++
++		switch src[i] {
++		case '"', '\\', '/':
++			dst = append(dst, src[i])
++			i++
++		case 'b':
++			dst = append(dst, '\b')
++			i++
++		case 'f':
++			dst = append(dst, '\f')
++			i++
++		case 'n':
++			dst = append(dst, '\n')
++			i++
++		case 'r':
++			dst = append(dst, '\r')
++			i++
++		case 't':
++			dst = append(dst, '\t')
++			i++
++		case 'u':
++			i++
++			if i+4 > len(src) {
++				return dst, errors.New("truncated \\u escape in JSON string")
++			}
++			r := parseHex4(src[i : i+4])
++			if r < 0 {
++				return dst, fmt.Errorf("invalid hex digit in \\u escape: %q", src[i:i+4])
++			}
++			i += 4
++			if utf16.IsSurrogate(r) {
++				if i+6 <= len(src) && src[i] == '\\' && src[i+1] == 'u' {
++					r2 := parseHex4(src[i+2 : i+6])
++					if r2 >= 0 {
++						combined := utf16.DecodeRune(r, r2)
++						if combined != utf8.RuneError {
++							dst = utf8.AppendRune(dst, combined)
++							i += 6
++							continue
++						}
++					}
++				}
++				dst = utf8.AppendRune(dst, utf8.RuneError)
++				continue
++			}
++			dst = utf8.AppendRune(dst, r)
++		default:
++			return dst, fmt.Errorf("invalid escape character %q in JSON string", src[i])
++		}
++	}
++	return dst, nil
++}
+diff --git a/go/mysql/json/escape_test.go b/go/mysql/json/escape_test.go
+new file mode 100644
+index 0000000..80b5f51
+--- /dev/null
++++ b/go/mysql/json/escape_test.go
+@@ -0,0 +1,204 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package json
++
++import (
++	"math/rand/v2"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/bytes2"
++	"vitess.io/vitess/go/sqltypes"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// escapeAlphabet is biased towards bytes that need special handling so that
++// random strings hit every branch, including at every position of an
++// 8-byte word.
++var escapeAlphabet = []string{
++	"a", "b", "z", "0", " ", "~", "/", "u", "\x7f",
++	"\"", "\\", "\x00", "\x01", "\b", "\t", "\n", "\f", "\r", "\x1b", "\x1f", "\x20", "\x21", "\x5b", "\x5d",
++	"é", "€", "😀", "�",
++	"\x80", "\xbf", "\xc0", "\xc1", "\xc2", "\xe2\x82", "\xf0\x9f", "\xf5", "\xff", "\xed\xa0\x80",
++	`é`, `😀`, `\ud83d`, `\uzzzz`, `\u12`, `\n`, `\"`, `\\`, `\/`, `\x`,
++}
++
++func randomEscapeInput(r *rand.Rand, maxParts int) string {
++	var sb strings.Builder
++	n := r.IntN(maxParts + 1)
++	for range n {
++		if r.IntN(3) == 0 {
++			// Long clean runs exercise the 8-byte fast path.
++			sb.WriteString(strings.Repeat("x", r.IntN(20)))
++		}
++		sb.WriteString(escapeAlphabet[r.IntN(len(escapeAlphabet))])
++	}
++	return sb.String()
++}
++
++func escapeEdgeCases() []string {
++	cases := []string{
++		"",
++		"hello world",
++		strings.Repeat("a", 7),
++		strings.Repeat("a", 8),
++		strings.Repeat("a", 9),
++		strings.Repeat("a", 1000),
++		"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f",
++		"\x20\x21\x22\x5c\x7f\x80\xff",
++		"日本語のテキスト",
++		"\xff\xfe\xfd",
++		"abc\xe2\x82",
++		"\xed\xa0\x80\xed\xb0\x80",
++		"\xf4\x90\x80\x80",
++		"<script>&amp;  </script>",
++	}
++	// Put every special byte at every offset of a 16-byte window.
++	for _, sp := range []string{"\"", "\\", "\x00", "\x1f", "\x80", "é", "\xff"} {
++		for off := range 16 {
++			cases = append(cases, strings.Repeat("a", off)+sp+strings.Repeat("b", 16-off))
++		}
++	}
++	return cases
++}
++
++func TestEscapeStringMatchesReference(t *testing.T) {
++	check := func(t *testing.T, s string) {
++		want := escapeStringRef([]byte("prefix"), s)
++		got := escapeString([]byte("prefix"), s)
++		require.Equal(t, string(want), string(got), "input %q", s)
++	}
++	for _, s := range escapeEdgeCases() {
++		check(t, s)
++	}
++	r := rand.New(rand.NewPCG(1, 2))
++	for range 20000 {
++		check(t, randomEscapeInput(r, 30))
++	}
++	// Arbitrary bytes.
++	buf := make([]byte, 64)
++	for range 20000 {
++		b := buf[:r.IntN(len(buf))]
++		for i := range b {
++			b[i] = byte(r.Uint32())
++		}
++		check(t, string(b))
++	}
++}
++
++func TestEscapeStringKnownOutput(t *testing.T) {
++	assert.Equal(t, `"a\"b\\c\n\t\r\b\f\u0000\u001f"`, string(escapeString(nil, "a\"b\\c\n\t\r\b\f\x00\x1f")))
++	assert.Equal(t, "\"x�y�\"", string(escapeString(nil, "x\xffy\xc3")))
++	assert.Equal(t, `"<>&/`+" \x7f"+`"`, string(escapeString(nil, "<>&/ \x7f")))
++}
++
++// writeStringContentRef runs the previous scan, unescape and SQL encoding of
++// a JSON string that starts at data[0] == '"'.
++func writeStringContentRef(data []byte) (string, int, error) {
++	end, hasEscape, err := scanJSONStringRef(data, 1)
++	if err != nil {
++		return "", 0, err
++	}
++	content := data[1:end]
++	buf := &bytes2.Buffer{}
++	if hasEscape {
++		content, err = unescapeJSONRef(nil, content)
++		if err != nil {
++			return "", 0, err
++		}
++	}
++	sqltypes.MakeTrusted(querypb.Type_VARCHAR, content).EncodeSQLBytes2(buf)
++	return buf.String(), end + 1, nil
++}
++
++func TestWriteStringContentMatchesReference(t *testing.T) {
++	check := func(t *testing.T, body string) {
++		for _, tail := range []string{`"`, `", 1`, ``, `\`} {
++			data := []byte(`"` + body + tail)
++			want, wantPos, wantErr := writeStringContentRef(data)
++
++			w := sqlWriter{data: data, buf: &bytes2.Buffer{}}
++			gotErr := w.writeStringContent()
++			if wantErr != nil {
++				require.Error(t, gotErr, "input %q", data)
++				assert.Equal(t, wantErr.Error(), gotErr.Error(), "input %q", data)
++				continue
++			}
++			require.NoError(t, gotErr, "input %q", data)
++			assert.Equal(t, want, w.buf.String(), "input %q", data)
++			assert.Equal(t, wantPos, w.pos, "input %q", data)
++		}
++	}
++	for _, s := range escapeEdgeCases() {
++		check(t, s)
++	}
++	r := rand.New(rand.NewPCG(3, 4))
++	for range 20000 {
++		check(t, randomEscapeInput(r, 30))
++	}
++}
++
++func TestUnescapeJSONMatchesReference(t *testing.T) {
++	check := func(t *testing.T, s string) {
++		want, wantErr := unescapeJSONRef([]byte("p"), []byte(s))
++		got, gotErr := unescapeJSON([]byte("p"), []byte(s))
++		if wantErr != nil {
++			require.Error(t, gotErr, "input %q", s)
++			assert.Equal(t, wantErr.Error(), gotErr.Error(), "input %q", s)
++			return
++		}
++		require.NoError(t, gotErr, "input %q", s)
++		assert.Equal(t, string(want), string(got), "input %q", s)
++	}
++	for _, s := range escapeEdgeCases() {
++		check(t, s)
++	}
++	r := rand.New(rand.NewPCG(5, 6))
++	for range 20000 {
++		check(t, randomEscapeInput(r, 30))
++	}
++}
++
++func FuzzEscapeString(f *testing.F) {
++	for _, s := range escapeEdgeCases() {
++		f.Add(s)
++	}
++	f.Fuzz(func(t *testing.T, s string) {
++		require.Equal(t, string(escapeStringRef(nil, s)), string(escapeString(nil, s)))
++
++		want, wantErr := unescapeJSONRef(nil, []byte(s))
++		got, gotErr := unescapeJSON(nil, []byte(s))
++		require.Equal(t, wantErr == nil, gotErr == nil)
++		if wantErr == nil {
++			require.Equal(t, want, got)
++		}
++
++		data := []byte(`"` + s)
++		wantSQL, wantPos, wantErr := writeStringContentRef(data)
++		w := sqlWriter{data: data, buf: &bytes2.Buffer{}}
++		gotErr = w.writeStringContent()
++		require.Equal(t, wantErr == nil, gotErr == nil)
++		if wantErr == nil {
++			require.Equal(t, wantSQL, w.buf.String())
++			require.Equal(t, wantPos, w.pos)
++		}
++	})
++}
+diff --git a/go/mysql/json/marshal.go b/go/mysql/json/marshal.go
+index 5d303ba..bd5b870 100644
+--- a/go/mysql/json/marshal.go
++++ b/go/mysql/json/marshal.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package json
+ 
+ import (
++	"bytes"
+ 	"errors"
+ 	"fmt"
+ 	"math/big"
+@@ -359,23 +360,21 @@ func (w *sqlWriter) writeStringContent() error {
+ 	// Scan to find the closing quote, tracking whether escape sequences exist.
+ 	start := w.pos
+ 	hasEscape := false
+-	for w.pos < len(w.data) {
+-		ch := w.data[w.pos]
+-		if ch == '\\' {
+-			if w.pos+1 >= len(w.data) {
+-				return errors.New("unterminated string in JSON")
+-			}
+-			hasEscape = true
+-			w.pos += 2 // skip '\' and the escaped character
+-			continue
++	data := hack.String(w.data)
++	for {
++		w.pos = nextQuoteOrBackslash(data, w.pos)
++		if w.pos >= len(data) {
++			return errors.New("unterminated string in JSON")
+ 		}
+-		if ch == '"' {
++		if data[w.pos] == '"' {
+ 			break
+ 		}
+-		w.pos++
+-	}
+-	if w.pos >= len(w.data) {
+-		return errors.New("unterminated string in JSON")
++		// Backslash: skip it and the escaped character.
++		if w.pos+1 >= len(data) {
++			return errors.New("unterminated string in JSON")
++		}
++		hasEscape = true
++		w.pos += 2
+ 	}
+ 
+ 	content := w.data[start:w.pos]
+@@ -403,11 +402,14 @@ func (w *sqlWriter) writeStringContent() error {
+ func unescapeJSON(dst, src []byte) ([]byte, error) {
+ 	i := 0
+ 	for i < len(src) {
+-		if src[i] != '\\' {
+-			dst = append(dst, src[i])
+-			i++
+-			continue
++		// Copy the run of bytes up to the next escape sequence in bulk.
++		n := bytes.IndexByte(src[i:], '\\')
++		if n < 0 {
++			dst = append(dst, src[i:]...)
++			break
+ 		}
++		dst = append(dst, src[i:i+n]...)
++		i += n
+ 		if i+1 >= len(src) {
+ 			return dst, errors.New("truncated escape sequence in JSON string")
+ 		}
+diff --git a/go/mysql/json/marshal_bench_test.go b/go/mysql/json/marshal_bench_test.go
+new file mode 100644
+index 0000000..2230da2
+--- /dev/null
++++ b/go/mysql/json/marshal_bench_test.go
+@@ -0,0 +1,96 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package json
++
++import (
++	"strings"
++	"testing"
++
++	"vitess.io/vitess/go/bytes2"
++)
++
++const benchLorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip. "
++
++// escapeBenchDocs are realistic JSON documents: an object with several string
++// fields, as commonly stored in a JSON column.
++var escapeBenchDocs = []struct {
++	name string
++	doc  string
++}{
++	{"user", `{"id": "8c2f5e4a-1b7d-4c9e-a3f0-2d6b8e1c4f7a", "name": "John Smith", "email": "john.smith@example.com", "address": "123 Main Street, Springfield, IL 62701", "status": "active", "age": 42, "bio": "` + benchLorem[:200] + `", "tags": ["admin", "beta", "newsletter"]}`},
++	{"user_escapes", `{"id": "8c2f5e4a-1b7d-4c9e-a3f0-2d6b8e1c4f7a", "name": "John \"Johnny\" Smith", "email": "john.smith@example.com", "address": "123 Main Street\nSpringfield, IL 62701", "status": "active", "age": 42, "bio": "` + strings.ReplaceAll(benchLorem[:200], ". ", ".\\n") + `", "tags": ["admin", "beta", "newsletter"]}`},
++	{"long_text", `{"id": 1, "title": "A long article", "body": "` + strings.Repeat(benchLorem[:200], 50) + `"}`},
++}
++
++func BenchmarkMarshalTo(b *testing.B) {
++	for _, d := range escapeBenchDocs {
++		b.Run(d.name, func(b *testing.B) {
++			var p Parser
++			v, err := p.Parse(d.doc)
++			if err != nil {
++				b.Fatal(err)
++			}
++			// Decode the lazily unescaped strings, so that MarshalTo escapes
++			// them again as it does for documents decoded from binlog events.
++			materializeStrings(v)
++			dst := v.MarshalTo(nil)
++			b.SetBytes(int64(len(d.doc)))
++			for b.Loop() {
++				dst = v.MarshalTo(dst[:0])
++			}
++		})
++	}
++}
++
++func BenchmarkAppendMarshalSQL(b *testing.B) {
++	for _, d := range escapeBenchDocs {
++		b.Run(d.name, func(b *testing.B) {
++			raw := []byte(d.doc)
++			buf := &bytes2.Buffer{}
++			b.SetBytes(int64(len(raw)))
++			for b.Loop() {
++				buf.Reset()
++				if err := AppendMarshalSQL(buf, raw); err != nil {
++					b.Fatal(err)
++				}
++			}
++		})
++		b.Run(d.name+"/MarshalSQLValue", func(b *testing.B) {
++			raw := []byte(d.doc)
++			b.ReportAllocs()
++			b.SetBytes(int64(len(raw)))
++			for b.Loop() {
++				if _, err := MarshalSQLValue(raw); err != nil {
++					b.Fatal(err)
++				}
++			}
++		})
++	}
++}
++
++func materializeStrings(v *Value) {
++	switch v.Type() {
++	case TypeObject:
++		for _, kv := range v.o.kvs {
++			materializeStrings(kv.v)
++		}
++	case TypeArray:
++		for _, vv := range v.a {
++			materializeStrings(vv)
++		}
++	}
++}
+diff --git a/go/mysql/json/parser.go b/go/mysql/json/parser.go
+index c379c19..95044e3 100644
+--- a/go/mysql/json/parser.go
++++ b/go/mysql/json/parser.go
+@@ -30,7 +30,6 @@ import (
+ 	"strings"
+ 	"time"
+ 	"unicode/utf16"
+-	"unicode/utf8"
+ 
+ 	"vitess.io/vitess/go/mysql/fastparse"
+ 
+@@ -570,77 +569,6 @@ func parseObject(s string, c *cache, depth int) (*Value, string, error) {
+ 	}
+ }
+ 
+-const hexDigits = "0123456789abcdef"
+-
+-// escapeString appends s as a JSON string to dst and returns the result.
+-//
+-// The output uses JSON compliant escapes for control bytes and only uses the
+-// short escape sequences for \b, \f, \n, \r, and \t.
+-func escapeString(dst []byte, s string) []byte {
+-	// If we have invalid UTF-8, normalize it so JSON output stays valid.
+-	if !utf8.ValidString(s) {
+-		s = string([]rune(s))
+-	}
+-
+-	if !hasSpecialChars(s) {
+-		// Fast path - nothing to escape.
+-		dst = append(dst, '"')
+-		dst = append(dst, s...)
+-		dst = append(dst, '"')
+-		return dst
+-	}
+-
+-	dst = append(dst, '"')
+-
+-	// Escape control bytes, quotes, and backslashes.
+-	for i := 0; i < len(s); i++ {
+-		ch := s[i]
+-
+-		switch ch {
+-		case '"', '\\':
+-			dst = append(dst, '\\', ch)
+-		case '\b': // 0x08, backspace
+-			dst = append(dst, '\\', 'b')
+-		case '\f': // 0x0C, form feed
+-			dst = append(dst, '\\', 'f')
+-		case '\n': // 0x0A, line feed
+-			dst = append(dst, '\\', 'n')
+-		case '\r': // 0x0D, carriage return
+-			dst = append(dst, '\\', 'r')
+-		case '\t': // 0x09, horizontal tab
+-			dst = append(dst, '\\', 't')
+-		default:
+-			// Other control characters (0x00-0x1F) use \u00XX escapes.
+-			// We hardcode 00 since we only handle single byte control
+-			// characters, then split the byte into two 4-bit halves;
+-			// ch>>4 extracts the upper bits, and ch&0x0f extracts the lower
+-			// bits. Each then indexes into hexDigits to produce the final
+-			// two hex characters.
+-			if ch < 0x20 {
+-				dst = append(dst, '\\', 'u', '0', '0', hexDigits[ch>>4], hexDigits[ch&0x0f])
+-				continue
+-			}
+-
+-			dst = append(dst, ch)
+-		}
+-	}
+-
+-	dst = append(dst, '"')
+-	return dst
+-}
+-
+-func hasSpecialChars(s string) bool {
+-	if strings.IndexByte(s, '"') >= 0 || strings.IndexByte(s, '\\') >= 0 {
+-		return true
+-	}
+-	for i := range len(s) {
+-		if s[i] < 0x20 {
+-			return true
+-		}
+-	}
+-	return false
+-}
+-
+ func unescapeStringBestEffort(s string) string {
+ 	n := strings.IndexByte(s, '\\')
+ 	if n < 0 {

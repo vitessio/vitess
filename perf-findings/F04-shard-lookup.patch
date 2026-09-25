@@ -1,0 +1,748 @@
+diff --git a/go/vt/key/destination.go b/go/vt/key/destination.go
+index 7f190c5..6e178fd 100644
+--- a/go/vt/key/destination.go
++++ b/go/vt/key/destination.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package key
+ 
+ import (
++	"bytes"
+ 	"encoding/hex"
+ 	"math/rand/v2"
+ 	"sort"
+@@ -219,6 +220,13 @@ func GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
+ 		return "", vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no shard in keyspace")
+ 	}
+ 
++	if i := searchShardForKeyspaceID(allShards, keyspaceID); i >= 0 {
++		return allShards[i].Name, nil
++	}
++
++	// Fall back to a linear scan. This handles shard lists that are not
++	// sorted by KeyRange start, and produces the error below when no shard
++	// contains the keyspace id.
+ 	for _, shardReference := range allShards {
+ 		if KeyRangeContains(shardReference.KeyRange, keyspaceID) {
+ 			return shardReference.Name, nil
+@@ -227,6 +235,41 @@ func GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
+ 	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
+ }
+ 
++// searchShardForKeyspaceID returns the index of a shard in allShards whose
++// KeyRange contains keyspaceID, or -1 if it can't find one quickly.
++//
++// It binary searches allShards on the assumption that the shards are sorted
++// by KeyRange start, which is how topo.OrderAndCheckPartitions leaves every
++// rebuilt SrvKeyspace partition. The candidate is always verified with
++// KeyRangeContains, so an unsorted or gapped shard list can only cause a miss
++// (-1) and never a wrong answer. When the shard KeyRanges are disjoint (which
++// OrderAndCheckPartitions enforces), at most one shard can contain
++// keyspaceID, so the result is the same one a linear scan would find.
++func searchShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) int {
++	// A linear scan returns the first shard when it matches. This also covers
++	// the unsharded and custom-sharded cases, where KeyRanges are nil.
++	if KeyRangeContains(allShards[0].KeyRange, keyspaceID) {
++		return 0
++	}
++
++	// Find the first shard after allShards[0] whose start is greater than
++	// keyspaceID; the candidate is the shard just before it.
++	id := Normalize(keyspaceID)
++	lo, hi := 1, len(allShards)
++	for lo < hi {
++		mid := int(uint(lo+hi) >> 1)
++		if bytes.Compare(Normalize(allShards[mid].GetKeyRange().GetStart()), id) <= 0 {
++			lo = mid + 1
++		} else {
++			hi = mid
++		}
++	}
++	if c := lo - 1; c > 0 && KeyRangeContains(allShards[c].KeyRange, keyspaceID) {
++		return c
++	}
++	return -1
++}
++
+ //
+ // DestinationKeyspaceIDs
+ //
+diff --git a/go/vt/key/destination_bench_test.go b/go/vt/key/destination_bench_test.go
+new file mode 100644
+index 0000000..8afc9f4
+--- /dev/null
++++ b/go/vt/key/destination_bench_test.go
+@@ -0,0 +1,231 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package key
++
++import (
++	"encoding/binary"
++	"encoding/hex"
++	"fmt"
++	"math/rand/v2"
++	"slices"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
++	"vitess.io/vitess/go/vt/vterrors"
++)
++
++// getShardForKeyspaceIDLinear is the reference linear-scan implementation of
++// GetShardForKeyspaceID. It is used to verify equivalence and as the baseline
++// in benchmarks.
++func getShardForKeyspaceIDLinear(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
++	if len(allShards) == 0 {
++		return "", vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no shard in keyspace")
++	}
++
++	for _, shardReference := range allShards {
++		if KeyRangeContains(shardReference.KeyRange, keyspaceID) {
++			return shardReference.Name, nil
++		}
++	}
++	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
++}
++
++// evenShardReferences returns n contiguous, sorted shard references that
++// evenly split the keyspace, as produced by a keyspace rebuild.
++func evenShardReferences(tb testing.TB, n int) []*topodatapb.ShardReference {
++	names, err := GenerateShardRanges(n, 0)
++	require.NoError(tb, err)
++	refs := make([]*topodatapb.ShardReference, 0, len(names))
++	for _, name := range names {
++		krs, err := ParseShardingSpec(name)
++		require.NoError(tb, err)
++		require.Len(tb, krs, 1)
++		refs = append(refs, &topodatapb.ShardReference{Name: name, KeyRange: krs[0]})
++	}
++	return refs
++}
++
++func randomKeyspaceIDs(n int) [][]byte {
++	r := rand.New(rand.NewPCG(1, 2))
++	ksids := make([][]byte, n)
++	for i := range ksids {
++		ksids[i] = binary.BigEndian.AppendUint64(nil, r.Uint64())
++	}
++	return ksids
++}
++
++func BenchmarkGetShardForKeyspaceID(b *testing.B) {
++	ksids := randomKeyspaceIDs(1024)
++	for _, n := range []int{2, 4, 8, 32, 128, 256} {
++		shards := evenShardReferences(b, n)
++		for _, impl := range []struct {
++			name string
++			fn   func([]*topodatapb.ShardReference, []byte) (string, error)
++		}{
++			{"linear", getShardForKeyspaceIDLinear},
++			{"current", GetShardForKeyspaceID},
++		} {
++			b.Run(fmt.Sprintf("shards=%d/impl=%s", n, impl.name), func(b *testing.B) {
++				b.ReportAllocs()
++				i := 0
++				for b.Loop() {
++					if _, err := impl.fn(shards, ksids[i&1023]); err != nil {
++						b.Fatal(err)
++					}
++					i++
++				}
++			})
++		}
++	}
++}
++
++// randomShardReferences returns n contiguous shard references with random
++// boundaries of random length, some of them with trailing zero bytes, sorted
++// the way topo.OrderAndCheckPartitions sorts them.
++func randomShardReferences(r *rand.Rand, n int) []*topodatapb.ShardReference {
++	seen := map[string]bool{}
++	var bounds [][]byte
++	for len(bounds) < n-1 {
++		b := make([]byte, 1+r.IntN(3))
++		for i := range b {
++			b[i] = byte(r.IntN(256))
++		}
++		if r.IntN(4) == 0 {
++			// Unnormalized boundary: same value as without the trailing zero.
++			b = append(b, 0)
++		}
++		nb := string(Normalize(b))
++		if nb == "" || seen[nb] {
++			continue
++		}
++		seen[nb] = true
++		bounds = append(bounds, b)
++	}
++	slices.SortFunc(bounds, Compare)
++	refs := make([]*topodatapb.ShardReference, n)
++	var start []byte
++	for i := range refs {
++		var end []byte
++		if i < len(bounds) {
++			end = bounds[i]
++		}
++		refs[i] = &topodatapb.ShardReference{
++			Name:     fmt.Sprintf("%x-%x", start, end),
++			KeyRange: &topodatapb.KeyRange{Start: start, End: end},
++		}
++		start = end
++	}
++	return refs
++}
++
++// probeKeyspaceIDs returns keyspace ids at and around every shard boundary,
++// plus a few random and extreme ones.
++func probeKeyspaceIDs(r *rand.Rand, shards []*topodatapb.ShardReference) [][]byte {
++	probes := [][]byte{nil, {}, {0}, {0, 0}, {0xff}, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}}
++	for _, s := range shards {
++		for _, b := range [][]byte{s.GetKeyRange().GetStart(), s.GetKeyRange().GetEnd()} {
++			if len(b) == 0 {
++				continue
++			}
++			probes = append(probes, b, append(slices.Clone(b), 0), append(slices.Clone(b), 1))
++			if b[len(b)-1] > 0 {
++				below := slices.Clone(b)
++				below[len(below)-1]--
++				probes = append(probes, below, append(below, 0xff))
++			}
++		}
++	}
++	for range 64 {
++		probes = append(probes, binary.BigEndian.AppendUint64(nil, r.Uint64()))
++	}
++	return probes
++}
++
++func assertSameAsLinear(t *testing.T, shards []*topodatapb.ShardReference, ksid []byte) {
++	t.Helper()
++	want, wantErr := getShardForKeyspaceIDLinear(shards, ksid)
++	got, gotErr := GetShardForKeyspaceID(shards, ksid)
++	if wantErr != nil {
++		require.EqualError(t, gotErr, wantErr.Error(), "ksid %x", ksid)
++		require.Equal(t, vterrors.Code(wantErr), vterrors.Code(gotErr))
++		return
++	}
++	require.NoError(t, gotErr, "ksid %x", ksid)
++	require.Equal(t, want, got, "ksid %x", ksid)
++}
++
++// TestGetShardForKeyspaceIDMatchesLinearScan checks that the binary search in
++// GetShardForKeyspaceID returns the same shard, or the same error, as a plain
++// linear scan for every shard list whose KeyRanges are disjoint: sorted,
++// unsorted, with gaps, unnormalized boundaries, nil KeyRanges and empty lists.
++func TestGetShardForKeyspaceIDMatchesLinearScan(t *testing.T) {
++	r := rand.New(rand.NewPCG(3, 4))
++
++	_, err := GetShardForKeyspaceID(nil, []byte{1})
++	require.EqualError(t, err, "no shard in keyspace")
++
++	var cases [][]*topodatapb.ShardReference
++	cases = append(cases,
++		[]*topodatapb.ShardReference{{Name: "0"}},
++		[]*topodatapb.ShardReference{{Name: "0", KeyRange: &topodatapb.KeyRange{}}},
++		// Custom sharding: every KeyRange is nil, so the first shard wins.
++		[]*topodatapb.ShardReference{{Name: "a"}, {Name: "b"}, {Name: "c"}},
++	)
++	for _, n := range []int{1, 2, 3, 4, 8, 32, 128, 256} {
++		cases = append(cases, evenShardReferences(t, n))
++	}
++	for range 200 {
++		cases = append(cases, randomShardReferences(r, 1+r.IntN(64)))
++	}
++
++	for _, sorted := range cases {
++		variants := [][]*topodatapb.ShardReference{sorted}
++		// Unsorted, as AddSrvKeyspacePartitions can leave a partition.
++		shuffled := slices.Clone(sorted)
++		r.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
++		variants = append(variants, shuffled)
++		// Gapped, as DeleteSrvKeyspacePartitions can leave a partition.
++		if len(sorted) > 1 {
++			i := r.IntN(len(sorted) - 1)
++			gapped := slices.Delete(slices.Clone(sorted), i, i+1+r.IntN(len(sorted)-1-i))
++			variants = append(variants, gapped, sorted[1:], sorted[:len(sorted)-1])
++		}
++		for _, shards := range variants {
++			for _, ksid := range probeKeyspaceIDs(r, sorted) {
++				assertSameAsLinear(t, shards, ksid)
++			}
++		}
++	}
++}
++
++// TestGetShardForKeyspaceIDOverlapping documents the behavior for shard lists
++// with overlapping KeyRanges, which topo.OrderAndCheckPartitions rejects: the
++// returned shard always contains the keyspace id, but when several shards do,
++// it isn't necessarily the first one in the list.
++func TestGetShardForKeyspaceIDOverlapping(t *testing.T) {
++	shards := initShardArray(t, "-40-80-c0-")
++	shards = append(shards, &topodatapb.ShardReference{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}}})
++	for _, ksid := range [][]byte{{0x10}, {0x50}, {0x90}, {0xd0}} {
++		got, err := GetShardForKeyspaceID(shards, ksid)
++		require.NoError(t, err)
++		idx := slices.IndexFunc(shards, func(s *topodatapb.ShardReference) bool { return s.Name == got })
++		require.True(t, KeyRangeContains(shards[idx].KeyRange, ksid))
++	}
++}
+diff --git a/go/vt/srvtopo/resolver.go b/go/vt/srvtopo/resolver.go
+index 4e512c6..f8d8b0e 100644
+--- a/go/vt/srvtopo/resolver.go
++++ b/go/vt/srvtopo/resolver.go
+@@ -181,8 +181,12 @@ func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace str
+ 		tabletType: tabletType,
+ 	}
+ 
++	// The callback is created once, rather than once per destination, to
++	// avoid allocating a closure for every destination.
++	addShard := accumulator.resolveShard
+ 	for i, destination := range destinations {
+-		if err := destination.Resolve(allShards, accumulator.resolveShard(i)); err != nil {
++		accumulator.idx = i
++		if err := destination.Resolve(allShards, addShard); err != nil {
+ 			return nil, nil, err
+ 		}
+ 	}
+@@ -197,38 +201,39 @@ type resultAcc struct {
+ 	ids        [][]sqltypes.Value
+ 	keyspace   string
+ 	tabletType topodatapb.TabletType
++	// idx is the index of the destination being resolved.
++	idx int
+ }
+ 
+-// resolveShard is called once per shard that is resolved. It will keep track of which shards that are
+-// the destinations resolved, and the values that are bound to each shard
+-func (acc *resultAcc) resolveShard(idx int) func(shard string) error {
+-	return func(shard string) error {
+-		offsetInValues, ok := acc.resolved[shard]
+-		if !ok {
+-			target := &querypb.Target{
+-				Keyspace:   acc.keyspace,
+-				Shard:      shard,
+-				TabletType: acc.tabletType,
+-			}
+-			// Right now we always set the Cell to ""
+-			// Later we can fallback to another cell if needed.
+-			// We would then need to read the SrvKeyspace there too.
+-			target.Cell = ""
+-			offsetInValues = len(acc.shards)
+-			acc.shards = append(acc.shards, &ResolvedShard{
+-				Target:  target,
+-				Gateway: acc.resolver.gateway,
+-			})
+-			if acc.ids != nil {
+-				acc.values = append(acc.values, nil)
+-			}
+-			acc.resolved[shard] = offsetInValues
++// resolveShard is called once per shard that is resolved for the destination
++// at acc.idx. It will keep track of which shards that are the destinations
++// resolved, and the values that are bound to each shard
++func (acc *resultAcc) resolveShard(shard string) error {
++	offsetInValues, ok := acc.resolved[shard]
++	if !ok {
++		target := &querypb.Target{
++			Keyspace:   acc.keyspace,
++			Shard:      shard,
++			TabletType: acc.tabletType,
+ 		}
++		// Right now we always set the Cell to ""
++		// Later we can fallback to another cell if needed.
++		// We would then need to read the SrvKeyspace there too.
++		target.Cell = ""
++		offsetInValues = len(acc.shards)
++		acc.shards = append(acc.shards, &ResolvedShard{
++			Target:  target,
++			Gateway: acc.resolver.gateway,
++		})
+ 		if acc.ids != nil {
+-			acc.values[offsetInValues] = append(acc.values[offsetInValues], acc.ids[idx])
++			acc.values = append(acc.values, nil)
+ 		}
+-		return nil
++		acc.resolved[shard] = offsetInValues
++	}
++	if acc.ids != nil {
++		acc.values[offsetInValues] = append(acc.values[offsetInValues], acc.ids[acc.idx])
+ 	}
++	return nil
+ }
+ 
+ // ResolveDestinations resolves values and their destinations into their
+@@ -254,35 +259,40 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
+ 	var result []*ResolvedShard
+ 	var values [][]*querypb.Value
+ 	resolved := make(map[string]int)
+-	for i, destination := range destinations {
+-		if err := destination.Resolve(allShards, func(shard string) error {
+-			s, ok := resolved[shard]
+-			if !ok {
+-				target := &querypb.Target{
+-					Keyspace:   keyspace,
+-					Shard:      shard,
+-					TabletType: tabletType,
+-					Cell:       r.localCell,
+-				}
+-				// Right now we always set the Cell to ""
+-				// Later we can fallback to another cell if needed.
+-				// We would then need to read the SrvKeyspace there too.
+-				target.Cell = ""
+-				s = len(result)
+-				result = append(result, &ResolvedShard{
+-					Target:  target,
+-					Gateway: r.gateway,
+-				})
+-				if ids != nil {
+-					values = append(values, nil)
+-				}
+-				resolved[shard] = s
++	// i is the index of the destination being resolved. The callback is
++	// created once, rather than once per destination, to avoid allocating a
++	// closure for every destination.
++	var i int
++	addShard := func(shard string) error {
++		s, ok := resolved[shard]
++		if !ok {
++			target := &querypb.Target{
++				Keyspace:   keyspace,
++				Shard:      shard,
++				TabletType: tabletType,
++				Cell:       r.localCell,
+ 			}
++			// Right now we always set the Cell to ""
++			// Later we can fallback to another cell if needed.
++			// We would then need to read the SrvKeyspace there too.
++			target.Cell = ""
++			s = len(result)
++			result = append(result, &ResolvedShard{
++				Target:  target,
++				Gateway: r.gateway,
++			})
+ 			if ids != nil {
+-				values[s] = append(values[s], ids[i])
++				values = append(values, nil)
+ 			}
+-			return nil
+-		}); err != nil {
++			resolved[shard] = s
++		}
++		if ids != nil {
++			values[s] = append(values[s], ids[i])
++		}
++		return nil
++	}
++	for i = range destinations {
++		if err := destinations[i].Resolve(allShards, addShard); err != nil {
+ 			return nil, nil, err
+ 		}
+ 	}
+diff --git a/go/vt/srvtopo/resolver_bench_test.go b/go/vt/srvtopo/resolver_bench_test.go
+new file mode 100644
+index 0000000..48c41f0
+--- /dev/null
++++ b/go/vt/srvtopo/resolver_bench_test.go
+@@ -0,0 +1,85 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package srvtopo
++
++import (
++	"encoding/binary"
++	"fmt"
++	"math/rand/v2"
++	"strconv"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/vt/key"
++	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
++	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++)
++
++func benchSrvKeyspace(b *testing.B, n int) *topodatapb.SrvKeyspace {
++	names, err := key.GenerateShardRanges(n, 0)
++	require.NoError(b, err)
++	refs := make([]*topodatapb.ShardReference, 0, len(names))
++	for _, name := range names {
++		krs, err := key.ParseShardingSpec(name)
++		require.NoError(b, err)
++		refs = append(refs, &topodatapb.ShardReference{Name: name, KeyRange: krs[0]})
++	}
++	return &topodatapb.SrvKeyspace{
++		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
++			ServedType:      topodatapb.TabletType_PRIMARY,
++			ShardReferences: refs,
++		}},
++	}
++}
++
++// BenchmarkResolveDestinations resolves one DestinationKeyspaceID per row,
++// the way a multi-row sharded INSERT does.
++func BenchmarkResolveDestinations(b *testing.B) {
++	for _, n := range []int{4, 32, 256} {
++		for _, rows := range []int{1, 100, 1000} {
++			b.Run(fmt.Sprintf("shards=%d/rows=%d", n, rows), func(b *testing.B) {
++				srv := srvtopotest.NewPassthroughSrvTopoServer()
++				srv.SrvKeyspace = benchSrvKeyspace(b, n)
++				resolver := NewResolver(srv, &tabletconntest.FakeQueryService{}, "cell1")
++
++				r := rand.New(rand.NewPCG(1, 2))
++				ids := make([]*querypb.Value, rows)
++				destinations := make([]key.ShardDestination, rows)
++				for i := range rows {
++					ids[i] = &querypb.Value{Value: strconv.AppendInt(nil, int64(i), 10)}
++					destinations[i] = key.DestinationKeyspaceID(binary.BigEndian.AppendUint64(nil, r.Uint64()))
++				}
++
++				ctx := b.Context()
++				b.ReportAllocs()
++				for b.Loop() {
++					rss, _, err := resolver.ResolveDestinations(ctx, "ks", topodatapb.TabletType_PRIMARY, ids, destinations)
++					if err != nil {
++						b.Fatal(err)
++					}
++					if len(rss) == 0 {
++						b.Fatal("no shards resolved")
++					}
++				}
++			})
++		}
++	}
++}
+diff --git a/go/vt/vtgate/engine/insert.go b/go/vt/vtgate/engine/insert.go
+index ca40774..cc60249 100644
+--- a/go/vt/vtgate/engine/insert.go
++++ b/go/vt/vtgate/engine/insert.go
+@@ -23,7 +23,6 @@ import (
+ 	"strings"
+ 
+ 	"vitess.io/vitess/go/sqltypes"
+-	"vitess.io/vitess/go/vt/key"
+ 	querypb "vitess.io/vitess/go/vt/proto/query"
+ 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+ 	"vitess.io/vitess/go/vt/sqlparser"
+@@ -226,16 +225,7 @@ func (ins *Insert) getInsertShardedQueries(
+ 	// We need to know the keyspace ids and the Mids associated with
+ 	// each RSS.  So we pass the ksid indexes in as ids, and get them back
+ 	// as values. We also skip nil KeyspaceIds, no need to resolve them.
+-	var indexes []*querypb.Value
+-	var destinations []key.ShardDestination
+-	for i, ksid := range keyspaceIDs {
+-		if ksid != nil {
+-			indexes = append(indexes, &querypb.Value{
+-				Value: strconv.AppendInt(nil, int64(i), 10),
+-			})
+-			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
+-		}
+-	}
++	indexes, destinations := rowDestinations(keyspaceIDs)
+ 	if len(destinations) == 0 {
+ 		// In this case, all we have is nil KeyspaceIds, we don't do
+ 		// anything at all.
+diff --git a/go/vt/vtgate/engine/insert_common.go b/go/vt/vtgate/engine/insert_common.go
+index 13dbce2..b379908 100644
+--- a/go/vt/vtgate/engine/insert_common.go
++++ b/go/vt/vtgate/engine/insert_common.go
+@@ -480,3 +480,38 @@ func shouldGenerate(v sqltypes.Value, sqlmode evalengine.SQLMode) bool {
+ 
+ 	return id == 0
+ }
++
++// rowDestinations returns a destination for every non-nil keyspace id, along
++// with its row index encoded as a decimal querypb.Value, so that the row
++// indexes can be recovered per shard from ResolveDestinations. The values
++// and their bytes are carved out of shared backing arrays to avoid several
++// allocations per row.
++func rowDestinations(keyspaceIDs [][]byte) ([]*querypb.Value, []key.ShardDestination) {
++	n := 0
++	for _, ksid := range keyspaceIDs {
++		if ksid != nil {
++			n++
++		}
++	}
++	if n == 0 {
++		return nil, nil
++	}
++	values := make([]querypb.Value, n)
++	indexes := make([]*querypb.Value, n)
++	destinations := make([]key.ShardDestination, n)
++	// Every index has at most as many digits as the largest one.
++	buf := make([]byte, 0, n*len(strconv.Itoa(len(keyspaceIDs)-1)))
++	j := 0
++	for i, ksid := range keyspaceIDs {
++		if ksid == nil {
++			continue
++		}
++		start := len(buf)
++		buf = strconv.AppendInt(buf, int64(i), 10)
++		values[j].Value = buf[start:len(buf):len(buf)]
++		indexes[j] = &values[j]
++		destinations[j] = key.DestinationKeyspaceID(ksid)
++		j++
++	}
++	return indexes, destinations
++}
+diff --git a/go/vt/vtgate/engine/insert_rowdest_test.go b/go/vt/vtgate/engine/insert_rowdest_test.go
+new file mode 100644
+index 0000000..872f83d
+--- /dev/null
++++ b/go/vt/vtgate/engine/insert_rowdest_test.go
+@@ -0,0 +1,92 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package engine
++
++import (
++	"strconv"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/vt/key"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// rowDestinationsOld is the per-row allocating version of rowDestinations,
++// kept as the reference for equivalence and as the benchmark baseline.
++func rowDestinationsOld(keyspaceIDs [][]byte) ([]*querypb.Value, []key.ShardDestination) {
++	var indexes []*querypb.Value
++	var destinations []key.ShardDestination
++	for i, ksid := range keyspaceIDs {
++		if ksid != nil {
++			indexes = append(indexes, &querypb.Value{
++				Value: strconv.AppendInt(nil, int64(i), 10),
++			})
++			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
++		}
++	}
++	return indexes, destinations
++}
++
++func TestRowDestinations(t *testing.T) {
++	for _, n := range []int{0, 1, 9, 10, 11, 99, 100, 101, 1234} {
++		ksids := make([][]byte, n)
++		for i := range ksids {
++			// Every third row has a nil keyspace id, as with INSERT IGNORE.
++			if i%3 != 1 {
++				ksids[i] = []byte(strconv.Itoa(i))
++			}
++		}
++		wantIdx, wantDst := rowDestinationsOld(ksids)
++		gotIdx, gotDst := rowDestinations(ksids)
++		require.Equal(t, wantDst, gotDst, "n=%d", n)
++		require.Len(t, gotIdx, len(wantIdx), "n=%d", n)
++		for i := range wantIdx {
++			require.Equal(t, string(wantIdx[i].Value), string(gotIdx[i].Value), "n=%d", n)
++			// Values must not share capacity, so appending to one can't
++			// overwrite the next.
++			require.Equal(t, len(gotIdx[i].Value), cap(gotIdx[i].Value))
++		}
++	}
++}
++
++func BenchmarkRowDestinations(b *testing.B) {
++	ksids := make([][]byte, 1000)
++	for i := range ksids {
++		ksids[i] = []byte{byte(i >> 8), byte(i)}
++	}
++	for _, impl := range []struct {
++		name string
++		fn   func([][]byte) ([]*querypb.Value, []key.ShardDestination)
++	}{
++		{"old", rowDestinationsOld},
++		{"new", rowDestinations},
++	} {
++		b.Run("impl="+impl.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				indexes, _ := impl.fn(ksids)
++				for _, v := range indexes {
++					if _, err := strconv.ParseInt(string(v.Value), 0, 64); err != nil {
++						b.Fatal(err)
++					}
++				}
++			}
++		})
++	}
++}
+diff --git a/go/vt/vtgate/engine/insert_select.go b/go/vt/vtgate/engine/insert_select.go
+index ce30e8c..13acddd 100644
+--- a/go/vt/vtgate/engine/insert_select.go
++++ b/go/vt/vtgate/engine/insert_select.go
+@@ -25,7 +25,6 @@ import (
+ 	"time"
+ 
+ 	"vitess.io/vitess/go/sqltypes"
+-	"vitess.io/vitess/go/vt/key"
+ 	querypb "vitess.io/vitess/go/vt/proto/query"
+ 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+ 	"vitess.io/vitess/go/vt/sqlparser"
+@@ -235,16 +234,7 @@ func (ins *InsertSelect) getInsertShardedQueries(
+ 		return nil, nil, err
+ 	}
+ 
+-	var indexes []*querypb.Value
+-	var destinations []key.ShardDestination
+-	for i, ksid := range keyspaceIDs {
+-		if ksid != nil {
+-			indexes = append(indexes, &querypb.Value{
+-				Value: strconv.AppendInt(nil, int64(i), 10),
+-			})
+-			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
+-		}
+-	}
++	indexes, destinations := rowDestinations(keyspaceIDs)
+ 	if len(destinations) == 0 {
+ 		// In this case, all we have is nil KeyspaceIds, we don't do
+ 		// anything at all.

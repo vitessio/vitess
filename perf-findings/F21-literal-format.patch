@@ -1,0 +1,200 @@
+diff --git a/go/vt/sqlparser/ast_format.go b/go/vt/sqlparser/ast_format.go
+index b2f75ad..1417f2d 100644
+--- a/go/vt/sqlparser/ast_format.go
++++ b/go/vt/sqlparser/ast_format.go
+@@ -1570,7 +1570,7 @@ func (node *AssignmentExpr) Format(buf *TrackedBuffer) {
+ func (node *Literal) Format(buf *TrackedBuffer) {
+ 	switch node.Type {
+ 	case StrVal:
+-		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
++		buf.writeStringLiteral(node.Val)
+ 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
+ 		buf.astPrintf(node, "%#s", node.Val)
+ 	case HexVal:
+diff --git a/go/vt/sqlparser/ast_format_fast.go b/go/vt/sqlparser/ast_format_fast.go
+index e0ce935..916d3b8 100644
+--- a/go/vt/sqlparser/ast_format_fast.go
++++ b/go/vt/sqlparser/ast_format_fast.go
+@@ -2022,7 +2022,7 @@ func (node *AssignmentExpr) FormatFast(buf *TrackedBuffer) {
+ func (node *Literal) FormatFast(buf *TrackedBuffer) {
+ 	switch node.Type {
+ 	case StrVal:
+-		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
++		buf.writeStringLiteral(node.Val)
+ 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
+ 		buf.WriteString(node.Val)
+ 	case HexVal:
+diff --git a/go/vt/sqlparser/literal_format_bench_test.go b/go/vt/sqlparser/literal_format_bench_test.go
+new file mode 100644
+index 0000000..ed6722f
+--- /dev/null
++++ b/go/vt/sqlparser/literal_format_bench_test.go
+@@ -0,0 +1,66 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package sqlparser
++
++import (
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++func BenchmarkFormatStringLiteral(b *testing.B) {
++	parser := NewTestParser()
++	short := "abcdefghij"
++	long := strings.Repeat("the quick brown fox jumps over the lazy dog ", 24)[:1024]
++	cases := []struct{ name, sql string }{
++		{"select-10B", "select * from t where a = '" + short + "' and b = 'x'"},
++		{"select-1KiB", "select * from t where a = '" + long + "'"},
++		{"insert-5x10B", "insert into t(a,b,c,d,e) values ('" + short + "', '" + short + "', '" + short + "', '" + short + "', '" + short + "')"},
++		{"insert-5x240B", "insert into t(a,b,c,d,e) values ('" + long[:240] + "', '" + long[:240] + "', '" + long[:240] + "', '" + long[:240] + "', '" + long[:240] + "')"},
++		{"select-noliteral", "select a, b, c from t where id = 1 and x > 5 order by a"},
++	}
++	for _, c := range cases {
++		stmt, err := parser.Parse(c.sql)
++		require.NoError(b, err)
++		b.Run("String/"+c.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				_ = String(stmt)
++			}
++		})
++		b.Run("Format/"+c.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				buf := NewTrackedBuffer(nil)
++				stmt.Format(buf)
++				_ = buf.String()
++			}
++		})
++	}
++	for _, c := range cases {
++		b.Run("Redact/"+c.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				_, err := parser.RedactSQLQuery(c.sql)
++				if err != nil {
++					b.Fatal(err)
++				}
++			}
++		})
++	}
++}
+diff --git a/go/vt/sqlparser/tracked_buffer.go b/go/vt/sqlparser/tracked_buffer.go
+index 14fe6fe..f0d092f 100644
+--- a/go/vt/sqlparser/tracked_buffer.go
++++ b/go/vt/sqlparser/tracked_buffer.go
+@@ -22,7 +22,9 @@ import (
+ 	"strconv"
+ 	"strings"
+ 
++	"vitess.io/vitess/go/hack"
+ 	"vitess.io/vitess/go/slice"
++	"vitess.io/vitess/go/sqltypes"
+ )
+ 
+ // NodeFormatter defines the signature of a custom node formatter
+@@ -364,6 +366,14 @@ func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
+ 	buf.WriteString(arg)
+ }
+ 
++// writeStringLiteral writes val into the buffer as a quoted and escaped
++// SQL string literal. The escaping is byte-oriented (identical to encoding a
++// VarChar sqltypes.Value), so invalid UTF-8 is preserved as-is. It writes
++// directly into the underlying strings.Builder without copying val first.
++func (buf *TrackedBuffer) writeStringLiteral(val string) {
++	sqltypes.MakeTrusted(sqltypes.VarChar, hack.StringBytes(val)).EncodeSQLStringBuilder(buf.Builder)
++}
++
+ // WriteInt writes a signed integer into the buffer.
+ func (buf *TrackedBuffer) WriteInt(v int64) {
+ 	buf.WriteString(strconv.FormatInt(v, 10))
+diff --git a/go/vt/sqlparser/tracked_buffer_test.go b/go/vt/sqlparser/tracked_buffer_test.go
+index d798fd7..60add91 100644
+--- a/go/vt/sqlparser/tracked_buffer_test.go
++++ b/go/vt/sqlparser/tracked_buffer_test.go
+@@ -17,10 +17,15 @@ limitations under the License.
+ package sqlparser
+ 
+ import (
++	"bytes"
++	"math/rand/v2"
++	"strings"
+ 	"testing"
+ 
+ 	"github.com/stretchr/testify/assert"
+ 	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
+ )
+ 
+ func TestBuildParsedQuery(t *testing.T) {
+@@ -327,3 +332,52 @@ func TestTrackedBufferMyprintf(t *testing.T) {
+ 		})
+ 	}
+ }
++
++// TestStringLiteralFormatEquivalence checks that string literals are formatted
++// byte-for-byte like a VarChar sqltypes.Value encoded with EncodeSQL, which is
++// how Literal.Format and Literal.FormatFast historically encoded them. The
++// encoding is byte-oriented, so invalid UTF-8 must be preserved as-is.
++func TestStringLiteralFormatEquivalence(t *testing.T) {
++	check := func(val string) {
++		var want bytes.Buffer
++		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(val)).EncodeSQL(&want)
++
++		lit := &Literal{Type: StrVal, Val: val}
++		require.Equal(t, want.String(), String(lit), "FormatFast(%q)", val)
++
++		buf := NewTrackedBuffer(nil)
++		lit.Format(buf)
++		require.Equal(t, want.String(), buf.String(), "Format(%q)", val)
++	}
++
++	for _, val := range []string{
++		"", "a", "'", "\\", "\\%", "\\_", "a\\%b\\_c\\", "\\\\%", "it's", "\x00\b\n\r\t\x1a",
++		"\xff\xfe", "caf\xc3\xa9", "\xc3", "\xe4\xb8", "日本語", "abc\x80def",
++		strings.Repeat("the quick brown fox ", 64),
++	} {
++		check(val)
++	}
++
++	// All strings of length <= 2 over all byte values.
++	for i := range 256 {
++		check(string([]byte{byte(i)}))
++		for j := range 256 {
++			check(string([]byte{byte(i), byte(j)}))
++		}
++	}
++
++	// Random strings biased towards bytes that need special handling.
++	special := []byte{0, '\'', '"', '\\', '%', '_', '\b', '\n', '\r', '\t', 0x1a, 0x80, 0xc3, 0xff}
++	r := rand.New(rand.NewPCG(1, 2))
++	for range 20000 {
++		b := make([]byte, r.IntN(64))
++		for k := range b {
++			if r.IntN(3) == 0 {
++				b[k] = special[r.IntN(len(special))]
++			} else {
++				b[k] = byte(r.IntN(256))
++			}
++		}
++		check(string(b))
++	}
++}

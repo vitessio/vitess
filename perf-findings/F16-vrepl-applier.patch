@@ -1,0 +1,666 @@
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
+index 6b726d9..ca26ec1 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
+@@ -88,6 +88,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
+ 			trimmed.Name = strings.Trim(trimmed.Name, "`")
+ 			tplanv.Fields = append(tplanv.Fields, trimmed)
+ 		}
++		tplanv.fieldInfos = tplanv.buildFieldInfos()
+ 		return &tplanv, nil
+ 	}
+ 	// select * construct was used. We need to use the field names.
+@@ -96,6 +97,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
+ 		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
+ 	}
+ 	tplan.Fields = fieldEvent.Fields
++	tplan.fieldInfos = tplan.buildFieldInfos()
+ 	return tplan, nil
+ }
+ 
+@@ -230,6 +232,56 @@ type TablePlan struct {
+ 
+ 	CollationEnv   *collations.Environment
+ 	WorkflowConfig *vttablet.VReplicationConfig
++
++	// fieldInfos holds per-column metadata derived from Fields, FieldsToSkip,
++	// ConvertCharset and ConvertIntToEnum. It is built once in
++	// buildExecutionPlan (i.e. every time a FIELD event arrives, which is the
++	// only point where Fields changes) so that the per-row apply paths do not
++	// have to concatenate bind variable names or look up maps per column.
++	// It is read-only after construction and therefore safe for the
++	// concurrent vcopier workers that share a TablePlan.
++	fieldInfos []fieldInfo
++}
++
++// fieldInfo is the precomputed, per-column metadata for TablePlan.Fields[i].
++type fieldInfo struct {
++	// beforeName and afterName are the bind variable names for the column
++	// in the before ("b_") and after ("a_") images.
++	beforeName string
++	afterName  string
++	// skip is true when the column is in FieldsToSkip (e.g. a target-side
++	// generated column), which is keyed by the lower-cased column name.
++	skip bool
++	// charsetConversion is the ConvertCharset entry for the column, if any.
++	charsetConversion *binlogdatapb.CharsetConversion
++	// intToEnum is the ConvertIntToEnum entry for the column.
++	intToEnum bool
++}
++
++// buildFieldInfos computes the per-column metadata for tp.Fields.
++func (tp *TablePlan) buildFieldInfos() []fieldInfo {
++	infos := make([]fieldInfo, len(tp.Fields))
++	for i, field := range tp.Fields {
++		infos[i] = fieldInfo{
++			beforeName:        "b_" + field.Name,
++			afterName:         "a_" + field.Name,
++			skip:              tp.FieldsToSkip[strings.ToLower(field.Name)],
++			charsetConversion: tp.ConvertCharset[field.Name],
++			intToEnum:         tp.ConvertIntToEnum[field.Name],
++		}
++	}
++	return infos
++}
++
++// getFieldInfos returns the precomputed per-column metadata for tp.Fields.
++// Plans built through buildExecutionPlan always have it; for a TablePlan
++// constructed directly (e.g. in tests) it is computed on the fly without
++// being stored, so that concurrent readers never race on it.
++func (tp *TablePlan) getFieldInfos() []fieldInfo {
++	if len(tp.fieldInfos) == len(tp.Fields) && tp.fieldInfos != nil {
++		return tp.fieldInfos
++	}
++	return tp.buildFieldInfos()
+ }
+ 
+ // MarshalJSON performs a custom JSON Marshalling.
+@@ -338,6 +390,7 @@ func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, pa
+ 		return nil
+ 	}
+ 
++	fieldInfos := tp.getFieldInfos()
+ 	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+ 		if tp.BulkInsertValues != nil && len(tp.BulkInsertValues.BindLocations()) > 0 {
+ 			fieldsIndex := 0
+@@ -351,7 +404,7 @@ func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, pa
+ 					if field.Type == querypb.Type_JSON {
+ 						jsonIndex++
+ 					}
+-					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
++					if fieldInfos[fieldIndex].skip {
+ 						continue
+ 					}
+ 					if field.Type == querypb.Type_JSON {
+@@ -372,7 +425,7 @@ func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, pa
+ 			if field.Type == querypb.Type_JSON {
+ 				jsonIndex++
+ 			}
+-			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
++			if fieldInfos[i].skip {
+ 				continue
+ 			}
+ 			if field.Type == querypb.Type_JSON {
+@@ -387,6 +440,7 @@ func (tp *TablePlan) checkUpdateJSONRowSize(afterRow, beforeRow *querypb.Row, da
+ 		return nil
+ 	}
+ 
++	fieldInfos := tp.getFieldInfos()
+ 	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+ 		jsonIndex := 0
+ 		for i, field := range tp.Fields {
+@@ -398,7 +452,7 @@ func (tp *TablePlan) checkUpdateJSONRowSize(afterRow, beforeRow *querypb.Row, da
+ 			}
+ 			fieldJSONIndex := jsonIndex
+ 			jsonIndex++
+-			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
++			if fieldInfos[i].skip {
+ 				continue
+ 			}
+ 			if dataColumns != nil && dataColumns.Count > 0 && !isBitSet(dataColumns.Cols, i) {
+@@ -566,20 +620,29 @@ func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.C
+ // - text values with charset conversion
+ // - enum values converted to text via Online DDL
+ // - ...any other future possible values
+-func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+-	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
++//
++// If dst is non-nil the result is written into it and dst is returned, which
++// lets callers allocate the bind variables for a whole row at once.
++func (tp *TablePlan) bindFieldVal(fi *fieldInfo, field *querypb.Field, val *sqltypes.Value, dst *querypb.BindVariable) (*querypb.BindVariable, error) {
++	if dst == nil {
++		dst = &querypb.BindVariable{}
++	}
++	if fi.charsetConversion != nil && !val.IsNull() {
+ 		// Non-null string value, for which we have a charset conversion instruction
+-		out, err := tp.convertStringCharset(val.Raw(), conversion, field.Name)
++		out, err := tp.convertStringCharset(val.Raw(), fi.charsetConversion, field.Name)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+-		return sqltypes.StringBindVariable(string(out)), nil
++		dst.Type, dst.Value = querypb.Type_VARCHAR, out
++		return dst, nil
+ 	}
+-	if tp.ConvertIntToEnum[field.Name] && !val.IsNull() {
++	if fi.intToEnum && !val.IsNull() {
+ 		// An integer converted to an enum. We must write the textual value of the int. i.e. 0 turns to '0'
+-		return sqltypes.StringBindVariable(val.ToString()), nil
++		dst.Type, dst.Value = querypb.Type_VARCHAR, []byte(val.ToString())
++		return dst, nil
+ 	}
+-	return sqltypes.ValueBindVariable(*val), nil
++	dst.Type, dst.Value = val.Type(), val.Raw()
++	return dst, nil
+ }
+ 
+ func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value) {
+@@ -611,6 +674,7 @@ func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.Ro
+ }
+ 
+ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value, bindvars map[string]*querypb.BindVariable) error {
++	fieldInfos := tp.getFieldInfos()
+ 	jsonIndex := 0
+ 	for i, field := range tp.Fields {
+ 		if field.Type != querypb.Type_JSON {
+@@ -624,7 +688,8 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
+ 		// jsonIndex must still advance: JsonPartialValues bits are indexed by
+ 		// the source's JSON-column ordering, so a skipped JSON column still
+ 		// consumes a bit position.
+-		if tp.FieldsToSkip[strings.ToLower(field.Name)] {
++		fi := &fieldInfos[i]
++		if fi.skip {
+ 			jsonIndex++
+ 			continue
+ 		}
+@@ -655,11 +720,11 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
+ 				return err
+ 			}
+ 		}
+-		bindVar, err = tp.bindFieldVal(field, newVal)
++		bindVar, err = tp.bindFieldVal(fi, field, newVal, nil)
+ 		if err != nil {
+ 			return err
+ 		}
+-		bindvars["a_"+field.Name] = bindVar
++		bindvars[fi.afterName] = bindVar
+ 		jsonIndex++
+ 	}
+ 	return nil
+@@ -671,27 +736,41 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
+ 		before, after bool
+ 		afterVals     []sqltypes.Value
+ 	)
+-	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
++	fieldInfos := tp.getFieldInfos()
++	nimages := 0
++	if rowChange.Before != nil {
++		nimages++
++	}
++	if rowChange.After != nil {
++		nimages++
++	}
++	bindvars := make(map[string]*querypb.BindVariable, nimages*len(tp.Fields))
++	// Allocate the bind variables for both images at once rather than one per column.
++	bvs := make([]querypb.BindVariable, nimages*len(tp.Fields))
+ 	if rowChange.Before != nil {
+ 		before = true
+ 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
+ 		for i, field := range tp.Fields {
+-			bindVar, err := tp.bindFieldVal(field, &vals[i])
++			fi := &fieldInfos[i]
++			bindVar, err := tp.bindFieldVal(fi, field, &vals[i], &bvs[0])
+ 			if err != nil {
+ 				return nil, err
+ 			}
+-			bindvars["b_"+field.Name] = bindVar
++			bvs = bvs[1:]
++			bindvars[fi.beforeName] = bindVar
+ 		}
+ 	}
+ 	if rowChange.After != nil {
+ 		after = true
+ 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
+ 		for i, field := range tp.Fields {
+-			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
++			fi := &fieldInfos[i]
++			bindVar, err := tp.bindFieldVal(fi, field, &afterVals[i], &bvs[0])
+ 			if err != nil {
+ 				return nil, err
+ 			}
+-			bindvars["a_"+field.Name] = bindVar
++			bvs = bvs[1:]
++			bindvars[fi.afterName] = bindVar
+ 		}
+ 		tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
+ 	}
+@@ -775,7 +854,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
+ 					// are not referenced by the INSERT, so there is no bindvar
+ 					// to rewrite. jsonIndex must still advance so subsequent
+ 					// JSON columns read the correct JsonPartialValues bit.
+-					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
++					fi := &fieldInfos[i]
++					if fi.skip {
+ 						jsonIndex++
+ 						continue
+ 					}
+@@ -786,12 +866,12 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
+ 						// If the JSON column was NOT updated then the JSON column is marked as partial
+ 						// and the diff is empty as a way to exclude it from the AFTER image. So we
+ 						// want to use the BEFORE image value.
+-						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
++						beforeVal, err := vjson.MarshalSQLValue(bindvars[fi.beforeName].Value)
+ 						if err != nil {
+ 							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
+ 								tp.TargetName, field.Name)
+ 						}
+-						bindvars["a_"+field.Name], err = tp.bindFieldVal(field, beforeVal)
++						bindvars[fi.afterName], err = tp.bindFieldVal(fi, field, beforeVal, nil)
+ 						if err != nil {
+ 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
+ 								tp.TargetName, field.Name)
+@@ -801,7 +881,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
+ 						// column is marked as partial, we need to wrap the JSON diff function(s)
+ 						// around the BEFORE value.
+ 						diff := afterVals[i].RawStr()
+-						beforeVal := bindvars["b_"+field.Name].Value
++						beforeVal := bindvars[fi.beforeName].Value
+ 						buf := bytes.Buffer{}
+ 						buf.Grow(len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
+ 						buf.WriteString(sqlparser.Utf8mb4Str)
+@@ -810,12 +890,12 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
+ 						buf.WriteByte('\'')
+ 						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+ 							fmt.Appendf(nil, diff, buf.String()))
+-						bv, err := tp.bindFieldVal(field, &newVal)
++						bv, err := tp.bindFieldVal(fi, field, &newVal, nil)
+ 						if err != nil {
+ 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
+ 								tp.TargetName, field.Name)
+ 						}
+-						bindvars["a_"+field.Name] = bv
++						bindvars[fi.afterName] = bv
+ 					}
+ 					jsonIndex++
+ 					continue
+@@ -932,24 +1012,37 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
+ 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk insert query")
+ 	}
+ 
+-	prefix := &strings.Builder{}
+-	prefix.WriteString(tp.BulkInsertFront.Query)
+-	prefix.WriteString(" values ")
+-	insertPrefix := prefix.String()
++	insertPrefix := tp.BulkInsertFront.Query + " values "
+ 	if tp.BulkInsertOnDup != nil {
+ 		maxQuerySize -= int64(len(tp.BulkInsertOnDup.Query))
+ 	}
+ 	maxQuerySize -= int64(len(insertPrefix))
+-	values := &strings.Builder{}
+ 
+-	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
+-		if tp.BulkInsertOnDup != nil {
+-			vals.WriteString(tp.BulkInsertOnDup.Query)
+-		}
++	// stmt holds the statement being built: insertPrefix followed by the
++	// comma separated row values. Rows are rendered directly into it; if a
++	// row would push the statement over maxQuerySize, the statement is
++	// executed without it and the row is carried over to the next one.
++	stmt := &strings.Builder{}
++	// Size the buffer for the common case where all rows fit in one
++	// statement: the raw row data plus some per-value quoting overhead.
++	sizeHint := int64(0)
++	for _, rowInsert := range rowInserts {
++		sizeHint += int64(len(rowInsert.GetAfter().GetValues()) + 4*len(rowInsert.GetAfter().GetLengths()))
++	}
++	sizeHint = min(sizeHint, max(maxQuerySize, 0))
++	stmt.Grow(len(insertPrefix) + int(sizeHint))
++	stmt.WriteString(insertPrefix)
++	execQuery := func(query string) (*sqltypes.Result, error) {
+ 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
+-		return executor(insertPrefix + vals.String())
++		return executor(query)
+ 	}
+ 
++	fieldInfos := tp.getFieldInfos()
++	// The bind variables are consumed by BulkInsertValues.Append before the
++	// next row is processed, and every row binds the same set of names, so
++	// the map and the bind variables themselves are reused across rows.
++	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
++	bvs := make([]querypb.BindVariable, len(tp.Fields))
+ 	limit := tp.maxRowJSONBytes()
+ 	newStmt := true
+ 	for _, rowInsert := range rowInserts {
+@@ -973,11 +1066,10 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
+ 			err     error
+ 			bindVar *querypb.BindVariable
+ 		)
+-		rowValues := &strings.Builder{}
+-		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+ 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
+ 		for n, field := range tp.Fields {
+-			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
++			fi := &fieldInfos[n]
++			if fi.skip {
+ 				continue
+ 			}
+ 			if field.Type == querypb.Type_JSON {
+@@ -990,33 +1082,46 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
+ 						return nil, err
+ 					}
+ 				}
+-				bindVar, err = tp.bindFieldVal(field, jsVal)
++				bindVar, err = tp.bindFieldVal(fi, field, jsVal, &bvs[n])
+ 			} else {
+-				bindVar, err = tp.bindFieldVal(field, &vals[n])
++				bindVar, err = tp.bindFieldVal(fi, field, &vals[n], &bvs[n])
+ 			}
+ 			if err != nil {
+ 				return nil, err
+ 			}
+-			bindvars["a_"+field.Name] = bindVar
++			bindvars[fi.afterName] = bindVar
++		}
++		rowStart := stmt.Len()
++		if !newStmt {
++			stmt.WriteString(", ")
+ 		}
+-		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
++		if err := tp.BulkInsertValues.Append(stmt, bindvars, nil); err != nil {
+ 			return nil, err
+ 		}
+-		if !newStmt && int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+-			if _, err := execQuery(values); err != nil {
++		if !newStmt && int64(stmt.Len()-len(insertPrefix)) > maxQuerySize {
++			// This row does not fit: execute the statement without it and
++			// start a new statement with it.
++			built := stmt.String()
++			query := built[:rowStart]
++			if tp.BulkInsertOnDup != nil {
++				query += tp.BulkInsertOnDup.Query
++			}
++			if _, err := execQuery(query); err != nil {
+ 				return nil, err
+ 			}
+-			values.Reset()
+-			newStmt = true
++			row := built[rowStart+len(", "):]
++			stmt = &strings.Builder{}
++			stmt.Grow(len(built))
++			stmt.WriteString(insertPrefix)
++			stmt.WriteString(row)
+ 		}
+-		if !newStmt {
+-			values.WriteString(", ")
+-		}
+-		values.WriteString(rowValues.String())
+ 		newStmt = false
+ 	}
+ 
+-	return execQuery(values)
++	if tp.BulkInsertOnDup != nil {
++		stmt.WriteString(tp.BulkInsertOnDup.Query)
++	}
++	return execQuery(stmt.String())
+ }
+ 
+ func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
+@@ -1077,6 +1182,7 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+ 	}
+ 
+ 	// Bind field values to locations.
++	fieldInfos := tp.getFieldInfos()
+ 	var (
+ 		offset      int64
+ 		offsetQuery int
+@@ -1086,7 +1192,7 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+ 	for i, loc := range bindLocations {
+ 		field = tp.Fields[fieldsIndex]
+ 		length := row.Lengths[fieldsIndex]
+-		for tp.FieldsToSkip[strings.ToLower(field.Name)] {
++		for fieldInfos[fieldsIndex].skip {
+ 			if length > 0 {
+ 				offset += length
+ 			}
+@@ -1118,7 +1224,7 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+ 				raw := row.Values[offset : offset+length]
+ 				var vv sqltypes.Value
+ 
+-				if conversion, ok := tp.ConvertCharset[field.Name]; ok && length > 0 {
++				if conversion := fieldInfos[fieldsIndex].charsetConversion; conversion != nil && length > 0 {
+ 					// Non-null string value, for which we have a charset conversion instruction
+ 					out, err := tp.convertStringCharset(raw, conversion, field.Name)
+ 					if err != nil {
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
+index 621fafb..ea10e04 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
+@@ -18,6 +18,8 @@ package vreplication
+ 
+ import (
+ 	"encoding/json"
++	"fmt"
++	"strconv"
+ 	"strings"
+ 	"testing"
+ 
+@@ -2108,3 +2110,219 @@ func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
+ 		}
+ 	}
+ }
++
++// TestBuildExecutionPlanFieldInfos verifies that buildExecutionPlan precomputes
++// the per-column metadata used by the apply paths, and that it matches the
++// per-row lookups it replaces: bind variable names use the (backtick-trimmed)
++// field name, FieldsToSkip is matched case-insensitively, and the charset and
++// int-to-enum conversions are keyed by the exact field name.
++func TestBuildExecutionPlanFieldInfos(t *testing.T) {
++	colInfos := map[string][]*ColumnInfo{
++		"t": {
++			{Name: "id", IsPK: true},
++			{Name: "Name"},
++			{Name: "c_latin"},
++			{Name: "e_enum"},
++			{Name: "GenCol", IsGenerated: true},
++		},
++	}
++	build := func(t *testing.T, rule *binlogdatapb.Rule, fields []*querypb.Field) *TablePlan {
++		vr := &vreplicator{workflowConfig: vttablet.GetDefaultVReplicationConfig()}
++		source := &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{rule}}}
++		rp, err := vr.buildReplicatorPlan(source, colInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
++		require.NoError(t, err)
++		tp, err := rp.buildExecutionPlan(&binlogdatapb.FieldEvent{TableName: "t", Fields: fields})
++		require.NoError(t, err)
++		require.Len(t, tp.fieldInfos, len(tp.Fields))
++		return tp
++	}
++
++	t.Run("explicit columns", func(t *testing.T) {
++		conversion := &binlogdatapb.CharsetConversion{FromCharset: "utf8mb4", ToCharset: "latin1"}
++		tp := build(t, &binlogdatapb.Rule{
++			Match:            "t",
++			Filter:           "select id, `Name`, c_latin, e_enum from t",
++			ConvertCharset:   map[string]*binlogdatapb.CharsetConversion{"c_latin": conversion},
++			ConvertIntToEnum: map[string]bool{"e_enum": true},
++		}, []*querypb.Field{
++			{Name: "id", Type: querypb.Type_INT64},
++			{Name: "`Name`", Type: querypb.Type_VARCHAR},
++			{Name: "c_latin", Type: querypb.Type_VARCHAR},
++			{Name: "e_enum", Type: querypb.Type_INT32},
++		})
++		assert.Equal(t, []fieldInfo{
++			{beforeName: "b_id", afterName: "a_id"},
++			{beforeName: "b_Name", afterName: "a_Name"},
++			{beforeName: "b_c_latin", afterName: "a_c_latin", charsetConversion: conversion},
++			{beforeName: "b_e_enum", afterName: "a_e_enum", intToEnum: true},
++		}, tp.fieldInfos)
++
++		var executed []string
++		_, err := tp.applyChange(&binlogdatapb.RowChange{
++			After: sqltypes.RowToProto3([]sqltypes.Value{
++				sqltypes.NewInt64(1),
++				sqltypes.NewVarChar("n"),
++				sqltypes.NewVarChar("café"),
++				sqltypes.NewInt32(2),
++			}),
++		}, func(sql string) (*sqltypes.Result, error) {
++			executed = append(executed, sql)
++			return &sqltypes.Result{RowsAffected: 1}, nil
++		})
++		require.NoError(t, err)
++		require.Len(t, executed, 1)
++		assert.Contains(t, executed[0], "(1,'n','caf\xe9','2')")
++	})
++
++	t.Run("select star skips generated columns case-insensitively", func(t *testing.T) {
++		tp := build(t, &binlogdatapb.Rule{Match: "t", Filter: "select * from t"}, []*querypb.Field{
++			{Name: "id", Type: querypb.Type_INT64},
++			{Name: "Name", Type: querypb.Type_VARCHAR},
++			{Name: "gencol", Type: querypb.Type_INT64},
++		})
++		assert.Equal(t, []fieldInfo{
++			{beforeName: "b_id", afterName: "a_id"},
++			{beforeName: "b_Name", afterName: "a_Name"},
++			{beforeName: "b_gencol", afterName: "a_gencol", skip: true},
++		}, tp.fieldInfos)
++	})
++}
++
++// TestTablePlanFieldInfosFallback verifies that a TablePlan that was not built
++// through buildExecutionPlan computes its per-column metadata on demand.
++func TestTablePlanFieldInfosFallback(t *testing.T) {
++	tp := &TablePlan{
++		Fields: []*querypb.Field{
++			{Name: "id", Type: querypb.Type_INT64},
++			{Name: "GenCol", Type: querypb.Type_INT64},
++		},
++		FieldsToSkip: map[string]bool{"gencol": true},
++	}
++	require.Nil(t, tp.fieldInfos)
++	assert.Equal(t, []fieldInfo{
++		{beforeName: "b_id", afterName: "a_id"},
++		{beforeName: "b_GenCol", afterName: "a_GenCol", skip: true},
++	}, tp.getFieldInfos())
++	assert.Nil(t, tp.fieldInfos, "the fallback must not store the result, as plans can be shared by concurrent copy workers")
++}
++
++func TestApplyBulkInsertChangesSplitCarriesRow(t *testing.T) {
++	tp := &TablePlan{
++		BulkInsertFront:  sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
++		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)", ":a_c1", ":a_c2"),
++		BulkInsertOnDup:  sqlparser.BuildParsedQuery(" on duplicate key update c2=values(c2)"),
++		Fields: []*querypb.Field{
++			{Name: "c1", Type: querypb.Type_INT32},
++			{Name: "c2", Type: querypb.Type_VARCHAR},
++		},
++		FieldsToSkip:     map[string]bool{},
++		TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
++	}
++	var rowInserts []*binlogdatapb.RowChange
++	for i, val := range []string{"a", "b", "c", "d", "e"} {
++		rowInserts = append(rowInserts, &binlogdatapb.RowChange{
++			After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(int64(i + 1)), sqltypes.NewVarChar(val)}),
++		})
++	}
++	const (
++		prefix = "insert into t(c1, c2) values "
++		onDup  = " on duplicate key update c2=values(c2)"
++	)
++	// Room for exactly two rows per statement: "(1, 'a'), (2, 'b')".
++	maxQuerySize := int64(len(prefix) + len("(1, 'a'), (2, 'b')") + len(onDup))
++	var executed []string
++	_, err := tp.applyBulkInsertChanges(rowInserts, func(sql string) (*sqltypes.Result, error) {
++		executed = append(executed, sql)
++		return &sqltypes.Result{RowsAffected: 1}, nil
++	}, maxQuerySize)
++	require.NoError(t, err)
++	assert.Equal(t, []string{
++		prefix + "(1, 'a'), (2, 'b')" + onDup,
++		prefix + "(3, 'c'), (4, 'd')" + onDup,
++		prefix + "(5, 'e')" + onDup,
++	}, executed)
++}
++
++func benchmarkTablePlan20Cols(b *testing.B) (*TablePlan, []querypb.Type) {
++	types := []querypb.Type{
++		querypb.Type_INT64,
++		querypb.Type_INT32, querypb.Type_INT32, querypb.Type_INT64, querypb.Type_INT64, querypb.Type_UINT32,
++		querypb.Type_VARCHAR, querypb.Type_VARCHAR, querypb.Type_VARCHAR, querypb.Type_VARCHAR, querypb.Type_VARCHAR, querypb.Type_VARCHAR,
++		querypb.Type_DATETIME, querypb.Type_DATETIME, querypb.Type_TIMESTAMP,
++		querypb.Type_DECIMAL, querypb.Type_DECIMAL,
++		querypb.Type_TEXT, querypb.Type_BLOB,
++		querypb.Type_INT8,
++	}
++	colInfos := make([]*ColumnInfo, len(types))
++	fields := make([]*querypb.Field, len(types))
++	for i, typ := range types {
++		name := fmt.Sprintf("col_%02d", i)
++		colInfos[i] = &ColumnInfo{Name: name, IsPK: i == 0}
++		fields[i] = &querypb.Field{Name: name, Type: typ}
++	}
++	vr := &vreplicator{workflowConfig: vttablet.GetDefaultVReplicationConfig()}
++	source := &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t", Filter: "select * from t"}}}}
++	rp, err := vr.buildReplicatorPlan(source, map[string][]*ColumnInfo{"t": colInfos}, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
++	require.NoError(b, err)
++	tp, err := rp.buildExecutionPlan(&binlogdatapb.FieldEvent{TableName: "t", Fields: fields})
++	require.NoError(b, err)
++	return tp, types
++}
++
++func benchmarkRow(types []querypb.Type, id int) *querypb.Row {
++	vals := make([]sqltypes.Value, len(types))
++	for i, typ := range types {
++		switch {
++		case i == 0:
++			vals[i] = sqltypes.NewInt64(int64(id))
++		case sqltypes.IsIntegral(typ):
++			vals[i] = sqltypes.MakeTrusted(typ, strconv.AppendInt(nil, int64(id*7+i), 10))
++		case typ == querypb.Type_DATETIME || typ == querypb.Type_TIMESTAMP:
++			vals[i] = sqltypes.MakeTrusted(typ, []byte("2026-09-25 12:34:56"))
++		case typ == querypb.Type_DECIMAL:
++			vals[i] = sqltypes.MakeTrusted(typ, []byte("12345.6789"))
++		default:
++			vals[i] = sqltypes.MakeTrusted(typ, fmt.Appendf(nil, "some string value %d/%d", id, i))
++		}
++	}
++	return sqltypes.RowToProto3(vals)
++}
++
++func BenchmarkApplyChange20Cols(b *testing.B) {
++	tp, types := benchmarkTablePlan20Cols(b)
++	before, after := benchmarkRow(types, 1), benchmarkRow(types, 1)
++	after.Values[len(after.Values)-1] = '9'
++	executor := func(sql string) (*sqltypes.Result, error) { return &sqltypes.Result{RowsAffected: 1}, nil }
++	for _, tc := range []struct {
++		name      string
++		rowChange *binlogdatapb.RowChange
++	}{
++		{"insert", &binlogdatapb.RowChange{After: after}},
++		{"update", &binlogdatapb.RowChange{Before: before, After: after}},
++		{"delete", &binlogdatapb.RowChange{Before: before}},
++	} {
++		b.Run(tc.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				if _, err := tp.applyChange(tc.rowChange, executor); err != nil {
++					b.Fatal(err)
++				}
++			}
++		})
++	}
++}
++
++func BenchmarkApplyBulkInsertChanges20Cols(b *testing.B) {
++	tp, types := benchmarkTablePlan20Cols(b)
++	rowInserts := make([]*binlogdatapb.RowChange, 100)
++	for i := range rowInserts {
++		rowInserts[i] = &binlogdatapb.RowChange{After: benchmarkRow(types, i)}
++	}
++	executor := func(sql string) (*sqltypes.Result, error) { return &sqltypes.Result{RowsAffected: 1}, nil }
++	b.ReportAllocs()
++	for b.Loop() {
++		if _, err := tp.applyBulkInsertChanges(rowInserts, executor, 64*1024*1024); err != nil {
++			b.Fatal(err)
++		}
++	}
++}

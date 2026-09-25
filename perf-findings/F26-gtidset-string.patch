@@ -1,0 +1,677 @@
+diff --git a/go/mysql/replication/mysql56_gtid.go b/go/mysql/replication/mysql56_gtid.go
+index 490e2c7..af19b9d 100644
+--- a/go/mysql/replication/mysql56_gtid.go
++++ b/go/mysql/replication/mysql56_gtid.go
+@@ -19,6 +19,7 @@ package replication
+ import (
+ 	"encoding/hex"
+ 	"fmt"
++	"slices"
+ 	"strconv"
+ 	"strings"
+ 
+@@ -63,15 +64,31 @@ type SID [16]byte
+ 
+ // String prints an SID in the form used by MySQL 5.6.
+ func (sid SID) String() string {
+-	dst := []byte("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+-	hex.Encode(dst, sid[:4])
+-	hex.Encode(dst[9:], sid[4:6])
+-	hex.Encode(dst[14:], sid[6:8])
+-	hex.Encode(dst[19:], sid[8:10])
+-	hex.Encode(dst[24:], sid[10:16])
+-	return string(dst)
++	var dst [sidTextLen]byte
++	return string(sid.appendTo(dst[:0]))
+ }
+ 
++// appendTo appends the MySQL 5.6 text form of the SID to dst.
++func (sid SID) appendTo(dst []byte) []byte {
++	dst = slices.Grow(dst, sidTextLen)
++	n := len(dst)
++	dst = dst[:n+sidTextLen]
++	out := dst[n:]
++	hex.Encode(out[0:8], sid[:4])
++	out[8] = '-'
++	hex.Encode(out[9:13], sid[4:6])
++	out[13] = '-'
++	hex.Encode(out[14:18], sid[6:8])
++	out[18] = '-'
++	hex.Encode(out[19:23], sid[8:10])
++	out[23] = '-'
++	hex.Encode(out[24:36], sid[10:16])
++	return dst
++}
++
++// sidTextLen is the length of the text form of an SID.
++const sidTextLen = 36
++
+ // ParseSID parses an SID in the form used by MySQL 5.6.
+ func ParseSID(s string) (sid SID, err error) {
+ 	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+diff --git a/go/mysql/replication/mysql56_gtid_set.go b/go/mysql/replication/mysql56_gtid_set.go
+index b336b1d..b6d75e1 100644
+--- a/go/mysql/replication/mysql56_gtid_set.go
++++ b/go/mysql/replication/mysql56_gtid_set.go
+@@ -23,6 +23,7 @@ import (
+ 	"strconv"
+ 	"strings"
+ 
++	"vitess.io/vitess/go/hack"
+ 	"vitess.io/vitess/go/vt/proto/vtrpc"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ )
+@@ -165,24 +166,72 @@ func sortSIDs(sids []SID) {
+ 
+ // String implements GTIDSet.
+ func (set Mysql56GTIDSet) String() string {
+-	var buf strings.Builder
+-	for i, sid := range set.SIDs() {
+-		if i != 0 {
+-			buf.WriteByte(',')
++	if len(set) == 0 {
++		return ""
++	}
++	return hack.String(set.appendTo(make([]byte, 0, set.textLen())))
++}
++
++// textLen returns the length of the text form of the set, as produced by String.
++func (set Mysql56GTIDSet) textLen() int {
++	size := 0
++	for _, intervals := range set {
++		size += 1 + sidTextLen // ',' + SID
++		for _, iv := range intervals {
++			size += 1 + decimalLen(iv.start) // ':' + start
++			if iv.end != iv.start {
++				size += 1 + decimalLen(iv.end) // '-' + end
++			}
+ 		}
+-		buf.WriteString(sid.String())
++	}
++	if size > 0 {
++		size-- // no leading ','
++	}
++	return size
++}
+ 
+-		for _, interval := range set[sid] {
+-			buf.WriteByte(':')
+-			buf.WriteString(strconv.FormatInt(interval.start, 10))
++// appendTo appends the text form of the set, as produced by String, to dst.
++func (set Mysql56GTIDSet) appendTo(dst []byte) []byte {
++	// Sort the SIDs in a stack buffer for the common case of a handful of
++	// server UUIDs, so that formatting doesn't allocate beyond dst.
++	var sidsBuf [8]SID
++	sids := sidsBuf[:0]
++	if len(set) > len(sidsBuf) {
++		sids = make([]SID, 0, len(set))
++	}
++	for sid := range set {
++		sids = append(sids, sid)
++	}
++	sortSIDs(sids)
+ 
+-			if interval.end != interval.start {
+-				buf.WriteByte('-')
+-				buf.WriteString(strconv.FormatInt(interval.end, 10))
++	for i, sid := range sids {
++		if i != 0 {
++			dst = append(dst, ',')
++		}
++		dst = sid.appendTo(dst)
++		for _, iv := range set[sid] {
++			dst = append(dst, ':')
++			dst = strconv.AppendInt(dst, iv.start, 10)
++			if iv.end != iv.start {
++				dst = append(dst, '-')
++				dst = strconv.AppendInt(dst, iv.end, 10)
+ 			}
+ 		}
+ 	}
+-	return buf.String()
++	return dst
++}
++
++// decimalLen returns the number of bytes needed to format n in base 10.
++func decimalLen(n int64) int {
++	if n < 0 {
++		return 20
++	}
++	l := 1
++	for n >= 10 {
++		n /= 10
++		l++
++	}
++	return l
+ }
+ 
+ // Last returns the last gtid as string
+@@ -323,57 +372,53 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
+ 	}
+ 
+ 	// Make a copy and add the new GTID in the proper place.
+-	// This function is not supposed to modify the original set.
+-	newSet := make(Mysql56GTIDSet)
++	// This function is not supposed to modify the original set, but the
++	// interval slices of the other SIDs are never modified in place, so the
++	// copy can share them with the original set.
++	newSet := make(Mysql56GTIDSet, len(set))
++	for sid, intervals := range set {
++		newSet[sid] = intervals
++	}
++	intervals := set[gtid56.Server]
++	newIntervals := make([]interval, 0, len(intervals))
+ 
+ 	added := false
+-
+-	for sid, intervals := range set {
+-		newIntervals := make([]interval, 0, len(intervals))
+-
+-		if sid == gtid56.Server {
+-			// Look for the right place to add this GTID.
+-			for _, iv := range intervals {
+-				if !added {
+-					switch {
+-					case gtid56.Sequence == iv.start-1:
+-						// Expand the interval at the beginning.
+-						iv.start = gtid56.Sequence
+-						added = true
+-					case gtid56.Sequence == iv.end+1:
+-						// Expand the interval at the end.
+-						iv.end = gtid56.Sequence
+-						added = true
+-					case gtid56.Sequence < iv.start-1:
+-						// The next interval is beyond the new GTID, but it can't
+-						// be expanded, so we have to insert a new interval.
+-						newIntervals = append(newIntervals, interval{start: gtid56.Sequence, end: gtid56.Sequence})
+-						added = true
+-					}
+-				}
+-				// Check if this interval can be merged with the previous one.
+-				count := len(newIntervals)
+-				if count != 0 && iv.start == newIntervals[count-1].end+1 {
+-					// Merge instead of appending.
+-					newIntervals[count-1].end = iv.end
+-				} else {
+-					// Can't be merged.
+-					newIntervals = append(newIntervals, iv)
+-				}
++	// Look for the right place to add this GTID.
++	for _, iv := range intervals {
++		if !added {
++			switch {
++			case gtid56.Sequence == iv.start-1:
++				// Expand the interval at the beginning.
++				iv.start = gtid56.Sequence
++				added = true
++			case gtid56.Sequence == iv.end+1:
++				// Expand the interval at the end.
++				iv.end = gtid56.Sequence
++				added = true
++			case gtid56.Sequence < iv.start-1:
++				// The next interval is beyond the new GTID, but it can't
++				// be expanded, so we have to insert a new interval.
++				newIntervals = append(newIntervals, interval{start: gtid56.Sequence, end: gtid56.Sequence})
++				added = true
+ 			}
++		}
++		// Check if this interval can be merged with the previous one.
++		count := len(newIntervals)
++		if count != 0 && iv.start == newIntervals[count-1].end+1 {
++			// Merge instead of appending.
++			newIntervals[count-1].end = iv.end
+ 		} else {
+-			// Just copy everything.
+-			newIntervals = append(newIntervals, intervals...)
++			// Can't be merged.
++			newIntervals = append(newIntervals, iv)
+ 		}
+-
+-		newSet[sid] = newIntervals
+ 	}
+ 
+ 	if !added {
+ 		// There wasn't any place to insert the new GTID, so just append it
+ 		// as a new interval.
+-		newSet[gtid56.Server] = append(newSet[gtid56.Server], interval{start: gtid56.Sequence, end: gtid56.Sequence})
++		newIntervals = append(newIntervals, interval{start: gtid56.Sequence, end: gtid56.Sequence})
+ 	}
++	newSet[gtid56.Server] = newIntervals
+ 
+ 	return newSet
+ }
+diff --git a/go/mysql/replication/mysql56_gtid_set_string_test.go b/go/mysql/replication/mysql56_gtid_set_string_test.go
+new file mode 100644
+index 0000000..f07d2c6
+--- /dev/null
++++ b/go/mysql/replication/mysql56_gtid_set_string_test.go
+@@ -0,0 +1,398 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package replication
++
++import (
++	"encoding/hex"
++	"fmt"
++	"math"
++	"math/rand/v2"
++	"strconv"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++)
++
++// referenceSIDString is the previous implementation of SID.String, kept as a
++// reference for the equivalence tests.
++func referenceSIDString(sid SID) string {
++	dst := []byte("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
++	hex.Encode(dst, sid[:4])
++	hex.Encode(dst[9:], sid[4:6])
++	hex.Encode(dst[14:], sid[6:8])
++	hex.Encode(dst[19:], sid[8:10])
++	hex.Encode(dst[24:], sid[10:16])
++	return string(dst)
++}
++
++// referenceGTIDSetString is the previous implementation of
++// Mysql56GTIDSet.String, kept as a reference for the equivalence tests.
++func referenceGTIDSetString(set Mysql56GTIDSet) string {
++	var buf strings.Builder
++	for i, sid := range set.SIDs() {
++		if i != 0 {
++			buf.WriteByte(',')
++		}
++		buf.WriteString(referenceSIDString(sid))
++
++		for _, interval := range set[sid] {
++			buf.WriteByte(':')
++			buf.WriteString(strconv.FormatInt(interval.start, 10))
++
++			if interval.end != interval.start {
++				buf.WriteByte('-')
++				buf.WriteString(strconv.FormatInt(interval.end, 10))
++			}
++		}
++	}
++	return buf.String()
++}
++
++// referenceEncodePosition is the previous implementation of EncodePosition.
++func referenceEncodePosition(rp Position) string {
++	if rp.GTIDSet == nil {
++		return ""
++	}
++	return fmt.Sprintf("%s/%s", rp.GTIDSet.Flavor(), referenceGTIDSetString(rp.GTIDSet.(Mysql56GTIDSet)))
++}
++
++func randomSID(r *rand.Rand) SID {
++	var sid SID
++	for i := range sid {
++		sid[i] = byte(r.UintN(256))
++	}
++	return sid
++}
++
++func randomInt64(r *rand.Rand) int64 {
++	switch r.IntN(6) {
++	case 0:
++		return int64(r.IntN(10))
++	case 1:
++		return int64(r.IntN(1000))
++	case 2:
++		return r.Int64()
++	case 3:
++		return math.MaxInt64 - int64(r.IntN(3))
++	case 4:
++		// Not produced by the parser, but reachable through SID blocks.
++		return -r.Int64()
++	default:
++		return int64(r.IntN(1 << 40))
++	}
++}
++
++// randomGTIDSet builds a set without enforcing the invariants that the parser
++// enforces, so that String is exercised on any interval values.
++func randomGTIDSet(r *rand.Rand, maxSIDs, maxIntervals int) Mysql56GTIDSet {
++	set := make(Mysql56GTIDSet)
++	for range r.IntN(maxSIDs + 1) {
++		var intervals []interval
++		for range r.IntN(maxIntervals + 1) {
++			start := randomInt64(r)
++			end := start
++			if r.IntN(2) == 0 {
++				end = randomInt64(r)
++			}
++			intervals = append(intervals, interval{start: start, end: end})
++		}
++		set[randomSID(r)] = intervals
++	}
++	return set
++}
++
++func TestSIDStringMatchesReference(t *testing.T) {
++	r := rand.New(rand.NewPCG(1, 2))
++	for range 1000 {
++		sid := randomSID(r)
++		assert.Equal(t, referenceSIDString(sid), sid.String())
++	}
++	assert.Equal(t, "00000000-0000-0000-0000-000000000000", SID{}.String())
++}
++
++func TestMysql56GTIDSetStringMatchesReference(t *testing.T) {
++	r := rand.New(rand.NewPCG(3, 4))
++	for range 5000 {
++		set := randomGTIDSet(r, 20, 5)
++		want := referenceGTIDSetString(set)
++		got := set.String()
++		require.Equal(t, want, got)
++		// textLen is exact for non-negative interval bounds, and an upper bound otherwise.
++		assert.GreaterOrEqual(t, set.textLen(), len(got), "textLen must not underestimate %q", got)
++		assert.Equal(t, referenceEncodePosition(Position{GTIDSet: set}), EncodePosition(Position{GTIDSet: set}))
++	}
++	assert.Equal(t, "", Mysql56GTIDSet{}.String())
++	assert.Equal(t, "", Mysql56GTIDSet(nil).String())
++	assert.Equal(t, "MySQL56/", EncodePosition(Position{GTIDSet: Mysql56GTIDSet{}}))
++}
++
++func TestMysql56GTIDSetStringRoundTrip(t *testing.T) {
++	r := rand.New(rand.NewPCG(5, 6))
++	for range 2000 {
++		// Build a set through the parser so that it satisfies its invariants.
++		var parts []string
++		for range r.IntN(12) {
++			sid := randomSID(r)
++			seq := int64(1)
++			var sb strings.Builder
++			sb.WriteString(sid.String())
++			for range 1 + r.IntN(4) {
++				start := seq + int64(r.IntN(1000))
++				end := start + int64(r.IntN(3))*int64(r.IntN(100000))
++				sb.WriteString(":" + strconv.FormatInt(start, 10))
++				if end != start {
++					sb.WriteString("-" + strconv.FormatInt(end, 10))
++				}
++				seq = end + 2
++			}
++			parts = append(parts, sb.String())
++		}
++		set, err := ParseMysql56GTIDSet(strings.Join(parts, ","))
++		require.NoError(t, err)
++
++		s := set.String()
++		require.Equal(t, referenceGTIDSetString(set), s)
++		require.Equal(t, len(s), set.textLen(), "textLen must be exact for %q", s)
++		reparsed, err := ParseMysql56GTIDSet(s)
++		require.NoError(t, err)
++		require.True(t, set.Equal(reparsed), "round trip of %q", s)
++
++		pos := Position{GTIDSet: set}
++		decoded, err := DecodePosition(EncodePosition(pos))
++		require.NoError(t, err)
++		require.True(t, pos.Equal(decoded))
++	}
++}
++
++func benchmarkGTIDSet(numSIDs, numIntervals int) Mysql56GTIDSet {
++	r := rand.New(rand.NewPCG(uint64(numSIDs), uint64(numIntervals)))
++	set := make(Mysql56GTIDSet)
++	for range numSIDs {
++		var intervals []interval
++		seq := int64(1)
++		for range numIntervals {
++			end := seq + int64(r.IntN(10_000_000))
++			intervals = append(intervals, interval{start: seq, end: end})
++			seq = end + 2 + int64(r.IntN(1000))
++		}
++		set[randomSID(r)] = intervals
++	}
++	return set
++}
++
++var benchmarkGTIDSetShapes = []struct{ sids, intervals int }{
++	{1, 1}, {1, 10}, {5, 1}, {5, 10}, {50, 1}, {50, 3},
++}
++
++var benchmarkSink string
++
++func BenchmarkMysql56GTIDSetString(b *testing.B) {
++	for _, shape := range benchmarkGTIDSetShapes {
++		set := benchmarkGTIDSet(shape.sids, shape.intervals)
++		name := fmt.Sprintf("sids=%d/intervals=%d", shape.sids, shape.intervals)
++		b.Run(name+"/impl=old", func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				benchmarkSink = referenceGTIDSetString(set)
++			}
++		})
++		b.Run(name+"/impl=new", func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				benchmarkSink = set.String()
++			}
++		})
++	}
++}
++
++func BenchmarkEncodePosition(b *testing.B) {
++	for _, shape := range benchmarkGTIDSetShapes {
++		pos := Position{GTIDSet: benchmarkGTIDSet(shape.sids, shape.intervals)}
++		name := fmt.Sprintf("sids=%d/intervals=%d", shape.sids, shape.intervals)
++		b.Run(name+"/impl=old", func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				benchmarkSink = referenceEncodePosition(pos)
++			}
++		})
++		b.Run(name+"/impl=new", func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				benchmarkSink = EncodePosition(pos)
++			}
++		})
++	}
++}
++
++// BenchmarkVStreamerGTIDCycle models the per-transaction position work of the
++// vstreamer (AppendGTID on the GTID event, EncodePosition on the XID event),
++// and the vplayer (DecodePosition of the GTID event, EncodePosition for the
++// _vt.vreplication update).
++func BenchmarkVStreamerGTIDCycle(b *testing.B) {
++	for _, shape := range benchmarkGTIDSetShapes {
++		set := benchmarkGTIDSet(shape.sids, shape.intervals)
++		sids := set.SIDs()
++		last := sids[len(sids)-1]
++		name := fmt.Sprintf("sids=%d/intervals=%d", shape.sids, shape.intervals)
++		b.Run(name+"/part=AppendGTID", func(b *testing.B) {
++			b.ReportAllocs()
++			pos := Position{GTIDSet: set}
++			seq := set[last][len(set[last])-1].end
++			for b.Loop() {
++				seq++
++				pos = AppendGTID(pos, Mysql56GTID{Server: last, Sequence: seq})
++			}
++		})
++		b.Run(name+"/part=DecodePosition", func(b *testing.B) {
++			b.ReportAllocs()
++			s := EncodePosition(Position{GTIDSet: set})
++			for b.Loop() {
++				_, _ = DecodePosition(s)
++			}
++		})
++		for _, impl := range []string{"old", "new"} {
++			encode := EncodePosition
++			appendGTID := AppendGTID
++			if impl == "old" {
++				encode = referenceEncodePosition
++				appendGTID = func(rp Position, gtid GTID) Position {
++					return Position{GTIDSet: referenceAddGTID(rp.GTIDSet.(Mysql56GTIDSet), gtid.(Mysql56GTID))}
++				}
++			}
++			b.Run(name+"/part=streamer/impl="+impl, func(b *testing.B) {
++				b.ReportAllocs()
++				pos := Position{GTIDSet: set}
++				seq := set[last][len(set[last])-1].end
++				for b.Loop() {
++					seq++
++					pos = appendGTID(pos, Mysql56GTID{Server: last, Sequence: seq})
++					benchmarkSink = encode(pos)
++				}
++			})
++		}
++	}
++}
++
++// referenceAddGTID is the previous implementation of Mysql56GTIDSet.AddGTID,
++// which copied the intervals of every SID.
++func referenceAddGTID(set Mysql56GTIDSet, gtid56 Mysql56GTID) Mysql56GTIDSet {
++	if set.ContainsGTID(gtid56) {
++		return set
++	}
++	newSet := make(Mysql56GTIDSet)
++	added := false
++	for sid, intervals := range set {
++		newIntervals := make([]interval, 0, len(intervals))
++		if sid == gtid56.Server {
++			for _, iv := range intervals {
++				if !added {
++					switch {
++					case gtid56.Sequence == iv.start-1:
++						iv.start = gtid56.Sequence
++						added = true
++					case gtid56.Sequence == iv.end+1:
++						iv.end = gtid56.Sequence
++						added = true
++					case gtid56.Sequence < iv.start-1:
++						newIntervals = append(newIntervals, interval{start: gtid56.Sequence, end: gtid56.Sequence})
++						added = true
++					}
++				}
++				count := len(newIntervals)
++				if count != 0 && iv.start == newIntervals[count-1].end+1 {
++					newIntervals[count-1].end = iv.end
++				} else {
++					newIntervals = append(newIntervals, iv)
++				}
++			}
++		} else {
++			newIntervals = append(newIntervals, intervals...)
++		}
++		newSet[sid] = newIntervals
++	}
++	if !added {
++		newSet[gtid56.Server] = append(newSet[gtid56.Server], interval{start: gtid56.Sequence, end: gtid56.Sequence})
++	}
++	return newSet
++}
++
++func TestMysql56GTIDSetAddGTIDMatchesReference(t *testing.T) {
++	r := rand.New(rand.NewPCG(7, 8))
++	sids := []SID{randomSID(r), randomSID(r), randomSID(r)}
++	for range 500 {
++		set := Mysql56GTIDSet(nil)
++		if r.IntN(10) != 0 {
++			set = make(Mysql56GTIDSet)
++		}
++		ref := set
++		for range r.IntN(60) {
++			gtid := Mysql56GTID{Server: sids[r.IntN(len(sids))], Sequence: 1 + int64(r.IntN(40))}
++			before := referenceGTIDSetString(set)
++			set = set.AddGTID(gtid).(Mysql56GTIDSet)
++			ref = referenceAddGTID(ref, gtid)
++			require.True(t, ref.Equal(set), "adding %v to %s: got %s, want %s", gtid, before, set, ref)
++		}
++	}
++}
++
++func TestMysql56GTIDSetAddGTIDDoesNotModifyReceiver(t *testing.T) {
++	sid1 := SID{1}
++	sid2 := SID{2}
++	const want = "01000000-0000-0000-0000-000000000000:1-5:7-9,02000000-0000-0000-0000-000000000000:1-3"
++	set := Mysql56GTIDSet{sid1: {{1, 5}, {7, 9}}, sid2: {{1, 3}}}
++	for _, gtid := range []Mysql56GTID{
++		{Server: sid1, Sequence: 6}, {Server: sid1, Sequence: 12}, {Server: sid2, Sequence: 4}, {Server: SID{3}, Sequence: 1},
++	} {
++		added := set.AddGTID(gtid).(Mysql56GTIDSet)
++		assert.True(t, added.ContainsGTID(gtid))
++		assert.Equal(t, want, set.String())
++		// Mutating the new set in place must not modify the receiver either.
++		added.AddGTIDInPlace(Mysql56GTID{Server: sid1, Sequence: 20})
++		added.AddGTIDInPlace(Mysql56GTID{Server: sid2, Sequence: 20})
++		added.UnionInPlace(Mysql56GTIDSet{sid1: {{30, 40}}, sid2: {{30, 40}}})
++		assert.Equal(t, want, set.String())
++	}
++}
++
++func BenchmarkMysql56GTIDSetAddGTID(b *testing.B) {
++	for _, shape := range benchmarkGTIDSetShapes {
++		set := benchmarkGTIDSet(shape.sids, shape.intervals)
++		sids := set.SIDs()
++		last := sids[len(sids)-1]
++		name := fmt.Sprintf("sids=%d/intervals=%d", shape.sids, shape.intervals)
++		b.Run(name+"/impl=old", func(b *testing.B) {
++			b.ReportAllocs()
++			pos := set
++			seq := set[last][len(set[last])-1].end
++			for b.Loop() {
++				seq++
++				pos = referenceAddGTID(pos, Mysql56GTID{Server: last, Sequence: seq})
++			}
++		})
++		b.Run(name+"/impl=new", func(b *testing.B) {
++			b.ReportAllocs()
++			pos := set
++			seq := set[last][len(set[last])-1].end
++			for b.Loop() {
++				seq++
++				pos = pos.AddGTID(Mysql56GTID{Server: last, Sequence: seq}).(Mysql56GTIDSet)
++			}
++		})
++	}
++}
+diff --git a/go/mysql/replication/replication_position.go b/go/mysql/replication/replication_position.go
+index c438873..33bfd1f 100644
+--- a/go/mysql/replication/replication_position.go
++++ b/go/mysql/replication/replication_position.go
+@@ -18,9 +18,9 @@ package replication
+ 
+ import (
+ 	"encoding/json"
+-	"fmt"
+ 	"strings"
+ 
++	"vitess.io/vitess/go/hack"
+ 	"vitess.io/vitess/go/vt/proto/vtrpc"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ )
+@@ -164,7 +164,14 @@ func EncodePosition(rp Position) string {
+ 	if rp.GTIDSet == nil {
+ 		return ""
+ 	}
+-	return fmt.Sprintf("%s/%s", rp.GTIDSet.Flavor(), rp.GTIDSet.String())
++	flavor := rp.GTIDSet.Flavor()
++	if set, ok := rp.GTIDSet.(Mysql56GTIDSet); ok {
++		buf := make([]byte, 0, len(flavor)+1+set.textLen())
++		buf = append(buf, flavor...)
++		buf = append(buf, '/')
++		return hack.String(set.appendTo(buf))
++	}
++	return flavor + "/" + rp.GTIDSet.String()
+ }
+ 
+ // DecodePosition converts a string in the format returned by

@@ -1,0 +1,616 @@
+diff --git a/go/sqltypes/bind_variables.go b/go/sqltypes/bind_variables.go
+index 5ce1e6f..e5473be 100644
+--- a/go/sqltypes/bind_variables.go
++++ b/go/sqltypes/bind_variables.go
+@@ -356,15 +356,20 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
+ 			if val.Type == querypb.Type_TUPLE {
+ 				return errors.New("tuple not allowed inside another tuple")
+ 			}
+-			if err := ValidateBindVariable(&querypb.BindVariable{Type: val.Type, Value: val.Value}); err != nil {
++			if err := validateValue(val.Type, val.Value); err != nil {
+ 				return err
+ 			}
+ 		}
+ 		return nil
+ 	}
+ 
++	return validateValue(bv.Type, bv.Value)
++}
++
++// validateValue returns an error if val is not a valid value of type typ.
++func validateValue(typ querypb.Type, val []byte) error {
+ 	// If NewValue succeeds, the value is valid.
+-	_, err := NewValue(bv.Type, bv.Value)
++	_, err := NewValue(typ, val)
+ 	return err
+ }
+ 
+diff --git a/go/sqltypes/bind_variables_test.go b/go/sqltypes/bind_variables_test.go
+index 526ca71..849e27b 100644
+--- a/go/sqltypes/bind_variables_test.go
++++ b/go/sqltypes/bind_variables_test.go
+@@ -370,6 +370,17 @@ func TestValidateBindVarables(t *testing.T) {
+ 	}
+ }
+ 
++func TestValidateBindVariableTupleDoesNotAllocate(t *testing.T) {
++	bv, err := BuildBindVariable([]any{int64(1), "abc", 1.5, []byte("x")})
++	require.NoError(t, err)
++	allocs := testing.AllocsPerRun(100, func() {
++		if err := ValidateBindVariable(bv); err != nil {
++			t.Fatal(err)
++		}
++	})
++	assert.Zero(t, allocs)
++}
++
+ func TestValidateBindVariable(t *testing.T) {
+ 	testcases := []struct {
+ 		in  *querypb.BindVariable
+@@ -665,3 +676,19 @@ func TestBindVariablesFormat(t *testing.T) {
+ 	assert.Contains(t, formattedStr, "\"key_3\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}")
+ 	assert.Contains(t, formattedStr, "\"key_4\": {\"type\": \"VARCHAR\", \"value\": \"2 items\"}")
+ }
++
++func BenchmarkValidateBindVariables(b *testing.B) {
++	values := make([]any, 1000)
++	for i := range values {
++		values[i] = int64(i)
++	}
++	bv, err := BuildBindVariable(values)
++	require.NoError(b, err)
++	bvs := map[string]*querypb.BindVariable{"vtg1": bv, "vtg2": Int64BindVariable(1)}
++	b.ReportAllocs()
++	for b.Loop() {
++		if err := ValidateBindVariables(bvs); err != nil {
++			b.Fatal(err)
++		}
++	}
++}
+diff --git a/go/vt/sqlparser/normalizer.go b/go/vt/sqlparser/normalizer.go
+index cc53c68..cf89142 100644
+--- a/go/vt/sqlparser/normalizer.go
++++ b/go/vt/sqlparser/normalizer.go
+@@ -18,9 +18,12 @@ package sqlparser
+ 
+ import (
+ 	"bytes"
++	"encoding/binary"
++	"hash/maphash"
+ 	"strconv"
+ 	"strings"
+ 
++	"vitess.io/vitess/go/hack"
+ 	"vitess.io/vitess/go/mysql/datetime"
+ 	"vitess.io/vitess/go/sqltypes"
+ 	querypb "vitess.io/vitess/go/vt/proto/query"
+@@ -44,7 +47,7 @@ type (
+ 		bindVars  map[string]*querypb.BindVariable
+ 		reserved  *ReservedVars
+ 		vals      map[Literal]string
+-		tupleVals map[string]string
++		tupleVals map[uint64]string
+ 		err       error
+ 		inDerived int
+ 		inSelect  int
+@@ -60,10 +63,17 @@ type (
+ 		sysVars       map[string]string
+ 		views         VSchemaViews
+ 
+-		onLeave      map[*AliasedExpr]func(*AliasedExpr)
++		onLeave      []pendingAlias
+ 		parameterize bool
+ 		useASTQuery  bool
+ 	}
++	// pendingAlias is an unaliased select expression that must be aliased with its
++	// original text if any of its sub-expressions gets rewritten.
++	pendingAlias struct {
++		node         *AliasedExpr
++		originalText string
++		rewrites     int
++	}
+ 	// RewriteASTResult holds the result of rewriting the AST, including bind variable needs.
+ 	RewriteASTResult struct {
+ 		*BindVarNeeds
+@@ -145,7 +155,7 @@ func newNormalizer(
+ 		bindVars:      bindVars,
+ 		reserved:      reserved,
+ 		vals:          make(map[Literal]string),
+-		tupleVals:     make(map[string]string),
++		tupleVals:     make(map[uint64]string),
+ 		bindVarNeeds:  &BindVarNeeds{},
+ 		keyspace:      keyspace,
+ 		selectLimit:   selectLimit,
+@@ -153,7 +163,6 @@ func newNormalizer(
+ 		fkChecksState: fkChecksState,
+ 		sysVars:       sysVars,
+ 		views:         views,
+-		onLeave:       make(map[*AliasedExpr]func(*AliasedExpr)),
+ 		parameterize:  parameterize,
+ 	}
+ }
+@@ -207,6 +216,11 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
+ 	if node.As.NotEmpty() {
+ 		return
+ 	}
++	if _, isCol := node.Expr.(*ColName); isCol {
++		// walkDown does not descend into column names, so nothing below
++		// this expression can be rewritten.
++		return
++	}
+ 	var originalText string
+ 	if node.InputExpression != "" {
+ 		originalText = node.InputExpression
+@@ -215,11 +229,25 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
+ 		node.Expr.Format(buf)
+ 		originalText = buf.String()
+ 	}
+-	rewrites := nz.bindVarNeeds.NumberOfRewrites()
+-	nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
+-		if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
+-			newAliasedExpr.As = NewIdentifierCI(originalText)
+-		}
++	nz.onLeave = append(nz.onLeave, pendingAlias{
++		node:         node,
++		originalText: originalText,
++		rewrites:     nz.bindVarNeeds.NumberOfRewrites(),
++	})
++}
++
++// leaveAliasedExpr adds the original expression text as alias to node if it was
++// tracked by noteAliasedExprName and any of its sub-expressions was rewritten.
++func (nz *normalizer) leaveAliasedExpr(node *AliasedExpr) {
++	last := len(nz.onLeave) - 1
++	if last < 0 || nz.onLeave[last].node != node {
++		return
++	}
++	pending := nz.onLeave[last]
++	nz.onLeave[last] = pendingAlias{}
++	nz.onLeave = nz.onLeave[:last]
++	if nz.bindVarNeeds.NumberOfRewrites() > pending.rewrites {
++		node.As = NewIdentifierCI(pending.originalText)
+ 	}
+ }
+ 
+@@ -257,10 +285,7 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
+ 		nz.inSelect--
+ 	case *AliasedExpr:
+ 		// if we are tracking this node for changes, this is the time to add the alias if needed
+-		if onLeave, ok := nz.onLeave[node]; ok {
+-			onLeave(node)
+-			delete(nz.onLeave, node)
+-		}
++		nz.leaveAliasedExpr(node)
+ 	case *Union:
+ 		nz.rewriteUnion(node)
+ 	case *FuncExpr:
+@@ -451,39 +476,63 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
+ 		return
+ 	}
+ 
+-	// Create a list bind variable for the tuple.
++	// Create a list bind variable for the tuple. All values are allocated in one slab.
++	values := make([]querypb.Value, len(tupleVals))
+ 	bvals := &querypb.BindVariable{
+-		Type: querypb.Type_TUPLE,
+-	}
+-	for _, val := range tupleVals {
+-		bval := literalToBindvar(val)
+-		if bval == nil {
++		Type:   querypb.Type_TUPLE,
++		Values: make([]*querypb.Value, len(tupleVals)),
++	}
++	h := maphash.Hash{}
++	h.SetSeed(tupleHashSeed)
++	var hdr [8]byte
++	for i, val := range tupleVals {
++		lit, ok := val.(*Literal)
++		if !ok {
+ 			return
+ 		}
+-		bvals.Values = append(bvals.Values, &querypb.Value{
+-			Type:  bval.Type,
+-			Value: bval.Value,
+-		})
+-	}
++		typ, raw, ok := literalToValue(lit)
++		if !ok {
++			return
++		}
++		values[i].Type = typ
++		values[i].Value = raw
++		bvals.Values[i] = &values[i]
+ 
+-	var bvname string
++		binary.LittleEndian.PutUint32(hdr[:4], uint32(typ))
++		binary.LittleEndian.PutUint32(hdr[4:], uint32(len(raw)))
++		_, _ = h.Write(hdr[:])
++		_, _ = h.Write(raw)
++	}
+ 
+-	if key, err := bvals.MarshalVT(); err != nil {
++	// Reuse the bind variable of an identical tuple, if there is one.
++	key := h.Sum64()
++	bvname, ok := nz.tupleVals[key]
++	if !ok || !tupleValuesEqual(nz.bindVars[bvname], bvals) {
+ 		bvname = nz.reserved.nextUnusedVar()
+-		nz.bindVars[bvname] = bvals
+-	} else {
+-		// Check if we can find key in tuplevals
+-		if bvname, ok = nz.tupleVals[string(key)]; !ok {
+-			bvname = nz.reserved.nextUnusedVar()
+-		}
+-
+-		nz.bindVars[bvname] = bvals
+-		nz.tupleVals[string(key)] = bvname
++		nz.tupleVals[key] = bvname
+ 	}
++	nz.bindVars[bvname] = bvals
+ 
+ 	node.Right = ListArg(bvname)
+ }
+ 
++// tupleHashSeed seeds the hash used to deduplicate IN-list tuples.
++var tupleHashSeed = maphash.MakeSeed()
++
++// tupleValuesEqual returns whether two tuple bind variables hold the same values.
++func tupleValuesEqual(a, b *querypb.BindVariable) bool {
++	if a == nil || b == nil || a.Type != b.Type || len(a.Values) != len(b.Values) {
++		return false
++	}
++	for i, av := range a.Values {
++		bv := b.Values[i]
++		if av.Type != bv.Type || !bytes.Equal(av.Value, bv.Value) {
++			return false
++		}
++	}
++	return true
++}
++
+ // convertUpdateExpr parameterizes expressions in UPDATE statements.
+ func (nz *normalizer) convertUpdateExpr(node *UpdateExpr) {
+ 	newR := nz.normalizeComparisonWithBindVar(node.Name, node.Expr)
+@@ -498,48 +547,92 @@ func literalToBindvar(node SQLNode) *querypb.BindVariable {
+ 	if !ok {
+ 		return nil
+ 	}
+-	var v sqltypes.Value
+-	var err error
++	typ, val, ok := literalToValue(lit)
++	if !ok {
++		return nil
++	}
++	return &querypb.BindVariable{Type: typ, Value: val}
++}
++
++// literalToValue returns the bind variable type and raw value for a literal, or false
++// if the literal cannot be converted.
++//
++// For most literal types the returned bytes alias the literal's string (which is
++// usually a substring of the original query) instead of copying it. This is safe
++// because bind variable values are never modified in place: they are only read,
++// or replaced with a new slice. The returned slice has cap == len, so appending
++// to it always reallocates.
++func literalToValue(lit *Literal) (querypb.Type, []byte, bool) {
++	var typ querypb.Type
+ 	switch lit.Type {
+ 	case StrVal:
+-		v, err = sqltypes.NewValue(sqltypes.VarChar, lit.Bytes())
++		typ = sqltypes.VarChar
+ 	case IntVal:
+-		v, err = sqltypes.NewValue(sqltypes.Int64, lit.Bytes())
++		typ = sqltypes.Int64
+ 	case FloatVal:
+-		v, err = sqltypes.NewValue(sqltypes.Float64, lit.Bytes())
++		typ = sqltypes.Float64
+ 	case DecimalVal:
+-		v, err = sqltypes.NewValue(sqltypes.Decimal, lit.Bytes())
+-	case HexNum:
+-		buf := make([]byte, 0, len(lit.Bytes()))
+-		buf = append(buf, "0x"...)
+-		buf = append(buf, bytes.ToUpper(lit.Bytes()[2:])...)
+-		v, err = sqltypes.NewValue(sqltypes.HexNum, buf)
+-	case HexVal:
+-		// Re-encode hex string literals to original MySQL format.
+-		buf := make([]byte, 0, len(lit.Bytes())+3)
+-		buf = append(buf, 'x', '\'')
+-		buf = append(buf, bytes.ToUpper(lit.Bytes())...)
+-		buf = append(buf, '\'')
+-		v, err = sqltypes.NewValue(sqltypes.HexVal, buf)
+-	case BitNum:
+-		out := make([]byte, 0, len(lit.Bytes())+2)
+-		out = append(out, '0', 'b')
+-		out = append(out, lit.Bytes()[2:]...)
+-		v, err = sqltypes.NewValue(sqltypes.BitNum, out)
++		typ = sqltypes.Decimal
+ 	case DateVal:
+-		v, err = sqltypes.NewValue(sqltypes.Date, lit.Bytes())
++		typ = sqltypes.Date
+ 	case TimeVal:
+-		v, err = sqltypes.NewValue(sqltypes.Time, lit.Bytes())
++		typ = sqltypes.Time
+ 	case TimestampVal:
+ 		// Use DATETIME type for TIMESTAMP literals.
+-		v, err = sqltypes.NewValue(sqltypes.Datetime, lit.Bytes())
++		typ = sqltypes.Datetime
++	case HexNum:
++		// Normalize to a lowercase 0x prefix followed by uppercase hex digits.
++		// This must stay a private copy: the evalengine temporarily modifies
++		// HEXNUM values in place when decoding odd-length values.
++		buf := make([]byte, len(lit.Val))
++		copy(buf, lit.Val)
++		buf[0], buf[1] = '0', 'x'
++		upperASCII(buf[2:])
++		return sqltypes.HexNum, buf, true
++	case HexVal:
++		// Re-encode hex string literals to original MySQL format.
++		buf := make([]byte, len(lit.Val)+3)
++		buf[0], buf[1] = 'x', '\''
++		copy(buf[2:], lit.Val)
++		upperASCII(buf[2 : len(buf)-1])
++		buf[len(buf)-1] = '\''
++		return sqltypes.HexVal, buf, true
++	case BitNum:
++		if strings.HasPrefix(lit.Val, "0b") {
++			return sqltypes.BitNum, stringValueBytes(lit.Val), true
++		}
++		buf := make([]byte, len(lit.Val))
++		copy(buf, lit.Val)
++		buf[0], buf[1] = '0', 'b'
++		return sqltypes.BitNum, buf, true
+ 	default:
+-		return nil
++		return 0, nil, false
+ 	}
+-	if err != nil {
+-		return nil
++	val := stringValueBytes(lit.Val)
++	// NewValue only validates numeric values here; it does not modify val.
++	if _, err := sqltypes.NewValue(typ, val); err != nil {
++		return 0, nil, false
++	}
++	return typ, val, true
++}
++
++// stringValueBytes returns the bytes of s without copying them. The result
++// must never be modified. An empty string yields a non-nil empty slice, to
++// match the result of []byte(s).
++func stringValueBytes(s string) []byte {
++	if len(s) == 0 {
++		return []byte{}
++	}
++	return hack.StringBytes(s)
++}
++
++// upperASCII converts ASCII lowercase letters in b to uppercase in place.
++func upperASCII(b []byte) {
++	for i, c := range b {
++		if 'a' <= c && c <= 'z' {
++			b[i] = c - ('a' - 'A')
++		}
+ 	}
+-	return sqltypes.ValueBindVariable(v)
+ }
+ 
+ // getBindvars extracts bind variables from a SQL statement.
+diff --git a/go/vt/sqlparser/normalizer_test.go b/go/vt/sqlparser/normalizer_test.go
+index 3ecc291..f27fa6a 100644
+--- a/go/vt/sqlparser/normalizer_test.go
++++ b/go/vt/sqlparser/normalizer_test.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package sqlparser
+ 
+ import (
++	"bytes"
+ 	"fmt"
+ 	"math/rand/v2"
+ 	"regexp"
+@@ -322,6 +323,32 @@ func TestNormalize(t *testing.T) {
+ 		outbv: map[string]*querypb.BindVariable{
+ 			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
+ 		},
++	}, {
++		// IN clauses with the same raw values but different types are not deduplicated
++		in:      "select * from t where v1 in (1, 2) OR v2 in ('1', '2')",
++		outstmt: "select * from t where v1 in ::bv1 or v2 in ::bv2",
++		outbv: map[string]*querypb.BindVariable{
++			"bv1": sqltypes.TestBindVariable([]any{1, 2}),
++			"bv2": sqltypes.TestBindVariable([]any{"1", "2"}),
++		},
++	}, {
++		// IN clauses with the same concatenated values but different value boundaries are not deduplicated
++		in:      "select * from t where v1 in ('ab', 'c') OR v2 in ('a', 'bc') OR v3 in ('ab', 'c')",
++		outstmt: "select * from t where v1 in ::bv1 or v2 in ::bv2 or v3 in ::bv1",
++		outbv: map[string]*querypb.BindVariable{
++			"bv1": sqltypes.TestBindVariable([]any{"ab", "c"}),
++			"bv2": sqltypes.TestBindVariable([]any{"a", "bc"}),
++		},
++	}, {
++		// IN clauses with hex literals are normalized to the same value
++		in:      "select * from t where v1 in (0Xab, x'cd') OR v2 in (0xAB, X'CD')",
++		outstmt: "select * from t where v1 in ::bv1 or v2 in ::bv1",
++		outbv: map[string]*querypb.BindVariable{
++			"bv1": {Type: querypb.Type_TUPLE, Values: []*querypb.Value{
++				{Type: querypb.Type_HEXNUM, Value: []byte("0xAB")},
++				{Type: querypb.Type_HEXVAL, Value: []byte("x'CD'")},
++			}},
++		},
+ 	}, { // EXPLAIN query will be normalized and not parameterized
+ 		in:      "explain select @x from t where v1 in (1, '2')",
+ 		outstmt: "explain select :__vtudvx as `@x` from t where v1 in (1, '2')",
+@@ -467,6 +494,112 @@ func TestNormalize(t *testing.T) {
+ 	}
+ }
+ 
++// legacyLiteralToBindvar is the previous implementation of literalToBindvar,
++// which copied the literal's bytes. It is kept to verify that literalToBindvar
++// still produces identical bind variables.
++func legacyLiteralToBindvar(lit *Literal) *querypb.BindVariable {
++	var v sqltypes.Value
++	var err error
++	switch lit.Type {
++	case StrVal:
++		v, err = sqltypes.NewValue(sqltypes.VarChar, lit.Bytes())
++	case IntVal:
++		v, err = sqltypes.NewValue(sqltypes.Int64, lit.Bytes())
++	case FloatVal:
++		v, err = sqltypes.NewValue(sqltypes.Float64, lit.Bytes())
++	case DecimalVal:
++		v, err = sqltypes.NewValue(sqltypes.Decimal, lit.Bytes())
++	case HexNum:
++		buf := make([]byte, 0, len(lit.Bytes()))
++		buf = append(buf, "0x"...)
++		buf = append(buf, bytes.ToUpper(lit.Bytes()[2:])...)
++		v, err = sqltypes.NewValue(sqltypes.HexNum, buf)
++	case HexVal:
++		buf := make([]byte, 0, len(lit.Bytes())+3)
++		buf = append(buf, 'x', '\'')
++		buf = append(buf, bytes.ToUpper(lit.Bytes())...)
++		buf = append(buf, '\'')
++		v, err = sqltypes.NewValue(sqltypes.HexVal, buf)
++	case BitNum:
++		out := make([]byte, 0, len(lit.Bytes())+2)
++		out = append(out, '0', 'b')
++		out = append(out, lit.Bytes()[2:]...)
++		v, err = sqltypes.NewValue(sqltypes.BitNum, out)
++	case DateVal:
++		v, err = sqltypes.NewValue(sqltypes.Date, lit.Bytes())
++	case TimeVal:
++		v, err = sqltypes.NewValue(sqltypes.Time, lit.Bytes())
++	case TimestampVal:
++		v, err = sqltypes.NewValue(sqltypes.Datetime, lit.Bytes())
++	default:
++		return nil
++	}
++	if err != nil {
++		return nil
++	}
++	return sqltypes.ValueBindVariable(v)
++}
++
++func TestLiteralToBindvarMatchesLegacy(t *testing.T) {
++	literals := []*Literal{
++		NewStrLiteral(""),
++		NewStrLiteral("abc"),
++		NewStrLiteral("héllo wörld"),
++		NewIntLiteral("0"),
++		NewIntLiteral("-12345"),
++		NewIntLiteral("9223372036854775807"),
++		NewIntLiteral("9223372036854775808"), // overflows int64: not converted
++		NewFloatLiteral("1.5e10"),
++		NewFloatLiteral("not a float"),
++		NewDecimalLiteral("123.456"),
++		NewDecimalLiteral("-0.000001"),
++		NewDecimalLiteral("12.3.4"),
++		NewHexNumLiteral("0x"),
++		NewHexNumLiteral("0xabcDEF09"),
++		NewHexNumLiteral("0XABcd"),
++		NewHexLiteral(""),
++		NewHexLiteral("7b7d"),
++		NewHexLiteral("7B7d"),
++		NewBitLiteral("0b1010"),
++		NewBitLiteral("0B1010"),
++		NewBitLiteral("0b"),
++		NewDateLiteral("2024-01-02"),
++		NewTimeLiteral("10:11:12"),
++		NewTimestampLiteral("2024-01-02 10:11:12"),
++		{Type: BitNum + 100, Val: "unknown literal type"},
++	}
++	for _, lit := range literals {
++		t.Run(fmt.Sprintf("%d:%s", lit.Type, lit.Val), func(t *testing.T) {
++			assert.Equal(t, legacyLiteralToBindvar(lit), literalToBindvar(lit))
++		})
++	}
++
++	// Literals produced by the parser, including all hex/bit spellings.
++	parser := NewTestParser()
++	stmt, err := parser.Parse("select 'a', 'it''s', 1, 1.5, 1e5, 0x1f, 0X1F, x'1f', X'1F', 0b101, 0B101, b'101', B'101', date '2024-01-02', time '10:11:12', timestamp '2024-01-02 10:11:12' from dual")
++	require.NoError(t, err)
++	var count int
++	_ = Walk(func(node SQLNode) (bool, error) {
++		if lit, ok := node.(*Literal); ok {
++			count++
++			assert.Equal(t, legacyLiteralToBindvar(lit), literalToBindvar(lit), "literal %d:%s", lit.Type, lit.Val)
++		}
++		return true, nil
++	}, stmt)
++	assert.Equal(t, 16, count)
++}
++
++func TestLiteralToBindvarDoesNotCopy(t *testing.T) {
++	lit := NewStrLiteral(strings.Repeat("a", 1024))
++	var bv *querypb.BindVariable
++	allocs := testing.AllocsPerRun(100, func() {
++		bv = literalToBindvar(lit)
++	})
++	// Only the BindVariable itself is allocated; the value shares the literal's bytes.
++	assert.EqualValues(t, 1, allocs)
++	assert.Equal(t, lit.Val, string(bv.Value))
++}
++
+ func TestNormalizeInvalidDates(t *testing.T) {
+ 	testcases := []struct {
+ 		in  string
+@@ -1527,3 +1660,62 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
+ 		}
+ 	}
+ }
++
++// BenchmarkNormalizeLiterals measures normalization of queries dominated by literals:
++// large IN lists and multi-row INSERTs with many string literals.
++func BenchmarkNormalizeLiterals(b *testing.B) {
++	var inInt, inStr, inHex, ins strings.Builder
++	inInt.WriteString("select * from t where id in (")
++	inStr.WriteString("select * from t where name in (")
++	inHex.WriteString("select * from t where a in (")
++	for i := range 1000 {
++		if i > 0 {
++			inInt.WriteByte(',')
++			inStr.WriteByte(',')
++			inHex.WriteByte(',')
++		}
++		fmt.Fprintf(&inInt, "%d", 100000+i)
++		fmt.Fprintf(&inStr, "'name-%08d-abcdefghijklmnop'", i)
++		if i%2 == 0 {
++			fmt.Fprintf(&inHex, "x'%08x'", i)
++		} else {
++			fmt.Fprintf(&inHex, "0x%08x", i)
++		}
++	}
++	inInt.WriteByte(')')
++	inStr.WriteByte(')')
++	inHex.WriteByte(')')
++	ins.WriteString("insert into t (id, a, b, c, d) values ")
++	for i := range 500 {
++		if i > 0 {
++			ins.WriteByte(',')
++		}
++		fmt.Fprintf(&ins, "(%d, 'first-value-%d-some-padding', 'second-value-%d-more-padding', 'third %d', '2024-01-%02d 10:00:00')", i, i, i, i, i%28+1)
++	}
++	queries := []struct{ name, sql string }{
++		{"in1000int", inInt.String()},
++		{"in1000str", inStr.String()},
++		{"in1000hex", inHex.String()},
++		{"insert500", ins.String()},
++		{"twoSameIn", "select * from t where a in (1,2,3,4,5,6,7,8,9,10) or b in (1,2,3,4,5,6,7,8,9,10)"},
++		{"selectExpr", "select a+1, b*2, concat(c, 'x'), d from t where e = 5 and f = 'abc'"},
++	}
++	parser := NewTestParser()
++	for _, q := range queries {
++		b.Run(q.name, func(b *testing.B) {
++			b.ReportAllocs()
++			for b.Loop() {
++				b.StopTimer()
++				ast, reservedVars, err := parser.Parse2(q.sql)
++				if err != nil {
++					b.Fatal(err)
++				}
++				b.StartTimer()
++				_, err = Normalize(ast, NewReservedVars("vtg", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", nil, nil, nil)
++				if err != nil {
++					b.Fatal(err)
++				}
++			}
++		})
++	}
++}
