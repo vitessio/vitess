@@ -1,0 +1,28 @@
+{{ define "srvvschemas.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>SrvVSchemas</h1>
+  <input class="table-filter" data-table-filter="#srvvschemas-table" placeholder="Filter SrvVSchemas" aria-label="Filter SrvVSchemas">
+</div>
+<div class="card">
+  <table id="srvvschemas-table">
+    <thead>
+      <tr><th>Cluster</th><th>Cell</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ .GetCell }}</td>
+        <td><pre>{{ protoJSON .GetSrvVSchema }}</pre></td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No SrvVSchemas found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

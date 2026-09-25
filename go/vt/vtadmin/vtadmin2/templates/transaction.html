@@ -1,0 +1,34 @@
+{{ define "transaction.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Transaction</h1>
+</div>
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ .Data.ClusterID }}</dd>
+    <dt>DTID</dt><dd>{{ .Data.Dtid }}</dd>
+  </dl>
+</div>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Shard</th><th>State</th><th>Message</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data.Response.GetShardStates }}
+      <tr>
+        <td>{{ .GetShard }}</td>
+        <td>{{ .GetState }}</td>
+        <td>{{ .GetMessage }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No shard states found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+  <pre>{{ protoJSON .Data.Response }}</pre>
+</div>
+{{ end }}

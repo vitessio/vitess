@@ -1,0 +1,35 @@
+{{ define "topology.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Topology</h1>
+</div>
+<div class="card">
+  <form method="GET" action="/topology">
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range .Data.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $.Data.ClusterID }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Path
+      <input name="path" value="{{ .Data.Path }}">
+    </label>
+    <button type="submit">Load</button>
+  </form>
+</div>
+<div class="card">
+  <dl>
+    <dt>Cluster</dt>
+    <dd>{{ .Data.ClusterID }}</dd>
+    <dt>Path</dt>
+    <dd>{{ .Data.Path }}</dd>
+  </dl>
+  <pre>{{ protoJSON .Data.Response }}</pre>
+</div>
+{{ end }}
