@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -46,6 +47,10 @@ var Cases = []TestCase{
 	{Run: LargeDecimals},
 	{Run: LargeIntegers},
 	{Run: DecimalClamping},
+	{Run: JSONNumberComparison},
+	{Run: JSONTimeComparison},
+	{Run: JSONDoubleConversion},
+	{Run: JSONTextDoubles},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -67,6 +72,11 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: JSONComparisonDomains},
+	{Run: JSONComparisonDomainsTemporal},
+	{Run: JSONComparisonDomainsColumns, Schema: JSONComparisonDomainsColumns_Schema},
+	{Run: JSONComparisonDomainsNullColumns, Schema: JSONComparisonDomainsNullColumns_Schema},
+	{Run: JSONComparisonDomainsCompositeColumns, Schema: JSONComparisonDomainsCompositeColumns_Schema},
 	{Run: FnField},
 	{Run: FnElt},
 	{Run: FnInsert},
@@ -911,6 +921,88 @@ func DecimalClamping(yield Query) {
 				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil, false)
 			}
 		}
+	}
+}
+
+// JSONNumberComparison pins how JSON numbers compare. MySQL fixes a number's
+// form when the document is built rather than when it is compared, so
+// 9007199254740992.1 and 9007199254740993.0 are both the double
+// 9007199254740992 and equal to that integer, while 9007199254740993 stayed an
+// integer that no double holds and equals neither.
+func JSONNumberComparison(yield Query) {
+	numbers := []string{
+		"1", "1.0", "1e0", "2", "0", "-0", "0.0", "-1", "-1.0",
+		"9007199254740992", "9007199254740992.0", "9007199254740992.1", "9007199254740993", "9007199254740993.0",
+		"0.1", "0.10000000000000000000001",
+		"123456789012345678901234567890", "123456789012345678901234567891",
+		"9223372036854775807", "9223372036854775808",
+		"18446744073709551615", "18446744073709551616",
+		"1e308", "1.5", "1.50",
+		"9.373401039503115", "9.373401039503114", "7.952458273698010123097", "7.95245827369801",
+		"1.0000000000000002", "1.0000000000000003", "1.0000000000000004", "1.00000000000000030000",
+		"10000000000000003e-16", "0.12345678901234567", "1.4334335999999999", "1.4334336",
+		"5.6843418860808027e-14", "5.684341886080803e-14",
+	}
+
+	for _, lhs := range numbers {
+		for _, rhs := range numbers {
+			yield(fmt.Sprintf("CAST('%s' AS JSON) = CAST('%s' AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST('%s' AS JSON) < CAST('%s' AS JSON)", lhs, rhs), nil, false)
+		}
+	}
+}
+
+// JSONTimeComparison covers times carried in a JSON document, including the
+// negative zero, written or rounded to, that MySQL reads as plain zero.
+func JSONTimeComparison(yield Query) {
+	times := []string{"'00:00:00'", "'-00:00:00'", "'-00:00:00.4'", "'10:00:00'", "'-10:00:00'", "'00:00:01'", "'-00:00:01'"}
+
+	for _, lhs := range times {
+		for _, rhs := range times {
+			yield(fmt.Sprintf("CAST(CAST(%s AS TIME) AS JSON) = CAST(CAST(%s AS TIME) AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(CAST(%s AS TIME) AS JSON) < CAST(CAST(%s AS TIME) AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS TIME) = CAST(%s AS TIME)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS TIME) < CAST(%s AS TIME)", lhs, rhs), nil, false)
+		}
+	}
+}
+
+// JSONDoubleConversion covers doubles that the conversion to JSON prints in
+// exponent form, which MySQL keeps as doubles that compare by value.
+func JSONDoubleConversion(yield Query) {
+	for _, d := range []string{"1e20", "1.5e15", "1e15", "1e-20", "123456789012345678e0", "-1e20"} {
+		yield(fmt.Sprintf("CAST(%s AS JSON)", d), nil, false)
+		yield(fmt.Sprintf("CAST(%s AS JSON) = CAST(%s AS JSON)", d, d), nil, false)
+		yield(fmt.Sprintf("JSON_ARRAY(%s)", d), nil, false)
+	}
+	yield("CAST(1e20 AS JSON) = CAST(100000000000000000000 AS JSON)", nil, false)
+	yield("CAST(1e20 AS JSON) = CAST('100000000000000000000' AS JSON)", nil, false)
+}
+
+// JSONTextDoubles covers doubles written out in JSON text. MySQL often reads
+// them to a double other than the correctly rounded one, and then prints and
+// compares the double it read, while a double written as SQL is read
+// correctly: the same spelling can hold two different values. UNHEX reads the
+// document's text, which is the double as MySQL prints it.
+func JSONTextDoubles(yield Query) {
+	for _, num := range []string{
+		"9.373401039503115", "907820456.6878871", "-97850197.21336927", "22323.780221271709",
+		"7.952458273698010123097", "-5001678.8730277932907349979", "32682596125924014.99384040696476537",
+		"0.00000000000056378173515265162148", "-85542944950666963514162118608", "9495784086192452298075156",
+		"685276831e210", "4.54827886204e-225", "9.755003974708891e271", "0.00000000000000000000021059834276",
+		"-682093.3194e-224", "0.00000000000009739818150763633668228E+293", "4107408810066.08607026258e-01",
+		"18446744073709551616", "1.0", "1e2", "-0.0", "0.1", "9007199254740992.1", "92851060.59457423",
+		"0.9999999999999999", "0.9999999999999999e5",
+	} {
+		double := num
+		if !strings.ContainsAny(num, "eE") {
+			double += "e0"
+		}
+		yield(fmt.Sprintf("CAST('[%s]' AS JSON)", num), nil, false)
+		yield(fmt.Sprintf("JSON_EXTRACT('[%s]', '$[0]') + 0", num), nil, false)
+		yield(fmt.Sprintf("CAST('%s' AS JSON) = CAST(%s AS JSON)", num, double), nil, false)
+		yield(fmt.Sprintf("JSON_EXTRACT('[%s]', '$[0]') = %s", num, double), nil, false)
+		yield(fmt.Sprintf("UNHEX(CAST('%s' AS JSON))", num), nil, false)
 	}
 }
 
@@ -1921,6 +2013,233 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil, false)
 		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil, false)
 	})
+}
+
+func JSONComparisonDomains(yield Query) {
+	domain := make([]string, 0, len(inputJSONComparisonDomainJSON)+len(inputJSONComparisonDomainScalars))
+	domain = append(domain, inputJSONComparisonDomainJSON...)
+	domain = append(domain, inputJSONComparisonDomainScalars...)
+
+	for i, l := range domain {
+		for j, a := range domain {
+			for k, b := range domain {
+				// Only yield combinations in which a JSON value participates:
+				// the JSON-free ones are covered by the other generators.
+				jsons := len(inputJSONComparisonDomainJSON)
+				if i >= jsons && j >= jsons && k >= jsons {
+					continue
+				}
+				yield(fmt.Sprintf("%s IN (%s, %s)", l, a, b), nil, false)
+				yield(fmt.Sprintf("%s NOT IN (%s, %s)", l, a, b), nil, false)
+				// MySQL versions disagree on BETWEEN with equal bounds and a
+				// JSON participant: 8.0.34 and 8.4.10 fold it into a
+				// JSON-comparator equality, the latest 8.0.x does not.
+				if a != b {
+					yield(fmt.Sprintf("%s BETWEEN %s AND %s", l, a, b), nil, false)
+					yield(fmt.Sprintf("%s NOT BETWEEN %s AND %s", l, a, b), nil, false)
+				}
+				yield(fmt.Sprintf("CASE %s WHEN %s THEN 1 WHEN %s THEN 2 ELSE 3 END", l, a, b), nil, false)
+			}
+		}
+	}
+}
+
+func JSONComparisonDomainsTemporal(yield Query) {
+	// Only constant operands here; JSONComparisonDomainsColumns covers the
+	// column-position rules with a schema.
+	dates := []string{
+		`CAST('2020-01-01' AS DATE)`,
+		`CAST('2020-01-01 12:00:00' AS DATETIME)`,
+	}
+	jsons := []string{`JSON_ARRAY()`, `JSON_OBJECT()`, `CAST('[]' AS JSON)`}
+
+	for _, l := range dates {
+		for _, j := range jsons {
+			yield(fmt.Sprintf("%s BETWEEN %s AND '2021-01-01'", l, j), nil, false)
+			yield(fmt.Sprintf("%s NOT BETWEEN %s AND '2021-01-01'", l, j), nil, false)
+			yield(fmt.Sprintf("%s BETWEEN '2019-01-01' AND %s", l, j), nil, false)
+			yield(fmt.Sprintf("'2020-01-01' BETWEEN %s AND %s", j, l), nil, false)
+		}
+		// Without a JSON participant, the pairwise comparisons apply.
+		yield(l+" BETWEEN '2019-01-01' AND '2021-01-01'", nil, false)
+
+		// A numeric operand moves the whole comparison off the DATETIME
+		// domain onto DOUBLE, in any position.
+		yield(l+" BETWEEN JSON_ARRAY() AND 99999999", nil, false)
+		yield(l+" NOT BETWEEN JSON_ARRAY() AND 99999999", nil, false)
+		yield(l+` BETWEEN 0 AND CAST('"2021-06-06"' AS JSON)`, nil, false)
+		yield(l+` BETWEEN CAST(NULL AS SIGNED) AND CAST('"2021-06-06"' AS JSON)`, nil, false)
+		yield(l+` BETWEEN 0.5 AND CAST('"2021-06-06"' AS JSON)`, nil, false)
+		yield(l+` BETWEEN 0e0 AND CAST('"2021-06-06"' AS JSON)`, nil, false)
+	}
+	yield(`1 BETWEEN CAST('"2"' AS JSON) AND 5`, nil, false)
+	yield(`0 BETWEEN CAST('true' AS JSON) AND 5`, nil, false)
+	yield(`2020 BETWEEN CAST(CAST('2020-01-01' AS DATE) AS JSON) AND 99999999`, nil, false)
+
+	// In the DATETIME domain a JSON operand converts from its serialized
+	// text, quotes included: JSON numbers parse, JSON strings and JSON date
+	// scalars fail to the zero date.
+	yield(`CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND CAST('20210101' AS JSON)`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) BETWEEN CAST('20200606' AS JSON) AND '2021-01-01'`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND CAST(CAST('2021-01-01' AS DATE) AS JSON)`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND CAST('"2021-06-06"' AS JSON)`, nil, false)
+
+	// A declared JSON type participates in domain selection even when the
+	// value is SQL NULL; an untyped NULL stays neutral. A DATE left operand
+	// with a NULL bound is absent here: 8.0.28 answers it differently from
+	// 8.0.34+, and TestJSONComparisonDomains pins the modern behavior.
+	yield(`0 IN (CAST(NULL AS JSON), '0')`, nil, false)
+	yield(`'a' BETWEEN CAST(NULL AS JSON) AND 'A'`, nil, false)
+	yield(`'a' BETWEEN NULL AND 'A'`, nil, false)
+	yield(`'a' BETWEEN CAST(NULL AS CHAR) AND 'A'`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) BETWEEN CAST(NULL AS JSON) AND 0`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) IN (CAST(NULL AS JSON), '2020-01-01')`, nil, false)
+
+	// The IN domain compares every pair with genuine JSON semantics.
+	yield(`0 IN (JSON_ARRAY(), '0.0')`, nil, false)
+	yield(`0.0 IN (CAST('0' AS JSON))`, nil, false)
+	yield(`'2020-1-1' IN (CAST('"2020-1-1"' AS JSON))`, nil, false)
+	yield(`'B' IN (JSON_ARRAY(), 'b')`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) IN (JSON_ARRAY(), CAST('2020-01-01' AS DATETIME))`, nil, false)
+	yield(`CAST('2020-01-01' AS DATE) IN (CAST('2020-01-01' AS DATE), JSON_ARRAY())`, nil, false)
+	yield(`(JSON_ARRAY(), 0) IN ((JSON_ARRAY(), '0'))`, nil, false)
+
+	// A DATE-typed composite operand selects the DATETIME domain. Only
+	// DATE_ADD is exercised here: 8.0.x constant-folds COALESCE/IF/CASE/
+	// GREATEST composites before selecting the domain while 8.4.x does not;
+	// TestJSONComparisonDomains pins those to the 8.4.x behavior.
+	yield(`DATE_ADD(CAST('2020-01-01' AS DATE), INTERVAL 0 DAY) BETWEEN JSON_ARRAY() AND '2021-01-01'`, nil, false)
+	yield(`DATE_ADD(CAST('2020-01-01' AS DATE), INTERVAL 0 DAY) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, nil, false)
+
+	// A TIME expression does not select a temporal domain: with only JSON
+	// and textual participants left, the domain falls back to strings.
+	for _, j := range jsons {
+		yield(fmt.Sprintf("CAST('12:00:00' AS TIME) BETWEEN %s AND '13:00:00'", j), nil, false)
+		yield(fmt.Sprintf("CAST('12:00:00' AS TIME) NOT BETWEEN %s AND '13:00:00'", j), nil, false)
+	}
+	yield(`CAST('12:00:00' AS TIME) BETWEEN '11:00:00' AND '13:00:00'`, nil, false)
+
+	// TIME-typed composites do not select a temporal domain either.
+	yield(`COALESCE(CAST('12:00:00' AS TIME), NULL) BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+	yield(`COALESCE(CAST('12:00:00' AS TIME), NULL) NOT BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+	yield(`GREATEST(CAST('12:00:00' AS TIME), CAST('11:00:00' AS TIME)) BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+	yield(`DATE_ADD(CAST('12:00:00' AS TIME), INTERVAL 0 SECOND) BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+}
+
+// JSONComparisonDomainsColumns exercises the column-position rules of the
+// comparison domains. The JSON participants are columns too: a standalone
+// JSON constant does not survive constant folding next to a column operand
+// yet.
+func JSONComparisonDomainsColumns(yield Query) {
+	row := []sqltypes.Value{
+		sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+		sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+		sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`12:00:00`)),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte(`0`)),
+		sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`99999999`)),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte(`99999999`)),
+	}
+
+	// A convertible constant bound activates the TIME column's per-pair
+	// paths; without one the whole predicate compares as strings.
+	yield(`column0 BETWEEN column1 AND '13:00:00'`, row, false)
+	yield(`column0 NOT BETWEEN column1 AND '13:00:00'`, row, false)
+	yield(`column0 BETWEEN column1 AND '99999999'`, row, false)
+	yield(`column0 BETWEEN '11:00:00' AND column1`, row, false)
+	yield(`column0 BETWEEN column1 AND 130000`, row, false)
+	yield(`column0 BETWEEN 'zz' AND column1`, row, false)
+	yield(`column0 BETWEEN column3 AND column1`, row, false)
+
+	// A TIME column in a bound position gets no TIME treatment.
+	yield(`column3 BETWEEN column1 AND column0`, row, false)
+
+	// A DATE column selects the DATETIME domain for all pairs without a
+	// numeric operand, and the per-pair field path with one.
+	yield(`column2 BETWEEN column1 AND '2021-01-01'`, row, false)
+	yield(`column2 NOT BETWEEN column1 AND '2021-01-01'`, row, false)
+	yield(`column2 BETWEEN column1 AND 99999999`, row, false)
+	yield(`column2 BETWEEN column1 AND column4`, row, false)
+
+	// A temporal column with a row-dependent JSON bound and a numeric
+	// participant compares numerically: the field-store and TIME
+	// conversions apply only to bounds that are constant for one
+	// execution, never to column bounds.
+	yield(`column2 BETWEEN column5 AND 99999999`, row, false)
+	yield(`column2 BETWEEN column5 AND column6`, row, false)
+	yield(`column0 BETWEEN column1 AND 99999999`, row, false)
+	yield(`column0 BETWEEN column1 AND column6`, row, false)
+	yield(`column0 BETWEEN JSON_ARRAY() AND 18446744073709551615`, row, false)
+
+	// IN with a JSON column compares every pair with JSON semantics.
+	yield(`column4 IN (column1, '0')`, row, false)
+	yield(`column2 IN (column1, '2020-1-1')`, row, false)
+	yield(`column0 IN (column1, '12:00:00.0')`, row, false)
+	yield(`column3 IN (column1, '12:00:00')`, row, false)
+
+	// The IN type scan stops at the first element that is not constant for
+	// one execution: a JSON element behind the stopper never selects JSON
+	// comparison, and the stopper's own type still joins the scan.
+	yield(`'12:00:00' IN (column0, JSON_ARRAY())`, row, false)
+	yield(`'12:00:00' IN (JSON_ARRAY(), column0)`, row, false)
+	yield(`'2020-1-1' IN (column2, JSON_ARRAY())`, row, false)
+	yield(`'2020-01-01' IN (JSON_ARRAY(), column2)`, row, false)
+	yield(`0 IN (column6, '0', JSON_ARRAY())`, row, false)
+
+	// A typed JSON SQL NULL keeps steering the domain when child folding
+	// erases the cast.
+	yield(`column0 IN (CAST(NULL AS JSON), '0')`, row, false)
+	yield(`column0 BETWEEN CAST(NULL AS JSON) AND 'A'`, row, false)
+}
+
+// JSONComparisonDomainsNullColumns exercises declared types of columns and
+// composites whose row values are SQL NULL: only the declaration can steer
+// the comparison domain.
+func JSONComparisonDomainsNullColumns(yield Query) {
+	row := []sqltypes.Value{sqltypes.NULL, sqltypes.NULL}
+
+	yield(`0 IN (column0, '0')`, row, false)
+	yield(`'a' BETWEEN column0 AND 'A'`, row, false)
+	yield(`0 IN (COALESCE(column0, NULL), '0')`, row, false)
+	yield(`'a' BETWEEN COALESCE(column0, NULL) AND 'A'`, row, false)
+	yield(`JSON_ARRAY() BETWEEN COALESCE(column1, NULL) AND '2021-01-01'`, row, false)
+}
+
+var JSONComparisonDomainsNullColumns_Schema = []*querypb.Field{
+	{Name: "column0", Type: sqltypes.TypeJSON, ColumnType: "JSON"},
+	{Name: "column1", Type: sqltypes.Date, ColumnType: "DATE"},
+}
+
+// JSONComparisonDomainsCompositeColumns exercises composites whose declared
+// result type differs from the selected child's runtime representation.
+func JSONComparisonDomainsCompositeColumns(yield Query) {
+	row := []sqltypes.Value{
+		sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)),
+		sqltypes.NULL,
+		sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`one`)),
+	}
+
+	yield(`0 IN (COALESCE(column0, column1), '0')`, row, false)
+	yield(`COALESCE(column2, column1) BETWEEN JSON_ARRAY() AND '2021-01-01'`, row, false)
+	yield(`0 IN (COALESCE(column0, JSON_CONTAINS_PATH(column0, column3, '$')), '0')`, row, false)
+}
+
+var JSONComparisonDomainsCompositeColumns_Schema = []*querypb.Field{
+	{Name: "column0", Type: sqltypes.TypeJSON, ColumnType: "JSON"},
+	{Name: "column1", Type: sqltypes.VarChar, ColumnType: "VARCHAR(64)", Charset: uint32(collations.CollationUtf8mb4ID)},
+	{Name: "column2", Type: sqltypes.Date, ColumnType: "DATE"},
+	{Name: "column3", Type: sqltypes.VarChar, ColumnType: "VARCHAR(16)", Charset: uint32(collations.CollationUtf8mb4ID)},
+}
+
+var JSONComparisonDomainsColumns_Schema = []*querypb.Field{
+	{Name: "column0", Type: sqltypes.Time, ColumnType: "TIME"},
+	{Name: "column1", Type: sqltypes.TypeJSON, ColumnType: "JSON"},
+	{Name: "column2", Type: sqltypes.Date, ColumnType: "DATE"},
+	{Name: "column3", Type: sqltypes.VarChar, ColumnType: "VARCHAR(64)", Charset: uint32(collations.CollationUtf8mb4ID)},
+	{Name: "column4", Type: sqltypes.Int64, ColumnType: "BIGINT"},
+	{Name: "column5", Type: sqltypes.TypeJSON, ColumnType: "JSON"},
+	{Name: "column6", Type: sqltypes.Int64, ColumnType: "BIGINT"},
 }
 
 func FnNow(yield Query) {
