@@ -335,9 +335,9 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 	return found
 }
 
-// BuildSettingQuery builds a query for system settings. Under strict table
-// ACL a setting with a subquery is refused, see rejectSettingSubqueries.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableACL bool) (query string, resetQuery string, err error) {
+// BuildSettingQuery builds a query for system settings. When rejectSubqueries
+// is set, a setting with a subquery is refused, see rejectSettingSubqueries.
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
@@ -355,7 +355,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 		}
 		// settings are applied with no table ACL check, so a subquery is refused
 		// where the ACL is enforced
-		if strictTableACL {
+		if rejectSubqueries {
 			if err := rejectSettingSubqueries(set, setting); err != nil {
 				return "", "", err
 			}
@@ -382,14 +382,14 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
 }
 
-// ValidateSettings mirrors BuildSettingQuery's subquery check for settings that
-// are applied without going through BuildSettingQuery — a true reservation
-// executes its settings directly on the tainted connection. Under strict table
-// ACL every setting must parse as a SET statement with no subquery, since a
-// setting that cannot be judged is rejected rather than applied unchecked.
-// Without strict table ACL the settings are applied as they always were.
-func ValidateSettings(settings []string, parser *sqlparser.Parser, strictTableACL bool) error {
-	if !strictTableACL {
+// ValidateSettings validates connection settings that are applied without going
+// through BuildSettingQuery: a true reservation executes its settings directly
+// on the tainted connection. When rejectSubqueries is set, like
+// BuildSettingQuery, it refuses a setting with a subquery, see
+// rejectSettingSubqueries, and a setting it cannot inspect for one. Otherwise it
+// accepts every setting, as the reservation path always did.
+func ValidateSettings(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
+	if !rejectSubqueries {
 		return nil
 	}
 	for _, setting := range settings {
@@ -412,11 +412,35 @@ func ValidateSettings(settings []string, parser *sqlparser.Parser, strictTableAC
 // a subquery. A setting is applied to the connection with no table ACL check,
 // so the tables a subquery reads would go unchecked. Settings carry constants:
 // vtgate evaluates a SET's expression on a shard, where the tablet checks it
-// like any read, and sends the value. The check only runs under strict table
-// ACL: without it there is nothing for it to protect, and a vtgate from
-// before the value was sent still sends a targeted session's SET expression
-// as written, which would break for nothing.
+// like any read, and sends the value. The check only runs where strict table
+// ACL is enforced, not in a dry run: without enforcement there is nothing for
+// it to protect, and a vtgate from before the value was sent still sends a
+// targeted session's SET expression as written, which would break for nothing.
 func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
+	if hasSubquery(set) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
+	}
+	return nil
+}
+
+// SettingWithSubquery returns the first of the connection settings whose
+// expressions embed a subquery, which strict table ACL refuses (see
+// rejectSettingSubqueries), or "" when there is none. A setting that does not
+// parse as a SET statement is skipped: the settings validation reports it.
+func SettingWithSubquery(settings []string, parser *sqlparser.Parser) string {
+	for _, setting := range settings {
+		stmt, err := parser.Parse(setting)
+		if err != nil {
+			continue
+		}
+		if set, ok := stmt.(*sqlparser.Set); ok && hasSubquery(set) {
+			return setting
+		}
+	}
+	return ""
+}
+
+func hasSubquery(set *sqlparser.Set) bool {
 	var found bool
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, ok := node.(*sqlparser.Subquery); ok {
@@ -424,8 +448,5 @@ func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
 		}
 		return !found, nil
 	}, set)
-	if found {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
-	}
-	return nil
+	return found
 }

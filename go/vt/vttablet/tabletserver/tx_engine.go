@@ -622,6 +622,15 @@ func (te *TxEngine) stopTransactionWatcher() {
 	te.ticks.Stop()
 }
 
+// validateSettings validates the pre-queries of a reservation, which are
+// executed directly on the reserved connection, see planbuilder.ValidateSettings.
+func (te *TxEngine) validateSettings(preQueries []string) error {
+	parser := te.env.Environment().Parser()
+	cfg := te.env.Config()
+	rejectSubqueries := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun, cfg.SanitizeLogMessages)
+	return planbuilder.ValidateSettings(preQueries, parser, rejectSubqueries)
+}
+
 // ReserveBegin creates a reserved connection, and in it opens a transaction
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
@@ -629,7 +638,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	// The pre-queries are executed directly on the reserved connection, without the
 	// settings pool's BuildSettingQuery pass, so the settings validation must run here —
 	// before any connection is acquired or state is changed.
-	if err := planbuilder.ValidateSettings(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
+	if err := te.validateSettings(preQueries); err != nil {
 		return 0, "", err
 	}
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -659,7 +668,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
 	// see ReserveBegin: validate before any connection is acquired or tainted
-	if err := planbuilder.ValidateSettings(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
+	if err := te.validateSettings(preQueries); err != nil {
 		return 0, err
 	}
 	if txID == 0 {
