@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -813,4 +814,84 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 	for i, sm := range []sequenceMetadata{sm1, sm2, sm3} {
 		require.Contains(t, drLog.logs[i+1], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
 	}
+}
+
+// TestDryRunInitializeTargetSequencesDbNameOverride validates that the dry run
+// reads the current sequence value from the db name that the tablet serving
+// the sequence actually uses (its db name override) rather than the default
+// vt_<keyspace> name, even when the sequence metadata was already escaped by
+// an earlier step (getting the max values).
+func TestDryRunInitializeTargetSequencesDbNameOverride(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+	dbNameOverride := "sourceks" // e.g. init_db_name_override=<keyspace>
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	// The source primary (which serves the sequence) uses a db name override.
+	_, err := env.ts.UpdateTabletFields(ctx, env.tablets[sourceKeyspaceName][startingSourceTabletUID].Alias, func(tablet *topodatapb.Tablet) error {
+		tablet.DbNameOverride = dbNameOverride
+		return nil
+	})
+	require.NoError(t, err)
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	drLog := NewLogRecorder()
+	dr := &switcherDryRun{
+		drLog: drLog,
+		ts:    ts,
+	}
+
+	sm1 := sequenceMetadata{
+		backingTableName:     "seq1",
+		backingTableKeyspace: sourceKeyspaceName,
+		backingTableDBName:   "vt_" + sourceKeyspaceName, // The default, which does not exist on the tablet
+		usingTableName:       tableName,
+		usingTableDBName:     targetKeyspaceName,
+		usingTableDefinition: &vschema.Table{
+			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq1"},
+		},
+	}
+	tables := map[string]*sequenceMetadata{
+		"seq1": &sm1,
+	}
+
+	env.tmc.expectVRQuery(startingTargetTabletUID, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "10"))
+	// The query must use the db name override, not vt_<keyspace>.
+	env.tmc.expectVRQuery(startingSourceTabletUID, fmt.Sprintf("select next_id from `%s`.`seq1` where id = 0", dbNameOverride),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "5"))
+
+	err = dr.initializeTargetSequences(ctx, tables)
+	require.NoError(t, err)
+	require.Equal(t, dbNameOverride, sm1.backingTableDBName)
+	require.Len(t, drLog.logs, 2)
+	require.Contains(t, drLog.logs[1], "Backing table: seq1, current value 5")
 }
