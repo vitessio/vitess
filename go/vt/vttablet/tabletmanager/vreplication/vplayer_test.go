@@ -299,6 +299,22 @@ func TestVPlayerMultiStatements(t *testing.T) {
 		require.Zero(t, vr.dbClient.maxBatchSize)
 	})
 
+	// An answer that leaves the state of the connection unknown closes it with
+	// an error that is not a connection error. The client is re-created on the
+	// next run all the same, so this must not end the workflow either.
+	t.Run("the connection is closed by an unexpected answer", func(t *testing.T) {
+		mock := binlogplayer.NewMockDBClient(t)
+		mock.ExpectRequest(SqlMaxAllowedPacket, maxAllowedPacket, nil)
+		unexpected := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet for COM_SET_OPTION: [254]")
+		dbClient := &multiStatementDBClient{DBClient: mock, err: unexpected, closed: true}
+		vr := newVR(t, dbClient, true)
+		vp := newVPlayer(vr, binlogplayer.VRSettings{}, nil, replication.Position{}, "replicate")
+		err := vp.setConnectionBatchMode()
+		require.ErrorContains(t, err, "unexpected packet for COM_SET_OPTION")
+		require.False(t, isUnrecoverableError(err))
+		require.Zero(t, vr.dbClient.maxBatchSize)
+	})
+
 	// A player that batched gives the capability back when it is done, so that
 	// a connection nobody is batching on does not keep carrying it.
 	t.Run("a batching player clears the connection on the way out", func(t *testing.T) {
