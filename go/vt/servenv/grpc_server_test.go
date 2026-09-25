@@ -18,17 +18,26 @@ package servenv
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
 )
 
 func TestEmpty(t *testing.T) {
@@ -96,6 +105,126 @@ func TestReportedOrca(t *testing.T) {
 	memUsage := serverMetrics.MemUtilization
 	assert.GreaterOrEqualf(t, memUsage, float64(0), "Mem Utilization is not set %.2f", memUsage)
 	t.Logf("Memory utilization is %.2f", memUsage)
+}
+
+func TestOrcaQPSKeepsReportingMessagesOfOpenVStream(t *testing.T) {
+	client := vtgateservicepb.NewVitessClient(startOrcaQPSTestServer(t))
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	stream, err := client.VStream(ctx, &vtgatepb.VStreamRequest{})
+	require.NoError(t, err)
+	streamStart := time.Now()
+	go drainStream(stream.Recv)
+
+	// Check a window well after the stream opened, so the rate is sustained.
+	require.Eventually(t, func() bool {
+		return time.Since(streamStart) > 5*orcaUpdateInterval && GRPCServerMetricsRecorder.ServerMetrics().QPS > 100
+	}, 30*time.Second, 10*time.Millisecond, "expected ORCA QPS to reflect messages sent on an already-open VStream")
+
+	for deadline := time.Now().Add(5 * orcaUpdateInterval); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		require.Greater(t, GRPCServerMetricsRecorder.ServerMetrics().QPS, float64(0), "expected ORCA QPS to stay nonzero while the VStream keeps sending")
+	}
+}
+
+func TestOrcaQPSReportsMessagesOfVTGateRPCs(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(context.Context, vtgateservicepb.VitessClient) error
+	}{
+		{"Execute", func(ctx context.Context, client vtgateservicepb.VitessClient) error {
+			_, err := client.Execute(ctx, &vtgatepb.ExecuteRequest{})
+			return err
+		}},
+		{"StreamExecute", func(ctx context.Context, client vtgateservicepb.VitessClient) error {
+			stream, err := client.StreamExecute(ctx, &vtgatepb.StreamExecuteRequest{})
+			if err != nil {
+				return err
+			}
+			return drainStream(stream.Recv)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := vtgateservicepb.NewVitessClient(startOrcaQPSTestServer(t))
+
+			assert.Eventually(t, func() bool {
+				return tt.call(t.Context(), client) == nil && GRPCServerMetricsRecorder.ServerMetrics().QPS > 0
+			}, 30*time.Second, 10*time.Millisecond, "expected ORCA QPS to count messages sent by %s", tt.name)
+		})
+	}
+}
+
+func TestOrcaQPSCountsHealthChecks(t *testing.T) {
+	healthClient := healthpb.NewHealthClient(startOrcaQPSTestServer(t))
+
+	assert.Eventually(t, func() bool {
+		_, err := healthClient.Check(t.Context(), &healthpb.HealthCheckRequest{})
+		return err == nil && GRPCServerMetricsRecorder.ServerMetrics().QPS > 0
+	}, 30*time.Second, 10*time.Millisecond, "expected ORCA QPS to count messages sent by health checks")
+}
+
+type orcaQPSTestVitessServer struct {
+	vtgateservicepb.UnimplementedVitessServer
+}
+
+func (orcaQPSTestVitessServer) Execute(context.Context, *vtgatepb.ExecuteRequest) (*vtgatepb.ExecuteResponse, error) {
+	return &vtgatepb.ExecuteResponse{Result: &querypb.QueryResult{RowsAffected: 1}}, nil
+}
+
+func (orcaQPSTestVitessServer) StreamExecute(_ *vtgatepb.StreamExecuteRequest, stream grpc.ServerStreamingServer[vtgatepb.StreamExecuteResponse]) error {
+	return stream.Send(&vtgatepb.StreamExecuteResponse{Result: &querypb.QueryResult{RowsAffected: 1}})
+}
+
+func (orcaQPSTestVitessServer) VStream(_ *vtgatepb.VStreamRequest, stream grpc.ServerStreamingServer[vtgatepb.VStreamResponse]) error {
+	response := &vtgatepb.VStreamResponse{Events: []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_HEARTBEAT,
+	}}}
+	for {
+		if err := stream.Send(response); err != nil {
+			return err
+		}
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func startOrcaQPSTestServer(t *testing.T) *grpc.ClientConn {
+	t.Helper()
+
+	port := getFreePort()
+	t.Cleanup(withTempVar(&gRPCPort, port))
+	t.Cleanup(withTempVar(&gRPCBindAddress, "127.0.0.1"))
+	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
+	t.Cleanup(withTempVar(&orcaUpdateInterval, 100*time.Millisecond))
+	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
+	orcaEgressMessages.Store(0)
+
+	createGRPCServer()
+	vtgateservicepb.RegisterVitessServer(GRPCServer, orcaQPSTestVitessServer{})
+	stopOrcaUpdater := serveGRPC()
+	t.Cleanup(stopOrcaUpdater)
+	t.Cleanup(GRPCServer.Stop)
+
+	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
+func drainStream[T any](recv func() (T, error)) error {
+	for {
+		if _, err := recv(); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // TestGRPCServerSkipsIngressStatsByDefault verifies that servenv gRPC servers
