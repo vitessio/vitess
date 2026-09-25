@@ -70,6 +70,11 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
+	// RequiredPosition is the minimum combined position that the promoted tablet
+	// must have. This includes both applied transactions and received transactions
+	// still in the relay log. Zero means no requirement.
+	RequiredPosition replication.Position
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -179,6 +184,10 @@ func (erp *EmergencyReparenter) getLockAction(newPrimaryAlias *topodatapb.Tablet
 }
 
 func validateEmergencyReparentOptions(opts EmergencyReparentOptions) error {
+	if err := validateRequiredPositionFlavor(opts.RequiredPosition); err != nil {
+		return err
+	}
+
 	if !opts.AllowSplitBrainPromotion {
 		return nil
 	}
@@ -309,11 +318,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+
+	if err := validateRequiredPosition(opts.RequiredPosition, isGTIDBased); err != nil {
+		return err
+	}
+
 	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
 	validCandidates, err = restrictValidCandidates(reachablePositions, tabletMap)
 	if err != nil {
 		return err
-	} else if len(validCandidates) == 0 {
+	}
+
+	if len(validCandidates) == 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
@@ -327,12 +343,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	waitCandidates := validCandidates
 	requireAll := true
 	splitBrainOverrideActive := false
+	var leadingPositions string
 	var suspectedSplitBrainCandidates map[string]*RelayLogPositions
 	if isGTIDBased {
 		waitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
 		requireAll = !hasUniformCombinedPosition(waitCandidates)
 		if requireAll {
-			leadingPositions := describeCombinedPositions(waitCandidates)
+			leadingPositions = describeCombinedPositions(waitCandidates)
 			if !opts.AllowSplitBrainPromotion {
 				suspectedSplitBrainCandidates = maps.Clone(waitCandidates)
 			} else {
@@ -354,6 +371,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				waitCandidates = validCandidates
 			}
 		}
+	}
+
+	// Check the survivors of split-brain handling before the first relay log wait.
+	// If none received the position, a wait cannot help and keeps replication stopped until it times out.
+	if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "candidate"); err != nil {
+		// Report the leaders the override discarded. One of them may have the position.
+		if splitBrainOverrideActive {
+			return vterrors.Wrapf(err, "requested primary %s does not have the required position and the split-brain override discarded the other leading candidates (%s)", topoproto.TabletAliasString(opts.NewPrimaryAlias), leadingPositions)
+		}
+
+		return err
 	}
 
 	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
@@ -407,6 +435,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		validCandidates, starved, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
 		if err != nil {
 			return err
+		}
+
+		// Check the required position before the rescue wait. The first detection
+		// pass can remove the only candidate that has it. Skip the check when the
+		// pass removed every candidate. The split-brain and errant GTID checks below
+		// report the cause.
+		if len(validCandidates) > 0 {
+			if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "remaining candidate"); err != nil {
+				return err
+			}
 		}
 
 		// A candidate accepted without any evidence may be a blind spot of our own
@@ -483,6 +521,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
 		}
 
+		// Check the required position before the rewait. The second detection
+		// pass can remove the only candidate that has it.
+		if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "remaining candidate"); err != nil {
+			return err
+		}
+
 		// If errant GTID detection removed every tablet that applied its relay logs, the
 		// surviving candidates may still have relay logs to apply. Wait on the leading
 		// survivors before electing one; we never promote a tablet that hasn't applied
@@ -552,6 +596,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
 
 	// The new primary ends up at the intermediate source's position, and SetReplicationSource
