@@ -36,14 +36,16 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
     // to give UX sense of work being done
     const [animationDone, setAnimationDone] = useState(false);
     useEffect(() => {
-        let timeout: NodeJS.Timeout;
+        let timeout: ReturnType<typeof setTimeout>;
         if (isOpen) {
             timeout = setTimeout(() => {
                 refetch();
                 setAnimationDone(true);
             }, 300);
         }
-        return () => timeout && clearTimeout(timeout);
+        return () => {
+            if (timeout) clearTimeout(timeout);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
@@ -85,7 +87,6 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
                 <div className="flex justify-center items-center w-full h-40">
                     {loading && (
                         <Transition
-                            className="absolute"
                             show={loading && isOpen}
                             leave="transition-opacity duration-100"
                             enter="transition-opacity duration-75"
@@ -94,7 +95,7 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
                             leaveFrom="opacity-100"
                             leaveTo="opacity-0"
                         >
-                            <div className="w-full flex flex-col justify-center items-center">
+                            <div className="absolute w-full flex flex-col justify-center items-center">
                                 <span className="flex h-6 w-6 relative items-center justify-center">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-6 w-6 bg-yellow-500"></span>
@@ -106,14 +107,15 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
                     )}
                     {!loading && (
                         <Transition
-                            className="absolute"
                             show={!loading && isOpen}
                             enter="delay-100 transition-opacity duration-75"
                             enterFrom="opacity-0"
                             enterTo="opacity-100"
                         >
-                            {data && <SuccessState />}
-                            {error && <FailState />}
+                            <div className="absolute">
+                                {data && <SuccessState />}
+                                {error && <FailState />}
+                            </div>
                         </Transition>
                     )}
                 </div>

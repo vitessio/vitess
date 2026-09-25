@@ -7,7 +7,8 @@ interface Props {
 
 const EventLogEntry: React.FC<Props> = ({ event }) => (
     <div className="font-mono text-sm whitespace-nowrap">
-        [{new Date((event.time?.seconds as number) * 1000).toISOString()} {event.file}:{event.line}] {event.value}
+        [{new Date((event.time?.seconds as number) * 1000).toISOString()} {event.file}:{event.line?.toString()}]{' '}
+        {event.value}
     </div>
 );
 
