@@ -1,0 +1,342 @@
+diff --git a/go/vt/mysqlctl/mysqld.go b/go/vt/mysqlctl/mysqld.go
+index 8f807d7..0eff94f 100644
+--- a/go/vt/mysqlctl/mysqld.go
++++ b/go/vt/mysqlctl/mysqld.go
+@@ -91,6 +91,14 @@ const (
+ 	// mysqldExitPollInterval is how often waitForMysqldExit checks whether
+ 	// mysqld has removed its socket and pid files.
+ 	mysqldExitPollInterval = 100 * time.Millisecond
++
++	// mysqldSocketPollInterval is how often Mysqld.Wait checks whether a
++	// starting mysqld accepts connections.
++	mysqldSocketPollInterval = 100 * time.Millisecond
++
++	// closePooledConnectionsTimeout bounds how long Shutdown waits for pooled
++	// connections that are in use before it shuts mysqld down anyway.
++	closePooledConnectionsTimeout = time.Second
+ )
+ 
+ // MysqldShutdownGracePeriod bounds the pid/socket file wait in
+@@ -733,7 +741,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnPa
+ 		} else if !os.IsNotExist(statErr) {
+ 			return fmt.Errorf("can't stat mysqld socket file: %v", statErr)
+ 		}
+-		time.Sleep(1000 * time.Millisecond)
++		time.Sleep(mysqldSocketPollInterval)
+ 	}
+ }
+ 
+@@ -1105,6 +1113,10 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
+ 		return false, nil
+ 	}
+ 
++	// mysqld gives connected clients two seconds to disconnect before it
++	// forces their connections closed, so close our own idle ones first.
++	mysqld.closePooledConnections(ctx)
++
+ 	// try the mysqld shutdown hook, if any
+ 	h := hook.NewSimpleHook("mysqld_shutdown")
+ 	hr := h.ExecuteContext(ctx)
+@@ -1186,6 +1198,29 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
+ 	return true, nil
+ }
+ 
++// closePooledConnections closes the connections of the dba and app pools
++// without closing the pools, which open new connections on demand once mysqld
++// is running again. On shutdown, mysqld waits two seconds for any connected
++// client before it forces the connection closed, and these pools keep idle
++// connections open. It waits at most closePooledConnectionsTimeout for
++// connections that are in use to be returned.
++func (mysqld *Mysqld) closePooledConnections(ctx context.Context) {
++	ctx, cancel := context.WithTimeout(ctx, closePooledConnectionsTimeout)
++	defer cancel()
++	for _, pool := range []*dbconnpool.ConnectionPool{mysqld.dbaPool, mysqld.appPool} {
++		if pool == nil || !pool.IsOpen() {
++			continue
++		}
++		capacity := pool.Capacity()
++		if err := pool.SetCapacity(ctx, 0); err != nil {
++			log.Warn("could not close all pooled MySQL connections before shutdown", slog.Any("error", err))
++		}
++		if err := pool.SetCapacity(context.Background(), capacity); err != nil {
++			log.Warn("could not restore the MySQL connection pool capacity", slog.Any("error", err))
++		}
++	}
++}
++
+ // StartAfterExit waits for a mysqld process that shut itself down (e.g. after a
+ // CLONE operation) to fully exit, then starts a new one. It polls for the
+ // disappearance of the socket and pid files before calling Start.
+diff --git a/go/vt/mysqlctl/mysqld_test.go b/go/vt/mysqlctl/mysqld_test.go
+index a56e140..78f7e74 100644
+--- a/go/vt/mysqlctl/mysqld_test.go
++++ b/go/vt/mysqlctl/mysqld_test.go
+@@ -328,6 +328,36 @@ func TestGetDbaConnection(t *testing.T) {
+ 	defer conn.Close()
+ }
+ 
++// TestClosePooledConnections checks that the helper Shutdown calls before it
++// stops mysqld closes the idle connections of the dba pool, which would
++// otherwise make mysqld wait two seconds before forcing them closed, and that
++// the pool still hands out connections afterwards.
++func TestClosePooledConnections(t *testing.T) {
++	db := fakesqldb.New(t)
++	t.Cleanup(db.Close)
++	db.AddQuery("SELECT 1", &sqltypes.Result{})
++	db.AddQuery("set @x = 1", &sqltypes.Result{})
++
++	params := db.ConnParams()
++	cp := *params
++	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
++	testMysqld := NewMysqld(dbc)
++	t.Cleanup(testMysqld.Close)
++	ctx := t.Context()
++
++	require.NoError(t, testMysqld.ExecuteSuperQuery(ctx, "set @x = 1"))
++	ids := db.QueryConnIDs("set @x = 1")
++	require.Len(t, ids, 1)
++	require.True(t, db.IsConnectionOpen(ids[0]), "the pool keeps its connection open while idle")
++
++	testMysqld.closePooledConnections(ctx)
++	assert.Eventually(t, func() bool {
++		return !db.IsConnectionOpen(ids[0])
++	}, 30*time.Second, 10*time.Millisecond)
++
++	require.NoError(t, testMysqld.ExecuteSuperQuery(ctx, "set @x = 1"))
++}
++
+ func TestGetVersionString(t *testing.T) {
+ 	db := fakesqldb.New(t)
+ 	defer db.Close()
+diff --git a/go/vt/vtorc/inst/instance_dao.go b/go/vt/vtorc/inst/instance_dao.go
+index 1616d5b..456fd73 100644
+--- a/go/vt/vtorc/inst/instance_dao.go
++++ b/go/vt/vtorc/inst/instance_dao.go
+@@ -644,7 +644,9 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
+ 	instance.ReplicationDepth = m.GetUint("replication_depth")
+ 	instance.IsCoPrimary = m.GetBool("is_co_primary")
+ 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
+-	instance.IsUpToDate = m.GetUint("seconds_since_last_checked") <= config.GetInstancePollSeconds()
++	// Strictly less than: an instance checked exactly --instance-poll-time ago (in whole seconds) is due,
++	// matching ReadOutdatedInstances.
++	instance.IsUpToDate = m.GetUint("seconds_since_last_checked") < config.GetInstancePollSeconds()
+ 	instance.IsRecentlyChecked = m.GetUint("seconds_since_last_checked") <= config.GetInstancePollSeconds()*5
+ 	instance.LastSeenTimestamp = m.GetString("last_seen")
+ 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
+@@ -809,6 +811,10 @@ func GetKeyspaceShardName(tabletAlias *topodatapb.TabletAlias) (keyspace, shard
+ // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
+ // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
+ // the instance.
++//
++// last_checked has a resolution of one second, so an instance checked exactly --instance-poll-time ago (in whole
++// seconds) is outdated. With a strict comparison, every instance was polled one second later than configured
++// (every 2s with --instance-poll-time=1s, every 6s with the 5s default), which delayed failure detection.
+ func ReadOutdatedInstances() ([]*topodatapb.TabletAlias, error) {
+ 	res := make([]*topodatapb.TabletAlias, 0)
+ 	query := `SELECT
+@@ -818,7 +824,7 @@ func ReadOutdatedInstances() ([]*topodatapb.TabletAlias, error) {
+ 	WHERE
+ 		CASE
+ 			WHEN last_attempted_check <= last_checked
+-			THEN last_checked < DATETIME('now', PRINTF('-%d SECOND', ?))
++			THEN last_checked <= DATETIME('now', PRINTF('-%d SECOND', ?))
+ 			ELSE last_checked < DATETIME('now', PRINTF('-%d SECOND', ?))
+ 		END
+ 	UNION
+diff --git a/go/vt/vtorc/inst/instance_dao_test.go b/go/vt/vtorc/inst/instance_dao_test.go
+index 558a5ce..85f7558 100644
+--- a/go/vt/vtorc/inst/instance_dao_test.go
++++ b/go/vt/vtorc/inst/instance_dao_test.go
+@@ -207,6 +207,38 @@ func TestReadInstance(t *testing.T) {
+ 	}
+ }
+ 
++// TestReadInstanceIsUpToDate checks that an instance that was checked exactly
++// --instance-poll-time ago is due for a poll, consistently with ReadOutdatedInstances.
++// Otherwise DiscoverInstance skips it and it is polled a second late.
++func TestReadInstanceIsUpToDate(t *testing.T) {
++	oldVal := config.GetInstancePollTime()
++	t.Cleanup(func() {
++		config.SetInstancePollTime(oldVal)
++		db.ClearVTOrcDatabase()
++	})
++	config.SetInstancePollTime(60 * time.Second)
++
++	for _, query := range initialSQL {
++		_, err := db.ExecVTOrc(query)
++		require.NoError(t, err)
++	}
++	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
++
++	_, err := db.ExecVTOrc("update database_instance set last_checked = DATETIME('now') where alias = 'zone1-0000000100'")
++	require.NoError(t, err)
++	instance, found, err := ReadInstance(tabletAlias)
++	require.NoError(t, err)
++	require.True(t, found)
++	assert.True(t, instance.IsUpToDate)
++
++	_, err = db.ExecVTOrc("update database_instance set last_checked = DATETIME('now', '-60 second') where alias = 'zone1-0000000100'")
++	require.NoError(t, err)
++	instance, found, err = ReadInstance(tabletAlias)
++	require.NoError(t, err)
++	require.True(t, found)
++	assert.False(t, instance.IsUpToDate)
++}
++
+ // TestReadProblemInstances is used to test the functionality of ReadProblemInstances and verify its failure modes and successes.
+ func TestReadProblemInstances(t *testing.T) {
+ 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
+@@ -561,6 +593,15 @@ func TestReadOutdatedInstances(t *testing.T) {
+ 				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
+ 			},
+ 			instancesRequired: []string{"zone1-0000000100"},
++		}, {
++			// last_checked has a resolution of one second. An instance that was checked
++			// exactly the poll interval ago must be polled now, not one second later.
++			name: "One instance was checked exactly the poll interval ago",
++			sql: []string{
++				"update database_instance set last_checked = DATETIME('now')",
++				"update database_instance set last_checked = DATETIME('now', '-1500 second'), last_attempted_check = DATETIME('now', '-1500 second') where alias = 'zone1-0000000100'",
++			},
++			instancesRequired: []string{"zone1-0000000100"},
+ 		}, {
+ 			name: "One instance doesn't have myql data",
+ 			sql: []string{
+diff --git a/go/vt/vtorc/logic/vtorc.go b/go/vt/vtorc/logic/vtorc.go
+index 83e258f..a061435 100644
+--- a/go/vt/vtorc/logic/vtorc.go
++++ b/go/vt/vtorc/logic/vtorc.go
+@@ -133,6 +133,18 @@ func handleDiscoveryRequests() {
+ 	}
+ }
+ 
++// discoveryDedupWindow returns how long DiscoverInstance skips an instance after
++// it was last attempted. Instances are polled from a one-second health tick, so
++// the window is a little shorter than --instance-poll-time: an instance polled on
++// one tick is due again on the tick --instance-poll-time later, and a window of
++// exactly --instance-poll-time would expire a few milliseconds after that tick and
++// delay the poll to the next one. The tick still keeps the period at
++// --instance-poll-time or more.
++func discoveryDedupWindow() time.Duration {
++	pollTime := config.GetInstancePollTime()
++	return pollTime - min(pollTime/2, 500*time.Millisecond)
++}
++
+ // DiscoverInstance will attempt to discover (poll) an instance (unless
+ // it is already up-to-date) and will also ensure that its primary and
+ // replicas (if any) are also checked.
+@@ -179,7 +191,7 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool)
+ 	// Calculate the expiry period each time as InstancePollSeconds
+ 	// _may_ change during the run of the process (via SIGHUP) and
+ 	// it is not possible to change the cache's default expiry..
+-	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAliasString, true, config.GetInstancePollTime()); existsInCacheError != nil && !forceDiscovery {
++	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAliasString, true, discoveryDedupWindow()); existsInCacheError != nil && !forceDiscovery {
+ 		// Just recently attempted
+ 		return
+ 	}
+diff --git a/go/vt/vttablet/tabletmanager/rpc_replication.go b/go/vt/vttablet/tabletmanager/rpc_replication.go
+index 570194a..d800672 100644
+--- a/go/vt/vttablet/tabletmanager/rpc_replication.go
++++ b/go/vt/vttablet/tabletmanager/rpc_replication.go
+@@ -578,7 +578,10 @@ func init() {
+ //   - No future writes will be accepted.
+ //   - No writes are in-flight.
+ //   - MySQL is in read-only mode.
+-//   - Semi-sync settings are consistent with a REPLICA tablet.
++//   - With force, semi-sync settings are consistent with a REPLICA tablet.
++//     Without force (PlannedReparentShard), primary-side semi-sync is left
++//     as it is. SetReplicationSource disables it before the tablet starts
++//     replicating, and UndoDemotePrimary needs it enabled anyway.
+ //
+ // If necessary, it waits for all in-flight writes to complete or time out.
+ //
+@@ -771,22 +774,33 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
+ 		}
+ 	}()
+ 
+-	log.Info("checking primary-side semi-sync state")
+-	// If we haven't disabled the primary side semi-sync so far, do it now.
+-	if tm.isPrimarySideSemiSyncEnabled(ctx) {
+-		// If using semi-sync, we need to disable primary-side.
+-		log.Info("disabling primary-side semi-sync")
+-		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
+-			return nil, err
+-		}
+-		defer func() {
+-			if finalErr != nil && revertPartialFailure && wasPrimary {
+-				log.Info("reverting primary-side semi-sync to enabled")
+-				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
+-					log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
+-				}
++	// Without force, this is a PlannedReparentShard demotion, and the shard has
++	// no writable primary until this RPC returns. Disabling primary-side
++	// semi-sync here blocks for up to one second: MySQL stops its semi-sync
++	// ACK receiver thread only when that thread's 1s poll on the replica
++	// connections times out, and no ACKs arrive after writes have stopped.
++	// Leaving it enabled is safe because MySQL is now super_read_only, so no
++	// commit can wait for an ACK. SetReplicationSource disables it before this
++	// tablet starts replicating, and UndoDemotePrimary keeps it enabled.
++	if !force {
++		log.Info("leaving primary-side semi-sync state to SetReplicationSource")
++	} else {
++		log.Info("checking primary-side semi-sync state")
++		// If we haven't disabled the primary side semi-sync so far, do it now.
++		if tm.isPrimarySideSemiSyncEnabled(ctx) {
++			log.Info("disabling primary-side semi-sync")
++			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
++				return nil, err
+ 			}
+-		}()
++			defer func() {
++				if finalErr != nil && revertPartialFailure && wasPrimary {
++					log.Info("reverting primary-side semi-sync to enabled")
++					if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
++						log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
++					}
++				}
++			}()
++		}
+ 	}
+ 
+ 	// Return the current replication position.
+diff --git a/go/vt/vttablet/tabletmanager/rpc_replication_test.go b/go/vt/vttablet/tabletmanager/rpc_replication_test.go
+index 075a325..ff45ef3 100644
+--- a/go/vt/vttablet/tabletmanager/rpc_replication_test.go
++++ b/go/vt/vttablet/tabletmanager/rpc_replication_test.go
+@@ -231,6 +231,36 @@ func TestDemotePrimaryIncludesServerVersion(t *testing.T) {
+ 	assert.Equal(t, "Ver 8.0.35", status.ServerVersion)
+ }
+ 
++// TestDemotePrimaryPrimarySideSemiSync checks that a PlannedReparentShard demotion
++// (force=false) leaves primary-side semi-sync enabled, because disabling it makes
++// MySQL wait up to one second for its ACK receiver thread while the shard has no
++// writable primary. SetReplicationSource disables it later. A forced demotion still
++// disables it right away.
++func TestDemotePrimaryPrimarySideSemiSync(t *testing.T) {
++	for _, force := range []bool{false, true} {
++		t.Run(fmt.Sprintf("force=%v", force), func(t *testing.T) {
++			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
++			defer cancel()
++			ts := memorytopo.NewServer(ctx, "cell1")
++			tm := newTestTM(t, ts, 1, "ks", "0", nil)
++			t.Cleanup(tm.Stop)
++
++			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
++			fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
++			fakeMysqlDaemon.DB().SetNeverFail(true)
++			fakeMysqlDaemon.SemiSyncPrimaryEnabled = true
++			fakeMysqlDaemon.SemiSyncReplicaEnabled = true
++			tm.SemiSyncMonitor.Open()
++
++			_, err := tm.DemotePrimary(ctx, force)
++			require.NoError(t, err)
++			assert.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
++			assert.Equal(t, !force, fakeMysqlDaemon.SemiSyncPrimaryEnabled)
++			assert.True(t, fakeMysqlDaemon.SemiSyncReplicaEnabled)
++		})
++	}
++}
++
+ func (rmd *restartReplicationMysqlDaemon) StopReplication(context.Context, map[string]string) error {
+ 	if rmd.cancel != nil {
+ 		rmd.cancel()

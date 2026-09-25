@@ -1,0 +1,179 @@
+// prober: runs light, rate-limited write (and optionally read) traffic against
+// vtgate and reports the client-visible unavailability window.
+package main
+
+import (
+	"context"
+	"database/sql"
+	"flag"
+	"fmt"
+	"math/rand"
+	"os"
+	"os/signal"
+	"sort"
+	"sync"
+	"syscall"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+)
+
+type ev struct {
+	start, end time.Time
+	err        string
+	write      bool
+}
+
+func main() {
+	dsn := flag.String("dsn", "root@tcp(127.0.0.1:40003)/sbtest?timeout=2s&readTimeout=60s&writeTimeout=60s", "")
+	threads := flag.Int("threads", 4, "")
+	interval := flag.Duration("interval", 10*time.Millisecond, "per-thread interval")
+	dur := flag.Duration("duration", 30*time.Second, "")
+	reads := flag.Bool("reads", false, "also a read per iteration")
+	tableSize := flag.Int("table-size", 100000, "")
+	out := flag.String("out", "", "file to write raw events to")
+	flag.Parse()
+
+	db, err := sql.Open("mysql", *dsn)
+	if err != nil {
+		panic(err)
+	}
+	db.SetMaxOpenConns(*threads * 2)
+	db.SetMaxIdleConns(*threads * 2)
+	db.SetConnMaxLifetime(0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), *dur)
+	defer cancel()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() { <-sigs; cancel() }()
+
+	var mu sync.Mutex
+	var evs []ev
+	var wg sync.WaitGroup
+	for i := 0; i < *threads; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			r := rand.New(rand.NewSource(int64(i)))
+			t := time.NewTicker(*interval)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+				id := r.Intn(*tableSize) + 1
+				s := time.Now()
+				qctx, qc := context.WithTimeout(context.Background(), 60*time.Second)
+				_, err := db.ExecContext(qctx, "UPDATE sbtest1 SET k=k+1 WHERE id=?", id)
+				qc()
+				e := ev{start: s, end: time.Now(), write: true}
+				if err != nil {
+					e.err = err.Error()
+				}
+				mu.Lock()
+				evs = append(evs, e)
+				mu.Unlock()
+				if *reads {
+					s := time.Now()
+					var k int
+					err := db.QueryRowContext(context.Background(), "SELECT k FROM sbtest2 WHERE id=?", id).Scan(&k)
+					e := ev{start: s, end: time.Now()}
+					if err != nil {
+						e.err = err.Error()
+					}
+					mu.Lock()
+					evs = append(evs, e)
+					mu.Unlock()
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	report(evs, true, *out)
+	if *reads {
+		report(evs, false, "")
+	}
+}
+
+func report(all []ev, write bool, out string) {
+	var evs []ev
+	for _, e := range all {
+		if e.write == write {
+			evs = append(evs, e)
+		}
+	}
+	sort.Slice(evs, func(i, j int) bool { return evs[i].end.Before(evs[j].end) })
+	kind := "READ"
+	if write {
+		kind = "WRITE"
+	}
+	if out != "" {
+		f, _ := os.Create(out)
+		for _, e := range evs {
+			fmt.Fprintf(f, "%d %d %q\n", e.start.UnixMicro(), e.end.Sub(e.start).Microseconds(), e.err)
+		}
+		f.Close()
+	}
+	var nerr int
+	var firstErr, lastErr time.Time
+	errKinds := map[string]int{}
+	var lats []time.Duration
+	var maxLat time.Duration
+	var maxLatAt time.Time
+	// longest gap between successful completions
+	var lastOK time.Time
+	var maxGap time.Duration
+	var gapStart time.Time
+	for _, e := range evs {
+		l := e.end.Sub(e.start)
+		if e.err != "" {
+			nerr++
+			if firstErr.IsZero() {
+				firstErr = e.start
+			}
+			lastErr = e.end
+			k := e.err
+			if len(k) > 90 {
+				k = k[:90]
+			}
+			errKinds[k]++
+			continue
+		}
+		lats = append(lats, l)
+		if l > maxLat {
+			maxLat = l
+			maxLatAt = e.start
+		}
+		if !lastOK.IsZero() && e.end.Sub(lastOK) > maxGap {
+			maxGap = e.end.Sub(lastOK)
+			gapStart = lastOK
+		}
+		lastOK = e.end
+	}
+	sort.Slice(lats, func(i, j int) bool { return lats[i] < lats[j] })
+	p := func(q float64) time.Duration {
+		if len(lats) == 0 {
+			return 0
+		}
+		return lats[int(float64(len(lats)-1)*q)]
+	}
+	fmt.Printf("%s: n=%d ok=%d err=%d p50=%v p99=%v max=%v (at %s)\n", kind, len(evs), len(lats), nerr, p(0.5), p(0.99), maxLat, maxLatAt.Format("15:04:05.000"))
+	fmt.Printf("%s: max gap between successful completions=%v starting %s\n", kind, maxGap, gapStart.Format("15:04:05.000"))
+	if nerr > 0 {
+		fmt.Printf("%s: errors from %s to %s (span %v)\n", kind, firstErr.Format("15:04:05.000"), lastErr.Format("15:04:05.000"), lastErr.Sub(firstErr))
+		for k, v := range errKinds {
+			fmt.Printf("   %5d  %s\n", v, k)
+		}
+	}
+	// count of slow ops (>100ms)
+	slow := 0
+	for _, l := range lats {
+		if l > 100*time.Millisecond {
+			slow++
+		}
+	}
+	fmt.Printf("%s: slow(>100ms)=%d\n", kind, slow)
+}

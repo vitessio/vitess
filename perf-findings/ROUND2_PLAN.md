@@ -6,7 +6,7 @@ Results go to `perf-findings/<ID>.md` and `<ID>.patch` (copied from the scratchp
 | Wave | ID | Workload | BASE | Status |
 |---|---|---|---|---|
 | 1 | P1-point-read | oltp_point_select through vtgate (prepared and text; 8/32 threads): per-query CPU/latency breakdown, syscalls, gRPC, pools, GC | 30000 | running |
-| 1 | P5-operations | PRS/ERS/VTOrc failover windows, buffering, backup/restore wall time | 40000 | running |
+| 1 | P5-operations | PRS/ERS/VTOrc failover windows, buffering, backup/restore wall time | 40000 | done |
 | 2 | P2-writes-tx | oltp_write_only / read_write / insert: transactions, commit path, tx pool, reserved connections | 30000 | pending |
 | 2 | P4-vreplication | MoveTables/Reshard copy + catch-up rows/s, VStream CDC throughput | 40000 | pending |
 | 3 | P3-scatter | cross-shard scatter / aggregation / ORDER BY LIMIT / joins / IN lists | 30000 | pending |
