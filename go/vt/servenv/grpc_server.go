@@ -73,6 +73,7 @@ var (
 
 	// GRPC server metrics recorder
 	GRPCServerMetricsRecorder orca.ServerMetricsRecorder
+	orcaUpdateInterval        = 30 * time.Second
 
 	authPlugin Authenticator
 )
@@ -286,6 +287,9 @@ func createGRPCServer() {
 	if gRPCIngressStatsEnabled {
 		opts = append(opts, grpc.StatsHandler(GRPCIngressStatsHandler()))
 	}
+	if gRPCEnableOrcaMetrics {
+		opts = append(opts, grpc.StatsHandler(orcaEgressStatsHandler{}))
+	}
 
 	opts = append(opts, interceptors()...)
 
@@ -402,17 +406,22 @@ func registerOrca() (stop func()) {
 	// Capture the recorder so the goroutine below does not read the
 	// GRPCServerMetricsRecorder global, which tests swap out between runs.
 	recorder := GRPCServerMetricsRecorder
+	interval := orcaUpdateInterval
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		lastReport := time.Now()
 		for {
 			select {
-			case <-ticker.C:
+			case now := <-ticker.C:
 				recorder.SetCPUUtilization(getCpuUsage())
 				recorder.SetMemoryUtilization(getMemoryUsage())
+				// Weighted round robin (gRFC A58) weights backends by qps / cpu.
+				recorder.SetQPS(float64(orcaEgressMessages.Swap(0)) / now.Sub(lastReport).Seconds())
+				lastReport = now
 			case <-stopCh:
 				return
 			}
