@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 
 	"vitess.io/vitess/go/slice"
@@ -151,26 +152,18 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 
 	//  - Rewrite join predicates already pushed down &&
 	//  - Save original join predicates if we have to bail out of the rewrite
-	original := map[predicates.ID]sqlparser.Expr{}
+	original := predicates.Snapshot{}
 	for _, col := range aj.JoinPredicates.columns {
 		if col.JoinPredicateID != nil {
 			// if we have pushed down a join predicate, we need to restore it to its original shape, without the argument from the LHS
-			id := *col.JoinPredicateID
-			oldExpr, err := ctx.PredTracker.Get(id)
-			if err != nil {
-				panic(err)
-			}
-			original[id] = oldExpr
-			ctx.PredTracker.Set(id, col.Original)
+			maps.Copy(original, ctx.PredTracker.ResetToOriginal(*col.JoinPredicateID, col.Original))
 		}
 	}
 
 	// Defer restoration of original predicates if no successful rewrite happens.
 	defer func() {
 		if res == NoRewrite {
-			for id, expr := range original {
-				ctx.PredTracker.Set(id, expr)
-			}
+			ctx.PredTracker.Rollback(original)
 		}
 	}()
 
