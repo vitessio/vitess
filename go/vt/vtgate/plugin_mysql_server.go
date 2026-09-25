@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
