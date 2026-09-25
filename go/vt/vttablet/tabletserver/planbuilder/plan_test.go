@@ -455,6 +455,13 @@ func TestSettingsRejectSubqueries(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 				}
+
+				// a dry run finds the setting without rejecting it
+				wantFound := ""
+				if tc.subquery {
+					wantFound = tc.setting
+				}
+				assert.Equal(t, wantFound, SettingWithSubquery(settings, parser))
 			})
 		}
 	}
