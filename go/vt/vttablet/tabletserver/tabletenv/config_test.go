@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -34,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -461,6 +464,60 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 				assert.Equal(t, test.ExpectedErrorCode, vterrors.Code(err))
 			}
 		})
+	}
+}
+
+func TestExternalMysqlConnParams(t *testing.T) {
+	for _, useSSL := range []bool{false, true} {
+		for _, useTCP := range []bool{false, true} {
+			t.Run(fmt.Sprintf("use SSL: %t, use TCP: %t", useSSL, useTCP), func(t *testing.T) {
+				config := NewDefaultConfig()
+				config.DB = &dbconfigs.DBConfigs{
+					Socket:                     "/tmp/mysql.sock",
+					Host:                       "mysql.example",
+					Port:                       3306,
+					Flags:                      mysql.CapabilityClientSSL,
+					SslMode:                    vttls.VerifyIdentity,
+					SslCa:                      "ca.pem",
+					SslCaPath:                  "ca.d",
+					SslCert:                    "client-cert.pem",
+					SslKey:                     "client-key.pem",
+					TLSMinVersion:              "TLSv1.3",
+					ServerName:                 "mysql.internal",
+					ConnectTimeoutMilliseconds: 1234,
+					DBName:                     "vt_ks",
+					App: dbconfigs.UserConfig{
+						User:     "app",
+						Password: "password",
+						UseSSL:   useSSL,
+						UseTCP:   useTCP,
+					},
+				}
+				expected := mysql.ConnParams{
+					Host:             "mysql.example",
+					Port:             3306,
+					Flags:            mysql.CapabilityClientSSL,
+					DbName:           "vt_ks",
+					Uname:            "app",
+					Pass:             "password",
+					ConnectTimeoutMs: 1234,
+				}
+				if !useTCP {
+					expected.UnixSocket = "/tmp/mysql.sock"
+				}
+				if useSSL {
+					expected.SslMode = vttls.VerifyIdentity
+					expected.SslCa = "ca.pem"
+					expected.SslCaPath = "ca.d"
+					expected.SslCert = "client-cert.pem"
+					expected.SslKey = "client-key.pem"
+					expected.TLSMinVersion = "TLSv1.3"
+					expected.ServerName = "mysql.internal"
+				}
+
+				assert.Equal(t, expected, config.externalMysqlConnParams())
+			})
+		}
 	}
 }
 

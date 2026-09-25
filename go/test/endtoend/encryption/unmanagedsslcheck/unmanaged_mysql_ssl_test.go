@@ -60,6 +60,7 @@ func TestConnectUnamanagedMySQLRequiringSSLSuccess(t *testing.T) {
 	tc1.DB.DBName = connParams.DbName
 	tc1.DB.App.User = testUser
 	tc1.DB.App.Password = "password"
+	tc1.DB.App.UseSSL = true
 	tc1.DB.SslMode = vttls.Required
 	tc1.DB.SslCa = cluster.MySQLTCPConnParams().SslCa
 	tc1.DB.SslCert = cluster.MySQLTCPConnParams().SslCert

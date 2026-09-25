@@ -48,14 +48,22 @@ import (
 
 const maxBackendOpTime = time.Second * 5
 
+type (
+	instanceWriteGeneration struct {
+		mu      sync.Mutex
+		retired bool
+	}
+)
+
 var (
 	instanceReadSem  = semaphore.NewWeighted(config.GetBackendReadConcurrency())
 	instanceWriteSem = semaphore.NewWeighted(config.GetBackendWriteConcurrency())
 )
 
 var (
-	forgetAliases     *cache.Cache
-	forgetAliasesOnce sync.Once
+	forgetAliases            *cache.Cache
+	forgetAliasesOnce        sync.Once
+	instanceWriteGenerations sync.Map
 )
 
 var (
@@ -84,6 +92,35 @@ func initForgetAliasesCache() {
 // InitializeForgetAliasesCache ensures the forgetAliases cache is initialized.
 func InitializeForgetAliasesCache() {
 	initForgetAliasesCache()
+}
+
+func lockInstanceWriteGenerationState(tabletAlias *topodatapb.TabletAlias) (string, *instanceWriteGeneration) {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	for {
+		stateValue, _ := instanceWriteGenerations.LoadOrStore(tabletAliasString, &instanceWriteGeneration{})
+		state := stateValue.(*instanceWriteGeneration)
+		state.mu.Lock()
+		if state.retired {
+			state.mu.Unlock()
+			continue
+		}
+		return tabletAliasString, state
+	}
+}
+
+func captureInstanceWriteGeneration(tabletAlias *topodatapb.TabletAlias) *instanceWriteGeneration {
+	_, state := lockInstanceWriteGenerationState(tabletAlias)
+	defer state.mu.Unlock()
+	return state
+}
+
+func (state *instanceWriteGeneration) runIfCurrent(f func() error) error {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.retired {
+		return nil
+	}
+	return f()
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
@@ -180,10 +217,13 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	if tabletAlias == nil {
 		return instance, errors.New("ReadTopologyInstance will not act on empty tablet alias")
 	}
+	writeGeneration := captureInstanceWriteGeneration(tabletAlias)
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
 		go func() {
-			_ = UpdateInstanceLastAttemptedCheck(tabletAlias)
+			_ = writeGeneration.runIfCurrent(func() error {
+				return UpdateInstanceLastAttemptedCheck(tabletAlias)
+			})
 		}()
 	})
 
@@ -240,7 +280,10 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 			// only counts REPLICA/RDONLY observers, so a stale topo type in the
 			// exact failover window this feature guards could miscount a current
 			// PRIMARY as an observer or drop a newly demoted replica.
-			RecordShardPeerHealth(tabletAlias, fs.TabletType, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+			_ = writeGeneration.runIfCurrent(func() error {
+				RecordShardPeerHealth(tabletAlias, fs.TabletType, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+				return nil
+			})
 		}
 		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
@@ -402,7 +445,11 @@ Cleanup:
 		instance.IsRecentlyChecked = true
 		instance.IsUpToDate = true
 		latency.Start("backend")
-		_ = WriteInstance(instance, instanceFound, err)
+		if err != nil {
+			_ = WriteInstance(instance, instanceFound, err)
+		} else {
+			_ = writeInstanceAtGeneration(instance, instanceFound, writeGeneration)
+		}
 		lastAttemptedCheckTimer.Stop()
 		latency.Stop("backend")
 		return instance, nil
@@ -413,7 +460,9 @@ Cleanup:
 	// updated on success by writeInstance. If the reason is a
 	// stalled disk, we can record that as well.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk)
+	_ = writeGeneration.runIfCurrent(func() error {
+		return UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk)
+	})
 	latency.Stop("backend")
 	return nil, err
 }
@@ -1076,13 +1125,20 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 	return nil
 }
 
+func writeInstanceAtGeneration(instance *Instance, instanceWasActuallyFound bool, state *instanceWriteGeneration) error {
+	return state.runIfCurrent(func() error {
+		return writeManyInstances([]*Instance{instance}, instanceWasActuallyFound, true)
+	})
+}
+
 // WriteInstance stores an instance in the vtorc backend
 func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError error) error {
 	if lastError != nil {
 		log.Info(fmt.Sprintf("writeInstance: will not update database_instance due to error: %+v", lastError))
 		return nil
 	}
-	return writeManyInstances([]*Instance{instance}, instanceWasActuallyFound, true)
+	state := captureInstanceWriteGeneration(instance.InstanceAlias)
+	return writeInstanceAtGeneration(instance, instanceWasActuallyFound, state)
 }
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
@@ -1152,7 +1208,71 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		return errors.New(errMsg)
 	}
 	initForgetAliasesCache()
-	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	tabletAliasString, writeGeneration := lockInstanceWriteGenerationState(tabletAlias)
+	defer writeGeneration.mu.Unlock()
+
+	dbConn, err := db.OpenVTOrc()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	tx, err := dbConn.Begin()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Delete from the 'vitess_tablet' table.
+	tabletResult, err := tx.Exec(`DELETE FROM
+			vitess_tablet
+		WHERE
+			alias = ?`,
+		tabletAliasString,
+	)
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	tabletRows, err := tabletResult.RowsAffected()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+
+	// Also delete from the 'database_instance' table.
+	instanceResult, err := tx.Exec(`DELETE FROM
+			database_instance
+		WHERE
+			alias = ?`,
+		tabletAliasString,
+	)
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	instanceRows, err := instanceResult.RowsAffected()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	// A tablet read from the topo but never probed has no database_instance row, so only an
+	// absence from both tables means it was never here.
+	if tabletRows == 0 && instanceRows == 0 {
+		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
+		log.Error(errMsg)
+		return errors.New(errMsg)
+	}
+	wasAlreadyForgotten := InstanceIsForgotten(tabletAlias)
+	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
+	if err := tx.Commit(); err != nil {
+		if !wasAlreadyForgotten {
+			forgetAliases.Delete(tabletAliasString)
+		}
+		log.Error(err.Error())
+		return err
+	}
+
 	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
 	log.Info(fmt.Sprintf("Forgetting: %v", tabletAliasString))
 
@@ -1163,41 +1283,9 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	// stops counting toward the quorum denominator immediately.
 	RemoveShardPeerObserver(tabletAliasString)
 
-	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`DELETE FROM
-			vitess_tablet
-		WHERE
-			alias = ?`,
-		tabletAliasString,
-	)
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
-
-	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`DELETE FROM
-			database_instance
-		WHERE
-			alias = ?`,
-		tabletAliasString,
-	)
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
-	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
-	rows, err := sqlResult.RowsAffected()
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
-	if rows == 0 {
-		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
-		log.Error(errMsg)
-		return errors.New(errMsg)
-	}
 	_ = AuditOperation("forget", tabletAlias, "")
+	writeGeneration.retired = true
+	instanceWriteGenerations.CompareAndDelete(tabletAliasString, writeGeneration)
 	return nil
 }
 

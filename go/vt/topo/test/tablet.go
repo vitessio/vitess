@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -136,4 +137,42 @@ func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if _, err := ts.GetTablet(ctx, tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
+
+	nonManaged := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: LocalCellName, Uid: 2},
+		Keyspace:  "test_keyspace",
+		Shard:     "0",
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, nonManaged))
+	aliases, err := ts.GetNonManagedTabletAliasesByShard(ctx, nonManaged.Keyspace, nonManaged.Shard)
+	require.NoError(t, err)
+	require.Len(t, aliases, 1)
+	require.True(t, proto.Equal(nonManaged.Alias, aliases[0]))
+
+	require.NoError(t, topo.DeleteTabletReplicationData(ctx, ts, nonManaged))
+	aliases, err = ts.GetNonManagedTabletAliasesByShard(ctx, nonManaged.Keyspace, nonManaged.Shard)
+	require.NoError(t, err)
+	require.Len(t, aliases, 1)
+	require.True(t, proto.Equal(nonManaged.Alias, aliases[0]))
+
+	nonManagedInfo, err := ts.GetTablet(ctx, nonManaged.Alias)
+	require.NoError(t, err)
+	nonManagedInfo.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
+	require.NoError(t, ts.UpdateTablet(ctx, nonManagedInfo))
+	aliases, err = ts.GetNonManagedTabletAliasesByShard(ctx, nonManaged.Keyspace, nonManaged.Shard)
+	require.NoError(t, err)
+	require.Empty(t, aliases)
+
+	nonManagedInfo.MysqlMode = topodatapb.TabletMySQLMode(99)
+	require.NoError(t, ts.UpdateTablet(ctx, nonManagedInfo))
+	aliases, err = ts.GetNonManagedTabletAliasesByShard(ctx, nonManaged.Keyspace, nonManaged.Shard)
+	require.NoError(t, err)
+	require.Len(t, aliases, 1)
+	require.True(t, proto.Equal(nonManaged.Alias, aliases[0]))
+
+	require.NoError(t, ts.DeleteTablet(ctx, nonManaged.Alias))
+	aliases, err = ts.GetNonManagedTabletAliasesByShard(ctx, nonManaged.Keyspace, nonManaged.Shard)
+	require.NoError(t, err)
+	require.Empty(t, aliases)
 }

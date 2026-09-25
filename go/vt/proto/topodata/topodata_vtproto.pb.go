@@ -86,6 +86,7 @@ func (m *Tablet) CloneVT() *Tablet {
 	r.DefaultConnCollation = m.DefaultConnCollation
 	r.TabletStartTime = m.TabletStartTime.CloneVT()
 	r.TabletShutdownTime = m.TabletShutdownTime.CloneVT()
+	r.MysqlMode = m.MysqlMode
 	if rhs := m.PortMap; rhs != nil {
 		tmpContainer := make(map[string]int32, len(rhs))
 		for k, v := range rhs {
@@ -676,6 +677,13 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MysqlMode != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.MysqlMode))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x98
 	}
 	if m.TabletShutdownTime != nil {
 		size, err := m.TabletShutdownTime.MarshalToSizedBufferVT(dAtA[:i])
@@ -2121,6 +2129,9 @@ func (m *Tablet) SizeVT() (n int) {
 		l = m.TabletShutdownTime.SizeVT()
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.MysqlMode != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.MysqlMode))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3474,6 +3485,25 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 19:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MysqlMode", wireType)
+			}
+			m.MysqlMode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MysqlMode |= TabletMySQLMode(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
