@@ -2190,6 +2190,69 @@ func TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads(t *testing.T) {
 	require.ErrorContains(t, err, "invalid traffic switch direction")
 }
 
+// TestWorkflowSwitchTrafficExpandsCellAliases confirms that a combined switch
+// naming a cell alias has that alias resolved to its concrete cells before the
+// read-ordering guard and the actual read switch run. Without this, the alias
+// passes the guard (which expands cells for its own comparison) but
+// switchShardReads receives the raw alias, whose nonexistent cell node its topo
+// helpers silently skip, leaving reads on the source.
+func TestWorkflowSwitchTrafficExpandsCellAliases(t *testing.T) {
+	ctx := t.Context()
+
+	const (
+		workflowName = "wf1"
+		tableName    = "t1"
+		keyspaceName = "ks1"
+		aliasName    = "alias1"
+		otherCell    = "cell2"
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: keyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: keyspaceName,
+		ShardNames:   []string{"-80", "80-"},
+	})
+	defer env.close()
+
+	// An alias whose name is not itself a cell node, resolving to concrete cells.
+	require.NoError(t, env.ts.CreateCellInfo(ctx, otherCell, &topodatapb.CellInfo{ServerAddress: "localhost", Root: "/" + otherCell}))
+	require.NoError(t, env.ts.CreateCellsAlias(ctx, aliasName, &topodatapb.CellsAlias{Cells: []string{defaultCellName, otherCell}}))
+
+	env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
+		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+			Workflow:     workflowName,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+				Id: 1,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace: keyspaceName,
+					Shard:    "0",
+					Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}},
+				},
+			}},
+		},
+	})
+
+	// The cell normalization runs up front, before any state lookup or switch, so
+	// the request's cells are expanded regardless of how far the switch proceeds in
+	// this minimal env.
+	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    keyspaceName,
+		Workflow:    workflowName,
+		Cells:       []string{aliasName},
+		TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+		Direction:   int32(DirectionForward),
+	}
+	_, _ = env.ws.WorkflowSwitchTraffic(ctx, req)
+
+	// The alias must have been resolved to its concrete cells (order-independent),
+	// so the guard and switchShardReads operate on the same real cells.
+	require.ElementsMatch(t, []string{defaultCellName, otherCell}, req.Cells)
+}
+
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

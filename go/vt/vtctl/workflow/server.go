@@ -2823,6 +2823,16 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if err != nil {
 		return nil, err
 	}
+	// Resolve cell aliases to concrete cells once, so the guard, the RDONLY probe,
+	// and switchShardReads all use the same list; otherwise an alias passes the
+	// guard but the shard-read switch skips its nonexistent cell node. Empty means
+	// all cells and is left untouched.
+	if len(req.Cells) > 0 {
+		req.Cells, err = s.ts.ExpandCells(ctx, strings.Join(req.Cells, ","))
+		if err != nil {
+			return nil, err
+		}
+	}
 	// Probed once and shared by the read-ordering guard and switchReads so both agree
 	// on whether switchReads will add RDONLY (tablet records are not under the workflow
 	// lock, so probing twice could disagree).
@@ -2923,13 +2933,16 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			var reqCells sets.Set[string]
 			var globalRules map[string][]string
 			if useCellState {
-				// ExpandCells resolves aliases to concrete cell names (empty means all
-				// cells) so they compare against the concrete cells in the state.
-				expanded, err := s.ts.ExpandCells(ctx, strings.Join(req.Cells, ","))
-				if err != nil {
-					return nil, err
+				// req.Cells is already concrete; empty means all cells, so expand it here
+				// to compare against the state's per-cell lists.
+				cellsForGuard := req.Cells
+				if len(cellsForGuard) == 0 {
+					cellsForGuard, err = s.ts.ExpandCells(ctx, "")
+					if err != nil {
+						return nil, err
+					}
 				}
-				reqCells = sets.New(expanded...)
+				reqCells = sets.New(cellsForGuard...)
 			} else {
 				var err error
 				globalRules, err = topotools.GetRoutingRules(ctx, s.ts)
