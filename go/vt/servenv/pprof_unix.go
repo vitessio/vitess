@@ -22,47 +22,81 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 func pprofInit() {
+	if stop := startPprof(); stop != nil {
+		OnTerm(stop)
+	}
+}
+
+func startPprof() (stop func()) {
 	prof, err := parseProfileFlag(pprofFlag)
 	if err != nil {
 		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
-	if prof != nil {
-		start, stop := prof.init()
-		startSignal := make(chan os.Signal, 1)
-		stopSignal := make(chan os.Signal, 1)
 
-		if prof.waitSig {
-			signal.Notify(startSignal, syscall.SIGUSR1)
-		} else {
-			start()
-			signal.Notify(stopSignal, syscall.SIGUSR1)
-		}
+	if prof == nil {
+		return nil
+	}
 
-		go func() {
-			for {
-				<-startSignal
+	start, stopProf := prof.init()
+	startSignal := make(chan os.Signal, 1)
+	stopSignal := make(chan os.Signal, 1)
+
+	startDoneCh := make(chan struct{})
+	stopDoneCh := make(chan struct{})
+	stopCh := make(chan struct{})
+
+	if prof.waitSig {
+		signal.Notify(startSignal, syscall.SIGUSR1)
+	} else {
+		start()
+		signal.Notify(stopSignal, syscall.SIGUSR1)
+	}
+
+	go func() {
+		defer close(startDoneCh)
+		for {
+			select {
+			case <-startSignal:
 				start()
 				signal.Reset(syscall.SIGUSR1)
 				signal.Notify(stopSignal, syscall.SIGUSR1)
+			case <-stopCh:
+				return
 			}
-		}()
+		}
+	}()
 
-		go func() {
-			for {
-				<-stopSignal
-				stop()
+	go func() {
+		defer close(stopDoneCh)
+		for {
+			select {
+			case <-stopSignal:
+				stopProf()
 				signal.Reset(syscall.SIGUSR1)
 				signal.Notify(startSignal, syscall.SIGUSR1)
+			case <-stopCh:
+				return
 			}
-		}()
+		}
+	}()
 
-		OnTerm(stop)
-	}
+	return sync.OnceFunc(func() {
+		close(stopCh)
+		<-startDoneCh
+		<-stopDoneCh
+		// Unregister the channels only after both listeners have exited;
+		// a listener handling a signal could otherwise re-register a
+		// channel via signal.Notify after it was stopped here.
+		signal.Stop(startSignal)
+		signal.Stop(stopSignal)
+		stopProf()
+	})
 }
