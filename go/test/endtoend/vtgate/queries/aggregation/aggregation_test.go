@@ -600,6 +600,23 @@ func TestComplexAggregation(t *testing.T) {
 	})
 }
 
+// TestAggregateInValueList tests an aggregate compared against an IN value
+// list, which vtgate evaluates itself over the merged shard results. The
+// comparison must keep MySQL's three-valued logic, so a list containing NULL
+// yields NULL when no other member matches.
+func TestAggregateInValueList(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',1), (3,'c',3), (4,'d',null)")
+
+	mcmp.AssertMatches("select count(*) in (3, 4) from aggr_test", `[[INT64(1)]]`)
+	mcmp.AssertMatches("select count(*) in (1, 2) from aggr_test", `[[INT64(0)]]`)
+	mcmp.AssertMatches("select count(val2) in (3, null) from aggr_test", `[[INT64(1)]]`)
+	mcmp.AssertMatches("select count(val2) in (1, null) from aggr_test", `[[NULL]]`)
+	mcmp.AssertMatches("select count(*) not in (1, null) from aggr_test", `[[NULL]]`)
+}
+
 func TestJoinAggregation(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
