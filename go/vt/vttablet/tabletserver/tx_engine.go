@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
@@ -626,22 +627,12 @@ func (te *TxEngine) stopTransactionWatcher() {
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
-<<<<<<< HEAD
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-	// The pre-queries are executed directly on the reserved connection, without the
-	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run here —
-	// before any connection is acquired or state is changed.
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
-		return 0, "", err
-	}
-=======
 	// The pre-queries are executed directly on the reserved connection, without the
 	// settings pool's BuildSettingQuery pass, so the settings validation must run here —
 	// before any connection is acquired or state is changed.
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
+	if err := planbuilder.ValidateSettings(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
 		return 0, "", err
 	}
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
 	if err != nil {
 		return 0, "", err
@@ -668,18 +659,10 @@ var noop = func(int) {}
 func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
-<<<<<<< HEAD
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 	// see ReserveBegin: validate before any connection is acquired or tainted
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+	if err := planbuilder.ValidateSettings(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
 		return 0, err
 	}
-=======
-	// see ReserveBegin: validate before any connection is acquired or tainted
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser(), te.env.Config().StrictTableACL); err != nil {
-		return 0, err
-	}
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 	if txID == 0 {
 		err := te.isTxPoolAvailable(noop)
 		if err != nil {

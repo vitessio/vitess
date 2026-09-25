@@ -90,16 +90,6 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "show variables where Variable_name like 'a%'",
 		output: nil,
 	}, {
-<<<<<<< HEAD
-||||||| parent of bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
-		// EXPLAIN carries no table permissions, so its per-table ACL is never
-		// checked. This is the shape VEXPLAIN MYSQLPLAN issues against every
-		// resolved shard; the empty result documents that those EXPLAINs are not
-		// ACL-checked on the explained table (see the 25.0 summary).
-		input:  "explain format = json select * from t",
-		output: nil,
-	}, {
-=======
 		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
 		// subquery in it, so those reads are checked. The SHOW's own subject
 		// (the table of SHOW COLUMNS FROM t) stays unchecked as before.
@@ -128,8 +118,7 @@ func TestBuildPermissions(t *testing.T) {
 		// statement's permissions: MySQL reads const tables and evaluates
 		// uncorrelated subqueries while it optimizes, and the plan shows the
 		// outcome ("Impossible WHERE"), so an EXPLAIN answers a yes/no
-		// question about the data. This is also the shape VEXPLAIN MYSQLPLAN
-		// issues against every resolved shard.
+		// question about the data.
 		input: "describe select * from t",
 		output: []Permission{{
 			TableName: "t",
@@ -150,6 +139,9 @@ func TestBuildPermissions(t *testing.T) {
 	}, {
 		input: "explain select 1 from dual where (select v from secret where id = 1) = 'guess'",
 		output: []Permission{{
+			TableName: "dual",
+			Role:      tableacl.READER,
+		}, {
 			TableName: "secret",
 			Role:      tableacl.READER,
 		}},
@@ -210,7 +202,6 @@ func TestBuildPermissions(t *testing.T) {
 		// A bare CREATE TABLE is a partial parse (the grammar keeps only the
 		// prefix), indistinguishable from `create table t (select ...)`, so it
 		// is flagged; MySQL rejects the bare form anyway.
->>>>>>> bbcfdb17ba (VTTablet: check the reads embedded in CREATE TABLE ... AS SELECT, EXPLAIN ANALYZE, SHOW ... WHERE and SET under table ACL (#21139))
 		input: "create table t",
 		output: []Permission{{
 			TableName: "t",
