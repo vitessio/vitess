@@ -1172,6 +1172,7 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	db.AddQueryPattern("(?is)explain .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)show variables .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)set @v = .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)select .* from dual.*", &sqltypes.Result{})
 
 	// A fully parsed CREATE TABLE ... AS SELECT is denied on the source table.
 	// A form the parser only partially parses (it keeps the CREATE TABLE
@@ -1194,6 +1195,11 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 		{"create view as select", "create view ct as select pk from test_table", planbuilder.PlanDDL, false, false},
 		{"show with a subquery in its filter", "show variables where Variable_name in (select email from test_table)", planbuilder.PlanShow, false, false},
 		{"set with a subquery", "set @v = (select email from test_table limit 1)", planbuilder.PlanSet, false, true},
+		// dual is exempt from the ACL, but a query against it still reads the
+		// tables of its subqueries; vtgate evaluates a targeted session's SET
+		// with such a query
+		{"select from dual with a subquery", "select (select email from test_table limit 1) from dual limit 1", planbuilder.PlanSelect, false, false},
+		{"select from dual with a subquery in its filter", "select 1 from dual where (select email from test_table limit 1) = 'x' limit 1", planbuilder.PlanSelect, false, false},
 	}
 
 	// test_table is readable only by "superuser". The caller "u2" has ADMIN on
