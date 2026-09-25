@@ -341,6 +341,15 @@ func (vtgate *VtgateProcess) Terminate() error {
 	return vtgate.proc.Process.Signal(syscall.SIGTERM)
 }
 
+// SendSIGHUP sends a SIGHUP to vtgate, which makes it reload the files
+// that it reloads on SIGHUP, such as its TLS certificates.
+func (vtgate *VtgateProcess) SendSIGHUP() error {
+	if vtgate.proc == nil {
+		return errors.New("vtgate is not running")
+	}
+	return vtgate.proc.Process.Signal(syscall.SIGHUP)
+}
+
 // TearDown shuts down the running vtgate service
 func (vtgate *VtgateProcess) TearDown() error {
 	if vtgate.proc == nil || vtgate.exit == nil {
