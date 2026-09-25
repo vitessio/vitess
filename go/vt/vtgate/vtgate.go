@@ -574,6 +574,10 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 
 func (vtg *VTGate) registerDebugBalancerHandler() {
 	servenv.HTTPHandleFunc("/debug/balancer", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		vtg.Gateway().DebugBalancerHandler(w, r)
 	})
 }

@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -35,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
@@ -2027,4 +2030,28 @@ func deleteCellsAlias(t *testing.T, ts *topo.Server, alias string) {
 	if err := ts.DeleteCellsAlias(t.Context(), alias); err != nil {
 		t.Logf("DeleteCellsAlias(%s) failed: %v", alias, err)
 	}
+}
+
+func TestHealthCheckServeHTTP(t *testing.T) {
+	hc := &HealthCheckImpl{
+		healthData: make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
+	}
+
+	// 1. Allowed with default policy
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/debug/gateway", nil)
+	hc.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "application/json; charset=utf-8", rec.Header().Get("Content-Type"))
+
+	// 2. Denied with deny-all policy
+	cleanup := acl.SetPolicyForTest("deny-all")
+	defer cleanup()
+
+	recDeny := httptest.NewRecorder()
+	reqDeny := httptest.NewRequest(http.MethodGet, "/debug/gateway", nil)
+	hc.ServeHTTP(recDeny, reqDeny)
+
+	require.Equal(t, http.StatusForbidden, recDeny.Code)
 }
