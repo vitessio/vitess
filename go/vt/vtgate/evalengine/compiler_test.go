@@ -19,8 +19,10 @@ package evalengine_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -428,6 +430,11 @@ func TestCompilerSingle(t *testing.T) {
 		{
 			expression: `UNHEX('f')`,
 			result:     `VARBINARY("\x0f")`,
+		},
+		{
+			// MySQL reads this text to the double 1.0, which is no hex string.
+			expression: `UNHEX(CAST('0.9999999999999999' AS JSON))`,
+			result:     `NULL`,
 		},
 		{
 			expression: `STRCMP(1234, '12_4')`,
@@ -1126,6 +1133,351 @@ func TestCompilerNonConstant(t *testing.T) {
 				require.NotEqualf(t, prev, res.String(), "constant evaluation from eval engine: got %s multiple times", res.String())
 				prev = res.String()
 			}
+		})
+	}
+}
+
+// TestCompiledJSONInList checks that a compiled IN over a list of JSON literals
+// agrees with the interpreter. The compiled form builds a static hash table and
+// treats a hash hit as equality without comparing the candidate, so documents
+// that share a shape but not a value must not collide.
+func TestCompiledJSONInList(t *testing.T) {
+	testCases := []struct {
+		expression string
+		value      string
+		result     string
+	}{
+		{`column0 IN (JSON_ARRAY(2))`, `[1]`, `INT64(0)`},
+		{`column0 IN (JSON_ARRAY(1))`, `[1]`, `INT64(1)`},
+		{`column0 IN (JSON_ARRAY(1, 2))`, `[2, 1]`, `INT64(0)`},
+		{`column0 IN (JSON_OBJECT('b', 2))`, `{"a": 1}`, `INT64(0)`},
+		{`column0 IN (JSON_OBJECT('a', 1))`, `{"a": 1}`, `INT64(1)`},
+		{`column0 IN (JSON_OBJECT('a', JSON_ARRAY(1)))`, `{"a": [2]}`, `INT64(0)`},
+		{`column0 NOT IN (JSON_ARRAY(2))`, `[1]`, `INT64(1)`},
+		{`column0 NOT IN (JSON_ARRAY(1))`, `[1]`, `INT64(0)`},
+		{`column0 IN (CAST(2 AS JSON))`, `1`, `INT64(0)`},
+		{`column0 IN (CAST(1.0 AS JSON))`, `1`, `INT64(1)`},
+		// A column or bind document reads correctly rounded; the same text in JSON reads MySQL's way.
+		{`column0 IN (JSON_ARRAY(92851060.59457423e0))`, `[92851060.59457423]`, `INT64(1)`},
+		{`column0 IN (CAST('[92851060.59457423]' AS JSON))`, `[92851060.59457423]`, `INT64(0)`},
+		{`column0 IN (JSON_ARRAY(1, JSON_OBJECT('b', 92851060.59457423e0)))`, `[1, {"b": 92851060.59457423}]`, `INT64(1)`},
+		{`column0 IN (CAST('[1, {"b": 92851060.59457423}]' AS JSON))`, `[1, {"b": 92851060.59457423}]`, `INT64(0)`},
+		{`:j IN (JSON_ARRAY(92851060.59457423e0))`, `[92851060.59457423]`, `INT64(1)`},
+		{`:j IN (CAST('[92851060.59457423]' AS JSON))`, `[92851060.59457423]`, `INT64(0)`},
+		// A printed number with digits no double holds is a decimal, and matches by those digits.
+		{`column0 IN (JSON_ARRAY(9007199254740993))`, `[9007199254740993.0]`, `INT64(1)`},
+		{`column0 IN (JSON_ARRAY(CAST(9007199254740993 AS DECIMAL(17,1))))`, `[9007199254740993.0]`, `INT64(1)`},
+		{`column0 IN (JSON_ARRAY(9007199254740992))`, `[9007199254740993.0]`, `INT64(0)`},
+		{`column0 IN (CAST('[9007199254740993.0]' AS JSON))`, `[9007199254740993.0]`, `INT64(0)`},
+		{`column0 IN (JSON_ARRAY(9007199254740992e0))`, `[9007199254740992.0]`, `INT64(1)`},
+		{`:j IN (JSON_ARRAY(9007199254740993))`, `[9007199254740993.0]`, `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression+" / "+tc.value, func(t *testing.T) {
+			values := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(tc.value))}
+
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(values))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			}
+
+			translated, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"j": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(tc.value)))}, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = values
+			env.Fields = makeFields(values)
+
+			interpreted, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, interpreted.String())
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, res.String())
+		})
+	}
+}
+
+// TestCompileFoldedJSONLiteralConcurrency compiles distinct type
+// specialisations of one translated expression concurrently while the
+// interpreter evaluates it concurrently too. Both read the same folded JSON
+// literal, whose nested strings and numbers are settled lazily on first
+// access; under -race this pins that the literal was settled at fold time and
+// is only read afterwards.
+func TestCompileFoldedJSONLiteralConcurrency(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	row := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`["a", "b", {"k": "c"}, 1, 2.5]`))}
+	fields := makeFields(row)
+	resolver := evalengine.FieldResolver(fields)
+
+	// One bind type per goroutine, so every goroutine compiles its own
+	// specialisation and every specialisation hashes the shared literal.
+	binds := []*querypb.BindVariable{
+		sqltypes.StringBindVariable("x"),
+		sqltypes.Int64BindVariable(1),
+		sqltypes.Uint64BindVariable(1),
+		sqltypes.Float64BindVariable(2.5),
+		sqltypes.DecimalBindVariable("2.5"),
+		sqltypes.BytesBindVariable([]byte("y")),
+		sqltypes.ValueBindVariable(sqltypes.NewDate("2020-01-01")),
+		sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))),
+	}
+
+	// A fresh translation each round keeps the literal unsettled on the
+	// unfixed code even when few goroutines run truly in parallel.
+	for range 10 {
+		expr, err := venv.Parser().ParseExpr(`column0 IN (CAST('["\\u0061", "\\u0062", {"k": "\\u0063"}, 1, 2.5]' AS JSON), CAST('["\\u0064"]' AS JSON)) OR :w IS NULL`)
+		require.NoError(t, err)
+		translated, err := evalengine.Translate(expr, &evalengine.Config{
+			ResolveColumn: resolver.Column,
+			ResolveType: func(sqlparser.Expr) (evalengine.Type, bool) {
+				return evalengine.NewType(sqltypes.TypeJSON, collations.CollationBinaryID), true
+			},
+			Collation:   collations.CollationUtf8mb4ID,
+			Environment: venv,
+		})
+		require.NoError(t, err)
+		untyped, ok := translated.(*evalengine.UntypedExpr)
+		require.True(t, ok)
+
+		compiled := make([]string, len(binds))
+		compileErrs := make([]error, len(binds))
+		interpreted := make([]string, len(binds))
+		interpretErrs := make([]error, len(binds))
+		var wg sync.WaitGroup
+		for i, bv := range binds {
+			wg.Go(func() {
+				env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"w": bv}, evalengine.NewEmptyVCursor(venv, nil))
+				env.Row = row
+				env.Fields = fields
+				program, err := untyped.Compile(env)
+				if err != nil {
+					compileErrs[i] = err
+					return
+				}
+				res, err := env.EvaluateVM(program)
+				if err != nil {
+					compileErrs[i] = err
+					return
+				}
+				compiled[i] = res.String()
+			})
+			wg.Go(func() {
+				env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"w": bv}, evalengine.NewEmptyVCursor(venv, nil))
+				env.Row = row
+				env.Fields = fields
+				res, err := env.EvaluateAST(untyped)
+				if err != nil {
+					interpretErrs[i] = err
+					return
+				}
+				interpreted[i] = res.String()
+			})
+		}
+		wg.Wait()
+
+		for i := range binds {
+			require.NoErrorf(t, compileErrs[i], "compiled, bind %d", i)
+			assert.Equalf(t, "INT64(1)", compiled[i], "compiled, bind %d", i)
+			require.NoErrorf(t, interpretErrs[i], "interpreted, bind %d", i)
+			assert.Equalf(t, "INT64(1)", interpreted[i], "interpreted, bind %d", i)
+		}
+	}
+}
+
+// TestJSONDoubleConversion pins the doubles the SQL-to-JSON conversion has to
+// treat specially, in the interpreter and the compiled program alike: NaN and
+// the infinities have no JSON representation and are rejected, and a double
+// printed in exponent form still reads back as the value it holds. Constant
+// folding is off except where the static IN table is the point, so the
+// compiled path runs the conversion and the comparison itself.
+func TestJSONDoubleConversion(t *testing.T) {
+	testCases := []struct {
+		expression string
+		bind       float64
+		fold       bool
+		result     string
+		err        string
+	}{
+		{expression: `CAST(:v AS JSON)`, bind: math.NaN(), err: "DOUBLE value is out of range"},
+		{expression: `CAST(:v AS JSON)`, bind: math.Inf(1), err: "DOUBLE value is out of range"},
+		{expression: `CAST(:v AS JSON)`, bind: math.Inf(-1), err: "DOUBLE value is out of range"},
+		{expression: `JSON_ARRAY(:v)`, bind: math.NaN(), err: "DOUBLE value is out of range"},
+		{expression: `CAST(:v AS JSON) = CAST(0 AS JSON)`, bind: math.NaN(), err: "DOUBLE value is out of range"},
+		{expression: `:v = CAST(0 AS JSON)`, bind: math.NaN(), err: "DOUBLE value is out of range"},
+		{expression: `CAST(:v AS JSON)`, bind: 1e20, result: `JSON("1e20")`},
+		{expression: `CAST(:v AS JSON) = CAST(:v AS JSON)`, bind: 1e20, result: `INT64(1)`},
+		{expression: `CAST(:v AS JSON) = CAST(100000000000000000000 AS JSON)`, bind: 1e20, result: `INT64(1)`},
+		{expression: `CAST(:v AS JSON) IN (CAST(100000000000000000000 AS JSON))`, bind: 1e20, fold: true, result: `INT64(1)`},
+		{expression: `CAST(:v AS JSON) = CAST(:v AS JSON)`, bind: 1e-20, result: `INT64(1)`},
+		{expression: `CAST(:v AS JSON) = CAST(0 AS JSON)`, bind: math.Copysign(0, -1), result: `INT64(1)`},
+	}
+
+	check := func(t *testing.T, want, wantErr string, res evalengine.EvalResult, err error) {
+		t.Helper()
+		if wantErr != "" {
+			require.ErrorContains(t, err, wantErr)
+			return
+		}
+		require.NoError(t, err)
+		require.Equal(t, want, res.String())
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s / %v", tc.expression, tc.bind), func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: !tc.fold,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"v": sqltypes.Float64BindVariable(tc.bind)}, evalengine.NewEmptyVCursor(venv, nil))
+
+			interpreted, err := env.EvaluateAST(untyped)
+			check(t, tc.result, tc.err, interpreted, err)
+
+			program, err := untyped.Compile(env)
+			require.NoError(t, err)
+			evaluated, err := env.EvaluateVM(program)
+			check(t, tc.result, tc.err, evaluated, err)
+		})
+	}
+}
+
+// TestJSONColumnDoubles checks that a double reaches the same value through a
+// JSON column as MySQL holds for it. MySQL prints a stored double in a form
+// that a correctly rounded read turns back into that double, while its own
+// parser, reading the same spelling out of a string, lands on another one.
+func TestJSONColumnDoubles(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`JSON_EXTRACT(column0, '$[0]') = 92851060.59457423e0`, `INT64(1)`},
+		{`column0 = JSON_ARRAY(92851060.59457423e0)`, `INT64(1)`},
+		{`column0 = CAST('[92851060.59457423]' AS JSON)`, `INT64(0)`},
+		{`JSON_EXTRACT('[92851060.59457423]', '$[0]') = JSON_EXTRACT(column0, '$[0]')`, `INT64(0)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	values := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[92851060.59457423]`))}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(values))
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = values
+			env.Fields = makeFields(values)
+
+			interpreted, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.String())
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+		})
+	}
+}
+
+// TestJSONColumnDecimals checks that a decimal reaches vtgate through a JSON
+// column with the digits MySQL holds for it. MySQL prints a stored decimal
+// digit for digit, in a form it never prints a double in, and compares it
+// exactly: 9007199254740993.0 equals the integer 9007199254740993 and the
+// decimal literal, and neither the double 9007199254740992 nor the JSON text
+// [9007199254740993.0], which MySQL reads as that double.
+func TestJSONColumnDecimals(t *testing.T) {
+	testCases := []struct {
+		column     string
+		expression string
+		result     string
+	}{
+		{`[9007199254740993.0]`, `column0 = JSON_ARRAY(9007199254740993)`, `INT64(1)`},
+		{`[9007199254740993.0]`, `column0 = JSON_ARRAY(CAST(9007199254740993 AS DECIMAL(17,1)))`, `INT64(1)`},
+		{`[9007199254740993.0]`, `column0 = JSON_ARRAY(9007199254740992)`, `INT64(0)`},
+		{`[9007199254740993.0]`, `column0 = JSON_ARRAY(9007199254740992e0)`, `INT64(0)`},
+		{`[9007199254740993.0]`, `column0 = CAST('[9007199254740993.0]' AS JSON)`, `INT64(0)`},
+		{`[9007199254740993.0]`, `CAST(column0 AS CHAR)`, `TEXT("[9007199254740993.0]")`},
+		{`[9007199254740993.0]`, `CAST(JSON_EXTRACT(column0, '$[0]') AS SIGNED)`, `INT64(9007199254740993)`},
+		{`[9007199254740993.0]`, `CAST(JSON_EXTRACT(column0, '$[0]') AS DECIMAL(30,5))`, `DECIMAL(9007199254740993.00000)`},
+		{`[9007199254740992.0]`, `column0 = JSON_ARRAY(9007199254740992)`, `INT64(1)`},
+		{`[9007199254740992.0]`, `column0 = JSON_ARRAY(9007199254740992e0)`, `INT64(1)`},
+		{`[9007199254740992.0]`, `column0 = CAST('[9007199254740993.0]' AS JSON)`, `INT64(1)`},
+		{`[12345678901234567.89]`, `column0 = JSON_ARRAY(CAST(12345678901234567.89 AS DECIMAL(20,2)))`, `INT64(1)`},
+		{`[12345678901234567.89]`, `column0 = JSON_ARRAY(12345678901234568)`, `INT64(0)`},
+		{`[1.500]`, `column0 = JSON_ARRAY(1.5)`, `INT64(1)`},
+		{`[1.500]`, `CAST(column0 AS CHAR)`, `TEXT("[1.500]")`},
+		{`[99999999999999999999]`, `column0 = JSON_ARRAY(CAST(99999999999999999999 AS DECIMAL(20,0)))`, `INT64(1)`},
+		{`[99999999999999999999]`, `column0 = JSON_ARRAY(1e20)`, `INT64(0)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.column+" "+tc.expression, func(t *testing.T) {
+			values := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(tc.column))}
+
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(values))
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = values
+			env.Fields = makeFields(values)
+
+			interpreted, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.String())
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
 		})
 	}
 }

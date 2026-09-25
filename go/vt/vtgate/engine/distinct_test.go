@@ -74,6 +74,11 @@ func TestDistinct(t *testing.T) {
 		collations:     []collations.ID{collations.CollationUtf8mb4ID, collations.Unknown},
 		inputs:         r("myid|id", "varchar|int64", "monkey|1", "horse|1", "Horse|1", "Monkey|1", "horses|1", "MONKEY|2"),
 		expectedResult: r("myid|id", "varchar|int64", "monkey|1", "horse|1", "horses|1", "MONKEY|2"),
+	}, {
+		testName:       "json arrays and objects that share a shape but not a value",
+		collations:     []collations.ID{collations.CollationBinaryID},
+		inputs:         r("myid", "json", `[1]`, `[2]`, `[1]`, `{"a":1}`, `{"b":2}`, `{"a":1}`, `[1,2]`),
+		expectedResult: r("myid", "json", `[1]`, `[2]`, `{"a":1}`, `{"b":2}`, `[1,2]`),
 	}}
 
 	for _, tc := range testCases {
