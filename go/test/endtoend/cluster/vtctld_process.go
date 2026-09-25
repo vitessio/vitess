@@ -50,7 +50,7 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
-func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
+func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
 	vtctldVer, err := GetMajorVersion(vtctld.Binary)
 	if err != nil {
 		return err
@@ -63,7 +63,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--topo_implementation", vtctld.TopoImplementation,
 		"--topo_global_server_address", vtctld.TopoGlobalAddress,
 		"--topo_global_root", vtctld.TopoGlobalRoot,
-		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
