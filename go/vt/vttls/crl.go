@@ -255,13 +255,19 @@ func (c *crlChecker) isRevoked(cert *x509.Certificate, crl *x509.RevocationList)
 // newCRLChecker loads the CRLs in crl and, when ca is set, the CA
 // certificates that the CRLs may be signed by.
 func newCRLChecker(crl, ca string) (*crlChecker, error) {
+	return newCRLCheckerWith(crl, ca, loadx509Certificates)
+}
+
+// newCRLCheckerWith is newCRLChecker with the CA certificates loaded
+// by loadCertificates. The CRLs are read anew on every call.
+func newCRLCheckerWith(crl, ca string, loadCertificates func(string) ([]*x509.Certificate, error)) (*crlChecker, error) {
 	crls, err := loadCRLSet(crl)
 	if err != nil {
 		return nil, err
 	}
 	var issuers []*x509.Certificate
 	if ca != "" {
-		issuers, err = loadx509Certificates(ca)
+		issuers, err = loadCertificates(ca)
 		if err != nil {
 			return nil, err
 		}

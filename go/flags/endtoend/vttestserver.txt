@@ -146,6 +146,7 @@ Flags:
       --tablet-manager-grpc-server-name string                           the server name to use to validate server certificate
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet-refresh-interval duration                                 Interval at which vtgate refreshes tablet information from topology server. (default 10s)
+      --tls-reload-interval duration                                     how often to check the gRPC and MySQL servers' TLS certificate, key, CA and CRL files for changes and reload them, 0 to disable; SIGHUP always reloads them
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.
