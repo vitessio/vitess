@@ -178,7 +178,16 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	// Example scenario:
 	// Before merge: routing based on predicates like ':lhs_col = rhs.col'.
 	// After merge: predicate rewritten to 'lhs.col = rhs.col', making this predicate invalid for routing.
-	r.Routing = r.Routing.resetRoutingLogic(ctx)
+	// The reset rewrites a ShardedRouting in place, and the merge may be sharing that object with one
+	// of its inputs, so it works on a copy: bailing out below has to leave the inputs as they were.
+	r.Routing = r.Routing.Clone().resetRoutingLogic(ctx)
+
+	// The reset recomputed the routing from the restored predicates, so a route that has to
+	// stay single-shard has to be checked once more.
+	if r.PreservesReferenceRows && !r.Routing.OpCode().IsSingleShard() {
+		debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s, routing is multi-shard after being reset", jm.joinType.ToString())
+		return in, NoRewrite
+	}
 
 	// Verify if the LHS is a Route operator, which is required for this rewrite.
 	rb, ok := in.LHS.(*Route)
