@@ -2190,12 +2190,9 @@ func TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads(t *testing.T) {
 	require.ErrorContains(t, err, "invalid traffic switch direction")
 }
 
-// TestWorkflowSwitchTrafficExpandsCellAliases confirms that a combined switch
-// naming a cell alias has that alias resolved to its concrete cells before the
-// read-ordering guard and the actual read switch run. Without this, the alias
-// passes the guard (which expands cells for its own comparison) but
-// switchShardReads receives the raw alias, whose nonexistent cell node its topo
-// helpers silently skip, leaving reads on the source.
+// TestWorkflowSwitchTrafficExpandsCellAliases confirms a combined switch resolves
+// a cell alias to its concrete cells, so the guard and switchShardReads use the
+// same real cells instead of the raw alias (whose cell node the switch skips).
 func TestWorkflowSwitchTrafficExpandsCellAliases(t *testing.T) {
 	ctx := t.Context()
 
@@ -2236,9 +2233,8 @@ func TestWorkflowSwitchTrafficExpandsCellAliases(t *testing.T) {
 		},
 	})
 
-	// The cell normalization runs up front, before any state lookup or switch, so
-	// the request's cells are expanded regardless of how far the switch proceeds in
-	// this minimal env.
+	// Cells are normalized up front, so req.Cells is expanded regardless of how far
+	// the switch proceeds in this minimal env.
 	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:    keyspaceName,
 		Workflow:    workflowName,
@@ -2248,8 +2244,6 @@ func TestWorkflowSwitchTrafficExpandsCellAliases(t *testing.T) {
 	}
 	_, _ = env.ws.WorkflowSwitchTraffic(ctx, req)
 
-	// The alias must have been resolved to its concrete cells (order-independent),
-	// so the guard and switchShardReads operate on the same real cells.
 	require.ElementsMatch(t, []string{defaultCellName, otherCell}, req.Cells)
 }
 
