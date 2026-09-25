@@ -561,8 +561,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 	default:
 		// no rules against this query. Good to proceed
 	}
-	// Skip ACL check for queries against the dummy dual table
-	if qre.plan.TableName().String() == "dual" {
+	// Skip ACL check for queries that read only the dummy dual table. A query
+	// against dual can still read other tables through a subquery, such as
+	// `select (select v from t) from dual`, and those are checked below, where
+	// checkAccess still exempts dual itself.
+	if qre.plan.TableName().String() == "dual" && readsOnlyDual(qre.plan.Permissions) {
 		return nil
 	}
 
@@ -608,6 +611,17 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	return nil
+}
+
+// readsOnlyDual reports whether every table a query reads is the dummy dual
+// table.
+func readsOnlyDual(permissions []p.Permission) bool {
+	for _, permission := range permissions {
+		if permission.TableName != "dual" {
+			return false
+		}
+	}
+	return true
 }
 
 func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName string, callerID *querypb.VTGateCallerID) error {
