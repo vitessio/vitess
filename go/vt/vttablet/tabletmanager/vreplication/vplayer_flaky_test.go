@@ -4129,27 +4129,6 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
-<<<<<<< HEAD
-				// Sleep long enough that we fail to record the heartbeat.
-				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
-				time.Sleep(to)
-				// Signal the preFunc goroutine to close the connection holding the row locks.
-				done <- struct{}{}
-				log.Flush()
-				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
-||||||| parent of af1642e3f7 (test: cut TestPlayerStalls from 75s to 10s per suite pass (#20546))
-				// Sleep long enough that we fail to record the heartbeat.
-				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
-				time.Sleep(to)
-				// Signal the preFunc goroutine to close the connection holding the row locks.
-				done <- struct{}{}
-				log.Flush()
-				logMessage := logger.String()
-				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
-					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")
-				}
-				drainDBQueries()
-=======
 				// Also release the row locks if the assertions below abort
 				// the subtest: teardown deletes from the locked table and
 				// would otherwise hang until the test timeout.
@@ -4182,7 +4161,6 @@ func TestPlayerStalls(t *testing.T) {
 					}
 				}
 				drainDBQueries()
->>>>>>> af1642e3f7 (test: cut TestPlayerStalls from 75s to 10s per suite pass (#20546))
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
