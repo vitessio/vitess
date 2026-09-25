@@ -211,6 +211,20 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) *QueryProjection {
 	return h.QP
 }
 
+// computesRowByRow reports whether the horizon yields the same rows whether it
+// runs once or once per shard, so it can be pushed under a route that fans out
+// to several shards.
+func (h *Horizon) computesRowByRow(ctx *plancontext.PlanningContext) bool {
+	sel, isSel := h.Query.(*sqlparser.Select)
+	qp := h.getQP(ctx)
+	return !(isSel && sel.Having != nil) &&
+		len(qp.OrderExprs) == 0 &&
+		!qp.NeedsAggregation() &&
+		!qp.HasWindow &&
+		!isDistinctAST(h.Query) &&
+		h.Query.GetLimit() == nil
+}
+
 func (h *Horizon) ShortDescription() string {
 	return fmt.Sprintf("Horizon (Alias: %s)", h.Alias)
 }
