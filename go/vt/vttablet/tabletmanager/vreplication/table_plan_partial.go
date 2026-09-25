@@ -169,10 +169,14 @@ func (tp *TablePlan) mappedDataColumnsFor(streamed *binlogdatapb.RowChange_Bitma
 
 // checkMixedColExprs rejects a row change when a target expression that uses
 // both present and absent streamed columns has a present input whose value
-// differs between the before and after images: the expression's new value
-// cannot be computed without the absent column. When none of the present
-// inputs changed the expression's value did not change either, so leaving it
-// out of the partial query is correct.
+// differs between the before and after images, or whose before-image value is
+// unknown: the expression's new value cannot be computed without the absent
+// column. Under NOBLOB the before image omits BLOB/TEXT columns whether or not
+// they changed, and an omitted value is indistinguishable from a real NULL in
+// the row bytes, so BeforeDataColumns must be consulted before treating a
+// present input as unchanged. When every present input is known in the before
+// image and none of them changed, the expression's value did not change either,
+// so leaving it out of the partial query is correct.
 func (tp *TablePlan) checkMixedColExprs(mapped *mappedDataColumns, rowChange *binlogdatapb.RowChange) error {
 	if len(mapped.mixed) == 0 {
 		return nil
@@ -185,6 +189,14 @@ func (tp *TablePlan) checkMixedColExprs(mapped *mappedDataColumns, rowChange *bi
 	after := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 	for _, m := range mapped.mixed {
 		for _, idx := range m.present {
+			// BeforeDataColumns is projected into tp.Fields order (see #21067).
+			// When it is absent we keep the byte comparison below, which is the
+			// pre-#21067 behavior against an older source.
+			if beforeCols := rowChange.BeforeDataColumns; beforeCols != nil && beforeCols.Count > 0 {
+				if int64(idx) >= beforeCols.Count || !isBitSet(beforeCols.Cols, idx) {
+					return tp.missingValueError(colExprs[m.colExpr])
+				}
+			}
 			if idx >= len(before) || idx >= len(after) ||
 				before[idx].IsNull() != after[idx].IsNull() ||
 				!bytes.Equal(before[idx].Raw(), after[idx].Raw()) {
@@ -249,10 +261,14 @@ func (tp *TablePlan) partialQueryDataColumns(rowChange *binlogdatapb.RowChange) 
 	return rowChange.DataColumns, nil
 }
 
-func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	bvf.mode = bvAfter
 	separator := "("
 	for ind, cexpr := range tpb.colExprs {
+		if int64(ind) >= dataColumns.Count {
+			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tpb.name.String())
+		}
 		if cexpr.isGenerated || !isBitSet(dataColumns.Cols, ind) {
 			continue
 		}
@@ -277,13 +293,17 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 		}
 	}
 	buf.Myprintf(")")
-	return buf.ParsedQuery()
+	return buf.ParsedQuery(), nil
 }
 
-func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	buf.Myprintf("insert into %v(", tpb.name)
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
+		if int64(ind) >= dataColumns.Count {
+			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tpb.name.String())
+		}
 		if cexpr.isGenerated {
 			continue
 		}
@@ -294,14 +314,18 @@ func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuf
 		separator = ","
 	}
 	buf.Myprintf(")", tpb.name)
-	return buf.ParsedQuery()
+	return buf.ParsedQuery(), nil
 }
 
-func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	bvf.mode = bvAfter
 	buf.WriteString(" select ")
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
+		if int64(ind) >= dataColumns.Count {
+			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tpb.name.String())
+		}
 		if cexpr.isGenerated {
 			continue
 		}
@@ -314,24 +338,30 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 	}
 	buf.WriteString(" from dual where ")
 	tpb.generatePKConstraint(buf, bvf)
-	return buf.ParsedQuery()
+	return buf.ParsedQuery(), nil
 }
 
-func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 
-	tpb.generatePartialInsertPart(buf, dataColumns)
+	if _, err := tpb.generatePartialInsertPart(buf, dataColumns); err != nil {
+		return nil, err
+	}
 	if tpb.lastpk == nil {
 		// If there's no lastpk, generate straight values.
 		buf.Myprintf(" values ", tpb.name)
-		tpb.generatePartialValuesPart(buf, bvf, dataColumns)
+		if _, err := tpb.generatePartialValuesPart(buf, bvf, dataColumns); err != nil {
+			return nil, err
+		}
 	} else {
 		// If there is a lastpk, generate values as a select from dual
 		// where the pks < lastpk
-		tpb.generatePartialSelectPart(buf, bvf, dataColumns)
+		if _, err := tpb.generatePartialSelectPart(buf, bvf, dataColumns); err != nil {
+			return nil, err
+		}
 	}
-	return buf.ParsedQuery()
+	return buf.ParsedQuery(), nil
 }
 
 // createPartialUpdateQuery generates the UPDATE for a partial row image. It
@@ -391,7 +421,10 @@ func (tp *TablePlan) getPartialInsertQuery(rowChange *binlogdatapb.RowChange) (*
 	if ok {
 		return ins, nil
 	}
-	ins = tp.TablePlanBuilder.createPartialInsertQuery(dataColumns)
+	ins, err = tp.TablePlanBuilder.createPartialInsertQuery(dataColumns)
+	if err != nil {
+		return nil, err
+	}
 	if ins == nil {
 		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tp.TargetName)
 	}

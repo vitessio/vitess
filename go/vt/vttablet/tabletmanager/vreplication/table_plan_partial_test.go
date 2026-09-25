@@ -222,6 +222,47 @@ func TestApplyChangePartialProjectedFilter(t *testing.T) {
 	require.ErrorContains(t, err, "unable to create partial update query for dst")
 }
 
+// TestApplyChangePartialLegacyInsertBitmapShort confirms that a short legacy
+// DataColumns bitmap (older source, no AfterDataColumns) errors on the INSERT
+// path instead of panicking in isBitSet. A Materialize-style filter with extra
+// constants has more colExprs than dataColumns.Count, which is the case the
+// UPDATE generator already guarded.
+func TestApplyChangePartialLegacyInsertBitmapShort(t *testing.T) {
+	tp := buildTestTablePlan(t, "dst",
+		"select blb, id, convert(val using utf8mb4) as val2, 1 as c from src",
+		[]*querypb.Field{
+			{Name: "blb", Type: querypb.Type_BLOB},
+			{Name: "id", Type: querypb.Type_INT32},
+			{Name: "val", Type: querypb.Type_VARBINARY},
+			{Name: "1", Type: querypb.Type_INT64},
+		})
+	tp.Stats = binlogplayer.NewStats()
+
+	after := &querypb.Row{Lengths: []int64{-1, 1, 3, 1}, Values: []byte("1aaa1")}
+	// Source table order (id, blb, val): fewer bits than the target has columns.
+	legacy := bitmap(true, false, true)
+	require.Greater(t, len(tp.TablePlanBuilder.colExprs), int(legacy.Count))
+
+	_, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: after, DataColumns: legacy})
+	require.ErrorContains(t, err, "unable to create partial insert query for dst")
+	assert.Equal(t, vtrpcpb.Code_INTERNAL, vterrors.Code(err))
+
+	// Each INSERT generator must fail closed on its own; the lastpk
+	// (copy-phase) select-from-dual form is a separate walk of the bitmap.
+	bvf := &bindvarFormatter{}
+	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+	_, err = tp.TablePlanBuilder.generatePartialInsertPart(buf, legacy)
+	require.ErrorContains(t, err, "unable to create partial insert query for dst")
+	_, err = tp.TablePlanBuilder.generatePartialValuesPart(buf, bvf, legacy)
+	require.ErrorContains(t, err, "unable to create partial insert query for dst")
+	tp.TablePlanBuilder.lastpk = sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id", "int32"),
+		"10",
+	)
+	_, err = tp.TablePlanBuilder.generatePartialSelectPart(buf, bvf, legacy)
+	require.ErrorContains(t, err, "unable to create partial insert query for dst")
+}
+
 // TestApplyChangePartialNoWritableColumns confirms that a partial UPDATE whose
 // image carries none of the target's writable columns is a no-op rather than an
 // invalid "update dst set  where ..." statement. This happens when the source
@@ -360,6 +401,31 @@ func TestApplyChangePartialMixedInputs(t *testing.T) {
 			AfterDataColumns: blobOmitted,
 		})
 		require.ErrorContains(t, err, "missing a needed value for dst.c")
+	})
+
+	t.Run("present input omitted in before image: rejected", func(t *testing.T) {
+		// Matt's two-BLOB repro (#21157 review): source (id, b1 BLOB, b2 BLOB, val),
+		// filter select id, concat(b1, b2) as c, val from src. Under NOBLOB the
+		// before image omits both blobs; UPDATE SET b1=NULL, val=2 then has
+		// after-image b1 present as NULL and b2 absent. Without BeforeDataColumns
+		// the omitted old b1 and the new NULL compare equal, so c is silently
+		// dropped and the target keeps concat('a','b'). With the bitmap, b1 is
+		// known to be missing from the before image and the event is rejected.
+		tp2 := buildTestTablePlan(t, "dst", "select id, concat(b1, b2) as c, val from src", []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT32},
+			{Name: "b1", Type: querypb.Type_BLOB},
+			{Name: "b2", Type: querypb.Type_BLOB},
+			{Name: "val", Type: querypb.Type_INT32},
+		})
+		tp2.Stats = binlogplayer.NewStats()
+		_, err := applyChangeQueries(t, tp2, &binlogdatapb.RowChange{
+			Before:            &querypb.Row{Lengths: []int64{1, -1, -1, 1}, Values: []byte("11")},
+			After:             &querypb.Row{Lengths: []int64{1, -1, -1, 1}, Values: []byte("12")},
+			AfterDataColumns:  bitmap(true, true, false, true),  // b1 present (NULL), b2 omitted
+			BeforeDataColumns: bitmap(true, false, false, true), // both blobs omitted in before
+		})
+		require.ErrorContains(t, err, "missing a needed value for dst.c")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 
 	t.Run("no before image to compare against: rejected", func(t *testing.T) {

@@ -3599,6 +3599,12 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		// src3/dst3: a target expression combining a non-blob and a blob column.
 		"create table src3(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
 		fmt.Sprintf("create table %s.dst3(id int, c varbinary(16), primary key(id))", vrepldb),
+		// src4/dst4: Matt's two-BLOB repro. Under NOBLOB the before image omits
+		// both blobs; UPDATE SET b1=NULL, val=2 then has after-image b1 present
+		// as NULL and b2 absent. The workflow must fail closed rather than
+		// leave a stale concat(b1,b2).
+		"create table src4(id int, b1 blob, b2 blob, val int, primary key(id))",
+		fmt.Sprintf("create table %s.dst4(id int, c varbinary(16), val int, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
@@ -3607,6 +3613,8 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 		"drop table src3",
 		fmt.Sprintf("drop table %s.dst3", vrepldb),
+		"drop table src4",
+		fmt.Sprintf("drop table %s.dst4", vrepldb),
 	})
 
 	filter := &binlogdatapb.Filter{
@@ -3619,6 +3627,9 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		}, {
 			Match:  "dst3",
 			Filter: "select id, concat(val, blb) as c from src3",
+		}, {
+			Match:  "dst4",
+			Filter: "select id, concat(b1, b2) as c, val from src4",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -3635,6 +3646,7 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		output string // empty means the row event must not produce any query
 		table  string
 		data   [][]string
+		error  string // if set, the workflow must fail closed with this message
 	}{{
 		// Inserts always carry a full image.
 		input:  "insert into src values (1, 'blob1', 'aaa', 'xxx')",
@@ -3695,11 +3707,37 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 		output: "update dst3 set c=concat(_binary'aaa', _binary'blob2') where id=1",
 		table:  "dst3",
 		data:   [][]string{{"1", "aaablob2"}},
+	}, {
+		input:  "insert into src4 values (1, 'a', 'b', 1)",
+		output: "insert into dst4(id,c,val) values (1,concat(_binary'a', _binary'b'),1)",
+		table:  "dst4",
+		data:   [][]string{{"1", "ab", "1"}},
+	}, {
+		// Under NOBLOB the before image omits both blobs. After UPDATE
+		// SET b1=NULL, val=2, b1 is present as NULL and b2 is absent, so
+		// concat(b1,b2) cannot be computed. Fail closed rather than
+		// silently keep c='ab' while applying val=2.
+		input: "update src4 set b1=NULL, val=2 where id=1",
+		table: "dst4",
+		data:  [][]string{{"1", "ab", "1"}},
+		error: "binary log event missing a needed value for dst4.c due to not using binlog-row-image=FULL",
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			execStatements(t, []string{tcase.input})
+			if tcase.error != "" {
+				// expectNontxQueries skips begin/rollback/pos updates so a
+				// leftover position write from the previous case cannot race
+				// the error assertions. The workflow must record the message
+				// and go to Error rather than apply a stale concat.
+				expectNontxQueries(t, qh.Expect(
+					fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tcase.error),
+					"/update _vt.vreplication set state='Error'",
+				), recvTimeout)
+				expectData(t, tcase.table, tcase.data)
+				return
+			}
 			if tcase.output != "" {
 				expectNontxQueries(t, qh.Expect(tcase.output), recvTimeout)
 			}
@@ -3710,6 +3748,7 @@ func TestPlayerNoBlobProjectedFilter(t *testing.T) {
 	// cached query). The dst2 and dst3 no-ops must not have generated or cached
 	// a partial query; had they produced an invalid empty UPDATE or an error,
 	// the stream would have stopped before the following cases could be applied.
+	// The dst4 two-BLOB rejection fails before generating a partial query.
 	stats := globalStats.controllers[int32(vrId)].blpStats
 	require.Equal(t, int64(2), stats.PartialQueryCount.Counts()["update"])
 	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["update"])
