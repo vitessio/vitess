@@ -19,15 +19,6 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
-<<<<<<< HEAD
-||||||| parent of 83eb933047 (vttls: Refuse a server-side CRL when the server is not configured for TLS (#21153))
-	"errors"
-	"fmt"
-=======
-	"errors"
-	"fmt"
-	"log/slog"
->>>>>>> 83eb933047 (vttls: Refuse a server-side CRL when the server is not configured for TLS (#21153))
 	"math"
 	"net"
 	"strconv"
@@ -222,8 +213,7 @@ func createGRPCServer() {
 
 	tlsEnabled, err := vttls.ServerTLSEnabled(gRPCCert, gRPCKey, gRPCCRL)
 	if err != nil {
-		log.Error("Failed to configure gRPC TLS", slog.Any("error", err))
-		os.Exit(1)
+		log.Exitf("Failed to configure gRPC TLS: %v", err)
 	}
 
 	var opts []grpc.ServerOption

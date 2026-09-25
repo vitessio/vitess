@@ -616,8 +616,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	// than silently ignored by a server that would not do TLS at all.
 	tlsEnabled, err := vttls.ServerTLSEnabled(mysqlSslCert, mysqlSslKey, mysqlSslCrl)
 	if err != nil {
-		log.Error("mysql server TLS config failed", slog.Any("error", err))
-		os.Exit(1)
+		log.Exitf("mysql server TLS config failed: %v", err)
 	}
 
 	// Create a Listener.
