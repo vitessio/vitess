@@ -18,6 +18,7 @@
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
+        - [Non-GTID replication for serving shards](#non-gtid-serving-shards-deprecation)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
@@ -192,6 +193,14 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
+
+#### <a id="non-gtid-serving-shards-deprecation"/>Non-GTID replication for serving shards</a>
+
+Running serving shards without MySQL GTIDs is deprecated and will become unsupported in v26. This covers both MariaDB (whose GTIDs are not MySQL GTIDs) and MySQL using file-based binlog coordinates (selected with `--db-flavor=FilePos`). Managed `vttablet` processes now warn at startup when they detect MariaDB or a `gtid_mode` other than `ON`, and `EmergencyReparentShard`/`PlannedReparentShard` warn when a tablet reports a MariaDB or file-based replication position.
+
+This is not a new requirement. The [reparenting guide](https://vitess.io/docs/25.0/user-guides/configuration-advanced/reparenting/) has stated that "Vitess requires the use of global transaction identifiers (GTIDs) for its operations" since the original vitess.io documentation (November 2018, before v3.0). Non-GTID configurations have worked in practice without being supported, and this deprecation brings the code in line with the documented requirement.
+
+**Impact**: Move serving shards to MySQL or Percona Server with `gtid_mode=ON` before upgrading to v26. Both configurations remain supported as import sources through unmanaged tablets in external keyspaces: this deprecation does not remove `FilePos` position parsing or the streaming support used by external imports.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
