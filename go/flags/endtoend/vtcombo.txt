@@ -256,7 +256,7 @@ Flags:
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-restore-skip-version-check                           skip the MySQL version compatibility check when restoring from a mysql-shell backup
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
-      --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
+      --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer, and enabling change buffering for inserts during the restore process
       --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
       --mysql-slow-connect-warn-threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
