@@ -122,8 +122,12 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 		if jp, ok := predicate.(*predicates.JoinPredicate); ok {
 			// Create a new JoinPredicate for each source to keep tracking working
 			// We can't use `*JoinPredicate.Clone` here as that would update the tracker and overwrite
-			// the expression for the original predicate
-			predicate = ctx.PredTracker.NewJoinPredicate(jp.Current())
+			// the expression for the original predicate.
+			// The copy is registered as a child of the original so that skipping the
+			// original (when the join it belongs to is merged into a single route)
+			// cascades to the per-source copies, whose arguments would otherwise
+			// have no producer left in the plan.
+			predicate = ctx.PredTracker.NewChildJoinPredicate(jp, jp.Current())
 		}
 
 		predicate = sqlparser.CopyOnRewrite(predicate, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
