@@ -18,12 +18,18 @@ limitations under the License.
 package json
 
 import (
+	"fmt"
+	"math"
+	"math/rand/v2"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/decimal"
 )
 
 func TestParseRawNumber(t *testing.T) {
@@ -206,7 +212,7 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 	// The significand accumulates one digit at a time, and each step rounds
 	// the multiplication and the addition separately, the way MySQL's builds
 	// run the loop. Fusing the two into one rounding — which the Go compiler
-	// may do on arm64 unless the conversion in mysqlNumberFits stops it —
+	// may do on arm64 unless the conversion in mysqlDouble stops it —
 	// moves the accumulation an ULP for these documents, and that is enough
 	// to push them over the largest double. MySQL 8.0.45, 8.4.11 and 9.4.0
 	// accept all of them.
@@ -300,6 +306,298 @@ func TestParseNumberGrammar(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestParseReadsDoublesAsMySQL pins numbers whose double MySQL's JSON parser
+// lands somewhere other than the correctly rounded one. Each mysql value is
+// what MySQL printed for CAST('[text]' AS JSON), which a correctly rounded read
+// turns back into the double MySQL holds.
+func TestParseReadsDoublesAsMySQL(t *testing.T) {
+	testCases := []struct {
+		text  string
+		mysql string
+	}{
+		// Sixteen and seventeen significant digits, no exponent.
+		{"9.373401039503115", "9.373401039503117"},
+		{"907820456.6878871", "907820456.6878872"},
+		{"-97850197.21336927", "-97850197.21336928"},
+		{"9918.029753268321", "9918.02975326832"},
+		{"22043578.934931774", "22043578.934931777"},
+		{"22323.780221271709", "22323.780221271707"},
+		// More digits than a double holds.
+		{"7.952458273698010123097", "7.952458273698009"},
+		{"-5001678.8730277932907349979", "-5001678.873027794"},
+		{"32682596125924014.99384040696476537", "3.268259612592402e16"},
+		{"0.00000000000056378173515265162148", "0.0000000000005637817351526517"},
+		// Integers too long for 64 bits, which MySQL keeps as doubles.
+		{"-85542944950666963514162118608", "-8.554294495066698e28"},
+		{"9495784086192452298075156", "9.495784086192454e24"},
+		// Few digits, but a power of ten that is not exact.
+		{"685276831e210", "6.8527683099999996e218"},
+		{"4.54827886204e-225", "4.5482788620399995e-225"},
+		{"9.755003974708891e271", "9.755003974708892e271"},
+		{"0.00000000000000000000021059834276", "2.1059834275999999e-22"},
+		{"-682093.3194e-224", "-6.820933194000001e-219"},
+		{"0.00000000000009739818150763633668228E+293", "9.739818150763633e279"},
+		{"4107408810066.08607026258e-01", "410740881006.60864"},
+		// Subnormals, where the scaling underflows before the significand.
+		{"2.2250738585072011e-308", "2.2250738585072014e-308"},
+		{"2.4703282292062328e-324", "0.0"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.text, func(t *testing.T) {
+			want, err := strconv.ParseFloat(tc.mysql, 64)
+			require.NoError(t, err)
+
+			var p Parser
+			v, err := p.ParseBytes([]byte(tc.text))
+			require.NoError(t, err)
+			require.Equal(t, NumberTypeFloat, v.NumberType())
+			got, ok := v.Float64()
+			require.True(t, ok)
+			assert.Equal(t, math.Float64bits(want), math.Float64bits(got), "got %v, MySQL holds %v", got, want)
+			assert.Equal(t, tc.mysql, v.String())
+
+			d, isDouble, fits := mysqlDouble(tc.text)
+			assert.True(t, isDouble)
+			assert.True(t, fits)
+			assert.Equal(t, math.Float64bits(want), math.Float64bits(d))
+			assert.False(t, mysqlDoubleIsExact(tc.text, writtenExponent(t, tc.text)))
+
+			// Had MySQL printed this spelling, it would have stored the
+			// correctly rounded double, which is what ParseStored reads.
+			v, err = p.ParseStored([]byte(tc.text))
+			require.NoError(t, err)
+			got, _ = v.Float64()
+			exact, err := strconv.ParseFloat(tc.text, 64)
+			require.NoError(t, err)
+			assert.Equal(t, math.Float64bits(exact), math.Float64bits(got))
+		})
+	}
+}
+
+// TestParseSpellsDoublesAsPrinted checks that a double MySQL reads to another
+// value is spelled as MySQL prints that value, so a reader of the text, such as
+// UNHEX, sees the spelling MySQL would hand it: an integral double keeps its
+// fraction rather than passing for an integer.
+func TestParseSpellsDoublesAsPrinted(t *testing.T) {
+	testCases := []struct {
+		text string
+		want string
+	}{
+		{"0.9999999999999999", "1.0"},
+		{"-0.9999999999999999", "-1.0"},
+		{"0.9999999999999999e5", "100000.0"},
+		{"0.9999999999999999e15", "1e15"},
+		{"0.99999999999999999", "1.0000000000000002"},
+		{"9999999999999999.9", "1.0000000000000002e16"},
+		{"0.9999999999999999e-5", "0.00001"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.text, func(t *testing.T) {
+			var p Parser
+			v, err := p.Parse(tc.text)
+			require.NoError(t, err)
+			assert.Equal(t, NumberTypeFloat, v.NumberType())
+			assert.Equal(t, tc.want, v.Raw())
+			assert.Equal(t, tc.want, v.String())
+		})
+	}
+}
+
+// TestParseStored pins doubles as MySQL prints them from documents it holds,
+// where its own conversion of the printed form lands on another double. A
+// correctly rounded read recovers the double MySQL holds, and Parse would not.
+func TestParseStored(t *testing.T) {
+	for _, printed := range []string{
+		"1.557263309126091e-58",
+		"4.679235127060472e-54",
+		"9.540364558481608e-24",
+		"2.2095423932793299e21",
+		"-9.392380146584453e41",
+		"2.1651550741616174e34",
+		"0.00000000000004480737565052",
+		"0.00000000000001985614047401509",
+		"92851060.59457423",
+	} {
+		t.Run(printed, func(t *testing.T) {
+			stored, err := strconv.ParseFloat(printed, 64)
+			require.NoError(t, err)
+
+			var p Parser
+			v, err := p.ParseStored([]byte("[" + printed + "]"))
+			require.NoError(t, err)
+			a, _ := v.Array()
+			got, ok := a[0].Float64()
+			require.True(t, ok)
+			assert.Equal(t, math.Float64bits(stored), math.Float64bits(got))
+
+			v, err = p.ParseBytes([]byte("[" + printed + "]"))
+			require.NoError(t, err)
+			a, _ = v.Array()
+			got, _ = a[0].Float64()
+			assert.NotEqual(t, math.Float64bits(stored), math.Float64bits(got))
+		})
+	}
+}
+
+// TestParseStoredDecimals checks that ParseStored tells a decimal MySQL printed
+// from a double it printed. MySQL prints a decimal digit for digit and never
+// with an exponent, prints a double in its shortest form, always with a
+// fraction or an exponent and never with a fractional zero beyond a lone .0,
+// and keeps an integer only while it fits 64 bits. Text only a decimal prints
+// reads back as one, with every digit it was stored with.
+func TestParseStoredDecimals(t *testing.T) {
+	testCases := []struct {
+		printed string
+		typ     NumberType
+	}{
+		{"9007199254740993.0", NumberTypeDecimal},
+		{"12345678901234567.89", NumberTypeDecimal},
+		{"0.30000000000000003", NumberTypeDecimal},
+		{"1.500", NumberTypeDecimal},
+		{"0.00", NumberTypeDecimal},
+		{"-1.50", NumberTypeDecimal},
+		{"99999999999999999999", NumberTypeDecimal},
+		{"100000000000000000000", NumberTypeDecimal},
+		{"9007199254740992.0", NumberTypeFloat},
+		{"3922024541026610.5", NumberTypeFloat},
+		{"0.30000000000000004", NumberTypeFloat},
+		{"0.1", NumberTypeFloat},
+		{"-0.0", NumberTypeFloat},
+		{"1e20", NumberTypeFloat},
+		{"1e-16", NumberTypeFloat},
+		{"1.50e+5", NumberTypeFloat},
+		{"0.000000000000001", NumberTypeFloat},
+		{"100", NumberTypeSigned},
+		{"-9223372036854775808", NumberTypeSigned},
+		{"18446744073709551615", NumberTypeUnsigned},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.printed, func(t *testing.T) {
+			var p Parser
+			v, err := p.ParseStored([]byte("[" + tc.printed + "]"))
+			require.NoError(t, err)
+			a, _ := v.Array()
+			require.Len(t, a, 1)
+			assert.Equal(t, tc.typ, a[0].NumberType())
+			if tc.typ == NumberTypeDecimal {
+				assert.Equal(t, "["+tc.printed+"]", v.String())
+				got, ok := a[0].NumericValue()
+				require.True(t, ok)
+				want, err := decimal.NewFromString(tc.printed)
+				require.NoError(t, err)
+				assert.Equal(t, 0, got.Cmp(want), "%s compares as %s", tc.printed, got)
+			}
+
+			// The same text handed to MySQL as JSON is never a decimal.
+			v, err = p.ParseBytes([]byte("[" + tc.printed + "]"))
+			require.NoError(t, err)
+			a, _ = v.Array()
+			assert.NotEqual(t, NumberTypeDecimal, a[0].NumberType())
+		})
+	}
+}
+
+// TestParseKeepsForms checks that reading doubles MySQL's way leaves alone
+// what MySQL keeps exact, and what it reads to the correctly rounded double
+// anyway.
+func TestParseKeepsForms(t *testing.T) {
+	testCases := []struct {
+		text string
+		typ  NumberType
+		out  string
+	}{
+		{"1", NumberTypeSigned, "1"},
+		{"-9223372036854775808", NumberTypeSigned, "-9223372036854775808"},
+		{"9223372036854775808", NumberTypeUnsigned, "9223372036854775808"},
+		{"18446744073709551615", NumberTypeUnsigned, "18446744073709551615"},
+		{"18446744073709551616", NumberTypeFloat, "1.8446744073709552e19"},
+		{"1.0", NumberTypeFloat, "1.0"},
+		{"1e2", NumberTypeFloat, "100.0"},
+		{"-0.0", NumberTypeFloat, "-0.0"},
+		{"0.1", NumberTypeFloat, "0.1"},
+		{"9007199254740992.1", NumberTypeFloat, "9.007199254740992e15"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.text, func(t *testing.T) {
+			var p Parser
+			v, err := p.ParseBytes([]byte("[" + tc.text + "]"))
+			require.NoError(t, err)
+			a, _ := v.Array()
+			require.Len(t, a, 1)
+			assert.Equal(t, tc.typ, a[0].NumberType())
+			assert.Equal(t, "["+tc.out+"]", v.String())
+		})
+	}
+
+	var p Parser
+	_, err := p.ParseBytes([]byte("1.7976931348623158e308"))
+	require.ErrorContains(t, err, "number too big to be stored in double")
+	_, err = p.ParseBytes([]byte("1.79769313486231580e308"))
+	require.NoError(t, err)
+	// The correctly rounded read of this spelling overflows; MySQL's lands on the largest double.
+	v, err := p.ParseBytes([]byte("1.79769313486231581e308"))
+	require.NoError(t, err)
+	assert.Equal(t, "1.7976931348623157e308", v.String())
+}
+
+// TestMySQLDoubleIsExact checks the shortcut that lets Parse skip
+// MySQL's conversion: wherever it claims the conversion lands on the correctly
+// rounded double, it must.
+func TestMySQLDoubleIsExact(t *testing.T) {
+	r := rand.New(rand.NewPCG(1, 2))
+	var checked int
+	for range 200000 {
+		var b strings.Builder
+		if r.IntN(2) == 0 {
+			b.WriteByte('-')
+		}
+		intDigits, fracDigits := 1+r.IntN(16), r.IntN(18)
+		if r.IntN(4) == 0 {
+			b.WriteByte('0')
+		} else {
+			b.WriteByte(byte('1' + r.IntN(9)))
+			for range intDigits - 1 {
+				b.WriteByte(byte('0' + r.IntN(10)))
+			}
+		}
+		if fracDigits > 0 {
+			b.WriteByte('.')
+			for range fracDigits {
+				b.WriteByte(byte('0' + r.IntN(10)))
+			}
+		}
+		if r.IntN(2) == 0 {
+			fmt.Fprintf(&b, "e%d", r.IntN(61)-30)
+		}
+		num := b.String()
+
+		if !mysqlDoubleIsExact(num, writtenExponent(t, num)) {
+			continue
+		}
+		checked++
+		d, isDouble, fits := mysqlDouble(num)
+		require.True(t, fits, num)
+		if !isDouble {
+			continue
+		}
+		exact, err := strconv.ParseFloat(num, 64)
+		require.NoError(t, err)
+		require.Equal(t, math.Float64bits(exact), math.Float64bits(d), "%s: MySQL lands on %v, correctly rounded is %v", num, d, exact)
+	}
+	require.Greater(t, checked, 50000)
+}
+
+func writtenExponent(t *testing.T, num string) int {
+	n, exponent, ok := readFloat(num)
+	require.True(t, ok, num)
+	require.Equal(t, len(num), n, num)
+	return exponent
 }
 
 // TestParseErrorAbbreviatesTheDocument covers how much of a rejected document
@@ -808,5 +1106,62 @@ func TestMarshalToBlob(t *testing.T) {
 		var obj Object
 		obj.Add("k", NewBlob("foo"))
 		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
+	})
+}
+
+// TestResolve verifies that resolving a parsed document settles every lazily
+// computed field in place: raw strings are unescaped and numbers classified
+// at every depth, so later Type and NumberType calls never write, and that
+// explicitly constructed values keep their declared kinds.
+func TestResolve(t *testing.T) {
+	t.Run("parsed", func(t *testing.T) {
+		v := MustParse(`{"i": -1, "u": 18446744073709551615, "f": 1.5e300, "s": "\u0070lain", "a": [7, {"n": 2.5, "t": "text"}]}`)
+
+		var unsettled func(v *Value) int
+		unsettled = func(v *Value) int {
+			switch v.t {
+			case TypeObject:
+				var n int
+				for _, item := range v.o.kvs {
+					n += unsettled(item.v)
+				}
+				return n
+			case TypeArray:
+				var n int
+				for _, item := range v.a {
+					n += unsettled(item)
+				}
+				return n
+			case typeRawString:
+				return 1
+			case TypeNumber:
+				if v.n == numberTypeRaw {
+					return 1
+				}
+				return 0
+			default:
+				return 0
+			}
+		}
+		// Five numbers and two strings: the parser leaves every string raw,
+		// escaped or not.
+		require.Equal(t, 7, unsettled(v), "parsed strings and numbers must start out lazily settled")
+
+		v.Resolve()
+		assert.Zero(t, unsettled(v))
+
+		obj, ok := v.Object()
+		require.True(t, ok)
+		assert.Equal(t, NumberTypeSigned, obj.Get("i").NumberType())
+		assert.Equal(t, NumberTypeUnsigned, obj.Get("u").NumberType())
+		assert.Equal(t, NumberTypeFloat, obj.Get("f").NumberType())
+		assert.Equal(t, "plain", obj.Get("s").Raw())
+	})
+
+	t.Run("constructed", func(t *testing.T) {
+		v := NewArray([]*Value{NewNumber("1.5", NumberTypeDecimal), NewString("as is")})
+		v.Resolve()
+		assert.Equal(t, NumberTypeDecimal, v.a[0].NumberType())
+		assert.Equal(t, TypeString, v.a[1].Type())
 	})
 }
