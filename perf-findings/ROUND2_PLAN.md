@@ -11,4 +11,4 @@ Results go to `perf-findings/<ID>.md` and `<ID>.patch` (copied from the scratchp
 | 2 | P4-vreplication | MoveTables/Reshard copy + catch-up rows/s, VStream CDC throughput | 40000 | done |
 | 3 | P3-scatter | cross-shard scatter / aggregation / ORDER BY LIMIT / joins / IN lists | 30000 | done |
 | 3 | P6-runtime | many connections and churn, GC (GOGC/GOMEMLIMIT) vs p99, gRPC and pool settings, mutex/block profiles | 40000 | running |
-| 4 | P7-validate-round1 | apply the round-1 patches and measure their end-to-end effect on the P1-P3 workloads | 30000 | pending |
+| 4 | P7-combined | combine the safe round-1 + round-2 code changes into one build; measure base vs combined on standard sysbench + scatter workloads, then add P1 config tuning | 40000 | running |
