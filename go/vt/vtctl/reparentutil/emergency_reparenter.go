@@ -204,6 +204,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
+		reachablePositions         map[string]*RelayLogPositions
 		validCandidates            map[string]*RelayLogPositions
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
@@ -304,12 +305,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// find the positions of all the valid candidates.
-	validCandidates, isGTIDBased, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
+	reachablePositions, isGTIDBased, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
 	if err != nil {
 		return err
 	}
 	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
+	validCandidates, err = restrictValidCandidates(reachablePositions, tabletMap)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {
@@ -552,6 +553,19 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
+
+	// The new primary ends up at the intermediate source's position, and SetReplicationSource
+	// refuses to repoint a tablet holding GTIDs the new primary lacks, so such a tablet can't ACK
+	if isGTIDBased {
+		intermediateSourceAlias := topoproto.TabletAliasString(intermediateSource.Alias)
+		sourcePosition := validCandidates[intermediateSourceAlias].Combined
+		for alias, pos := range reachablePositions {
+			if !sourcePosition.AtLeast(pos.Combined) {
+				erp.logger.Warningf("%s has GTIDs that the intermediate source %s lacks, so it can't be repointed and doesn't count as a semi-sync acker", alias, intermediateSourceAlias)
+				nonAckers = append(nonAckers, alias)
+			}
+		}
+	}
 
 	// After finding the intermediate source, we want to filter the valid candidate list by the following criteria -
 	// 1. Only keep the tablets which can make progress after being promoted (have sufficient reachable semi-sync ackers)

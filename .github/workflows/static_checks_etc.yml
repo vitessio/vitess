@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: '**'
 
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Static Code Checks, Etc.')
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:
@@ -34,7 +38,11 @@ jobs:
         with:
           persist-credentials: 'false'
 
+      # Only uploads dependency data for FOSSA's license tracking; the policy
+      # check (skip-test) is off, so a pull request gains nothing from it.
+      # Pushes keep main, the release branches and the tags scanned.
       - name: Run FOSSA scan and upload build data
+        if: github.event_name == 'push'
         timeout-minutes: 5
         uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
         with:
@@ -140,7 +148,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
-          go mod download
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -209,7 +216,10 @@ jobs:
         with:
           args: --timeout 10m
           install-mode: "goinstall"
-          skip-cache: true
+          # Same policy as the setup-go action: only pushes to main and the
+          # release branches save the golangci-lint cache, everything else
+          # restores from it.
+          skip-save-cache: ${{ !(github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))) }}
           working-directory: go
           version: ${{ steps.golangci_lint_version.outputs.version }}
 
