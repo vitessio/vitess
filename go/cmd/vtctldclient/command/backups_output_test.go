@@ -58,6 +58,8 @@ func eventResp() *vtctldatapb.BackupResponse {
 	}
 }
 
+// TestConsumeBackupStream_JSONUsable verifies JSON mode separates progress from
+// the machine-readable usable-backup result and inlines the MANIFEST.
 func TestConsumeBackupStream_JSONUsable(t *testing.T) {
 	manifest := `{"BackupName":"2026-01-01.000000.zone1-0000000100","Incremental":false}`
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
@@ -86,6 +88,8 @@ func TestConsumeBackupStream_JSONUsable(t *testing.T) {
 	assert.Equal(t, "2026-01-01.000000.zone1-0000000100", m["BackupName"])
 }
 
+// TestConsumeBackupStream_JSONEmpty verifies an empty incremental backup is
+// represented by EMPTY status and a null MANIFEST.
 func TestConsumeBackupStream_JSONEmpty(t *testing.T) {
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
 		eventResp(),
@@ -106,7 +110,8 @@ func TestConsumeBackupStream_JSONEmpty(t *testing.T) {
 	assert.Equal(t, "null", string(got.Manifest))
 }
 
-// A peer predating these fields sends log events only, leaving Status at
+// TestConsumeBackupStream_JSONOlderServerNoStatus verifies that a peer predating
+// these fields sends log events only, leaving Status at
 // STATUS_UNSPECIFIED. That must surface as "UNKNOWN", not EMPTY.
 func TestConsumeBackupStream_JSONOlderServerNoStatus(t *testing.T) {
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp(), eventResp()}}
@@ -127,9 +132,8 @@ func TestConsumeBackupStream_JSONOlderServerNoStatus(t *testing.T) {
 	assert.Equal(t, "null", string(got.Manifest))
 }
 
-// The half callers feel: if an unknown outcome set the flag, Backup --json
-// against an N-1 peer would exit 2 mid-rolling-upgrade and scripts would skip
-// follow-up work.
+// TestHandleBackupStream_OlderServerIsNotEmpty verifies an unknown outcome does
+// not make Backup --json exit 2 during a mixed-version deployment.
 func TestHandleBackupStream_OlderServerIsNotEmpty(t *testing.T) {
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp(), eventResp()}}
 
@@ -137,9 +141,8 @@ func TestHandleBackupStream_OlderServerIsNotEmpty(t *testing.T) {
 	require.False(t, EmptyBackup(), "STATUS_UNSPECIFIED must not be reported as an empty backup")
 }
 
-// A manifest that is not valid JSON -- truncated read, or an engine that does
-// not write JSON -- must not turn an already-stored backup into a failed
-// command. Report null and keep the status.
+// TestConsumeBackupStream_JSONManifestNotJSON verifies an invalid MANIFEST is
+// reported as null without turning an already-stored backup into a failure.
 func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
 		eventResp(),
@@ -163,6 +166,8 @@ func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
 	assert.Contains(t, errOut.String(), "not valid JSON")
 }
 
+// TestConsumeBackupStream_TextUsable verifies text mode retains progress output
+// without printing the machine-readable MANIFEST.
 func TestConsumeBackupStream_TextUsable(t *testing.T) {
 	manifest := `{"BackupName":"2026-01-01.000000.zone1-0000000100"}`
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
@@ -182,10 +187,9 @@ func TestConsumeBackupStream_TextUsable(t *testing.T) {
 	assert.Empty(t, errOut.String())
 }
 
+// TestConsumeBackupStream_TextEmpty verifies text mode reports the existing
+// empty-backup log event exactly once and does not print a terminal summary.
 func TestConsumeBackupStream_TextEmpty(t *testing.T) {
-	// A real empty incremental backup reports "no new data" as a log event, then
-	// sends a terminal EMPTY message. In text mode the terminal message must not
-	// print a duplicate summary line: the outcome is already in the log stream.
 	emptyEvent := &vtctldatapb.BackupResponse{
 		TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		Keyspace:    "ks",
@@ -208,9 +212,8 @@ func TestConsumeBackupStream_TextEmpty(t *testing.T) {
 	assert.Empty(t, errOut.String())
 }
 
-// An empty backup in --json mode is a success reported via EmptyBackup, never an
-// error -- an error would make cobra skip PersistentPostRunE. Without --json it
-// stays a plain success and does not set the flag.
+// TestHandleBackupStream_EmptyReporting verifies an empty backup is reported
+// out of band only in JSON mode so Cobra still runs PersistentPostRunE.
 func TestHandleBackupStream_EmptyReporting(t *testing.T) {
 	emptyStream := func() *fakeBackupStream {
 		return &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
@@ -234,8 +237,9 @@ func TestHandleBackupStream_EmptyReporting(t *testing.T) {
 	require.False(t, EmptyBackup(), "a usable backup must reset the flag")
 }
 
+// TestConsumeBackupStream_Error verifies a terminal stream error is returned to
+// the command caller.
 func TestConsumeBackupStream_Error(t *testing.T) {
-	// A terminal error from the stream is returned to the caller.
 	stream := &erroringBackupStream{}
 	var out, errOut bytes.Buffer
 	_, err := consumeBackupStream(stream, false, &out, &errOut)

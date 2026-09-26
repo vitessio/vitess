@@ -1333,6 +1333,8 @@ func terminateRestore(t *testing.T) {
 	assert.True(t, found, "Restore message not found")
 }
 
+// vtctlBackupReplicaNoDestroyNoWrites verifies a usable JSON backup result can
+// be tied to the backup written to storage.
 func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
 	replica := getReplica(t, replicaIndex)
 	numBackups := len(waitForNumBackups(t, -1))
@@ -1566,6 +1568,8 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
+// testReplicaIncrementalBackup verifies both stored and empty incremental
+// backup outcomes, including the opt-in JSON exit-code contract.
 func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
 

@@ -690,6 +690,8 @@ func TestApplyVSchema(t *testing.T) {
 	}
 }
 
+// TestBackup verifies tablet selection and forwarding of progress, terminal
+// outcome metadata, and stream errors for a single-tablet backup.
 func TestBackup(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
@@ -981,6 +983,8 @@ func TestBackup(t *testing.T) {
 	}
 }
 
+// TestBackupShard verifies shard tablet selection and backup stream forwarding
+// across successful and failing tablet-manager responses.
 func TestBackupShard(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
@@ -11177,6 +11181,8 @@ func TestReparentTablet(t *testing.T) {
 	}
 }
 
+// TestRestoreFromBackup verifies restore progress forwarding and error handling
+// for tablet-manager restore streams.
 func TestRestoreFromBackup(t *testing.T) {
 	ctx := t.Context()
 

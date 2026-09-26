@@ -1529,6 +1529,8 @@ func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupS
 	return err
 }
 
+// tmRPCTestBackup verifies progress events and the terminal backup outcome are
+// delivered in order through a TabletManagerClient implementation.
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)
