@@ -1,0 +1,1758 @@
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
+index 6b726d900d..f492a4457e 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
+@@ -88,6 +88,9 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
+ 			trimmed.Name = strings.Trim(trimmed.Name, "`")
+ 			tplanv.Fields = append(tplanv.Fields, trimmed)
+ 		}
++		if !tplanv.BulkUpdate.fieldsOK(tplanv.Fields) {
++			tplanv.BulkUpdate = nil
++		}
+ 		return &tplanv, nil
+ 	}
+ 	// select * construct was used. We need to use the field names.
+@@ -96,6 +99,9 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
+ 		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
+ 	}
+ 	tplan.Fields = fieldEvent.Fields
++	if !tplan.BulkUpdate.fieldsOK(tplan.Fields) {
++		tplan.BulkUpdate = nil
++	}
+ 	return tplan, nil
+ }
+ 
+@@ -230,6 +236,12 @@ type TablePlan struct {
+ 
+ 	CollationEnv   *collations.Environment
+ 	WorkflowConfig *vttablet.VReplicationConfig
++
++	// BulkUpdate is set when several update-shaped row changes can be
++	// applied as a single UPDATE statement (see applyBulkUpdateChanges). It
++	// is only used in VPlayerBatching mode. buildExecutionPlan clears it when
++	// the field types do not allow it.
++	BulkUpdate *bulkUpdatePlan
+ }
+ 
+ // MarshalJSON performs a custom JSON Marshalling.
+@@ -1019,6 +1031,260 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
+ 	return execQuery(values)
+ }
+ 
++// bulkUpdatePlan holds what is needed to render several single-row UPDATEs
++// that only differ in their values as one statement:
++//
++//	update t set c1=case pk when 1 then v11 when 2 then v21 end, ... where pk in (1, 2) order by pk
++//
++// See tablePlanBuilder.generateBulkUpdatePlan for when a plan has one.
++type bulkUpdatePlan struct {
++	prefix      string   // "update `t` set "
++	pkCol       string   // target PK column, escaped
++	pkBindVar   string   // before-image bind variable of the PK, e.g. "b_id"
++	setCols     []string // target columns to set, escaped
++	setBindVars []string // after-image bind variable of each set column, e.g. "a_c"
++}
++
++// maxBulkUpdateRows caps the rows per bulk UPDATE statement. Every row
++// evaluates one CASE per column, and a CASE is a linear scan over the rows,
++// so the per-row cost of a bulk UPDATE grows with the statement size.
++var maxBulkUpdateRows = 100
++
++// fieldsOK reports whether the field types allow the bulk UPDATE:
++// the PK must be an integer (runs are formed by comparing PK values) and the
++// set columns must not be JSON (JSON values are expressions), BIT, geometry or
++// floating point, whose values could be converted differently when they are
++// the result of a CASE expression rather than a literal.
++func (bu *bulkUpdatePlan) fieldsOK(fields []*querypb.Field) bool {
++	if bu == nil || len(fields) == 0 {
++		return false
++	}
++	types := make(map[string]querypb.Type, len(fields))
++	for _, field := range fields {
++		if field.Type == querypb.Type_JSON {
++			// JSON columns need their bind variables rewritten (bindAfterJSONFieldVals).
++			return false
++		}
++		types[field.Name] = field.Type
++	}
++	pkType, ok := types[strings.TrimPrefix(bu.pkBindVar, "b_")]
++	if !ok || !sqltypes.IsIntegral(pkType) {
++		return false
++	}
++	for _, bv := range bu.setBindVars {
++		typ, ok := types[strings.TrimPrefix(bv, "a_")]
++		if !ok || sqltypes.IsFloat(typ) {
++			return false
++		}
++		switch typ {
++		case querypb.Type_BIT, querypb.Type_GEOMETRY, querypb.Type_EXPRESSION, querypb.Type_TUPLE, querypb.Type_ROW_TUPLE:
++			return false
++		}
++	}
++	return true
++}
++
++// applyBulkUpdateChanges applies the row changes of a row event in order,
++// combining runs of consecutive update-shaped changes into single UPDATE
++// statements. A run holds changes that keep their PK and whose PK values are
++// strictly increasing (or strictly decreasing), and the statement updates the
++// rows in that same order (ORDER BY), so the target goes through the same
++// sequence of row states as with one UPDATE per row: unique key checks,
++// missing rows (no-op) and errors behave the same. Any other change (insert,
++// delete, PK change, partial image) ends the run and is applied by applyChange.
++func (tp *TablePlan) applyBulkUpdateChanges(rowChanges []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
++	bu := tp.BulkUpdate
++	if bu == nil {
++		for _, change := range rowChanges {
++			if _, err := tp.applyChange(change, executor); err != nil {
++				return nil, err
++			}
++		}
++		return &sqltypes.Result{}, nil
++	}
++	pkUnsigned := false
++	for _, field := range tp.Fields {
++		if "b_"+field.Name == bu.pkBindVar {
++			pkUnsigned = sqltypes.IsUnsigned(field.Type)
++			break
++		}
++	}
++
++	type pendingRow struct {
++		pk       sqltypes.Value
++		bindvars map[string]*querypb.BindVariable
++	}
++	var (
++		run      []pendingRow
++		runSize  int64
++		dir      int // 0: undetermined, 1: increasing, -1: decreasing PKs
++		lastPK   uint64
++		lastPKs  int64
++		baseSize = int64(len(bu.prefix)) + int64(len(" where  in () order by  desc")+2*len(bu.pkCol))
++	)
++	for _, col := range bu.setCols {
++		baseSize += int64(len(col) + len("=case ") + len(bu.pkCol) + len(" end, "))
++	}
++	comparePK := func(v sqltypes.Value) (int, bool) {
++		if pkUnsigned {
++			u, err := v.ToUint64()
++			if err != nil {
++				return 0, false
++			}
++			c := 0
++			if len(run) > 0 {
++				switch {
++				case u > lastPK:
++					c = 1
++				case u < lastPK:
++					c = -1
++				}
++			}
++			lastPK = u
++			return c, true
++		}
++		s, err := v.ToInt64()
++		if err != nil {
++			return 0, false
++		}
++		c := 0
++		if len(run) > 0 {
++			switch {
++			case s > lastPKs:
++				c = 1
++			case s < lastPKs:
++				c = -1
++			}
++		}
++		lastPKs = s
++		return c, true
++	}
++	flush := func() error {
++		switch len(run) {
++		case 0:
++			return nil
++		case 1:
++			if _, err := execParsedQuery(tp.Update, run[0].bindvars, executor); err != nil {
++				return err
++			}
++		default:
++			var buf strings.Builder
++			buf.Grow(int(runSize))
++			buf.WriteString(bu.prefix)
++			for i, col := range bu.setCols {
++				if i > 0 {
++					buf.WriteString(", ")
++				}
++				buf.WriteString(col)
++				buf.WriteString("=case ")
++				buf.WriteString(bu.pkCol)
++				for _, row := range run {
++					buf.WriteString(" when ")
++					row.pk.EncodeSQLStringBuilder(&buf)
++					buf.WriteString(" then ")
++					sqlparser.EncodeValue(&buf, row.bindvars[bu.setBindVars[i]])
++				}
++				buf.WriteString(" end")
++			}
++			buf.WriteString(" where ")
++			buf.WriteString(bu.pkCol)
++			buf.WriteString(" in (")
++			for i, row := range run {
++				if i > 0 {
++					buf.WriteString(", ")
++				}
++				row.pk.EncodeSQLStringBuilder(&buf)
++			}
++			buf.WriteString(") order by ")
++			buf.WriteString(bu.pkCol)
++			if dir < 0 {
++				buf.WriteString(" desc")
++			}
++			tp.Stats.BulkQueryCount.Add("update", 1)
++			if _, err := executor(buf.String()); err != nil {
++				return err
++			}
++		}
++		run = run[:0]
++		runSize = baseSize
++		dir = 0
++		return nil
++	}
++	runSize = baseSize
++	for _, change := range rowChanges {
++		if change.GetBefore() == nil || change.GetAfter() == nil || tp.isPartial(change) {
++			if err := flush(); err != nil {
++				return nil, err
++			}
++			if _, err := tp.applyChange(change, executor); err != nil {
++				return nil, err
++			}
++			continue
++		}
++		bindvars := make(map[string]*querypb.BindVariable, 2*len(tp.Fields))
++		beforeVals := sqltypes.MakeRowTrusted(tp.Fields, change.Before)
++		afterVals := sqltypes.MakeRowTrusted(tp.Fields, change.After)
++		if len(beforeVals) != len(tp.Fields) || len(afterVals) != len(tp.Fields) {
++			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
++				"vreplication: row change for table %s does not match its %d fields", tp.TargetName, len(tp.Fields))
++		}
++		var rowSize int64
++		for i, field := range tp.Fields {
++			bv, err := tp.bindFieldVal(field, &beforeVals[i])
++			if err != nil {
++				return nil, err
++			}
++			bindvars["b_"+field.Name] = bv
++			bv, err = tp.bindFieldVal(field, &afterVals[i])
++			if err != nil {
++				return nil, err
++			}
++			bindvars["a_"+field.Name] = bv
++			rowSize += int64(len(bv.Value))*2 + 16
++		}
++		pkBV := bindvars[bu.pkBindVar]
++		if pkBV == nil || tp.pkChanged(bindvars) {
++			if err := flush(); err != nil {
++				return nil, err
++			}
++			if _, err := tp.applyChange(change, executor); err != nil {
++				return nil, err
++			}
++			continue
++		}
++		pk, err := sqltypes.BindVariableToValue(pkBV)
++		if err != nil {
++			return nil, err
++		}
++		rowSize += int64(len(bu.setCols))*(int64(len(pk.Raw()))+12) + int64(len(pk.Raw())) + 2
++		c, ok := comparePK(pk)
++		if !ok {
++			if err := flush(); err != nil {
++				return nil, err
++			}
++			if _, err := tp.applyChange(change, executor); err != nil {
++				return nil, err
++			}
++			continue
++		}
++		if len(run) > 0 && (c == 0 || (dir != 0 && c != dir) || len(run) >= maxBulkUpdateRows || runSize+rowSize > maxQuerySize) {
++			if err := flush(); err != nil {
++				return nil, err
++			}
++			c = 0
++		}
++		if len(run) > 0 && dir == 0 {
++			dir = c
++		}
++		run = append(run, pendingRow{pk: pk, bindvars: bindvars})
++		runSize += rowSize
++	}
++	if err := flush(); err != nil {
++		return nil, err
++	}
++	return &sqltypes.Result{}, nil
++}
++
+ func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
+ 	sql, err := pq.GenerateQuery(bindvars, nil)
+ 	if err != nil {
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_bulk_update_test.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_bulk_update_test.go
+new file mode 100644
+index 0000000000..a8ed2ff3a7
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_bulk_update_test.go
+@@ -0,0 +1,271 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vreplication
++
++import (
++	"context"
++	"fmt"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/binlog/binlogplayer"
++	"vitess.io/vitess/go/vt/sqlparser"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	vttablet "vitess.io/vitess/go/vt/vttablet/common"
++)
++
++// buildBulkUpdateTestPlan builds the execution plan of table t1 for the given
++// filter and source fields, the way the vplayer does on a FIELD event.
++func buildBulkUpdateTestPlan(t *testing.T, filter string, fields []*querypb.Field) *TablePlan {
++	t.Helper()
++	vttablet.InitVReplicationConfigDefaults()
++	require.NotZero(t, vttablet.DefaultVReplicationConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching,
++		"this test requires VPlayer batching to be enabled in the default config")
++	colInfos := map[string][]*ColumnInfo{"t1": {{Name: "id", IsPK: true}}}
++	for _, f := range fields[1:] {
++		colInfos["t1"] = append(colInfos["t1"], &ColumnInfo{Name: f.Name})
++	}
++	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
++	source := getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: filter}}})
++	plan, err := vr.buildReplicatorPlan(source, colInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
++	require.NoError(t, err)
++	tp, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{TableName: "t1", Fields: fields})
++	require.NoError(t, err)
++	return tp
++}
++
++func TestBuildPlayerPlanBulkUpdate(t *testing.T) {
++	fields := []*querypb.Field{
++		{Name: "id", Type: querypb.Type_INT64},
++		{Name: "c2", Type: querypb.Type_VARCHAR},
++		{Name: "c3", Type: querypb.Type_INT32},
++	}
++	testcases := []struct {
++		name        string
++		filter      string
++		wantCols    []string
++		wantBVs     []string
++		wantNoPlan  bool
++		wantNotElig bool
++	}{{
++		name:     "select star",
++		filter:   "select * from t1",
++		wantCols: []string{"c2", "c3"},
++		wantBVs:  []string{"a_c2", "a_c3"},
++	}, {
++		name:     "explicit columns with a rename",
++		filter:   "select id, c2 as x, c3 from t1",
++		wantCols: []string{"x", "c3"},
++		wantBVs:  []string{"a_c2", "a_c3"},
++	}, {
++		name:       "expression",
++		filter:     "select id, concat(c2, 'x') as c2 from t1",
++		wantNoPlan: true,
++	}, {
++		name:       "aggregation",
++		filter:     "select id, count(*) as c2 from t1 group by id",
++		wantNoPlan: true,
++	}}
++	for _, tc := range testcases {
++		t.Run(tc.name, func(t *testing.T) {
++			tp := buildBulkUpdateTestPlan(t, tc.filter, fields)
++			if tc.wantNoPlan {
++				assert.Nil(t, tp.BulkUpdate)
++				return
++			}
++			require.NotNil(t, tp.BulkUpdate)
++			assert.Equal(t, tc.wantCols, tp.BulkUpdate.setCols)
++			assert.Equal(t, tc.wantBVs, tp.BulkUpdate.setBindVars)
++			assert.Equal(t, "b_id", tp.BulkUpdate.pkBindVar)
++		})
++	}
++}
++
++func TestApplyBulkUpdateChanges(t *testing.T) {
++	intFields := []*querypb.Field{
++		{Name: "id", Type: querypb.Type_INT64},
++		{Name: "v", Type: querypb.Type_VARCHAR},
++		{Name: "b", Type: querypb.Type_VARBINARY},
++	}
++	row := func(id int64, v string) *querypb.Row {
++		return sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(id), sqltypes.NewVarChar(v), sqltypes.NewVarBinary("x" + v)})
++	}
++	upd := func(id int64, from, to string) *binlogdatapb.RowChange {
++		return &binlogdatapb.RowChange{Before: row(id, from), After: row(id, to)}
++	}
++	apply := func(t *testing.T, tp *TablePlan, changes []*binlogdatapb.RowChange) []string {
++		var executed []string
++		_, err := tp.applyBulkUpdateChanges(changes, func(sql string) (*sqltypes.Result, error) {
++			executed = append(executed, sql)
++			return &sqltypes.Result{}, nil
++		}, 1<<20)
++		require.NoError(t, err)
++		return executed
++	}
++
++	t.Run("increasing PKs make one statement", func(t *testing.T) {
++		tp := buildBulkUpdateTestPlan(t, "select * from t1", intFields)
++		got := apply(t, tp, []*binlogdatapb.RowChange{upd(1, "a", "b"), upd(3, "c", "d"), upd(7, "e", "it's")})
++		assert.Equal(t, []string{
++			"update t1 set v=case id when 1 then 'b' when 3 then 'd' when 7 then 'it\\'s' end, " +
++				"b=case id when 1 then _binary'xb' when 3 then _binary'xd' when 7 then _binary'xit\\'s' end " +
++				"where id in (1, 3, 7) order by id",
++		}, got)
++		assert.EqualValues(t, 1, tp.Stats.BulkQueryCount.Counts()["update"])
++	})
++
++	t.Run("decreasing PKs keep the source order", func(t *testing.T) {
++		tp := buildBulkUpdateTestPlan(t, "select id, v from t1", intFields[:2])
++		got := apply(t, tp, []*binlogdatapb.RowChange{
++			{Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(9), sqltypes.NewVarChar("a")}), After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(9), sqltypes.NewVarChar("b")})},
++			{Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("c")}), After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("d")})},
++		})
++		assert.Equal(t, []string{"update t1 set v=case id when 9 then 'b' when 2 then 'd' end where id in (9, 2) order by id desc"}, got)
++	})
++
++	t.Run("a change of direction, a PK change and other shapes split the runs in order", func(t *testing.T) {
++		tp := buildBulkUpdateTestPlan(t, "select * from t1", intFields)
++		got := apply(t, tp, []*binlogdatapb.RowChange{
++			upd(1, "a", "b"),
++			upd(2, "a", "b"),
++			upd(1, "b", "c"), // direction change: 1,2 | 1
++			{Before: row(5, "a"), After: row(6, "a")}, // PK change: per-row delete + insert
++			{After: row(10, "n")},                     // insert
++			upd(11, "a", "b"),
++			upd(12, "a", "b"),
++		})
++		assert.Equal(t, []string{
++			"update t1 set v=case id when 1 then 'b' when 2 then 'b' end, b=case id when 1 then _binary'xb' when 2 then _binary'xb' end where id in (1, 2) order by id",
++			"update t1 set v='c', b=_binary'xc' where id=1",
++			"delete from t1 where id=5",
++			"insert into t1(id,v,b) values (6,'a',_binary'xa')",
++			"insert into t1(id,v,b) values (10,'n',_binary'xn')",
++			"update t1 set v=case id when 11 then 'b' when 12 then 'b' end, b=case id when 11 then _binary'xb' when 12 then _binary'xb' end where id in (11, 12) order by id",
++		}, got)
++	})
++
++	t.Run("statements are capped at maxBulkUpdateRows", func(t *testing.T) {
++		old := maxBulkUpdateRows
++		maxBulkUpdateRows = 2
++		t.Cleanup(func() { maxBulkUpdateRows = old })
++		tp := buildBulkUpdateTestPlan(t, "select id, v from t1", intFields[:2])
++		var changes []*binlogdatapb.RowChange
++		for i := int64(1); i <= 5; i++ {
++			changes = append(changes, &binlogdatapb.RowChange{
++				Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(i), sqltypes.NewVarChar("a")}),
++				After:  sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(i), sqltypes.NewVarChar(fmt.Sprint(i))}),
++			})
++		}
++		assert.Equal(t, []string{
++			"update t1 set v=case id when 1 then '1' when 2 then '2' end where id in (1, 2) order by id",
++			"update t1 set v=case id when 3 then '3' when 4 then '4' end where id in (3, 4) order by id",
++			"update t1 set v='5' where id=5",
++		}, apply(t, tp, changes))
++	})
++
++	t.Run("ineligible field types use one UPDATE per row", func(t *testing.T) {
++		for _, fields := range [][]*querypb.Field{
++			{{Name: "id", Type: querypb.Type_VARCHAR}, {Name: "v", Type: querypb.Type_VARCHAR}},
++			{{Name: "id", Type: querypb.Type_INT64}, {Name: "v", Type: querypb.Type_FLOAT64}},
++			{{Name: "id", Type: querypb.Type_INT64}, {Name: "v", Type: querypb.Type_JSON}},
++		} {
++			tp := buildBulkUpdateTestPlan(t, "select * from t1", fields)
++			require.Nil(t, tp.BulkUpdate)
++		}
++		tp := buildBulkUpdateTestPlan(t, "select * from t1", []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "v", Type: querypb.Type_FLOAT64}})
++		got := apply(t, tp, []*binlogdatapb.RowChange{
++			{Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewFloat64(1.5)}), After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewFloat64(2.5)})},
++			{Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewFloat64(1.5)}), After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewFloat64(3.5)})},
++		})
++		assert.Equal(t, []string{"update t1 set v=2.5 where id=1", "update t1 set v=3.5 where id=2"}, got)
++	})
++}
++
++// TestVPlayerBuffersRowChangesAcrossRowEvents confirms that in batch mode the
++// vplayer combines the row changes of consecutive row events of the same table
++// and shape, e.g. single-row INSERTs of consecutive source transactions merged
++// into one target transaction, into one bulk statement, and that it applies
++// the buffered changes in order before a row event of another shape and
++// before the commit.
++func TestVPlayerBuffersRowChangesAcrossRowEvents(t *testing.T) {
++	fields := []*querypb.Field{
++		{Name: "id", Type: querypb.Type_INT64},
++		{Name: "v", Type: querypb.Type_VARCHAR},
++	}
++	tp := buildBulkUpdateTestPlan(t, "select * from t1", fields)
++	stats := binlogplayer.NewStats()
++	t.Cleanup(stats.Stop)
++	dbClient := newVDBClient(binlogplayer.NewMockDBClient(t), stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems)
++	dbClient.maxBatchSize = 1 << 20
++	var executed []string
++	committed := 0
++	vp := &vplayer{
++		vr: &vreplicator{
++			id:             1,
++			dbClient:       dbClient,
++			stats:          stats,
++			workflowConfig: vttablet.DefaultVReplicationConfig,
++		},
++		batchMode:  true,
++		tablePlans: map[string]*TablePlan{"t1": tp},
++		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
++			executed = append(executed, sql)
++			return &sqltypes.Result{}, nil
++		},
++		commit: func() error {
++			committed++
++			dbClient.InTransaction = false
++			return nil
++		},
++	}
++	row := func(id int64, v string) *querypb.Row {
++		return sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(id), sqltypes.NewVarChar(v)})
++	}
++	rowEvent := func(change *binlogdatapb.RowChange) *binlogdatapb.VEvent {
++		return &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}}
++	}
++	events := []*binlogdatapb.VEvent{
++		{Type: binlogdatapb.VEventType_BEGIN},
++		rowEvent(&binlogdatapb.RowChange{After: row(1, "a")}),
++		// The next source transaction; its BEGIN and COMMIT were merged away.
++		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-5"},
++		rowEvent(&binlogdatapb.RowChange{After: row(2, "b")}),
++		rowEvent(&binlogdatapb.RowChange{After: row(3, "c")}),
++		rowEvent(&binlogdatapb.RowChange{Before: row(2, "b"), After: row(2, "x")}),
++		rowEvent(&binlogdatapb.RowChange{Before: row(3, "c"), After: row(3, "y")}),
++		rowEvent(&binlogdatapb.RowChange{Before: row(1, "a")}),
++		{Type: binlogdatapb.VEventType_COMMIT},
++	}
++	for _, ev := range events {
++		require.NoError(t, vp.applyEvent(t.Context(), ev, false))
++	}
++	require.Len(t, executed, 4)
++	assert.Equal(t, []string{
++		"insert into t1(id,v) values (1,'a'), (2,'b'), (3,'c')",
++		"update t1 set v=case id when 2 then 'x' when 3 then 'y' end where id in (2, 3) order by id",
++		"delete from t1 where id=1",
++	}, executed[:3])
++	assert.Contains(t, executed[3], "update _vt.vreplication set pos=")
++	assert.Equal(t, 1, committed)
++	assert.Nil(t, vp.pending.tplan)
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go b/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
+index 7509d02924..d1f3b40f68 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
+@@ -373,6 +373,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
+ 		Update:                  tpb.generateUpdateStatement(),
+ 		Delete:                  tpb.generateDeleteStatement(),
+ 		MultiDelete:             tpb.generateMultiDeleteStatement(),
++		BulkUpdate:              tpb.generateBulkUpdatePlan(),
+ 		PKReferences:            pkrefs,
+ 		PKIndices:               tpb.pkIndices,
+ 		Stats:                   tpb.stats,
+@@ -905,6 +906,51 @@ func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQue
+ 	)
+ }
+ 
++// generateBulkUpdatePlan returns the metadata needed to apply several update-shaped
++// row changes of one row event as a single UPDATE statement, or nil if the plan is
++// not eligible. Only plain column copies keyed by a single PK column qualify:
++// grouped/aggregate plans, expressions, time zone conversions, extra source PK
++// columns and copy-phase (lastpk) plans keep using the per-row UPDATE. The field
++// types are checked by buildExecutionPlan (see bulkUpdatePlan.fieldsOK), as they
++// are only known once the FIELD event has been received.
++func (tpb *tablePlanBuilder) generateBulkUpdatePlan() *bulkUpdatePlan {
++	if tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
++		tpb.onInsert != insertNormal || tpb.lastpk != nil ||
++		len(tpb.pkCols) != 1 || len(tpb.extraSourcePkCols) != 0 {
++		return nil
++	}
++	if tpb.source != nil && tpb.source.SourceTimeZone != "" && tpb.source.TargetTimeZone != "" {
++		return nil
++	}
++	pkRef, ok := tpb.pkCols[0].expr.(*sqlparser.ColName)
++	if !ok {
++		return nil
++	}
++	plan := &bulkUpdatePlan{
++		prefix:    "update " + sqlparser.String(tpb.name) + " set ",
++		pkCol:     sqlparser.String(tpb.pkCols[0].colName),
++		pkBindVar: "b_" + pkRef.Name.String(),
++	}
++	for _, cexpr := range tpb.colExprs {
++		if cexpr.isPK || cexpr.isGenerated {
++			continue
++		}
++		if cexpr.isGrouped || cexpr.operation != opExpr {
++			return nil
++		}
++		ref, ok := cexpr.expr.(*sqlparser.ColName)
++		if !ok {
++			return nil
++		}
++		plan.setCols = append(plan.setCols, sqlparser.String(cexpr.colName))
++		plan.setBindVars = append(plan.setBindVars, "a_"+ref.Name.String())
++	}
++	if len(plan.setCols) == 0 {
++		return nil
++	}
++	return plan
++}
++
+ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
+ 	buf.WriteString(" where ")
+ 	bvf.mode = bvBefore
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
+index cea9c25b34..53f9835390 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
+@@ -114,6 +114,38 @@ type vplayer struct {
+ 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
+ 	// The initialization is done on the first row event that this vplayer sees.
+ 	foreignKeyChecksStateInitialized bool
++
++	// pending holds row changes that are not applied yet so that the row
++	// changes of consecutive row events can be combined into bulk statements
++	// (batch mode only). See bufferRowEvent.
++	pending pendingRowChanges
++}
++
++// bulkKind is the bulk statement type used for a group of row changes.
++type bulkKind int
++
++const (
++	bulkNone bulkKind = iota
++	bulkInsert
++	bulkDelete
++	bulkUpdate
++)
++
++// maxPendingRowChanges bounds the number of row changes buffered by the
++// vplayer before they are applied.
++const maxPendingRowChanges = 5000
++
++// pendingRowChanges are consecutive row changes of one table that all have
++// the same shape and the same binlog row event flags. They were not applied
++// yet: they become one or more bulk statements when a different event
++// arrives, so that consecutive source transactions that write the same table
++// the same way (e.g. single-row INSERTs into a log table) turn into a few
++// multi-row statements instead of one statement per row.
++type pendingRowChanges struct {
++	tplan   *TablePlan
++	kind    bulkKind
++	flags   uint32
++	changes []*binlogdatapb.RowChange
+ }
+ 
+ // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
+@@ -402,7 +434,81 @@ func bulkApplicableShapes(tableName string, rowChanges []*binlogdatapb.RowChange
+ 	return deletesOnly, insertsOnly, nil
+ }
+ 
++// bulkKindFor returns how the changes of a row event can be combined with the
++// changes of adjacent row events of the same table, or bulkNone.
++func (vp *vplayer) bulkKindFor(tplan *TablePlan, rowEvent *binlogdatapb.RowEvent) (bulkKind, error) {
++	if !vp.batchMode || len(vp.copyState) != 0 || len(rowEvent.RowChanges) == 0 {
++		return bulkNone, nil
++	}
++	deletesOnly, insertsOnly, err := bulkApplicableShapes(rowEvent.TableName, rowEvent.RowChanges)
++	if err != nil {
++		return bulkNone, err
++	}
++	switch {
++	case insertsOnly:
++		return bulkInsert, nil
++	case deletesOnly:
++		if tplan.MultiDelete != nil {
++			return bulkDelete, nil
++		}
++		return bulkNone, nil
++	}
++	if tplan.BulkUpdate == nil {
++		return bulkNone, nil
++	}
++	for _, change := range rowEvent.RowChanges {
++		if change.Before == nil || change.After == nil {
++			return bulkNone, nil
++		}
++	}
++	return bulkUpdate, nil
++}
++
++func (vp *vplayer) applyFunc(ctx context.Context) func(sql string) (*sqltypes.Result, error) {
++	return func(sql string) (*sqltypes.Result, error) {
++		start := time.Now()
++		qr, err := vp.query(ctx, sql)
++		vp.vr.stats.QueryCount.Add(vp.phase, 1)
++		vp.vr.stats.QueryTimings.Record(vp.phase, start)
++		return qr, err
++	}
++}
++
++// flushPendingRowChanges applies the buffered row changes, if any.
++func (vp *vplayer) flushPendingRowChanges(ctx context.Context) error {
++	p := &vp.pending
++	if p.tplan == nil {
++		return nil
++	}
++	tplan, kind, changes := p.tplan, p.kind, p.changes
++	p.tplan, p.kind, p.changes = nil, bulkNone, p.changes[:0]
++	applyFunc := vp.applyFunc(ctx)
++	var err error
++	switch {
++	case len(changes) == 1:
++		_, err = tplan.applyChange(changes[0], applyFunc)
++	case kind == bulkInsert:
++		_, err = tplan.applyBulkInsertChanges(changes, applyFunc, vp.vr.dbClient.maxBatchSize)
++	case kind == bulkDelete:
++		_, err = tplan.applyBulkDeleteChanges(changes, applyFunc, vp.vr.dbClient.maxBatchSize)
++	case kind == bulkUpdate:
++		_, err = tplan.applyBulkUpdateChanges(changes, applyFunc, vp.vr.dbClient.maxBatchSize)
++	}
++	// Drop the references to the applied row changes.
++	clear(changes)
++	if err != nil {
++		return vterrors.Wrapf(err, "failed to apply %d buffered row changes for table %s", len(changes), tplan.TargetName)
++	}
++	return nil
++}
++
+ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
++	if vp.pending.tplan != nil && vp.pending.flags != rowEvent.Flags {
++		// The foreign_key_checks setting may change for this event.
++		if err := vp.flushPendingRowChanges(ctx); err != nil {
++			return err
++		}
++	}
+ 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
+ 		return err
+ 	}
+@@ -410,13 +516,25 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
+ 	if tplan == nil {
+ 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
+ 	}
+-	applyFunc := func(sql string) (*sqltypes.Result, error) {
+-		start := time.Now()
+-		qr, err := vp.query(ctx, sql)
+-		vp.vr.stats.QueryCount.Add(vp.phase, 1)
+-		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+-		return qr, err
++	kind, err := vp.bulkKindFor(tplan, rowEvent)
++	if err != nil {
++		return err
++	}
++	if p := &vp.pending; p.tplan != nil && (p.tplan != tplan || p.kind != kind || kind == bulkNone) {
++		if err := vp.flushPendingRowChanges(ctx); err != nil {
++			return err
++		}
++	}
++	if kind != bulkNone {
++		p := &vp.pending
++		p.tplan, p.kind, p.flags = tplan, kind, rowEvent.Flags
++		p.changes = append(p.changes, rowEvent.RowChanges...)
++		if len(p.changes) >= maxPendingRowChanges {
++			return vp.flushPendingRowChanges(ctx)
++		}
++		return nil
+ 	}
++	applyFunc := vp.applyFunc(ctx)
+ 
+ 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
+ 		deletesOnly, insertsOnly, err := bulkApplicableShapes(rowEvent.TableName, rowEvent.RowChanges)
+@@ -436,6 +554,14 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
+ 			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
+ 			return err
+ 		}
++		// Multi-row UPDATEs on the source produce one update-shaped change per
++		// row. Applying each as its own statement costs the target mysqld a
++		// parse, a table map event and a result packet per row, so combine
++		// consecutive updates into single statements where the plan allows it.
++		if !deletesOnly && !insertsOnly && tplan.BulkUpdate != nil {
++			_, err := tplan.applyBulkUpdateChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
++			return err
++		}
+ 	}
+ 
+ 	for _, change := range rowEvent.RowChanges {
+@@ -711,6 +837,15 @@ func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
+ }
+ 
+ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
++	switch event.Type {
++	case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_ROW, binlogdatapb.VEventType_ROWS_QUERY:
++		// These events do not write anything before the row changes that
++		// may be buffered, so the buffer can keep growing.
++	default:
++		if err := vp.flushPendingRowChanges(ctx); err != nil {
++			return err
++		}
++	}
+ 	switch event.Type {
+ 	case binlogdatapb.VEventType_GTID:
+ 		pos, err := binlogplayer.DecodePosition(event.Gtid)
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer_bulk_update_test.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer_bulk_update_test.go
+new file mode 100644
+index 0000000000..a438d37447
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer_bulk_update_test.go
+@@ -0,0 +1,101 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vreplication
++
++import (
++	"fmt"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++
++	vttablet "vitess.io/vitess/go/vt/vttablet/common"
++	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++)
++
++// TestPlayerBatchModeBulkUpdate confirms that in batch mode the update-shaped
++// changes of a multi-row UPDATE are applied as one UPDATE statement per run
++// of monotonic primary keys, in the source's row order, and that the target
++// ends up with the same data as the source. The first UPDATE shifts a unique
++// key in descending id order: applying it in ascending order would hit a
++// duplicate key error, so it checks that the bulk statement keeps the order.
++func TestPlayerBatchModeBulkUpdate(t *testing.T) {
++	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
++	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
++	// The framework helpers run on t.Context(), which is canceled before
++	// t.Cleanup callbacks run, so teardown uses defer.
++	defer func() {
++		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
++	}()
++
++	defer deleteTablet(addTablet(100))
++	schema := "(id bigint, uk int, c varchar(20), d datetime(3), dc decimal(10,2), b varbinary(10), e enum('x','y','z'), n int, primary key(id), unique key(uk))"
++	execStatements(t, []string{
++		"create table t1" + schema,
++		fmt.Sprintf("create table %s.t1%s", vrepldb, schema),
++	})
++	defer execStatements(t, []string{
++		"drop table t1",
++		fmt.Sprintf("drop table %s.t1", vrepldb),
++	})
++
++	filter := &binlogdatapb.Filter{
++		Rules: []*binlogdatapb.Rule{{
++			Match:  "t1",
++			Filter: "select * from t1",
++		}},
++	}
++	bls := &binlogdatapb.BinlogSource{
++		Keyspace: env.KeyspaceName,
++		Shard:    env.ShardName,
++		Filter:   filter,
++		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
++	}
++	cancel, vrID := startVReplication(t, bls, "")
++	defer cancel()
++	stats := globalStats.controllers[int32(vrID)].blpStats
++
++	execStatements(t, []string{
++		"insert into t1 values (1, 10, 'a', '2020-01-01 00:00:00.123', 1.50, 'x1', 'x', 1), (2, 20, 'b', '2020-01-02 00:00:00', 2.50, 'x2', 'y', null), (3, 30, 'it''s', null, -3.25, null, 'z', 3)",
++	})
++	expectNontxQueries(t, qh.Expect("/insert into t1"), recvTimeout)
++
++	// Descending ids: every row takes the unique key value of the row after it.
++	execStatements(t, []string{"update t1 set uk = uk + 10 order by id desc"})
++	expectNontxQueries(t, qh.Expect(
++		"/^update t1 set uk=case id when 3 then 40 when 2 then 30 when 1 then 20 end, c=case id when 3 then 'it\\\\'s' .* where id in \\(3, 2, 1\\) order by id desc$",
++	), recvTimeout)
++
++	// Ascending ids, every column type changes, NULLs in both directions.
++	execStatements(t, []string{
++		"update t1 set c = concat(c, 'é'), d = coalesce(d + interval 1 second, '2021-01-01'), dc = dc * 2, b = if(b is null, 0x00ff, null), e = 'y', n = if(n is null, 7, null) where id in (1, 2, 3)",
++	})
++	expectNontxQueries(t, qh.Expect("/^update t1 set uk=case id when 1 then 20 when 2 then 30 when 3 then 40 end, .* where id in \\(1, 2, 3\\) order by id$"), recvTimeout)
++
++	want := [][]string{
++		{"1", "20", "aé", "2020-01-01 00:00:01.123", "3.00", "", "y", ""},
++		{"2", "30", "bé", "2020-01-02 00:00:01.000", "5.00", "", "y", "7"},
++		{"3", "40", "it'sé", "2021-01-01 00:00:00.000", "-6.50", "\x00\xff", "y", ""},
++	}
++	expectData(t, "t1", want)
++	expectQueryResult(t, "select id, uk, c, d, dc, b, e, n from vttest.t1", want)
++	require.Eventually(t, func() bool {
++		return stats.BulkQueryCount.Counts()["update"] == 2
++	}, 30*time.Second, 100*time.Millisecond, "bulk update count: %v", stats.BulkQueryCount.Counts())
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
+index 196097f29e..58a103ea7f 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
+@@ -564,10 +564,10 @@ func TestPlayerSavepoint(t *testing.T) {
+ 		"rollback work to savepoint vrepl_a",
+ 		"commit",
+ 	})
++	// The two insert row events are combined into one statement (batch mode).
+ 	expectDBClientQueries(t, qh.Expect(
+ 		"begin",
+-		"/insert into t1.*2.*",
+-		"/insert into t1.*3.*",
++		"insert into t1(id) values (2), (3)",
+ 		"/update _vt.vreplication set pos=",
+ 		"commit",
+ 	))
+@@ -2474,11 +2474,11 @@ func TestPlayerSplitTransaction(t *testing.T) {
+ 		"commit",
+ 	})
+ 	// Because the packet size is 10, this is received as two events,
+-	// but still combined as one transaction.
++	// but still combined as one transaction, and the two insert row
++	// events are combined into one statement (batch mode).
+ 	expectDBClientQueries(t, qh.Expect(
+ 		"begin",
+-		"insert into t1(id,val) values (1,'123456')",
+-		"insert into t1(id,val) values (2,'789012')",
++		"insert into t1(id,val) values (1,'123456'), (2,'789012')",
+ 		"/update _vt.vreplication set pos=",
+ 		"commit",
+ 	))
+@@ -2717,15 +2717,14 @@ func TestPlayerTransactions(t *testing.T) {
+ 	// Release the lock.
+ 	_, _ = vconn.ExecuteFetch("rollback", 1)
+ 	// First transaction will complete. The other two
+-	// transactions must be batched into one. But the
+-	// DDLs should be on their own.
++	// transactions must be batched into one, with their inserts
++	// combined into one statement. But the DDLs should be on their own.
+ 	expectDBClientQueries(t, qh.Expect(
+ 		"update t1 set val='ccc' where id=1",
+ 		"/update _vt.vreplication set pos=",
+ 		"commit",
+ 		"begin",
+-		"insert into t1(id,val) values (2,'aaa')",
+-		"insert into t1(id,val) values (3,'aaa')",
++		"insert into t1(id,val) values (2,'aaa'), (3,'aaa')",
+ 		"/update _vt.vreplication set pos=",
+ 		"commit",
+ 		"alter table t1 add column val2 varbinary(128)",
+@@ -2818,16 +2817,15 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
+ 			// Release the lock.
+ 			_, _ = vconn.ExecuteFetch("rollback", 1)
+ 			// First transaction will complete. The other two
+-			// transactions must be batched into one. The last transaction
+-			// will wait to be sent to the relay until the player fetches
+-			// them.
++			// transactions must be batched into one, with their inserts
++			// combined into one statement. The last transaction will wait
++			// to be sent to the relay until the player fetches them.
+ 			expectDBClientQueries(t, qh.Expect(
+ 				"update t1 set val='ccc' where id=1",
+ 				"/update _vt.vreplication set pos=",
+ 				"commit",
+ 				"begin",
+-				"insert into t1(id,val) values (2,'789012')",
+-				"insert into t1(id,val) values (3,'345678')",
++				"insert into t1(id,val) values (2,'789012'), (3,'345678')",
+ 				"/update _vt.vreplication set pos=",
+ 				"commit",
+ 				"begin",
+diff --git a/perf-findings/harness/V2/ab.sh b/perf-findings/harness/V2/ab.sh
+new file mode 100755
+index 0000000000..c533d5f697
+--- /dev/null
++++ b/perf-findings/harness/V2/ab.sh
+@@ -0,0 +1,24 @@
++#!/bin/bash
++# A/B drain rounds. Usage: ab.sh ROUNDS "cfg1 cfg2 ..." ; WORKLOADS env passes through to drainset.sh.
++# cfg names: base | prw1 | prw4 | prw8 | v2 | v2off
++D=/home/vt/perf/V2
++ROUNDS=$1; CFGS=$2
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in $CFGS; do
++    case $cfg in
++      base) export TABLET_BIN=/home/vt/bin-V2base VTTABLET_EXTRA_FLAGS="" ;;
++      prw1) export TABLET_BIN=/home/vt/bin-PR VTTABLET_EXTRA_FLAGS="" ;;
++      prw4) export TABLET_BIN=/home/vt/bin-PR VTTABLET_EXTRA_FLAGS="--vreplication-parallel-replication-workers=4" ;;
++      prw8) export TABLET_BIN=/home/vt/bin-PR VTTABLET_EXTRA_FLAGS="--vreplication-parallel-replication-workers=8" ;;
++      prv2w4) export TABLET_BIN=/home/vt/bin-PRV2 VTTABLET_EXTRA_FLAGS="--vreplication-parallel-replication-workers=4" ;;
++      v2a) export TABLET_BIN=/home/vt/bin-V2a VTTABLET_EXTRA_FLAGS="" ;;
++      v2) export TABLET_BIN=/home/vt/bin-V2 VTTABLET_EXTRA_FLAGS="" ;;
++      v2off) export TABLET_BIN=/home/vt/bin-V2 VTTABLET_EXTRA_FLAGS="${V2OFF_FLAGS:-}" ;;
++      *) echo "bad cfg $cfg"; exit 1 ;;
++    esac
++    $D/c.sh restart-tablets >/dev/null 2>&1
++    sleep 8
++    $D/waitstream.sh
++    $D/${SET:-drainset}.sh "$cfg-r$r"
++  done
++done
+diff --git a/perf-findings/harness/V2/abtable.sh b/perf-findings/harness/V2/abtable.sh
+new file mode 100755
+index 0000000000..507eb2da34
+--- /dev/null
++++ b/perf-findings/harness/V2/abtable.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# abtable.sh "cfg1 cfg2" "w1 w2" : summaries grouped by workload.
++for w in $2; do
++  for c in $1; do /home/vt/perf/V2/summ.sh "$c-r[123]-$w"; done
++  echo
++done
+diff --git a/perf-findings/harness/V2/bulk.lua b/perf-findings/harness/V2/bulk.lua
+new file mode 100644
+index 0000000000..53ec23a335
+--- /dev/null
++++ b/perf-findings/harness/V2/bulk.lua
+@@ -0,0 +1,35 @@
++-- Large-transaction workload on bulk1 (200k rows, ids 1..200000).
++--   --mode=upd : UPDATE bulk1 SET k=k+1 WHERE id BETWEEN r AND r+N-1        (one N-row UPDATE row event)
++--   --mode=del : DELETE the N-row range and re-INSERT it with one multi-row INSERT (N-row DELETE + N-row INSERT events)
++sysbench.cmdline.options = {
++  rows = {"rows per transaction", 100},
++  mode = {"upd or del", "upd"},
++  tables = {"ignored", 4},
++  table_size = {"ignored", 200000},
++}
++
++function thread_init()
++  drv = sysbench.sql.driver()
++  con = drv:connect()
++end
++
++function thread_done()
++  con:disconnect()
++end
++
++function event()
++  local n = sysbench.opt.rows
++  local r = sysbench.rand.uniform(1, 200000 - n)
++  if sysbench.opt.mode == "upd" then
++    con:query(string.format("UPDATE bulk1 SET k=k+1 WHERE id BETWEEN %d AND %d", r, r + n - 1))
++    return
++  end
++  con:query("BEGIN")
++  con:query(string.format("DELETE FROM bulk1 WHERE id BETWEEN %d AND %d", r, r + n - 1))
++  local vals = {}
++  for i = r, r + n - 1 do
++    vals[#vals + 1] = string.format("(%d,%d,'%s','%s')", i, i % 1000, sysbench.rand.string(string.rep("#", 60)), sysbench.rand.string(string.rep("#", 30)))
++  end
++  con:query("INSERT INTO bulk1 (id,k,c,pad) VALUES " .. table.concat(vals, ","))
++  con:query("COMMIT")
++end
+diff --git a/perf-findings/harness/V2/c.sh b/perf-findings/harness/V2/c.sh
+new file mode 100755
+index 0000000000..9aa8e24681
+--- /dev/null
++++ b/perf-findings/harness/V2/c.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Run the V2 harness as the vt user.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=40000 BIN=${BIN:-/home/vt/bin} TABLET_BIN=${TABLET_BIN:-} \
++  KEYSPACES="${KEYSPACES:-src:0 dst:0}" TABLES=${TABLES:-4} TABLE_SIZE=${TABLE_SIZE:-200000} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/perf/V2/cluster.sh "$@"
+diff --git a/perf-findings/harness/V2/checksum.sh b/perf-findings/harness/V2/checksum.sh
+new file mode 100755
+index 0000000000..23365b786f
+--- /dev/null
++++ b/perf-findings/harness/V2/checksum.sh
+@@ -0,0 +1,18 @@
++#!/bin/bash
++# Compare row counts and CHECKSUM TABLE of every workflow table on source and target (target must be caught up).
++S=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++T=/home/vt/perf/c40000/vt_0000000101/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++seq_src=$(q $S "select @@global.gtid_executed" | tr -d '\n' | sed -E 's/.*-([0-9]+)$/\1/')
++for _ in $(seq 1 600); do
++  g=$(q $T "select pos from _vt.vreplication where workflow='wf'" | sed -E 's/.*-([0-9]+)$/\1/')
++  [[ ${g:-0} -ge $seq_src ]] && break
++  sleep 0.1
++done
++ok=1
++for t in sbtest1 sbtest2 sbtest3 sbtest4 wide1 bulk1; do
++  a=$(q $S "checksum table vt_src.$t" | awk '{print $2}'); b=$(q $T "checksum table vt_dst.$t" | awk '{print $2}')
++  ca=$(q $S "select count(*) from vt_src.$t"); cb=$(q $T "select count(*) from vt_dst.$t")
++  if [[ $a != "$b" || $ca != "$cb" ]]; then ok=0; echo "MISMATCH $t src=$ca/$a dst=$cb/$b"; fi
++done
++[[ $ok == 1 ]] && echo "checksum OK (all 6 tables match, src seq $seq_src)"
+diff --git a/perf-findings/harness/V2/cluster.sh b/perf-findings/harness/V2/cluster.sh
+new file mode 100755
+index 0000000000..d841c75f40
+--- /dev/null
++++ b/perf-findings/harness/V2/cluster.sh
+@@ -0,0 +1,249 @@
++#!/bin/bash
++# P4 VReplication harness: a copy of perf-findings/harness/cluster.sh that runs several keyspaces in one cluster.
++#
++# Usage (as the vt user): BASE=40000 ./cluster.sh up|down|cpu|pids|restart-tablets|load|purge-binlogs|env
++#
++# Environment (in addition to the base harness):
++#   KEYSPACES  space separated "keyspace:shard,shard" list (default "src:0 dst:-80,80-").
++#              The first keyspace is unsharded (vschema {"sharded":false}) and gets the sysbench schema;
++#              the others get a hash-on-id vschema for the same tables (no schema: MoveTables creates it).
++#   TABLES / TABLE_SIZE   sysbench tables loaded into the first keyspace by `load` (directly into its mysqld).
++#   BIN        Vitess binaries. `restart-tablets` restarts only the vttablets (mysqld kept) with $BIN.
++# Tablet i (0-based, in KEYSPACES order): uid 100+i, web BASE+100+i, grpc BASE+200+i, mysqld BASE+400+i.
++set -euo pipefail
++
++BASE=${BASE:-40000}
++NAME=${NAME:-c$BASE}
++KEYSPACES=${KEYSPACES:-"src:0 dst:-80,80-"}
++TABLES=${TABLES:-4}
++TABLE_SIZE=${TABLE_SIZE:-500000}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++tablet_uid() { echo $((100 + $1)); }
++
++# Prints "index keyspace shard" for every tablet.
++tablets() {
++  local i=0
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*} shards=${spec#*:}
++    for shard in ${shards//,/ }; do echo "$i $ks $shard"; i=$((i + 1)); done
++  done
++}
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOC'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOC
++}
++
++start_tablet() {
++  local i=$1 ks=$2 shard=$3 uid alias
++  uid=$(tablet_uid "$i")
++  printf -v alias '%s-%010d' "$CELL" "$uid"
++  # shellcheck disable=SC2086
++  "${TABLET_BIN:-$BIN}/vttablet" $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$ks" --init-shard "$shard" \
++    --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++    --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++    --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++    ${VTTABLET_EXTRA_FLAGS:-} >>"$LOGDIR/vttablet_$uid.log" 2>&1 &
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  for spec in $KEYSPACES; do vtctldclient CreateKeyspace --durability-policy=none "${spec%%:*}" >/dev/null 2>&1 || true; done
++
++  local pids=()
++  while read -r i ks shard; do
++    local uid
++    uid=$(tablet_uid "$i")
++    mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++      --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++    pids+=($!)
++  done < <(tablets)
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++  while read -r i ks shard; do
++    local alias
++    printf -v alias '%s-%010d' "$CELL" "$(tablet_uid "$i")"
++    vtctldclient PlannedReparentShard "$ks/$shard" --new-primary "$alias" >/dev/null
++  done < <(tablets)
++
++  load_schema
++
++  # shellcheck disable=SC2086
++  vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables="" first=1
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL AUTO_INCREMENT, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*}
++    if ((first)); then
++      vtctldclient ApplySchema --sql "$sql" "$ks" >/dev/null
++      vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$ks" >/dev/null
++      first=0
++    else
++      vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$ks" >/dev/null
++    fi
++  done
++}
++
++# Load sysbench tables into the first keyspace directly through its primary's socket (fast, no vtgate).
++load() {
++  local sock=$VTDATAROOT/vt_0000000100/mysql.sock ks=${KEYSPACES%%:*}
++  for t in $(seq 1 "$TABLES"); do mysql -S "$sock" -u vt_dba "vt_$ks" -e "DROP TABLE IF EXISTS sbtest$t"; done
++  sysbench --db-driver=mysql --mysql-socket="$sock" --mysql-user=vt_dba --mysql-db="vt_$ks" --tables="$TABLES" \
++    --table-size="$TABLE_SIZE" --threads="$TABLES" oltp_write_only prepare
++  purge_binlogs 0
++}
++
++# Rotate binlogs and purge the files older than $1 seconds (default 120: running streams may still need recent files).
++purge_binlogs() {
++  local age=${1:-120}
++  for d in "$VTDATAROOT"/vt_*; do
++    mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS; PURGE BINARY LOGS BEFORE NOW() - INTERVAL $age SECOND;" 2>&1 | grep -v Warning || true
++  done
++}
++
++# Stop the vttablet with index $1: the one in its pid file and any other one still holding its web port.
++kill_tablet() {
++  local idx=$1 f pids p
++  f=$VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$idx")")/vttablet.pid
++  pids="$(cat "$f" 2>/dev/null || true) $(pgrep -f -- "--port $((BASE + 100 + idx)) " || true)"
++  for p in $pids; do kill "$p" 2>/dev/null || true; done
++  for p in $pids; do while kill -0 "$p" 2>/dev/null; do sleep 0.2; done; done
++}
++
++restart_tablets() {
++  while read -r i ks shard; do kill_tablet "$i" & done < <(tablets)
++  wait
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++}
++
++# Restart the vttablet with index $1 only (mysqld kept).
++restart_tablet() {
++  local idx=$1
++  kill_tablet "$idx"
++  while read -r i ks shard; do [[ $i == "$idx" ]] && start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  wait_http $((BASE + 100 + idx))
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  echo "cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspaces [$KEYSPACES]"
++  echo "  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root ; vtctldclient --server localhost:$VTCTLD_GRPC"
++  tablets | while read -r i ks shard; do
++    echo "  tablet $i uid $(tablet_uid "$i") $ks/$shard web $((BASE + 100 + i)) sock $VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$i")")/mysql.sock"
++  done
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck
++  tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++case "${1:-}" in
++  up) up ;;
++  down) down ;;
++  env) env_info ;;
++  load) load ;;
++  purge-binlogs) purge_binlogs "${2:-120}" ;;
++  restart-tablets) restart_tablets ;;
++  restart-tablet) restart_tablet "$2" ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  vtctldclient) shift; vtctldclient "$@" ;;
++  *) echo "usage: $0 up|down|env|load|purge-binlogs|restart-tablets|pids|cpu|vtctldclient ARGS" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/harness/V2/concset.sh b/perf-findings/harness/V2/concset.sh
+new file mode 100755
+index 0000000000..051694042d
+--- /dev/null
++++ b/perf-findings/harness/V2/concset.sh
+@@ -0,0 +1,21 @@
++#!/bin/bash
++# Concurrent running-phase tests (workload on the source while the workflow runs). Usage: concset.sh PREFIX
++P=$1
++D=/home/vt/perf/V2
++L="flock -o /home/vt/perf/bench.lock"
++W=${WORKLOADS:-"wo16 wo64 wide32 b100r150 b100r300"}
++T=${TIME:-30}
++for w in $W; do
++  case $w in
++    wo16) $L $D/run.sh $P-$w $T 0 oltp_write_only --threads=16 ;;
++    wo32) $L $D/run.sh $P-$w $T 0 oltp_write_only --threads=32 ;;
++    wo64) $L $D/run.sh $P-$w $T 0 oltp_write_only --threads=64 ;;
++    ins1x64) $L $D/run.sh $P-$w $T 0 oltp_insert --threads=64 --tables=1 ;;
++    ins64)$L $D/run.sh $P-$w $T 0 oltp_insert --threads=64 ;;
++    wide32) $L $D/run.sh $P-$w $T 0 $D/wide.lua --threads=32 ;;
++    b100r150) $L $D/run.sh $P-$w $T 150 $D/bulk.lua --threads=8 --rows=100 --mode=upd ;;
++    b100r300) $L $D/run.sh $P-$w $T 300 $D/bulk.lua --threads=8 --rows=100 --mode=upd ;;
++    b100) $L $D/run.sh $P-$w $T 0 $D/bulk.lua --threads=8 --rows=100 --mode=upd ;;
++  esac
++  $D/c.sh purge-binlogs 5 >/dev/null 2>&1
++done
+diff --git a/perf-findings/harness/V2/drain.sh b/perf-findings/harness/V2/drain.sh
+new file mode 100755
+index 0000000000..21eaf9df47
+--- /dev/null
++++ b/perf-findings/harness/V2/drain.sh
+@@ -0,0 +1,56 @@
++#!/bin/bash
++# Drain test (applier capacity): stop the workflow, generate a backlog on the source mysqld, restart the workflow and
++# time until the target has applied the source's whole GTID set.
++# Usage: drain.sh LABEL EVENTS SYSBENCH_ARGS...      (e.g. drain.sh wo-a 60000 oltp_write_only --threads=16)
++# Env: PROF=seconds -> target+source vttablet CPU profile during the drain. GEN_ONLY=1 / APPLY_ONLY=1 split the phases.
++set -uo pipefail
++LABEL=$1; EVENTS=$2; shift 2
++D=/home/vt/perf/V2
++OUT=$D/out/$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++SSOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++TSOCK=/home/vt/perf/c40000/vt_0000000101/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++srcseq() { q $SSOCK "select @@global.gtid_executed" | tr -d '\n' | sed -E 's/.*-([0-9]+)$/\1/'; }
++tgtseq() { q $TSOCK "select pos from _vt.vreplication where workflow='wf'" | sed -E 's/.*-([0-9]+)$/\1/'; }
++status() { q "$1" "show global status where variable_name in ('Questions','Com_insert','Com_update','Com_delete','Com_commit','Com_begin','Com_select','Com_set_option','Com_rollback','Handler_commit','Innodb_rows_updated','Innodb_rows_inserted','Innodb_rows_deleted','Bytes_received','Binlog_bytes_written' )"; }
++VC="$D/c.sh vtctldclient"
++
++$VC Workflow --keyspace dst stop --workflow wf >/dev/null
++sleep 0.5
++s0=$(srcseq)
++sysbench --db-driver=mysql --mysql-socket=$SSOCK --mysql-user=vt_dba --mysql-db=vt_src --tables=4 --table-size=200000 \
++  --events="$EVENTS" --time=0 --rand-type=uniform --db-ps-mode=disable "$@" run >"$OUT/sysbench" 2>&1
++s1=$(srcseq)
++N=$((s1 - s0))
++uptime >"$OUT/uptime0"
++"$D/c.sh" cpu >"$OUT/cpu0"
++status $TSOCK >"$OUT/tstat0"
++curl -s localhost:40101/debug/vars >"$OUT/vars0"
++$D/thr.sh /home/vt/perf/c40000/vt_0000000101/mysql.pid >"$OUT/thr0"
++t0=$(date +%s.%N)
++$VC Workflow --keyspace dst start --workflow wf >/dev/null
++if [[ ${PERF:-0} -gt 0 ]]; then
++  /usr/lib/linux-tools-6.8.0-142/perf record -F 499 -g -o "$OUT/mysqld.perf" -p "$(cat /home/vt/perf/c40000/vt_0000000101/mysql.pid)" -- sleep "$PERF" >/dev/null 2>&1 &
++fi
++if [[ ${PROF:-0} -gt 0 ]]; then
++  curl -s -o "$OUT/tgt.pprof" "http://localhost:40101/debug/pprof/profile?seconds=$PROF" &
++  curl -s -o "$OUT/src.pprof" "http://localhost:40100/debug/pprof/profile?seconds=$PROF" &
++fi
++for _ in $(seq 1 6000); do
++  g=$(tgtseq); [[ ${g:-0} -ge $s1 ]] && break; sleep 0.05
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++$D/thr.sh /home/vt/perf/c40000/vt_0000000101/mysql.pid >"$OUT/thr1"
++status $TSOCK >"$OUT/tstat1"
++curl -s localhost:40101/debug/vars >"$OUT/vars1"
++uptime >"$OUT/uptime1"
++wait
++dur=$(echo "$t1 - $t0" | bc)
++{
++echo "$LABEL trx=$N drain=${dur}s rate=$(echo "$N / $dur" | bc)/s load=[$(sed 's/.*average: //' "$OUT/uptime0")]->[$(sed 's/.*average: //' "$OUT/uptime1")]"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$N" '$1 !~ /vtgate|_100/ || $1=="vttablet_100" {d=$4-$2; printf "  %-14s %7.2f s  %7.1f us/src-trx\n", $1, d, d*1e6/r}'
++paste "$OUT/tstat0" "$OUT/tstat1" | awk -v r="$N" '{printf "    %-22s %9.3f\n", $1, ($4-$2)/r}' | tr '\n' ' ' | sed 's/  */ /g'; echo
++echo "  top target mysqld threads (us/src-trx, % of drain): $(join <(sort "$OUT/thr0") <(sort "$OUT/thr1") | awk -v r="$N" -v d="$dur" '{x=($6-$3)/100; w=($7-$4)/1e9; printf "%.1f %.0f%%busy %.0f%%runqwait\n", x*1e6/r, x*100/d, w*100/d}' | sort -n -r | head -3 | tr '\n' ' ')"
++} | tee "$OUT/summary"
+diff --git a/perf-findings/harness/V2/drainset.sh b/perf-findings/harness/V2/drainset.sh
+new file mode 100755
+index 0000000000..fa2f6c4e82
+--- /dev/null
++++ b/perf-findings/harness/V2/drainset.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# One round of drain tests for the label prefix $1 (each test takes the bench lock separately).
++P=$1
++D=/home/vt/perf/V2
++L="flock -o /home/vt/perf/bench.lock"
++W=${WORKLOADS:-"wo ins upd wide b100 b1000 d100"}
++for w in $W; do
++  case $w in
++    wo) $L $D/drain.sh $P-wo 60000 oltp_write_only --threads=16 ;;
++    ins) $L $D/drain.sh $P-ins 150000 oltp_insert --threads=16 ;;
++    ins1) $L $D/drain.sh $P-ins1 150000 oltp_insert --threads=16 --tables=1 ;;
++    upd)$L $D/drain.sh $P-upd 150000 oltp_update_index --threads=16 ;;
++    wide) $L $D/drain.sh $P-wide2 40000 $D/wide.lua --threads=16 ;;
++    b100) $L $D/drain.sh $P-b100 3000 $D/bulk.lua --threads=8 --rows=100 --mode=upd ;;
++    b1000) $L $D/drain.sh $P-b1000 300 $D/bulk.lua --threads=8 --rows=1000 --mode=upd ;;
++    d100) $L $D/drain.sh $P-d100 3000 $D/bulk.lua --threads=8 --rows=100 --mode=del ;;
++  esac
++  $D/c.sh purge-binlogs 5 >/dev/null 2>&1
++done
+diff --git a/perf-findings/harness/V2/dst_vschema.json b/perf-findings/harness/V2/dst_vschema.json
+new file mode 100644
+index 0000000000..efc2e3aefe
+--- /dev/null
++++ b/perf-findings/harness/V2/dst_vschema.json
+@@ -0,0 +1,7 @@
++{"sharded":true,"vindexes":{"hash":{"type":"hash"}},"tables":{
++"sbtest1":{"column_vindexes":[{"column":"id","name":"hash"}]},
++"sbtest2":{"column_vindexes":[{"column":"id","name":"hash"}]},
++"sbtest3":{"column_vindexes":[{"column":"id","name":"hash"}]},
++"sbtest4":{"column_vindexes":[{"column":"id","name":"hash"}]},
++"wide1":{"column_vindexes":[{"column":"id","name":"hash"}]},
++"bulk1":{"column_vindexes":[{"column":"id","name":"hash"}]}}}
+diff --git a/perf-findings/harness/V2/extra.sql b/perf-findings/harness/V2/extra.sql
+new file mode 100644
+index 0000000000..10fa7c8d3e
+--- /dev/null
++++ b/perf-findings/harness/V2/extra.sql
+@@ -0,0 +1,15 @@
++CREATE TABLE IF NOT EXISTS wide1 (
++ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, k INT NOT NULL DEFAULT 0,
++ c01 VARCHAR(64) NOT NULL DEFAULT '', c02 VARCHAR(64) NOT NULL DEFAULT '', c03 VARCHAR(64) NOT NULL DEFAULT '', c04 VARCHAR(64) NOT NULL DEFAULT '',
++ c05 VARCHAR(64) NOT NULL DEFAULT '', c06 VARCHAR(64) NOT NULL DEFAULT '', c07 VARCHAR(64) NOT NULL DEFAULT '', c08 VARCHAR(64) NOT NULL DEFAULT '',
++ c09 VARCHAR(64) NOT NULL DEFAULT '', c10 VARCHAR(64) NOT NULL DEFAULT '', c11 VARCHAR(64) NOT NULL DEFAULT '', c12 VARCHAR(64) NOT NULL DEFAULT '',
++ c13 VARCHAR(64) NOT NULL DEFAULT '', c14 VARCHAR(64) NOT NULL DEFAULT '', c15 VARCHAR(64) NOT NULL DEFAULT '', c16 VARCHAR(64) NOT NULL DEFAULT '',
++ n01 BIGINT NOT NULL DEFAULT 0, n02 BIGINT NOT NULL DEFAULT 0, n03 BIGINT NOT NULL DEFAULT 0, n04 BIGINT NOT NULL DEFAULT 0,
++ d01 DATETIME NOT NULL DEFAULT '2020-01-01 00:00:00', d02 DATETIME NOT NULL DEFAULT '2020-01-01 00:00:00',
++ dec1 DECIMAL(12,2) NOT NULL DEFAULT 0, t1 TEXT, KEY k_w (k)) ENGINE=InnoDB;
++CREATE TABLE IF NOT EXISTS bulk1 (id INT NOT NULL PRIMARY KEY, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', KEY k_b (k)) ENGINE=InnoDB;
++INSERT INTO wide1 (k,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,c16,n01,n02,n03,n04,dec1,t1)
++ SELECT k, md5(id), md5(id+1), md5(id+2), md5(id+3), md5(id+4), md5(id+5), md5(id+6), md5(id+7), md5(id+8), md5(id+9), md5(id+10), md5(id+11), md5(id+12), md5(id+13), md5(id+14), md5(id+15), id, id*2, id*3, id*4, id/7, repeat(md5(id), 25) FROM sbtest1 WHERE id <= 50000;
++INSERT INTO bulk1 SELECT id,k,c,pad FROM sbtest2;
++select count(*) from wide1;
++select count(*) from bulk1;
+diff --git a/perf-findings/harness/V2/gen2.py b/perf-findings/harness/V2/gen2.py
+new file mode 100644
+index 0000000000..59ceb72591
+--- /dev/null
++++ b/perf-findings/harness/V2/gen2.py
+@@ -0,0 +1,34 @@
++import random
++
++
++def s(n):
++    return ''.join(random.choice('abcdefghij') for _ in range(n))
++
++
++def rowset(seed):
++    random.seed(seed)
++    return [(i, random.randint(1, 1000000), s(119), s(59)) for i in range(1000, 21000)]
++
++
++def case_file(name, rows, n, order):
++    with open(name, 'w') as f:
++        f.write('begin;\n')
++        for j in range(0, len(rows), n):
++            ch = rows[j:j + n]
++            if len(ch) == 1:
++                i, k, c, p = ch[0]
++                f.write("update t set k=%d, c='%s', pad='%s' where id=%d;\n" % (k, c, p, i))
++                continue
++            parts = []
++            for col, idx, q in (('k', 1, False), ('c', 2, True), ('pad', 3, True)):
++                w = ' '.join("when %d then %s" % (x[0], ("'%s'" % x[idx]) if q else x[idx]) for x in ch)
++                parts.append("%s=case id %s end" % (col, w))
++            f.write("update t set %s where id in (%s)%s;\n" % (', '.join(parts), ','.join(str(x[0]) for x in ch), ' order by id' if order else ''))
++        f.write('commit;\n')
++
++
++seed = 500
++for r in (1, 2):
++    for (n, order) in ((1, False), (2, True), (2, False), (4, False), (100, True), (100, False)):
++        seed += 1
++        case_file('m%d%s-r%d.sql' % (n, 'o' if order else '', r), rowset(seed), n, order)
+diff --git a/perf-findings/harness/V2/run.sh b/perf-findings/harness/V2/run.sh
+new file mode 100755
+index 0000000000..e8ec5fca97
+--- /dev/null
++++ b/perf-findings/harness/V2/run.sh
+@@ -0,0 +1,70 @@
++#!/bin/bash
++# Concurrent running-phase test: run a sysbench workload on the source mysqld while the workflow runs,
++# sample GTID lag every second, then wait for the target to catch up.
++# Usage: run.sh LABEL TIME RATE SYSBENCH_ARGS...
++#   RATE: sysbench --rate (0 = unlimited). SYSBENCH_ARGS e.g. "oltp_write_only --threads=16" or "/home/vt/perf/V2/bulk.lua --threads=8 --rows=100"
++# Env: PROF=seconds  -> capture target (and source) vttablet CPU profile starting 5 s into the run.
++#      NOLOCK=1 -> don't take the bench lock (caller holds it).
++set -uo pipefail
++LABEL=$1; TIME=$2; RATE=$3; shift 3
++D=/home/vt/perf/V2
++OUT=$D/out/$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++SSOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++TSOCK=/home/vt/perf/c40000/vt_0000000101/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++srcseq() { q $SSOCK "select @@global.gtid_executed" | tr -d '\n' | sed -E 's/.*-([0-9]+)$/\1/'; }
++tgtseq() { q $TSOCK "select pos from _vt.vreplication where workflow='wf'" | sed -E 's/.*-([0-9]+)$/\1/'; }
++status() { q "$1" "show global status where variable_name in ('Questions','Com_insert','Com_update','Com_delete','Com_commit','Com_begin','Com_select','Com_set_option','Com_rollback','Handler_commit','Innodb_rows_updated','Innodb_rows_inserted','Innodb_rows_deleted','Bytes_received')"; }
++
++uptime >"$OUT/uptime0"
++"$D/c.sh" cpu >"$OUT/cpu0"
++status $TSOCK >"$OUT/tstat0"
++status $SSOCK >"$OUT/sstat0"
++s0=$(srcseq); g0=$(tgtseq)
++curl -s localhost:40101/debug/vars >"$OUT/vars0"
++# sampler
++(
++  t0=$(date +%s.%N)
++  while [[ ! -f $OUT/stop ]]; do
++    s=$(srcseq); g=$(tgtseq); l=$(curl -s localhost:40101/debug/vars | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('VReplicationLagSecondsMax',-1))" 2>/dev/null)
++    printf "%.1f %d %d %d %s\n" "$(echo "$(date +%s.%N) - $t0" | bc)" "$((s - s0))" "$((g - s0))" "$((s - g))" "$l" >>"$OUT/lag"
++    sleep 1
++  done
++) &
++SAMP=$!
++if [[ ${PROF:-0} -gt 0 ]]; then
++  (sleep 5; curl -s -o "$OUT/tgt.pprof" "http://localhost:40101/debug/pprof/profile?seconds=$PROF") &
++  (sleep 5; curl -s -o "$OUT/src.pprof" "http://localhost:40100/debug/pprof/profile?seconds=$PROF") &
++fi
++ts=$(date +%s.%N)
++sysbench --db-driver=mysql --mysql-socket=$SSOCK --mysql-user=vt_dba --mysql-db=vt_src --tables=4 --table-size=200000 \
++  --time="$TIME" --rate="$RATE" --rand-type=uniform --report-interval=0 --db-ps-mode=disable "$@" run >"$OUT/sysbench" 2>&1
++te=$(date +%s.%N)
++s1=$(srcseq)
++"$D/c.sh" cpu >"$OUT/cpu_gen"
++# wait for catch-up (max 300 s)
++for _ in $(seq 1 3000); do
++  g=$(tgtseq); [[ $g -ge $s1 ]] && break; sleep 0.1
++done
++tc=$(date +%s.%N)
++touch "$OUT/stop"; wait $SAMP 2>/dev/null
++wait
++"$D/c.sh" cpu >"$OUT/cpu1"
++status $TSOCK >"$OUT/tstat1"
++status $SSOCK >"$OUT/sstat1"
++curl -s localhost:40101/debug/vars >"$OUT/vars1"
++uptime >"$OUT/uptime1"
++N=$((s1 - s0))
++gen=$(echo "$te - $ts" | bc); cu=$(echo "$tc - $te" | bc)
++maxgap=$(awk 'BEGIN{m=0} $4>m{m=$4} END{print m}' "$OUT/lag")
++maxlag=$(awk 'BEGIN{m=0} $5>m && $5<1e9{m=$5} END{print m}' "$OUT/lag")
++{
++echo "$LABEL trx=$N gen=${gen}s src_rate=$(echo "$N / $gen" | bc)/s catchup_after_end=${cu}s eff_apply=$(echo "$N / ($gen + $cu)" | bc)/s max_gtid_gap=$maxgap max_lag_s=$maxlag load0=[$(sed 's/.*average: //' "$OUT/uptime0")] load1=[$(sed 's/.*average: //' "$OUT/uptime1")]"
++echo "  sysbench: $(grep -Eo 'transactions:.*|queries:.*' "$OUT/sysbench" | tr '\n' ' ')"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$N" '{d=$4-$2; printf "  %-14s %7.2f s  %7.1f us/src-trx\n", $1, d, d*1e6/r}'
++echo "  target mysqld per src trx:"
++paste "$OUT/tstat0" "$OUT/tstat1" | awk -v r="$N" '{printf "    %-22s %9.3f\n", $1, ($4-$2)/r}'
++echo "  source per src trx:"
++paste "$OUT/sstat0" "$OUT/sstat1" | awk -v r="$N" '$1 ~ /Innodb_rows|Com_commit|Questions/ {printf "    %-22s %9.3f\n", $1, ($4-$2)/r}'
++} | tee "$OUT/summary"
+diff --git a/perf-findings/harness/V2/run2.sh b/perf-findings/harness/V2/run2.sh
+new file mode 100755
+index 0000000000..1bc1f864ec
+--- /dev/null
++++ b/perf-findings/harness/V2/run2.sh
+@@ -0,0 +1,15 @@
++#!/bin/bash
++# Busiest target mysqld thread CPU per updated row (20k rows) for each variant.
++cd "$(dirname "$0")"
++PID=/home/vt/perf/c40000/vt_0000000101/mysql.pid
++for r in 1 2; do
++  for f in m1 m2o m2 m4 m100o m100; do
++    /home/vt/perf/V2/thr.sh $PID | sort >a
++    t0=$(date +%s.%N)
++    mysql -S /home/vt/perf/c40000/vt_0000000101/mysql.sock -u vt_dba v2scratch <$f-r$r.sql
++    t1=$(date +%s.%N)
++    /home/vt/perf/V2/thr.sh $PID | sort >b
++    top=$(join a b | awk '{print $6-$3}' | sort -n -r | head -1)
++    echo "$f r$r wall=$(echo "$t1 - $t0" | bc)s busiest_thread=$(echo "$top * 10000 / 20000" | bc -l | cut -c1-5)us/row"
++  done
++done
+diff --git a/perf-findings/harness/V2/shrink.sql b/perf-findings/harness/V2/shrink.sql
+new file mode 100644
+index 0000000000..eb23c22139
+--- /dev/null
++++ b/perf-findings/harness/V2/shrink.sql
+@@ -0,0 +1,8 @@
++set sql_log_bin=0;
++delete from wide1 where id > 50000;
++delete from sbtest1 where id > 200000;
++delete from sbtest2 where id > 200000;
++delete from sbtest3 where id > 200000;
++delete from sbtest4 where id > 200000;
++optimize table wide1, sbtest1, sbtest2, sbtest3, sbtest4;
++drop database if exists v2scratch;
+diff --git a/perf-findings/harness/V2/summ.sh b/perf-findings/harness/V2/summ.sh
+new file mode 100755
+index 0000000000..e10b4282b6
+--- /dev/null
++++ b/perf-findings/harness/V2/summ.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++# Summarize drain results: summ.sh GLOB  (e.g. summ.sh 'base-r*-wo')
++cd /home/vt/perf/V2/out || exit 1
++for d in $1; do
++  [[ -f $d/summary ]] || continue
++  awk -v n="$d" '
++    NR==1 { for (i=1;i<=NF;i++) { if ($i ~ /^rate=/) r=substr($i,6); if ($i ~ /^drain=/) dr=substr($i,7) } }
++    $1=="vttablet_100" { sv=$4 } $1=="vttablet_101" { tv=$4 } $1=="mysqld_101" { tm=$4 }
++    /Questions/ { for (i=1;i<=NF;i++) { if ($i=="Questions") q=$(i+1); if ($i=="Com_commit") c=$(i+1) } }
++    /top target mysqld threads/ { match($0, /: [0-9.]+ [0-9]+%busy [0-9]+%runqwait/); split(substr($0, RSTART+2, RLENGTH-2), a, " "); tb=a[2]; tw=a[3] ; if (tb=="") { match($0, /: [0-9.]+ [0-9]+%/); split(substr($0, RSTART+2, RLENGTH-2), a, " "); tb=a[2] } }
++    END { printf "%-22s rate=%-7s drain=%-6.2f srcVT=%-7s tgtVT=%-7s tgtMy=%-8s stmts/trx=%-7s commits/trx=%-6s applythr=%s %s\n", n, r, dr, sv, tv, tm, q, c, tb, tw }' "$d/summary"
++done
+diff --git a/perf-findings/harness/V2/thr.sh b/perf-findings/harness/V2/thr.sh
+new file mode 100755
+index 0000000000..8ded0287d5
+--- /dev/null
++++ b/perf-findings/harness/V2/thr.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Per-thread CPU of the process in pid file $1: "tid comm cpu_ticks runqueue_wait_ns"
++for t in /proc/$(cat $1)/task/*; do
++  w=$(awk '{print $2}' "$t/schedstat" 2>/dev/null)
++  awk -v tid="${t##*/}" -v w="${w:-0}" '{ s=$0; sub(/^[^)]*\) /, "", s); split(s, f, " "); c=$0; sub(/^[^(]*\(/, "", c); sub(/\).*/, "", c); print tid, c, f[12]+f[13], w }' "$t/stat" 2>/dev/null
++done
+diff --git a/perf-findings/harness/V2/waitstream.sh b/perf-findings/harness/V2/waitstream.sh
+new file mode 100755
+index 0000000000..ff0e15995d
+--- /dev/null
++++ b/perf-findings/harness/V2/waitstream.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++# Wait (max 90 s) until the target vplayer reports a finite lag, i.e. the stream is running.
++for _ in $(seq 1 180); do
++  l=$(curl -s localhost:40101/debug/vars | python3 -c "import json,sys; print(json.load(sys.stdin).get('VReplicationLagSecondsMax', -1))" 2>/dev/null)
++  if [[ -n $l && $l -ge 0 && $l -lt 1000000 ]]; then exit 0; fi
++  sleep 0.5
++done
++echo "stream did not start" >&2
++exit 1
+diff --git a/perf-findings/harness/V2/wide.lua b/perf-findings/harness/V2/wide.lua
+new file mode 100644
+index 0000000000..fe0d0e7668
+--- /dev/null
++++ b/perf-findings/harness/V2/wide.lua
+@@ -0,0 +1,28 @@
++-- Wide-row workload: each transaction updates one random wide1 row (3 columns), deletes one random row and re-inserts it (table size stays constant).
++-- Row images are ~2.3 KB (16 varchar(64), 4 bigint, 2 datetime, decimal, 800 B text).
++function thread_init()
++  drv = sysbench.sql.driver()
++  con = drv:connect()
++end
++
++function thread_done()
++  con:disconnect()
++end
++
++local function s64()
++  return sysbench.rand.string(string.rep("@", 32))
++end
++
++function event()
++  local id = sysbench.rand.uniform(1, 50000)
++  con:query("BEGIN")
++  con:query(string.format("UPDATE wide1 SET k=k+1, c01='%s', n01=n01+1 WHERE id=%d", s64(), id))
++  local id2 = sysbench.rand.uniform(1, 50000)
++  con:query(string.format("DELETE FROM wide1 WHERE id=%d", id2))
++  con:query(string.format(
++    "INSERT INTO wide1 (id,k,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,c16,n01,n02,n03,n04,dec1,t1) " ..
++    "VALUES (%d,%d,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s',%d,%d,%d,%d,%d.25,'%s')",
++    id2, id, s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(), s64(),
++    id, id, id, id, id, string.rep(s64(), 25)))
++  con:query("COMMIT")
++end

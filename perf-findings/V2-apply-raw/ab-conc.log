@@ -1,0 +1,673 @@
+base-r1-wo16 trx=94610 gen=30.045699076s src_rate=3148/s catchup_after_end=20.079979192s eff_apply=1887/s max_gtid_gap=85882 max_lag_s=27 load0=[4.12, 7.20, 7.19] load1=[8.31, 8.06, 7.50]
+  sysbench: transactions:                        94610  (3152.64 per sec.) queries:                             567660 (18915.83 per sec.) 
+  vtgate            0.03 s      0.3 us/src-trx
+  vttablet_100      6.65 s     70.3 us/src-trx
+  mysqld_100       76.01 s    803.4 us/src-trx
+  vttablet_101     11.08 s    117.1 us/src-trx
+  mysqld_101       26.83 s    283.6 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           744.958
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.006
+    Com_set_option             0.000
+    Com_update                 2.005
+    Handler_commit             8.021
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  4.022
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+base-r1-wo64 trx=84144 gen=30.116166102s src_rate=2793/s catchup_after_end=11.737553141s eff_apply=2010/s max_gtid_gap=41673 max_lag_s=16 load0=[7.03, 7.80, 7.42] load1=[18.54, 11.00, 8.54]
+  sysbench: transactions:                        84144  (2801.17 per sec.) queries:                             504864 (16807.01 per sec.) 
+  vtgate            0.04 s      0.5 us/src-trx
+  vttablet_100      5.75 s     68.3 us/src-trx
+  mysqld_100       51.26 s    609.2 us/src-trx
+  vttablet_101     10.63 s    126.3 us/src-trx
+  mysqld_101       24.18 s    287.4 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           744.658
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.003
+    Com_set_option             0.000
+    Com_update                 2.005
+    Handler_commit             8.020
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  4.019
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+base-r1-b100r300 trx=8976 gen=30.031182242s src_rate=298/s catchup_after_end=24.349960567s eff_apply=165/s max_gtid_gap=4367 max_lag_s=24 load0=[14.65, 10.62, 8.47] load1=[8.49, 9.63, 8.25]
+  sysbench: transactions:                        8976   (299.14 per sec.) queries:                             8976   (299.14 per sec.) 
+  vtgate            0.03 s      3.3 us/src-trx
+  vttablet_100      5.46 s    608.3 us/src-trx
+  mysqld_100       23.73 s   2643.7 us/src-trx
+  vttablet_101     22.16 s   2468.8 us/src-trx
+  mysqld_101       53.30 s   5938.1 us/src-trx
+  target mysqld per src trx:
+    Bytes_received         16389.352
+    Com_begin                  0.091
+    Com_commit                 0.091
+    Com_delete                 0.000
+    Com_insert                 0.000
+    Com_rollback               0.000
+    Com_select                 0.062
+    Com_set_option             0.001
+    Com_update               100.091
+    Handler_commit           200.397
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.091
+    Questions                100.368
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.000
+    Questions                  1.021
+base-r1-ins1x64 trx=239426 gen=30.095297794s src_rate=7955/s catchup_after_end=.037077425s eff_apply=7945/s max_gtid_gap=3788 max_lag_s=1 load0=[5.72, 8.88, 8.04] load1=[16.66, 11.32, 8.89]
+  sysbench: transactions:                        239426 (7974.71 per sec.) queries:                             239426 (7974.71 per sec.) 
+  vtgate            0.02 s      0.1 us/src-trx
+  vttablet_100     11.34 s     47.4 us/src-trx
+  mysqld_100       55.55 s    232.0 us/src-trx
+  vttablet_101     11.44 s     47.8 us/src-trx
+  mysqld_101       12.17 s     50.8 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           241.574
+    Com_begin                  0.010
+    Com_commit                 0.010
+    Com_delete                 0.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.000
+    Com_set_option             0.000
+    Com_update                 0.010
+    Handler_commit             2.040
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.010
+    Questions                  1.030
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.000
+    Questions                  1.001
+v2-r1-wo16 trx=88161 gen=30.035758400s src_rate=2935/s catchup_after_end=15.089536561s eff_apply=1953/s max_gtid_gap=69663 max_lag_s=24 load0=[11.58, 10.57, 8.70] load1=[13.24, 11.28, 9.04]
+  sysbench: transactions:                        88161  (2937.95 per sec.) queries:                             528966 (17627.70 per sec.) 
+  vtgate            0.04 s      0.5 us/src-trx
+  vttablet_100      6.26 s     71.0 us/src-trx
+  mysqld_100       72.60 s    823.5 us/src-trx
+  vttablet_101     10.36 s    117.5 us/src-trx
+  mysqld_101       23.41 s    265.5 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           774.038
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.005
+    Com_set_option             0.000
+    Com_update                 1.755
+    Handler_commit             7.522
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  3.771
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+v2-r1-wo64 trx=94370 gen=30.078167463s src_rate=3137/s catchup_after_end=9.774531490s eff_apply=2367/s max_gtid_gap=43952 max_lag_s=14 load0=[11.18, 10.93, 8.96] load1=[17.37, 12.76, 9.67]
+  sysbench: transactions:                        94370  (3143.81 per sec.) queries:                             566220 (18862.88 per sec.) 
+  vtgate            0.02 s      0.2 us/src-trx
+  vttablet_100      6.75 s     71.5 us/src-trx
+  mysqld_100       55.44 s    587.5 us/src-trx
+  vttablet_101     11.91 s    126.2 us/src-trx
+  mysqld_101       25.93 s    274.8 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           773.930
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.003
+    Com_set_option             0.000
+    Com_update                 1.754
+    Handler_commit             7.519
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  3.767
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+v2-r1-b100r300 trx=9107 gen=30.037855737s src_rate=303/s catchup_after_end=.037907690s eff_apply=302/s max_gtid_gap=65 max_lag_s=0 load0=[13.67, 12.17, 9.53] load1=[10.85, 11.67, 9.45]
+  sysbench: transactions:                        9107   (303.39 per sec.) queries:                             9107   (303.39 per sec.) 
+  vtgate            0.01 s      1.1 us/src-trx
+  vttablet_100      7.03 s    771.9 us/src-trx
+  mysqld_100       24.82 s   2725.4 us/src-trx
+  vttablet_101      8.94 s    981.7 us/src-trx
+  mysqld_101       24.55 s   2695.7 us/src-trx
+  target mysqld per src trx:
+    Bytes_received         18038.893
+    Com_begin                  0.480
+    Com_commit                 0.480
+    Com_delete                 0.000
+    Com_insert                 0.000
+    Com_rollback               0.000
+    Com_select                 0.008
+    Com_set_option             0.001
+    Com_update                 2.480
+    Handler_commit             5.924
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.480
+    Questions                  3.452
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated       99.999
+    Questions                  1.014
+v2-r1-ins1x64 trx=246901 gen=30.092678201s src_rate=8204/s catchup_after_end=.045693884s eff_apply=8192/s max_gtid_gap=3065 max_lag_s=1 load0=[7.67, 10.86, 9.24] load1=[21.14, 13.69, 10.22]
+  sysbench: transactions:                        246901 (8224.00 per sec.) queries:                             246901 (8224.00 per sec.) 
+  vtgate            0.01 s      0.0 us/src-trx
+  vttablet_100     11.69 s     47.3 us/src-trx
+  mysqld_100       59.66 s    241.6 us/src-trx
+  vttablet_101      9.78 s     39.6 us/src-trx
+  mysqld_101        8.49 s     34.4 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           208.052
+    Com_begin                  0.027
+    Com_commit                 0.027
+    Com_delete                 0.000
+    Com_insert                 0.027
+    Com_rollback               0.000
+    Com_select                 0.000
+    Com_set_option             0.000
+    Com_update                 0.027
+    Handler_commit             0.159
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.027
+    Questions                  0.107
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.000
+    Questions                  1.001
+prw4-r1-wo16 trx=87148 gen=30.037222971s src_rate=2901/s catchup_after_end=10.432091862s eff_apply=2153/s max_gtid_gap=64654 max_lag_s=23 load0=[14.31, 12.69, 9.98] load1=[16.51, 13.54, 10.39]
+  sysbench: transactions:                        87148  (2903.89 per sec.) queries:                             522888 (17423.34 per sec.) 
+  vtgate            0.02 s      0.2 us/src-trx
+  vttablet_100      5.94 s     68.2 us/src-trx
+  mysqld_100       68.76 s    789.0 us/src-trx
+  vttablet_101     11.58 s    132.9 us/src-trx
+  mysqld_101       27.37 s    314.1 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           757.331
+    Com_begin                  0.063
+    Com_commit                 0.063
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.004
+    Com_set_option             0.001
+    Com_update                 2.063
+    Handler_commit             8.256
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.063
+    Questions                  4.197
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+prw4-r1-wo64 trx=79768 gen=30.099259706s src_rate=2650/s catchup_after_end=4.173922371s eff_apply=2327/s max_gtid_gap=26029 max_lag_s=9 load0=[13.96, 13.12, 10.30] load1=[19.94, 14.86, 11.00]
+  sysbench: transactions:                        79768  (2656.62 per sec.) queries:                             478608 (15939.69 per sec.) 
+  vtgate            0.02 s      0.3 us/src-trx
+  vttablet_100      5.79 s     72.6 us/src-trx
+  mysqld_100       47.97 s    601.4 us/src-trx
+  vttablet_101     12.68 s    159.0 us/src-trx
+  mysqld_101       27.89 s    349.6 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           757.025
+    Com_begin                  0.064
+    Com_commit                 0.064
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.002
+    Com_set_option             0.000
+    Com_update                 2.064
+    Handler_commit             8.256
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.064
+    Questions                  4.194
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+prw4-r1-b100r300 trx=8961 gen=30.018295293s src_rate=298/s catchup_after_end=6.324909539s eff_apply=246/s max_gtid_gap=2073 max_lag_s=6 load0=[15.95, 14.23, 10.85] load1=[13.86, 13.86, 10.85]
+  sysbench: transactions:                        8961   (298.66 per sec.) queries:                             8961   (298.66 per sec.) 
+  vtgate            0.02 s      2.2 us/src-trx
+  vttablet_100      5.41 s    603.7 us/src-trx
+  mysqld_100       25.16 s   2807.7 us/src-trx
+  vttablet_101     23.42 s   2613.5 us/src-trx
+  mysqld_101       57.97 s   6469.1 us/src-trx
+  target mysqld per src trx:
+    Bytes_received         16379.352
+    Com_begin                  0.103
+    Com_commit                 0.103
+    Com_delete                 0.000
+    Com_insert                 0.000
+    Com_rollback               0.000
+    Com_select                 0.023
+    Com_set_option             0.000
+    Com_update               100.104
+    Handler_commit           200.426
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.103
+    Questions                100.344
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated       99.999
+    Questions                  1.016
+prw4-r1-ins1x64 trx=255085 gen=30.119108485s src_rate=8469/s catchup_after_end=2.941892111s eff_apply=7715/s max_gtid_gap=49356 max_lag_s=5 load0=[12.82, 13.63, 10.81] load1=[19.42, 15.14, 11.40]
+  sysbench: transactions:                        255085 (8496.96 per sec.) queries:                             255085 (8496.96 per sec.) 
+  vtgate            0.02 s      0.1 us/src-trx
+  vttablet_100      7.11 s     27.9 us/src-trx
+  mysqld_100       55.86 s    219.0 us/src-trx
+  vttablet_101     13.78 s     54.0 us/src-trx
+  mysqld_101       21.09 s     82.7 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           253.045
+    Com_begin                  0.063
+    Com_commit                 0.063
+    Com_delete                 0.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.000
+    Com_set_option             0.000
+    Com_update                 0.063
+    Handler_commit             2.254
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.063
+    Questions                  1.191
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.000
+    Questions                  1.001
+base-r2-wo16 trx=76210 gen=30.081642079s src_rate=2533/s catchup_after_end=6.627044998s eff_apply=2076/s max_gtid_gap=27898 max_lag_s=11 load0=[14.40, 14.29, 11.22] load1=[14.84, 14.53, 11.43]
+  sysbench: transactions:                        76210  (2539.02 per sec.) queries:                             457260 (15234.13 per sec.) 
+  vtgate            0.01 s      0.1 us/src-trx
+  vttablet_100      5.63 s     73.9 us/src-trx
+  mysqld_100       61.62 s    808.6 us/src-trx
+  vttablet_101     10.64 s    139.6 us/src-trx
+  mysqld_101       23.62 s    309.9 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           744.649
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.003
+    Com_set_option             0.000
+    Com_update                 2.005
+    Handler_commit             8.022
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  4.020
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+base-r2-wo64 trx=96562 gen=30.196651953s src_rate=3197/s catchup_after_end=10.998551879s eff_apply=2344/s max_gtid_gap=50390 max_lag_s=16 load0=[14.05, 14.37, 11.40] load1=[17.95, 15.63, 11.98]
+  sysbench: transactions:                        96562  (3215.57 per sec.) queries:                             579372 (19293.41 per sec.) 
+  vtgate            0.03 s      0.3 us/src-trx
+  vttablet_100      6.93 s     71.8 us/src-trx
+  mysqld_100       57.40 s    594.4 us/src-trx
+  vttablet_101     12.34 s    127.8 us/src-trx
+  mysqld_101       26.90 s    278.6 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           744.576
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.003
+    Com_set_option             0.000
+    Com_update                 2.005
+    Handler_commit             8.020
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  4.018
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+base-r2-b100r300 trx=9202 gen=30.025858131s src_rate=306/s catchup_after_end=24.218165097s eff_apply=169/s max_gtid_gap=4215 max_lag_s=24 load0=[16.75, 15.42, 11.94] load1=[8.87, 13.50, 11.48]
+  sysbench: transactions:                        9202   (306.67 per sec.) queries:                             9202   (306.67 per sec.) 
+  vtgate            0.04 s      4.3 us/src-trx
+  vttablet_100      5.64 s    612.9 us/src-trx
+  mysqld_100       25.63 s   2785.3 us/src-trx
+  vttablet_101     23.01 s   2500.5 us/src-trx
+  mysqld_101       57.52 s   6250.8 us/src-trx
+  target mysqld per src trx:
+    Bytes_received         16387.900
+    Com_begin                  0.091
+    Com_commit                 0.091
+    Com_delete                 0.000
+    Com_insert                 0.000
+    Com_rollback               0.000
+    Com_select                 0.061
+    Com_set_option             0.001
+    Com_update               100.091
+    Handler_commit           200.396
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.091
+    Questions                100.365
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.000
+    Questions                  1.021
+base-r2-ins1x64 trx=235986 gen=30.125797646s src_rate=7833/s catchup_after_end=.035446752s eff_apply=7824/s max_gtid_gap=3959 max_lag_s=1 load0=[8.48, 13.34, 11.44] load1=[15.31, 14.76, 12.00]
+  sysbench: transactions:                        235986 (7858.04 per sec.) queries:                             235986 (7858.04 per sec.) 
+  vtgate            0.03 s      0.1 us/src-trx
+  vttablet_100     11.40 s     48.3 us/src-trx
+  mysqld_100       55.10 s    233.5 us/src-trx
+  vttablet_101     11.46 s     48.6 us/src-trx
+  mysqld_101       12.04 s     51.0 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           241.510
+    Com_begin                  0.010
+    Com_commit                 0.010
+    Com_delete                 0.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.000
+    Com_set_option             0.000
+    Com_update                 0.010
+    Handler_commit             2.039
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.010
+    Questions                  1.029
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.000
+    Questions                  1.001
+v2-r2-wo16 trx=85228 gen=30.055704932s src_rate=2835/s catchup_after_end=15.735097659s eff_apply=1861/s max_gtid_gap=70383 max_lag_s=26 load0=[12.39, 14.14, 11.86] load1=[13.71, 14.37, 12.05]
+  sysbench: transactions:                        85228  (2839.99 per sec.) queries:                             511368 (17039.91 per sec.) 
+  vtgate            0.03 s      0.4 us/src-trx
+  vttablet_100      6.21 s     72.9 us/src-trx
+  mysqld_100       67.88 s    796.5 us/src-trx
+  vttablet_101      9.80 s    115.0 us/src-trx
+  mysqld_101       22.29 s    261.5 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           774.010
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.005
+    Com_set_option             0.000
+    Com_update                 1.756
+    Handler_commit             7.524
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  3.773
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+v2-r2-wo64 trx=92303 gen=30.108660972s src_rate=3065/s catchup_after_end=9.814949921s eff_apply=2311/s max_gtid_gap=44261 max_lag_s=15 load0=[13.71, 14.37, 12.05] load1=[19.63, 15.94, 12.68]
+  sysbench: transactions:                        92303  (3074.58 per sec.) queries:                             553818 (18447.49 per sec.) 
+  vtgate            0.03 s      0.3 us/src-trx
+  vttablet_100      6.49 s     70.3 us/src-trx
+  mysqld_100       53.25 s    576.9 us/src-trx
+  vttablet_101     11.30 s    122.4 us/src-trx
+  mysqld_101       25.22 s    273.2 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           773.921
+    Com_begin                  0.005
+    Com_commit                 0.005
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.003
+    Com_set_option             0.000
+    Com_update                 1.754
+    Handler_commit             7.518
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.005
+    Questions                  3.767
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+v2-r2-b100r300 trx=8992 gen=30.022308569s src_rate=299/s catchup_after_end=.044721434s eff_apply=299/s max_gtid_gap=57 max_lag_s=10 load0=[19.63, 15.94, 12.68] load1=[12.55, 14.57, 12.33]
+  sysbench: transactions:                        8992   (299.68 per sec.) queries:                             8992   (299.68 per sec.) 
+  vtgate            0.02 s      2.2 us/src-trx
+  vttablet_100      7.28 s    809.6 us/src-trx
+  mysqld_100       25.35 s   2819.2 us/src-trx
+  vttablet_101      9.15 s   1017.6 us/src-trx
+  mysqld_101       25.50 s   2835.9 us/src-trx
+  target mysqld per src trx:
+    Bytes_received         18046.849
+    Com_begin                  0.489
+    Com_commit                 0.489
+    Com_delete                 0.000
+    Com_insert                 0.000
+    Com_rollback               0.000
+    Com_select                 0.007
+    Com_set_option             0.001
+    Com_update                 2.489
+    Handler_commit             5.960
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.489
+    Questions                  3.479
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.000
+    Questions                  1.012
+v2-r2-ins1x64 trx=235501 gen=30.095394499s src_rate=7825/s catchup_after_end=.032922639s eff_apply=7816/s max_gtid_gap=747 max_lag_s=1 load0=[11.94, 14.41, 12.29] load1=[22.05, 16.60, 13.08]
+  sysbench: transactions:                        235501 (7844.35 per sec.) queries:                             235501 (7844.35 per sec.) 
+  vtgate            0.02 s      0.1 us/src-trx
+  vttablet_100     10.98 s     46.6 us/src-trx
+  mysqld_100       55.12 s    234.1 us/src-trx
+  vttablet_101      9.45 s     40.1 us/src-trx
+  mysqld_101        8.54 s     36.3 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           208.922
+    Com_begin                  0.030
+    Com_commit                 0.030
+    Com_delete                 0.000
+    Com_insert                 0.030
+    Com_rollback               0.000
+    Com_select                 0.000
+    Com_set_option             0.000
+    Com_update                 0.030
+    Handler_commit             0.180
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.030
+    Questions                  0.121
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.000
+    Questions                  1.001
+prw4-r2-wo16 trx=95853 gen=30.041010544s src_rate=3190/s catchup_after_end=12.492134974s eff_apply=2253/s max_gtid_gap=80347 max_lag_s=25 load0=[16.00, 15.57, 12.82] load1=[16.05, 15.65, 12.96]
+  sysbench: transactions:                        95853  (3193.20 per sec.) queries:                             575118 (19159.23 per sec.) 
+  vtgate            0.03 s      0.3 us/src-trx
+  vttablet_100      6.41 s     66.9 us/src-trx
+  mysqld_100       69.11 s    721.0 us/src-trx
+  vttablet_101     11.83 s    123.4 us/src-trx
+  mysqld_101       28.47 s    297.0 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           757.344
+    Com_begin                  0.063
+    Com_commit                 0.063
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.005
+    Com_set_option             0.001
+    Com_update                 2.063
+    Handler_commit             8.256
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.063
+    Questions                  4.197
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+prw4-r2-wo64 trx=82919 gen=30.084417201s src_rate=2756/s catchup_after_end=4.170857342s eff_apply=2420/s max_gtid_gap=27074 max_lag_s=13 load0=[16.05, 15.65, 12.96] load1=[22.66, 17.39, 13.65]
+  sysbench: transactions:                        82919  (2762.02 per sec.) queries:                             497514 (16572.11 per sec.) 
+  vtgate            0.02 s      0.2 us/src-trx
+  vttablet_100      6.01 s     72.5 us/src-trx
+  mysqld_100       48.54 s    585.4 us/src-trx
+  vttablet_101     12.68 s    152.9 us/src-trx
+  mysqld_101       28.16 s    339.6 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           756.964
+    Com_begin                  0.064
+    Com_commit                 0.064
+    Com_delete                 1.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.002
+    Com_set_option             0.000
+    Com_update                 2.064
+    Handler_commit             8.255
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.064
+    Questions                  4.194
+  source per src trx:
+    Com_commit                 1.000
+    Innodb_rows_deleted        1.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        2.000
+    Questions                  6.002
+prw4-r2-b100r300 trx=8891 gen=30.048600426s src_rate=295/s catchup_after_end=5.065259739s eff_apply=253/s max_gtid_gap=1549 max_lag_s=4 load0=[22.66, 17.39, 13.65] load1=[16.43, 16.46, 13.49]
+  sysbench: transactions:                        8891   (296.22 per sec.) queries:                             8891   (296.22 per sec.) 
+  vtgate            0.03 s      3.4 us/src-trx
+  vttablet_100      5.21 s    586.0 us/src-trx
+  mysqld_100       24.28 s   2730.9 us/src-trx
+  vttablet_101     23.24 s   2613.9 us/src-trx
+  mysqld_101       56.96 s   6406.5 us/src-trx
+  target mysqld per src trx:
+    Bytes_received         16341.981
+    Com_begin                  0.106
+    Com_commit                 0.106
+    Com_delete                 0.000
+    Com_insert                 0.000
+    Com_rollback               0.000
+    Com_select                 0.019
+    Com_set_option             0.001
+    Com_update               100.106
+    Handler_commit           200.434
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.106
+    Questions                100.348
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       0.000
+    Innodb_rows_updated      100.000
+    Questions                  1.014
+prw4-r2-ins1x64 trx=263886 gen=30.401401436s src_rate=8680/s catchup_after_end=2.413738418s eff_apply=8041/s max_gtid_gap=42989 max_lag_s=5 load0=[16.43, 16.46, 13.49] load1=[24.66, 18.54, 14.29]
+  sysbench: transactions:                        263886 (8700.63 per sec.) queries:                             263886 (8700.63 per sec.) 
+  vtgate            0.01 s      0.0 us/src-trx
+  vttablet_100      7.23 s     27.4 us/src-trx
+  mysqld_100       55.71 s    211.1 us/src-trx
+  vttablet_101     13.79 s     52.3 us/src-trx
+  mysqld_101       20.35 s     77.1 us/src-trx
+  target mysqld per src trx:
+    Bytes_received           253.025
+    Com_begin                  0.063
+    Com_commit                 0.063
+    Com_delete                 0.000
+    Com_insert                 1.000
+    Com_rollback               0.000
+    Com_select                 0.000
+    Com_set_option             0.000
+    Com_update                 0.063
+    Handler_commit             2.254
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.063
+    Questions                  1.191
+  source per src trx:
+    Com_commit                 0.000
+    Innodb_rows_deleted        0.000
+    Innodb_rows_inserted       1.000
+    Innodb_rows_updated        0.000
+    Questions                  1.001
+finished

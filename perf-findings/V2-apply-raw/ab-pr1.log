@@ -1,0 +1,216 @@
+base-r1-wo trx=60000 drain=15.276251154s rate=3927/s load=[9.08, 6.52, 3.96]->[9.04, 6.63, 4.04]
+  vttablet_100      3.74 s     62.3 us/src-trx
+  vttablet_101      6.30 s    105.0 us/src-trx
+  mysqld_101       13.05 s    217.5 us/src-trx
+ Bytes_received 745.545 Com_begin 0.005 Com_commit 0.005 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.008 Com_set_option 0.000 Com_update 2.005 Handler_commit 8.023 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.005 Questions 4.027 
+  top target mysqld threads (us/src-trx, % of drain): 178.8 70% 6.7 3% 5.5 2% 
+base-r1-upd trx=150000 drain=12.060923398s rate=12436/s load=[12.00, 7.51, 4.40]->[12.49, 7.83, 4.55]
+  vttablet_100      4.19 s     27.9 us/src-trx
+  vttablet_101      4.75 s     31.7 us/src-trx
+  mysqld_101       10.28 s     68.5 us/src-trx
+ Bytes_received 235.740 Com_begin 0.002 Com_commit 0.002 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.000 Com_update 1.002 Handler_commit 2.008 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.574 Innodb_rows_updated 1.002 Questions 1.009 
+  top target mysqld threads (us/src-trx, % of drain): 47.9 60% 2.6 3% 2.3 3% 
+base-r1-wide trx=40000 drain=15.828082264s rate=2527/s load=[16.49, 8.99, 5.00]->[17.22, 9.51, 5.24]
+  vttablet_100      3.52 s     88.0 us/src-trx
+  vttablet_101      5.75 s    143.7 us/src-trx
+  mysqld_101       11.42 s    285.5 us/src-trx
+ Bytes_received 3185.538 Com_begin 0.016 Com_commit 0.016 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.013 Com_set_option 0.000 Com_update 1.017 Handler_commit 4.073 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.017 Questions 2.068 
+  top target mysqld threads (us/src-trx, % of drain): 218.8 55% 20.8 5% 10.8 3% 
+base-r1-b100 trx=3000 drain=21.247431180s rate=141/s load=[16.29, 9.70, 5.37]->[14.93, 9.94, 5.56]
+  vttablet_100      1.69 s    563.3 us/src-trx
+  vttablet_101      8.21 s   2736.7 us/src-trx
+  mysqld_101       20.05 s   6683.3 us/src-trx
+ Bytes_received 16333.187 Com_begin 0.091 Com_commit 0.091 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.224 Com_set_option 0.006 Com_update 100.092 Handler_commit 200.483 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.092 Questions 100.610 
+  top target mysqld threads (us/src-trx, % of drain): 5160.0 73% 576.7 8% 160.0 2% 
+prw1-r1-wo trx=60000 drain=17.579476997s rate=3413/s load=[13.68, 10.02, 5.74]->[13.78, 10.23, 5.88]
+  vttablet_100      3.54 s     59.0 us/src-trx
+  vttablet_101      6.53 s    108.8 us/src-trx
+  mysqld_101       14.89 s    248.2 us/src-trx
+ Bytes_received 745.658 Com_begin 0.005 Com_commit 0.005 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.009 Com_set_option 0.000 Com_update 2.005 Handler_commit 8.023 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.005 Questions 4.028 
+  top target mysqld threads (us/src-trx, % of drain): 187.5 64% 11.2 4% 6.8 2% 
+prw1-r1-upd trx=150000 drain=10.976120198s rate=13666/s load=[18.21, 11.51, 6.42]->[17.34, 11.54, 6.48]
+  vttablet_100      3.99 s     26.6 us/src-trx
+  vttablet_101      4.64 s     30.9 us/src-trx
+  mysqld_101        9.35 s     62.3 us/src-trx
+ Bytes_received 235.694 Com_begin 0.002 Com_commit 0.002 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.002 Com_set_option 0.000 Com_update 1.002 Handler_commit 2.008 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.002 Questions 1.009 
+  top target mysqld threads (us/src-trx, % of drain): 47.5 65% 2.5 3% 2.3 3% 
+prw1-r1-wide trx=40000 drain=17.716340616s rate=2257/s load=[17.40, 11.84, 6.66]->[18.03, 12.26, 6.88]
+  vttablet_100      3.43 s     85.7 us/src-trx
+  vttablet_101      5.17 s    129.2 us/src-trx
+  mysqld_101       10.61 s    265.3 us/src-trx
+ Bytes_received 3185.727 Com_begin 0.017 Com_commit 0.017 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.013 Com_set_option 0.000 Com_update 1.017 Handler_commit 4.074 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.017 Questions 2.070 
+  top target mysqld threads (us/src-trx, % of drain): 198.5 45% 17.0 4% 12.0 3% 
+prw1-r1-b100 trx=3000 drain=18.186475711s rate=164/s load=[17.94, 12.34, 6.94]->[16.25, 12.34, 7.06]
+  vttablet_100      1.67 s    556.7 us/src-trx
+  vttablet_101      7.73 s   2576.7 us/src-trx
+  mysqld_101       16.93 s   5643.3 us/src-trx
+ Bytes_received 16362.167 Com_begin 0.091 Com_commit 0.091 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.198 Com_set_option 0.005 Com_update 100.092 Handler_commit 200.468 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.092 Questions 100.570 
+  top target mysqld threads (us/src-trx, % of drain): 4510.0 74% 476.7 8% 143.3 2% 
+prw4-r1-wo trx=60000 drain=9.943394129s rate=6034/s load=[16.26, 12.71, 7.42]->[14.76, 12.50, 7.41]
+  vttablet_100      3.84 s     64.0 us/src-trx
+  vttablet_101      6.47 s    107.8 us/src-trx
+  mysqld_101       16.02 s    267.0 us/src-trx
+ Bytes_received 757.925 Com_begin 0.063 Com_commit 0.063 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.007 Com_set_option 0.001 Com_update 2.063 Handler_commit 8.257 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.063 Questions 4.202 
+  top target mysqld threads (us/src-trx, % of drain): 28.8 17% 28.3 17% 28.0 17% 
+prw4-r1-upd trx=150000 drain=12.003483316s rate=12496/s load=[13.66, 12.39, 7.46]->[11.55, 12.00, 7.41]
+  vttablet_100      4.57 s     30.5 us/src-trx
+  vttablet_101      7.50 s     50.0 us/src-trx
+  mysqld_101       19.33 s    128.9 us/src-trx
+ Bytes_received 249.012 Com_begin 0.063 Com_commit 0.063 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.001 Com_update 1.063 Handler_commit 2.256 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.063 Questions 1.196 
+  top target mysqld threads (us/src-trx, % of drain): 20.4 25% 11.5 14% 11.5 14% 
+prw4-r1-wide trx=40000 drain=8.042137435s rate=4973/s load=[13.22, 12.34, 7.57]->[13.04, 12.32, 7.59]
+  vttablet_100      3.53 s     88.2 us/src-trx
+  vttablet_101      5.16 s    129.0 us/src-trx
+  mysqld_101       12.01 s    300.2 us/src-trx
+ Bytes_received 3195.689 Com_begin 0.066 Com_commit 0.066 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.009 Com_set_option 0.002 Com_update 1.066 Handler_commit 4.269 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.066 Questions 2.212 
+  top target mysqld threads (us/src-trx, % of drain): 33.0 16% 32.5 16% 32.0 16% 
+prw4-r1-b100 trx=3000 drain=9.456829463s rate=317/s load=[12.00, 12.11, 7.55]->[11.16, 11.93, 7.54]
+  vttablet_100      1.64 s    546.7 us/src-trx
+  vttablet_101      6.60 s   2200.0 us/src-trx
+  mysqld_101       17.56 s   5853.3 us/src-trx
+ Bytes_received 16407.568 Com_begin 0.101 Com_commit 0.101 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.131 Com_set_option 0.028 Com_update 100.102 Handler_commit 200.478 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.102 Questions 100.520 
+  top target mysqld threads (us/src-trx, % of drain): 636.7 20% 633.3 20% 606.7 19% 
+base-r2-wo trx=60000 drain=12.851359145s rate=4668/s load=[13.96, 12.58, 7.94]->[12.02, 12.21, 7.89]
+  vttablet_100      4.13 s     68.8 us/src-trx
+  vttablet_101      6.17 s    102.8 us/src-trx
+  mysqld_101       13.40 s    223.3 us/src-trx
+ Bytes_received 745.442 Com_begin 0.005 Com_commit 0.005 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.008 Com_set_option 0.000 Com_update 2.005 Handler_commit 8.023 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.005 Questions 4.026 
+  top target mysqld threads (us/src-trx, % of drain): 183.3 86% 7.2 3% 5.8 3% 
+base-r2-upd trx=150000 drain=10.309751723s rate=14549/s load=[11.24, 11.93, 7.96]->[10.14, 11.67, 7.92]
+  vttablet_100      4.76 s     31.7 us/src-trx
+  vttablet_101      5.33 s     35.5 us/src-trx
+  mysqld_101       11.20 s     74.7 us/src-trx
+ Bytes_received 235.710 Com_begin 0.002 Com_commit 0.002 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.000 Com_update 1.002 Handler_commit 2.008 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.002 Questions 1.009 
+  top target mysqld threads (us/src-trx, % of drain): 53.9 78% 2.9 4% 2.8 4% 
+base-r2-wide trx=40000 drain=11.639379757s rate=3436/s load=[11.61, 11.81, 8.08]->[10.62, 11.59, 8.05]
+  vttablet_100      3.87 s     96.7 us/src-trx
+  vttablet_101      5.47 s    136.8 us/src-trx
+  mysqld_101        9.89 s    247.3 us/src-trx
+ Bytes_received 3185.278 Com_begin 0.016 Com_commit 0.016 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.011 Com_set_option 0.000 Com_update 1.017 Handler_commit 4.072 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.017 Questions 2.065 
+  top target mysqld threads (us/src-trx, % of drain): 199.8 69% 10.5 4% 10.5 4% 
+base-r2-b100 trx=3000 drain=17.007679826s rate=176/s load=[9.13, 11.17, 8.00]->[7.84, 10.78, 7.93]
+  vttablet_100      1.84 s    613.3 us/src-trx
+  vttablet_101      7.06 s   2353.3 us/src-trx
+  mysqld_101       18.22 s   6073.3 us/src-trx
+ Bytes_received 16420.397 Com_begin 0.092 Com_commit 0.092 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.205 Com_set_option 0.005 Com_update 100.093 Handler_commit 200.474 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.093 Questions 100.584 
+  top target mysqld threads (us/src-trx, % of drain): 5003.3 88% 376.7 7% 170.0 3% 
+prw1-r2-wo trx=60000 drain=13.692786637s rate=4381/s load=[10.90, 11.05, 8.13]->[9.53, 10.75, 8.06]
+  vttablet_100      3.77 s     62.8 us/src-trx
+  vttablet_101      5.93 s     98.8 us/src-trx
+  mysqld_101       17.33 s    288.8 us/src-trx
+ Bytes_received 745.596 Com_begin 0.005 Com_commit 0.005 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.009 Com_set_option 0.000 Com_update 2.005 Handler_commit 8.023 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.005 Questions 4.027 
+  top target mysqld threads (us/src-trx, % of drain): 182.0 80% 32.7 14% 7.5 3% 
+prw1-r2-upd trx=150000 drain=10.603812652s rate=14145/s load=[9.05, 10.48, 8.07]->[9.04, 10.43, 8.08]
+  vttablet_100      4.77 s     31.8 us/src-trx
+  vttablet_101      5.49 s     36.6 us/src-trx
+  mysqld_101       10.98 s     73.2 us/src-trx
+ Bytes_received 235.719 Com_begin 0.002 Com_commit 0.002 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.000 Com_update 1.002 Handler_commit 2.008 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.002 Questions 1.009 
+  top target mysqld threads (us/src-trx, % of drain): 0.0 0% 0.0 0% 0.0 0% 
+prw1-r2-wide trx=40000 drain=10.751578273s rate=3720/s load=[10.64, 10.62, 8.21]->[10.17, 10.52, 8.20]
+  vttablet_100      3.91 s     97.8 us/src-trx
+  vttablet_101      5.53 s    138.2 us/src-trx
+  mysqld_101        9.99 s    249.8 us/src-trx
+ Bytes_received 3185.227 Com_begin 0.016 Com_commit 0.016 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.010 Com_set_option 0.000 Com_update 1.017 Handler_commit 4.071 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.017 Questions 2.065 
+  top target mysqld threads (us/src-trx, % of drain): 201.8 75%busy 6%runqwait 11.0 4%busy 5%runqwait 9.0 3%busy 1%runqwait 
+prw1-r2-b100 trx=3000 drain=16.626613270s rate=180/s load=[10.19, 10.49, 8.26]->[9.40, 10.30, 8.23]
+  vttablet_100      1.78 s    593.3 us/src-trx
+  vttablet_101      7.28 s   2426.7 us/src-trx
+  mysqld_101       18.53 s   6176.7 us/src-trx
+ Bytes_received 16292.173 Com_begin 0.091 Com_commit 0.091 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.205 Com_set_option 0.005 Com_update 100.092 Handler_commit 200.470 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.092 Questions 100.580 
+  top target mysqld threads (us/src-trx, % of drain): 5023.3 91%busy 2%runqwait 346.7 6%busy 1%runqwait 186.7 3%busy 1%runqwait 
+prw4-r2-wo trx=60000 drain=17.643094095s rate=3400/s load=[11.15, 10.66, 8.43]->[13.65, 11.25, 8.67]
+  vttablet_100      3.83 s     63.8 us/src-trx
+  vttablet_101      6.30 s    105.0 us/src-trx
+  mysqld_101       17.38 s    289.7 us/src-trx
+ Bytes_received 758.333 Com_begin 0.063 Com_commit 0.063 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.010 Com_set_option 0.001 Com_update 2.063 Handler_commit 8.259 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.063 Questions 4.206 
+  top target mysqld threads (us/src-trx, % of drain): 28.7 10%busy 31%runqwait 28.5 10%busy 30%runqwait 28.3 10%busy 29%runqwait 
+prw4-r2-upd trx=150000 drain=12.178993531s rate=12316/s load=[16.19, 12.23, 9.13]->[14.44, 11.99, 9.08]
+  vttablet_100      4.70 s     31.3 us/src-trx
+  vttablet_101      7.84 s     52.3 us/src-trx
+  mysqld_101       19.88 s    132.5 us/src-trx
+ Bytes_received 248.992 Com_begin 0.063 Com_commit 0.063 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.001 Com_update 1.063 Handler_commit 2.256 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.063 Questions 1.196 
+  top target mysqld threads (us/src-trx, % of drain): 19.2 24%busy 23%runqwait 12.1 15%busy 17%runqwait 12.0 15%busy 17%runqwait 
+prw4-r2-wide trx=40000 drain=8.299767147s rate=4819/s load=[12.86, 11.76, 9.09]->[12.58, 11.73, 9.11]
+  vttablet_100      3.79 s     94.8 us/src-trx
+  vttablet_101      5.66 s    141.5 us/src-trx
+  mysqld_101       12.78 s    319.5 us/src-trx
+ Bytes_received 3195.748 Com_begin 0.066 Com_commit 0.066 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.009 Com_set_option 0.002 Com_update 1.066 Handler_commit 4.269 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.066 Questions 2.212 
+  top target mysqld threads (us/src-trx, % of drain): 34.8 17%busy 22%runqwait 34.8 17%busy 21%runqwait 34.5 17%busy 21%runqwait 
+prw4-r2-b100 trx=3000 drain=9.519762972s rate=315/s load=[11.50, 11.53, 9.07]->[10.67, 11.35, 9.04]
+  vttablet_100      1.73 s    576.7 us/src-trx
+  vttablet_101      6.46 s   2153.3 us/src-trx
+  mysqld_101       17.09 s   5696.7 us/src-trx
+ Bytes_received 16332.887 Com_begin 0.101 Com_commit 0.101 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.130 Com_set_option 0.029 Com_update 100.102 Handler_commit 200.477 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.102 Questions 100.518 
+  top target mysqld threads (us/src-trx, % of drain): 680.0 21%busy 13%runqwait 663.3 21%busy 14%runqwait 623.3 20%busy 16%runqwait 
+base-r3-wo trx=60000 drain=15.345906517s rate=3909/s load=[11.18, 11.25, 9.10]->[11.39, 11.28, 9.14]
+  vttablet_100      3.60 s     60.0 us/src-trx
+  vttablet_101      5.79 s     96.5 us/src-trx
+  mysqld_101       13.91 s    231.8 us/src-trx
+ Bytes_received 745.518 Com_begin 0.005 Com_commit 0.005 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.009 Com_set_option 0.000 Com_update 2.005 Handler_commit 8.023 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.005 Questions 4.027 
+  top target mysqld threads (us/src-trx, % of drain): 180.3 71%busy 15%runqwait 7.8 3%busy 5%runqwait 6.5 3%busy 10%runqwait 
+base-r3-upd trx=150000 drain=10.272659681s rate=14601/s load=[12.16, 11.42, 9.24]->[11.23, 11.24, 9.21]
+  vttablet_100      4.75 s     31.7 us/src-trx
+  vttablet_101      5.33 s     35.5 us/src-trx
+  mysqld_101       10.44 s     69.6 us/src-trx
+ Bytes_received 235.672 Com_begin 0.002 Com_commit 0.002 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.000 Com_update 1.002 Handler_commit 2.008 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.002 Questions 1.009 
+  top target mysqld threads (us/src-trx, % of drain): 53.7 78%busy 8%runqwait 2.7 4%busy 7%runqwait 2.5 4%busy 4%runqwait 
+base-r3-wide trx=40000 drain=10.913611290s rate=3665/s load=[7.23, 9.95, 8.87]->[6.07, 9.56, 8.76]
+  vttablet_100      3.80 s     95.0 us/src-trx
+  vttablet_101      5.12 s    128.0 us/src-trx
+  mysqld_101        9.82 s    245.5 us/src-trx
+ Bytes_received 3185.310 Com_begin 0.016 Com_commit 0.016 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.011 Com_set_option 0.000 Com_update 1.017 Handler_commit 4.072 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.017 Questions 2.065 
+  top target mysqld threads (us/src-trx, % of drain): 200.7 74%busy 7%runqwait 10.2 4%busy 5%runqwait 8.5 3%busy 1%runqwait 
+base-r3-b100 trx=3000 drain=17.148186869s rate=174/s load=[1.08, 5.59, 7.36]->[1.77, 5.46, 7.27]
+  vttablet_100      1.80 s    600.0 us/src-trx
+  vttablet_101      7.36 s   2453.3 us/src-trx
+  mysqld_101       18.29 s   6096.7 us/src-trx
+ Bytes_received 16427.763 Com_begin 0.091 Com_commit 0.091 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.209 Com_set_option 0.005 Com_update 100.092 Handler_commit 200.475 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.092 Questions 100.588 
+  top target mysqld threads (us/src-trx, % of drain): 5110.0 89%busy 4%runqwait 286.7 5%busy 1%runqwait 180.0 3%busy 1%runqwait 
+prw1-r3-wo trx=60000 drain=13.286287034s rate=4515/s load=[6.80, 6.09, 7.38]->[6.81, 6.13, 7.38]
+  vttablet_100      4.20 s     70.0 us/src-trx
+  vttablet_101      6.33 s    105.5 us/src-trx
+  mysqld_101       14.03 s    233.8 us/src-trx
+ Bytes_received 745.420 Com_begin 0.005 Com_commit 0.005 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.008 Com_set_option 0.000 Com_update 2.005 Handler_commit 8.023 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.005 Questions 4.026 
+  top target mysqld threads (us/src-trx, % of drain): 187.2 85%busy 6%runqwait 7.7 3%busy 5%runqwait 6.3 3%busy 4%runqwait 
+prw1-r3-upd trx=150000 drain=10.588412303s rate=14166/s load=[7.26, 6.26, 7.37]->[7.00, 6.24, 7.35]
+  vttablet_100      4.74 s     31.6 us/src-trx
+  vttablet_101      5.71 s     38.1 us/src-trx
+  mysqld_101       11.17 s     74.5 us/src-trx
+ Bytes_received 235.673 Com_begin 0.002 Com_commit 0.002 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.003 Com_set_option 0.000 Com_update 1.002 Handler_commit 2.008 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.002 Questions 1.009 
+  top target mysqld threads (us/src-trx, % of drain): 57.3 81%busy 8%runqwait 3.4 5%busy 6%runqwait 2.7 4%busy 4%runqwait 
+prw1-r3-wide trx=40000 drain=11.194343611s rate=3573/s load=[7.36, 6.35, 7.35]->[6.55, 6.22, 7.29]
+  vttablet_100      3.98 s     99.5 us/src-trx
+  vttablet_101      5.67 s    141.8 us/src-trx
+  mysqld_101       10.76 s    269.0 us/src-trx
+ Bytes_received 3185.383 Com_begin 0.016 Com_commit 0.016 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.011 Com_set_option 0.000 Com_update 1.017 Handler_commit 4.072 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.017 Questions 2.065 
+  top target mysqld threads (us/src-trx, % of drain): 214.2 77%busy 5%runqwait 11.5 4%busy 4%runqwait 10.0 4%busy 1%runqwait 
+prw1-r3-b100 trx=3000 drain=17.293366359s rate=173/s load=[6.94, 6.33, 7.30]->[6.54, 6.29, 7.27]
+  vttablet_100      1.86 s    620.0 us/src-trx
+  vttablet_101      7.57 s   2523.3 us/src-trx
+  mysqld_101       18.76 s   6253.3 us/src-trx
+ Bytes_received 16468.026 Com_begin 0.092 Com_commit 0.092 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.209 Com_set_option 0.005 Com_update 100.093 Handler_commit 200.478 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.093 Questions 100.590 
+  top target mysqld threads (us/src-trx, % of drain): 5146.7 89%busy 4%runqwait 320.0 6%busy 1%runqwait 176.7 3%busy 3%runqwait 
+prw4-r3-wo trx=60000 drain=9.641837793s rate=6222/s load=[7.04, 6.36, 7.25]->[7.10, 6.40, 7.25]
+  vttablet_100      3.96 s     66.0 us/src-trx
+  vttablet_101      6.74 s    112.3 us/src-trx
+  mysqld_101       17.08 s    284.7 us/src-trx
+ Bytes_received 757.854 Com_begin 0.063 Com_commit 0.063 Com_delete 1.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.007 Com_set_option 0.001 Com_update 2.063 Handler_commit 8.257 Innodb_rows_deleted 1.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 2.063 Questions 4.202 
+  top target mysqld threads (us/src-trx, % of drain): 30.0 19%busy 26%runqwait 29.8 19%busy 25%runqwait 29.7 18%busy 26%runqwait 
+prw4-r3-upd trx=150000 drain=15.788696571s rate=9500/s load=[11.14, 7.36, 7.55]->[11.49, 7.62, 7.64]
+  vttablet_100      4.65 s     31.0 us/src-trx
+  vttablet_101      8.18 s     54.5 us/src-trx
+  mysqld_101       18.16 s    121.1 us/src-trx
+ Bytes_received 249.073 Com_begin 0.063 Com_commit 0.063 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.004 Com_set_option 0.001 Com_update 1.063 Handler_commit 2.256 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 1.063 Questions 1.197 
+  top target mysqld threads (us/src-trx, % of drain): 12.4 12%busy 23%runqwait 12.1 12%busy 24%runqwait 11.9 11%busy 23%runqwait 
+prw4-r3-wide trx=40000 drain=8.589139592s rate=4657/s load=[13.29, 8.21, 7.83]->[13.26, 8.29, 7.86]
+  vttablet_100      3.93 s     98.2 us/src-trx
+  vttablet_101      5.70 s    142.5 us/src-trx
+  mysqld_101       13.03 s    325.7 us/src-trx
+ Bytes_received 3195.763 Com_begin 0.066 Com_commit 0.066 Com_delete 0.000 Com_insert 1.000 Com_rollback 0.000 Com_select 0.009 Com_set_option 0.002 Com_update 1.066 Handler_commit 4.269 Innodb_rows_deleted 0.000 Innodb_rows_inserted 1.000 Innodb_rows_updated 1.066 Questions 2.213 
+  top target mysqld threads (us/src-trx, % of drain): 36.2 17%busy 21%runqwait 35.8 17%busy 23%runqwait 35.5 17%busy 23%runqwait 
+prw4-r3-b100 trx=3000 drain=10.067065939s rate=298/s load=[12.52, 8.22, 7.84]->[11.21, 8.08, 7.79]
+  vttablet_100      1.84 s    613.3 us/src-trx
+  vttablet_101      6.67 s   2223.3 us/src-trx
+  mysqld_101       18.58 s   6193.3 us/src-trx
+ Bytes_received 16363.503 Com_begin 0.102 Com_commit 0.102 Com_delete 0.000 Com_insert 0.000 Com_rollback 0.000 Com_select 0.131 Com_set_option 0.028 Com_update 100.103 Handler_commit 200.482 Innodb_rows_deleted 0.000 Innodb_rows_inserted 0.000 Innodb_rows_updated 100.103 Questions 100.523 
+  top target mysqld threads (us/src-trx, % of drain): 706.7 21%busy 13%runqwait 693.3 21%busy 14%runqwait 673.3 20%busy 15%runqwait 
