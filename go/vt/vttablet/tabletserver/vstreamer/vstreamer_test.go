@@ -52,6 +52,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type testcase struct {
@@ -284,6 +285,81 @@ func TestNoBlob(t *testing.T) {
 		{"commit", nil},
 	}}
 	tsp.Run()
+
+	// An UPDATE whose row moves into the target key range is delivered with
+	// only its after image, which the consumer applies as an INSERT. Under
+	// NOBLOB that image omits the unchanged blob and, unlike a real INSERT
+	// where an omitted column took its default, the target has no row to keep
+	// the value from. The stream fails closed. When the blob changed too the
+	// image is full and the row is delivered.
+	// 1, 2, 3 and 5 hash into -80; 4 and 6 into 80-.
+	execStatements(t, []string{
+		"create table t7(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+	})
+	defer execStatements(t, []string{"drop table t7"})
+	keyrangeFilter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t7",
+			Filter: "select id1, blb, val from t7 where in_keyrange(id1, 'hash', '-80')",
+		}},
+	}
+
+	pos := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into t7 values (4, 1, 'blob1', 'aaa')", // 80-, filtered out
+		"update t7 set id1 = 3 where id1 = 4",          // moves into -80, blob unchanged and omitted
+	})
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	// Without the check the stream would simply deliver the event and keep
+	// running; bound it so a regression fails instead of hanging.
+	streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := vstream(streamCtx, t, pos, nil, keyrangeFilter, ch, false)
+	close(ch)
+	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image")
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+	movedFE := &TestFieldEvent{
+		table: "t8",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsm := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t8(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t8",
+					Filter: "select id1, blb, val from t8 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsm.Close()
+	tsm.Init()
+	tsm.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t8 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t8 set id1 = 5, blb = 'blob2' where id1 = 6", []TestRowEvent{ // moves into -80 with a full image
+			{event: movedFE.String()},
+			{spec: &TestRowEventSpec{table: "t8", changes: []TestRowChange{{after: []string{"5", "blob2", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsm.Run()
 }
 
 // TestSetAndEnum confirms that the events for set and enum columns are correct.
