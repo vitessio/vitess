@@ -1,0 +1,1736 @@
+diff --git a/go/vt/binlog/binlog_connection.go b/go/vt/binlog/binlog_connection.go
+index 1cac5bb..86f08f4 100644
+--- a/go/vt/binlog/binlog_connection.go
++++ b/go/vt/binlog/binlog_connection.go
+@@ -25,6 +25,7 @@ import (
+ 	"math/big"
+ 	"slices"
+ 	"sync"
++	"time"
+ 
+ 	"vitess.io/vitess/go/mysql"
+ 	"vitess.io/vitess/go/mysql/replication"
+@@ -38,6 +39,44 @@ import (
+ // cannot find a suitable binlog to satisfy the request.
+ var ErrBinlogUnavailable = errors.New("cannot find relevant binlogs on this server")
+ 
++const (
++	// EventQueueSize is the buffer size of the channels that hand binlog
++	// events from the goroutine reading them to their consumer. Handing each
++	// event over an unbuffered channel costs a goroutine switch per event,
++	// which was a large part of the vstreamer's CPU usage at high event rates.
++	EventQueueSize = 16
++
++	// largeEventSize is the size above which SendEvent waits for the queue to
++	// be empty before queueing an event, so that queued events use at most
++	// about EventQueueSize*largeEventSize bytes plus one large event.
++	largeEventSize = 64 * 1024
++
++	// largeEventWaitInterval is how often SendEvent checks whether the queue is
++	// empty before queueing a large event.
++	largeEventWaitInterval = 100 * time.Microsecond
++)
++
++// SendEvent queues ev on ch, a channel with a buffer of EventQueueSize, unless
++// ctx is done first. Large events are only queued once ch is empty, so that ch
++// holds at most one of them. It returns false if ctx is done.
++func SendEvent(ctx context.Context, ch chan<- mysql.BinlogEvent, ev mysql.BinlogEvent) bool {
++	if len(ev.Bytes()) > largeEventSize {
++		for len(ch) > 0 {
++			select {
++			case <-ctx.Done():
++				return false
++			case <-time.After(largeEventWaitInterval):
++			}
++		}
++	}
++	select {
++	case ch <- ev:
++		return true
++	case <-ctx.Done():
++		return false
++	}
++}
++
+ // BinlogConnection represents a connection to mysqld that pretends to be a replica
+ // connecting for replication. Each such connection must identify itself to
+ // mysqld with a server ID that is unique both among other BinlogConnections and
+@@ -142,8 +181,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
+ // streamEvents returns a channel on which events are streamed and a channel on
+ // which errors are propagated.
+ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.BinlogEvent, chan error) {
+-	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
+-	eventChan := make(chan mysql.BinlogEvent)
++	eventChan := make(chan mysql.BinlogEvent, EventQueueSize)
+ 	errChan := make(chan error)
+ 
+ 	// Start reading events.
+@@ -172,9 +210,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
+ 				return
+ 			}
+ 
+-			select {
+-			case eventChan <- event:
+-			case <-ctx.Done():
++			if !SendEvent(ctx, eventChan, event) {
+ 				return
+ 			}
+ 		}
+diff --git a/go/vt/binlog/binlog_connection_test.go b/go/vt/binlog/binlog_connection_test.go
+new file mode 100644
+index 0000000..50bcbae
+--- /dev/null
++++ b/go/vt/binlog/binlog_connection_test.go
+@@ -0,0 +1,82 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package binlog
++
++import (
++	"context"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql"
++)
++
++// TestSendEventQueuesSmallEvents checks that small events are queued without
++// waiting for the consumer, up to EventQueueSize.
++func TestSendEventQueuesSmallEvents(t *testing.T) {
++	ch := make(chan mysql.BinlogEvent, EventQueueSize)
++	for range EventQueueSize {
++		require.True(t, SendEvent(t.Context(), ch, mysql.NewMysql56BinlogEvent(make([]byte, 100))))
++	}
++	assert.Len(t, ch, EventQueueSize)
++
++	// The queue is full: SendEvent returns false once ctx is done.
++	ctx, cancel := context.WithCancel(t.Context())
++	cancel()
++	assert.False(t, SendEvent(ctx, ch, mysql.NewMysql56BinlogEvent(make([]byte, 100))))
++}
++
++// TestSendEventQueuesLargeEventsAlone checks that a large event is only
++// queued once the queue is empty, which bounds the memory used by queued events.
++func TestSendEventQueuesLargeEventsAlone(t *testing.T) {
++	ch := make(chan mysql.BinlogEvent, EventQueueSize)
++	small := mysql.NewMysql56BinlogEvent(make([]byte, 100))
++	large := mysql.NewMysql56BinlogEvent(make([]byte, largeEventSize+1))
++	require.True(t, SendEvent(t.Context(), ch, small))
++
++	sent := make(chan bool, 1)
++	go func() {
++		sent <- SendEvent(t.Context(), ch, large)
++	}()
++	assert.Never(t, func() bool { return len(ch) > 1 }, 100*time.Millisecond, 5*time.Millisecond)
++
++	assert.Equal(t, small, <-ch)
++	select {
++	case ok := <-sent:
++		assert.True(t, ok)
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "large event was not queued once the queue was empty")
++	}
++	assert.Equal(t, large, <-ch)
++
++	// A large event waiting for the queue to drain gives up when ctx is done.
++	require.True(t, SendEvent(t.Context(), ch, small))
++	ctx, cancel := context.WithCancel(t.Context())
++	go func() {
++		sent <- SendEvent(ctx, ch, large)
++	}()
++	cancel()
++	select {
++	case ok := <-sent:
++		assert.False(t, ok)
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "SendEvent did not return after ctx was canceled")
++	}
++	assert.Len(t, ch, 1)
++}
+diff --git a/go/vt/discovery/tablet_picker.go b/go/vt/discovery/tablet_picker.go
+index 148c158..e1ba60f 100644
+--- a/go/vt/discovery/tablet_picker.go
++++ b/go/vt/discovery/tablet_picker.go
+@@ -61,10 +61,19 @@ const (
+ )
+ 
+ var (
++	// tabletPickerRetryDelay is the maximum delay between attempts to find a
++	// tablet for streaming.
+ 	tabletPickerRetryDelay   = 30 * time.Second
+ 	muTabletPickerRetryDelay sync.Mutex
+ 	globalTPStats            *tabletPickerStats
+ 
++	// tabletPickerInitialRetryDelay is the delay before the first retry. It
++	// doubles on each failed attempt, up to tabletPickerRetryDelay, so that a
++	// stream whose source tablet becomes serving a moment after the first
++	// attempt (e.g. when both tablets restart at the same time) does not wait
++	// for the full tabletPickerRetryDelay.
++	tabletPickerInitialRetryDelay = 1 * time.Second
++
+ 	tabletPickerCellPreferenceMap = map[string]TabletPickerCellPreference{
+ 		"preferlocalwithalias": TabletPickerCellPreference_PreferLocalWithAlias,
+ 		"onlyspecified":        TabletPickerCellPreference_OnlySpecified,
+@@ -344,8 +353,9 @@ func (tp *TabletPicker) sortCandidates(ctx context.Context, candidates []*topo.T
+ // Selection is based on CellPreference.
+ // See prioritizeTablets for prioritization logic.
+ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
+-	// Keep trying at intervals (tabletPickerRetryDelay) until a healthy
+-	// serving tablet is found or the context is cancelled.
++	// Keep trying at increasing intervals, up to tabletPickerRetryDelay,
++	// until a healthy serving tablet is found or the context is cancelled.
++	retryDelay := min(tabletPickerInitialRetryDelay, GetTabletPickerRetryDelay())
+ 	for {
+ 		select {
+ 		case <-ctx.Done():
+@@ -357,14 +367,15 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
+ 		if len(candidates) == 0 {
+ 			// If no viable candidates were found, sleep and try again.
+ 			tp.incNoTabletFoundStat()
+-			log.Info(fmt.Sprintf("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, maxReplicationLag: %v, sleeping for %.3f seconds.", tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, tp.options.ExcludeTabletsWithMaxReplicationLag, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0))
+-			timer := time.NewTimer(GetTabletPickerRetryDelay())
++			log.Info(fmt.Sprintf("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, maxReplicationLag: %v, sleeping for %.3f seconds.", tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, tp.options.ExcludeTabletsWithMaxReplicationLag, float64(retryDelay.Milliseconds())/1000.0))
++			timer := time.NewTimer(retryDelay)
+ 			select {
+ 			case <-ctx.Done():
+ 				timer.Stop()
+ 				return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+ 			case <-timer.C:
+ 			}
++			retryDelay = min(2*retryDelay, GetTabletPickerRetryDelay())
+ 			continue
+ 		}
+ 		log.Info("Tablet picker found a healthy tablet for streaming: " + candidates[0].Tablet.String())
+diff --git a/go/vt/discovery/tablet_picker_test.go b/go/vt/discovery/tablet_picker_test.go
+index 3c34597..b413cce 100644
+--- a/go/vt/discovery/tablet_picker_test.go
++++ b/go/vt/discovery/tablet_picker_test.go
+@@ -518,6 +518,45 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
+ 	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
+ }
+ 
++// TestPickRetriesSoonAfterNoTablet checks that the first retries after
++// finding no tablet happen well before tabletPickerRetryDelay, so that a
++// stream does not wait for the full delay when its source tablet becomes
++// serving shortly after the first attempt, e.g. when both restart at once.
++func TestPickRetriesSoonAfterNoTablet(t *testing.T) {
++	ctx := utils.LeakCheckContext(t)
++
++	te := newPickerTestEnv(t, ctx, []string{"cell"})
++	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
++	require.NoError(t, err)
++
++	delay := GetTabletPickerRetryDelay()
++	t.Cleanup(func() {
++		SetTabletPickerRetryDelay(delay)
++	})
++	SetTabletPickerRetryDelay(time.Hour)
++
++	noTabletFound := func() int64 {
++		return globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"]
++	}
++	before := noTabletFound()
++	pickCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
++	defer cancel()
++	result := make(chan *topodatapb.Tablet, 1)
++	go func() {
++		tablet, err := tp.PickForStreaming(pickCtx)
++		assert.NoError(t, err)
++		result <- tablet
++	}()
++
++	// Add the tablet once the first attempt has failed.
++	require.Eventually(t, func() bool { return noTabletFound() > before }, 30*time.Second, time.Millisecond)
++	want := addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
++	defer deleteTablet(t, te, want)
++	got := <-result
++	require.NotNil(t, got, "Tablet should not be nil")
++	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
++}
++
+ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
+ 	ctx := utils.LeakCheckContext(t)
+ 
+diff --git a/go/vt/vttablet/onlineddl/executor.go b/go/vt/vttablet/onlineddl/executor.go
+index c143c42..cafee89 100644
+--- a/go/vt/vttablet/onlineddl/executor.go
++++ b/go/vt/vttablet/onlineddl/executor.go
+@@ -94,6 +94,12 @@ var (
+ 
+ 	migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+ 	cutoverIntervals            = []time.Duration{0, 1 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute}
++
++	// vreplMigrationReviewInterval is how soon a running vreplication migration that is
++	// not yet ready to cut over is reviewed again. Without it, a migration whose copy
++	// completes after the last of migrationNextCheckIntervals waits for the next
++	// migrationCheckInterval tick before its cut-over.
++	vreplMigrationReviewInterval = 5 * time.Second
+ )
+ 
+ const (
+@@ -4037,7 +4043,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
+ 				// understand whether "now is a good time" or "not there yet"
+ 				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
+ 				if !isReady {
+-					// The migration is not ready yet.
++					// The migration is not ready yet. Review it again soon.
++					e.ticks.TriggerAfter(vreplMigrationReviewInterval)
+ 					return nil
+ 				}
+ 				if strategySetting.IsInOrderCompletion() {
+diff --git a/go/vt/vttablet/onlineddl/executor_test.go b/go/vt/vttablet/onlineddl/executor_test.go
+index 12ce36b..f38ef50 100644
+--- a/go/vt/vttablet/onlineddl/executor_test.go
++++ b/go/vt/vttablet/onlineddl/executor_test.go
+@@ -1685,6 +1685,75 @@ func TestReviewRunningMigrationsRefreshesLivenessOnAdoption(t *testing.T) {
+ 		"the first review after adoption must refresh liveness without waiting for the stream to write, or the stale review later in the tick fails an active migration")
+ }
+ 
++// TestReviewRunningMigrationsReviewsNotReadyMigrationSoon checks that a
++// running vreplication migration that is not yet ready to cut over schedules
++// another review after vreplMigrationReviewInterval, so that its cut-over does
++// not wait for the next migrationCheckInterval tick once its copy completes.
++func TestReviewRunningMigrationsReviewsNotReadyMigrationSoon(t *testing.T) {
++	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
++	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
++	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
++	const timeUpdated = "1700000000"
++
++	savedInterval := vreplMigrationReviewInterval
++	t.Cleanup(func() { vreplMigrationReviewInterval = savedInterval })
++	vreplMigrationReviewInterval = time.Millisecond
++
++	e := &Executor{
++		env:                       env,
++		tabletAlias:               alias,
++		vreplicationLastError:     map[string]*vterrors.LastError{},
++		vreplicationPendingCancel: map[string]string{},
++		vreplicationProgress:      map[string]vreplStreamProgress{},
++		ticks:                     timer.NewTimer(time.Hour),
++		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
++			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
++		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
++			q := strings.ToLower(query)
++			switch {
++			case strings.Contains(q, "migration_status='running'"):
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
++			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
++				return &sqltypes.Result{}, nil
++			case strings.Contains(q, "from _vt.vreplication_log"):
++				return &sqltypes.Result{}, nil
++			case strings.Contains(q, "copy_state"):
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
++			case strings.Contains(q, "from _vt.vreplication"):
++				// A stream that is still copying: not ready to cut over.
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("id|workflow|source|pos|state|message|time_updated", "int32|varchar|varchar|varchar|varchar|varchar|int64"),
++					"1|"+uuid+"|||Copying||"+timeUpdated), nil
++			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy|vitess_liveness_indicator", "varchar|varchar|varchar|int64"),
++					uuid+"|running|vitess|"+timeUpdated), nil
++			}
++			return &sqltypes.Result{RowsAffected: 1}, nil
++		},
++	}
++	e.isOpen.Store(1)
++
++	reviewed := make(chan struct{}, 1)
++	e.ticks.Start(func() {
++		select {
++		case reviewed <- struct{}{}:
++		default:
++		}
++	})
++	t.Cleanup(e.ticks.Stop)
++
++	_, _, err := e.reviewRunningMigrations(t.Context())
++	require.NoError(t, err)
++	select {
++	case <-reviewed:
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "a running migration that is not ready to cut over must be reviewed again soon")
++	}
++}
++
+ // TestReviewRunningMigrationsRepairOutcomes pins the two outcomes of a
+ // repair RPC. A successful one is followed by the retirement of the park
+ // record in the same review. A failed one — the engine applies the update
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/controller.go b/go/vt/vttablet/tabletmanager/vreplication/controller.go
+index 7f00125..957879a 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/controller.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/controller.go
+@@ -86,6 +86,10 @@ type controller struct {
+ 	cancel context.CancelFunc
+ 	done   chan struct{}
+ 
++	// posFlushRequests asks the running vplayer to save its position now if it
++	// has only skipped empty transactions since its last save. See requestPosFlush.
++	posFlushRequests chan struct{}
++
+ 	// The following fields are updated after start. So, they need synchronization.
+ 	sourceTablet atomic.Value
+ 
+@@ -146,6 +150,8 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
+ 		done:            make(chan struct{}),
+ 		source:          &binlogdatapb.BinlogSource{},
+ 		WorkflowConfig:  workflowConfig,
++
++		posFlushRequests: make(chan struct{}, 1),
+ 	}
+ 	blpStats.WorkflowConfig = workflowConfig.String()
+ 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
+@@ -350,6 +356,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
+ 		defer vsClient.Close(ctx)
+ 
+ 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
++		vr.posFlushRequests = ct.posFlushRequests
+ 		err = vr.Replicate(ctx)
+ 		ct.lastWorkflowError.Record(err)
+ 
+@@ -464,3 +471,13 @@ func (ct *controller) Stop(stopStats bool) {
+ 	}
+ 	<-ct.done
+ }
++
++// requestPosFlush asks the running vplayer, if any, to save its current
++// position right away if it has skipped empty transactions since its last
++// save, instead of waiting for idleTimeout. It does not block.
++func (ct *controller) requestPosFlush() {
++	select {
++	case ct.posFlushRequests <- struct{}{}:
++	default:
++	}
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine.go b/go/vt/vttablet/tabletmanager/vreplication/engine.go
+index 0f94113..281d897 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/engine.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/engine.go
+@@ -72,6 +72,11 @@ const (
+ // stop replicating.
+ var waitRetryTime = 1 * time.Second
+ 
++// waitForPosPollInterval is how often WaitForPos checks the position of a stream.
++// Traffic switches and Online DDL cut-overs wait for a position while writes are
++// blocked, so this has to be short.
++var waitForPosPollInterval = 100 * time.Millisecond
++
+ // How frequently vcopier will update _vt.vreplication rows_copied
+ var rowsCopiedUpdateInterval = 30 * time.Second
+ 
+@@ -809,7 +814,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 	}
+ 	defer dbClient.Close()
+ 
+-	tkr := time.NewTicker(waitRetryTime)
++	tkr := time.NewTicker(waitForPosPollInterval)
+ 	defer tkr.Stop()
+ 	for {
+ 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(id), 10)
+@@ -848,6 +853,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 			if qr.Rows[0][1].ToString() == binlogdatapb.VReplicationWorkflowState_Stopped.String() {
+ 				return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
+ 			}
++			// The stream may already have applied everything up to mPos but
++			// not saved its position yet, because the last transactions were
++			// empty for it (e.g. filtered out). Ask it to save it now.
++			vre.requestPosFlush(id)
+ 		}
+ 
+ 		select {
+@@ -870,6 +879,17 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 	}
+ }
+ 
++// requestPosFlush asks the stream with the given id, if it is running, to save
++// its current position without waiting for idleTimeout.
++func (vre *Engine) requestPosFlush(id int32) {
++	vre.mu.Lock()
++	ct := vre.controllers[id]
++	vre.mu.Unlock()
++	if ct != nil {
++		ct.requestPosFlush()
++	}
++}
++
+ // UpdateStats must be called with lock held.
+ func (vre *Engine) updateStats() {
+ 	globalStats.mu.Lock()
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine_test.go b/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
+index 4f456b8..e737e9a 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
+@@ -332,9 +332,9 @@ func TestEngineSelect(t *testing.T) {
+ }
+ 
+ func TestWaitForPos(t *testing.T) {
+-	savedRetryTime := waitRetryTime
+-	defer func() { waitRetryTime = savedRetryTime }()
+-	waitRetryTime = 10 * time.Millisecond
++	savedPollInterval := waitForPosPollInterval
++	defer func() { waitForPosPollInterval = savedPollInterval }()
++	waitForPosPollInterval = 10 * time.Millisecond
+ 
+ 	dbClient := binlogplayer.NewMockDBClient(t)
+ 	mysqld := &mysqlctl.FakeMysqlDaemon{}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
+index 2abe4d1..bc41810 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
+@@ -49,6 +49,8 @@ type relayLog struct {
+ 	curSize  int
+ 	items    [][]*binlogdatapb.VEvent
+ 	timedout bool
++	// interrupted makes the current or next Fetch return even if there are no items.
++	interrupted bool
+ 	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, and ctx is not Done.
+ 	canAccept sync.Cond
+ 	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.
+@@ -112,13 +114,14 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
+ 	}
+ 	cancelTimer := rl.startFetchTimer()
+ 	defer cancelTimer()
+-	for len(rl.items) == 0 && !rl.timedout {
++	for len(rl.items) == 0 && !rl.timedout && !rl.interrupted {
+ 		rl.hasItems.Wait()
+ 		if err := rl.checkDone(); err != nil {
+ 			return nil, err
+ 		}
+ 	}
+ 	rl.timedout = false
++	rl.interrupted = false
+ 	items := rl.items
+ 	rl.items = nil
+ 	rl.curSize = 0
+@@ -126,6 +129,15 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
+ 	return items, nil
+ }
+ 
++// interruptFetch makes the current, or else the next, Fetch return without
++// waiting for items or for idleTimeout.
++func (rl *relayLog) interruptFetch() {
++	rl.mu.Lock()
++	defer rl.mu.Unlock()
++	rl.interrupted = true
++	rl.hasItems.Broadcast()
++}
++
+ func (rl *relayLog) checkDone() error {
+ 	select {
+ 	case <-rl.ctx.Done():
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
+index 6aae450..ab11374 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
+@@ -341,6 +341,16 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
+ 	if settings.StartPos.IsZero() {
+ 		return nil
+ 	}
++	// If this stream was fast-forwarded to a copy snapshot less than
++	// ReplicaLagTolerance ago, it can be at most that far behind, which is
++	// the condition catchup waits for below. Skip catchup: the fastForward of
++	// the next copy cycle replays the same events. Otherwise, catchup would
++	// start a vplayer and then wait for at least one waitRetryTime tick (1s),
++	// or for the first source heartbeat if the source is idle, before copying
++	// each table.
++	if last := vc.vr.lastCopySnapshotTime; !last.IsZero() && time.Since(last) < vc.vr.workflowConfig.ReplicaLagTolerance {
++		return nil
++	}
+ 
+ 	// Start vreplication.
+ 	errch := make(chan error, 1)
+@@ -439,6 +449,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 	vstreamOptions := &binlogdatapb.VStreamOptions{
+ 		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+ 	}
++	// The source takes its row snapshot after this time.
++	streamStart := time.Now()
+ 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+ 		for {
+ 			select {
+@@ -496,6 +508,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
+ 				return err
+ 			}
++			vc.vr.lastCopySnapshotTime = streamStart
+ 			fieldEvent := &binlogdatapb.FieldEvent{
+ 				TableName: initialPlan.SendRule.Match,
+ 			}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
+index 5f921ce..fcfc7f7 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
+@@ -40,6 +40,29 @@ import (
+ 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+ )
+ 
++// TestCatchupSkippedAfterRecentCopySnapshot checks that catchup returns
++// without starting a vplayer, and so without waiting for waitRetryTime, when
++// the stream was fast-forwarded to a copy snapshot less than
++// ReplicaLagTolerance ago. This removed a ~1s pause before copying each table.
++func TestCatchupSkippedAfterRecentCopySnapshot(t *testing.T) {
++	stats := binlogplayer.NewStats()
++	t.Cleanup(stats.Stop)
++	dbClient := binlogplayer.NewMockDBClient(t)
++	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
++
++	// The vreplicator has no source vstreamer and no engine, so starting a
++	// catchup vplayer would fail.
++	vr := &vreplicator{
++		id:                   1,
++		dbClient:             newVDBClient(dbClient, stats, 0),
++		stats:                stats,
++		workflowConfig:       vttablet.GetDefaultVReplicationConfig(),
++		lastCopySnapshotTime: time.Now(),
++	}
++	require.NoError(t, newVCopier(vr).catchup(t.Context(), map[string]*sqltypes.Result{"t1": nil}))
++	dbClient.Wait()
++}
++
+ func TestNewCopyWorkerFactoryUsesMaxQuerySize(t *testing.T) {
+ 	stats := binlogplayer.NewStats()
+ 	dbClient := binlogplayer.NewMockDBClient(t)
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
+index cea9c25..c8b4d03 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
+@@ -85,6 +85,10 @@ type vplayer struct {
+ 	unsavedEvent *binlogdatapb.VEvent
+ 	// timeLastSaved is set every time a GTID is saved.
+ 	timeLastSaved time.Time
++	// flushPosRequested is set when someone waits for a position (see
++	// Engine.WaitForPos): the position of the unsavedEvent is then saved
++	// without waiting for idleTimeout.
++	flushPosRequested atomic.Bool
+ 	// lastTimestampNs is the last timestamp seen so far.
+ 	lastTimestampNs int64
+ 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
+@@ -287,6 +291,20 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
+ 
+ 	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize, &vp.lastThrottledNano)
+ 
++	if flushRequests := vp.vr.posFlushRequests; flushRequests != nil {
++		go func() {
++			for {
++				select {
++				case <-ctx.Done():
++					return
++				case <-flushRequests:
++					vp.flushPosRequested.Store(true)
++					relay.interruptFetch()
++				}
++			}
++		}()
++	}
++
+ 	streamErr := make(chan error, 1)
+ 	go func() {
+ 		streamErr <- runWithRecover(vp.vr.WorkflowName, "vstream", func() error {
+@@ -582,7 +600,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+ 		// 2. We've been receiving empty events for longer than idleTimeout.
+ 		// In both cases, now > timeLastSaved. If so, the GTID of the last unsavedEvent
+ 		// must be saved.
+-		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
++		// It is also saved right away when someone waits for a position, so
++		// that a stream whose last source transactions were all filtered out
++		// reports the position it reached without an idleTimeout delay.
++		if vp.unsavedEvent != nil && (time.Since(vp.timeLastSaved) >= idleTimeout || vp.flushPosRequested.Swap(false)) {
+ 			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Timestamp)
+ 			if err != nil {
+ 				return err
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
+index 196097f..79bec77 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
+@@ -2439,6 +2439,59 @@ func TestPlayerIdleUpdate(t *testing.T) {
+ 	assert.GreaterOrEqualf(t, duration, idleTimeout, "duration: %v, must be at least %v", duration, idleTimeout)
+ }
+ 
++// TestPlayerWaitForPosSavesSkippedPosition checks that WaitForPos gets the
++// position of transactions that the stream skipped because they were empty
++// for it (here: a write to a table outside the filter) saved right away,
++// instead of after idleTimeout. Traffic switches and Online DDL cut-overs wait
++// for such positions while writes are blocked.
++func TestPlayerWaitForPosSavesSkippedPosition(t *testing.T) {
++	defer deleteTablet(addTablet(100))
++
++	// Without a position flush request, the skipped position would not be
++	// saved before WaitForPos times out.
++	savedIdleTimeout := idleTimeout
++	t.Cleanup(func() { idleTimeout = savedIdleTimeout })
++	idleTimeout = time.Hour
++
++	execStatements(t, []string{
++		"create table t1(id int, val varchar(128), primary key(id))",
++		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
++		"create table t2(id int, val varchar(128), primary key(id))",
++	})
++	defer execStatements(t, []string{
++		"drop table t1",
++		fmt.Sprintf("drop table %s.t1", vrepldb),
++		"drop table t2",
++	})
++
++	bls := &binlogdatapb.BinlogSource{
++		Keyspace: env.KeyspaceName,
++		Shard:    env.ShardName,
++		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1"}}},
++		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
++	}
++	cancel, id := startVReplication(t, bls, "")
++	defer cancel()
++
++	execStatements(t, []string{"insert into t1 values(1, 'aaa')"})
++	expectDBClientQueries(t, qh.Expect(
++		"begin",
++		"insert into t1(id,val) values (1,'aaa')",
++		"/update _vt.vreplication set pos=",
++		"commit",
++	))
++
++	// This transaction is empty for the stream.
++	execStatements(t, []string{"insert into t2 values(1, 'bbb')"})
++	pos := primaryPosition(t)
++	ctx, cancelWait := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancelWait()
++	require.NoError(t, playerEngine.WaitForPos(ctx, int32(id), pos))
++	expectDBClientQueries(t, qh.Expect(
++		"/update _vt.vreplication set pos=",
++	))
++}
++
+ func TestPlayerSplitTransaction(t *testing.T) {
+ 	defer deleteTablet(addTablet(100))
+ 	setFlag("vstream_packet_size", "10")
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
+index aaf32a6..7049cd7 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
+@@ -126,6 +126,16 @@ type vreplicator struct {
+ 
+ 	throttleUpdatesRateLimiter *timer.RateLimiter
+ 	workflowConfig             *vttablet.VReplicationConfig
++
++	// lastCopySnapshotTime is set when a copy phase cycle has fast-forwarded
++	// the stream to the GTID of its row snapshot. At that point the stream's
++	// position was at most as old as this time. It is kept in memory only, so
++	// a restarted stream always runs a full catchup.
++	lastCopySnapshotTime time.Time
++
++	// posFlushRequests receives the controller's requests to save the current
++	// position without waiting for idleTimeout. It may be nil.
++	posFlushRequests <-chan struct{}
+ }
+ 
+ // newVReplicator creates a new vreplicator. The valid fields from the source are:
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+index 0c35885..07c04fe 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+@@ -428,9 +428,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 			select {
+ 			case ev, ok := <-events:
+ 				if ok {
+-					select {
+-					case throttledEvents <- ev:
+-					case <-ctx.Done():
++					if !binlog.SendEvent(ctx, throttledEvents, ev) {
+ 						return
+ 					}
+ 				} else {
+@@ -445,19 +443,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 	// throttledEvents can be read just like you would read from events
+ 	// throttledEvents pulls data from events, but throttles pulling data,
+ 	// which in turn blocks the BinlogConnection from pushing events to the channel
+-	throttledEvents := make(chan mysql.BinlogEvent)
++	throttledEvents := make(chan mysql.BinlogEvent, binlog.EventQueueSize)
+ 	go throttleEvents(throttledEvents)
+ 
++	// A heartbeat is sent after HeartbeatTime without anything else to do.
++	// Resetting hbTimer for every binlog event is costly at high event rates,
++	// so we only remember when the loop was last busy: when hbTimer fires
++	// early, it is re-armed for the remaining idle time.
++	lastBusy := time.Now()
+ 	for {
+-		hbTimer.Reset(HeartbeatTime)
+-		// Drain event if timer fired before reset.
+-		select {
+-		case <-hbTimer.C:
+-		default:
+-		}
+-
+ 		select {
+ 		case ev, ok := <-throttledEvents:
++			lastBusy = time.Now()
+ 			if !ok {
+ 				select {
+ 				case err := <-errs:
+@@ -483,6 +480,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				}
+ 			}
+ 		case vs.vschema = <-vs.vevents:
++			lastBusy = time.Now()
+ 			select {
+ 			case err := <-errs:
+ 				return err
+@@ -501,6 +499,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 		case <-ctx.Done():
+ 			return nil
+ 		case <-hbTimer.C:
++			if idle := time.Since(lastBusy); idle < HeartbeatTime {
++				hbTimer.Reset(HeartbeatTime - idle)
++				continue
++			}
+ 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
+ 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
+ 				if err == io.EOF {
+@@ -509,6 +511,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vs.vse.errorCounts.Add("Send", 1)
+ 				return vterrors.Wrapf(err, "failed to send heartbeat event")
+ 			}
++			lastBusy = time.Now()
++			hbTimer.Reset(HeartbeatTime)
+ 		}
+ 	}
+ }
+diff --git a/perf-findings/P4-scripts/abbin.sh b/perf-findings/P4-scripts/abbin.sh
+new file mode 100755
+index 0000000..b6152d0
+--- /dev/null
++++ b/perf-findings/P4-scripts/abbin.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# Alternate MoveTables copy runs between vttablet binary directories.
++# Usage: abbin.sh ROUNDS PREFIX "label1|/bin/dir1" "label2|/bin/dir2" ...
++# Env: MT_FLAGS (passed to mt.sh), TABLES_ARG (tables list for mt.sh, optional)
++ROUNDS=$1
++PREFIX=$2
++shift 2
++D=/home/vt/perf/P4
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    bin=${cfg#*|}
++    BIN=$bin "$D/c.sh" restart-tablets >/dev/null 2>&1
++    sleep 3
++    "$D/mt.sh" "$PREFIX-$label-r$r" 0 | head -1
++    "$D/mtcancel.sh" >/dev/null 2>&1
++    sleep 2
++  done
++done
+diff --git a/perf-findings/P4-scripts/abcopy.sh b/perf-findings/P4-scripts/abcopy.sh
+new file mode 100755
+index 0000000..ec4920c
+--- /dev/null
++++ b/perf-findings/P4-scripts/abcopy.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++# Alternate MoveTables copy runs over several configurations.
++# Usage: abcopy.sh ROUNDS "label1|mt flags1" "label2|mt flags2" ...
++ROUNDS=$1
++shift
++D=/home/vt/perf/P4
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    flags=${cfg#*|}
++    [[ $flags == "$cfg" ]] && flags=""
++    MT_FLAGS="$flags" "$D/mt.sh" "$label-r$r" 0 | head -1
++    "$D/mtcancel.sh" >/dev/null 2>&1
++    sleep 2
++  done
++done
+diff --git a/perf-findings/P4-scripts/abmix.sh b/perf-findings/P4-scripts/abmix.sh
+new file mode 100755
+index 0000000..f1b2943
+--- /dev/null
++++ b/perf-findings/P4-scripts/abmix.sh
+@@ -0,0 +1,23 @@
++#!/bin/bash
++# Alternate MoveTables copy runs over (binary, MoveTables flags) configurations.
++# Usage: abmix.sh ROUNDS PREFIX "label|bin|mt flags" ...
++ROUNDS=$1
++PREFIX=$2
++shift 2
++D=/home/vt/perf/P4
++cur=""
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    IFS='|' read -r label bin flags <<<"$cfg"
++    if [[ $bin != "$cur" ]]; then
++      BIN=$bin "$D/c.sh" restart-tablets >/dev/null 2>&1
++      sleep 5
++      cur=$bin
++    fi
++    MT_FLAGS="$flags" "$D/mt.sh" "$PREFIX-$label-r$r" 0 >/dev/null
++    grep -v vtgate "$D/out/$PREFIX-$label-r$r/summary" | tr '\n' ' ' | tr -s ' '
++    echo
++    "$D/mtcancel.sh" >/dev/null 2>&1
++    sleep 2
++  done
++done
+diff --git a/perf-findings/P4-scripts/big.sh b/perf-findings/P4-scripts/big.sh
+new file mode 100755
+index 0000000..b67ec19
+--- /dev/null
++++ b/perf-findings/P4-scripts/big.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# Create src.big1 with 1.5M rows (copies of sbtest1..3) for longer Online DDL runs.
++S=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++mysql -S $S -u vt_dba vt_src -e "DROP TABLE IF EXISTS big1; CREATE TABLE big1 LIKE sbtest1; INSERT INTO big1 SELECT * FROM sbtest1; INSERT INTO big1 (k,c,pad) SELECT k,c,pad FROM sbtest2; INSERT INTO big1 (k,c,pad) SELECT k,c,pad FROM sbtest3; SELECT COUNT(*) FROM big1"
++/home/vt/perf/P4/c.sh vtctldclient ReloadSchemaKeyspace src
++/home/vt/perf/P4/c.sh purge-binlogs 0
++df -h / | tail -1
+diff --git a/perf-findings/P4-scripts/bins.sh b/perf-findings/P4-scripts/bins.sh
+new file mode 100755
+index 0000000..4972fc9
+--- /dev/null
++++ b/perf-findings/P4-scripts/bins.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# Print the binary each vttablet of the P4 cluster runs (by web port).
++for port in 40100 40101 40102; do
++  for p in $(pgrep -f -- "--port $port "); do
++    echo "$port pid=$p $(readlink /proc/$p/exe)"
++  done
++done
+diff --git a/perf-findings/P4-scripts/c.sh b/perf-findings/P4-scripts/c.sh
+new file mode 100755
+index 0000000..18ad579
+--- /dev/null
++++ b/perf-findings/P4-scripts/c.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Run the P4 harness as the vt user.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=40000 BIN=${BIN:-/home/vt/bin} \
++  KEYSPACES="${KEYSPACES:-src:0 dst:-80,80-}" TABLES=${TABLES:-4} TABLE_SIZE=${TABLE_SIZE:-500000} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/perf/P4/cluster.sh "$@"
+diff --git a/perf-findings/P4-scripts/catchup.sh b/perf-findings/P4-scripts/catchup.sh
+new file mode 100755
+index 0000000..f24938a
+--- /dev/null
++++ b/perf-findings/P4-scripts/catchup.sh
+@@ -0,0 +1,42 @@
++#!/bin/bash
++# Measure the vplayer drain rate: stop the workflow, write N sysbench transactions on the source (directly
++# to its mysqld), restart the workflow and time until both target streams have reached the source GTID position.
++# Usage: catchup.sh LABEL [EVENTS] [SB_TEST]     Env: PROF=seconds to capture pprof of source and target -80.
++LABEL=$1
++EVENTS=${2:-40000}
++SBTEST=${3:-oltp_write_only}
++D=/home/vt/perf/P4
++OUT=$D/out/cu-$LABEL
++mkdir -p "$OUT"
++SSOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++T1=/home/vt/perf/c40000/vt_0000000101/mysql.sock
++T2=/home/vt/perf/c40000/vt_0000000102/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++VC="$D/c.sh vtctldclient"
++
++$VC Workflow --keyspace dst stop --workflow wf >/dev/null
++sleep 1
++"$D/c.sh" cpu >"$OUT/cpug0"
++sysbench --db-driver=mysql --mysql-socket=$SSOCK --mysql-user=vt_dba --mysql-db=vt_src --tables=4 --table-size=500000 \
++  --threads=8 --events="$EVENTS" --time=0 --rand-type=uniform "$SBTEST" run >"$OUT/sysbench" 2>&1
++srcgtid=$(q $SSOCK "select @@global.gtid_executed" | tr -d '\n')
++"$D/c.sh" cpu >"$OUT/cpu0"
++t0=$(date +%s.%N)
++$VC Workflow --keyspace dst start --workflow wf >/dev/null
++if [[ ${PROF:-0} -gt 0 ]]; then
++  curl -s -o "$OUT/src.pprof" "http://localhost:40100/debug/pprof/profile?seconds=$PROF" &
++  curl -s -o "$OUT/dst1.pprof" "http://localhost:40101/debug/pprof/profile?seconds=$PROF" &
++fi
++while :; do
++  r1=$(q $T1 "select gtid_subset('$srcgtid', substring(pos, 9)) from _vt.vreplication where workflow='wf'")
++  r2=$(q $T2 "select gtid_subset('$srcgtid', substring(pos, 9)) from _vt.vreplication where workflow='wf'")
++  [[ $r1 == 1 && $r2 == 1 ]] && break
++  sleep 0.1
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++wait
++dur=$(echo "$t1 - $t0" | bc)
++echo "$LABEL events=$EVENTS dur=${dur}s trx/s=$(echo "$EVENTS / $dur" | bc) gen: $(grep -o 'transactions:.*' "$OUT/sysbench") load: $(uptime | sed 's/.*average: //')" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$EVENTS" '{d=$4-$2; printf "  %-14s %7.2f s  %6.1f us/trx\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
++echo "  source mysqld CPU to generate: $(paste -d' ' "$OUT/cpug0" "$OUT/cpu0" | awk -v r="$EVENTS" '$1=="mysqld_100"{printf "%.1f us/trx", ($4-$2)*1e6/r}')" | tee -a "$OUT/summary"
+diff --git a/perf-findings/P4-scripts/cleanup_artifacts.sh b/perf-findings/P4-scripts/cleanup_artifacts.sh
+new file mode 100755
+index 0000000..22f1a0d
+--- /dev/null
++++ b/perf-findings/P4-scripts/cleanup_artifacts.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++# Drop Online DDL artifact tables (_vt_*) in vt_src and purge binlogs, to save disk.
++S=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++for t in $(mysql -N -S $S -u vt_dba -e "select table_name from information_schema.tables where table_schema='vt_src' and table_name like '\_vt\_%'"); do
++  mysql -S $S -u vt_dba vt_src -e "drop table if exists \`$t\`"
++done
++/home/vt/perf/P4/c.sh purge-binlogs 0
++du -sh /home/vt/perf/c40000
++df -h / | tail -1
+diff --git a/perf-findings/P4-scripts/cluster.sh b/perf-findings/P4-scripts/cluster.sh
+new file mode 100755
+index 0000000..6cf6ea3
+--- /dev/null
++++ b/perf-findings/P4-scripts/cluster.sh
+@@ -0,0 +1,249 @@
++#!/bin/bash
++# P4 VReplication harness: a copy of perf-findings/harness/cluster.sh that runs several keyspaces in one cluster.
++#
++# Usage (as the vt user): BASE=40000 ./cluster.sh up|down|cpu|pids|restart-tablets|load|purge-binlogs|env
++#
++# Environment (in addition to the base harness):
++#   KEYSPACES  space separated "keyspace:shard,shard" list (default "src:0 dst:-80,80-").
++#              The first keyspace is unsharded (vschema {"sharded":false}) and gets the sysbench schema;
++#              the others get a hash-on-id vschema for the same tables (no schema: MoveTables creates it).
++#   TABLES / TABLE_SIZE   sysbench tables loaded into the first keyspace by `load` (directly into its mysqld).
++#   BIN        Vitess binaries. `restart-tablets` restarts only the vttablets (mysqld kept) with $BIN.
++# Tablet i (0-based, in KEYSPACES order): uid 100+i, web BASE+100+i, grpc BASE+200+i, mysqld BASE+400+i.
++set -euo pipefail
++
++BASE=${BASE:-40000}
++NAME=${NAME:-c$BASE}
++KEYSPACES=${KEYSPACES:-"src:0 dst:-80,80-"}
++TABLES=${TABLES:-4}
++TABLE_SIZE=${TABLE_SIZE:-500000}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++tablet_uid() { echo $((100 + $1)); }
++
++# Prints "index keyspace shard" for every tablet.
++tablets() {
++  local i=0
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*} shards=${spec#*:}
++    for shard in ${shards//,/ }; do echo "$i $ks $shard"; i=$((i + 1)); done
++  done
++}
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOC'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOC
++}
++
++start_tablet() {
++  local i=$1 ks=$2 shard=$3 uid alias
++  uid=$(tablet_uid "$i")
++  printf -v alias '%s-%010d' "$CELL" "$uid"
++  # shellcheck disable=SC2086
++  vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$ks" --init-shard "$shard" \
++    --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++    --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++    --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++    ${VTTABLET_EXTRA_FLAGS:-} >>"$LOGDIR/vttablet_$uid.log" 2>&1 &
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  for spec in $KEYSPACES; do vtctldclient CreateKeyspace --durability-policy=none "${spec%%:*}" >/dev/null 2>&1 || true; done
++
++  local pids=()
++  while read -r i ks shard; do
++    local uid
++    uid=$(tablet_uid "$i")
++    mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++      --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++    pids+=($!)
++  done < <(tablets)
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++  while read -r i ks shard; do
++    local alias
++    printf -v alias '%s-%010d' "$CELL" "$(tablet_uid "$i")"
++    vtctldclient PlannedReparentShard "$ks/$shard" --new-primary "$alias" >/dev/null
++  done < <(tablets)
++
++  load_schema
++
++  # shellcheck disable=SC2086
++  vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables="" first=1
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL AUTO_INCREMENT, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*}
++    if ((first)); then
++      vtctldclient ApplySchema --sql "$sql" "$ks" >/dev/null
++      vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$ks" >/dev/null
++      first=0
++    else
++      vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$ks" >/dev/null
++    fi
++  done
++}
++
++# Load sysbench tables into the first keyspace directly through its primary's socket (fast, no vtgate).
++load() {
++  local sock=$VTDATAROOT/vt_0000000100/mysql.sock ks=${KEYSPACES%%:*}
++  for t in $(seq 1 "$TABLES"); do mysql -S "$sock" -u vt_dba "vt_$ks" -e "DROP TABLE IF EXISTS sbtest$t"; done
++  sysbench --db-driver=mysql --mysql-socket="$sock" --mysql-user=vt_dba --mysql-db="vt_$ks" --tables="$TABLES" \
++    --table-size="$TABLE_SIZE" --threads="$TABLES" oltp_write_only prepare
++  purge_binlogs 0
++}
++
++# Rotate binlogs and purge the files older than $1 seconds (default 120: running streams may still need recent files).
++purge_binlogs() {
++  local age=${1:-120}
++  for d in "$VTDATAROOT"/vt_*; do
++    mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS; PURGE BINARY LOGS BEFORE NOW() - INTERVAL $age SECOND;" 2>&1 | grep -v Warning || true
++  done
++}
++
++# Stop the vttablet with index $1: the one in its pid file and any other one still holding its web port.
++kill_tablet() {
++  local idx=$1 f pids p
++  f=$VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$idx")")/vttablet.pid
++  pids="$(cat "$f" 2>/dev/null || true) $(pgrep -f -- "--port $((BASE + 100 + idx)) " || true)"
++  for p in $pids; do kill "$p" 2>/dev/null || true; done
++  for p in $pids; do while kill -0 "$p" 2>/dev/null; do sleep 0.2; done; done
++}
++
++restart_tablets() {
++  while read -r i ks shard; do kill_tablet "$i" & done < <(tablets)
++  wait
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++}
++
++# Restart the vttablet with index $1 only (mysqld kept).
++restart_tablet() {
++  local idx=$1
++  kill_tablet "$idx"
++  while read -r i ks shard; do [[ $i == "$idx" ]] && start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  wait_http $((BASE + 100 + idx))
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  echo "cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspaces [$KEYSPACES]"
++  echo "  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root ; vtctldclient --server localhost:$VTCTLD_GRPC"
++  tablets | while read -r i ks shard; do
++    echo "  tablet $i uid $(tablet_uid "$i") $ks/$shard web $((BASE + 100 + i)) sock $VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$i")")/mysql.sock"
++  done
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck
++  tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++case "${1:-}" in
++  up) up ;;
++  down) down ;;
++  env) env_info ;;
++  load) load ;;
++  purge-binlogs) purge_binlogs "${2:-120}" ;;
++  restart-tablets) restart_tablets ;;
++  restart-tablet) restart_tablet "$2" ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  vtctldclient) shift; vtctldclient "$@" ;;
++  *) echo "usage: $0 up|down|env|load|purge-binlogs|restart-tablets|pids|cpu|vtctldclient ARGS" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/P4-scripts/cuab.sh b/perf-findings/P4-scripts/cuab.sh
+new file mode 100755
+index 0000000..00cfb7b
+--- /dev/null
++++ b/perf-findings/P4-scripts/cuab.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# Alternate catch-up drain runs between vttablet binaries.
++# Usage: cuab.sh ROUNDS EVENTS PREFIX "label|bin" ...
++ROUNDS=$1
++EVENTS=$2
++PREFIX=$3
++shift 3
++D=/home/vt/perf/P4
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    bin=${cfg#*|}
++    BIN=$bin "$D/c.sh" restart-tablets >/dev/null 2>&1
++    sleep 45
++    "$D/catchup.sh" "$PREFIX-$label-r$r" "$EVENTS" >/dev/null
++    grep -v vtgate "$D/out/cu-$PREFIX-$label-r$r/summary"
++    "$D/c.sh" purge-binlogs >/dev/null 2>&1
++  done
++done
+diff --git a/perf-findings/P4-scripts/mt.sh b/perf-findings/P4-scripts/mt.sh
+new file mode 100755
+index 0000000..98026a8
+--- /dev/null
++++ b/perf-findings/P4-scripts/mt.sh
+@@ -0,0 +1,47 @@
++#!/bin/bash
++# Time one MoveTables copy phase src -> dst, with CPU per process and optional pprof.
++# Usage: mt.sh LABEL [PROFILE_SECONDS]
++# Env: MT_FLAGS extra flags for `MoveTables create` (e.g. --config-overrides ...).
++set -uo pipefail
++LABEL=${1:-run}
++PROF=${2:-0}
++D=/home/vt/perf/P4
++OUT=$D/out/$LABEL
++mkdir -p "$OUT"
++VC="$D/c.sh vtctldclient"
++TSOCK1=/home/vt/perf/c40000/vt_0000000101/mysql.sock
++TSOCK2=/home/vt/perf/c40000/vt_0000000102/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++
++"$D/c.sh" cpu >"$OUT/cpu0"
++uptime >"$OUT/uptime0"
++t0=$(date +%s.%N)
++$VC MoveTables --workflow wf --target-keyspace dst create --source-keyspace src --tables ${TABLES_LIST:-sbtest1,sbtest2,sbtest3,sbtest4} ${MT_FLAGS:-} >"$OUT/create.log" 2>&1 || { cat "$OUT/create.log"; exit 1; }
++if [[ $PROF -gt 0 ]]; then
++  sleep 3
++  curl -s -o "$OUT/src.pprof" "http://localhost:40100/debug/pprof/profile?seconds=$PROF" &
++  curl -s -o "$OUT/dst1.pprof" "http://localhost:40101/debug/pprof/profile?seconds=$PROF" &
++fi
++# Wait until both streams have finished copying (no copy_state rows and state Running).
++while :; do
++  n1=$(q $TSOCK1 "select count(*) from _vt.copy_state")
++  n2=$(q $TSOCK2 "select count(*) from _vt.copy_state")
++  s1=$(q $TSOCK1 "select state from _vt.vreplication where workflow='wf'")
++  s2=$(q $TSOCK2 "select state from _vt.vreplication where workflow='wf'")
++  p1=$(q $TSOCK1 "select length(pos) from _vt.vreplication where workflow='wf'")
++  p2=$(q $TSOCK2 "select length(pos) from _vt.vreplication where workflow='wf'")
++  if [[ $n1 == 0 && $n2 == 0 && $s1 == Running && $s2 == Running && ${p1:-0} -gt 0 && ${p2:-0} -gt 0 ]]; then break; fi
++  if [[ $s1 == Error || $s2 == Error ]]; then echo "ERROR"; q $TSOCK1 "select message from _vt.vreplication"; break; fi
++  sleep 0.25
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++uptime >"$OUT/uptime1"
++wait
++cq="select 0"
++TL=${TABLES_LIST:-}; for t in ${TL//,/ }; do cq+="+(select count(*) from vt_dst.$t)"; done
++[[ -z ${TABLES_LIST:-} ]] && cq="select (select count(*) from vt_dst.sbtest1)+(select count(*) from vt_dst.sbtest2)+(select count(*) from vt_dst.sbtest3)+(select count(*) from vt_dst.sbtest4)"
++rows=$(( $(q $TSOCK1 "$cq") + $(q $TSOCK2 "$cq") ))
++dur=$(echo "$t1 - $t0" | bc)
++echo "$LABEL rows=$rows dur=${dur}s rows/s=$(echo "$rows / $dur" | bc) load: $(cut -d, -f3- "$OUT/uptime1")" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$rows" '{d=$4-$2; printf "  %-14s %7.2f s  %6.2f s/1M rows\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
+diff --git a/perf-findings/P4-scripts/mtcancel.sh b/perf-findings/P4-scripts/mtcancel.sh
+new file mode 100755
+index 0000000..65af883
+--- /dev/null
++++ b/perf-findings/P4-scripts/mtcancel.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# Cancel the MoveTables workflow (drops the target tables) and purge binlogs.
++D=/home/vt/perf/P4
++"$D/c.sh" vtctldclient MoveTables --workflow wf --target-keyspace dst cancel >/dev/null 2>&1 || true
++"$D/c.sh" purge-binlogs 0
+diff --git a/perf-findings/P4-scripts/oddl.sh b/perf-findings/P4-scripts/oddl.sh
+new file mode 100755
+index 0000000..84368f2
+--- /dev/null
++++ b/perf-findings/P4-scripts/oddl.sh
+@@ -0,0 +1,34 @@
++#!/bin/bash
++# Run one Online DDL (vitess strategy) on src.sbtest1 under a light write load; report the migration timeline
++# and the client-visible write gap during cut-over.
++# Usage: oddl.sh LABEL [ALTER]
++LABEL=$1
++ALTER=${2:-"alter table sbtest1 engine=innodb"}
++D=/home/vt/perf/P4
++OUT=$D/out/oddl-$LABEL
++mkdir -p "$OUT"
++S=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++q() { mysql -N -S "$S" -u vt_dba -e "$1" 2>/dev/null; }
++"$D/prober2" -table "${PTABLE:-sbtest1}" -dsn "root@tcp(127.0.0.1:40003)/src?timeout=2s&readTimeout=60s&writeTimeout=60s" -threads 4 -interval 10ms \
++  -duration 600s -table-size ${PSIZE:-500000} -out "$OUT/events" >"$OUT/prober" 2>&1 &
++pp=$!
++if [[ ${OTHER:-0} == 1 ]]; then
++  "$D/prober2" -dsn "root@tcp(127.0.0.1:40003)/src?timeout=2s&readTimeout=60s&writeTimeout=60s" -threads 2 -interval 10ms \
++    -duration 600s -table sbtest2 -table-size 500000 >"$OUT/prober2" 2>&1 &
++  pp2=$!
++fi
++sleep 2
++t0=$(date +%s.%N)
++uuid=$("$D/c.sh" vtctldclient ApplySchema --ddl-strategy "vitess" --sql "$ALTER" src 2>&1 | tail -1)
++while :; do
++  st=$(q "select migration_status from _vt.schema_migrations where migration_uuid='$uuid'")
++  [[ $st == complete || $st == failed || $st == cancelled ]] && break
++  sleep 0.2
++done
++t1=$(date +%s.%N)
++sleep 2
++kill -INT $pp
++wait $pp
++[[ -n ${pp2:-} ]] && kill -INT $pp2 && wait $pp2
++q "select concat_ws(' ', 'requested', requested_timestamp, 'started', started_timestamp, 'ready', ready_to_complete_timestamp, 'cutover_attempts', cutover_attempts, 'completed', completed_timestamp, 'rows', rows_copied) from _vt.schema_migrations where migration_uuid='$uuid'" >"$OUT/timeline"
++echo "$LABEL $st total=$(echo "$t1 - $t0" | bc)s $(cat "$OUT/timeline") | $(grep -o 'max gap.*=[0-9.]*[mµ]*s' "$OUT/prober") $(grep -o 'err=[0-9]*' "$OUT/prober" | head -1)"
+diff --git a/perf-findings/P4-scripts/oddlab.sh b/perf-findings/P4-scripts/oddlab.sh
+new file mode 100755
+index 0000000..49f4044
+--- /dev/null
++++ b/perf-findings/P4-scripts/oddlab.sh
+@@ -0,0 +1,17 @@
++#!/bin/bash
++# Alternate Online DDL runs between vttablet binaries.
++# Usage: oddlab.sh ROUNDS "label|bin" ...
++ROUNDS=$1
++shift
++D=/home/vt/perf/P4
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    bin=${cfg#*|}
++    BIN=$bin "$D/c.sh" restart-tablets >/dev/null 2>&1
++    sleep 15
++    "$D/bins.sh" | tr "\n" " "; echo
++    "$D/oddl.sh" "$label-r$r" "${ALTER:-alter table sbtest1 engine=innodb}"
++    "$D/c.sh" purge-binlogs 0 >/dev/null 2>&1
++  done
++done
+diff --git a/perf-findings/P4-scripts/prober.go.txt b/perf-findings/P4-scripts/prober.go.txt
+new file mode 100644
+index 0000000..fd54f99
+--- /dev/null
++++ b/perf-findings/P4-scripts/prober.go.txt
+@@ -0,0 +1,180 @@
++// prober: runs light, rate-limited write (and optionally read) traffic against
++// vtgate and reports the client-visible unavailability window.
++package main
++
++import (
++	"context"
++	"database/sql"
++	"flag"
++	"fmt"
++	"math/rand"
++	"os"
++	"os/signal"
++	"sort"
++	"sync"
++	"syscall"
++	"time"
++
++	_ "github.com/go-sql-driver/mysql"
++)
++
++type ev struct {
++	start, end time.Time
++	err        string
++	write      bool
++}
++
++func main() {
++	dsn := flag.String("dsn", "root@tcp(127.0.0.1:40003)/sbtest?timeout=2s&readTimeout=60s&writeTimeout=60s", "")
++	threads := flag.Int("threads", 4, "")
++	interval := flag.Duration("interval", 10*time.Millisecond, "per-thread interval")
++	dur := flag.Duration("duration", 30*time.Second, "")
++	reads := flag.Bool("reads", false, "also a read per iteration")
++	table := flag.String("table", "sbtest1", "table to update")
++	tableSize := flag.Int("table-size", 100000, "")
++	out := flag.String("out", "", "file to write raw events to")
++	flag.Parse()
++
++	db, err := sql.Open("mysql", *dsn)
++	if err != nil {
++		panic(err)
++	}
++	db.SetMaxOpenConns(*threads * 2)
++	db.SetMaxIdleConns(*threads * 2)
++	db.SetConnMaxLifetime(0)
++
++	ctx, cancel := context.WithTimeout(context.Background(), *dur)
++	defer cancel()
++	sigs := make(chan os.Signal, 1)
++	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
++	go func() { <-sigs; cancel() }()
++
++	var mu sync.Mutex
++	var evs []ev
++	var wg sync.WaitGroup
++	for i := 0; i < *threads; i++ {
++		wg.Add(1)
++		go func(i int) {
++			defer wg.Done()
++			r := rand.New(rand.NewSource(int64(i)))
++			t := time.NewTicker(*interval)
++			defer t.Stop()
++			for {
++				select {
++				case <-ctx.Done():
++					return
++				case <-t.C:
++				}
++				id := r.Intn(*tableSize) + 1
++				s := time.Now()
++				qctx, qc := context.WithTimeout(context.Background(), 60*time.Second)
++				_, err := db.ExecContext(qctx, "UPDATE "+*table+" SET k=k+1 WHERE id=?", id)
++				qc()
++				e := ev{start: s, end: time.Now(), write: true}
++				if err != nil {
++					e.err = err.Error()
++				}
++				mu.Lock()
++				evs = append(evs, e)
++				mu.Unlock()
++				if *reads {
++					s := time.Now()
++					var k int
++					err := db.QueryRowContext(context.Background(), "SELECT k FROM sbtest2 WHERE id=?", id).Scan(&k)
++					e := ev{start: s, end: time.Now()}
++					if err != nil {
++						e.err = err.Error()
++					}
++					mu.Lock()
++					evs = append(evs, e)
++					mu.Unlock()
++				}
++			}
++		}(i)
++	}
++	wg.Wait()
++	report(evs, true, *out)
++	if *reads {
++		report(evs, false, "")
++	}
++}
++
++func report(all []ev, write bool, out string) {
++	var evs []ev
++	for _, e := range all {
++		if e.write == write {
++			evs = append(evs, e)
++		}
++	}
++	sort.Slice(evs, func(i, j int) bool { return evs[i].end.Before(evs[j].end) })
++	kind := "READ"
++	if write {
++		kind = "WRITE"
++	}
++	if out != "" {
++		f, _ := os.Create(out)
++		for _, e := range evs {
++			fmt.Fprintf(f, "%d %d %q\n", e.start.UnixMicro(), e.end.Sub(e.start).Microseconds(), e.err)
++		}
++		f.Close()
++	}
++	var nerr int
++	var firstErr, lastErr time.Time
++	errKinds := map[string]int{}
++	var lats []time.Duration
++	var maxLat time.Duration
++	var maxLatAt time.Time
++	// longest gap between successful completions
++	var lastOK time.Time
++	var maxGap time.Duration
++	var gapStart time.Time
++	for _, e := range evs {
++		l := e.end.Sub(e.start)
++		if e.err != "" {
++			nerr++
++			if firstErr.IsZero() {
++				firstErr = e.start
++			}
++			lastErr = e.end
++			k := e.err
++			if len(k) > 90 {
++				k = k[:90]
++			}
++			errKinds[k]++
++			continue
++		}
++		lats = append(lats, l)
++		if l > maxLat {
++			maxLat = l
++			maxLatAt = e.start
++		}
++		if !lastOK.IsZero() && e.end.Sub(lastOK) > maxGap {
++			maxGap = e.end.Sub(lastOK)
++			gapStart = lastOK
++		}
++		lastOK = e.end
++	}
++	sort.Slice(lats, func(i, j int) bool { return lats[i] < lats[j] })
++	p := func(q float64) time.Duration {
++		if len(lats) == 0 {
++			return 0
++		}
++		return lats[int(float64(len(lats)-1)*q)]
++	}
++	fmt.Printf("%s: n=%d ok=%d err=%d p50=%v p99=%v max=%v (at %s)\n", kind, len(evs), len(lats), nerr, p(0.5), p(0.99), maxLat, maxLatAt.Format("15:04:05.000"))
++	fmt.Printf("%s: max gap between successful completions=%v starting %s\n", kind, maxGap, gapStart.Format("15:04:05.000"))
++	if nerr > 0 {
++		fmt.Printf("%s: errors from %s to %s (span %v)\n", kind, firstErr.Format("15:04:05.000"), lastErr.Format("15:04:05.000"), lastErr.Sub(firstErr))
++		for k, v := range errKinds {
++			fmt.Printf("   %5d  %s\n", v, k)
++		}
++	}
++	// count of slow ops (>100ms)
++	slow := 0
++	for _, l := range lats {
++		if l > 100*time.Millisecond {
++			slow++
++		}
++	}
++	fmt.Printf("%s: slow(>100ms)=%d\n", kind, slow)
++}
+diff --git a/perf-findings/P4-scripts/rsab.sh b/perf-findings/P4-scripts/rsab.sh
+new file mode 100755
+index 0000000..d7367f3
+--- /dev/null
++++ b/perf-findings/P4-scripts/rsab.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++# Alternate source-restart measurements between vttablet binaries.
++# Usage: rsab.sh ROUNDS "label|bin" ...
++ROUNDS=$1
++shift
++D=/home/vt/perf/P4
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    bin=${cfg#*|}
++    [[ ${SKIPWAIT:-0} == 1 ]] || BIN=$bin "$D/c.sh" restart-tablets >/dev/null 2>&1
++    [[ ${SKIPWAIT:-0} == 1 ]] || sleep 45
++    BIN=$bin "$D/srcrestart.sh" "$label-r$r"
++    "$D/c.sh" purge-binlogs >/dev/null 2>&1
++  done
++done
+diff --git a/perf-findings/P4-scripts/small.sh b/perf-findings/P4-scripts/small.sh
+new file mode 100755
+index 0000000..e4be5db
+--- /dev/null
++++ b/perf-findings/P4-scripts/small.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# Create N small tables (5000 rows each, copies of sbtest1) in src and add them to the dst vschema.
++N=${1:-40}
++ROWS=${2:-5000}
++D=/home/vt/perf/P4
++S=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++for i in $(seq 1 "$N"); do
++  mysql -S $S -u vt_dba vt_src -e "DROP TABLE IF EXISTS small$i; CREATE TABLE small$i LIKE sbtest1; INSERT INTO small$i SELECT * FROM sbtest1 WHERE id <= $ROWS;"
++done
++vs='{"sharded":true,"vindexes":{"hash":{"type":"hash"}},"tables":{'
++first=1
++for t in sbtest1 sbtest2 sbtest3 sbtest4 $(seq -f 'small%g' 1 "$N"); do
++  [[ $first == 1 ]] || vs+=","
++  first=0
++  vs+="\"$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++done
++vs+='}}'
++"$D/c.sh" vtctldclient ApplyVSchema --vschema "$vs" dst >/dev/null && echo vschema ok
++"$D/c.sh" vtctldclient ReloadSchemaKeyspace src
++"$D/c.sh" purge-binlogs
+diff --git a/perf-findings/P4-scripts/srcrestart.sh b/perf-findings/P4-scripts/srcrestart.sh
+new file mode 100755
+index 0000000..298a57d
+--- /dev/null
++++ b/perf-findings/P4-scripts/srcrestart.sh
+@@ -0,0 +1,31 @@
++#!/bin/bash
++# Restart the source vttablet under a light write load and measure how long the target streams take to
++# catch up again with the source position as of the moment the source vttablet was serving again.
++# Usage: srcrestart.sh LABEL
++LABEL=$1
++D=/home/vt/perf/P4
++OUT=$D/out/rs-$LABEL
++mkdir -p "$OUT"
++SSOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++T1=/home/vt/perf/c40000/vt_0000000101/mysql.sock
++T2=/home/vt/perf/c40000/vt_0000000102/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++sysbench --db-driver=mysql --mysql-socket=$SSOCK --mysql-user=vt_dba --mysql-db=vt_src --tables=4 --table-size=500000 \
++  --threads=2 --rate=100 --time=150 --rand-type=uniform oltp_write_only run >"$OUT/sysbench" 2>&1 &
++sp=$!
++sleep 3
++t0=$(date +%s.%N)
++if [[ ${MODE:-src} == all ]]; then "$D/c.sh" restart-tablets >/dev/null 2>&1; else "$D/c.sh" restart-tablet 0 >/dev/null 2>&1; fi
++t1=$(date +%s.%N)
++srcgtid=$(q $SSOCK "select @@global.gtid_executed" | tr -d '\n')
++while :; do
++  r1=$(q $T1 "select gtid_subset('$srcgtid', substring(pos, 9)) from _vt.vreplication where workflow='wf'")
++  r2=$(q $T2 "select gtid_subset('$srcgtid', substring(pos, 9)) from _vt.vreplication where workflow='wf'")
++  [[ $r1 == 1 && $r2 == 1 ]] && break
++  [[ $(echo "$(date +%s.%N) - $t0 > 140" | bc) == 1 ]] && { echo "timeout"; break; }
++  sleep 0.2
++done
++t2=$(date +%s.%N)
++kill $sp 2>/dev/null
++wait $sp 2>/dev/null
++echo "$LABEL restart=$(echo "$t1 - $t0" | bc)s caught_up_after_restart=$(echo "$t2 - $t1" | bc)s total=$(echo "$t2 - $t0" | bc)s"
+diff --git a/perf-findings/P4-scripts/swab.sh b/perf-findings/P4-scripts/swab.sh
+new file mode 100755
+index 0000000..efafafe
+--- /dev/null
++++ b/perf-findings/P4-scripts/swab.sh
+@@ -0,0 +1,22 @@
++#!/bin/bash
++# Alternate blocks of ReverseTraffic/SwitchTraffic pairs between vttablet binaries.
++# Usage: swab.sh ROUNDS PAIRS "label|bin" ...   (workflow must currently be in the switched state)
++ROUNDS=$1
++PAIRS=$2
++shift 2
++D=/home/vt/perf/P4
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    bin=${cfg#*|}
++    BIN=$bin "$D/c.sh" restart-tablets >/dev/null 2>&1
++    # vreplication streams need a while to find their source tablets after a restart.
++    sleep 60
++    for p in $(seq 1 "$PAIRS"); do
++      "$D/switch.sh" "$label-r$r-$p" reversetraffic
++      sleep 3
++      "$D/switch.sh" "$label-r$r-$p" switchtraffic
++      sleep 3
++    done
++  done
++done
+diff --git a/perf-findings/P4-scripts/switch.sh b/perf-findings/P4-scripts/switch.sh
+new file mode 100755
+index 0000000..85d4ca0
+--- /dev/null
++++ b/perf-findings/P4-scripts/switch.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# Time a MoveTables SwitchTraffic / ReverseTraffic under a light write load and report the client-visible write gap.
++# Usage: switch.sh LABEL switchtraffic|reversetraffic [extra flags]
++LABEL=$1
++ACTION=$2
++shift 2
++D=/home/vt/perf/P4
++OUT=$D/out/sw-$LABEL
++mkdir -p "$OUT"
++"$D/prober" -dsn "root@tcp(127.0.0.1:40003)/src?timeout=2s&readTimeout=60s&writeTimeout=60s" -threads 4 -interval 10ms \
++  -duration 14s -table-size 500000 -out "$OUT/events" >"$OUT/prober" 2>&1 &
++pp=$!
++sleep 5
++t0=$(date +%s.%N)
++"$D/c.sh" vtctldclient MoveTables --workflow wf --target-keyspace dst "$ACTION" "$@" >"$OUT/switch.log" 2>&1
++rc=$?
++t1=$(date +%s.%N)
++wait $pp
++echo "$LABEL $ACTION rc=$rc cmd=$(echo "$t1 - $t0" | bc)s $(grep -o 'max gap.*=[0-9.]*[mµ]*s' "$OUT/prober") $(grep -o 'err=[0-9]*' "$OUT/prober" | head -1)"
+diff --git a/perf-findings/P4-scripts/wfstate.sh b/perf-findings/P4-scripts/wfstate.sh
+new file mode 100755
+index 0000000..2126346
+--- /dev/null
++++ b/perf-findings/P4-scripts/wfstate.sh
+@@ -0,0 +1,8 @@
++#!/bin/bash
++# Print the vreplication streams of every tablet of the P4 cluster.
++for d in /home/vt/perf/c40000/vt_*; do
++  echo "== $d"
++  mysql -N -S "$d/mysql.sock" -u vt_dba -e "select id, workflow, state, left(message, 200), from_unixtime(time_updated), left(pos, 80) from _vt.vreplication" 2>&1
++done
++date
++/home/vt/perf/P4/c.sh vtctldclient GetTablets
