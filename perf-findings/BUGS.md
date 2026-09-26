@@ -14,13 +14,57 @@
 - **open:** confirmed, not fixed.
 - **unverified:** observed once; needs a repro.
 
+## Ranked list (highest to lowest)
+
+**Ranking criteria:**
+- Severity: silent data corruption > wrong query results > outages or stuck operations > user-visible errors > races and degradation > observability > cosmetic.
+- Reach: default code paths rank above opt-in flags and rare setups.
+- Confidence: unverified reports rank lower.
+
+The tables below give details for each bug.
+
+| # | Bug | Pri | Why this position | Status |
+|---|---|---|---|---|
+| 1 | VReplication with an explicit column list that includes a target-generated column writes shifted values (or panics) | P0 | The worst corruption: wrong values in wrong columns. Plausible whenever an Online DDL/Materialize target has generated columns. | open |
+| 2 | Copy phase turns JSON doubles into DECIMAL (MoveTables/Reshard) | P0 | Silent, on the **default** path, and invisible to VDiff; any JSON with floating-point numbers is affected | open (needs a consistent type rule) |
+| 3 | `select *` rules drop ConvertCharset / ConvertIntToEnum | P0 | Silent unconverted data, but only for workflows that combine `select *` with conversion rules | open |
+| 4 | Parallel-insert-worker connections skip session setup (TZ, `set names binary`, timeouts) | P0 | Silent TIMESTAMP shifts and misread bytes, but only with an opt-in flag on a non-UTC target; not reproduced end to end | patch ready |
+| 5 | PAD SPACE ignored in general_ci/latin1/unicode_ci/`_bin` Collate and Hash | P1 | Silent wrong query results whenever vtgate evaluates (cross-shard filters, GROUP BY, DISTINCT, joins); `utf8mb4_general_ci` is very common | open (behaviour change) |
+| 6 | Tablet restart during VDiff setup orphans the workflow lock for 24 h | P1 | A routine restart blocks VDiff and **SwitchTraffic** for a day and leaves the stream stopped; reproduced on base | patch ready |
+| 7 | Semi-sync PRS has a ~1 s write outage (DemotePrimary waits for the ACK receiver) | P1 | Hits **every** planned reparent in semi-sync deployments, which is the common production setup | patch ready |
+| 8 | VStream `minimize_skew` stalls with 3+ shards, then fails after 10 minutes | P1 | Deterministic (6/6 on 4 shards) for every CDC user of that option | patch ready |
+| 9 | VTOrc polling off-by-one (every 6 s instead of 5) | P1 | Adds ~1 s to every unplanned failover's detection, fleet-wide | patch ready |
+| 10 | Cancelling a MoveTables with thousands of tables leaves a half-cancelled workflow | P1 | Inconsistent state that needs manual cleanup, but only for very large table counts | patch ready |
+| 11 | vtgate accepts a quoted-int `SET innodb_lock_wait_timeout`, then every query in the session fails | P1 | The session is poisoned, but it needs specific client input; an easy fix | open |
+| 12 | vtgate took ~40 s to route to a restarted tablet | P1? | Big if real (40 s of unavailability after restarts) | unverified; **reproduce first** |
+| 13 | VTOrc `FullStatus` hangs ~15 s on a refused connection | P1? | Slows recovery when a tablet process is down | unverified |
+| 14 | `VDiff stop/delete` blocked ~7 minutes waiting for the workflow lock | P1? | Operators can't stop a stuck VDiff | unverified |
+| 15 | Heartbeats rewrite the whole `_vt.vreplication` row (rules included) into the binlog | P2 | ~700 MB/h of binlog for a large idle workflow can fill disks and slow replicas | open (flag mitigates) |
+| 16 | `Throttler.checkScope` mutates a shared global result | P2 | A data race that corrupts shared state on every exempted check | open |
+| 17 | `processExactKeyRange` sorts the shared cached shard list in place | P2 | A data race on the srvtopo cache, only with unsorted partitions | fixed in patch |
+| 18 | Plan-cache sketch: `reset` corrupts counters and `indexOf` uses half of them | P2 | Worse plan-cache admission (up to −1.8 pp hit ratio); a miss costs +28% vtgate CPU | patch ready |
+| 19 | Streaming `FetchNext` returns uncapped slices | P2 | Latent column overwrite (no caller today); the consolidator over-counts memory and gives up early | open (1-line fix) |
+| 20 | `QueryPlanCacheSize` shows ~4% of the real size | P2 | Operators can't see a full plan cache | patch ready |
+| 21 | VDiff progress metrics over-report (50x) and double-count after a resume | P2 | Misleading progress | patch ready |
+| 22 | A nil `ConvertCharset` entry panics vreplication | P2 | A crash, but only on a malformed rule | fixed in patch |
+| 23 | mysqld shutdown waits 2 s for Vitess's own idle connection | P2 | +2–3 s on every backup, restore and tablet shutdown | patch ready |
+| 24 | Relay-log stall-flag race | P3 | A spurious stall error needing exact timing at the 5-min deadline | open |
+| 25 | `VDiff --wait` checks for completion only once a minute (vtctldclient and legacy vtctl) | P3 | A slow CLI return, no correctness impact | patch ready (vtctldclient) |
+| 26 | `Collation_binary.Hash` panics when `numCodepoints > len` | P3 | No production caller today | open |
+| 27 | `charset.Convert` panics on a destination buffer smaller than 4 bytes | P3 | No current caller | fixed in patch |
+| 28 | `counters.String` emits invalid JSON for control characters | P3 | Only odd label values in `/debug/vars` | open |
+| 29 | `Timings.Reset` race | P3 | Only tests call it | fixed in patch |
+| 30 | vtexplain test flake (background `wait_timeout` query) | P3 | Flaky CI | open |
+| 31 | servenv cgroup tests fail in containers | P3 | Test robustness | open |
+| 32 | Wrong "not thread safe" doc comment on the throttler client | P3 | Docs only | fixed in patch |
+| 33–35 | Upstream: Go `utf8.RuneCount` allocation; missing `VZEROUPPER` in the simd experiment; grpc-go BDP pings per round trip | – | Report to Go / grpc-go | – |
+
 ## P0: silent wrong data
 
 | Bug | Where | Impact | Status | Source |
 |---|---|---|---|---|
 | VReplication `select *` rules drop `ConvertCharset` / `ConvertIntToEnum` | `vreplication/replicator_plan.go` (table plan built for `select *`) | MoveTables / Online DDL with charset or int→enum conversion rules copy unconverted values without any error | open; a test in `replicator_plan_test` can show it | F16, F30 #17a |
 | An explicit column list that selects a column generated on the target breaks `appendFromRow` | `replicator_plan.go` `appendFromRow` skip loop (no bounds check) | Panics with index out of range; with extra PK columns it **binds shifted values**, so wrong data is written | open; easy unit test | F30 #17b |
-
 | VReplication copy phase silently turns JSON doubles into DECIMAL (MoveTables/Reshard); VDiff doesn't detect it | copy phase JSON handling (`replicator_plan.go` / `table_plan_builder.go`) | Target JSON documents differ in number types from the source (`JSON_TYPE` DOUBLE → DECIMAL) | open; V1 adds an opt-in "JSON as text" mode that keeps doubles (but turns decimals into doubles); a consistent rule is still needed | V1 #3 |
 | `--vreplication-parallel-insert-workers` connections skip the session setup: no UTC time zone, no `set names binary`, no network timeouts | vcopier parallel insert worker connections | On a non-UTC target, TIMESTAMP values are shifted and non-utf8 bytes misread (opt-in flag) | patch ready (unit test fails on main; not reproduced end to end) | V1 #4 |
 
@@ -51,7 +95,6 @@
 | A `ConvertCharset` entry mapped to nil panics | `replicator_plan.go` | vreplication crashes on a malformed rule | fixed in patch (nil now means no conversion) | F16 |
 | Each VReplication heartbeat / position update rewrites the whole `_vt.vreplication` row, including all filter rules, into the binlog | `_vt.vreplication` schema / heartbeat updates | An idle 2000-table workflow writes ~700 MB/h of target binlog; 180 KB of binlog per replicated 349-byte transaction | open (`--vreplication-heartbeat-update-interval=10` cuts it 10x); the proper fix is to keep frequently updated columns out of the row that holds the rules | V4b #6 |
 | mysqld shutdown waits 2 s for Vitess's own idle dba-pool connection | `mysqlctl/mysqld.go` | Every backup, restore and tablet shutdown is 2–3 s slower | patch ready (`TestClosePooledConnections`) | P5 #3 |
-
 | The VDiff `VDiffRowsCompared` gauge re-adds the cumulative count every 10k rows (a 1M-row diff reads 50.5M), and `VDiffRowsComparedTotal` double-counts earlier attempts after a resume | `vdiff/table_differ.go:875`, `:588` | Misleading VDiff progress metrics | patch ready (`TestUpdateTableProgressRowCounts`; passes with the fix, not yet run on main) | V6 |
 
 ## P3: latent, tests only, or cosmetic
