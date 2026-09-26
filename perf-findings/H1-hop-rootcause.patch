@@ -1,0 +1,2714 @@
+diff --git a/perf-findings/H1-raw/ab1.txt b/perf-findings/H1-raw/ab1.txt
+new file mode 100644
+index 0000000000..5221041819
+--- /dev/null
++++ b/perf-findings/H1-raw/ab1.txt
+@@ -0,0 +1,20 @@
++base                   thr=1  qps=    1250 avg=0.800 p99=1.370 | vtgate 590us (u360/s230) cs 18.63v/0.74n | tablets 525us (u282/s242) cs 18.25v/0.73n | mysqlds 181us (u147/s34) cs 1.29v/0.17n | vtgate sysc 45.8 sw 19.37 wake 13.35 | tablets sysc 46.1 sw 19.01 wake 14.13 | mysqlds sysc 5.6 sw 1.46 wake 1.88 | IPI resched 0.53 callfn 25.89 send 26.42 /q | load 10.60
++base                   thr=8  qps=    4839 avg=1.650 p99=4.490 | vtgate 221us (u159/s62) cs 2.39v/1.23n | tablets 229us (u145/s84) cs 5.70v/1.37n | mysqlds 144us (u120/s24) cs 1.07v/0.44n | vtgate sysc 10.8 sw 3.62 wake 3.11 | tablets sysc 16.2 sw 7.07 wake 4.13 | mysqlds sysc 5.1 sw 1.52 wake 1.06 | IPI resched 1.19 callfn 1.36 send 2.54 /q | load 10.63
++rt                     thr=1  qps=    1263 avg=0.790 p99=1.440 | vtgate 593us (u356/s238) cs 18.82v/0.61n | tablets 513us (u278/s235) cs 18.23v/0.64n | mysqlds 181us (u150/s31) cs 1.28v/0.16n | vtgate sysc 46.3 sw 19.44 wake 13.40 | tablets sysc 46.0 sw 18.89 wake 14.12 | mysqlds sysc 5.6 sw 1.45 wake 1.89 | IPI resched 0.49 callfn 26.48 send 26.97 /q | load 10.16
++rt                     thr=8  qps=    4792 avg=1.670 p99=4.570 | vtgate 224us (u162/s62) cs 2.16v/1.25n | tablets 234us (u152/s82) cs 5.70v/1.35n | mysqlds 149us (u120/s29) cs 1.07v/0.45n | vtgate sysc 10.5 sw 3.41 wake 3.05 | tablets sysc 16.3 sw 7.06 wake 4.08 | mysqlds sysc 5.1 sw 1.52 wake 1.05 | IPI resched 1.20 callfn 1.31 send 2.50 /q | load 10.13
++nowake                 thr=1  qps=    1356 avg=0.740 p99=1.270 | vtgate 569us (u345/s224) cs 16.80v/0.63n | tablets 464us (u240/s225) cs 15.99v/0.54n | mysqlds 170us (u140/s30) cs 1.26v/0.06n | vtgate sysc 42.6 sw 17.43 wake 12.65 | tablets sysc 41.4 sw 16.55 wake 11.94 | mysqlds sysc 5.5 sw 1.32 wake 1.33 | IPI resched 0.45 callfn 23.54 send 23.99 /q | load 9.98
++nowake                 thr=8  qps=    4262 avg=1.870 p99=6.430 | vtgate 226us (u166/s60) cs 2.21v/1.15n | tablets 231us (u148/s84) cs 5.21v/1.22n | mysqlds 152us (u123/s29) cs 1.08v/0.47n | vtgate sysc 10.5 sw 3.36 wake 2.96 | tablets sysc 15.4 sw 6.44 wake 3.92 | mysqlds sysc 5.2 sw 1.55 wake 1.03 | IPI resched 1.51 callfn 1.00 send 2.51 /q | load 10.61
++sysmon                 thr=1  qps=    1198 avg=0.830 p99=1.790 | vtgate 600us (u350/s250) cs 18.56v/1.10n | tablets 531us (u281/s250) cs 18.12v/1.09n | mysqlds 188us (u154/s33) cs 1.30v/0.24n | vtgate sysc 45.5 sw 19.66 wake 13.25 | tablets sysc 45.6 sw 19.23 wake 13.90 | mysqlds sysc 5.6 sw 1.54 wake 1.86 | IPI resched 1.06 callfn 23.34 send 24.40 /q | load 7.70
++sysmon                 thr=8  qps=    4785 avg=1.670 p99=4.570 | vtgate 218us (u162/s56) cs 1.77v/1.15n | tablets 226us (u144/s83) cs 5.07v/1.29n | mysqlds 150us (u122/s28) cs 1.07v/0.41n | vtgate sysc 10.1 sw 2.92 wake 2.86 | tablets sysc 15.7 sw 6.37 wake 3.91 | mysqlds sysc 5.2 sw 1.48 wake 1.00 | IPI resched 1.19 callfn 1.37 send 2.56 /q | load 8.29
++window                 thr=1  qps=    1219 avg=0.820 p99=1.370 | vtgate 506us (u326/s180) cs 13.52v/0.13n | tablets 393us (u223/s170) cs 12.47v/0.12n | mysqlds 183us (u149/s34) cs 1.30v/0.03n | vtgate sysc 29.2 sw 13.64 wake 8.40 | tablets sysc 28.9 sw 12.61 wake 8.42 | mysqlds sysc 5.6 sw 1.34 wake 2.24 | IPI resched 0.13 callfn 21.43 send 21.57 /q | load 8.95
++window                 thr=8  qps=    4851 avg=1.650 p99=4.570 | vtgate 218us (u160/s59) cs 2.33v/1.19n | tablets 223us (u145/s78) cs 5.31v/1.36n | mysqlds 147us (u120/s27) cs 1.07v/0.46n | vtgate sysc 9.6 sw 3.52 wake 2.96 | tablets sysc 14.5 sw 6.68 wake 3.93 | mysqlds sysc 5.1 sw 1.53 wake 1.07 | IPI resched 1.12 callfn 1.28 send 2.40 /q | load 9.70
++base                   thr=1  qps=    1236 avg=0.810 p99=1.390 | vtgate 599us (u354/s244) cs 18.70v/0.63n | tablets 527us (u284/s243) cs 18.31v/0.63n | mysqlds 185us (u151/s34) cs 1.31v/0.15n | vtgate sysc 45.9 sw 19.33 wake 13.33 | tablets sysc 46.2 sw 18.96 wake 14.08 | mysqlds sysc 5.6 sw 1.47 wake 1.89 | IPI resched 0.45 callfn 26.25 send 26.71 /q | load 8.02
++base                   thr=8  qps=    4793 avg=1.670 p99=4.650 | vtgate 221us (u161/s60) cs 2.12v/1.21n | tablets 233us (u148/s85) cs 5.64v/1.34n | mysqlds 147us (u119/s28) cs 1.08v/0.44n | vtgate sysc 10.6 sw 3.34 wake 3.05 | tablets sysc 16.2 sw 6.98 wake 4.08 | mysqlds sysc 5.2 sw 1.52 wake 1.04 | IPI resched 1.19 callfn 1.36 send 2.55 /q | load 8.62
++rt                     thr=1  qps=    1208 avg=0.830 p99=1.500 | vtgate 623us (u380/s243) cs 18.95v/0.60n | tablets 543us (u279/s264) cs 18.36v/0.63n | mysqlds 189us (u154/s35) cs 1.32v/0.17n | vtgate sysc 46.4 sw 19.55 wake 13.34 | tablets sysc 46.2 sw 19.02 wake 14.15 | mysqlds sysc 5.6 sw 1.49 wake 1.89 | IPI resched 0.44 callfn 26.41 send 26.85 /q | load 7.99
++rt                     thr=8  qps=    4721 avg=1.690 p99=4.570 | vtgate 227us (u171/s56) cs 2.35v/1.25n | tablets 233us (u145/s88) cs 5.73v/1.37n | mysqlds 149us (u122/s27) cs 1.08v/0.46n | vtgate sysc 10.8 sw 3.60 wake 3.10 | tablets sysc 16.3 sw 7.10 wake 4.13 | mysqlds sysc 5.2 sw 1.54 wake 1.08 | IPI resched 1.18 callfn 1.34 send 2.53 /q | load 7.89
++nowake                 thr=1  qps=    1339 avg=0.740 p99=1.440 | vtgate 575us (u333/s242) cs 16.82v/0.64n | tablets 469us (u252/s217) cs 15.93v/0.57n | mysqlds 172us (u145/s27) cs 1.28v/0.08n | vtgate sysc 42.6 sw 17.46 wake 12.64 | tablets sysc 41.4 sw 16.52 wake 11.90 | mysqlds sysc 5.6 sw 1.37 wake 1.32 | IPI resched 0.46 callfn 23.04 send 23.50 /q | load 8.41
++nowake                 thr=8  qps=    4774 avg=1.670 p99=4.740 | vtgate 223us (u166/s56) cs 1.99v/1.15n | tablets 225us (u146/s79) cs 5.14v/1.20n | mysqlds 147us (u119/s28) cs 1.08v/0.42n | vtgate sysc 10.2 sw 3.14 wake 2.89 | tablets sysc 15.3 sw 6.35 wake 3.78 | mysqlds sysc 5.2 sw 1.50 wake 0.97 | IPI resched 1.12 callfn 1.34 send 2.46 /q | load 8.42
++sysmon                 thr=1  qps=    1260 avg=0.790 p99=1.390 | vtgate 595us (u352/s244) cs 18.78v/0.58n | tablets 524us (u281/s243) cs 18.25v/0.61n | mysqlds 183us (u144/s38) cs 1.30v/0.15n | vtgate sysc 46.1 sw 19.36 wake 13.30 | tablets sysc 46.1 sw 18.88 wake 14.15 | mysqlds sysc 5.6 sw 1.46 wake 1.88 | IPI resched 0.43 callfn 26.48 send 26.90 /q | load 8.29
++sysmon                 thr=8  qps=    4845 avg=1.650 p99=4.650 | vtgate 217us (u161/s56) cs 1.74v/1.16n | tablets 223us (u143/s80) cs 5.01v/1.28n | mysqlds 150us (u123/s27) cs 1.07v/0.40n | vtgate sysc 10.1 sw 2.91 wake 2.86 | tablets sysc 15.6 sw 6.30 wake 3.87 | mysqlds sysc 5.2 sw 1.48 wake 0.99 | IPI resched 1.17 callfn 1.36 send 2.53 /q | load 8.42
++window                 thr=1  qps=    1243 avg=0.800 p99=1.270 | vtgate 496us (u335/s162) cs 13.50v/0.08n | tablets 390us (u226/s164) cs 12.62v/0.07n | mysqlds 180us (u143/s37) cs 1.31v/0.02n | vtgate sysc 29.2 sw 13.58 wake 8.39 | tablets sysc 29.2 sw 12.71 wake 8.48 | mysqlds sysc 5.6 sw 1.34 wake 2.27 | IPI resched 0.07 callfn 21.86 send 21.92 /q | load 9.19
++window                 thr=8  qps=    3862 avg=2.070 p99=6.910 | vtgate 215us (u158/s56) cs 2.00v/1.20n | tablets 224us (u148/s76) cs 5.22v/1.33n | mysqlds 149us (u120/s29) cs 1.09v/0.52n | vtgate sysc 9.0 sw 3.20 wake 2.96 | tablets sysc 14.2 sw 6.56 wake 3.90 | mysqlds sysc 5.2 sw 1.61 wake 1.09 | IPI resched 2.61 callfn 0.67 send 3.31 /q | load 9.73
+diff --git a/perf-findings/H1-raw/ab2.txt b/perf-findings/H1-raw/ab2.txt
+new file mode 100644
+index 0000000000..6740278dfc
+--- /dev/null
++++ b/perf-findings/H1-raw/ab2.txt
+@@ -0,0 +1,36 @@
++base                   thr=1  qps=    1257 avg=0.790 p99=1.340 | vtgate 573us (u346/s227) cs 19.12v/0.61n | tablets 502us (u279/s223) cs 18.57v/0.62n | mysqlds 181us (u150/s30) cs 1.28v/0.14n | load 9.94
++base                   thr=8  qps=    5001 avg=1.600 p99=4.490 | vtgate 213us (u164/s49) cs 2.14v/1.21n | tablets 217us (u148/s69) cs 5.67v/1.33n | mysqlds 142us (u117/s25) cs 1.07v/0.44n | load 9.95
++window                 thr=1  qps=    1326 avg=0.750 p99=1.140 | vtgate 454us (u310/s144) cs 13.54v/0.09n | tablets 357us (u226/s131) cs 12.72v/0.09n | mysqlds 173us (u142/s31) cs 1.27v/0.03n | load 8.37
++window                 thr=8  qps=    5132 avg=1.560 p99=4.410 | vtgate 203us (u155/s48) cs 2.05v/1.14n | tablets 206us (u141/s65) cs 5.28v/1.29n | mysqlds 141us (u120/s22) cs 1.07v/0.46n | load 8.41
++procs1                 thr=1  qps=    1685 avg=0.590 p99=1.080 | vtgate 360us (u241/s118) cs 9.10v/0.15n | tablets 348us (u215/s133) cs 11.12v/0.13n | mysqlds 147us (u126/s21) cs 1.21v/0.01n | load 8.07
++procs1                 thr=8  qps=    5269 avg=1.520 p99=4.100 | vtgate 136us (u100/s36) cs 1.55v/0.22n | tablets 164us (u115/s49) cs 3.19v/0.39n | mysqlds 126us (u103/s23) cs 1.07v/0.43n | load 7.67
++winprocs1              thr=1  qps=    1862 avg=0.540 p99=1.080 | vtgate 257us (u183/s74) cs 6.24v/0.01n | tablets 222us (u143/s78) cs 7.16v/0.01n | mysqlds 142us (u114/s28) cs 1.19v/0.00n | load 6.85
++winprocs1              thr=8  qps=    5397 avg=1.480 p99=3.960 | vtgate 132us (u101/s31) cs 1.40v/0.21n | tablets 159us (u116/s43) cs 2.89v/0.39n | mysqlds 127us (u107/s21) cs 1.06v/0.40n | load 6.40
++winprocs2              thr=1  qps=    1331 avg=0.750 p99=1.320 | vtgate 439us (u306/s134) cs 12.52v/0.04n | tablets 333us (u207/s126) cs 11.41v/0.03n | mysqlds 170us (u137/s34) cs 1.27v/0.01n | load 3.73
++winprocs2              thr=8  qps=    5132 avg=1.560 p99=4.180 | vtgate 176us (u135/s41) cs 1.88v/0.72n | tablets 201us (u141/s60) cs 4.39v/0.99n | mysqlds 139us (u117/s22) cs 1.07v/0.45n | load 4.97
++procs2                 thr=1  qps=    1292 avg=0.770 p99=1.250 | vtgate 539us (u348/s192) cs 16.58v/0.36n | tablets 471us (u273/s198) cs 16.74v/0.30n | mysqlds 184us (u149/s35) cs 1.27v/0.08n | load 3.55
++procs2                 thr=8  qps=    4825 avg=1.660 p99=4.330 | vtgate 190us (u141/s49) cs 2.02v/0.80n | tablets 219us (u152/s67) cs 4.83v/1.07n | mysqlds 146us (u117/s29) cs 1.07v/0.46n | load 4.64
++base                   thr=1  qps=    1130 avg=0.880 p99=2.480 | vtgate 566us (u377/s189) cs 18.26v/2.90n | tablets 510us (u295/s215) cs 18.51v/2.98n | mysqlds 184us (u160/s24) cs 1.31v/0.47n | load 5.14
++base                   thr=8  qps=    4163 avg=1.920 p99=7.170 | vtgate 219us (u166/s54) cs 2.23v/1.21n | tablets 234us (u156/s78) cs 6.01v/1.35n | mysqlds 151us (u127/s24) cs 1.08v/0.50n | load 7.44
++window                 thr=1  qps=    1295 avg=0.770 p99=1.210 | vtgate 472us (u321/s151) cs 13.65v/0.04n | tablets 365us (u226/s140) cs 12.72v/0.04n | mysqlds 177us (u146/s31) cs 1.27v/0.01n | load 4.33
++window                 thr=8  qps=    5330 avg=1.500 p99=4.030 | vtgate 211us (u158/s53) cs 2.27v/1.22n | tablets 207us (u142/s65) cs 5.24v/1.39n | mysqlds 143us (u120/s24) cs 1.06v/0.49n | load 3.42
++procs1                 thr=1  qps=    1640 avg=0.610 p99=1.210 | vtgate 366us (u242/s124) cs 9.10v/0.17n | tablets 354us (u230/s124) cs 11.22v/0.16n | mysqlds 150us (u124/s26) cs 1.22v/0.02n | load 3.59
++procs1                 thr=8  qps=    4984 avg=1.600 p99=4.410 | vtgate 143us (u105/s38) cs 1.59v/0.25n | tablets 173us (u125/s48) cs 3.27v/0.43n | mysqlds 131us (u108/s22) cs 1.07v/0.44n | load 4.11
++winprocs1              thr=1  qps=    1789 avg=0.560 p99=1.230 | vtgate 267us (u185/s82) cs 6.32v/0.02n | tablets 232us (u153/s79) cs 7.22v/0.02n | mysqlds 145us (u121/s24) cs 1.20v/0.01n | load 5.93
++winprocs1              thr=8  qps=    5304 avg=1.510 p99=4.650 | vtgate 135us (u100/s34) cs 1.52v/0.22n | tablets 158us (u117/s41) cs 2.93v/0.39n | mysqlds 126us (u104/s23) cs 1.07v/0.40n | load 5.74
++winprocs2              thr=1  qps=    1335 avg=0.750 p99=1.230 | vtgate 440us (u303/s137) cs 12.50v/0.08n | tablets 332us (u208/s124) cs 11.49v/0.07n | mysqlds 171us (u143/s28) cs 1.29v/0.02n | load 5.66
++winprocs2              thr=8  qps=    5180 avg=1.540 p99=4.330 | vtgate 174us (u135/s39) cs 1.84v/0.68n | tablets 198us (u143/s54) cs 4.38v/0.97n | mysqlds 138us (u116/s22) cs 1.07v/0.45n | load 6.03
++procs2                 thr=1  qps=    1287 avg=0.770 p99=1.500 | vtgate 528us (u341/s187) cs 16.50v/0.47n | tablets 459us (u279/s180) cs 16.63v/0.43n | mysqlds 184us (u145/s39) cs 1.30v/0.12n | load 7.51
++procs2                 thr=8  qps=    4948 avg=1.610 p99=4.490 | vtgate 180us (u137/s42) cs 1.99v/0.73n | tablets 206us (u145/s61) cs 4.74v/0.98n | mysqlds 137us (u114/s23) cs 1.07v/0.46n | load 7.78
++base                   thr=1  qps=    1270 avg=0.790 p99=1.370 | vtgate 565us (u346/s219) cs 19.07v/0.58n | tablets 498us (u283/s216) cs 18.58v/0.62n | mysqlds 182us (u152/s30) cs 1.30v/0.14n | load 6.67
++base                   thr=8  qps=    4843 avg=1.650 p99=4.820 | vtgate 219us (u164/s54) cs 2.11v/1.24n | tablets 225us (u150/s74) cs 5.71v/1.34n | mysqlds 145us (u121/s24) cs 1.08v/0.45n | load 7.19
++window                 thr=1  qps=    1304 avg=0.770 p99=1.300 | vtgate 464us (u328/s136) cs 13.57v/0.13n | tablets 361us (u222/s140) cs 12.79v/0.11n | mysqlds 173us (u143/s30) cs 1.29v/0.03n | load 5.90
++window                 thr=8  qps=    5101 avg=1.570 p99=4.410 | vtgate 206us (u157/s50) cs 2.16v/1.15n | tablets 207us (u145/s62) cs 5.28v/1.33n | mysqlds 141us (u117/s24) cs 1.07v/0.46n | load 7.84
++procs1                 thr=1  qps=    1571 avg=0.630 p99=1.420 | vtgate 386us (u261/s125) cs 9.26v/0.17n | tablets 372us (u237/s135) cs 11.36v/0.14n | mysqlds 155us (u129/s25) cs 1.24v/0.02n | load 7.43
++procs1                 thr=8  qps=    5075 avg=1.570 p99=4.490 | vtgate 140us (u103/s37) cs 1.54v/0.23n | tablets 170us (u123/s48) cs 3.22v/0.41n | mysqlds 130us (u108/s22) cs 1.07v/0.44n | load 7.49
++winprocs1              thr=1  qps=    1785 avg=0.560 p99=1.140 | vtgate 271us (u192/s79) cs 6.31v/0.01n | tablets 234us (u155/s79) cs 7.20v/0.01n | mysqlds 147us (u125/s22) cs 1.20v/0.00n | load 4.16
++winprocs1              thr=8  qps=    5162 avg=1.550 p99=4.180 | vtgate 139us (u104/s35) cs 1.47v/0.23n | tablets 166us (u122/s44) cs 2.97v/0.42n | mysqlds 132us (u109/s23) cs 1.07v/0.41n | load 4.12
++winprocs2              thr=1  qps=    1339 avg=0.750 p99=1.440 | vtgate 440us (u300/s140) cs 12.51v/0.04n | tablets 329us (u209/s120) cs 11.35v/0.03n | mysqlds 170us (u135/s34) cs 1.26v/0.01n | load 2.78
++winprocs2              thr=8  qps=    5283 avg=1.510 p99=3.960 | vtgate 172us (u132/s40) cs 1.86v/0.71n | tablets 196us (u138/s58) cs 4.36v/0.98n | mysqlds 139us (u115/s24) cs 1.06v/0.45n | load 4.59
++procs2                 thr=1  qps=    1332 avg=0.750 p99=1.320 | vtgate 519us (u333/s186) cs 16.49v/0.36n | tablets 450us (u247/s203) cs 16.67v/0.33n | mysqlds 179us (u148/s32) cs 1.27v/0.08n | load 2.97
++procs2                 thr=8  qps=    4982 avg=1.600 p99=4.250 | vtgate 184us (u137/s46) cs 2.00v/0.78n | tablets 211us (u148/s63) cs 4.79v/1.04n | mysqlds 142us (u120/s22) cs 1.07v/0.47n | load 3.71
+diff --git a/perf-findings/H1-raw/ab3.txt b/perf-findings/H1-raw/ab3.txt
+new file mode 100644
+index 0000000000..6ff5a0e703
+--- /dev/null
++++ b/perf-findings/H1-raw/ab3.txt
+@@ -0,0 +1,36 @@
++base                   thr=1  qps=    1290 avg=0.770 p99=1.390 | vtgate 550us (u350/s200) cs 18.96v/0.69n | tablets 483us (u270/s213) cs 18.51v/0.71n | mysqlds 177us (u149/s28) cs 1.28v/0.15n | load 0.69
++base                   thr=8  qps=    4940 avg=1.620 p99=4.570 | vtgate 215us (u161/s54) cs 2.14v/1.25n | tablets 220us (u150/s71) cs 5.69v/1.39n | mysqlds 145us (u120/s25) cs 1.07v/0.45n | load 2.80
++base                   thr=32 qps=    7992 avg=4.000 p99=11.040 | vtgate 139us (u106/s33) cs 0.70v/0.80n | tablets 139us (u103/s36) cs 2.14v/0.81n | mysqlds 112us (u92/s20) cs 1.04v/0.30n | load 5.30
++window                 thr=1  qps=    1279 avg=0.780 p99=1.250 | vtgate 471us (u327/s145) cs 13.64v/0.06n | tablets 369us (u223/s146) cs 12.72v/0.06n | mysqlds 177us (u145/s33) cs 1.28v/0.02n | load 2.96
++window                 thr=8  qps=    5165 avg=1.550 p99=4.100 | vtgate 215us (u166/s50) cs 2.31v/1.19n | tablets 215us (u148/s67) cs 5.32v/1.36n | mysqlds 145us (u119/s27) cs 1.07v/0.46n | load 4.38
++window                 thr=32 qps=    8262 avg=3.870 p99=9.910 | vtgate 144us (u109/s35) cs 0.72v/0.85n | tablets 138us (u102/s36) cs 2.04v/0.78n | mysqlds 114us (u92/s22) cs 1.04v/0.31n | load 5.75
++winprocs1              thr=1  qps=    1853 avg=0.540 p99=1.160 | vtgate 265us (u187/s78) cs 6.23v/0.01n | tablets 221us (u146/s75) cs 7.17v/0.00n | mysqlds 147us (u118/s29) cs 1.19v/0.00n | load 2.67
++winprocs1              thr=8  qps=    5368 avg=1.490 p99=4.100 | vtgate 133us (u101/s32) cs 1.38v/0.20n | tablets 160us (u117/s43) cs 2.92v/0.35n | mysqlds 127us (u106/s21) cs 1.06v/0.39n | load 2.72
++winprocs1              thr=32 qps=    7778 avg=4.110 p99=9.560 | vtgate 91us (u72/s20) cs 0.40v/0.15n | tablets 114us (u85/s29) cs 1.65v/0.38n | mysqlds 106us (u86/s19) cs 1.04v/0.40n | load 2.84
++winprocs2              thr=1  qps=    1298 avg=0.770 p99=1.230 | vtgate 458us (u320/s138) cs 12.64v/0.02n | tablets 341us (u233/s108) cs 11.39v/0.02n | mysqlds 175us (u146/s29) cs 1.28v/0.00n | load 1.54
++winprocs2              thr=8  qps=    5419 avg=1.470 p99=3.960 | vtgate 171us (u129/s42) cs 1.81v/0.66n | tablets 196us (u141/s54) cs 4.27v/0.93n | mysqlds 137us (u113/s24) cs 1.06v/0.44n | load 2.46
++winprocs2              thr=32 qps=    7883 avg=4.060 p99=9.910 | vtgate 118us (u92/s26) cs 0.55v/0.61n | tablets 137us (u99/s38) cs 2.09v/0.82n | mysqlds 117us (u97/s20) cs 1.05v/0.31n | load 4.56
++nowakewin              thr=1  qps=    1450 avg=0.690 p99=1.140 | vtgate 414us (u286/s128) cs 11.21v/0.03n | tablets 312us (u185/s127) cs 10.61v/0.02n | mysqlds 160us (u130/s30) cs 1.25v/0.01n | load 2.16
++nowakewin              thr=8  qps=    5371 avg=1.490 p99=4.030 | vtgate 205us (u159/s46) cs 2.19v/1.07n | tablets 197us (u137/s60) cs 4.72v/1.19n | mysqlds 142us (u119/s23) cs 1.06v/0.45n | load 3.34
++nowakewin              thr=32 qps=    8085 avg=3.950 p99=10.270 | vtgate 143us (u109/s34) cs 0.72v/0.83n | tablets 137us (u101/s36) cs 2.01v/0.79n | mysqlds 117us (u97/s20) cs 1.04v/0.30n | load 5.95
++nowakewin2             thr=1  qps=    1571 avg=0.640 p99=1.060 | vtgate 354us (u228/s126) cs 9.23v/0.01n | tablets 282us (u167/s115) cs 10.08v/0.02n | mysqlds 155us (u130/s25) cs 1.22v/0.00n | load 2.86
++nowakewin2             thr=8  qps=    5607 avg=1.420 p99=3.750 | vtgate 168us (u128/s40) cs 1.80v/0.64n | tablets 185us (u128/s57) cs 4.04v/0.86n | mysqlds 134us (u111/s23) cs 1.06v/0.44n | load 3.56
++nowakewin2             thr=32 qps=    8118 avg=3.940 p99=9.560 | vtgate 119us (u93/s26) cs 0.66v/0.64n | tablets 133us (u97/s36) cs 1.98v/0.77n | mysqlds 116us (u95/s20) cs 1.04v/0.34n | load 4.06
++base                   thr=1  qps=    1283 avg=0.780 p99=1.270 | vtgate 570us (u347/s223) cs 19.24v/0.40n | tablets 496us (u290/s206) cs 18.52v/0.42n | mysqlds 181us (u157/s23) cs 1.28v/0.10n | load 2.28
++base                   thr=8  qps=    5181 avg=1.540 p99=4.100 | vtgate 219us (u164/s55) cs 2.34v/1.27n | tablets 222us (u147/s75) cs 5.66v/1.41n | mysqlds 144us (u117/s27) cs 1.07v/0.46n | load 3.96
++base                   thr=32 qps=    8354 avg=3.830 p99=9.730 | vtgate 140us (u106/s34) cs 0.81v/0.87n | tablets 138us (u101/s37) cs 2.14v/0.86n | mysqlds 114us (u94/s20) cs 1.04v/0.30n | load 6.92
++window                 thr=1  qps=    1330 avg=0.750 p99=1.160 | vtgate 457us (u304/s153) cs 13.50v/0.04n | tablets 356us (u219/s137) cs 12.62v/0.04n | mysqlds 172us (u141/s31) cs 1.27v/0.01n | load 3.29
++window                 thr=8  qps=    5194 avg=1.540 p99=4.100 | vtgate 213us (u159/s53) cs 2.30v/1.16n | tablets 214us (u144/s70) cs 5.29v/1.33n | mysqlds 145us (u120/s25) cs 1.07v/0.47n | load 3.94
++window                 thr=32 qps=    8352 avg=3.830 p99=9.730 | vtgate 141us (u106/s35) cs 0.75v/0.85n | tablets 137us (u100/s37) cs 2.09v/0.81n | mysqlds 113us (u93/s20) cs 1.04v/0.31n | load 6.84
++winprocs1              thr=1  qps=    1906 avg=0.520 p99=1.100 | vtgate 254us (u170/s83) cs 6.19v/0.01n | tablets 214us (u140/s74) cs 7.12v/0.00n | mysqlds 142us (u116/s26) cs 1.18v/0.00n | load 3.19
++winprocs1              thr=8  qps=    5587 avg=1.430 p99=3.620 | vtgate 130us (u96/s33) cs 1.37v/0.19n | tablets 156us (u111/s45) cs 2.87v/0.35n | mysqlds 126us (u104/s22) cs 1.06v/0.40n | load 3.74
++winprocs1              thr=32 qps=    8029 avg=3.980 p99=9.060 | vtgate 89us (u68/s22) cs 0.40v/0.14n | tablets 111us (u83/s27) cs 1.63v/0.38n | mysqlds 106us (u86/s19) cs 1.04v/0.40n | load 4.60
++winprocs2              thr=1  qps=    1348 avg=0.740 p99=1.230 | vtgate 438us (u297/s142) cs 12.47v/0.02n | tablets 330us (u208/s122) cs 11.34v/0.02n | mysqlds 168us (u142/s27) cs 1.27v/0.01n | load 2.35
++winprocs2              thr=8  qps=    5348 avg=1.490 p99=4.100 | vtgate 173us (u129/s44) cs 1.85v/0.65n | tablets 197us (u139/s59) cs 4.28v/0.93n | mysqlds 138us (u114/s24) cs 1.07v/0.43n | load 4.32
++winprocs2              thr=32 qps=    7851 avg=4.070 p99=10.270 | vtgate 118us (u92/s26) cs 0.64v/0.62n | tablets 134us (u98/s36) cs 2.09v/0.75n | mysqlds 115us (u94/s20) cs 1.04v/0.34n | load 5.17
++nowakewin              thr=1  qps=    1513 avg=0.660 p99=1.040 | vtgate 397us (u268/s129) cs 11.08v/0.03n | tablets 298us (u175/s123) cs 10.46v/0.02n | mysqlds 154us (u129/s25) cs 1.24v/0.00n | load 2.56
++nowakewin              thr=8  qps=    5428 avg=1.470 p99=3.890 | vtgate 203us (u153/s50) cs 2.11v/1.04n | tablets 195us (u133/s62) cs 4.69v/1.16n | mysqlds 140us (u117/s23) cs 1.06v/0.45n | load 3.79
++nowakewin              thr=32 qps=    8560 avg=3.730 p99=9.730 | vtgate 137us (u105/s32) cs 0.69v/0.82n | tablets 130us (u94/s36) cs 2.01v/0.79n | mysqlds 111us (u91/s20) cs 1.04v/0.30n | load 6.80
++nowakewin2             thr=1  qps=    1523 avg=0.660 p99=1.160 | vtgate 366us (u244/s122) cs 9.31v/0.02n | tablets 290us (u172/s118) cs 10.18v/0.02n | mysqlds 160us (u130/s30) cs 1.23v/0.00n | load 3.14
++nowakewin2             thr=8  qps=    5594 avg=1.430 p99=3.620 | vtgate 167us (u125/s42) cs 1.72v/0.63n | tablets 186us (u131/s55) cs 4.00v/0.86n | mysqlds 135us (u112/s23) cs 1.06v/0.43n | load 3.71
++nowakewin2             thr=32 qps=    8123 avg=3.930 p99=9.560 | vtgate 118us (u90/s28) cs 0.55v/0.63n | tablets 132us (u96/s37) cs 1.98v/0.74n | mysqlds 113us (u95/s19) cs 1.04v/0.34n | load 4.63
+diff --git a/perf-findings/H1-raw/ab4.txt b/perf-findings/H1-raw/ab4.txt
+new file mode 100644
+index 0000000000..58f8ec89af
+--- /dev/null
++++ b/perf-findings/H1-raw/ab4.txt
+@@ -0,0 +1,24 @@
++winprocs1              thr=1  qps=    1902 avg=0.520 p99=1.160 | vtgate 256us (u185/s71) cs 6.19v/0.01n | tablets 212us (u138/s75) cs 7.13v/0.00n | mysqlds 145us (u121/s24) cs 1.19v/0.00n | load 1.07
++winprocs1              thr=8  qps=    5566 avg=1.440 p99=3.430 | vtgate 134us (u100/s33) cs 1.43v/0.20n | tablets 160us (u117/s43) cs 2.92v/0.40n | mysqlds 129us (u108/s21) cs 1.06v/0.41n | load 1.99
++winprocs1              thr=32 qps=    7766 avg=4.120 p99=9.390 | vtgate 93us (u69/s24) cs 0.41v/0.15n | tablets 117us (u86/s31) cs 1.69v/0.40n | mysqlds 109us (u90/s19) cs 1.05v/0.41n | load 3.73
++p1winprocs1            thr=1  qps=    1872 avg=0.530 p99=1.040 | vtgate 264us (u193/s72) cs 6.29v/0.01n | tablets 197us (u117/s79) cs 7.48v/0.01n | mysqlds 152us (u123/s29) cs 1.19v/0.01n | load 1.98
++p1winprocs1            thr=8  qps=    6081 avg=1.310 p99=3.430 | vtgate 123us (u90/s33) cs 1.34v/0.20n | tablets 132us (u88/s44) cs 2.85v/0.35n | mysqlds 124us (u103/s21) cs 1.06v/0.44n | load 2.83
++p1winprocs1            thr=32 qps=    8698 avg=3.680 p99=8.900 | vtgate 85us (u63/s22) cs 0.30v/0.13n | tablets 91us (u64/s28) cs 1.56v/0.34n | mysqlds 102us (u83/s19) cs 1.04v/0.45n | load 4.01
++winprocs2              thr=1  qps=    1362 avg=0.730 p99=1.160 | vtgate 434us (u302/s132) cs 12.42v/0.02n | tablets 325us (u202/s123) cs 11.28v/0.02n | mysqlds 170us (u140/s29) cs 1.25v/0.00n | load 2.18
++winprocs2              thr=8  qps=    5322 avg=1.500 p99=3.820 | vtgate 176us (u128/s48) cs 1.90v/0.67n | tablets 201us (u144/s57) cs 4.36v/0.97n | mysqlds 140us (u116/s25) cs 1.06v/0.45n | load 3.92
++winprocs2              thr=32 qps=    8021 avg=3.990 p99=9.560 | vtgate 119us (u92/s28) cs 0.59v/0.66n | tablets 138us (u99/s39) cs 2.11v/0.83n | mysqlds 117us (u97/s20) cs 1.04v/0.33n | load 6.04
++p1winprocs2            thr=1  qps=    1368 avg=0.730 p99=1.160 | vtgate 416us (u285/s131) cs 11.21v/0.01n | tablets 332us (u204/s128) cs 11.32v/0.01n | mysqlds 170us (u140/s30) cs 1.26v/0.01n | load 2.93
++p1winprocs2            thr=8  qps=    5748 avg=1.390 p99=3.680 | vtgate 165us (u125/s40) cs 1.74v/0.67n | tablets 174us (u118/s55) cs 4.25v/0.90n | mysqlds 135us (u109/s26) cs 1.06v/0.49n | load 3.63
++p1winprocs2            thr=32 qps=    8569 avg=3.730 p99=9.560 | vtgate 111us (u82/s28) cs 0.49v/0.56n | tablets 114us (u78/s36) cs 2.17v/0.66n | mysqlds 111us (u90/s21) cs 1.04v/0.40n | load 4.91
++winprocs1              thr=1  qps=    1908 avg=0.520 p99=1.100 | vtgate 259us (u184/s75) cs 6.19v/0.01n | tablets 211us (u130/s80) cs 7.12v/0.00n | mysqlds 144us (u117/s27) cs 1.19v/0.00n | load 2.44
++winprocs1              thr=8  qps=    5486 avg=1.460 p99=3.680 | vtgate 131us (u98/s33) cs 1.42v/0.19n | tablets 160us (u119/s41) cs 2.89v/0.36n | mysqlds 126us (u104/s23) cs 1.07v/0.40n | load 3.22
++winprocs1              thr=32 qps=    7933 avg=4.030 p99=9.390 | vtgate 91us (u69/s22) cs 0.38v/0.14n | tablets 115us (u88/s27) cs 1.68v/0.41n | mysqlds 108us (u89/s19) cs 1.05v/0.40n | load 4.44
++p1winprocs1            thr=1  qps=    1957 avg=0.510 p99=1.040 | vtgate 256us (u182/s75) cs 6.18v/0.01n | tablets 185us (u98/s87) cs 7.40v/0.00n | mysqlds 150us (u121/s29) cs 1.18v/0.00n | load 2.20
++p1winprocs1            thr=8  qps=    5838 avg=1.370 p99=3.750 | vtgate 128us (u95/s33) cs 1.40v/0.20n | tablets 136us (u91/s45) cs 2.89v/0.34n | mysqlds 128us (u103/s24) cs 1.06v/0.44n | load 2.60
++p1winprocs1            thr=32 qps=    9072 avg=3.520 p99=8.430 | vtgate 83us (u61/s22) cs 0.24v/0.13n | tablets 91us (u62/s29) cs 1.56v/0.38n | mysqlds 102us (u84/s18) cs 1.04v/0.45n | load 3.33
++winprocs2              thr=1  qps=    1344 avg=0.740 p99=1.180 | vtgate 440us (u307/s133) cs 12.48v/0.02n | tablets 328us (u216/s112) cs 11.28v/0.01n | mysqlds 172us (u140/s32) cs 1.27v/0.01n | load 1.89
++winprocs2              thr=8  qps=    5523 avg=1.450 p99=3.620 | vtgate 170us (u129/s41) cs 1.88v/0.69n | tablets 194us (u136/s58) cs 4.30v/0.96n | mysqlds 136us (u114/s22) cs 1.06v/0.45n | load 3.20
++winprocs2              thr=32 qps=    7838 avg=4.080 p99=10.090 | vtgate 118us (u89/s29) cs 0.54v/0.61n | tablets 136us (u98/s38) cs 2.08v/0.75n | mysqlds 115us (u93/s22) cs 1.04v/0.33n | load 4.22
++p1winprocs2            thr=1  qps=    1361 avg=0.730 p99=1.230 | vtgate 417us (u290/s128) cs 11.22v/0.02n | tablets 333us (u218/s115) cs 11.34v/0.01n | mysqlds 170us (u138/s32) cs 1.26v/0.01n | load 2.17
++p1winprocs2            thr=8  qps=    5611 avg=1.420 p99=3.750 | vtgate 171us (u129/s42) cs 1.90v/0.69n | tablets 179us (u121/s59) cs 4.37v/0.93n | mysqlds 140us (u113/s27) cs 1.06v/0.51n | load 2.76
++p1winprocs2            thr=32 qps=    8485 avg=3.770 p99=9.730 | vtgate 112us (u85/s27) cs 0.50v/0.59n | tablets 115us (u77/s37) cs 2.18v/0.65n | mysqlds 112us (u89/s22) cs 1.04v/0.40n | load 3.53
+diff --git a/perf-findings/H1-raw/combo1.class b/perf-findings/H1-raw/combo1.class
+new file mode 100644
+index 0000000000..424c6e9dd4
+--- /dev/null
++++ b/perf-findings/H1-raw/combo1.class
+@@ -0,0 +1,52 @@
++vtcombo: 230 µs/q
++   k:net-write                                32.4 µs/q   14.1%
++   u:sqlparser                                23.7 µs/q   10.3%
++   k:futex                                    22.6 µs/q    9.8%
++   u:vitess-other                             22.0 µs/q    9.6%
++   u:vtgate-logic                             21.6 µs/q    9.4%
++   u:malloc                                   19.3 µs/q    8.4%
++   u:go-sched                                 18.6 µs/q    8.1%
++   k:epoll                                    10.3 µs/q    4.5%
++   u:vttablet-logic                            9.2 µs/q    4.0%
++   k:net-read                                  6.0 µs/q    2.6%
++   u:mysql-proto                               6.0 µs/q    2.6%
++   u:go-net                                    5.9 µs/q    2.6%
++   k:nanosleep                                 4.9 µs/q    2.1%
++   k:other-syscall                             4.4 µs/q    1.9%
++   u:gc                                        3.9 µs/q    1.7%
++   u:other(context.)                           2.8 µs/q    1.2%
++   u:proto                                     2.1 µs/q    0.9%
++   u:other([unknown])                          1.7 µs/q    0.7%
++   u:other(memeqbody)                          1.2 µs/q    0.5%
++   u:other(fmt.)                               0.8 µs/q    0.3%
++   u:other(context.removeChild)                0.7 µs/q    0.3%
++   u:other(time.newTimer)                      0.7 µs/q    0.3%
++   u:other(io.ReadAtLeast)                     0.6 µs/q    0.2%
++   u:other(context.value)                      0.6 µs/q    0.2%
++   u:other(github.com/spf13/viper.)            0.5 µs/q    0.2%
++mysqld: 124 µs/q
++   u:other([unknown])                         23.2 µs/q   18.7%
++   k:net-read                                 10.9 µs/q    8.8%
++   k:other-syscall                             9.7 µs/q    7.8%
++   k:net-write                                 8.9 µs/q    7.2%
++   u:other(MYSQLparse)                         5.0 µs/q    4.0%
++   k:poll                                      4.1 µs/q    3.3%
++   k:futex                                     1.4 µs/q    1.1%
++   u:other(btr_search_guess_on_hash)           1.2 µs/q    1.0%
++   u:other(malloc)                             0.9 µs/q    0.8%
++   u:other(JOIN::optimize)                     0.9 µs/q    0.8%
++   u:other(__memmove_avx512_unaligned_erms)    0.9 µs/q    0.7%
++   u:other(dispatch_command)                   0.8 µs/q    0.7%
++   u:other(Lex_hash::get_hash_symbol)          0.8 µs/q    0.6%
++   u:other(JOIN::make_join_plan)               0.7 µs/q    0.5%
++   u:other(row_search_mvcc)                    0.7 µs/q    0.5%
++   u:other(__strlen_evex)                      0.6 µs/q    0.5%
++   u:other(fold_condition)                     0.6 µs/q    0.5%
++   u:other(pthread_mutex_unlock@@GLIBC_2.2.5)    0.6 µs/q    0.5%
++   u:other(vio_io_wait)                        0.6 µs/q    0.5%
++   u:other(ha_innobase::innobase_get_index)    0.6 µs/q    0.5%
++   u:other(__memset_avx512_unaligned_erms)     0.6 µs/q    0.5%
++   u:other(launch_hook_trans_begin)            0.5 µs/q    0.4%
++   u:other(_dl_relocate_object)                0.5 µs/q    0.4%
++   u:other(clock_gettime@@GLIBC_2.17)          0.5 µs/q    0.4%
++   u:other(ha_innobase::external_lock)         0.5 µs/q    0.4%
+diff --git a/perf-findings/H1-raw/counts.txt b/perf-findings/H1-raw/counts.txt
+new file mode 100644
+index 0000000000..b965aaa502
+--- /dev/null
++++ b/perf-findings/H1-raw/counts.txt
+@@ -0,0 +1,28 @@
++cnt-base               thr=1  qps=    1046 avg=0.950 p99=2.860 | vtgate 609us (u374/s235) cs 17.98v/4.08n | tablets 572us (u312/s261) cs 18.90v/4.21n | mysqlds 187us (u164/s23) cs 1.33v/0.58n | vtgate sysc 42.5 sw 22.07 wake 11.87 | tablets sysc 45.6 sw 23.14 wake 12.98 | mysqlds sysc 5.7 sw 1.92 wake 1.40 | IPI resched 8.38 callfn 1.52 send 9.90 /q | load 3.46
++== base vtgate (q~1068) 
++per query (q=1068): unblocks 7.66, goroutine starts 11.93 (on a different thread than last time 4.94), creates 0.00, ProcStart 7.94, ProcStop 7.94, syscalls(traced) 10.46, syscall-end-without-P 0.01, threads seen 8
++futile ProcStart (P started and stopped without running a goroutine): 3.86/q
++== base vttablet100 (q~566)
++per query (q=566): unblocks 7.42, goroutine starts 10.14 (on a different thread than last time 4.64), creates 0.01, ProcStart 8.83, ProcStop 8.83, syscalls(traced) 10.66, syscall-end-without-P 0.02, threads seen 7
++futile ProcStart (P started and stopped without running a goroutine): 4.38/q
++cnt-window             thr=1  qps=    1226 avg=0.810 p99=1.340 | vtgate 504us (u327/s177) cs 13.51v/0.05n | tablets 396us (u241/s156) cs 12.56v/0.04n | mysqlds 184us (u141/s43) cs 1.28v/0.01n | vtgate sysc 29.3 sw 13.57 wake 8.41 | tablets sysc 29.1 sw 12.62 wake 8.42 | mysqlds sysc 5.6 sw 1.30 wake 2.25 | IPI resched 0.04 callfn 21.98 send 22.02 /q | load 3.49
++== window vtgate (q~1242) 
++per query (q=1242): unblocks 5.64, goroutine starts 7.53 (on a different thread than last time 3.76), creates 0.00, ProcStart 5.64, ProcStop 5.64, syscalls(traced) 5.60, syscall-end-without-P 0.00, threads seen 7
++futile ProcStart (P started and stopped without running a goroutine): 2.85/q
++== window vttablet100 (q~651)
++per query (q=651): unblocks 5.05, goroutine starts 6.92 (on a different thread than last time 2.87), creates 0.00, ProcStart 6.53, ProcStop 6.53, syscalls(traced) 5.57, syscall-end-without-P 0.00, threads seen 7
++futile ProcStart (P started and stopped without running a goroutine): 3.56/q
++cnt-procs1             thr=1  qps=    1553 avg=0.640 p99=1.210 | vtgate 402us (u256/s146) cs 9.30v/0.12n | tablets 390us (u232/s158) cs 11.40v/0.12n | mysqlds 158us (u129/s29) cs 1.23v/0.01n | vtgate sysc 27.4 sw 9.42 wake 6.71 | tablets sysc 30.5 sw 11.53 wake 6.58 | mysqlds sysc 5.5 sw 1.24 wake 1.22 | IPI resched 0.07 callfn 16.56 send 16.63 /q | load 1.77
++== procs1 vtgate (q~1645) 
++per query (q=1645): unblocks 8.70, goroutine starts 11.86 (on a different thread than last time 0.08), creates 0.00, ProcStart 2.59, ProcStop 2.59, syscalls(traced) 11.54, syscall-end-without-P 0.01, threads seen 4
++futile ProcStart (P started and stopped without running a goroutine): 0.01/q
++== procs1 vttablet100 (q~868)
++per query (q=868): unblocks 7.01, goroutine starts 11.03 (on a different thread than last time 0.13), creates 0.97, ProcStart 3.63, ProcStop 3.63, syscalls(traced) 11.53, syscall-end-without-P 0.01, threads seen 4
++futile ProcStart (P started and stopped without running a goroutine): 0.08/q
++cnt-winprocs1          thr=1  qps=    1679 avg=0.590 p99=1.230 | vtgate 291us (u202/s88) cs 6.38v/0.01n | tablets 257us (u158/s98) cs 7.38v/0.00n | mysqlds 154us (u124/s30) cs 1.21v/0.00n | vtgate sysc 16.1 sw 6.39 wake 3.72 | tablets sysc 18.2 sw 7.40 wake 4.18 | mysqlds sysc 5.4 sw 1.21 wake 1.67 | IPI resched 0.01 callfn 11.71 send 11.72 /q | load 1.25
++== winprocs1 vtgate (q~1650) 
++per query (q=1650): unblocks 5.78, goroutine starts 7.95 (on a different thread than last time 0.01), creates 0.00, ProcStart 1.90, ProcStop 1.90, syscalls(traced) 5.75, syscall-end-without-P 0.00, threads seen 4
++futile ProcStart (P started and stopped without running a goroutine): 0.00/q
++== winprocs1 vttablet100 (q~861)
++per query (q=861): unblocks 4.14, goroutine starts 7.19 (on a different thread than last time 0.04), creates 0.96, ProcStart 2.35, ProcStop 2.35, syscalls(traced) 5.75, syscall-end-without-P 0.00, threads seen 4
++futile ProcStart (P started and stopped without running a goroutine): 0.43/q
+diff --git a/perf-findings/H1-raw/floor1.txt b/perf-findings/H1-raw/floor1.txt
+new file mode 100644
+index 0000000000..0a4c4576f8
+--- /dev/null
++++ b/perf-findings/H1-raw/floor1.txt
+@@ -0,0 +1,22 @@
++fl-proxy-def           thr=1  qps=    6141 avg=0.160 p99=0.370 | proxy 101us (u26/s75) cs 5.74v/0.01n | mysqlds 72us (u45/s27) cs 1.03v/0.01n | proxy sysc 16.5 sw 5.75 wake 3.67 | mysqlds sysc 5.1 sw 1.04 wake 2.03 | IPI resched 0.01 callfn 6.87 send 6.88 /q | load 3.71
++fl-grpcproxy-def       thr=1  qps=    2017 avg=0.490 p99=1.370 | gproxy 309us (u130/s179) cs 13.48v/2.04n | gsrv 304us (u122/s181) cs 13.83v/2.03n | mysqlds 135us (u107/s29) cs 1.07v/0.49n | gproxy sysc 37.3 sw 15.52 wake 11.06 | gsrv sysc 38.0 sw 15.85 wake 10.78 | mysqlds sysc 5.1 sw 1.56 wake 1.79 | IPI resched 2.13 callfn 11.95 send 14.08 /q | load 3.88
++fl-proxy-def           thr=8  qps=   27182 avg=0.290 p99=1.160 | proxy 41us (u12/s29) cs 0.80v/0.40n | mysqlds 52us (u34/s18) cs 0.99v/0.36n | proxy sysc 8.0 sw 1.20 wake 2.40 | mysqlds sysc 5.0 sw 1.35 wake 0.28 | IPI resched 0.63 callfn 0.57 send 1.20 /q | load 9.37
++fl-grpcproxy-def       thr=8  qps=    8340 avg=0.960 p99=2.860 | gproxy 103us (u54/s49) cs 2.46v/0.76n | gsrv 104us (u55/s50) cs 2.66v/0.79n | mysqlds 102us (u78/s24) cs 1.02v/0.45n | gproxy sysc 9.8 sw 3.22 wake 2.60 | gsrv sysc 10.2 sw 3.46 wake 2.67 | mysqlds sysc 5.0 sw 1.47 wake 0.79 | IPI resched 0.96 callfn 1.39 send 2.34 /q | load 9.28
++fl-proxy-window        thr=1  qps=    6223 avg=0.160 p99=0.360 | proxy 103us (u28/s75) cs 5.82v/0.01n | mysqlds 70us (u48/s22) cs 1.03v/0.01n | proxy sysc 16.6 sw 5.84 wake 3.77 | mysqlds sysc 5.1 sw 1.04 wake 2.03 | IPI resched 0.01 callfn 6.97 send 6.99 /q | load 7.52
++fl-grpcproxy-window    thr=1  qps=    2093 avg=0.480 p99=0.860 | gproxy 249us (u117/s133) cs 9.51v/0.14n | gsrv 234us (u103/s131) cs 10.58v/0.13n | mysqlds 142us (u112/s30) cs 1.08v/0.06n | gproxy sysc 23.8 sw 9.65 wake 7.72 | gsrv sysc 26.5 sw 10.71 wake 7.84 | mysqlds sysc 5.2 sw 1.14 wake 2.28 | IPI resched 0.14 callfn 18.92 send 19.06 /q | load 11.41
++fl-proxy-window        thr=8  qps=   27199 avg=0.290 p99=1.210 | proxy 41us (u12/s29) cs 0.78v/0.41n | mysqlds 52us (u35/s17) cs 0.99v/0.36n | proxy sysc 8.0 sw 1.19 wake 2.39 | mysqlds sysc 5.0 sw 1.36 wake 0.27 | IPI resched 0.63 callfn 0.57 send 1.21 /q | load 11.34
++fl-grpcproxy-window    thr=8  qps=    7617 avg=1.050 p99=3.750 | gproxy 99us (u56/s44) cs 2.43v/0.75n | gsrv 101us (u52/s48) cs 2.60v/0.83n | mysqlds 104us (u80/s24) cs 1.01v/0.52n | gproxy sysc 9.3 sw 3.18 wake 2.57 | gsrv sysc 9.6 sw 3.43 wake 2.61 | mysqlds sysc 5.0 sw 1.54 wake 0.86 | IPI resched 0.99 callfn 1.22 send 2.21 /q | load 10.99
++fl-proxy-procs1        thr=1  qps=    6651 avg=0.150 p99=0.390 | proxy 85us (u20/s65) cs 5.04v/0.01n | mysqlds 66us (u44/s22) cs 1.03v/0.01n | proxy sysc 15.0 sw 5.05 wake 3.04 | mysqlds sysc 5.1 sw 1.03 wake 2.05 | IPI resched 0.03 callfn 6.43 send 6.46 /q | load 9.72
++fl-grpcproxy-procs1    thr=1  qps=    2904 avg=0.340 p99=0.780 | gproxy 202us (u92/s111) cs 6.74v/0.21n | gsrv 196us (u74/s121) cs 7.67v/0.20n | mysqlds 109us (u85/s24) cs 1.06v/0.02n | gproxy sysc 23.5 sw 6.95 wake 5.50 | gsrv sysc 24.8 sw 7.87 wake 5.29 | mysqlds sysc 5.1 sw 1.08 wake 1.33 | IPI resched 0.15 callfn 12.92 send 13.07 /q | load 8.61
++fl-proxy-procs1        thr=8  qps=   33109 avg=0.240 p99=0.780 | proxy 28us (u7/s21) cs 0.18v/0.11n | mysqlds 43us (u28/s14) cs 0.99v/0.37n | proxy sysc 6.8 sw 0.29 wake 2.01 | mysqlds sysc 5.0 sw 1.36 wake 0.14 | IPI resched 0.49 callfn 0.68 send 1.17 /q | load 9.13
++fl-grpcproxy-procs1    thr=8  qps=   10109 avg=0.790 p99=2.110 | gproxy 60us (u33/s27) cs 1.06v/0.12n | gsrv 61us (u33/s28) cs 1.19v/0.16n | mysqlds 83us (u65/s18) cs 1.02v/0.28n | gproxy sysc 6.4 sw 1.18 wake 1.40 | gsrv sysc 6.5 sw 1.35 wake 1.49 | mysqlds sysc 5.0 sw 1.29 wake 0.53 | IPI resched 0.33 callfn 1.86 send 2.19 /q | load 8.34
++fl-proxy-window-procs1 thr=1  qps=    6863 avg=0.150 p99=0.370 | proxy 83us (u21/s62) cs 5.01v/0.03n | mysqlds 64us (u40/s24) cs 1.02v/0.01n | proxy sysc 15.0 sw 5.03 wake 3.03 | mysqlds sysc 5.0 sw 1.03 wake 2.05 | IPI resched 0.03 callfn 6.38 send 6.41 /q | load 10.94
++fl-grpcproxy-window-procs1 thr=1  qps=    3106 avg=0.320 p99=0.670 | gproxy 136us (u63/s72) cs 4.94v/0.01n | gsrv 135us (u51/s84) cs 6.87v/0.01n | mysqlds 104us (u80/s25) cs 1.06v/0.00n | gproxy sysc 14.2 sw 4.95 wake 3.38 | gsrv sysc 17.8 sw 6.87 wake 4.05 | mysqlds sysc 5.1 sw 1.06 wake 2.17 | IPI resched 0.02 callfn 11.82 send 11.84 /q | load 8.95
++fl-proxy-window-procs1 thr=8  qps=   32913 avg=0.240 p99=0.780 | proxy 28us (u6/s22) cs 0.20v/0.07n | mysqlds 43us (u28/s15) cs 0.99v/0.39n | proxy sysc 6.9 sw 0.27 wake 2.01 | mysqlds sysc 5.0 sw 1.38 wake 0.15 | IPI resched 0.54 callfn 0.67 send 1.21 /q | load 8.58
++fl-grpcproxy-window-procs1 thr=8  qps=   10192 avg=0.780 p99=2.140 | gproxy 58us (u32/s26) cs 1.01v/0.14n | gsrv 59us (u34/s25) cs 1.16v/0.16n | mysqlds 83us (u67/s16) cs 1.02v/0.29n | gproxy sysc 6.0 sw 1.15 wake 1.37 | gsrv sysc 6.2 sw 1.32 wake 1.46 | mysqlds sysc 5.0 sw 1.30 wake 0.57 | IPI resched 0.36 callfn 1.81 send 2.18 /q | load 9.84
++fl-proxy-unix          thr=1  qps=    6684 avg=0.150 p99=0.370 | proxy 88us (u23/s65) cs 5.18v/0.01n | mysqlds 66us (u41/s25) cs 1.03v/0.00n | proxy sysc 15.3 sw 5.19 wake 3.16 | mysqlds sysc 5.1 sw 1.03 wake 2.04 | IPI resched 0.01 callfn 6.50 send 6.52 /q | load 8.03
++fl-grpcproxy-unix      thr=1  qps=    1928 avg=0.520 p99=1.080 | gproxy 388us (u153/s235) cs 16.37v/1.08n | gsrv 363us (u138/s225) cs 16.59v/0.97n | mysqlds 147us (u120/s27) cs 1.09v/0.16n | gproxy sysc 44.1 sw 17.45 wake 13.80 | gsrv sysc 44.4 sw 17.56 wake 13.66 | mysqlds sysc 5.2 sw 1.26 wake 1.85 | IPI resched 0.62 callfn 23.30 send 23.92 /q | load 6.79
++fl-proxy-unix          thr=8  qps=   27243 avg=0.290 p99=1.210 | proxy 41us (u11/s29) cs 0.83v/0.39n | mysqlds 52us (u36/s16) cs 0.99v/0.38n | proxy sysc 8.1 sw 1.22 wake 2.40 | mysqlds sysc 5.0 sw 1.37 wake 0.31 | IPI resched 0.64 callfn 0.57 send 1.21 /q | load 10.43
++fl-grpcproxy-unix      thr=8  qps=    8139 avg=0.980 p99=2.970 | gproxy 108us (u61/s47) cs 2.61v/0.79n | gsrv 101us (u56/s46) cs 2.71v/0.83n | mysqlds 103us (u81/s22) cs 1.02v/0.45n | gproxy sysc 10.1 sw 3.40 wake 2.75 | gsrv sysc 10.5 sw 3.54 wake 2.80 | mysqlds sysc 5.0 sw 1.47 wake 0.76 | IPI resched 0.99 callfn 1.48 send 2.47 /q | load 10.53
++fl-grpcproxy-fake      thr=1  qps=    4119 avg=0.240 p99=0.510 | gproxy 243us (u106/s137) cs 9.21v/0.43n | gsrv 185us (u81/s104) cs 7.92v/0.38n | mysqlds 1us (u1/s0) cs 0.04v/0.00n | gproxy sysc 26.6 sw 9.64 wake 8.44 | gsrv sysc 21.3 sw 8.30 wake 6.14 | mysqlds sysc 0.1 sw 0.05 wake 0.00 | IPI resched 0.29 callfn 12.88 send 13.16 /q | load 9.12
++fl-grpcproxy-fake      thr=8  qps=   17574 avg=0.450 p99=1.470 | gproxy 81us (u46/s35) cs 1.63v/0.59n | gsrv 48us (u29/s18) cs 1.38v/0.24n | mysqlds 0us (u0/s0) cs 0.01v/0.00n | gproxy sysc 7.8 sw 2.22 wake 2.35 | gsrv sysc 4.1 sw 1.62 wake 0.97 | mysqlds sysc 0.0 sw 0.01 wake 0.00 | IPI resched 0.42 callfn 1.18 send 1.61 /q | load 11.20
+diff --git a/perf-findings/H1-raw/results.txt b/perf-findings/H1-raw/results.txt
+new file mode 100644
+index 0000000000..8f1e7e2d89
+--- /dev/null
++++ b/perf-findings/H1-raw/results.txt
+@@ -0,0 +1,194 @@
++08:28:50 base-1t                thr=1  qps=    1130 avg=0.880 p99=1.860 | vtgate 620us (u376/s244) cs 18.46v/1.55n | tablets 556us (u293/s263) cs 18.50v/1.29n | mysqlds 192us (u163/s29) cs 1.32v/0.39n | vtgate sysc 45.3 sw 20.00 wake 13.57 | tablets sysc 46.4 sw 19.82 wake 14.18 | mysqlds sysc 5.6 sw 1.72 wake 1.98 | IPI resched 0.95 callfn 23.45 send 24.42 /q | load 2.75
++08:29:10 base-1t                thr=1  qps=    1157 avg=0.860 p99=1.790 | vtgate 577us (u377/s200) cs 18.57v/1.56n | tablets 510us (u302/s207) cs 18.68v/1.35n | mysqlds 189us (u161/s29) cs 1.32v/0.40n | load 2.69
++08:29:23 direct-1t              thr=1  qps=   11555 avg=0.090 p99=0.330 | vtgate 0us (u0/s0) cs 0.00v/0.00n | tablets 2us (u1/s1) cs 0.06v/0.00n | mysqlds 60us (u40/s20) cs 0.95v/0.07n | vtgate sysc 0.0 sw 0.00 wake 0.00 | tablets sysc 0.1 sw 0.07 wake 0.04 | mysqlds sysc 4.9 sw 1.02 wake 1.03 | IPI resched 0.01 callfn 2.08 send 2.09 /q | load 2.43
++08:29:35 direct-1t              thr=1  qps=   12460 avg=0.080 p99=0.300 | vtgate 0us (u0/s0) cs 0.00v/0.00n | tablets 2us (u1/s1) cs 0.06v/0.00n | mysqlds 55us (u37/s18) cs 0.99v/0.03n | load 2.29
++08:39:43 direct                 thr=1  qps=   12383 avg=0.080 p99=0.280 | mysqlds 57us (u40/s16) cs 0.69v/0.34n | mysqlds sysc 4.4 sw 1.03 wake 1.05 | IPI resched 0.02 callfn 3.73 send 3.75 /q | load 4.11
++08:39:56 proxy                  thr=1  qps=    7661 avg=0.130 p99=0.410 | proxy 75us (u24/s51) cs 5.00v/0.77n | mysqlds 60us (u46/s14) cs 0.69v/0.88n | proxy sysc 15.2 sw 5.77 wake 3.32 | mysqlds sysc 4.4 sw 1.56 wake 1.85 | IPI resched 0.30 callfn 4.11 send 4.41 /q | load 4.40
++08:41:49 grpcproxy              thr=1  qps=    1858 avg=0.540 p99=2.350 | gproxy 283us (u124/s159) cs 12.95v/2.87n | gsrv 288us (u110/s178) cs 13.57v/2.84n | mysqlds 171us (u135/s36) cs 1.09v/0.48n | gproxy sysc 36.3 sw 15.81 wake 10.60 | gsrv sysc 37.5 sw 16.41 wake 10.33 | mysqlds sysc 5.2 sw 1.58 wake 2.15 | IPI resched 4.28 callfn 6.66 send 10.94 /q | load 7.49
++08:42:01 direct                 thr=1  qps=   30999 avg=0.030 p99=0.110 | mysqlds 22us (u18/s5) cs 0.11v/0.90n | load 7.54
++08:42:13 proxy                  thr=1  qps=   14808 avg=0.070 p99=0.200 | proxy 40us (u16/s24) cs 3.82v/0.90n | mysqlds 32us (u27/s4) cs 0.49v/1.29n | load 8.54
++08:42:25 grpcproxy              thr=1  qps=    1878 avg=0.530 p99=2.910 | gproxy 262us (u121/s142) cs 13.58v/3.73n | gsrv 268us (u120/s148) cs 14.15v/3.69n | mysqlds 178us (u137/s41) cs 1.09v/0.43n | load 8.64
++08:49:42 direct-rate0           thr=1  qps=   15403 avg=0.060 p99=0.250 | mysqlds 45us (u31/s15) cs 0.67v/0.34n | mysqlds sysc 4.4 sw 1.02 wake 1.04 | IPI resched 0.01 callfn 1.47 send 1.49 /q | load 0.55
++08:49:52 direct-rate5000        thr=1  qps=    5025 avg=0.280 p99=1.860 | mysqlds 79us (u54/s25) cs 1.03v/0.01n | mysqlds sysc 5.1 sw 1.03 wake 1.05 | IPI resched 0.01 callfn 2.85 send 2.87 /q | load 0.78
++08:50:03 direct-rate2000        thr=1  qps=    2002 avg=0.280 p99=0.940 | mysqlds 120us (u90/s31) cs 1.09v/0.01n | mysqlds sysc 5.2 sw 1.10 wake 1.08 | IPI resched 0.01 callfn 3.55 send 3.57 /q | load 0.73
++08:50:14 direct-rate1200        thr=1  qps=    1194 avg=0.310 p99=0.870 | mysqlds 150us (u112/s38) cs 1.14v/0.00n | mysqlds sysc 5.3 sw 1.15 wake 1.08 | IPI resched 0.02 callfn 4.07 send 4.09 /q | load 0.70
++08:50:25 direct-rate600         thr=1  qps=     614 avg=0.320 p99=0.740 | mysqlds 175us (u124/s51) cs 1.28v/0.00n | mysqlds sysc 5.6 sw 1.29 wake 1.08 | IPI resched 0.02 callfn 5.34 send 5.38 /q | load 0.67
++08:52:43 direct-vtstmt          thr=1  qps=   13353 avg=0.070 p99=0.240 | mysqlds 51us (u34/s17) cs 1.01v/0.00n | load 2.75
++08:52:53 direct-sbstmt          thr=1  qps=   13308 avg=0.070 p99=0.240 | mysqlds 51us (u35/s16) cs 1.01v/0.00n | load 2.63
++08:53:03 direct-vtstmt-r1200    thr=1  qps=    1189 avg=0.310 p99=1.790 | mysqlds 140us (u105/s35) cs 1.16v/0.00n | load 2.23
++08:55:06 direct-r1200-spin0     thr=1  qps=    1214 avg=0.220 p99=0.890 | mysqlds 129us (u109/s20) cs 1.14v/0.09n | load 12.79
++08:55:17 gate-1t-spin0          thr=1  qps=    1205 avg=0.830 p99=1.610 | vtgate 558us (u360/s197) cs 18.35v/1.74n | tablets 496us (u294/s202) cs 18.67v/1.62n | mysqlds 180us (u156/s24) cs 1.28v/0.48n | load 11.15
++08:55:28 gate-8t-spin0          thr=8  qps=    5255 avg=1.520 p99=4.330 | vtgate 211us (u160/s51) cs 2.28v/1.23n | tablets 211us (u149/s62) cs 5.74v/1.14n | mysqlds 136us (u115/s21) cs 1.06v/0.57n | load 10.61
++08:55:47 direct-r1200-spin1     thr=1  qps=    1209 avg=42.710 p99=248.830 | mysqlds 51us (u40/s10) cs 1.12v/0.03n | load 13.04
++08:55:58 gate-1t-spin1          thr=1  qps=     902 avg=1.110 p99=7.980 | vtgate 442us (u311/s131) cs 11.38v/2.52n | tablets 404us (u244/s161) cs 15.38v/2.34n | mysqlds 178us (u158/s20) cs 1.34v/0.86n | load 13.75
++08:56:09 gate-8t-spin1          thr=8  qps=    2352 avg=3.400 p99=22.280 | vtgate 192us (u150/s42) cs 1.76v/0.78n | tablets 194us (u144/s50) cs 5.15v/0.64n | mysqlds 135us (u116/s20) cs 1.13v/0.27n | load 15.48
++08:58:04 place-default          thr=1  qps=    1078 avg=0.920 p99=2.610 | vtgate 555us (u352/s203) cs 16.79v/3.95n | tablets 508us (u289/s219) cs 18.11v/3.41n | mysqlds 182us (u165/s17) cs 1.35v/0.95n | vtgate sysc 40.5 sw 20.75 wake 11.40 | tablets sysc 44.5 sw 21.55 wake 12.37 | mysqlds sysc 5.7 sw 2.30 wake 1.73 | IPI resched 6.47 callfn 1.95 send 8.43 /q | load 17.56
++08:58:16 place-all0             thr=1  qps=    1241 avg=0.800 p99=1.580 | vtgate 327us (u279/s48) cs 4.85v/1.92n | tablets 256us (u210/s45) cs 6.75v/0.89n | mysqlds 182us (u175/s7) cs 1.28v/0.42n | vtgate sysc 19.1 sw 6.77 wake 5.86 | tablets sysc 22.8 sw 7.65 wake 5.29 | mysqlds sysc 5.6 sw 1.71 wake 2.22 | IPI resched 0.49 callfn 0.46 send 0.97 /q | load 16.48
++08:58:28 place-all01            thr=1  qps=    1147 avg=0.870 p99=2.350 | vtgate 452us (u316/s136) cs 13.52v/3.46n | tablets 411us (u249/s161) cs 15.18v/2.85n | mysqlds 178us (u155/s23) cs 1.29v/0.86n | vtgate sysc 34.2 sw 16.98 wake 9.47 | tablets sysc 38.4 sw 18.07 wake 10.24 | mysqlds sysc 5.6 sw 2.16 wake 1.78 | IPI resched 3.64 callfn 1.81 send 5.45 /q | load 15.13
++08:58:40 place-go012-my3        thr=1  qps=    1061 avg=0.940 p99=3.890 | vtgate 541us (u326/s214) cs 16.66v/3.92n | tablets 511us (u267/s244) cs 17.95v/3.75n | mysqlds 189us (u144/s45) cs 1.36v/0.10n | vtgate sysc 41.7 sw 20.58 wake 12.53 | tablets sysc 44.9 sw 21.74 wake 12.65 | mysqlds sysc 5.7 sw 1.47 wake 1.88 | IPI resched 6.69 callfn 4.78 send 11.47 /q | load 14.63
++08:58:53 place-go0-my1          thr=1  qps=    1408 avg=0.710 p99=2.970 | vtgate 300us (u235/s65) cs 6.14v/2.23n | tablets 257us (u173/s84) cs 7.83v/2.17n | mysqlds 161us (u121/s40) cs 1.24v/0.06n | vtgate sysc 22.7 sw 8.37 wake 6.21 | tablets sysc 26.3 sw 10.02 wake 6.08 | mysqlds sysc 5.5 sw 1.31 wake 1.82 | IPI resched 2.06 callfn 3.04 send 5.12 /q | load 13.01
++08:59:05 place-default          thr=1  qps=    1240 avg=0.800 p99=1.230 | vtgate 597us (u346/s251) cs 18.75v/0.83n | tablets 524us (u279/s245) cs 18.26v/0.72n | mysqlds 183us (u144/s39) cs 1.30v/0.27n | vtgate sysc 46.0 sw 19.58 wake 13.37 | tablets sysc 46.1 sw 19.01 wake 14.03 | mysqlds sysc 5.6 sw 1.58 wake 1.88 | IPI resched 0.94 callfn 25.22 send 26.16 /q | load 11.91
++09:03:21 base                   thr=1  qps=    1250 avg=0.800 p99=1.370 | vtgate 590us (u360/s230) cs 18.63v/0.74n | tablets 525us (u282/s242) cs 18.25v/0.73n | mysqlds 181us (u147/s34) cs 1.29v/0.17n | vtgate sysc 45.8 sw 19.37 wake 13.35 | tablets sysc 46.1 sw 19.01 wake 14.13 | mysqlds sysc 5.6 sw 1.46 wake 1.88 | IPI resched 0.53 callfn 25.89 send 26.42 /q | load 10.60
++09:03:35 base                   thr=8  qps=    4839 avg=1.650 p99=4.490 | vtgate 221us (u159/s62) cs 2.39v/1.23n | tablets 229us (u145/s84) cs 5.70v/1.37n | mysqlds 144us (u120/s24) cs 1.07v/0.44n | vtgate sysc 10.8 sw 3.62 wake 3.11 | tablets sysc 16.2 sw 7.07 wake 4.13 | mysqlds sysc 5.1 sw 1.52 wake 1.06 | IPI resched 1.19 callfn 1.36 send 2.54 /q | load 10.63
++09:05:41 rt                     thr=1  qps=    1263 avg=0.790 p99=1.440 | vtgate 593us (u356/s238) cs 18.82v/0.61n | tablets 513us (u278/s235) cs 18.23v/0.64n | mysqlds 181us (u150/s31) cs 1.28v/0.16n | vtgate sysc 46.3 sw 19.44 wake 13.40 | tablets sysc 46.0 sw 18.89 wake 14.12 | mysqlds sysc 5.6 sw 1.45 wake 1.89 | IPI resched 0.49 callfn 26.48 send 26.97 /q | load 10.16
++09:05:55 rt                     thr=8  qps=    4792 avg=1.670 p99=4.570 | vtgate 224us (u162/s62) cs 2.16v/1.25n | tablets 234us (u152/s82) cs 5.70v/1.35n | mysqlds 149us (u120/s29) cs 1.07v/0.45n | vtgate sysc 10.5 sw 3.41 wake 3.05 | tablets sysc 16.3 sw 7.06 wake 4.08 | mysqlds sysc 5.1 sw 1.52 wake 1.05 | IPI resched 1.20 callfn 1.31 send 2.50 /q | load 10.13
++09:08:02 nowake                 thr=1  qps=    1356 avg=0.740 p99=1.270 | vtgate 569us (u345/s224) cs 16.80v/0.63n | tablets 464us (u240/s225) cs 15.99v/0.54n | mysqlds 170us (u140/s30) cs 1.26v/0.06n | vtgate sysc 42.6 sw 17.43 wake 12.65 | tablets sysc 41.4 sw 16.55 wake 11.94 | mysqlds sysc 5.5 sw 1.32 wake 1.33 | IPI resched 0.45 callfn 23.54 send 23.99 /q | load 9.98
++09:08:15 nowake                 thr=8  qps=    4262 avg=1.870 p99=6.430 | vtgate 226us (u166/s60) cs 2.21v/1.15n | tablets 231us (u148/s84) cs 5.21v/1.22n | mysqlds 152us (u123/s29) cs 1.08v/0.47n | vtgate sysc 10.5 sw 3.36 wake 2.96 | tablets sysc 15.4 sw 6.44 wake 3.92 | mysqlds sysc 5.2 sw 1.55 wake 1.03 | IPI resched 1.51 callfn 1.00 send 2.51 /q | load 10.61
++09:09:07 sysmon                 thr=1  qps=    1198 avg=0.830 p99=1.790 | vtgate 600us (u350/s250) cs 18.56v/1.10n | tablets 531us (u281/s250) cs 18.12v/1.09n | mysqlds 188us (u154/s33) cs 1.30v/0.24n | vtgate sysc 45.5 sw 19.66 wake 13.25 | tablets sysc 45.6 sw 19.23 wake 13.90 | mysqlds sysc 5.6 sw 1.54 wake 1.86 | IPI resched 1.06 callfn 23.34 send 24.40 /q | load 7.70
++09:09:21 sysmon                 thr=8  qps=    4785 avg=1.670 p99=4.570 | vtgate 218us (u162/s56) cs 1.77v/1.15n | tablets 226us (u144/s83) cs 5.07v/1.29n | mysqlds 150us (u122/s28) cs 1.07v/0.41n | vtgate sysc 10.1 sw 2.92 wake 2.86 | tablets sysc 15.7 sw 6.37 wake 3.91 | mysqlds sysc 5.2 sw 1.48 wake 1.00 | IPI resched 1.19 callfn 1.37 send 2.56 /q | load 8.29
++09:10:45 window                 thr=1  qps=    1219 avg=0.820 p99=1.370 | vtgate 506us (u326/s180) cs 13.52v/0.13n | tablets 393us (u223/s170) cs 12.47v/0.12n | mysqlds 183us (u149/s34) cs 1.30v/0.03n | vtgate sysc 29.2 sw 13.64 wake 8.40 | tablets sysc 28.9 sw 12.61 wake 8.42 | mysqlds sysc 5.6 sw 1.34 wake 2.24 | IPI resched 0.13 callfn 21.43 send 21.57 /q | load 8.95
++09:10:59 window                 thr=8  qps=    4851 avg=1.650 p99=4.570 | vtgate 218us (u160/s59) cs 2.33v/1.19n | tablets 223us (u145/s78) cs 5.31v/1.36n | mysqlds 147us (u120/s27) cs 1.07v/0.46n | vtgate sysc 9.6 sw 3.52 wake 2.96 | tablets sysc 14.5 sw 6.68 wake 3.93 | mysqlds sysc 5.1 sw 1.53 wake 1.07 | IPI resched 1.12 callfn 1.28 send 2.40 /q | load 9.70
++09:12:29 base                   thr=1  qps=    1236 avg=0.810 p99=1.390 | vtgate 599us (u354/s244) cs 18.70v/0.63n | tablets 527us (u284/s243) cs 18.31v/0.63n | mysqlds 185us (u151/s34) cs 1.31v/0.15n | vtgate sysc 45.9 sw 19.33 wake 13.33 | tablets sysc 46.2 sw 18.96 wake 14.08 | mysqlds sysc 5.6 sw 1.47 wake 1.89 | IPI resched 0.45 callfn 26.25 send 26.71 /q | load 8.02
++09:12:43 base                   thr=8  qps=    4793 avg=1.670 p99=4.650 | vtgate 221us (u161/s60) cs 2.12v/1.21n | tablets 233us (u148/s85) cs 5.64v/1.34n | mysqlds 147us (u119/s28) cs 1.08v/0.44n | vtgate sysc 10.6 sw 3.34 wake 3.05 | tablets sysc 16.2 sw 6.98 wake 4.08 | mysqlds sysc 5.2 sw 1.52 wake 1.04 | IPI resched 1.19 callfn 1.36 send 2.55 /q | load 8.62
++09:14:13 rt                     thr=1  qps=    1208 avg=0.830 p99=1.500 | vtgate 623us (u380/s243) cs 18.95v/0.60n | tablets 543us (u279/s264) cs 18.36v/0.63n | mysqlds 189us (u154/s35) cs 1.32v/0.17n | vtgate sysc 46.4 sw 19.55 wake 13.34 | tablets sysc 46.2 sw 19.02 wake 14.15 | mysqlds sysc 5.6 sw 1.49 wake 1.89 | IPI resched 0.44 callfn 26.41 send 26.85 /q | load 7.99
++09:14:27 rt                     thr=8  qps=    4721 avg=1.690 p99=4.570 | vtgate 227us (u171/s56) cs 2.35v/1.25n | tablets 233us (u145/s88) cs 5.73v/1.37n | mysqlds 149us (u122/s27) cs 1.08v/0.46n | vtgate sysc 10.8 sw 3.60 wake 3.10 | tablets sysc 16.3 sw 7.10 wake 4.13 | mysqlds sysc 5.2 sw 1.54 wake 1.08 | IPI resched 1.18 callfn 1.34 send 2.53 /q | load 7.89
++09:15:58 nowake                 thr=1  qps=    1339 avg=0.740 p99=1.440 | vtgate 575us (u333/s242) cs 16.82v/0.64n | tablets 469us (u252/s217) cs 15.93v/0.57n | mysqlds 172us (u145/s27) cs 1.28v/0.08n | vtgate sysc 42.6 sw 17.46 wake 12.64 | tablets sysc 41.4 sw 16.52 wake 11.90 | mysqlds sysc 5.6 sw 1.37 wake 1.32 | IPI resched 0.46 callfn 23.04 send 23.50 /q | load 8.41
++09:16:11 nowake                 thr=8  qps=    4774 avg=1.670 p99=4.740 | vtgate 223us (u166/s56) cs 1.99v/1.15n | tablets 225us (u146/s79) cs 5.14v/1.20n | mysqlds 147us (u119/s28) cs 1.08v/0.42n | vtgate sysc 10.2 sw 3.14 wake 2.89 | tablets sysc 15.3 sw 6.35 wake 3.78 | mysqlds sysc 5.2 sw 1.50 wake 0.97 | IPI resched 1.12 callfn 1.34 send 2.46 /q | load 8.42
++09:17:42 sysmon                 thr=1  qps=    1260 avg=0.790 p99=1.390 | vtgate 595us (u352/s244) cs 18.78v/0.58n | tablets 524us (u281/s243) cs 18.25v/0.61n | mysqlds 183us (u144/s38) cs 1.30v/0.15n | vtgate sysc 46.1 sw 19.36 wake 13.30 | tablets sysc 46.1 sw 18.88 wake 14.15 | mysqlds sysc 5.6 sw 1.46 wake 1.88 | IPI resched 0.43 callfn 26.48 send 26.90 /q | load 8.29
++09:17:55 sysmon                 thr=8  qps=    4845 avg=1.650 p99=4.650 | vtgate 217us (u161/s56) cs 1.74v/1.16n | tablets 223us (u143/s80) cs 5.01v/1.28n | mysqlds 150us (u123/s27) cs 1.07v/0.40n | vtgate sysc 10.1 sw 2.91 wake 2.86 | tablets sysc 15.6 sw 6.30 wake 3.87 | mysqlds sysc 5.2 sw 1.48 wake 0.99 | IPI resched 1.17 callfn 1.36 send 2.53 /q | load 8.42
++09:19:26 window                 thr=1  qps=    1243 avg=0.800 p99=1.270 | vtgate 496us (u335/s162) cs 13.50v/0.08n | tablets 390us (u226/s164) cs 12.62v/0.07n | mysqlds 180us (u143/s37) cs 1.31v/0.02n | vtgate sysc 29.2 sw 13.58 wake 8.39 | tablets sysc 29.2 sw 12.71 wake 8.48 | mysqlds sysc 5.6 sw 1.34 wake 2.27 | IPI resched 0.07 callfn 21.86 send 21.92 /q | load 9.19
++09:19:40 window                 thr=8  qps=    3862 avg=2.070 p99=6.910 | vtgate 215us (u158/s56) cs 2.00v/1.20n | tablets 224us (u148/s76) cs 5.22v/1.33n | mysqlds 149us (u120/s29) cs 1.09v/0.52n | vtgate sysc 9.0 sw 3.20 wake 2.96 | tablets sysc 14.2 sw 6.56 wake 3.90 | mysqlds sysc 5.2 sw 1.61 wake 1.09 | IPI resched 2.61 callfn 0.67 send 3.31 /q | load 9.73
++09:21:43 fl-proxy-def           thr=1  qps=    6141 avg=0.160 p99=0.370 | proxy 101us (u26/s75) cs 5.74v/0.01n | mysqlds 72us (u45/s27) cs 1.03v/0.01n | proxy sysc 16.5 sw 5.75 wake 3.67 | mysqlds sysc 5.1 sw 1.04 wake 2.03 | IPI resched 0.01 callfn 6.87 send 6.88 /q | load 3.71
++09:21:55 fl-grpcproxy-def       thr=1  qps=    2017 avg=0.490 p99=1.370 | gproxy 309us (u130/s179) cs 13.48v/2.04n | gsrv 304us (u122/s181) cs 13.83v/2.03n | mysqlds 135us (u107/s29) cs 1.07v/0.49n | gproxy sysc 37.3 sw 15.52 wake 11.06 | gsrv sysc 38.0 sw 15.85 wake 10.78 | mysqlds sysc 5.1 sw 1.56 wake 1.79 | IPI resched 2.13 callfn 11.95 send 14.08 /q | load 3.88
++09:23:50 fl-proxy-def           thr=8  qps=   27182 avg=0.290 p99=1.160 | proxy 41us (u12/s29) cs 0.80v/0.40n | mysqlds 52us (u34/s18) cs 0.99v/0.36n | proxy sysc 8.0 sw 1.20 wake 2.40 | mysqlds sysc 5.0 sw 1.35 wake 0.28 | IPI resched 0.63 callfn 0.57 send 1.20 /q | load 9.37
++09:24:03 fl-grpcproxy-def       thr=8  qps=    8340 avg=0.960 p99=2.860 | gproxy 103us (u54/s49) cs 2.46v/0.76n | gsrv 104us (u55/s50) cs 2.66v/0.79n | mysqlds 102us (u78/s24) cs 1.02v/0.45n | gproxy sysc 9.8 sw 3.22 wake 2.60 | gsrv sysc 10.2 sw 3.46 wake 2.67 | mysqlds sysc 5.0 sw 1.47 wake 0.79 | IPI resched 0.96 callfn 1.39 send 2.34 /q | load 9.28
++09:24:19 fl-proxy-window        thr=1  qps=    6223 avg=0.160 p99=0.360 | proxy 103us (u28/s75) cs 5.82v/0.01n | mysqlds 70us (u48/s22) cs 1.03v/0.01n | proxy sysc 16.6 sw 5.84 wake 3.77 | mysqlds sysc 5.1 sw 1.04 wake 2.03 | IPI resched 0.01 callfn 6.97 send 6.99 /q | load 7.52
++09:26:13 fl-grpcproxy-window    thr=1  qps=    2093 avg=0.480 p99=0.860 | gproxy 249us (u117/s133) cs 9.51v/0.14n | gsrv 234us (u103/s131) cs 10.58v/0.13n | mysqlds 142us (u112/s30) cs 1.08v/0.06n | gproxy sysc 23.8 sw 9.65 wake 7.72 | gsrv sysc 26.5 sw 10.71 wake 7.84 | mysqlds sysc 5.2 sw 1.14 wake 2.28 | IPI resched 0.14 callfn 18.92 send 19.06 /q | load 11.41
++09:26:26 fl-proxy-window        thr=8  qps=   27199 avg=0.290 p99=1.210 | proxy 41us (u12/s29) cs 0.78v/0.41n | mysqlds 52us (u35/s17) cs 0.99v/0.36n | proxy sysc 8.0 sw 1.19 wake 2.39 | mysqlds sysc 5.0 sw 1.36 wake 0.27 | IPI resched 0.63 callfn 0.57 send 1.21 /q | load 11.34
++09:26:39 fl-grpcproxy-window    thr=8  qps=    7617 avg=1.050 p99=3.750 | gproxy 99us (u56/s44) cs 2.43v/0.75n | gsrv 101us (u52/s48) cs 2.60v/0.83n | mysqlds 104us (u80/s24) cs 1.01v/0.52n | gproxy sysc 9.3 sw 3.18 wake 2.57 | gsrv sysc 9.6 sw 3.43 wake 2.61 | mysqlds sysc 5.0 sw 1.54 wake 0.86 | IPI resched 0.99 callfn 1.22 send 2.21 /q | load 10.99
++09:28:33 fl-proxy-procs1        thr=1  qps=    6651 avg=0.150 p99=0.390 | proxy 85us (u20/s65) cs 5.04v/0.01n | mysqlds 66us (u44/s22) cs 1.03v/0.01n | proxy sysc 15.0 sw 5.05 wake 3.04 | mysqlds sysc 5.1 sw 1.03 wake 2.05 | IPI resched 0.03 callfn 6.43 send 6.46 /q | load 9.72
++09:28:46 fl-grpcproxy-procs1    thr=1  qps=    2904 avg=0.340 p99=0.780 | gproxy 202us (u92/s111) cs 6.74v/0.21n | gsrv 196us (u74/s121) cs 7.67v/0.20n | mysqlds 109us (u85/s24) cs 1.06v/0.02n | gproxy sysc 23.5 sw 6.95 wake 5.50 | gsrv sysc 24.8 sw 7.87 wake 5.29 | mysqlds sysc 5.1 sw 1.08 wake 1.33 | IPI resched 0.15 callfn 12.92 send 13.07 /q | load 8.61
++09:28:59 fl-proxy-procs1        thr=8  qps=   33109 avg=0.240 p99=0.780 | proxy 28us (u7/s21) cs 0.18v/0.11n | mysqlds 43us (u28/s14) cs 0.99v/0.37n | proxy sysc 6.8 sw 0.29 wake 2.01 | mysqlds sysc 5.0 sw 1.36 wake 0.14 | IPI resched 0.49 callfn 0.68 send 1.17 /q | load 9.13
++09:29:12 fl-grpcproxy-procs1    thr=8  qps=   10109 avg=0.790 p99=2.110 | gproxy 60us (u33/s27) cs 1.06v/0.12n | gsrv 61us (u33/s28) cs 1.19v/0.16n | mysqlds 83us (u65/s18) cs 1.02v/0.28n | gproxy sysc 6.4 sw 1.18 wake 1.40 | gsrv sysc 6.5 sw 1.35 wake 1.49 | mysqlds sysc 5.0 sw 1.29 wake 0.53 | IPI resched 0.33 callfn 1.86 send 2.19 /q | load 8.34
++09:31:06 fl-proxy-window-procs1 thr=1  qps=    6863 avg=0.150 p99=0.370 | proxy 83us (u21/s62) cs 5.01v/0.03n | mysqlds 64us (u40/s24) cs 1.02v/0.01n | proxy sysc 15.0 sw 5.03 wake 3.03 | mysqlds sysc 5.0 sw 1.03 wake 2.05 | IPI resched 0.03 callfn 6.38 send 6.41 /q | load 10.94
++09:31:19 fl-grpcproxy-window-procs1 thr=1  qps=    3106 avg=0.320 p99=0.670 | gproxy 136us (u63/s72) cs 4.94v/0.01n | gsrv 135us (u51/s84) cs 6.87v/0.01n | mysqlds 104us (u80/s25) cs 1.06v/0.00n | gproxy sysc 14.2 sw 4.95 wake 3.38 | gsrv sysc 17.8 sw 6.87 wake 4.05 | mysqlds sysc 5.1 sw 1.06 wake 2.17 | IPI resched 0.02 callfn 11.82 send 11.84 /q | load 8.95
++09:31:32 fl-proxy-window-procs1 thr=8  qps=   32913 avg=0.240 p99=0.780 | proxy 28us (u6/s22) cs 0.20v/0.07n | mysqlds 43us (u28/s15) cs 0.99v/0.39n | proxy sysc 6.9 sw 0.27 wake 2.01 | mysqlds sysc 5.0 sw 1.38 wake 0.15 | IPI resched 0.54 callfn 0.67 send 1.21 /q | load 8.58
++09:33:26 fl-grpcproxy-window-procs1 thr=8  qps=   10192 avg=0.780 p99=2.140 | gproxy 58us (u32/s26) cs 1.01v/0.14n | gsrv 59us (u34/s25) cs 1.16v/0.16n | mysqlds 83us (u67/s16) cs 1.02v/0.29n | gproxy sysc 6.0 sw 1.15 wake 1.37 | gsrv sysc 6.2 sw 1.32 wake 1.46 | mysqlds sysc 5.0 sw 1.30 wake 0.57 | IPI resched 0.36 callfn 1.81 send 2.18 /q | load 9.84
++09:33:42 fl-proxy-unix          thr=1  qps=    6684 avg=0.150 p99=0.370 | proxy 88us (u23/s65) cs 5.18v/0.01n | mysqlds 66us (u41/s25) cs 1.03v/0.00n | proxy sysc 15.3 sw 5.19 wake 3.16 | mysqlds sysc 5.1 sw 1.03 wake 2.04 | IPI resched 0.01 callfn 6.50 send 6.52 /q | load 8.03
++09:33:55 fl-grpcproxy-unix      thr=1  qps=    1928 avg=0.520 p99=1.080 | gproxy 388us (u153/s235) cs 16.37v/1.08n | gsrv 363us (u138/s225) cs 16.59v/0.97n | mysqlds 147us (u120/s27) cs 1.09v/0.16n | gproxy sysc 44.1 sw 17.45 wake 13.80 | gsrv sysc 44.4 sw 17.56 wake 13.66 | mysqlds sysc 5.2 sw 1.26 wake 1.85 | IPI resched 0.62 callfn 23.30 send 23.92 /q | load 6.79
++09:35:49 fl-proxy-unix          thr=8  qps=   27243 avg=0.290 p99=1.210 | proxy 41us (u11/s29) cs 0.83v/0.39n | mysqlds 52us (u36/s16) cs 0.99v/0.38n | proxy sysc 8.1 sw 1.22 wake 2.40 | mysqlds sysc 5.0 sw 1.37 wake 0.31 | IPI resched 0.64 callfn 0.57 send 1.21 /q | load 10.43
++09:36:02 fl-grpcproxy-unix      thr=8  qps=    8139 avg=0.980 p99=2.970 | gproxy 108us (u61/s47) cs 2.61v/0.79n | gsrv 101us (u56/s46) cs 2.71v/0.83n | mysqlds 103us (u81/s22) cs 1.02v/0.45n | gproxy sysc 10.1 sw 3.40 wake 2.75 | gsrv sysc 10.5 sw 3.54 wake 2.80 | mysqlds sysc 5.0 sw 1.47 wake 0.76 | IPI resched 0.99 callfn 1.48 send 2.47 /q | load 10.53
++09:36:18 fl-grpcproxy-fake      thr=1  qps=    4119 avg=0.240 p99=0.510 | gproxy 243us (u106/s137) cs 9.21v/0.43n | gsrv 185us (u81/s104) cs 7.92v/0.38n | mysqlds 1us (u1/s0) cs 0.04v/0.00n | gproxy sysc 26.6 sw 9.64 wake 8.44 | gsrv sysc 21.3 sw 8.30 wake 6.14 | mysqlds sysc 0.1 sw 0.05 wake 0.00 | IPI resched 0.29 callfn 12.88 send 13.16 /q | load 9.12
++09:38:12 fl-grpcproxy-fake      thr=8  qps=   17574 avg=0.450 p99=1.470 | gproxy 81us (u46/s35) cs 1.63v/0.59n | gsrv 48us (u29/s18) cs 1.38v/0.24n | mysqlds 0us (u0/s0) cs 0.01v/0.00n | gproxy sysc 7.8 sw 2.22 wake 2.35 | gsrv sysc 4.1 sw 1.62 wake 0.97 | mysqlds sysc 0.0 sw 0.01 wake 0.00 | IPI resched 0.42 callfn 1.18 send 1.61 /q | load 11.20
++09:38:28 combo                  thr=1  qps=    2637 avg=0.380 p99=0.700 | vtcombo 320us (u193/s128) cs 9.20v/0.02n | mysqlds 124us (u93/s31) cs 1.06v/0.01n | vtcombo sysc 22.6 sw 9.23 wake 5.13 | mysqlds sysc 5.1 sw 1.07 wake 2.13 | IPI resched 0.01 callfn 9.02 send 9.04 /q | load 8.87
++09:38:42 combo                  thr=8  qps=   12071 avg=0.660 p99=2.300 | vtcombo 148us (u109/s39) cs 0.79v/0.83n | mysqlds 82us (u67/s15) cs 1.01v/0.29n | vtcombo sysc 7.9 sw 1.63 wake 2.43 | mysqlds sysc 5.0 sw 1.29 wake 0.25 | IPI resched 0.66 callfn 0.54 send 1.20 /q | load 8.35
++09:42:57 base                   thr=1  qps=    1257 avg=0.790 p99=1.340 | vtgate 573us (u346/s227) cs 19.12v/0.61n | tablets 502us (u279/s223) cs 18.57v/0.62n | mysqlds 181us (u150/s30) cs 1.28v/0.14n | load 9.94
++09:43:10 base                   thr=8  qps=    5001 avg=1.600 p99=4.490 | vtgate 213us (u164/s49) cs 2.14v/1.21n | tablets 217us (u148/s69) cs 5.67v/1.33n | mysqlds 142us (u117/s25) cs 1.07v/0.44n | load 9.95
++09:44:13 window                 thr=1  qps=    1326 avg=0.750 p99=1.140 | vtgate 454us (u310/s144) cs 13.54v/0.09n | tablets 357us (u226/s131) cs 12.72v/0.09n | mysqlds 173us (u142/s31) cs 1.27v/0.03n | load 8.37
++09:44:26 window                 thr=8  qps=    5132 avg=1.560 p99=4.410 | vtgate 203us (u155/s48) cs 2.05v/1.14n | tablets 206us (u141/s65) cs 5.28v/1.29n | mysqlds 141us (u120/s22) cs 1.07v/0.46n | load 8.41
++09:45:19 procs1                 thr=1  qps=    1685 avg=0.590 p99=1.080 | vtgate 360us (u241/s118) cs 9.10v/0.15n | tablets 348us (u215/s133) cs 11.12v/0.13n | mysqlds 147us (u126/s21) cs 1.21v/0.01n | load 8.07
++09:45:32 procs1                 thr=8  qps=    5269 avg=1.520 p99=4.100 | vtgate 136us (u100/s36) cs 1.55v/0.22n | tablets 164us (u115/s49) cs 3.19v/0.39n | mysqlds 126us (u103/s23) cs 1.07v/0.43n | load 7.67
++09:46:25 winprocs1              thr=1  qps=    1862 avg=0.540 p99=1.080 | vtgate 257us (u183/s74) cs 6.24v/0.01n | tablets 222us (u143/s78) cs 7.16v/0.01n | mysqlds 142us (u114/s28) cs 1.19v/0.00n | load 6.85
++09:46:38 winprocs1              thr=8  qps=    5397 avg=1.480 p99=3.960 | vtgate 132us (u101/s31) cs 1.40v/0.21n | tablets 159us (u116/s43) cs 2.89v/0.39n | mysqlds 127us (u107/s21) cs 1.06v/0.40n | load 6.40
++09:47:31 winprocs2              thr=1  qps=    1331 avg=0.750 p99=1.320 | vtgate 439us (u306/s134) cs 12.52v/0.04n | tablets 333us (u207/s126) cs 11.41v/0.03n | mysqlds 170us (u137/s34) cs 1.27v/0.01n | load 3.73
++09:47:44 winprocs2              thr=8  qps=    5132 avg=1.560 p99=4.180 | vtgate 176us (u135/s41) cs 1.88v/0.72n | tablets 201us (u141/s60) cs 4.39v/0.99n | mysqlds 139us (u117/s22) cs 1.07v/0.45n | load 4.97
++09:48:36 procs2                 thr=1  qps=    1292 avg=0.770 p99=1.250 | vtgate 539us (u348/s192) cs 16.58v/0.36n | tablets 471us (u273/s198) cs 16.74v/0.30n | mysqlds 184us (u149/s35) cs 1.27v/0.08n | load 3.55
++09:48:49 procs2                 thr=8  qps=    4825 avg=1.660 p99=4.330 | vtgate 190us (u141/s49) cs 2.02v/0.80n | tablets 219us (u152/s67) cs 4.83v/1.07n | mysqlds 146us (u117/s29) cs 1.07v/0.46n | load 4.64
++09:49:42 base                   thr=1  qps=    1130 avg=0.880 p99=2.480 | vtgate 566us (u377/s189) cs 18.26v/2.90n | tablets 510us (u295/s215) cs 18.51v/2.98n | mysqlds 184us (u160/s24) cs 1.31v/0.47n | load 5.14
++09:49:55 base                   thr=8  qps=    4163 avg=1.920 p99=7.170 | vtgate 219us (u166/s54) cs 2.23v/1.21n | tablets 234us (u156/s78) cs 6.01v/1.35n | mysqlds 151us (u127/s24) cs 1.08v/0.50n | load 7.44
++09:51:57 window                 thr=1  qps=    1295 avg=0.770 p99=1.210 | vtgate 472us (u321/s151) cs 13.65v/0.04n | tablets 365us (u226/s140) cs 12.72v/0.04n | mysqlds 177us (u146/s31) cs 1.27v/0.01n | load 4.33
++09:53:50 window                 thr=8  qps=    5330 avg=1.500 p99=4.030 | vtgate 211us (u158/s53) cs 2.27v/1.22n | tablets 207us (u142/s65) cs 5.24v/1.39n | mysqlds 143us (u120/s24) cs 1.06v/0.49n | load 3.42
++09:55:43 procs1                 thr=1  qps=    1640 avg=0.610 p99=1.210 | vtgate 366us (u242/s124) cs 9.10v/0.17n | tablets 354us (u230/s124) cs 11.22v/0.16n | mysqlds 150us (u124/s26) cs 1.22v/0.02n | load 3.59
++09:55:56 procs1                 thr=8  qps=    4984 avg=1.600 p99=4.410 | vtgate 143us (u105/s38) cs 1.59v/0.25n | tablets 173us (u125/s48) cs 3.27v/0.43n | mysqlds 131us (u108/s22) cs 1.07v/0.44n | load 4.11
++09:57:31 winprocs1              thr=1  qps=    1789 avg=0.560 p99=1.230 | vtgate 267us (u185/s82) cs 6.32v/0.02n | tablets 232us (u153/s79) cs 7.22v/0.02n | mysqlds 145us (u121/s24) cs 1.20v/0.01n | load 5.93
++09:57:44 winprocs1              thr=8  qps=    5304 avg=1.510 p99=4.650 | vtgate 135us (u100/s34) cs 1.52v/0.22n | tablets 158us (u117/s41) cs 2.93v/0.39n | mysqlds 126us (u104/s23) cs 1.07v/0.40n | load 5.74
++09:59:16 winprocs2              thr=1  qps=    1335 avg=0.750 p99=1.230 | vtgate 440us (u303/s137) cs 12.50v/0.08n | tablets 332us (u208/s124) cs 11.49v/0.07n | mysqlds 171us (u143/s28) cs 1.29v/0.02n | load 5.66
++09:59:29 winprocs2              thr=8  qps=    5180 avg=1.540 p99=4.330 | vtgate 174us (u135/s39) cs 1.84v/0.68n | tablets 198us (u143/s54) cs 4.38v/0.97n | mysqlds 138us (u116/s22) cs 1.07v/0.45n | load 6.03
++10:01:00 procs2                 thr=1  qps=    1287 avg=0.770 p99=1.500 | vtgate 528us (u341/s187) cs 16.50v/0.47n | tablets 459us (u279/s180) cs 16.63v/0.43n | mysqlds 184us (u145/s39) cs 1.30v/0.12n | load 7.51
++10:01:13 procs2                 thr=8  qps=    4948 avg=1.610 p99=4.490 | vtgate 180us (u137/s42) cs 1.99v/0.73n | tablets 206us (u145/s61) cs 4.74v/0.98n | mysqlds 137us (u114/s23) cs 1.07v/0.46n | load 7.78
++10:02:44 base                   thr=1  qps=    1270 avg=0.790 p99=1.370 | vtgate 565us (u346/s219) cs 19.07v/0.58n | tablets 498us (u283/s216) cs 18.58v/0.62n | mysqlds 182us (u152/s30) cs 1.30v/0.14n | load 6.67
++10:02:57 base                   thr=8  qps=    4843 avg=1.650 p99=4.820 | vtgate 219us (u164/s54) cs 2.11v/1.24n | tablets 225us (u150/s74) cs 5.71v/1.34n | mysqlds 145us (u121/s24) cs 1.08v/0.45n | load 7.19
++10:04:28 window                 thr=1  qps=    1304 avg=0.770 p99=1.300 | vtgate 464us (u328/s136) cs 13.57v/0.13n | tablets 361us (u222/s140) cs 12.79v/0.11n | mysqlds 173us (u143/s30) cs 1.29v/0.03n | load 5.90
++10:04:41 window                 thr=8  qps=    5101 avg=1.570 p99=4.410 | vtgate 206us (u157/s50) cs 2.16v/1.15n | tablets 207us (u145/s62) cs 5.28v/1.33n | mysqlds 141us (u117/s24) cs 1.07v/0.46n | load 7.84
++10:06:13 procs1                 thr=1  qps=    1571 avg=0.630 p99=1.420 | vtgate 386us (u261/s125) cs 9.26v/0.17n | tablets 372us (u237/s135) cs 11.36v/0.14n | mysqlds 155us (u129/s25) cs 1.24v/0.02n | load 7.43
++10:06:26 procs1                 thr=8  qps=    5075 avg=1.570 p99=4.490 | vtgate 140us (u103/s37) cs 1.54v/0.23n | tablets 170us (u123/s48) cs 3.22v/0.41n | mysqlds 130us (u108/s22) cs 1.07v/0.44n | load 7.49
++10:07:21 winprocs1              thr=1  qps=    1785 avg=0.560 p99=1.140 | vtgate 271us (u192/s79) cs 6.31v/0.01n | tablets 234us (u155/s79) cs 7.20v/0.01n | mysqlds 147us (u125/s22) cs 1.20v/0.00n | load 4.16
++10:07:34 winprocs1              thr=8  qps=    5162 avg=1.550 p99=4.180 | vtgate 139us (u104/s35) cs 1.47v/0.23n | tablets 166us (u122/s44) cs 2.97v/0.42n | mysqlds 132us (u109/s23) cs 1.07v/0.41n | load 4.12
++10:08:27 winprocs2              thr=1  qps=    1339 avg=0.750 p99=1.440 | vtgate 440us (u300/s140) cs 12.51v/0.04n | tablets 329us (u209/s120) cs 11.35v/0.03n | mysqlds 170us (u135/s34) cs 1.26v/0.01n | load 2.78
++10:08:40 winprocs2              thr=8  qps=    5283 avg=1.510 p99=3.960 | vtgate 172us (u132/s40) cs 1.86v/0.71n | tablets 196us (u138/s58) cs 4.36v/0.98n | mysqlds 139us (u115/s24) cs 1.06v/0.45n | load 4.59
++10:09:31 procs2                 thr=1  qps=    1332 avg=0.750 p99=1.320 | vtgate 519us (u333/s186) cs 16.49v/0.36n | tablets 450us (u247/s203) cs 16.67v/0.33n | mysqlds 179us (u148/s32) cs 1.27v/0.08n | load 2.97
++10:09:45 procs2                 thr=8  qps=    4982 avg=1.600 p99=4.250 | vtgate 184us (u137/s46) cs 2.00v/0.78n | tablets 211us (u148/s63) cs 4.79v/1.04n | mysqlds 142us (u120/s22) cs 1.07v/0.47n | load 3.71
++10:11:00 cnt-base               thr=1  qps=    1046 avg=0.950 p99=2.860 | vtgate 609us (u374/s235) cs 17.98v/4.08n | tablets 572us (u312/s261) cs 18.90v/4.21n | mysqlds 187us (u164/s23) cs 1.33v/0.58n | vtgate sysc 42.5 sw 22.07 wake 11.87 | tablets sysc 45.6 sw 23.14 wake 12.98 | mysqlds sysc 5.7 sw 1.92 wake 1.40 | IPI resched 8.38 callfn 1.52 send 9.90 /q | load 3.46
++10:11:57 cnt-window             thr=1  qps=    1226 avg=0.810 p99=1.340 | vtgate 504us (u327/s177) cs 13.51v/0.05n | tablets 396us (u241/s156) cs 12.56v/0.04n | mysqlds 184us (u141/s43) cs 1.28v/0.01n | vtgate sysc 29.3 sw 13.57 wake 8.41 | tablets sysc 29.1 sw 12.62 wake 8.42 | mysqlds sysc 5.6 sw 1.30 wake 2.25 | IPI resched 0.04 callfn 21.98 send 22.02 /q | load 3.49
++10:12:55 cnt-procs1             thr=1  qps=    1553 avg=0.640 p99=1.210 | vtgate 402us (u256/s146) cs 9.30v/0.12n | tablets 390us (u232/s158) cs 11.40v/0.12n | mysqlds 158us (u129/s29) cs 1.23v/0.01n | vtgate sysc 27.4 sw 9.42 wake 6.71 | tablets sysc 30.5 sw 11.53 wake 6.58 | mysqlds sysc 5.5 sw 1.24 wake 1.22 | IPI resched 0.07 callfn 16.56 send 16.63 /q | load 1.77
++10:13:52 cnt-winprocs1          thr=1  qps=    1679 avg=0.590 p99=1.230 | vtgate 291us (u202/s88) cs 6.38v/0.01n | tablets 257us (u158/s98) cs 7.38v/0.00n | mysqlds 154us (u124/s30) cs 1.21v/0.00n | vtgate sysc 16.1 sw 6.39 wake 3.72 | tablets sysc 18.2 sw 7.40 wake 4.18 | mysqlds sysc 5.4 sw 1.21 wake 1.67 | IPI resched 0.01 callfn 11.71 send 11.72 /q | load 1.25
++10:15:04 base                   thr=1  qps=    1290 avg=0.770 p99=1.390 | vtgate 550us (u350/s200) cs 18.96v/0.69n | tablets 483us (u270/s213) cs 18.51v/0.71n | mysqlds 177us (u149/s28) cs 1.28v/0.15n | load 0.69
++10:15:17 base                   thr=8  qps=    4940 avg=1.620 p99=4.570 | vtgate 215us (u161/s54) cs 2.14v/1.25n | tablets 220us (u150/s71) cs 5.69v/1.39n | mysqlds 145us (u120/s25) cs 1.07v/0.45n | load 2.80
++10:15:31 base                   thr=32 qps=    7992 avg=4.000 p99=11.040 | vtgate 139us (u106/s33) cs 0.70v/0.80n | tablets 139us (u103/s36) cs 2.14v/0.81n | mysqlds 112us (u92/s20) cs 1.04v/0.30n | load 5.30
++10:16:22 window                 thr=1  qps=    1279 avg=0.780 p99=1.250 | vtgate 471us (u327/s145) cs 13.64v/0.06n | tablets 369us (u223/s146) cs 12.72v/0.06n | mysqlds 177us (u145/s33) cs 1.28v/0.02n | load 2.96
++10:16:36 window                 thr=8  qps=    5165 avg=1.550 p99=4.100 | vtgate 215us (u166/s50) cs 2.31v/1.19n | tablets 215us (u148/s67) cs 5.32v/1.36n | mysqlds 145us (u119/s27) cs 1.07v/0.46n | load 4.38
++10:16:49 window                 thr=32 qps=    8262 avg=3.870 p99=9.910 | vtgate 144us (u109/s35) cs 0.72v/0.85n | tablets 138us (u102/s36) cs 2.04v/0.78n | mysqlds 114us (u92/s22) cs 1.04v/0.31n | load 5.75
++10:17:41 winprocs1              thr=1  qps=    1853 avg=0.540 p99=1.160 | vtgate 265us (u187/s78) cs 6.23v/0.01n | tablets 221us (u146/s75) cs 7.17v/0.00n | mysqlds 147us (u118/s29) cs 1.19v/0.00n | load 2.67
++10:17:54 winprocs1              thr=8  qps=    5368 avg=1.490 p99=4.100 | vtgate 133us (u101/s32) cs 1.38v/0.20n | tablets 160us (u117/s43) cs 2.92v/0.35n | mysqlds 127us (u106/s21) cs 1.06v/0.39n | load 2.72
++10:18:07 winprocs1              thr=32 qps=    7778 avg=4.110 p99=9.560 | vtgate 91us (u72/s20) cs 0.40v/0.15n | tablets 114us (u85/s29) cs 1.65v/0.38n | mysqlds 106us (u86/s19) cs 1.04v/0.40n | load 2.84
++10:18:59 winprocs2              thr=1  qps=    1298 avg=0.770 p99=1.230 | vtgate 458us (u320/s138) cs 12.64v/0.02n | tablets 341us (u233/s108) cs 11.39v/0.02n | mysqlds 175us (u146/s29) cs 1.28v/0.00n | load 1.54
++10:19:12 winprocs2              thr=8  qps=    5419 avg=1.470 p99=3.960 | vtgate 171us (u129/s42) cs 1.81v/0.66n | tablets 196us (u141/s54) cs 4.27v/0.93n | mysqlds 137us (u113/s24) cs 1.06v/0.44n | load 2.46
++10:19:25 winprocs2              thr=32 qps=    7883 avg=4.060 p99=9.910 | vtgate 118us (u92/s26) cs 0.55v/0.61n | tablets 137us (u99/s38) cs 2.09v/0.82n | mysqlds 117us (u97/s20) cs 1.05v/0.31n | load 4.56
++10:20:17 nowakewin              thr=1  qps=    1450 avg=0.690 p99=1.140 | vtgate 414us (u286/s128) cs 11.21v/0.03n | tablets 312us (u185/s127) cs 10.61v/0.02n | mysqlds 160us (u130/s30) cs 1.25v/0.01n | load 2.16
++10:20:30 nowakewin              thr=8  qps=    5371 avg=1.490 p99=4.030 | vtgate 205us (u159/s46) cs 2.19v/1.07n | tablets 197us (u137/s60) cs 4.72v/1.19n | mysqlds 142us (u119/s23) cs 1.06v/0.45n | load 3.34
++10:20:43 nowakewin              thr=32 qps=    8085 avg=3.950 p99=10.270 | vtgate 143us (u109/s34) cs 0.72v/0.83n | tablets 137us (u101/s36) cs 2.01v/0.79n | mysqlds 117us (u97/s20) cs 1.04v/0.30n | load 5.95
++10:21:35 nowakewin2             thr=1  qps=    1571 avg=0.640 p99=1.060 | vtgate 354us (u228/s126) cs 9.23v/0.01n | tablets 282us (u167/s115) cs 10.08v/0.02n | mysqlds 155us (u130/s25) cs 1.22v/0.00n | load 2.86
++10:21:48 nowakewin2             thr=8  qps=    5607 avg=1.420 p99=3.750 | vtgate 168us (u128/s40) cs 1.80v/0.64n | tablets 185us (u128/s57) cs 4.04v/0.86n | mysqlds 134us (u111/s23) cs 1.06v/0.44n | load 3.56
++10:22:01 nowakewin2             thr=32 qps=    8118 avg=3.940 p99=9.560 | vtgate 119us (u93/s26) cs 0.66v/0.64n | tablets 133us (u97/s36) cs 1.98v/0.77n | mysqlds 116us (u95/s20) cs 1.04v/0.34n | load 4.06
++10:22:53 base                   thr=1  qps=    1283 avg=0.780 p99=1.270 | vtgate 570us (u347/s223) cs 19.24v/0.40n | tablets 496us (u290/s206) cs 18.52v/0.42n | mysqlds 181us (u157/s23) cs 1.28v/0.10n | load 2.28
++10:23:06 base                   thr=8  qps=    5181 avg=1.540 p99=4.100 | vtgate 219us (u164/s55) cs 2.34v/1.27n | tablets 222us (u147/s75) cs 5.66v/1.41n | mysqlds 144us (u117/s27) cs 1.07v/0.46n | load 3.96
++10:23:19 base                   thr=32 qps=    8354 avg=3.830 p99=9.730 | vtgate 140us (u106/s34) cs 0.81v/0.87n | tablets 138us (u101/s37) cs 2.14v/0.86n | mysqlds 114us (u94/s20) cs 1.04v/0.30n | load 6.92
++10:24:11 window                 thr=1  qps=    1330 avg=0.750 p99=1.160 | vtgate 457us (u304/s153) cs 13.50v/0.04n | tablets 356us (u219/s137) cs 12.62v/0.04n | mysqlds 172us (u141/s31) cs 1.27v/0.01n | load 3.29
++10:24:24 window                 thr=8  qps=    5194 avg=1.540 p99=4.100 | vtgate 213us (u159/s53) cs 2.30v/1.16n | tablets 214us (u144/s70) cs 5.29v/1.33n | mysqlds 145us (u120/s25) cs 1.07v/0.47n | load 3.94
++10:24:37 window                 thr=32 qps=    8352 avg=3.830 p99=9.730 | vtgate 141us (u106/s35) cs 0.75v/0.85n | tablets 137us (u100/s37) cs 2.09v/0.81n | mysqlds 113us (u93/s20) cs 1.04v/0.31n | load 6.84
++10:25:29 winprocs1              thr=1  qps=    1906 avg=0.520 p99=1.100 | vtgate 254us (u170/s83) cs 6.19v/0.01n | tablets 214us (u140/s74) cs 7.12v/0.00n | mysqlds 142us (u116/s26) cs 1.18v/0.00n | load 3.19
++10:25:42 winprocs1              thr=8  qps=    5587 avg=1.430 p99=3.620 | vtgate 130us (u96/s33) cs 1.37v/0.19n | tablets 156us (u111/s45) cs 2.87v/0.35n | mysqlds 126us (u104/s22) cs 1.06v/0.40n | load 3.74
++10:25:56 winprocs1              thr=32 qps=    8029 avg=3.980 p99=9.060 | vtgate 89us (u68/s22) cs 0.40v/0.14n | tablets 111us (u83/s27) cs 1.63v/0.38n | mysqlds 106us (u86/s19) cs 1.04v/0.40n | load 4.60
++10:26:48 winprocs2              thr=1  qps=    1348 avg=0.740 p99=1.230 | vtgate 438us (u297/s142) cs 12.47v/0.02n | tablets 330us (u208/s122) cs 11.34v/0.02n | mysqlds 168us (u142/s27) cs 1.27v/0.01n | load 2.35
++10:27:01 winprocs2              thr=8  qps=    5348 avg=1.490 p99=4.100 | vtgate 173us (u129/s44) cs 1.85v/0.65n | tablets 197us (u139/s59) cs 4.28v/0.93n | mysqlds 138us (u114/s24) cs 1.07v/0.43n | load 4.32
++10:27:14 winprocs2              thr=32 qps=    7851 avg=4.070 p99=10.270 | vtgate 118us (u92/s26) cs 0.64v/0.62n | tablets 134us (u98/s36) cs 2.09v/0.75n | mysqlds 115us (u94/s20) cs 1.04v/0.34n | load 5.17
++10:28:06 nowakewin              thr=1  qps=    1513 avg=0.660 p99=1.040 | vtgate 397us (u268/s129) cs 11.08v/0.03n | tablets 298us (u175/s123) cs 10.46v/0.02n | mysqlds 154us (u129/s25) cs 1.24v/0.00n | load 2.56
++10:28:19 nowakewin              thr=8  qps=    5428 avg=1.470 p99=3.890 | vtgate 203us (u153/s50) cs 2.11v/1.04n | tablets 195us (u133/s62) cs 4.69v/1.16n | mysqlds 140us (u117/s23) cs 1.06v/0.45n | load 3.79
++10:28:32 nowakewin              thr=32 qps=    8560 avg=3.730 p99=9.730 | vtgate 137us (u105/s32) cs 0.69v/0.82n | tablets 130us (u94/s36) cs 2.01v/0.79n | mysqlds 111us (u91/s20) cs 1.04v/0.30n | load 6.80
++10:29:24 nowakewin2             thr=1  qps=    1523 avg=0.660 p99=1.160 | vtgate 366us (u244/s122) cs 9.31v/0.02n | tablets 290us (u172/s118) cs 10.18v/0.02n | mysqlds 160us (u130/s30) cs 1.23v/0.00n | load 3.14
++10:29:37 nowakewin2             thr=8  qps=    5594 avg=1.430 p99=3.620 | vtgate 167us (u125/s42) cs 1.72v/0.63n | tablets 186us (u131/s55) cs 4.00v/0.86n | mysqlds 135us (u112/s23) cs 1.06v/0.43n | load 3.71
++10:29:50 nowakewin2             thr=32 qps=    8123 avg=3.930 p99=9.560 | vtgate 118us (u90/s28) cs 0.55v/0.63n | tablets 132us (u96/s37) cs 1.98v/0.74n | mysqlds 113us (u95/s19) cs 1.04v/0.34n | load 4.63
++10:31:03 place-default          thr=1  qps=    1878 avg=0.530 p99=1.100 | vtgate 261us (u189/s72) cs 6.20v/0.01n | tablets 212us (u138/s74) cs 7.13v/0.00n | mysqlds 147us (u122/s25) cs 1.19v/0.00n | load 1.56
++10:31:17 place-all0             thr=1  qps=    1317 avg=0.760 p99=1.420 | vtgate 305us (u244/s61) cs 4.79v/2.39n | tablets 247us (u203/s45) cs 4.70v/1.31n | mysqlds 166us (u154/s12) cs 1.24v/0.47n | load 1.66
++10:31:31 place-default          thr=1  qps=    1846 avg=0.540 p99=1.160 | vtgate 264us (u185/s79) cs 6.21v/0.01n | tablets 223us (u144/s79) cs 7.16v/0.00n | mysqlds 147us (u122/s24) cs 1.19v/0.00n | load 1.58
++10:31:44 place-all0             thr=1  qps=    1257 avg=0.790 p99=1.550 | vtgate 317us (u253/s64) cs 4.84v/2.37n | tablets 261us (u211/s49) cs 4.80v/1.30n | mysqlds 171us (u154/s17) cs 1.28v/0.49n | load 1.79
++10:32:16 combo-procs1           thr=1  qps=    4752 avg=0.210 p99=0.640 | vtcombo 154us (u94/s60) cs 5.17v/0.00n | mysqlds 71us (u49/s22) cs 1.04v/0.00n | load 1.30
++10:32:29 combo-procs1           thr=8  qps=   12231 avg=0.650 p99=2.140 | vtcombo 82us (u55/s27) cs 0.01v/0.00n | mysqlds 49us (u41/s8) cs 1.01v/0.01n | load 1.45
++10:32:42 combo-procs1           thr=32 qps=   12474 avg=2.560 p99=7.430 | vtcombo 80us (u55/s25) cs 0.01v/0.00n | mysqlds 51us (u41/s10) cs 1.01v/0.08n | load 1.50
++10:33:16 combo-default          thr=1  qps=    3324 avg=0.300 p99=0.650 | vtcombo 262us (u165/s96) cs 8.61v/0.01n | mysqlds 95us (u70/s25) cs 1.05v/0.00n | load 1.21
++10:33:29 combo-default          thr=8  qps=   13302 avg=0.600 p99=2.110 | vtcombo 143us (u103/s40) cs 0.74v/0.83n | mysqlds 74us (u60/s14) cs 1.00v/0.28n | load 3.08
++10:33:42 combo-default          thr=32 qps=   15471 avg=2.070 p99=5.470 | vtcombo 130us (u96/s34) cs 0.50v/0.98n | mysqlds 64us (u52/s12) cs 1.00v/0.28n | load 4.54
++10:34:03 direct                 thr=8  qps=  120997 avg=0.070 p99=0.190 | mysqlds 23us (u19/s4) cs 0.01v/1.00n | load 5.33
++10:34:15 direct                 thr=1  qps=   14114 avg=0.070 p99=0.170 | mysqlds 49us (u33/s16) cs 1.01v/0.00n | load 4.74
++10:34:35 fl-proxy-def           thr=1  qps=    7638 avg=0.130 p99=0.300 | proxy 81us (u24/s57) cs 5.66v/0.00n | mysqlds 55us (u37/s18) cs 1.02v/0.00n | load 3.62
++10:34:47 fl-grpcproxy-def       thr=1  qps=    2242 avg=0.440 p99=0.810 | gproxy 312us (u141/s170) cs 14.41v/0.49n | gsrv 298us (u132/s166) cs 15.13v/0.48n | mysqlds 135us (u112/s23) cs 1.08v/0.12n | load 3.57
++10:35:02 fl-proxy-lockthread    thr=1  qps=    7266 avg=0.140 p99=0.330 | proxy 109us (u25/s84) cs 5.16v/0.00n | mysqlds 49us (u35/s14) cs 1.02v/0.00n | load 3.31
++10:35:14 fl-grpcproxy-lockthread thr=1  qps=    2012 avg=0.500 p99=0.890 | gproxy 372us (u161/s212) cs 16.37v/0.45n | gsrv 304us (u128/s176) cs 15.92v/0.46n | mysqlds 138us (u119/s19) cs 1.09v/0.10n | load 2.95
++10:35:30 fl-proxy-def           thr=1  qps=    7616 avg=0.130 p99=0.320 | proxy 80us (u23/s57) cs 5.55v/0.00n | mysqlds 56us (u37/s19) cs 1.02v/0.00n | load 2.53
++10:35:42 fl-grpcproxy-def       thr=1  qps=    2283 avg=0.440 p99=0.780 | gproxy 306us (u127/s178) cs 14.32v/0.46n | gsrv 294us (u134/s161) cs 15.06v/0.45n | mysqlds 133us (u111/s22) cs 1.08v/0.11n | load 2.33
++10:35:57 fl-proxy-lockthread    thr=1  qps=    7380 avg=0.130 p99=0.320 | proxy 108us (u25/s83) cs 4.98v/0.00n | mysqlds 48us (u35/s13) cs 1.02v/0.00n | load 2.25
++10:36:09 fl-grpcproxy-lockthread thr=1  qps=    1958 avg=0.510 p99=0.950 | gproxy 379us (u162/s218) cs 16.47v/0.45n | gsrv 311us (u129/s182) cs 15.93v/0.47n | mysqlds 141us (u117/s23) cs 1.09v/0.11n | load 2.60
++10:37:48 winprocs1              thr=1  qps=    1902 avg=0.520 p99=1.160 | vtgate 256us (u185/s71) cs 6.19v/0.01n | tablets 212us (u138/s75) cs 7.13v/0.00n | mysqlds 145us (u121/s24) cs 1.19v/0.00n | load 1.07
++10:38:01 winprocs1              thr=8  qps=    5566 avg=1.440 p99=3.430 | vtgate 134us (u100/s33) cs 1.43v/0.20n | tablets 160us (u117/s43) cs 2.92v/0.40n | mysqlds 129us (u108/s21) cs 1.06v/0.41n | load 1.99
++10:38:14 winprocs1              thr=32 qps=    7766 avg=4.120 p99=9.390 | vtgate 93us (u69/s24) cs 0.41v/0.15n | tablets 117us (u86/s31) cs 1.69v/0.40n | mysqlds 109us (u90/s19) cs 1.05v/0.41n | load 3.73
++10:39:06 p1winprocs1            thr=1  qps=    1872 avg=0.530 p99=1.040 | vtgate 264us (u193/s72) cs 6.29v/0.01n | tablets 197us (u117/s79) cs 7.48v/0.01n | mysqlds 152us (u123/s29) cs 1.19v/0.01n | load 1.98
++10:39:19 p1winprocs1            thr=8  qps=    6081 avg=1.310 p99=3.430 | vtgate 123us (u90/s33) cs 1.34v/0.20n | tablets 132us (u88/s44) cs 2.85v/0.35n | mysqlds 124us (u103/s21) cs 1.06v/0.44n | load 2.83
++10:39:32 p1winprocs1            thr=32 qps=    8698 avg=3.680 p99=8.900 | vtgate 85us (u63/s22) cs 0.30v/0.13n | tablets 91us (u64/s28) cs 1.56v/0.34n | mysqlds 102us (u83/s19) cs 1.04v/0.45n | load 4.01
++10:40:24 winprocs2              thr=1  qps=    1362 avg=0.730 p99=1.160 | vtgate 434us (u302/s132) cs 12.42v/0.02n | tablets 325us (u202/s123) cs 11.28v/0.02n | mysqlds 170us (u140/s29) cs 1.25v/0.00n | load 2.18
++10:40:37 winprocs2              thr=8  qps=    5322 avg=1.500 p99=3.820 | vtgate 176us (u128/s48) cs 1.90v/0.67n | tablets 201us (u144/s57) cs 4.36v/0.97n | mysqlds 140us (u116/s25) cs 1.06v/0.45n | load 3.92
++10:40:50 winprocs2              thr=32 qps=    8021 avg=3.990 p99=9.560 | vtgate 119us (u92/s28) cs 0.59v/0.66n | tablets 138us (u99/s39) cs 2.11v/0.83n | mysqlds 117us (u97/s20) cs 1.04v/0.33n | load 6.04
++10:41:42 p1winprocs2            thr=1  qps=    1368 avg=0.730 p99=1.160 | vtgate 416us (u285/s131) cs 11.21v/0.01n | tablets 332us (u204/s128) cs 11.32v/0.01n | mysqlds 170us (u140/s30) cs 1.26v/0.01n | load 2.93
++10:41:55 p1winprocs2            thr=8  qps=    5748 avg=1.390 p99=3.680 | vtgate 165us (u125/s40) cs 1.74v/0.67n | tablets 174us (u118/s55) cs 4.25v/0.90n | mysqlds 135us (u109/s26) cs 1.06v/0.49n | load 3.63
++10:42:08 p1winprocs2            thr=32 qps=    8569 avg=3.730 p99=9.560 | vtgate 111us (u82/s28) cs 0.49v/0.56n | tablets 114us (u78/s36) cs 2.17v/0.66n | mysqlds 111us (u90/s21) cs 1.04v/0.40n | load 4.91
++10:43:00 winprocs1              thr=1  qps=    1908 avg=0.520 p99=1.100 | vtgate 259us (u184/s75) cs 6.19v/0.01n | tablets 211us (u130/s80) cs 7.12v/0.00n | mysqlds 144us (u117/s27) cs 1.19v/0.00n | load 2.44
++10:43:13 winprocs1              thr=8  qps=    5486 avg=1.460 p99=3.680 | vtgate 131us (u98/s33) cs 1.42v/0.19n | tablets 160us (u119/s41) cs 2.89v/0.36n | mysqlds 126us (u104/s23) cs 1.07v/0.40n | load 3.22
++10:43:27 winprocs1              thr=32 qps=    7933 avg=4.030 p99=9.390 | vtgate 91us (u69/s22) cs 0.38v/0.14n | tablets 115us (u88/s27) cs 1.68v/0.41n | mysqlds 108us (u89/s19) cs 1.05v/0.40n | load 4.44
++10:44:18 p1winprocs1            thr=1  qps=    1957 avg=0.510 p99=1.040 | vtgate 256us (u182/s75) cs 6.18v/0.01n | tablets 185us (u98/s87) cs 7.40v/0.00n | mysqlds 150us (u121/s29) cs 1.18v/0.00n | load 2.20
++10:44:31 p1winprocs1            thr=8  qps=    5838 avg=1.370 p99=3.750 | vtgate 128us (u95/s33) cs 1.40v/0.20n | tablets 136us (u91/s45) cs 2.89v/0.34n | mysqlds 128us (u103/s24) cs 1.06v/0.44n | load 2.60
++10:44:45 p1winprocs1            thr=32 qps=    9072 avg=3.520 p99=8.430 | vtgate 83us (u61/s22) cs 0.24v/0.13n | tablets 91us (u62/s29) cs 1.56v/0.38n | mysqlds 102us (u84/s18) cs 1.04v/0.45n | load 3.33
++10:45:37 winprocs2              thr=1  qps=    1344 avg=0.740 p99=1.180 | vtgate 440us (u307/s133) cs 12.48v/0.02n | tablets 328us (u216/s112) cs 11.28v/0.01n | mysqlds 172us (u140/s32) cs 1.27v/0.01n | load 1.89
++10:45:50 winprocs2              thr=8  qps=    5523 avg=1.450 p99=3.620 | vtgate 170us (u129/s41) cs 1.88v/0.69n | tablets 194us (u136/s58) cs 4.30v/0.96n | mysqlds 136us (u114/s22) cs 1.06v/0.45n | load 3.20
++10:46:03 winprocs2              thr=32 qps=    7838 avg=4.080 p99=10.090 | vtgate 118us (u89/s29) cs 0.54v/0.61n | tablets 136us (u98/s38) cs 2.08v/0.75n | mysqlds 115us (u93/s22) cs 1.04v/0.33n | load 4.22
++10:46:55 p1winprocs2            thr=1  qps=    1361 avg=0.730 p99=1.230 | vtgate 417us (u290/s128) cs 11.22v/0.02n | tablets 333us (u218/s115) cs 11.34v/0.01n | mysqlds 170us (u138/s32) cs 1.26v/0.01n | load 2.17
++10:47:08 p1winprocs2            thr=8  qps=    5611 avg=1.420 p99=3.750 | vtgate 171us (u129/s42) cs 1.90v/0.69n | tablets 179us (u121/s59) cs 4.37v/0.93n | mysqlds 140us (u113/s27) cs 1.06v/0.51n | load 2.76
++10:47:21 p1winprocs2            thr=32 qps=    8485 avg=3.770 p99=9.730 | vtgate 112us (u85/s27) cs 0.50v/0.59n | tablets 115us (u77/s37) cs 2.18v/0.65n | mysqlds 112us (u89/s22) cs 1.04v/0.40n | load 3.53
+diff --git a/perf-findings/H1-raw/sys1.class b/perf-findings/H1-raw/sys1.class
+new file mode 100644
+index 0000000000..ee9f6ef95c
+--- /dev/null
++++ b/perf-findings/H1-raw/sys1.class
+@@ -0,0 +1,78 @@
++vtgate: 512 µs/q
++   k:net-write                                68.5 µs/q   13.4%
++   k:futex                                    67.2 µs/q   13.1%
++   u:go-sched                                 64.0 µs/q   12.5%
++   u:grpc                                     62.9 µs/q   12.3%
++   u:malloc                                   39.4 µs/q    7.7%
++   u:sqlparser                                37.4 µs/q    7.3%
++   u:vtgate-logic                             31.9 µs/q    6.2%
++   u:vitess-other                             26.0 µs/q    5.1%
++   k:epoll                                    17.9 µs/q    3.5%
++   k:nanosleep                                13.6 µs/q    2.7%
++   u:gc                                       10.8 µs/q    2.1%
++   k:net-read                                 10.3 µs/q    2.0%
++   u:go-net                                   10.3 µs/q    2.0%
++   k:other-syscall                             8.7 µs/q    1.7%
++   u:mysql-proto                               7.4 µs/q    1.4%
++   u:proto                                     6.9 µs/q    1.3%
++   u:other(context.)                           3.7 µs/q    0.7%
++   u:vttablet-logic                            2.3 µs/q    0.5%
++   u:other(fmt.)                               1.9 µs/q    0.4%
++   u:other(io.ReadAtLeast)                     1.8 µs/q    0.4%
++   u:other(github.com/spf13/viper.)            1.8 µs/q    0.4%
++   u:other([unknown])                          1.3 µs/q    0.3%
++   u:other(context.removeChild)                1.2 µs/q    0.2%
++   u:other(context.value)                      1.1 µs/q    0.2%
++   u:other(memeqbody)                          1.1 µs/q    0.2%
++vttablet: 449 µs/q
++   k:futex                                    78.9 µs/q   17.6%
++   u:go-sched                                 71.8 µs/q   16.0%
++   u:grpc                                     66.7 µs/q   14.9%
++   k:net-write                                55.3 µs/q   12.3%
++   u:malloc                                   28.3 µs/q    6.3%
++   u:vitess-other                             25.1 µs/q    5.6%
++   k:epoll                                    17.9 µs/q    4.0%
++   u:vttablet-logic                           16.6 µs/q    3.7%
++   k:net-read                                 12.7 µs/q    2.8%
++   u:go-net                                   11.6 µs/q    2.6%
++   k:other-syscall                            11.4 µs/q    2.5%
++   k:nanosleep                                10.0 µs/q    2.2%
++   u:gc                                        8.1 µs/q    1.8%
++   u:proto                                     5.9 µs/q    1.3%
++   u:mysql-proto                               4.6 µs/q    1.0%
++   u:other(context.)                           4.4 µs/q    1.0%
++   u:sqlparser                                 3.6 µs/q    0.8%
++   u:other(io.ReadAtLeast)                     1.6 µs/q    0.4%
++   u:other(context.removeChild)                1.4 µs/q    0.3%
++   u:other([unknown])                          1.3 µs/q    0.3%
++   u:other(time.newTimer)                      1.2 µs/q    0.3%
++   u:other(memeqbody)                          0.9 µs/q    0.2%
++   u:other(type:.hash.SS)                      0.8 µs/q    0.2%
++   u:other(context.value)                      0.7 µs/q    0.2%
++   u:other(time.Now)                           0.6 µs/q    0.1%
++mysqld: 189 µs/q
++   u:other([unknown])                         38.8 µs/q   20.5%
++   k:net-write                                 9.7 µs/q    5.1%
++   u:other(MYSQLparse)                         9.6 µs/q    5.1%
++   k:net-read                                  8.8 µs/q    4.7%
++   k:poll                                      7.1 µs/q    3.7%
++   k:futex                                     2.8 µs/q    1.5%
++   u:other(row_search_mvcc)                    2.2 µs/q    1.1%
++   k:other-syscall                             2.1 µs/q    1.1%
++   u:other(dispatch_command)                   2.1 µs/q    1.1%
++   u:other(vio_io_wait)                        1.4 µs/q    0.7%
++   u:other(Lex_hash::get_hash_symbol)          1.4 µs/q    0.7%
++   u:other(__memmove_avx512_unaligned_erms)    1.4 µs/q    0.7%
++   u:other(Query_block::add_table_to_list)     1.3 µs/q    0.7%
++   u:other(ha_innobase::info_low)              1.3 µs/q    0.7%
++   u:other(operator new)                       1.1 µs/q    0.6%
++   u:other(JOIN::optimize)                     1.1 µs/q    0.6%
++   u:other(btr_search_guess_on_hash)           1.0 µs/q    0.5%
++   u:other(Sql_cmd_dml::execute)               1.0 µs/q    0.5%
++   u:other(malloc)                             1.0 µs/q    0.5%
++   u:other(ha_innobase::external_lock)         1.0 µs/q    0.5%
++   u:other(clock_gettime@@GLIBC_2.17)          0.9 µs/q    0.5%
++   u:other(CreateIteratorFromAccessPath)       0.9 µs/q    0.5%
++   u:other(std::_Rb_tree_increment)            0.8 µs/q    0.4%
++   u:other(Item::itemize)                      0.8 µs/q    0.4%
++   u:other(__printf_buffer)                    0.7 µs/q    0.4%
+diff --git a/perf-findings/H1-raw/wp1.class b/perf-findings/H1-raw/wp1.class
+new file mode 100644
+index 0000000000..23254cdb42
+--- /dev/null
++++ b/perf-findings/H1-raw/wp1.class
+@@ -0,0 +1,78 @@
++vtgate: 238 µs/q
++   k:net-write                                38.9 µs/q   16.3%
++   u:grpc                                     25.9 µs/q   10.9%
++   u:sqlparser                                24.9 µs/q   10.5%
++   u:vtgate-logic                             22.2 µs/q    9.3%
++   u:malloc                                   18.1 µs/q    7.6%
++   k:futex                                    15.8 µs/q    6.6%
++   u:vitess-other                             15.4 µs/q    6.5%
++   u:go-sched                                 15.3 µs/q    6.4%
++   u:gc                                        8.9 µs/q    3.8%
++   k:epoll                                     7.2 µs/q    3.0%
++   u:mysql-proto                               6.0 µs/q    2.5%
++   u:proto                                     5.5 µs/q    2.3%
++   k:net-read                                  5.3 µs/q    2.2%
++   k:nanosleep                                 4.3 µs/q    1.8%
++   u:go-net                                    4.2 µs/q    1.8%
++   k:other-syscall                             2.7 µs/q    1.1%
++   u:other(context.)                           2.3 µs/q    1.0%
++   u:vttablet-logic                            1.7 µs/q    0.7%
++   u:other(github.com/spf13/viper.)            1.2 µs/q    0.5%
++   u:other(context.value)                      0.9 µs/q    0.4%
++   u:other(type:.hash.SS)                      0.8 µs/q    0.3%
++   u:other(fmt.)                               0.7 µs/q    0.3%
++   u:other(github.com/spf13/cast.ToStringE)    0.6 µs/q    0.2%
++   u:other([unknown])                          0.6 µs/q    0.2%
++   u:other(crypto/des.feistel)                 0.5 µs/q    0.2%
++vttablet: 195 µs/q
++   k:net-write                                29.8 µs/q   15.3%
++   u:runtime-other                            24.1 µs/q   12.3%
++   u:grpc                                     22.0 µs/q   11.3%
++   u:go-sched                                 17.3 µs/q    8.9%
++   k:futex                                    16.2 µs/q    8.3%
++   u:malloc                                   13.9 µs/q    7.1%
++   u:vitess-other                             13.1 µs/q    6.7%
++   u:vttablet-logic                            8.9 µs/q    4.5%
++   k:epoll                                     6.8 µs/q    3.5%
++   k:net-read                                  6.3 µs/q    3.2%
++   u:gc                                        5.6 µs/q    2.9%
++   u:proto                                     4.4 µs/q    2.3%
++   u:go-net                                    4.2 µs/q    2.1%
++   k:nanosleep                                 4.0 µs/q    2.1%
++   u:other(context.)                           3.0 µs/q    1.5%
++   u:mysql-proto                               3.0 µs/q    1.5%
++   k:other-syscall                             2.7 µs/q    1.4%
++   u:sqlparser                                 1.6 µs/q    0.8%
++   u:other([unknown])                          0.9 µs/q    0.5%
++   u:other(context.removeChild)                0.9 µs/q    0.4%
++   u:other(time.newTimer)                      0.8 µs/q    0.4%
++   u:other(memeqbody)                          0.6 µs/q    0.3%
++   u:other(context.value)                      0.6 µs/q    0.3%
++   u:other(io.ReadAtLeast)                     0.3 µs/q    0.2%
++   u:other(type:.hash.SS)                      0.3 µs/q    0.2%
++mysqld: 147 µs/q
++   u:other([unknown])                         31.3 µs/q   21.2%
++   k:net-write                                 9.5 µs/q    6.4%
++   k:net-read                                  7.8 µs/q    5.3%
++   u:other(MYSQLparse)                         6.6 µs/q    4.5%
++   k:poll                                      4.7 µs/q    3.2%
++   u:other(dispatch_command)                   1.9 µs/q    1.3%
++   k:other-syscall                             1.3 µs/q    0.9%
++   u:other(row_search_mvcc)                    1.2 µs/q    0.8%
++   u:other(Lex_hash::get_hash_symbol)          1.2 µs/q    0.8%
++   u:other(vio_io_wait)                        1.0 µs/q    0.7%
++   u:other(malloc)                             1.0 µs/q    0.7%
++   u:other(btr_cur_search_to_nth_level)        1.0 µs/q    0.7%
++   u:other(btr_search_guess_on_hash)           0.9 µs/q    0.6%
++   u:other(__printf_buffer)                    0.9 µs/q    0.6%
++   u:other(launch_hook_trans_begin)            0.9 µs/q    0.6%
++   u:other(ha_innobase::external_lock)         0.9 µs/q    0.6%
++   u:other(ha_innobase::info_low)              0.8 µs/q    0.6%
++   u:other(open_tables)                        0.8 µs/q    0.6%
++   k:futex                                     0.8 µs/q    0.6%
++   u:other(fold_condition)                     0.8 µs/q    0.5%
++   u:other(clock_gettime@@GLIBC_2.17)          0.8 µs/q    0.5%
++   u:other(Query_block::add_table_to_list)     0.8 µs/q    0.5%
++   u:other(__libc_recv)                        0.8 µs/q    0.5%
++   u:other(CreateIteratorFromAccessPath)       0.8 µs/q    0.5%
++   u:other(Trans_delegate::trans_begin)        0.7 µs/q    0.5%
+diff --git a/perf-findings/harness/H1-c/pingpong.c b/perf-findings/harness/H1-c/pingpong.c
+new file mode 100644
+index 0000000000..ec3a27acba
+--- /dev/null
++++ b/perf-findings/harness/H1-c/pingpong.c
+@@ -0,0 +1,95 @@
++// pingpong: cost of a cross-thread wake-up on this machine.
++// Two processes ping-pong one byte over a pair of pipes (or a socketpair / loopback TCP), N round trips.
++// usage: pingpong pipe|unix|tcp N CPU_A CPU_B [think_us]
++//   CPU_A/CPU_B: -1 = no pinning. think_us: busy-free sleep (nanosleep) before each ping, to model an idle gap.
++// Prints wall time per round trip and CPU (user+sys of both processes) per round trip.
++#define _GNU_SOURCE
++#include <arpa/inet.h>
++#include <netinet/in.h>
++#include <netinet/tcp.h>
++#include <sched.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/resource.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <sys/wait.h>
++#include <time.h>
++#include <unistd.h>
++
++static void pin(int cpu) {
++  if (cpu < 0) return;
++  cpu_set_t s;
++  CPU_ZERO(&s);
++  CPU_SET(cpu, &s);
++  sched_setaffinity(0, sizeof(s), &s);
++}
++
++static double now(void) {
++  struct timespec t;
++  clock_gettime(CLOCK_MONOTONIC, &t);
++  return t.tv_sec + t.tv_nsec / 1e9;
++}
++
++int main(int argc, char **argv) {
++  const char *mode = argv[1];
++  long n = atol(argv[2]);
++  int ca = atoi(argv[3]), cb = atoi(argv[4]);
++  long think = argc > 5 ? atol(argv[5]) : 0;
++  int a_rd, a_wr, b_rd, b_wr;
++  if (!strcmp(mode, "pipe")) {
++    int p1[2], p2[2];
++    pipe(p1);
++    pipe(p2);
++    a_wr = p1[1]; b_rd = p1[0]; b_wr = p2[1]; a_rd = p2[0];
++  } else if (!strcmp(mode, "unix")) {
++    int sv[2];
++    socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
++    a_rd = a_wr = sv[0]; b_rd = b_wr = sv[1];
++  } else {
++    int l = socket(AF_INET, SOCK_STREAM, 0), one = 1;
++    struct sockaddr_in addr = {.sin_family = AF_INET, .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
++    setsockopt(l, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
++    bind(l, (struct sockaddr *)&addr, sizeof(addr));
++    socklen_t len = sizeof(addr);
++    getsockname(l, (struct sockaddr *)&addr, &len);
++    listen(l, 1);
++    int c = socket(AF_INET, SOCK_STREAM, 0);
++    connect(c, (struct sockaddr *)&addr, sizeof(addr));
++    int s = accept(l, NULL, NULL);
++    setsockopt(c, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
++    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
++    a_rd = a_wr = c; b_rd = b_wr = s;
++  }
++  char buf[256];
++  pid_t pid = fork();
++  if (pid == 0) {
++    pin(cb);
++    for (long i = 0; i < n; i++) {
++      if (read(b_rd, buf, 1) != 1) exit(1);
++      if (write(b_wr, buf, 1) != 1) exit(1);
++    }
++    exit(0);
++  }
++  pin(ca);
++  struct timespec ts = {0, think * 1000};
++  double wait = 0, t0 = now();
++  for (long i = 0; i < n; i++) {
++    if (think) nanosleep(&ts, NULL);
++    double t1 = now();
++    write(a_wr, buf, 1);
++    read(a_rd, buf, 1);
++    wait += now() - t1;
++  }
++  double el = now() - t0;
++  waitpid(pid, NULL, 0);
++  struct rusage self, child;
++  getrusage(RUSAGE_SELF, &self);
++  getrusage(RUSAGE_CHILDREN, &child);
++  double cpu = self.ru_utime.tv_sec + self.ru_stime.tv_sec + child.ru_utime.tv_sec + child.ru_stime.tv_sec +
++               (self.ru_utime.tv_usec + self.ru_stime.tv_usec + child.ru_utime.tv_usec + child.ru_stime.tv_usec) / 1e6;
++  printf("%s cpus=%d,%d think=%ldus: rtt=%.1fus cpu=%.1fus/rt (elapsed %.2fs)\n", mode, ca, cb, think, wait / n * 1e6,
++         cpu / n * 1e6, el);
++  return 0;
++}
+diff --git a/perf-findings/harness/H1-c/spinner.c b/perf-findings/harness/H1-c/spinner.c
+new file mode 100644
+index 0000000000..ffff73cf00
+--- /dev/null
++++ b/perf-findings/harness/H1-c/spinner.c
+@@ -0,0 +1,33 @@
++// spinner: keep every vCPU out of HLT with SCHED_IDLE busy loops (they only get CPU nobody else wants).
++// Experiment only: isolates the cost of waking a halted vCPU from the cost of the wake-up itself.
++// usage: spinner SECONDS
++#define _GNU_SOURCE
++#include <pthread.h>
++#include <sched.h>
++#include <stdlib.h>
++#include <time.h>
++#include <unistd.h>
++
++static volatile int stop;
++
++static void *spin(void *arg) {
++  long cpu = (long)arg;
++  cpu_set_t s;
++  CPU_ZERO(&s);
++  CPU_SET(cpu, &s);
++  sched_setaffinity(0, sizeof(s), &s);
++  struct sched_param p = {0};
++  sched_setscheduler(0, SCHED_IDLE, &p);
++  while (!stop) __builtin_ia32_pause();
++  return NULL;
++}
++
++int main(int argc, char **argv) {
++  int n = sysconf(_SC_NPROCESSORS_ONLN);
++  pthread_t t[256];
++  for (long i = 0; i < n; i++) pthread_create(&t[i], NULL, spin, (void *)i);
++  sleep(atoi(argv[1]));
++  stop = 1;
++  for (int i = 0; i < n; i++) pthread_join(t[i], NULL);
++  return 0;
++}
+diff --git a/perf-findings/harness/H1-floor/main.go b/perf-findings/harness/H1-floor/main.go
+new file mode 100644
+index 0000000000..a7920cdaad
+--- /dev/null
++++ b/perf-findings/harness/H1-floor/main.go
+@@ -0,0 +1,400 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++// Command h1floor builds the "floor" for the per-hop cost of a Vitess point select on a given machine:
++// minimal programs that do only the network hops, with the same libraries Vitess uses.
++//
++//	-mode proxy      MySQL protocol server (go/mysql) that forwards each COM_QUERY text to mysqld over one
++//	                 go/mysql client connection per client connection. No parsing, planning or gRPC.
++//	-mode grpcsrv    gRPC server implementing queryservice.Execute (the vtgate->vttablet RPC) on a pool of go/mysql
++//	                 client connections to mysqld (a vttablet without any query logic).
++//	-mode grpcproxy  MySQL protocol server that sends each COM_QUERY through one unary queryservice.Execute call to
++//	                 grpcsrv (a vtgate without any query logic).
++//	-mode tcpsrv     TCP echo server: reads a request, writes a -resp byte response.
++//	-mode tcpclient  closed-loop TCP ping-pong client with -conns connections, prints round trips/s and latency.
++//
++// Tuning knobs mirror the ones tested in the report: -unix (unix sockets for gRPC), -window (static HTTP/2 windows,
++// which disables BDP pings), -lockthread (serve each MySQL connection on a locked OS thread).
++package main
++
++import (
++	"context"
++	"flag"
++	"fmt"
++	"io"
++	"log"
++	"net"
++	"os"
++	"os/signal"
++	"runtime"
++	"sync"
++	"sync/atomic"
++	"syscall"
++	"time"
++
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/credentials/insecure"
++
++	"vitess.io/vitess/go/mysql"
++	"vitess.io/vitess/go/mysql/replication"
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
++	_ "vitess.io/vitess/go/vt/servenv" // registers the vtprotobuf gRPC codec, as in vtgate/vttablet
++	"vitess.io/vitess/go/vt/vtenv"
++)
++
++var (
++	mode       = flag.String("mode", "", "proxy|grpcsrv|grpcproxy|tcpsrv|tcpclient")
++	listen     = flag.String("listen", "127.0.0.1:30510", "listen address (host:port, or a path for -unix)")
++	backend    = flag.String("backend", "127.0.0.1:30511", "grpc backend address (grpcproxy) or tcp server (tcpclient)")
++	socket     = flag.String("socket", "", "mysqld unix socket")
++	user       = flag.String("user", "vt_dba", "mysqld user")
++	dbname     = flag.String("db", "vt_sbtest", "mysqld database")
++	unix       = flag.Bool("unix", false, "use a unix socket for gRPC (listen/backend are paths)")
++	window     = flag.Int("window", 0, "if > 0, static HTTP/2 stream and connection windows (disables BDP estimation)")
++	conns      = flag.Int("conns", 1, "tcpclient: concurrent connections")
++	dur        = flag.Duration("dur", 10*time.Second, "tcpclient: duration")
++	reqSize    = flag.Int("req", 52, "tcpclient: request bytes")
++	respSize   = flag.Int("resp", 191, "tcpsrv: response bytes")
++	fake       = flag.Bool("fake", false, "grpcsrv: return a canned point-select result without querying mysqld")
++	lockThread = flag.Bool("lockthread", false, "proxy/grpcproxy: LockOSThread in each connection handler")
++)
++
++func main() {
++	flag.Parse()
++	switch *mode {
++	case "proxy":
++		serveMySQL(&proxyHandler{})
++	case "grpcproxy":
++		serveMySQL(newGRPCProxyHandler())
++	case "grpcsrv":
++		serveGRPC()
++	case "tcpsrv":
++		tcpServer()
++	case "tcpclient":
++		tcpClient()
++	default:
++		log.Fatalf("unknown -mode %q", *mode)
++	}
++}
++
++func connParams() *mysql.ConnParams {
++	return &mysql.ConnParams{UnixSocket: *socket, Uname: *user, DbName: *dbname}
++}
++
++// baseHandler implements the parts of mysql.Handler that the floor programs don't use.
++type baseHandler struct{ env *vtenv.Environment }
++
++func (h *baseHandler) NewConnection(c *mysql.Conn)    {}
++func (h *baseHandler) ConnectionReady(c *mysql.Conn)  {}
++func (h *baseHandler) ConnectionClosed(c *mysql.Conn) {}
++func (h *baseHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
++	return fmt.Errorf("not supported")
++}
++
++func (h *baseHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
++	return nil, 0, fmt.Errorf("not supported")
++}
++
++func (h *baseHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
++	return fmt.Errorf("not supported")
++}
++
++func (h *baseHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
++	return fmt.Errorf("not supported")
++}
++
++func (h *baseHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
++	return fmt.Errorf("not supported")
++}
++
++func (h *baseHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
++	return fmt.Errorf("not supported")
++}
++func (h *baseHandler) WarningCount(c *mysql.Conn) uint16 { return 0 }
++func (h *baseHandler) ComResetConnection(c *mysql.Conn)  {}
++func (h *baseHandler) Env() *vtenv.Environment           { return h.env }
++func (h *baseHandler) setEnv(env *vtenv.Environment)     { h.env = env }
++func (h *baseHandler) lockOSThreadOnce(c *mysql.Conn) {
++	if *lockThread && c.ClientData == nil {
++		runtime.LockOSThread()
++		c.ClientData = true
++	}
++}
++
++// proxyHandler forwards each query to mysqld on a per-client-connection go/mysql client connection.
++type proxyHandler struct {
++	baseHandler
++	mu    sync.Mutex
++	conns map[uint32]*mysql.Conn
++}
++
++func (h *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
++	h.lockOSThreadOnce(c)
++	h.mu.Lock()
++	if h.conns == nil {
++		h.conns = map[uint32]*mysql.Conn{}
++	}
++	bc := h.conns[c.ConnectionID]
++	h.mu.Unlock()
++	if bc == nil {
++		var err error
++		bc, err = mysql.Connect(context.Background(), connParams())
++		if err != nil {
++			return err
++		}
++		h.mu.Lock()
++		h.conns[c.ConnectionID] = bc
++		h.mu.Unlock()
++	}
++	qr, err := bc.ExecuteFetch(query, 10001, true)
++	if err != nil {
++		return err
++	}
++	return callback(qr)
++}
++
++func (h *proxyHandler) ConnectionClosed(c *mysql.Conn) {
++	h.mu.Lock()
++	defer h.mu.Unlock()
++	if bc := h.conns[c.ConnectionID]; bc != nil {
++		bc.Close()
++		delete(h.conns, c.ConnectionID)
++	}
++}
++
++type grpcProxyHandler struct {
++	baseHandler
++	client queryservicepb.QueryClient
++}
++
++func dialOptions() []grpc.DialOption {
++	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
++	if *window > 0 {
++		opts = append(opts, grpc.WithInitialWindowSize(int32(*window)), grpc.WithInitialConnWindowSize(int32(*window)))
++	}
++	if *unix {
++		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
++			var d net.Dialer
++			return d.DialContext(ctx, "unix", addr)
++		}))
++	}
++	return opts
++}
++
++func newGRPCProxyHandler() *grpcProxyHandler {
++	target := *backend
++	if *unix {
++		target = "passthrough:///" + target
++	}
++	cc, err := grpc.NewClient(target, dialOptions()...)
++	if err != nil {
++		log.Fatal(err)
++	}
++	return &grpcProxyHandler{client: queryservicepb.NewQueryClient(cc)}
++}
++
++func (h *grpcProxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
++	h.lockOSThreadOnce(c)
++	resp, err := h.client.Execute(context.Background(), &querypb.ExecuteRequest{Query: &querypb.BoundQuery{Sql: query}})
++	if err != nil {
++		return err
++	}
++	return callback(sqltypes.Proto3ToResult(resp.Result))
++}
++
++type envSetter interface {
++	mysql.Handler
++	setEnv(*vtenv.Environment)
++}
++
++func serveMySQL(h envSetter) {
++	env, err := vtenv.New(vtenv.Options{MySQLServerVersion: "8.0.40-Vitess"})
++	if err != nil {
++		log.Fatal(err)
++	}
++	h.setEnv(env)
++	// Same listener settings as vtgate's defaults (flush delay 100ms, no multi-query).
++	l, err := mysql.NewListener("tcp", *listen, mysql.NewAuthServerNone(), h, 0, 0, false, false, 0, 100*time.Millisecond, false)
++	if err != nil {
++		log.Fatal(err)
++	}
++	go l.Accept()
++	waitSignal()
++}
++
++// queryServer is a vttablet without query logic: a LIFO pool of mysqld connections (like smartconnpool, which
++// reuses the most recently returned connection).
++type queryServer struct {
++	queryservicepb.UnimplementedQueryServer
++	mu   sync.Mutex
++	pool []*mysql.Conn
++	fake *querypb.QueryResult
++}
++
++func (s *queryServer) get() *mysql.Conn {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	if n := len(s.pool); n > 0 {
++		c := s.pool[n-1]
++		s.pool = s.pool[:n-1]
++		return c
++	}
++	return nil
++}
++
++func (s *queryServer) put(c *mysql.Conn) {
++	s.mu.Lock()
++	s.pool = append(s.pool, c)
++	s.mu.Unlock()
++}
++
++func (s *queryServer) Execute(ctx context.Context, req *querypb.ExecuteRequest) (*querypb.ExecuteResponse, error) {
++	if s.fake != nil {
++		return &querypb.ExecuteResponse{Result: s.fake}, nil
++	}
++	c := s.get()
++	if c == nil {
++		var err error
++		if c, err = mysql.Connect(ctx, connParams()); err != nil {
++			return nil, err
++		}
++	}
++	defer s.put(c)
++	qr, err := c.ExecuteFetch(req.Query.Sql, 10001, true)
++	if err != nil {
++		return nil, err
++	}
++	return &querypb.ExecuteResponse{Result: sqltypes.ResultToProto3(qr)}, nil
++}
++
++func serveGRPC() {
++	s := &queryServer{}
++	if *fake {
++		// canned result of a sysbench point select (one CHAR(120) column, one row)
++		c, err := mysql.Connect(context.Background(), connParams())
++		if err != nil {
++			log.Fatal(err)
++		}
++		qr, err := c.ExecuteFetch("select c from sbtest1 where id=1", 1, true)
++		if err != nil {
++			log.Fatal(err)
++		}
++		s.fake = sqltypes.ResultToProto3(qr)
++		c.Close()
++	}
++	var opts []grpc.ServerOption
++	if *window > 0 {
++		opts = append(opts, grpc.InitialWindowSize(int32(*window)), grpc.InitialConnWindowSize(int32(*window)))
++	}
++	// vttablet uses a stream worker pool; mirror it.
++	opts = append(opts, grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))))
++	gs := grpc.NewServer(opts...)
++	queryservicepb.RegisterQueryServer(gs, s)
++	network := "tcp"
++	if *unix {
++		network = "unix"
++		os.Remove(*listen)
++	}
++	l, err := net.Listen(network, *listen)
++	if err != nil {
++		log.Fatal(err)
++	}
++	go gs.Serve(l)
++	waitSignal()
++}
++
++func tcpServer() {
++	l, err := net.Listen("tcp", *listen)
++	if err != nil {
++		log.Fatal(err)
++	}
++	go func() {
++		for {
++			c, err := l.Accept()
++			if err != nil {
++				return
++			}
++			go func() {
++				buf := make([]byte, 4096)
++				resp := make([]byte, *respSize)
++				for {
++					if _, err := c.Read(buf); err != nil {
++						c.Close()
++						return
++					}
++					if _, err := c.Write(resp); err != nil {
++						c.Close()
++						return
++					}
++				}
++			}()
++		}
++	}()
++	waitSignal()
++}
++
++func tcpClient() {
++	var n atomic.Int64
++	var totalNs atomic.Int64
++	deadline := time.Now().Add(*dur)
++	var wg sync.WaitGroup
++	for range *conns {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			c, err := net.Dial("tcp", *backend)
++			if err != nil {
++				log.Fatal(err)
++			}
++			defer c.Close()
++			req := make([]byte, *reqSize)
++			buf := make([]byte, 4096)
++			for time.Now().Before(deadline) {
++				t0 := time.Now()
++				if _, err := c.Write(req); err != nil {
++					log.Fatal(err)
++				}
++				got := 0
++				for got < *respSize {
++					k, err := c.Read(buf)
++					if err != nil {
++						if err == io.EOF {
++							return
++						}
++						log.Fatal(err)
++					}
++					got += k
++				}
++				totalNs.Add(int64(time.Since(t0)))
++				n.Add(1)
++			}
++		}()
++	}
++	wg.Wait()
++	var ru syscall.Rusage
++	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
++	cpu := time.Duration(ru.Utime.Nano() + ru.Stime.Nano())
++	fmt.Printf("roundtrips=%d rps=%.0f avg=%.1fus client_cpu=%.1fus/rt\n", n.Load(), float64(n.Load())/dur.Seconds(),
++		float64(totalNs.Load())/float64(n.Load())/1e3, float64(cpu.Microseconds())/float64(n.Load()))
++}
++
++func waitSignal() {
++	ch := make(chan os.Signal, 1)
++	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
++	<-ch
++}
+diff --git a/perf-findings/harness/H1-go-runtime-experiment.diff b/perf-findings/harness/H1-go-runtime-experiment.diff
+new file mode 100644
+index 0000000000..96928e600b
+--- /dev/null
++++ b/perf-findings/harness/H1-go-runtime-experiment.diff
+@@ -0,0 +1,43 @@
++--- /root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.linux-amd64/src/runtime/runtime1.go	2026-09-25 17:05:30.183959154 +0000
+++++ runtime1.go	2026-09-26 08:59:45.234754496 +0000
++@@ -322,6 +322,8 @@
++ 	tracebackancestors       int32
++ 	updatemaxprocs           int32
++ 	asyncpreemptoff          int32
+++	nowakepnext              int32 // H1 experiment: ready(next=true) does not wake an idle P
+++	sysmonmin                int32 // H1 experiment: minimum sysmon sleep in µs (default 20)
++ 	harddecommit             int32
++ 	adaptivestackstart       int32
++ 	tracefpunwindoff         int32
++@@ -356,6 +358,8 @@
++ 
++ var dbgvars = []*dbgVar{
++ 	{name: "adaptivestackstart", value: &debug.adaptivestackstart},
+++	{name: "nowakepnext", value: &debug.nowakepnext},
+++	{name: "sysmonmin", value: &debug.sysmonmin},
++ 	{name: "asyncpreemptoff", value: &debug.asyncpreemptoff},
++ 	{name: "cgocheck", value: &debug.cgocheck},
++ 	{name: "clobberfree", value: &debug.clobberfree},
++--- /root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.linux-amd64/src/runtime/proc.go	2026-09-25 17:05:30.079887663 +0000
+++++ proc.go	2026-09-26 08:59:45.236284314 +0000
++@@ -1148,7 +1148,9 @@
++ 		traceRelease(trace)
++ 	}
++ 	runqput(mp.p.ptr(), gp, next)
++-	wakep()
+++	if !next || debug.nowakepnext == 0 {
+++		wakep()
+++	}
++ 	releasem(mp)
++ }
++ 
++@@ -6548,6 +6550,9 @@
++ 	for {
++ 		if idle == 0 { // start with 20us sleep...
++ 			delay = 20
+++			if debug.sysmonmin > 20 {
+++				delay = uint32(debug.sysmonmin)
+++			}
++ 		} else if idle > 50 { // start doubling the sleep after 1ms...
++ 			delay *= 2
++ 		}
+diff --git a/perf-findings/harness/H1-scripts/ab.sh b/perf-findings/harness/H1-scripts/ab.sh
+new file mode 100644
+index 0000000000..50e80c2e31
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/ab.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# A/B driver. usage: ab.sh ROUNDS "THREADS:SECONDS ..." cfg1 cfg2 ...
++# cfg files (cfg/NAME.cfg) set BIN, GATE_ENV, TABLET_ENV, VTGATE_EXTRA_FLAGS, VTTABLET_EXTRA_FLAGS.
++# The cluster restart happens OUTSIDE the bench lock; each measurement runs under `flock -o`.
++cd /home/vt/perf/H1
++R=$1; RUNS=$2; shift 2
++for r in $(seq 1 "$R"); do
++  for cfg in "$@"; do
++    (
++      unset BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      source "cfg/$cfg.cfg"
++      export BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      ./c restart >/dev/null 2>&1
++    )
++    sleep 3
++    for run in $RUNS; do
++      flock -o /home/vt/perf/bench.lock python3 bench.py "$cfg" "${run%%:*}" "${run##*:}" warm=3 ${PERFARG:-}
++    done
++  done
++done
+diff --git a/perf-findings/harness/H1-scripts/agg.py b/perf-findings/harness/H1-scripts/agg.py
+new file mode 100644
+index 0000000000..cf63a8b379
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/agg.py
+@@ -0,0 +1,48 @@
++#!/usr/bin/env python3
++"""Aggregate bench.py result lines: mean per (label, threads), % vs the first label per thread count.
++usage: agg.py FILE [label ...]  (labels in the given order; default: order of appearance)"""
++import collections, re, sys
++
++rows = collections.defaultdict(list)
++order = []
++for line in open(sys.argv[1]):
++    m = re.search(r"(\S+)\s+thr=(\d+)\s+qps=\s*(\d+) avg=([\d.]+) p99=([\d.]+)", line)
++    if not m:
++        continue
++    lab, thr = m.group(1), int(m.group(2))
++    d = dict(qps=float(m.group(3)), avg=float(m.group(4)), p99=float(m.group(5)))
++    for g in ("vtgate", "tablets", "mysqlds", "vtcombo", "proxy", "gproxy", "gsrv"):
++        mm = re.search(r"\| " + g + r" (\d+)us", line)
++        if mm:
++            d[g] = float(mm.group(1))
++    mm = re.search(r"IPI resched ([\d.]+) callfn ([\d.]+)", line)
++    if mm:
++        d["ipi"] = float(mm.group(1)) + float(mm.group(2))
++    d["load"] = float(re.search(r"load ([\d.]+)", line).group(1))
++    if (lab, thr) not in rows:
++        order.append((lab, thr))
++    rows[(lab, thr)].append(d)
++labels = sys.argv[2:] or list(dict.fromkeys(l for l, _ in order))
++cols = ["vtgate", "tablets", "mysqlds"]
++print("| config | thr | n | QPS | avg ms | p99 ms | vtgate µs/q | tablets µs/q | mysqld µs/q | IPIs/q | load |")
++print("|---|---|---|---|---|---|---|---|---|---|---|")
++for thr in sorted({t for _, t in order}):
++    base = None
++    for lab in labels:
++        rs = rows.get((lab, thr))
++        if not rs:
++            continue
++        mean = lambda k: sum(r.get(k, 0) for r in rs) / len(rs)
++        cell = {}
++        for k in ["qps", "avg", "p99"] + cols:
++            cell[k] = mean(k)
++        if base is None:
++            base = cell
++        def pct(k):
++            return "" if base is cell or not base[k] else f" ({100 * (cell[k] / base[k] - 1):+.0f}%)"
++        def rng(k):
++            vs = [r.get(k, 0) for r in rs]
++            return f" [{min(vs):.0f}–{max(vs):.0f}]" if len(vs) > 1 else ""
++        ipi = f"{mean('ipi'):.1f}" if all("ipi" in r for r in rs) else "–"
++        print(f"| {lab} | {thr} | {len(rs)} | {cell['qps']:.0f}{pct('qps')} | {cell['avg']:.2f}{pct('avg')} | {cell['p99']:.2f}{pct('p99')} | "
++              + " | ".join(f"{cell[k]:.0f}{pct(k)}{rng(k)}" for k in cols) + f" | {ipi} | {mean('load'):.1f} |")
+diff --git a/perf-findings/harness/H1-scripts/aggtrace.py b/perf-findings/harness/H1-scripts/aggtrace.py
+new file mode 100644
+index 0000000000..189696461e
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/aggtrace.py
+@@ -0,0 +1,25 @@
++#!/usr/bin/env python3
++# aggregate `perf trace -s` output: per-syscall calls (and per thread role) divided by a query count
++import re, sys
++fn, q = sys.argv[1], int(sys.argv[2])
++tot = {}
++threads = []
++cur = None
++for line in open(fn):
++    m = re.match(r"\s*(\S+) \((\d+)\), (\d+) events", line)
++    if m:
++        cur = {"tid": m.group(2), "calls": {}}
++        threads.append(cur)
++        continue
++    m = re.match(r"\s+(\w+)\s+(\d+)\s+(\d+)\s+([\d.]+)", line)
++    if m and cur is not None:
++        name, calls, errs, ms = m.group(1), int(m.group(2)), int(m.group(3)), float(m.group(4))
++        cur["calls"][name] = calls
++        t = tot.setdefault(name, [0, 0, 0.0])
++        t[0] += calls; t[1] += errs; t[2] += ms
++print(f"{fn}: per query (q={q})")
++for k, v in sorted(tot.items(), key=lambda kv: -kv[1][0]):
++    print(f"  {k:<16} {v[0] / q:6.2f}/q  (errors {v[1] / q:.2f}/q)")
++print(f"  TOTAL            {sum(v[0] for v in tot.values()) / q:6.2f}/q")
++for t in threads:
++    print("  tid", t["tid"], " ".join(f"{k}={v / q:.2f}" for k, v in sorted(t["calls"].items(), key=lambda kv: -kv[1])))
+diff --git a/perf-findings/harness/H1-scripts/bench.py b/perf-findings/harness/H1-scripts/bench.py
+new file mode 100644
+index 0000000000..e33eb7c8c0
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/bench.py
+@@ -0,0 +1,153 @@
++#!/usr/bin/env python3
++"""One sysbench oltp_point_select run with per-process accounting.
++
++usage: bench.py LABEL THREADS SECONDS [key=value ...]
++  target=gate|direct|hostport   (gate: vtgate mysql 30003; direct: mysqld 30400 TCP; hostport: host=,port=)
++  mode=text|ps                  (sysbench --db-ps-mode disable|auto)
++  perf=1                        count syscalls / sched_switch / sched_wakeup per process group + IPIs system-wide
++  warm=2                        warm-up seconds (not measured)
++  extra=name:pid,name:pid       additional processes to account (e.g. floor programs)
++  nocluster=1                   do not account the cluster processes
++Prints one result line (also appended to results.txt).
++"""
++import os, re, signal, subprocess, sys, time
++
++H = "/home/vt/perf/H1"
++PERF = "/usr/lib/linux-tools/6.8.0-142-generic/perf"
++TCK = os.sysconf("SC_CLK_TCK")
++
++
++def cluster_pids():
++    out = subprocess.run([H + "/c", "pids"], capture_output=True, text=True).stdout
++    res = []
++    for line in out.split():
++        pass
++    toks = out.split()
++    for i in range(0, len(toks), 2):
++        res.append((toks[i], int(toks[i + 1])))
++    return res
++
++
++def resolve(p):
++    """pid literal, @<cluster pid name> (e.g. @mysqld_100), or %<floor mode> (e.g. %proxy)"""
++    if p.startswith("@"):
++        return dict(cluster_pids())[p[1:]]
++    if p.startswith("%"):
++        out = subprocess.run(["bash", H + "/floor.sh", "pids"], capture_output=True, text=True).stdout
++        return int(dict(l.split() for l in out.splitlines() if len(l.split()) == 2)[p[1:]])
++    return int(p)
++
++
++def group(name):
++    if name.startswith("vttablet"):
++        return "tablets"
++    if name.startswith("mysqld"):
++        return "mysqlds"
++    return name
++
++
++def snap(pid):
++    with open(f"/proc/{pid}/stat") as f:
++        s = f.read()
++    fields = s[s.rindex(")") + 2:].split()
++    ut, st = int(fields[11]), int(fields[12])
++    vcs = ncs = 0
++    for t in os.listdir(f"/proc/{pid}/task"):
++        try:
++            with open(f"/proc/{pid}/task/{t}/status") as f:
++                for line in f:
++                    if line.startswith("voluntary_ctxt_switches"):
++                        vcs += int(line.split()[1])
++                    elif line.startswith("nonvoluntary_ctxt_switches"):
++                        ncs += int(line.split()[1])
++        except FileNotFoundError:
++            pass
++    return dict(ut=ut, st=st, vcs=vcs, ncs=ncs)
++
++
++def main():
++    label, threads, secs = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
++    kv = dict(a.split("=", 1) for a in sys.argv[4:])
++    target = kv.get("target", "gate")
++    mode = kv.get("mode", "text")
++    warm = int(kv.get("warm", "2"))
++    if target == "gate":
++        host, port, user, db = "127.0.0.1", "30003", "root", "sbtest"
++    elif target == "direct":
++        host, port, user, db = "127.0.0.1", "30400", "sb", "vt_sbtest"
++    else:
++        host, port, user, db = kv.get("host", "127.0.0.1"), kv["port"], kv.get("user", "root"), kv.get("db", "sbtest")
++    procs = [] if kv.get("nocluster") else cluster_pids()
++    if kv.get("extra"):
++        for e in kv["extra"].split(","):
++            n, p = e.split(":")
++            procs.append((n, resolve(p)))
++    sb = ["sysbench", kv.get("script", "oltp_point_select"), "--db-driver=mysql", f"--mysql-host={host}", f"--mysql-port={port}",
++          f"--mysql-user={user}", f"--mysql-db={db}", "--tables=4", "--table-size=100000", "--auto_inc=off",
++          f"--threads={threads}", "--db-ps-mode=" + ("disable" if mode == "text" else "auto"), "--percentile=99",
++          "--rand-type=uniform"] + ([f"--rate={kv['rate']}"] if kv.get("rate") else [])
++    if warm:
++        subprocess.run(sb + [f"--time={warm}", "run"], capture_output=True)
++    groups = {}
++    for n, p in procs:
++        groups.setdefault(group(n), []).append(p)
++    perfs = []
++    if kv.get("perf"):
++        ev = "raw_syscalls:sys_enter,sched:sched_switch,sched:sched_wakeup,sched:sched_waking"
++        for g, pl in groups.items():
++            fn = f"{H}/tmp/perf_{g}.csv"
++            perfs.append((g, fn, subprocess.Popen([PERF, "stat", "-x,", "-e", ev, "-p", ",".join(map(str, pl)), "-o", fn],
++                                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)))
++        fn = f"{H}/tmp/perf_sys.csv"
++        perfs.append(("sys", fn, subprocess.Popen([PERF, "stat", "-a", "-x,", "-e",
++                                                   "irq_vectors:reschedule_entry,irq_vectors:call_function_single_entry,ipi:ipi_send_cpu,cpu-clock",
++                                                   "-o", fn], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)))
++        time.sleep(0.3)
++    before = {p: snap(p) for _, p in procs}
++    t0 = time.time()
++    r = subprocess.run(sb + [f"--time={secs}", "run"], capture_output=True, text=True)
++    wall = time.time() - t0
++    after = {p: snap(p) for _, p in procs}
++    for _, _, pp in perfs:
++        pp.send_signal(signal.SIGINT)
++    for _, _, pp in perfs:
++        pp.wait()
++    out = r.stdout
++    m = re.search(r"queries:\s+(\d+)\s+\(([\d.]+) per sec", out)
++    if not m:
++        print(out, r.stderr)
++        sys.exit(1)
++    q, qps = int(m.group(1)), float(m.group(2))
++    avg = float(re.search(r"avg:\s+([\d.]+)", out).group(1))
++    p99 = float(re.search(r"99th percentile:\s+([\d.]+)", out).group(1))
++    load = open("/proc/loadavg").read().split()[0]
++    parts = [f"{label:<22} thr={threads:<2} qps={qps:8.0f} avg={avg:.3f} p99={p99:.3f}"]
++    for g, pl in groups.items():
++        ut = sum(after[p]["ut"] - before[p]["ut"] for p in pl) / TCK
++        st = sum(after[p]["st"] - before[p]["st"] for p in pl) / TCK
++        vcs = sum(after[p]["vcs"] - before[p]["vcs"] for p in pl)
++        ncs = sum(after[p]["ncs"] - before[p]["ncs"] for p in pl)
++        parts.append(f"| {g} {1e6 * (ut + st) / q:.0f}us (u{1e6 * ut / q:.0f}/s{1e6 * st / q:.0f}) cs {vcs / q:.2f}v/{ncs / q:.2f}n")
++    for g, fn, _ in perfs:
++        vals = {}
++        for line in open(fn):
++            f = line.strip().split(",")
++            if len(f) > 3 and f[0] and f[0][0].isdigit():
++                vals[f[2]] = float(f[0])
++        if g == "sys":
++            parts.append("| IPI resched %.2f callfn %.2f send %.2f /q" % (
++                vals.get("irq_vectors:reschedule_entry", 0) / q, vals.get("irq_vectors:call_function_single_entry", 0) / q,
++                vals.get("ipi:ipi_send_cpu", 0) / q))
++        else:
++            parts.append("| %s sysc %.1f sw %.2f wake %.2f" % (
++                g, vals.get("raw_syscalls:sys_enter", 0) / q, vals.get("sched:sched_switch", 0) / q,
++                vals.get("sched:sched_waking", 0) / q))
++    parts.append(f"| load {load}")
++    line = " ".join(parts)
++    print(line)
++    with open(H + "/results.txt", "a") as f:
++        f.write(time.strftime("%H:%M:%S ") + line + "\n")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/perf-findings/harness/H1-scripts/c b/perf-findings/harness/H1-scripts/c
+new file mode 100755
+index 0000000000..dd2e78bbcd
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/c
+@@ -0,0 +1,4 @@
++#!/bin/bash
++# wrapper: run H1 cluster.sh as vt with BASE=30000; BIN, GATE_ENV, TABLET_ENV, *_EXTRA_FLAGS pass through
++cd /home/vt/perf/H1
++exec runuser -u vt -- env BASE=30000 HOME=/home/vt BIN=${BIN:-/home/vt/bin} GATE_ENV="${GATE_ENV:-}" TABLET_ENV="${TABLET_ENV:-}" VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" ./cluster.sh "$@"
+diff --git a/perf-findings/harness/H1-scripts/cfg/base.cfg b/perf-findings/harness/H1-scripts/cfg/base.cfg
+new file mode 100644
+index 0000000000..ff5dd63ca7
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/base.cfg
+@@ -0,0 +1 @@
++BIN=/home/vt/bin
+diff --git a/perf-findings/harness/H1-scripts/cfg/nowake.cfg b/perf-findings/harness/H1-scripts/cfg/nowake.cfg
+new file mode 100644
+index 0000000000..e8aceeb23f
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/nowake.cfg
+@@ -0,0 +1,3 @@
++BIN=/home/vt/bin-H1rt
++GATE_ENV=GODEBUG=nowakepnext=1
++TABLET_ENV=GODEBUG=nowakepnext=1
+diff --git a/perf-findings/harness/H1-scripts/cfg/nowakewin.cfg b/perf-findings/harness/H1-scripts/cfg/nowakewin.cfg
+new file mode 100644
+index 0000000000..67659549ba
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/nowakewin.cfg
+@@ -0,0 +1,5 @@
++BIN=/home/vt/bin-H1rt
++GATE_ENV="GODEBUG=nowakepnext=1"
++TABLET_ENV="GODEBUG=nowakepnext=1"
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/cfg/nowakewin2.cfg b/perf-findings/harness/H1-scripts/cfg/nowakewin2.cfg
+new file mode 100644
+index 0000000000..2d080194bd
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/nowakewin2.cfg
+@@ -0,0 +1,5 @@
++BIN=/home/vt/bin-H1rt
++GATE_ENV="GOMAXPROCS=2 GODEBUG=nowakepnext=1"
++TABLET_ENV="GOMAXPROCS=2 GODEBUG=nowakepnext=1"
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/cfg/p1winprocs1.cfg b/perf-findings/harness/H1-scripts/cfg/p1winprocs1.cfg
+new file mode 100644
+index 0000000000..6e01f8acaa
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/p1winprocs1.cfg
+@@ -0,0 +1,5 @@
++BIN=/home/vt/bin-P1r1
++GATE_ENV=GOMAXPROCS=1
++TABLET_ENV=GOMAXPROCS=1
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/cfg/p1winprocs2.cfg b/perf-findings/harness/H1-scripts/cfg/p1winprocs2.cfg
+new file mode 100644
+index 0000000000..09dec3c8b0
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/p1winprocs2.cfg
+@@ -0,0 +1,5 @@
++BIN=/home/vt/bin-P1r1
++GATE_ENV=GOMAXPROCS=2
++TABLET_ENV=GOMAXPROCS=2
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/cfg/procs1.cfg b/perf-findings/harness/H1-scripts/cfg/procs1.cfg
+new file mode 100644
+index 0000000000..34f93cdc0b
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/procs1.cfg
+@@ -0,0 +1,3 @@
++BIN=/home/vt/bin
++GATE_ENV=GOMAXPROCS=1
++TABLET_ENV=GOMAXPROCS=1
+diff --git a/perf-findings/harness/H1-scripts/cfg/procs2.cfg b/perf-findings/harness/H1-scripts/cfg/procs2.cfg
+new file mode 100644
+index 0000000000..4890981794
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/procs2.cfg
+@@ -0,0 +1,3 @@
++BIN=/home/vt/bin
++GATE_ENV=GOMAXPROCS=2
++TABLET_ENV=GOMAXPROCS=2
+diff --git a/perf-findings/harness/H1-scripts/cfg/rt.cfg b/perf-findings/harness/H1-scripts/cfg/rt.cfg
+new file mode 100644
+index 0000000000..6025d20d72
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/rt.cfg
+@@ -0,0 +1 @@
++BIN=/home/vt/bin-H1rt
+diff --git a/perf-findings/harness/H1-scripts/cfg/sysmon.cfg b/perf-findings/harness/H1-scripts/cfg/sysmon.cfg
+new file mode 100644
+index 0000000000..f64e4b1c69
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/sysmon.cfg
+@@ -0,0 +1,3 @@
++BIN=/home/vt/bin-H1rt
++GATE_ENV=GODEBUG=sysmonmin=1000
++TABLET_ENV=GODEBUG=sysmonmin=1000
+diff --git a/perf-findings/harness/H1-scripts/cfg/window.cfg b/perf-findings/harness/H1-scripts/cfg/window.cfg
+new file mode 100644
+index 0000000000..7bb75356c2
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/window.cfg
+@@ -0,0 +1,3 @@
++BIN=/home/vt/bin
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/cfg/winprocs1.cfg b/perf-findings/harness/H1-scripts/cfg/winprocs1.cfg
+new file mode 100644
+index 0000000000..d166be8147
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/winprocs1.cfg
+@@ -0,0 +1,5 @@
++BIN=/home/vt/bin
++GATE_ENV=GOMAXPROCS=1
++TABLET_ENV=GOMAXPROCS=1
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/cfg/winprocs2.cfg b/perf-findings/harness/H1-scripts/cfg/winprocs2.cfg
+new file mode 100644
+index 0000000000..fd9b060c8c
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cfg/winprocs2.cfg
+@@ -0,0 +1,5 @@
++BIN=/home/vt/bin
++GATE_ENV=GOMAXPROCS=2
++TABLET_ENV=GOMAXPROCS=2
++VTGATE_EXTRA_FLAGS="--grpc-initial-window-size=4194304 --grpc-initial-conn-window-size=8388608"
++VTTABLET_EXTRA_FLAGS="--grpc-server-initial-window-size=4194304 --grpc-server-initial-conn-window-size=8388608"
+diff --git a/perf-findings/harness/H1-scripts/classify.py b/perf-findings/harness/H1-scripts/classify.py
+new file mode 100644
+index 0000000000..a84bc44256
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/classify.py
+@@ -0,0 +1,126 @@
++#!/usr/bin/env python3
++"""Classify `perf script` samples (cpu-clock, -g) per process into cost buckets.
++
++usage: perf script -i X -F comm,tid,ip,sym | classify.py QUERIES [comm ...]
++Buckets are decided from the whole callchain (leaf first):
++  kernel side: by the syscall / entry at the user->kernel boundary (futex, epoll, nanosleep, net read, net write, other sys),
++               or irq/softirq/scheduler paths without a syscall (e.g. preemption, timer interrupts)
++  user side:   Go scheduler (schedule/findRunnable/park/wake), GC, malloc, gRPC+http2, protobuf, MySQL protocol,
++               sqlparser, other Vitess, other runtime
++Prints µs of CPU per query for each (comm, bucket), using the sampling frequency to convert.
++"""
++import collections, sys
++
++FREQ = 1999.0
++queries = int(sys.argv[1])
++comms = set(sys.argv[2:])
++
++SCHED_FUNCS = ("runtime.schedule", "runtime.findRunnable", "runtime.park_m", "runtime.wakep", "runtime.startm",
++               "runtime.stopm", "runtime.mcall", "runtime.goexit0", "runtime.gosched_m", "runtime.stealWork",
++               "runtime.notesleep", "runtime.notewakeup", "runtime.ready", "runtime.goready", "runtime.netpoll",
++               "runtime.exitsyscall", "runtime.entersyscall", "runtime.handoffp", "runtime.resetspinning",
++               "runtime.gopark", "runtime.runqgrab", "runtime.usleep", "runtime.osyield", "runtime.sysmon",
++               "runtime.selectgo", "runtime.chansend", "runtime.chanrecv", "runtime.lock2", "runtime.unlock2")
++
++
++def classify(frames):
++    # frames: list of (sym, is_kernel) leaf first
++    kern = [s for s, k in frames if k]
++    user = [s for s, k in frames if not k]
++    if kern:
++        ks = " ".join(kern)
++        if "__x64_sys_futex" in ks:
++            return "k:futex"
++        if "__x64_sys_epoll" in ks:
++            return "k:epoll"
++        if "nanosleep" in ks:
++            return "k:nanosleep"
++        if "sched_yield" in ks:
++            return "k:sched_yield"
++        if any(x in ks for x in ("__x64_sys_read", "__x64_sys_recvfrom", "__x64_sys_recvmsg", "ksys_read")):
++            return "k:net-read"
++        if any(x in ks for x in ("__x64_sys_write", "__x64_sys_sendto", "__x64_sys_sendmsg", "ksys_write")):
++            return "k:net-write"
++        if "__x64_sys_ppoll" in ks or "__x64_sys_poll" in ks:
++            return "k:poll"
++        if "do_syscall_64" in ks:
++            return "k:other-syscall"
++        if any(x in ks for x in ("asm_sysvec_apic_timer_interrupt", "asm_sysvec_reschedule_ipi", "irqentry_exit",
++                                 "asm_sysvec_call_function_single", "asm_common_interrupt")):
++            # interrupt taken while in user mode: attribute to the user frame below (fall through)
++            pass
++        elif not user:
++            return "k:other"
++    us = " ".join(user)
++    if any(x in us for x in ("runtime.gcBgMarkWorker", "runtime.gcAssist", "runtime.gcDrain", "runtime.bgsweep", "runtime.bgscavenge", "runtime.markroot")):
++        return "u:gc"
++    if any(f in SCHED2 for f in user):
++        return "u:go-sched"
++    if "runtime.mallocgc" in us:
++        return "u:malloc"
++    nonrt = [f for f in user if not f.startswith(("runtime.", "internal/", "sync.", "syscall.", "sync/atomic."))]
++    if not nonrt:
++        return "u:runtime-other" if user else "k:?"
++    f = nonrt[0]
++    if "google.golang.org/grpc" in f or "golang.org/x/net/http2" in f:
++        return "u:grpc"
++    if "google.golang.org/protobuf" in f or "vtproto" in f or "MarshalVT" in f or "UnmarshalVT" in f or "SizeVT" in f:
++        return "u:proto"
++    if "go/vt/sqlparser" in f:
++        return "u:sqlparser"
++    if "vitess.io/vitess/go/mysql" in f:
++        return "u:mysql-proto"
++    if "go/vt/vtgate" in f:
++        return "u:vtgate-logic"
++    if "go/vt/vttablet" in f:
++        return "u:vttablet-logic"
++    if "vitess.io" in f:
++        return "u:vitess-other"
++    if f.startswith(("net.", "internal/poll", "bufio.")):
++        return "u:go-net"
++    return "u:other(" + f.split("(")[0][:40] + ")"
++
++
++SCHED2 = set(("runtime.wakep", "runtime.ready", "runtime.goready", "runtime.startm", "runtime.notewakeup", "runtime.gopark",
++              "runtime.park_m", "runtime.schedule", "runtime.findRunnable", "runtime.mcall", "runtime.exitsyscall",
++              "runtime.entersyscall", "runtime.netpoll", "runtime.stopm", "runtime.goexit0", "runtime.gosched_m",
++              "runtime.sysmon", "runtime.injectglist", "runtime.handoffp", "runtime.Gosched"))
++
++
++def main():
++    per = collections.defaultdict(collections.Counter)
++    comm = None
++    frames = []
++
++    def flush():
++        if comm is not None and (not comms or comm in comms):
++            per[comm][classify(frames)] += 1
++
++    for line in sys.stdin:
++        if not line.strip():
++            flush()
++            comm, frames = None, []
++            continue
++        if not line.startswith((" ", "\t")):
++            flush()
++            parts = line.split()
++            comm = parts[0]
++            frames = []
++            continue
++        parts = line.strip().split(None, 1)
++        if len(parts) < 2:
++            continue
++        sym = parts[1]
++        is_kernel = sym.endswith("([kernel.kallsyms])")
++        sym = sym.rsplit(" (", 1)[0]
++        sym = sym.split("+0x")[0]
++        frames.append((sym, is_kernel))
++    flush()
++    for c, cnt in sorted(per.items(), key=lambda kv: -sum(kv[1].values())):
++        tot = sum(cnt.values())
++        print(f"{c}: {tot / FREQ * 1e6 / queries:.0f} µs/q")
++        for b, n in cnt.most_common(25):
++            print(f"   {b:<40} {n / FREQ * 1e6 / queries:6.1f} µs/q  {100.0 * n / tot:5.1f}%")
++
++
++main()
+diff --git a/perf-findings/harness/H1-scripts/cluster.sh b/perf-findings/harness/H1-scripts/cluster.sh
+new file mode 100755
+index 0000000000..13dfc201db
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/cluster.sh
+@@ -0,0 +1,275 @@
++#!/bin/bash
++# Local Vitess cluster for performance profiling.
++#
++# Usage (run as the unprivileged `vt` user, e.g. `runuser -u vt -- env BASE=20000 ./cluster.sh up`):
++#   cluster.sh up        start etcd, vtctld, mysqld+vttablet per tablet, vtgate; elect primaries; load schema/vschema
++#   cluster.sh down      stop everything and delete the data dir
++#   cluster.sh status    show processes and tablets
++#   cluster.sh env       print the ports of this cluster
++#   cluster.sh prepare   (re)load sysbench data through vtgate: TABLES tables x TABLE_SIZE rows (default 100000)
++#   cluster.sh cpu       print cumulative CPU seconds (user+sys) per process: vtgate, vttablet_<uid>, mysqld_<uid>
++#                        (diff two snapshots around a run to get CPU per query)
++#   cluster.sh sb ARGS   run sysbench against vtgate with the right connection flags, e.g.
++#                        cluster.sh sb oltp_point_select --threads=8 --time=30 run
++#
++# Environment:
++#   BASE      port base (default 20000). Use different bases (20000, 30000) for concurrent clusters.
++#   NAME      cluster name / data dir suffix (default c$BASE)
++#   KEYSPACE  keyspace name (default sbtest)
++#   SHARDS    space separated shard list (default "-80 80-"; use "0" for unsharded)
++#   REPLICAS  replicas per shard in addition to the primary (default 0)
++#   TABLES    number of sysbench tables to declare in the vschema (default 4)
++#   VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS  extra flags
++#   BIN       directory with the Vitess binaries (default /home/vt/bin)
++#
++# Ports (relative to BASE): etcd +10/+11, vtctld web +20 grpc +21, vtgate web +1 grpc +2 mysql +3,
++# tablet i (0-based): web +100+i, grpc +200+i, mysqld +400+i.
++# pprof is available at http://localhost:<web port>/debug/pprof/ on vtgate and every vttablet.
++
++set -euo pipefail
++
++BASE=${BASE:-20000}
++NAME=${NAME:-c$BASE}
++KEYSPACE=${KEYSPACE:-sbtest}
++SHARDS=${SHARDS:-"-80 80-"}
++REPLICAS=${REPLICAS:-0}
++TABLES=${TABLES:-4}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:$PATH"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++# tablet index -> uid; uids are unique per cluster (VTDATAROOT is per cluster).
++tablet_uid() { echo $((100 + $1)); }
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOF'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOF
++}
++
++start_tablets() {
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid alias; uid=$(tablet_uid $i); printf -v alias '%s-%010d' "$CELL" "$uid"
++      env ${TABLET_ENV:-} vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$KEYSPACE" --init-shard "$shard" \
++        --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++        --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++        --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++        --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++        --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++        --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++        ${VTTABLET_EXTRA_FLAGS:-} >"$LOGDIR/vttablet_$uid.log" 2>&1 &
++      i=$((i + 1))
++    done
++  done
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do wait_http $((BASE + 100 + i)); i=$((i + 1)); done
++  done
++
++}
++
++start_vtgate() {
++  env ${GATE_ENV:-} vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY,REPLICA \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  for _ in $(seq 1 100); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select 1' "$KEYSPACE" >/dev/null 2>&1 && break
++    sleep 0.3
++  done
++}
++
++# restart vtgate and vttablets only (keep mysqld, topo, data); picks up BIN / *_EXTRA_FLAGS / env (GOGC, GOMAXPROCS...)
++restart() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  for _ in $(seq 1 100); do
++    local alive=0
++    for f in "$VTDATAROOT"/vt_*/vttablet.pid "$VTDATAROOT/vtgate.pid"; do [[ -f $f ]] && kill -0 "$(cat "$f")" 2>/dev/null && alive=1; done
++    [[ $alive == 0 ]] && break; sleep 0.2
++  done
++  # also stop strays whose pid file was overwritten (e.g. a start that failed to bind its port)
++  pkill -f -- "^(vttablet|vtgate) .*--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  for _ in $(seq 1 100); do
++    pgrep -f -- "^(vttablet|vtgate) .*--topo-global-server-address localhost:$ETCD_PORT" >/dev/null || break
++    sleep 0.2
++  done
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++  start_tablets
++  sleep 3
++  start_vtgate
++  for _ in $(seq 1 100); do
++    [[ $(mysql -N -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select count(*) from sbtest1 where id in (1,2,3,4,5,6,7,8)' "$KEYSPACE" 2>/dev/null) == 8 ]] && break
++    sleep 0.3
++  done
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  vtctldclient CreateKeyspace --durability-policy=none "$KEYSPACE" >/dev/null 2>&1 || true
++
++  local i=0 pids=()
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid; uid=$(tablet_uid $i)
++      mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++        --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++      pids+=($!)
++      i=$((i + 1))
++    done
++  done
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  start_tablets
++
++  # Elect the first tablet of every shard as primary.
++  i=0
++  for shard in $SHARDS; do
++    local alias; printf -v alias '%s-%010d' "$CELL" "$(tablet_uid $i)"
++    vtctldclient PlannedReparentShard "$KEYSPACE/$shard" --new-primary "$alias" >/dev/null
++    i=$((i + REPLICAS + 1))
++  done
++
++  load_schema
++
++  start_vtgate
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables=""
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  vtctldclient ApplySchema --sql "$sql" "$KEYSPACE" >/dev/null
++  if [[ $SHARDS == "0" ]]; then
++    vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$KEYSPACE" >/dev/null
++  else
++    vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$KEYSPACE" >/dev/null
++  fi
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  cat <<EOF
++cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspace $KEYSPACE shards [$SHARDS] replicas/shard $REPLICAS
++  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root $KEYSPACE
++  vtgate web/pprof: http://localhost:$VTGATE_WEB/debug/pprof/
++  vtctldclient: vtctldclient --server localhost:$VTCTLD_GRPC
++  tablet i: web/pprof $((BASE + 100))+i, grpc $((BASE + 200))+i, mysqld $((BASE + 400))+i (socket $VTDATAROOT/vt_<uid>/mysql.sock, user vt_dba)
++EOF
++}
++
++SB_ARGS() {
++  echo "--db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=$VTGATE_MYSQL --mysql-user=root --mysql-db=$KEYSPACE --tables=$TABLES --table-size=${TABLE_SIZE:-100000} --auto_inc=off"
++}
++
++prepare() {
++  for t in $(seq 1 "$TABLES"); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root "$KEYSPACE" -e "DROP TABLE IF EXISTS sbtest$t"
++  done
++  # shellcheck disable=SC2046
++  sysbench $(SB_ARGS) oltp_read_write --threads=4 prepare
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck; tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++status() {
++  env_info
++  vtctldclient GetTablets 2>/dev/null || true
++}
++
++case "${1:-}" in
++  up) up ;;
++  restart) restart ;;
++  down) down ;;
++  status) status ;;
++  env) env_info ;;
++  prepare) prepare ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  sb) shift; # shellcheck disable=SC2046
++      sysbench $(SB_ARGS) "$@" ;;
++  *) echo "usage: $0 up|down|status|env" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/harness/H1-scripts/combo.sh b/perf-findings/harness/H1-scripts/combo.sh
+new file mode 100644
+index 0000000000..c8ec61fdcd
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/combo.sh
+@@ -0,0 +1,24 @@
++#!/bin/bash
++# vtcombo (vtgate + 2 tablets in ONE process, in-process tablet calls, no gRPC hop) via vttestserver, as vt.
++# ports: 30600 (vtcombo web), mysql protocol printed in the log. usage: combo.sh up|down|prepare|pid
++cd /home/vt/perf/H1
++D=/home/vt/perf/H1/combo
++case $1 in
++up)
++  mkdir -p comboschema/sbtest $D/logs; chown -R vt:vt $D
++  for t in 1 2 3 4; do
++    echo "CREATE TABLE sbtest$t (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;" > comboschema/sbtest/t$t.sql
++  done
++  echo '{"sharded":true,"vindexes":{"hash":{"type":"hash"}},"tables":{"sbtest1":{"column_vindexes":[{"column":"id","name":"hash"}]},"sbtest2":{"column_vindexes":[{"column":"id","name":"hash"}]},"sbtest3":{"column_vindexes":[{"column":"id","name":"hash"}]},"sbtest4":{"column_vindexes":[{"column":"id","name":"hash"}]}}}' > comboschema/sbtest/vschema.json
++  chown -R vt:vt comboschema
++  runuser -u vt -- env ${COMBO_ENV:-} HOME=/home/vt VTROOT=/home/vt/perf/H1/vtroot VTDATAROOT=$D VT_MYSQL_ROOT=/usr PATH=/home/vt/bin-H1:/home/vt/bin:/usr/sbin:$PATH \
++    /home/vt/bin-H1/vttestserver --port 30600 --keyspaces sbtest --num-shards 2 --schema-dir /home/vt/perf/H1/comboschema \
++    --data-dir $D --mysql-bind-host 127.0.0.1 --persistent-mode --extra-my-cnf /home/vt/perf/c30000/extra.cnf ${COMBO_FLAGS:-} > tmp/combo.log 2>&1 &
++  for _ in $(seq 1 120); do grep -q "Local cluster started" tmp/combo.log && break; sleep 1; done
++  tail -5 tmp/combo.log
++  ;;
++down)
++  pkill -f "vttestserver --port 30600"; sleep 3; pkill -f "vtcombo.*30600" ;;
++pid)
++  pgrep -f "^/home/vt/bin-H1/vtcombo" ;;
++esac
+diff --git a/perf-findings/harness/H1-scripts/combobench.sh b/perf-findings/harness/H1-scripts/combobench.sh
+new file mode 100644
+index 0000000000..e9f7b8a292
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/combobench.sh
+@@ -0,0 +1,8 @@
++#!/bin/bash
++# sysbench against vtcombo (vtgate + tablets in one process); accounts vtcombo and its mysqld
++cd /home/vt/perf/H1
++CP=$(pgrep -f "^/home/vt/perf/H1/vtroot/bin/vtcombo")
++MP=$(pgrep -f "^/usr/sbin/mysqld --defaults-file=/home/vt/perf/H1/combo")
++for run in ${RUNS:-1:10 8:10}; do
++  flock -o /home/vt/perf/bench.lock python3 bench.py "combo${LBL:-}" ${run%%:*} ${run##*:} target=hostport port=30603 db=sbtest nocluster=1 extra=vtcombo:$CP,mysqld:$MP warm=3 ${PERFARG:-}
++done
+diff --git a/perf-findings/harness/H1-scripts/comboprep.sh b/perf-findings/harness/H1-scripts/comboprep.sh
+new file mode 100644
+index 0000000000..cddd3711c1
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/comboprep.sh
+@@ -0,0 +1,4 @@
++#!/bin/bash
++for t in 1 2 3 4; do mysql -h 127.0.0.1 -P 30603 -u root sbtest -e "DROP TABLE IF EXISTS sbtest$t"; done
++sysbench --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=30603 --mysql-user=root --mysql-db=sbtest --tables=4 --table-size=100000 --auto_inc=off oltp_read_write --threads=4 prepare | tail -2
++mysql -h 127.0.0.1 -P 30603 -u root sbtest -e "select count(*) from sbtest1"
+diff --git a/perf-findings/harness/H1-scripts/counts.sh b/perf-findings/harness/H1-scripts/counts.sh
+new file mode 100644
+index 0000000000..ec42669f1f
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/counts.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++# per-config counts at 1 thread: perf counters (syscalls, switches, IPIs) + Go execution traces (hops)
++# usage: counts.sh cfg...   (restart outside the lock; each measurement under flock -o)
++cd /home/vt/perf/H1
++TA=/home/vt/perf/H1/traceana
++for cfg in "$@"; do
++  (
++    unset BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++    source "cfg/$cfg.cfg"
++    export BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++    ./c restart >/dev/null 2>&1
++  )
++  sleep 3
++  flock -o /home/vt/perf/bench.lock python3 bench.py "cnt-$cfg" 1 10 warm=3 perf=1
++  flock -o /home/vt/perf/bench.lock bash tracepair.sh "$cfg"
++done
+diff --git a/perf-findings/harness/H1-scripts/floor.sh b/perf-findings/harness/H1-scripts/floor.sh
+new file mode 100644
+index 0000000000..ecb3fdf1d0
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/floor.sh
+@@ -0,0 +1,21 @@
++#!/bin/bash
++# start|stop the H1 floor programs (as vt). FLOOR_ENV is passed to all of them (e.g. GOMAXPROCS=1).
++# ports: proxy 30510, grpcsrv 30511, grpcproxy 30512, tcpsrv 30513
++B=/home/vt/bin-H1/h1floor
++SOCK=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++cd /home/vt/perf/H1
++case "$1" in
++start)
++  runuser -u vt -- env ${FLOOR_ENV:-} $B -mode proxy -listen 127.0.0.1:30510 -socket $SOCK ${FLOOR_ARGS:-} > tmp/floor_proxy.log 2>&1 &
++  runuser -u vt -- env ${FLOOR_ENV:-} $B -mode grpcsrv -listen ${GRPC_ADDR:-127.0.0.1:30511} -socket $SOCK ${FLOOR_ARGS:-} > tmp/floor_grpcsrv.log 2>&1 &
++  sleep 0.5
++  runuser -u vt -- env ${FLOOR_ENV:-} $B -mode grpcproxy -listen 127.0.0.1:30512 -backend ${GRPC_ADDR:-127.0.0.1:30511} ${FLOOR_ARGS:-} > tmp/floor_grpcproxy.log 2>&1 &
++  runuser -u vt -- env ${FLOOR_ENV:-} $B -mode tcpsrv -listen 127.0.0.1:30513 > tmp/floor_tcpsrv.log 2>&1 &
++  sleep 1
++  pgrep -f "h1floor -mode" -a
++  ;;
++stop)
++  pkill -f "h1floor -mode" ; sleep 0.5 ;;
++pids)
++  for m in proxy grpcsrv grpcproxy tcpsrv; do echo "$m $(pgrep -f "^/home/vt/bin-H1/h1floor -mode $m ")"; done ;;
++esac
+diff --git a/perf-findings/harness/H1-scripts/floorab.sh b/perf-findings/harness/H1-scripts/floorab.sh
+new file mode 100644
+index 0000000000..2771985fd3
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/floorab.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash
++# Floor programs under several configs. usage: floorab.sh "THREADS:SECONDS ..." config...
++# configs: def | procs1 | window | unix | window-procs1 | fake (grpcsrv returns a canned result, no mysqld)
++cd /home/vt/perf/H1
++RUNS=$1; shift
++for cfg in "$@"; do
++  bash floor.sh stop >/dev/null 2>&1
++  FE=""; FA=""; GA=""
++  case $cfg in
++    procs1) FE="GOMAXPROCS=1" ;;
++    procs2) FE="GOMAXPROCS=2" ;;
++    window) FA="-window=4194304" ;;
++    unix) FA="-unix"; GA="/home/vt/perf/H1/tmp/grpc.sock" ;;
++    window-procs1) FE="GOMAXPROCS=1"; FA="-window=4194304" ;;
++    window-unix-procs1) FE="GOMAXPROCS=1"; FA="-window=4194304 -unix"; GA="/home/vt/perf/H1/tmp/grpc.sock" ;;
++    fake) FA="-fake" ;;
++    lockthread) FA="-lockthread" ;;
++    fake-window) FA="-fake -window=4194304" ;;
++  esac
++  FLOOR_ENV="$FE" FLOOR_ARGS="$FA" GRPC_ADDR="$GA" bash floor.sh start >/dev/null 2>&1
++  sleep 1
++  for run in $RUNS; do
++    T=${run%%:*}; S=${run##*:}
++    [[ $cfg == fake* ]] || flock -o /home/vt/perf/bench.lock python3 bench.py "fl-proxy-$cfg" $T $S target=hostport port=30510 db=vt_sbtest nocluster=1 extra=proxy:%proxy,mysqld:@mysqld_100 ${PERFARG:-}
++    flock -o /home/vt/perf/bench.lock python3 bench.py "fl-grpcproxy-$cfg" $T $S target=hostport port=30512 db=vt_sbtest nocluster=1 extra=gproxy:%grpcproxy,gsrv:%grpcsrv,mysqld:@mysqld_100 ${PERFARG:-}
++  done
++done
+diff --git a/perf-findings/harness/H1-scripts/groups.py b/perf-findings/harness/H1-scripts/groups.py
+new file mode 100644
+index 0000000000..7d5047c1de
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/groups.py
+@@ -0,0 +1,24 @@
++#!/usr/bin/env python3
++"""Group classify.py output into mechanism buckets. usage: groups.py FILE.class ..."""
++import re, sys
++
++groups = {'sched': ['k:futex', 'u:go-sched', 'k:epoll', 'k:nanosleep', 'k:sched_yield'],
++          'sock': ['k:net-write', 'k:net-read', 'k:other-syscall', 'k:poll', 'u:go-net'],
++          'grpc': ['u:grpc', 'u:proto'], 'mem': ['u:malloc', 'u:gc'],
++          'logic': ['u:sqlparser', 'u:vtgate-logic', 'u:vttablet-logic', 'u:vitess-other', 'u:mysql-proto']}
++for f in sys.argv[1:]:
++    cur = None
++    d = {}
++    for line in open(f):
++        m = re.match(r'(\S+): (\d+) µs/q', line)
++        if m:
++            cur = m.group(1)
++            d[cur] = {'total': float(m.group(2))}
++            continue
++        m = re.match(r'\s+(\S+(?:\([^)]*\))?)\s+([\d.]+) µs/q', line)
++        if m and cur:
++            d[cur][m.group(1)] = float(m.group(2))
++    for p, v in d.items():
++        out = {g: sum(v.get(k, 0) for k in ks) for g, ks in groups.items()}
++        out['other'] = v['total'] - sum(out.values())
++        print(f, p, int(v['total']), {k: round(x) for k, x in out.items()})
+diff --git a/perf-findings/harness/H1-scripts/kbreak.py b/perf-findings/harness/H1-scripts/kbreak.py
+new file mode 100644
+index 0000000000..765214dc72
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/kbreak.py
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""For samples of COMM whose kernel stack contains SYSCALL_SUBSTR, count which 'interesting' kernel
++function (first match from the leaf) the sample is in. usage: kbreak.py QUERIES COMM SYSCALL_SUBSTR < perf-script"""
++import collections, sys
++
++FREQ = 1999.0
++q, comm_want, sc = int(sys.argv[1]), sys.argv[2], sys.argv[3]
++MARKERS = ["try_to_wake_up", "ep_poll_callback", "sock_def_readable", "__wake_up", "tcp_v4_rcv", "__netif_receive_skb",
++           "net_rx_action", "__dev_queue_xmit", "tcp_ack", "tcp_rcv_established", "tcp_write_xmit", "tcp_sendmsg_locked",
++           "__schedule", "schedule", "futex_wait", "futex_wake", "ep_poll", "tcp_recvmsg", "_copy_from_iter",
++           "_copy_to_iter", "__alloc_skb", "kfree_skb", "skb_release", "selinux", "security_", "fdget", "do_syscall_64"]
++cnt = collections.Counter()
++tot = 0
++comm, frames = None, []
++
++
++def flush():
++    global tot
++    if comm != comm_want or not frames:
++        return
++    ks = [f for f, k in frames if k]
++    if not any(sc in f for f in ks):
++        return
++    tot += 1
++    for f in ks:
++        for m in MARKERS:
++            if f.startswith(m):
++                cnt[m] += 1
++                return
++    cnt["(" + ks[0] + ")"] += 1
++
++
++for line in sys.stdin:
++    if not line.strip():
++        flush(); comm, frames = None, []; continue
++    if not line.startswith((" ", "\t")):
++        flush(); comm = line.split()[0]; frames = []; continue
++    p = line.strip().split(None, 1)
++    if len(p) < 2:
++        continue
++    k = p[1].endswith("([kernel.kallsyms])")
++    frames.append((p[1].rsplit(" (", 1)[0], k))
++flush()
++print(f"{comm_want} {sc}: {tot / FREQ * 1e6 / q:.1f} µs/q")
++for m, n in cnt.most_common(20):
++    print(f"   {m:<40} {n / FREQ * 1e6 / q:6.1f} µs/q {100 * n / tot:5.1f}%")
+diff --git a/perf-findings/harness/H1-scripts/perfrec.sh b/perf-findings/harness/H1-scripts/perfrec.sh
+new file mode 100644
+index 0000000000..a245264c83
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/perfrec.sh
+@@ -0,0 +1,11 @@
++#!/bin/bash
++# usage: perfrec.sh OUT SECONDS THREADS [port] -- system-wide perf record (cpu-clock, call graphs) during a sysbench run
++P=/usr/lib/linux-tools/6.8.0-142-generic/perf
++OUT=$1; S=${2:-5}; T=${3:-1}; PORT=${4:-30003}
++cd /home/vt/perf/H1
++sysbench oltp_point_select --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=$PORT --mysql-user=root --mysql-db=sbtest --tables=4 --table-size=100000 --threads=$T --db-ps-mode=disable --time=$((S+3)) run > tmp/perfrec_sb.txt &
++SB=$!
++sleep 1.5
++$P record -a -g -F 1999 -o "$OUT" -- sleep "$S" 2> /dev/null
++wait $SB
++grep -E 'queries:|avg:' tmp/perfrec_sb.txt
+diff --git a/perf-findings/harness/H1-scripts/place.sh b/perf-findings/harness/H1-scripts/place.sh
+new file mode 100644
+index 0000000000..42cb32182c
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/place.sh
+@@ -0,0 +1,22 @@
++#!/bin/bash
++# CPU placement experiments (taskset on running processes; Go >= 1.25 follows the affinity mask for GOMAXPROCS).
++# usage: place.sh THREADS SECONDS PLACEMENT...   placements: default | all0 | all01 | gate0-tab1-my23 | go012-my3 | go01-my23
++cd /home/vt/perf/H1
++T=$1; S=$2; shift 2
++set_aff() { # name-regex cpus
++  ./c pids | awk -v r="$1" '$1 ~ r {print $2}' | while read -r p; do taskset -a -cp "$2" "$p" >/dev/null; done
++}
++for pl in "$@"; do
++  case $pl in
++    default) set_aff . 0-3 ;;
++    all0) set_aff . 0 ;;
++    all01) set_aff . 0-1 ;;
++    gate0-tab1-my23) set_aff vtgate 0; set_aff vttablet 1; set_aff mysqld 2-3 ;;
++    go012-my3) set_aff 'vtgate|vttablet' 0-2; set_aff mysqld 3 ;;
++    go01-my23) set_aff 'vtgate|vttablet' 0-1; set_aff mysqld 2-3 ;;
++    go0-my1) set_aff 'vtgate|vttablet' 0; set_aff mysqld 1 ;;
++  esac
++  sleep 1.5  # let the Go runtimes pick up the new GOMAXPROCS
++  python3 bench.py "place-$pl" "$T" "$S" warm=2 ${PERFARG:-}
++done
++set_aff . 0-3
+diff --git a/perf-findings/harness/H1-scripts/pp.sh b/perf-findings/harness/H1-scripts/pp.sh
+new file mode 100644
+index 0000000000..50400ac802
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/pp.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++# cross-thread wake-up cost (C pingpong), run under the bench lock by the caller
++P=/home/vt/bin-H1/pingpong
++$P pipe 200000 -1 -1
++$P pipe 200000 0 0
++$P pipe 200000 0 1
++$P pipe 20000 0 1 500
++$P pipe 20000 0 0 500
++$P tcp 200000 0 0
++$P tcp 200000 0 1
++$P tcp 20000 0 1 500
++$P unix 200000 0 1
++$P unix 20000 0 1 500
+diff --git a/perf-findings/harness/H1-scripts/ratescan.sh b/perf-findings/harness/H1-scripts/ratescan.sh
+new file mode 100644
+index 0000000000..b4205e8344
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/ratescan.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# mysqld CPU/query vs arrival rate, direct sysbench (1 thread), to test the "idle gap inflates mysqld CPU" hypothesis
++cd /home/vt/perf/H1
++MY=$(./c pids | awk '$1=="mysqld_100"{print $2}')
++for r in ${RATES:-0 5000 2000 1200 600}; do
++  flock -o /home/vt/perf/bench.lock python3 bench.py "direct-rate$r" 1 ${S:-8} target=hostport port=30400 user=sb db=vt_sbtest nocluster=1 extra=mysqld:$MY rate=$r ${PERFARG:-}
++done
+diff --git a/perf-findings/harness/H1-scripts/restart.sh b/perf-findings/harness/H1-scripts/restart.sh
+new file mode 100644
+index 0000000000..04fcb68ccb
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/restart.sh
+@@ -0,0 +1,8 @@
++#!/bin/bash
++# restart vtgate + vttablets with cfg/$1.cfg (outside the bench lock)
++cd /home/vt/perf/H1
++unset BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++source "cfg/$1.cfg"
++export BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++./c restart >/dev/null 2>&1
++./c pids
+diff --git a/perf-findings/harness/H1-scripts/schedrec.sh b/perf-findings/harness/H1-scripts/schedrec.sh
+new file mode 100644
+index 0000000000..d95de34f4f
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/schedrec.sh
+@@ -0,0 +1,10 @@
++#!/bin/bash
++# perf sched record (system wide) for SECONDS during a 1-thread sysbench run through vtgate. usage: schedrec.sh OUT SECONDS [threads]
++P=/usr/lib/linux-tools/6.8.0-142-generic/perf
++cd /home/vt/perf/H1
++sysbench oltp_point_select --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=${PORT:-30003} --mysql-user=root --mysql-db=${DB:-sbtest} --tables=4 --table-size=100000 --threads=${3:-1} --db-ps-mode=disable --time=$(($2+3)) run > tmp/schedrec_sb.txt &
++SB=$!
++sleep 1.5
++$P sched record -a -o "$1" -- sleep "$2" 2>/dev/null
++wait $SB
++grep -E 'queries:|avg:' tmp/schedrec_sb.txt
+diff --git a/perf-findings/harness/H1-scripts/schedsum.py b/perf-findings/harness/H1-scripts/schedsum.py
+new file mode 100644
+index 0000000000..a65295bff8
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/schedsum.py
+@@ -0,0 +1,23 @@
++#!/usr/bin/env python3
++"""Summarize `perf sched timehist -w` output: per process, switch-ins, run time and wake-up delay per query,
++and the distribution of wake-up (schedule) delays. usage: schedsum.py QUERIES < timehist"""
++import collections, re, sys
++
++q = int(sys.argv[1])
++st = collections.defaultdict(lambda: [0, 0.0, 0.0, []])  # count, run ms, delay ms, delays
++for line in sys.stdin:
++    m = re.match(r"\s*[\d.]+ \[(\d+)\]\s+\S*\s+(.+?)\[(\d+)(?:/(\d+))?\]\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*$", line)
++    if not m:
++        continue
++    comm = m.group(2).strip()
++    if comm.startswith("<idle>"):
++        comm = "idle"
++    wait, delay, run = float(m.group(5)), float(m.group(6)), float(m.group(7))
++    s = st[comm]
++    s[0] += 1; s[1] += run; s[2] += delay; s[3].append(delay)
++print(f"{'process':<14} {'switch-ins/q':>12} {'run µs/q':>9} {'wake delay µs/q':>15} {'avg delay µs':>12} {'p50':>6} {'p90':>6}")
++for comm, (n, run, delay, ds) in sorted(st.items(), key=lambda kv: -kv[1][1]):
++    if n < q / 20:
++        continue
++    ds.sort()
++    print(f"{comm:<14} {n / q:12.2f} {run * 1e3 / q:9.1f} {delay * 1e3 / q:15.1f} {delay * 1e3 / n:12.1f} {ds[len(ds) // 2] * 1e3:6.1f} {ds[len(ds) * 9 // 10] * 1e3:6.1f}")
+diff --git a/perf-findings/harness/H1-scripts/spin.sh b/perf-findings/harness/H1-scripts/spin.sh
+new file mode 100644
+index 0000000000..08db62a73a
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/spin.sh
+@@ -0,0 +1,15 @@
++#!/bin/bash
++# With and without SCHED_IDLE spinners on every vCPU (no vCPU ever halts). Run under the bench lock.
++cd /home/vt/perf/H1
++P=/home/vt/bin-H1/pingpong
++for sp in 0 1; do
++  if [[ $sp == 1 ]]; then /home/vt/bin-H1/spinner 75 & SPID=$!; sleep 0.5; fi
++  echo "== spinner=$sp"
++  $P pipe 100000 0 1
++  $P pipe 10000 0 1 500
++  python3 bench.py "direct-r1200-spin$sp" 1 8 target=hostport port=30400 user=sb db=vt_sbtest nocluster=1 extra=mysqld:@mysqld_100 rate=1200 warm=1
++  python3 bench.py "gate-1t-spin$sp" 1 10 warm=1 ${PERFARG:-}
++  python3 bench.py "gate-8t-spin$sp" 8 10 warm=1
++  [[ $sp == 1 ]] && kill $SPID
++done
++wait
+diff --git a/perf-findings/harness/H1-scripts/sysc.sh b/perf-findings/harness/H1-scripts/sysc.sh
+new file mode 100644
+index 0000000000..7a5422c8dd
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/sysc.sh
+@@ -0,0 +1,23 @@
++#!/bin/bash
++# usage: sysc.sh SECONDS THREADS -- runs sysbench (text) in background, perf-trace -s on vtgate, tablet 100, mysqld 100.
++# Prints the number of queries seen by vtgate and tablet 100 during the trace window.
++P=/usr/lib/linux-tools/6.8.0-142-generic/perf
++S=${1:-3}; T=${2:-1}
++cd /home/vt/perf/H1
++GATE=$(./c pids | awk '$1=="vtgate"{print $2}')
++TAB=$(./c pids | awk '$1=="vttablet_100"{print $2}')
++MY=$(./c pids | awk '$1=="mysqld_100"{print $2}')
++gq() { curl -s localhost:30001/debug/vars | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sum(d["QueryExecutions"].values()))'; }
++tq() { curl -s localhost:30100/debug/vars | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["Queries"]["TotalCount"])'; }
++sysbench oltp_point_select --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=30003 --mysql-user=root --mysql-db=sbtest --tables=4 --table-size=100000 --threads=$T --db-ps-mode=disable --time=$((S+4)) run > tmp/sysc_sb.txt &
++SB=$!
++sleep 1.5
++g0=$(gq); t0=$(tq)
++$P trace -s -p $GATE -o tmp/trace_gate.txt -- sleep $S &
++$P trace -s -p $TAB -o tmp/trace_tab.txt -- sleep $S &
++$P trace -s -p $MY -o tmp/trace_my.txt -- sleep $S &
++wait %2 %3 %4
++g1=$(gq); t1=$(tq)
++echo "gate queries $((g1-g0)) tablet100 queries $((t1-t0))"
++wait $SB
++grep -E 'queries:|avg:' tmp/sysc_sb.txt
+diff --git a/perf-findings/harness/H1-scripts/tracepair.sh b/perf-findings/harness/H1-scripts/tracepair.sh
+new file mode 100644
+index 0000000000..e291264ff4
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/tracepair.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# 1 s Go execution traces of vtgate and tablet 100 during a 1-thread run; prints hop counts per query
++cd /home/vt/perf/H1
++L=$1
++sysbench oltp_point_select --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=30003 --mysql-user=root --mysql-db=sbtest --tables=4 --table-size=100000 --threads=1 --db-ps-mode=disable --time=5 run > tmp/tp_sb.txt &
++SB=$!
++sleep 2
++g0=$(curl -s localhost:30001/debug/vars | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sum(d["QueryExecutions"].values()))')
++t0=$(curl -s localhost:30100/debug/vars | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["Queries"]["TotalCount"])')
++curl -s -o tmp/gate-$L.trace "http://localhost:30001/debug/pprof/trace?seconds=1" &
++curl -s -o tmp/tab-$L.trace "http://localhost:30100/debug/pprof/trace?seconds=1"
++wait %2
++g1=$(curl -s localhost:30001/debug/vars | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sum(d["QueryExecutions"].values()))')
++t1=$(curl -s localhost:30100/debug/vars | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["Queries"]["TotalCount"])')
++wait $SB
++echo "== $L vtgate (q~$(( (g1-g0) ))) "
++./traceana -q $((g1-g0)) tmp/gate-$L.trace | head -2
++echo "== $L vttablet100 (q~$(( (t1-t0) )))"
++./traceana -q $((t1-t0)) tmp/tab-$L.trace | head -2
+diff --git a/perf-findings/harness/H1-scripts/vtstmt.lua b/perf-findings/harness/H1-scripts/vtstmt.lua
+new file mode 100644
+index 0000000000..e316330305
+--- /dev/null
++++ b/perf-findings/harness/H1-scripts/vtstmt.lua
+@@ -0,0 +1,11 @@
++-- point select with the exact statement text vttablet sends
++function thread_init()
++  drv = sysbench.sql.driver()
++  con = drv:connect()
++end
++function event()
++  con:query(string.format("select c from sbtest1 where id = %d limit 10001 /* INT64 */", sysbench.rand.uniform(1, 100000)))
++end
++function thread_done()
++  con:disconnect()
++end
+diff --git a/perf-findings/harness/H1-traceana/main.go b/perf-findings/harness/H1-traceana/main.go
+new file mode 100644
+index 0000000000..5866e2d5b8
+--- /dev/null
++++ b/perf-findings/harness/H1-traceana/main.go
+@@ -0,0 +1,221 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++// traceana summarizes goroutine hand-offs in a Go execution trace.
++//
++// usage: traceana [-q queries] [-dump N] [-from µs] file.trace
++package main
++
++import (
++	"flag"
++	"fmt"
++	"io"
++	"os"
++	"sort"
++	"strings"
++
++	"golang.org/x/exp/trace"
++)
++
++func entryName(s trace.Stack) string {
++	var frames []trace.StackFrame
++	for f := range s.Frames() {
++		frames = append(frames, f)
++	}
++	// innermost first; walk from outermost to find a non-runtime entry
++	for i := len(frames) - 1; i >= 0; i-- {
++		fn := frames[i].Func
++		if strings.HasPrefix(fn, "runtime.") && fn != "runtime.main" {
++			continue
++		}
++		return short(fn)
++	}
++	if len(frames) > 0 {
++		return short(frames[len(frames)-1].Func)
++	}
++	return "?"
++}
++
++func blockSite(s trace.Stack) string {
++	var out []string
++	for f := range s.Frames() {
++		fn := f.Func
++		if strings.HasPrefix(fn, "runtime.") || strings.HasPrefix(fn, "internal/poll.") || strings.HasPrefix(fn, "sync.") {
++			continue
++		}
++		out = append(out, short(fn))
++		if len(out) == 2 {
++			break
++		}
++	}
++	return strings.Join(out, "<")
++}
++
++func short(fn string) string {
++	if i := strings.LastIndex(fn, "/"); i >= 0 {
++		fn = fn[i+1:]
++	}
++	if len(fn) > 60 {
++		fn = fn[:60]
++	}
++	return fn
++}
++
++func main() {
++	q := flag.Int("q", 1, "queries in the trace window (for per-query numbers)")
++	dump := flag.Int("dump", 0, "print N events in time order starting at -from")
++	from := flag.Float64("from", 0, "start of the dump, µs from trace start")
++	flag.Parse()
++	f, err := os.Open(flag.Arg(0))
++	if err != nil {
++		panic(err)
++	}
++	r, err := trace.NewReader(f)
++	if err != nil {
++		panic(err)
++	}
++	gname := map[trace.GoID]string{}
++	lastThread := map[trace.GoID]trace.ThreadID{}
++	unblockBy := map[string]int{}
++	unblocked := map[string]int{}
++	blockReasons := map[string]int{}
++	procRan := map[trace.ProcID]bool{}
++	var futile int
++	var procStart, procStop, goStart, goStartOtherThread, unblocks, creates, syscalls, syscallBlocked int
++	threadsSeen := map[trace.ThreadID]bool{}
++	var t0 trace.Time
++	first := true
++	var printed int
++	var lastT trace.Time
++	for {
++		ev, err := r.ReadEvent()
++		if err == io.EOF {
++			break
++		}
++		if err != nil {
++			panic(err)
++		}
++		if first {
++			t0 = ev.Time()
++			first = false
++		}
++		us := float64(ev.Time()-t0) / 1e3
++		g := ev.Goroutine()
++		if ev.Thread() != trace.NoThread {
++			threadsSeen[ev.Thread()] = true
++		}
++		if ev.Kind() != trace.EventStateTransition {
++			continue
++		}
++		st := ev.StateTransition()
++		desc := ""
++		switch st.Resource.Kind {
++		case trace.ResourceProc:
++			from, to := st.Proc()
++			if from == trace.ProcIdle && to == trace.ProcRunning {
++				procStart++
++				procRan[st.Resource.Proc()] = false
++				desc = fmt.Sprintf("ProcStart P%d", st.Resource.Proc())
++			} else if from == trace.ProcRunning && to == trace.ProcIdle {
++				procStop++
++				if ran, ok := procRan[st.Resource.Proc()]; ok && !ran {
++					futile++
++				}
++				desc = fmt.Sprintf("ProcStop P%d", st.Resource.Proc())
++			}
++		case trace.ResourceGoroutine:
++			id := st.Resource.Goroutine()
++			from, to := st.Goroutine()
++			if st.Stack != trace.NoStack {
++				if _, ok := gname[id]; !ok || from == trace.GoNotExist {
++					gname[id] = entryName(st.Stack)
++				}
++			}
++			name := gname[id]
++			if name == "" {
++				name = fmt.Sprintf("g%d", id)
++			}
++			switch {
++			case from == trace.GoNotExist && to == trace.GoRunnable:
++				creates++
++				desc = "create " + name
++			case from == trace.GoRunnable && to == trace.GoRunning:
++				goStart++
++				procRan[ev.Proc()] = true
++				if lt, ok := lastThread[id]; ok && lt != ev.Thread() {
++					goStartOtherThread++
++				}
++				lastThread[id] = ev.Thread()
++				desc = "start " + name
++			case from == trace.GoRunning && to == trace.GoWaiting:
++				site := blockSite(st.Stack)
++				blockReasons[st.Reason+" @ "+site]++
++				desc = "block " + name + " (" + st.Reason + " @ " + site + ")"
++			case from == trace.GoWaiting && to == trace.GoRunnable:
++				unblocks++
++				by := "no-G(netpoll/sched)"
++				if g != trace.NoGoroutine {
++					by = gname[g]
++				}
++				unblockBy[by+" -> "+name]++
++				unblocked[name]++
++				desc = "unblock " + name + " by " + by
++			case from == trace.GoRunning && to == trace.GoRunnable:
++				desc = "preempt/yield " + name + " " + st.Reason
++			case from == trace.GoRunning && to == trace.GoSyscall:
++				syscalls++
++				desc = "syscall " + name + " " + blockSite(st.Stack)
++			case from == trace.GoSyscall && to == trace.GoRunnable:
++				syscallBlocked++
++				desc = "syscall-end-blocked(P lost) " + name
++			case from == trace.GoSyscall && to == trace.GoRunning:
++				desc = "syscall-end " + name
++			case from == trace.GoRunning && to == trace.GoNotExist:
++				desc = "exit " + name
++			}
++		}
++		if *dump > 0 && us >= *from && printed < *dump && desc != "" {
++			fmt.Printf("%10.1fµs +%6.1f M%-5d P%-3d %s\n", us, float64(ev.Time()-lastT)/1e3, ev.Thread(), ev.Proc(), desc)
++			lastT = ev.Time()
++			printed++
++		}
++	}
++	n := float64(*q)
++	fmt.Printf("per query (q=%d): unblocks %.2f, goroutine starts %.2f (on a different thread than last time %.2f), creates %.2f, ProcStart %.2f, ProcStop %.2f, syscalls(traced) %.2f, syscall-end-without-P %.2f, threads seen %d\n",
++		*q, float64(unblocks)/n, float64(goStart)/n, float64(goStartOtherThread)/n, float64(creates)/n, float64(procStart)/n, float64(procStop)/n, float64(syscalls)/n, float64(syscallBlocked)/n, len(threadsSeen))
++	fmt.Printf("futile ProcStart (P started and stopped without running a goroutine): %.2f/q\n", float64(futile)/n)
++	printTop("unblocks by waker -> wakee", unblockBy, n, 20)
++	printTop("block reasons", blockReasons, n, 20)
++}
++
++func printTop(title string, m map[string]int, n float64, k int) {
++	type kv struct {
++		k string
++		v int
++	}
++	var s []kv
++	for a, b := range m {
++		s = append(s, kv{a, b})
++	}
++	sort.Slice(s, func(i, j int) bool { return s[i].v > s[j].v })
++	fmt.Println(title + ":")
++	for i, e := range s {
++		if i >= k {
++			break
++		}
++		fmt.Printf("  %6.3f/q  %s\n", float64(e.v)/n, e.k)
++	}
++}

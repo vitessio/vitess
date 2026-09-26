@@ -20,5 +20,5 @@ Prompted by the ~15x QPS gap to plain MySQL. Preliminary data is in HOP-OVERHEAD
 | ID | Focus | BASE | Status |
 |---|---|---|---|
 | P7-finish | write-up of the combined build: applied/skipped patches, tests, provenance | – | done |
-| H1-hop-rootcause | exact per-query cost breakdown (syscalls, context switches, goroutine hops, perf/kernel), Go-networking floor in this environment, mysqld CPU inflation, runtime/kernel/gRPC-option levers | 30000 | running |
+| H1-hop-rootcause | exact per-query cost breakdown (syscalls, context switches, goroutine hops, perf/kernel), Go-networking floor in this environment, mysqld CPU inflation, runtime/kernel/gRPC-option levers | 30000 | done |
 | H2-grpc-transport | unary vs bidi stream vs stream pool vs raw framing (microbenchmarks); evaluate PRs #19620/#20215; prototype pooled-stream Execute with raw MySQL rows | 40000 | done |
