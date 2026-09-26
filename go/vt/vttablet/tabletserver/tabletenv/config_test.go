@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -522,4 +523,21 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	err = config.verifyUnmanagedTabletConfig()
 	require.NoError(t, err)
 	assert.Empty(t, config.DB.App.Password)
+}
+
+func TestOltpConfigUnmarshalJSON(t *testing.T) {
+	var cfg OltpConfig
+	err := json.Unmarshal([]byte(`{"queryTimeoutSeconds":"5s","txTimeoutSeconds":"10s","maxRows":100,"warnRows":50}`), &cfg)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, cfg.QueryTimeout)
+	assert.Equal(t, 10*time.Second, cfg.TxTimeout)
+	assert.Equal(t, 100, cfg.MaxRows)
+	assert.Equal(t, 50, cfg.WarnRows)
+
+	// Round-trip through the YAML loader that --tablet-config uses.
+	full := NewDefaultConfig()
+	err = yaml2.Unmarshal([]byte("oltp:\n  queryTimeoutSeconds: 5s\n  maxRows: 100\n"), full)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, full.Oltp.QueryTimeout)
+	assert.Equal(t, 100, full.Oltp.MaxRows)
 }
