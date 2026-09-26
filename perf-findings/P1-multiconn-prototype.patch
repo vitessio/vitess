@@ -1,0 +1,76 @@
+diff --git a/go/vt/vttablet/grpctabletconn/conn.go b/go/vt/vttablet/grpctabletconn/conn.go
+index 331305c..18ecc97 100644
+--- a/go/vt/vttablet/grpctabletconn/conn.go
++++ b/go/vt/vttablet/grpctabletconn/conn.go
+@@ -19,7 +19,10 @@ package grpctabletconn
+ import (
+ 	"context"
+ 	"io"
++	"os"
++	"strconv"
+ 	"sync"
++	"sync/atomic"
+ 
+ 	"github.com/spf13/pflag"
+ 	"google.golang.org/grpc"
+@@ -79,6 +82,23 @@ type gRPCQueryClient struct {
+ 	mu sync.RWMutex
+ 	cc *grpc.ClientConn
+ 	c  queryservicepb.QueryClient
++
++	// PROTOTYPE(P1): extra connections used round-robin by Execute.
++	extraCC []*grpc.ClientConn
++	extraC  []queryservicepb.QueryClient
++	next    atomic.Uint32
++}
++
++// executeClient returns the client used for the next Execute call. conn.mu must be held.
++func (conn *gRPCQueryClient) executeClient() queryservicepb.QueryClient {
++	if len(conn.extraC) == 0 {
++		return conn.c
++	}
++	n := conn.next.Add(1) % uint32(len(conn.extraC)+1)
++	if n == 0 {
++		return conn.c
++	}
++	return conn.extraC[n-1]
+ }
+ 
+ var _ queryservice.QueryService = (*gRPCQueryClient)(nil)
+@@ -107,6 +127,16 @@ func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpccli
+ 		cc:     cc,
+ 		c:      c,
+ 	}
++	if n, _ := strconv.Atoi(os.Getenv("P1_TABLET_GRPC_CONNS")); n > 1 {
++		for i := 1; i < n; i++ {
++			ecc, err := grpcclient.DialContext(ctx, addr, failFast, opt)
++			if err != nil {
++				return nil, err
++			}
++			result.extraCC = append(result.extraCC, ecc)
++			result.extraC = append(result.extraC, queryservicepb.NewQueryClient(ecc))
++		}
++	}
+ 
+ 	return result, nil
+ }
+@@ -140,7 +170,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, _ queryservice.Session
+ 		req.ReservedConnKeepAliveIds = ids
+ 	}
+ 	req.ReservedConnActivityRefresh = queryservice.IsReservedConnActivityRefresh(ctx)
+-	er, err := conn.c.Execute(ctx, req)
++	er, err := conn.executeClient().Execute(ctx, req)
+ 	if err != nil {
+ 		return nil, tabletconn.ErrorFromGRPC(err)
+ 	}
+@@ -1219,6 +1249,10 @@ func (conn *gRPCQueryClient) Close(ctx context.Context) error {
+ 
+ 	cc := conn.cc
+ 	conn.cc = nil
++	for _, ecc := range conn.extraCC {
++		ecc.Close()
++	}
++	conn.extraCC, conn.extraC = nil, nil
+ 	return cc.Close()
+ }
+ 

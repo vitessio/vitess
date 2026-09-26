@@ -1,0 +1,1136 @@
+diff --git a/go/flags/endtoend/mysqlctld.txt b/go/flags/endtoend/mysqlctld.txt
+index 71ebd7c..2e3e440 100644
+--- a/go/flags/endtoend/mysqlctld.txt
++++ b/go/flags/endtoend/mysqlctld.txt
+@@ -87,6 +87,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+   -h, --help                                                             help for mysqlctld
+       --init-db-sql-file string                                          Path to .sql file to run after mysqld initialization
+       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+diff --git a/go/flags/endtoend/vtcombo.txt b/go/flags/endtoend/vtcombo.txt
+index c826c1a..c7dea4d 100644
+--- a/go/flags/endtoend/vtcombo.txt
++++ b/go/flags/endtoend/vtcombo.txt
+@@ -167,6 +167,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+       --grpc-use-effective-callerid                                      If set, and no username is available from a verified client certificate, sets the immediate caller ID from the client-supplied effective caller ID's principal. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any principal.
+       --grpc-use-effective-groups                                        If set with --grpc-use-effective-callerid, and no username is available from a verified client certificate, copies non-empty client-supplied effective caller ID groups to the immediate caller's security groups. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any groups.
+       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
+diff --git a/go/flags/endtoend/vtctld.txt b/go/flags/endtoend/vtctld.txt
+index e526cf5..c0d930e 100644
+--- a/go/flags/endtoend/vtctld.txt
++++ b/go/flags/endtoend/vtctld.txt
+@@ -84,6 +84,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+   -h, --help                                                             help for vtctld
+       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+diff --git a/go/flags/endtoend/vtgate.txt b/go/flags/endtoend/vtgate.txt
+index 6932e6d..1dd5391 100644
+--- a/go/flags/endtoend/vtgate.txt
++++ b/go/flags/endtoend/vtgate.txt
+@@ -97,6 +97,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+       --grpc-use-effective-callerid                                      If set, and no username is available from a verified client certificate, sets the immediate caller ID from the client-supplied effective caller ID's principal. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any principal.
+       --grpc-use-effective-groups                                        If set with --grpc-use-effective-callerid, and no username is available from a verified client certificate, copies non-empty client-supplied effective caller ID groups to the immediate caller's security groups. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any groups.
+       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
+diff --git a/go/flags/endtoend/vtgateclienttest.txt b/go/flags/endtoend/vtgateclienttest.txt
+index 84429d0..cd72970 100644
+--- a/go/flags/endtoend/vtgateclienttest.txt
++++ b/go/flags/endtoend/vtgateclienttest.txt
+@@ -44,6 +44,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+   -h, --help                                                             help for vtgateclienttest
+       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+diff --git a/go/flags/endtoend/vttablet.txt b/go/flags/endtoend/vttablet.txt
+index aad760b..2a78556 100644
+--- a/go/flags/endtoend/vttablet.txt
++++ b/go/flags/endtoend/vttablet.txt
+@@ -198,6 +198,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+       --health-check-interval duration                                   Interval between health checks (default 20s)
+       --heartbeat-enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
+       --heartbeat-interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
+diff --git a/go/flags/endtoend/vttestserver.txt b/go/flags/endtoend/vttestserver.txt
+index c5fd0b6..40b8060 100644
+--- a/go/flags/endtoend/vttestserver.txt
++++ b/go/flags/endtoend/vttestserver.txt
+@@ -79,6 +79,7 @@ Flags:
+       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
++      --grpc-server-num-stream-workers int                               Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).
+   -h, --help                                                             help for vttestserver
+       --initialize-with-random-data                                      If this flag is each table-shard will be initialized with random data. See also the 'rng_seed' and 'min_shard_size' and 'max_shard_size' flags.
+       --initialize-with-vt-dba-tcp                                       If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.
+diff --git a/go/vt/callinfo/plugin_grpc.go b/go/vt/callinfo/plugin_grpc.go
+index e402f2f..c8b06c2 100644
+--- a/go/vt/callinfo/plugin_grpc.go
++++ b/go/vt/callinfo/plugin_grpc.go
+@@ -21,6 +21,7 @@ package callinfo
+ import (
+ 	"context"
+ 	"fmt"
++	"net"
+ 
+ 	"github.com/google/safehtml"
+ 	"github.com/google/safehtml/template"
+@@ -39,20 +40,27 @@ func GRPCCallInfo(ctx context.Context) context.Context {
+ 	callinfo := &gRPCCallInfoImpl{
+ 		method: method,
+ 	}
++	// The address is formatted only when it is asked for: this runs for
++	// every RPC, and most RPCs never look at it.
+ 	peer, ok := peer.FromContext(ctx)
+ 	if ok {
+-		callinfo.remoteAddr = peer.Addr.String()
++		callinfo.addr = peer.Addr
+ 	}
+ 
+ 	return NewContext(ctx, callinfo)
+ }
+ 
+ type gRPCCallInfoImpl struct {
+-	method     string
++	method string
++	// addr, when set, takes precedence over remoteAddr.
++	addr       net.Addr
+ 	remoteAddr string
+ }
+ 
+ func (gci *gRPCCallInfoImpl) RemoteAddr() string {
++	if gci.addr != nil {
++		return gci.addr.String()
++	}
+ 	return gci.remoteAddr
+ }
+ 
+@@ -61,7 +69,7 @@ func (gci *gRPCCallInfoImpl) Username() string {
+ }
+ 
+ func (gci *gRPCCallInfoImpl) Text() string {
+-	return fmt.Sprintf("%s:%s(gRPC)", gci.remoteAddr, gci.method)
++	return fmt.Sprintf("%s:%s(gRPC)", gci.RemoteAddr(), gci.method)
+ }
+ 
+ var grpcTmpl = template.Must(template.New("tcs").Parse("<b>Method:</b> {{.Method}} <b>Remote Addr:</b> {{.RemoteAddr}}"))
+@@ -72,7 +80,7 @@ func (gci *gRPCCallInfoImpl) HTML() safehtml.HTML {
+ 		RemoteAddr string
+ 	}{
+ 		Method:     gci.method,
+-		RemoteAddr: gci.remoteAddr,
++		RemoteAddr: gci.RemoteAddr(),
+ 	})
+ 	if err != nil {
+ 		panic(err)
+diff --git a/go/vt/callinfo/plugin_grpc_test.go b/go/vt/callinfo/plugin_grpc_test.go
+index 7946198..d94f72f 100644
+--- a/go/vt/callinfo/plugin_grpc_test.go
++++ b/go/vt/callinfo/plugin_grpc_test.go
+@@ -17,9 +17,13 @@ limitations under the License.
+ package callinfo
+ 
+ import (
++	"net"
+ 	"testing"
+ 
+ 	"github.com/stretchr/testify/require"
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/metadata"
++	"google.golang.org/grpc/peer"
+ )
+ 
+ func TestGRPCCallInfo(t *testing.T) {
+@@ -34,3 +38,23 @@ func TestGRPCCallInfo(t *testing.T) {
+ 	require.Equal(t, "localhost:tcp(gRPC)", grpcCi.Text())
+ 	require.Equal(t, "<b>Method:</b> tcp <b>Remote Addr:</b> localhost", grpcCi.HTML().String())
+ }
++
++type fakeServerTransportStream struct {
++	method string
++}
++
++func (s *fakeServerTransportStream) Method() string                  { return s.method }
++func (s *fakeServerTransportStream) SetHeader(md metadata.MD) error  { return nil }
++func (s *fakeServerTransportStream) SendHeader(md metadata.MD) error { return nil }
++func (s *fakeServerTransportStream) SetTrailer(md metadata.MD) error { return nil }
++
++func TestGRPCCallInfoFromPeer(t *testing.T) {
++	ctx := grpc.NewContextWithServerTransportStream(t.Context(), &fakeServerTransportStream{method: "/queryservice.Query/Execute"})
++	ctx = peer.NewContext(ctx, &peer.Peer{Addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 15991}})
++
++	ci, ok := FromContext(GRPCCallInfo(ctx))
++	require.True(t, ok)
++	require.Equal(t, "127.0.0.1:15991", ci.RemoteAddr())
++	require.Equal(t, "gRPC", ci.Username())
++	require.Equal(t, "127.0.0.1:15991:/queryservice.Query/Execute(gRPC)", ci.Text())
++}
+diff --git a/go/vt/callinfo/plugin_mysql.go b/go/vt/callinfo/plugin_mysql.go
+index 37f743c..f9a83d2 100644
+--- a/go/vt/callinfo/plugin_mysql.go
++++ b/go/vt/callinfo/plugin_mysql.go
+@@ -21,6 +21,7 @@ package callinfo
+ import (
+ 	"context"
+ 	"fmt"
++	"net"
+ 
+ 	"github.com/google/safehtml"
+ 	"github.com/google/safehtml/template"
+@@ -31,18 +32,25 @@ import (
+ // MysqlCallInfo returns an augmented context with a CallInfo structure,
+ // only for Mysql contexts.
+ func MysqlCallInfo(ctx context.Context, c *mysql.Conn) context.Context {
++	// The address is formatted only when it is asked for: this runs for
++	// every query, and most queries never look at it.
+ 	return NewContext(ctx, &mysqlCallInfoImpl{
+-		remoteAddr: c.RemoteAddr().String(),
+-		user:       c.User,
++		addr: c.RemoteAddr(),
++		user: c.User,
+ 	})
+ }
+ 
+ type mysqlCallInfoImpl struct {
++	// addr, when set, takes precedence over remoteAddr.
++	addr       net.Addr
+ 	remoteAddr string
+ 	user       string
+ }
+ 
+ func (mci *mysqlCallInfoImpl) RemoteAddr() string {
++	if mci.addr != nil {
++		return mci.addr.String()
++	}
+ 	return mci.remoteAddr
+ }
+ 
+@@ -51,7 +59,7 @@ func (mci *mysqlCallInfoImpl) Username() string {
+ }
+ 
+ func (mci *mysqlCallInfoImpl) Text() string {
+-	return fmt.Sprintf("%s@%s(Mysql)", mci.user, mci.remoteAddr)
++	return fmt.Sprintf("%s@%s(Mysql)", mci.user, mci.RemoteAddr())
+ }
+ 
+ var mysqlTmpl = template.Must(template.New("tcs").Parse("<b>MySQL User:</b> {{.MySQLUser}} <b>Remote Addr:</b> {{.RemoteAddr}}"))
+@@ -62,7 +70,7 @@ func (mci *mysqlCallInfoImpl) HTML() safehtml.HTML {
+ 		RemoteAddr string
+ 	}{
+ 		MySQLUser:  mci.user,
+-		RemoteAddr: mci.remoteAddr,
++		RemoteAddr: mci.RemoteAddr(),
+ 	})
+ 	if err != nil {
+ 		panic(err)
+diff --git a/go/vt/servenv/grpc_server.go b/go/vt/servenv/grpc_server.go
+index c56410e..61889f6 100644
+--- a/go/vt/servenv/grpc_server.go
++++ b/go/vt/servenv/grpc_server.go
+@@ -114,6 +114,10 @@ var (
+ 
+ 	gRPCKeepaliveTime    = 10 * time.Second
+ 	gRPCKeepaliveTimeout = 10 * time.Second
++
++	// gRPCNumStreamWorkers is the number of worker goroutines that serve
++	// incoming streams. Zero means max(GOMAXPROCS, minStreamWorkers).
++	gRPCNumStreamWorkers int
+ )
+ 
+ // Injectable behavior for testing.
+@@ -164,6 +168,7 @@ func RegisterGRPCServerFlags() {
+ 		utils.SetFlagStringVar(fs, &gRPCServerCA, "grpc-server-ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+ 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTime, "grpc-server-keepalive-time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
+ 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTimeout, "grpc-server-keepalive-timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
++		utils.SetFlagIntVar(fs, &gRPCNumStreamWorkers, "grpc-server-num-stream-workers", gRPCNumStreamWorkers, "Number of worker goroutines that serve incoming gRPC streams. When all workers are busy, a new goroutine is started for the stream. Long-lived streams such as StreamHealth or VStream hold a worker for their whole lifetime. 0 means max(GOMAXPROCS, 64).")
+ 	})
+ }
+ 
+@@ -275,7 +280,7 @@ func createGRPCServer() {
+ 	// Reuse a fixed pool of worker goroutines for incoming streams instead
+ 	// of spawning a new goroutine per RPC. This avoids per-RPC goroutine
+ 	// creation and cold-start scheduling latency on the hot path.
+-	opts = append(opts, grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))))
++	opts = append(opts, grpc.NumStreamWorkers(uint32(numStreamWorkers())))
+ 	if gRPCIngressStatsEnabled {
+ 		opts = append(opts, grpc.StatsHandler(GRPCIngressStatsHandler()))
+ 	}
+@@ -285,6 +290,22 @@ func createGRPCServer() {
+ 	GRPCServer = grpc.NewServer(opts...)
+ }
+ 
++// minStreamWorkers is the default lower bound on the number of gRPC stream
++// workers. A worker is busy for the whole lifetime of the stream it serves,
++// and long-lived streams (StreamHealth from every vtgate, VStream, and so on)
++// would otherwise take all GOMAXPROCS workers: every unary RPC would then run
++// on a newly started goroutine, which also has to grow its stack for the deep
++// query path. Idle workers only cost a parked goroutine each.
++const minStreamWorkers = 64
++
++// numStreamWorkers returns the number of gRPC stream workers to start.
++func numStreamWorkers() int {
++	if gRPCNumStreamWorkers > 0 {
++		return gRPCNumStreamWorkers
++	}
++	return max(runtime.GOMAXPROCS(0), minStreamWorkers)
++}
++
+ // We can only set a ServerInterceptor once, so we chain multiple interceptors into one
+ func interceptors() []grpc.ServerOption {
+ 	interceptors := &serverInterceptorBuilder{}
+diff --git a/go/vt/servenv/grpc_server_test.go b/go/vt/servenv/grpc_server_test.go
+index 79e9c78..012f3e5 100644
+--- a/go/vt/servenv/grpc_server_test.go
++++ b/go/vt/servenv/grpc_server_test.go
+@@ -20,6 +20,7 @@ import (
+ 	"context"
+ 	"fmt"
+ 	"net"
++	"runtime"
+ 	"sync/atomic"
+ 	"testing"
+ 
+@@ -123,6 +124,18 @@ func TestEnableGRPCIngressStatsInstallsServerOption(t *testing.T) {
+ 	assert.Positive(t, atomic.LoadUint64(&ingressBytes))
+ }
+ 
++// TestNumStreamWorkers verifies that the default number of stream workers
++// leaves room for long-lived streams even with a small GOMAXPROCS, and that
++// the flag overrides it.
++func TestNumStreamWorkers(t *testing.T) {
++	t.Cleanup(withTempVar(&gRPCNumStreamWorkers, 0))
++	assert.Equal(t, max(runtime.GOMAXPROCS(0), minStreamWorkers), numStreamWorkers())
++	assert.GreaterOrEqual(t, numStreamWorkers(), 64)
++
++	gRPCNumStreamWorkers = 8
++	assert.Equal(t, 8, numStreamWorkers())
++}
++
+ type ingressStatsTestService interface {
+ 	Check(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+ }
+diff --git a/go/vt/topo/topoproto/tablet.go b/go/vt/topo/topoproto/tablet.go
+index 4a7eac0..9e70915 100644
+--- a/go/vt/topo/topoproto/tablet.go
++++ b/go/vt/topo/topoproto/tablet.go
+@@ -205,6 +205,16 @@ func TabletTypeLString(tabletType topodatapb.TabletType) string {
+ 	return value
+ }
+ 
++// TabletTypeString returns the same value as tabletType.String(), without
++// the protobuf reflection that the generated String method does. It is meant
++// for per-query code paths such as stats labels.
++func TabletTypeString(tabletType topodatapb.TabletType) string {
++	if value, ok := topodatapb.TabletType_name[int32(tabletType)]; ok {
++		return value
++	}
++	return tabletType.String()
++}
++
+ // IsTypeInList returns true if the given type is in the list.
+ // Use it with AllTabletTypes for instance.
+ func IsTypeInList(tabletType topodatapb.TabletType, types []topodatapb.TabletType) bool {
+diff --git a/go/vt/topo/topoproto/tablet_test.go b/go/vt/topo/topoproto/tablet_test.go
+index 56bfa45..35e438d 100644
+--- a/go/vt/topo/topoproto/tablet_test.go
++++ b/go/vt/topo/topoproto/tablet_test.go
+@@ -115,3 +115,14 @@ func TestIsTabletsInList(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestTabletTypeString(t *testing.T) {
++	for v := range topodatapb.TabletType_name {
++		tabletType := topodatapb.TabletType(v)
++		assert.Equal(t, tabletType.String(), TabletTypeString(tabletType))
++	}
++	// Aliases resolve to the canonical name, and unknown values fall back to String.
++	assert.Equal(t, "PRIMARY", TabletTypeString(topodatapb.TabletType_MASTER))
++	assert.Equal(t, "RDONLY", TabletTypeString(topodatapb.TabletType_BATCH))
++	assert.Equal(t, topodatapb.TabletType(42).String(), TabletTypeString(topodatapb.TabletType(42)))
++}
+diff --git a/go/vt/vtgate/executor.go b/go/vt/vtgate/executor.go
+index e73e059..38d102f 100644
+--- a/go/vt/vtgate/executor.go
++++ b/go/vt/vtgate/executor.go
+@@ -415,7 +415,7 @@ func (e *Executor) StreamExecute(
+ 		updateLogStats := func(err error) {
+ 			logStats.StmtType = plan.QueryType.String()
+ 			logStats.PlanType = plan.Type.String()
+-			logStats.TabletType = vc.TabletType().String()
++			logStats.TabletType = topoproto.TabletTypeString(vc.TabletType())
+ 			logStats.ExecuteTime = time.Since(execStart)
+ 			logStats.ActiveKeyspace = vc.GetKeyspace()
+ 
+@@ -440,7 +440,7 @@ func (e *Executor) StreamExecute(
+ 				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+ 			}
+ 
+-			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
++			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), topoproto.TabletTypeString(vc.TabletType()), int64(logStats.ShardQueries), tablesUsed)
+ 			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
+ 		}
+ 
+diff --git a/go/vt/vtgate/plan_execute.go b/go/vt/vtgate/plan_execute.go
+index 5f17eb2..c962db8 100644
+--- a/go/vt/vtgate/plan_execute.go
++++ b/go/vt/vtgate/plan_execute.go
+@@ -28,6 +28,7 @@ import (
+ 	querypb "vitess.io/vitess/go/vt/proto/query"
+ 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+ 	"vitess.io/vitess/go/vt/sqlparser"
++	"vitess.io/vitess/go/vt/topo/topoproto"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ 	"vitess.io/vitess/go/vt/vtgate/engine"
+ 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+@@ -489,7 +490,7 @@ func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, v
+ 	logStats.StmtType = plan.QueryType.String()
+ 	logStats.PlanType = plan.Type.String()
+ 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
+-	logStats.TabletType = vcursor.TabletType().String()
++	logStats.TabletType = topoproto.TabletTypeString(vcursor.TabletType())
+ 	errCount := e.logExecutionEnd(logStats, execStart, plan, vcursor, err, qr)
+ 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
+ }
+@@ -513,7 +514,7 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
+ 		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+ 	}
+ 
+-	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), logStats.TablesUsed)
++	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), topoproto.TabletTypeString(vcursor.TabletType()), int64(logStats.ShardQueries), logStats.TablesUsed)
+ 
+ 	return errCount
+ }
+diff --git a/go/vt/vtgate/scatter_conn.go b/go/vt/vtgate/scatter_conn.go
+index d49b078..f154eb1 100644
+--- a/go/vt/vtgate/scatter_conn.go
++++ b/go/vt/vtgate/scatter_conn.go
+@@ -755,7 +755,14 @@ func (stc *ScatterConn) multiGoTransaction(
+ 		startTime, statsKey := stc.startAction(name, rs.Target)
+ 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
+ 
+-		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
++		// The transaction mode is a dynamic (viper) setting whose lookup is
++		// comparatively expensive, and actionInfo only needs it inside a
++		// transaction or reserved connection.
++		var txMode vtgatepb.TransactionMode
++		if session.InTransaction() || session.InReservedConn() {
++			txMode = stc.txConn.txMode.TransactionMode()
++		}
++		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, txMode)
+ 		if err != nil {
+ 			return
+ 		}
+diff --git a/go/vt/vtgate/status.go b/go/vt/vtgate/status.go
+index b220de8..a36cb46 100644
+--- a/go/vt/vtgate/status.go
++++ b/go/vt/vtgate/status.go
+@@ -28,8 +28,6 @@ import (
+ )
+ 
+ const (
+-	aggrChanSize = 10000
+-
+ 	// StatusTemplate is the display part to use to show
+ 	// a TabletCacheStatusList.
+ 	StatusTemplate = `
+@@ -74,23 +72,20 @@ const (
+ )
+ 
+ var (
+-	// aggrChan buffers queryInfo objects to be processed.
+-	aggrChan chan *queryInfo
+ 	// muAggr protects below vars.
+ 	muAggr sync.Mutex
+ 	// aggregators holds all Aggregators created.
+ 	aggregators []*TabletStatusAggregator
+-	// gatewayStatsChanFull tracks the number of times
+-	// aggrChan becomes full.
++	// gatewayStatsChanFull used to track the number of times the queryInfo
++	// buffer became full. Query info is now recorded inline, so it stays at
++	// zero. It is kept so that existing dashboards keep working.
+ 	gatewayStatsChanFull *stats.Counter
+ )
+ 
+ func init() {
+-	// init global goroutines to aggregate stats.
+-	aggrChan = make(chan *queryInfo, aggrChanSize)
++	// init global goroutine to rotate the per-second stats slots.
+ 	gatewayStatsChanFull = stats.NewCounter("GatewayStatsChanFullCount", "The number of times the queryInfo buffer becomes full")
+ 	go resetAggregators()
+-	go processQueryInfo()
+ }
+ 
+ // registerAggregator registers an aggregator to the global list.
+@@ -112,13 +107,6 @@ func resetAggregators() {
+ 	}
+ }
+ 
+-// processQueryInfo processes the next queryInfo object.
+-func processQueryInfo() {
+-	for qi := range aggrChan {
+-		qi.aggr.processQueryInfo(qi)
+-	}
+-}
+-
+ //
+ // TabletCacheStatus definitions
+ //
+@@ -187,19 +175,17 @@ func NewTabletStatusAggregator(keyspace, shard string, tabletType topodatapb.Tab
+ }
+ 
+ // UpdateQueryInfo updates the aggregator with the given information about a query.
++// It runs for every query, so it records the information inline under the
++// aggregator's own lock: handing it to a background goroutine over a channel
++// costs a goroutine wakeup per query.
+ func (tsa *TabletStatusAggregator) UpdateQueryInfo(addr string, tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
+-	qi := &queryInfo{
++	tsa.processQueryInfo(&queryInfo{
+ 		aggr:       tsa,
+ 		addr:       addr,
+ 		tabletType: tabletType,
+ 		elapsed:    elapsed,
+ 		hasError:   hasError,
+-	}
+-	select {
+-	case aggrChan <- qi:
+-	default:
+-		gatewayStatsChanFull.Add(1)
+-	}
++	})
+ }
+ 
+ func (tsa *TabletStatusAggregator) processQueryInfo(qi *queryInfo) {
+diff --git a/go/vt/vtgate/tabletgateway.go b/go/vt/vtgate/tabletgateway.go
+index 856dcf7..7ac35de 100644
+--- a/go/vt/vtgate/tabletgateway.go
++++ b/go/vt/vtgate/tabletgateway.go
+@@ -100,10 +100,9 @@ type TabletGateway struct {
+ 	defaultConnCollation atomic.Uint32
+ 
+ 	// mu protects the fields of this group.
+-	mu sync.Mutex
+-	// statusAggregators is a map indexed by the key
+-	// keyspace/shard/tablet_type.
+-	statusAggregators map[string]*TabletStatusAggregator
++	mu sync.RWMutex
++	// statusAggregators is a map indexed by keyspace, shard and tablet type.
++	statusAggregators map[statusAggregatorKey]*TabletStatusAggregator
+ 
+ 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
+ 	buffer *buffer.Buffer
+@@ -144,7 +143,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
+ 		srvTopoServer:     serv,
+ 		localCell:         localCell,
+ 		retryCount:        retryCount,
+-		statusAggregators: make(map[string]*TabletStatusAggregator),
++		statusAggregators: make(map[statusAggregatorKey]*TabletStatusAggregator),
+ 	}
+ 	gw.setupBuffering(ctx)
+ 	gw.setupBalancer()
+@@ -512,18 +511,33 @@ func (gw *TabletGateway) updateStats(target *querypb.Target, startTime time.Time
+ 	aggr.UpdateQueryInfo("", target.TabletType, elapsed, err != nil)
+ }
+ 
++// statusAggregatorKey identifies a TabletStatusAggregator.
++type statusAggregatorKey struct {
++	keyspace   string
++	shard      string
++	tabletType topodatapb.TabletType
++}
++
+ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatusAggregator {
+-	key := fmt.Sprintf("%v/%v/%v", target.Keyspace, target.Shard, target.TabletType.String())
++	key := statusAggregatorKey{keyspace: target.Keyspace, shard: target.Shard, tabletType: target.TabletType}
+ 
+-	// get existing aggregator
+-	gw.mu.Lock()
+-	defer gw.mu.Unlock()
++	// This runs for every query: look up an existing aggregator under the
++	// read lock, without building a string key.
++	gw.mu.RLock()
+ 	aggr, ok := gw.statusAggregators[key]
++	gw.mu.RUnlock()
+ 	if ok {
+ 		return aggr
+ 	}
++
++	gw.mu.Lock()
++	defer gw.mu.Unlock()
++	if aggr, ok := gw.statusAggregators[key]; ok {
++		return aggr
++	}
+ 	// create a new one if it doesn't exist yet
+-	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, key)
++	name := fmt.Sprintf("%v/%v/%v", target.Keyspace, target.Shard, target.TabletType.String())
++	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, name)
+ 	gw.statusAggregators[key] = aggr
+ 	return aggr
+ }
+diff --git a/go/vt/vtgate/tabletgateway_test.go b/go/vt/vtgate/tabletgateway_test.go
+index 4756287..1f86508 100644
+--- a/go/vt/vtgate/tabletgateway_test.go
++++ b/go/vt/vtgate/tabletgateway_test.go
+@@ -20,6 +20,7 @@ import (
+ 	"context"
+ 	"errors"
+ 	"testing"
++	"time"
+ 
+ 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+ 
+@@ -398,3 +399,35 @@ func TestWithRetry(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestTabletGatewayStatsAggregator(t *testing.T) {
++	ctx := utils.LeakCheckContext(t)
++
++	hc := discovery.NewFakeHealthCheck(nil)
++	ts := &econtext.FakeTopoServer{}
++	tg := NewTabletGateway(ctx, hc, ts, "local")
++	t.Cleanup(func() { tg.Close(ctx) })
++
++	primary := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
++	replica := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_REPLICA}
++
++	tg.updateStats(primary, time.Now(), nil)
++	tg.updateStats(primary, time.Now(), errors.New("failed"))
++	tg.updateStats(replica, time.Now(), nil)
++
++	// Equal targets share one aggregator, and every query is recorded
++	// before updateStats returns.
++	require.Same(t, tg.getStatsAggregator(primary), tg.getStatsAggregator(primary.CloneVT()))
++	status := tg.CacheStatus()
++	require.Len(t, status, 2)
++	byName := map[string]*TabletCacheStatus{}
++	for _, s := range status {
++		byName[s.Name] = s
++	}
++	require.Contains(t, byName, "ks/-80/PRIMARY")
++	require.Contains(t, byName, "ks/-80/REPLICA")
++	assert.EqualValues(t, 2, byName["ks/-80/PRIMARY"].QueryCount)
++	assert.EqualValues(t, 1, byName["ks/-80/PRIMARY"].QueryError)
++	assert.EqualValues(t, 1, byName["ks/-80/REPLICA"].QueryCount)
++	assert.EqualValues(t, 0, byName["ks/-80/REPLICA"].QueryError)
++}
+diff --git a/go/vt/vttablet/tabletserver/query_engine.go b/go/vt/vttablet/tabletserver/query_engine.go
+index bc85d25..5dc4d25 100644
+--- a/go/vt/vttablet/tabletserver/query_engine.go
++++ b/go/vt/vttablet/tabletserver/query_engine.go
+@@ -45,6 +45,7 @@ import (
+ 	"vitess.io/vitess/go/vt/sqlparser"
+ 	"vitess.io/vitess/go/vt/tableacl"
+ 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
++	"vitess.io/vitess/go/vt/topo/topoproto"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+ 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+@@ -712,7 +713,7 @@ func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, ta
+ 		qe.queryTextCharsProcessed.Add(keys, int64(len(plan.FullQuery.Query)))
+ 	}
+ 
+-	qe.queryCountsWithTabletType.Add([]string{tableName, plan.PlanID.String(), tabletType.String()}, queryCount)
++	qe.queryCountsWithTabletType.Add([]string{tableName, plan.PlanID.String(), topoproto.TabletTypeString(tabletType)}, queryCount)
+ 
+ 	// queryErrorCountsWithCode is similar to queryErrorCounts except we have an additional dimension
+ 	// of error code.
+diff --git a/go/vt/vttablet/tabletserver/query_executor.go b/go/vt/vttablet/tabletserver/query_executor.go
+index 50c1966..47c9fb9 100644
+--- a/go/vt/vttablet/tabletserver/query_executor.go
++++ b/go/vt/vttablet/tabletserver/query_executor.go
+@@ -43,6 +43,7 @@ import (
+ 	"vitess.io/vitess/go/vt/sqlparser"
+ 	"vitess.io/vitess/go/vt/tableacl"
+ 	"vitess.io/vitess/go/vt/tableacl/acl"
++	"vitess.io/vitess/go/vt/topo/topoproto"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+ 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+@@ -136,7 +137,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
+ 	defer func(start time.Time) {
+ 		duration := time.Since(start)
+ 		qre.tsv.stats.QueryTimings.Add(planName, duration)
+-		qre.tsv.stats.QueryTimingsByTabletType.Add(qre.targetTabletType.String(), duration)
++		qre.tsv.stats.QueryTimingsByTabletType.Add(topoproto.TabletTypeString(qre.targetTabletType), duration)
+ 		qre.recordUserQuery("Execute", int64(duration))
+ 
+ 		mysqlTime := qre.logStats.MysqlResponseTime
+@@ -145,9 +146,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
+ 			tableName = "Join"
+ 		}
+ 
+-		var errCode string
+ 		vtErrorCode := vterrors.Code(err)
+-		errCode = vtErrorCode.String()
++		errCode, ok := vtrpcpb.Code_name[int32(vtErrorCode)]
++		if !ok {
++			errCode = vtErrorCode.String()
++		}
+ 
+ 		if reply == nil {
+ 			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
+@@ -872,15 +875,16 @@ func (qre *QueryExecutor) checkPermissions() error {
+ 	username := ""
+ 	ci, ok := callinfo.FromContext(qre.ctx)
+ 	if ok {
+-		remoteAddr = ci.RemoteAddr()
++		// Only the query rules look at the remote address, and formatting
++		// it costs an allocation per query.
++		if !qre.plan.Rules.Empty() {
++			remoteAddr = ci.RemoteAddr()
++		}
+ 		username = ci.Username()
+ 	}
+ 
+ 	action, ruleCancelCtx, timeout, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+ 
+-	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, timeout) // aborts buffering at given timeout
+-	defer cancel()
+-
+ 	switch action {
+ 	case rules.QRFail:
+ 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
+@@ -889,7 +893,11 @@ func (qre *QueryExecutor) checkPermissions() error {
+ 	case rules.QRBuffer:
+ 		if ruleCancelCtx != nil {
+ 			// We buffer up to some timeout. The timeout is determined by ctx.Done().
+-			// If we're not at timeout yet, we fail the query
++			// If we're not at timeout yet, we fail the query.
++			// The timer is created only here: almost every query matches no
++			// rule, and a timer per query is measurable on the hot path.
++			bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, timeout) // aborts buffering at given timeout
++			defer cancel()
+ 			select {
+ 			case <-ruleCancelCtx.Done():
+ 				// good! We have buffered the query, and buffering is completed
+diff --git a/go/vt/vttablet/tabletserver/rules/rules.go b/go/vt/vttablet/tabletserver/rules/rules.go
+index 0a5c623..36581e9 100644
+--- a/go/vt/vttablet/tabletserver/rules/rules.go
++++ b/go/vt/vttablet/tabletserver/rules/rules.go
+@@ -101,6 +101,11 @@ func (qrs *Rules) Add(qr *Rule) {
+ 	qrs.rules = append(qrs.rules, qr)
+ }
+ 
++// Empty returns true if there are no rules.
++func (qrs *Rules) Empty() bool {
++	return qrs == nil || len(qrs.rules) == 0
++}
++
+ // Find finds the first occurrence of a Rule by matching
+ // the Name field. It returns nil if the rule was not found.
+ func (qrs *Rules) Find(name string) (qr *Rule) {
+diff --git a/perf-findings/harness/P1-ab.sh b/perf-findings/harness/P1-ab.sh
+new file mode 100755
+index 0000000..249be85
+--- /dev/null
++++ b/perf-findings/harness/P1-ab.sh
+@@ -0,0 +1,24 @@
++#!/bin/bash
++# ab.sh ROUNDS "MODES" CFG1 CFG2 [CFG3...]
++#   MODES: space separated list of MODE:THREADS, e.g. "ps:8 text:8 ps:32"
++#   CFGn:  path to a shell snippet that sets BIN / GATE_ENV / TABLET_ENV / VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS
++# For every round and config: restart vtgate+vttablets with that config, warm up 5s, run each mode for $TIME (default 20s).
++set -u
++ROUNDS=$1; MODES=$2; shift 2
++TIME=${TIME:-20}
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    name=$(basename "$cfg" .cfg)
++    (
++      unset BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      # shellcheck disable=SC1090
++      source "$cfg"
++      export BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      /home/vt/perf/P1/c.sh restart >/dev/null 2>&1
++    )
++    /home/vt/perf/P1/c.sh sb oltp_point_select --threads=8 --time=5 --db-ps-mode=auto run >/dev/null 2>&1
++    for m in $MODES; do
++      /home/vt/perf/P1/bench.sh "${m%%:*}" "${m##*:}" "$TIME" "r$r-$name"
++    done
++  done
++done
+diff --git a/perf-findings/harness/P1-agg.py b/perf-findings/harness/P1-agg.py
+new file mode 100644
+index 0000000..9755922
+--- /dev/null
++++ b/perf-findings/harness/P1-agg.py
+@@ -0,0 +1,41 @@
++#!/usr/bin/env python3
++"""Aggregate bench.sh lines from ab.sh output files: mean (and min..max) per config/mode/threads."""
++import re
++import sys
++from collections import defaultdict
++
++rows = defaultdict(list)
++order = []
++for path in sys.argv[1:]:
++    for line in open(path):
++        m = re.match(r'(r\d+-)?(\S+)\s+(\S+)\s+thr=(\d+)\s+qps=(\S+)\s+avg=(\S+)\s+p95=(\S+)\s+p99=(\S+)\s+vtgate=(\d+) tablets=(\d+) mysqld=(\d+) load=(\S+)', line)
++        if not m:
++            continue
++        cfg, mode, thr = m.group(2), m.group(3), int(m.group(4))
++        vals = [float(m.group(i)) for i in range(5, 13)]
++        key = (mode, thr, cfg)
++        if key not in rows:
++            order.append(key)
++        rows[key].append(vals)
++
++names = ['qps', 'avg', 'p95', 'p99', 'vtgate', 'tablets', 'mysqld', 'load']
++base = {}
++print(f"| mode | thr | config | n | QPS | avg ms | p95 ms | p99 ms | vtgate µs/q | tablets µs/q | mysqld µs/q | load |")
++print("|---|---|---|---|---|---|---|---|---|---|---|---|")
++for key in sorted(order, key=lambda k: (k[0], k[1], order.index(k))):
++    v = rows[key]
++    n = len(v)
++    mean = [sum(x[i] for x in v) / n for i in range(8)]
++    lo = [min(x[i] for x in v) for i in range(8)]
++    hi = [max(x[i] for x in v) for i in range(8)]
++    mode, thr, cfg = key
++    if (mode, thr) not in base:
++        base[(mode, thr)] = mean
++    b = base[(mode, thr)]
++
++    def fmt(i, prec):
++        s = f"{mean[i]:.{prec}f}"
++        if b is not mean and b[i]:
++            s += f" ({(mean[i] / b[i] - 1) * 100:+.1f}%)"
++        return s + f" [{lo[i]:.{prec}f}–{hi[i]:.{prec}f}]" if i in (4, 5) else s
++    print(f"| {mode} | {thr} | {cfg} | {n} | {fmt(0,0)} | {fmt(1,2)} | {fmt(2,2)} | {fmt(3,2)} | {fmt(4,0)} | {fmt(5,0)} | {fmt(6,0)} | {mean[7]:.1f} |")
+diff --git a/perf-findings/harness/P1-bench.sh b/perf-findings/harness/P1-bench.sh
+new file mode 100755
+index 0000000..8e3089a
+--- /dev/null
++++ b/perf-findings/harness/P1-bench.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash
++# bench.sh MODE THREADS TIME [LABEL]
++#   MODE: ps (prepared, --db-ps-mode=auto) | text (--db-ps-mode=disable)
++# Prints one line: label mode threads qps avg p95 p99 cpu_us/query per process (vtgate, tablets sum, mysqld sum) + load
++set -u
++MODE=$1; THREADS=$2; TIME=$3; LABEL=${4:-run}
++C=/home/vt/perf/P1/c.sh
++if [[ $MODE == ps ]]; then PSM=auto; else PSM=disable; fi
++before=$($C cpu)
++out=$($C sb oltp_point_select --threads="$THREADS" --time="$TIME" --db-ps-mode=$PSM --histogram=on --report-interval=0 run 2>&1)
++after=$($C cpu)
++load=$(cut -d' ' -f1 /proc/loadavg)
++q=$(echo "$out" | awk '/queries:/ && /per sec/ {gsub(/[()]/,""); print $2; exit}')
++qps=$(echo "$out" | awk '/queries:/ && /per sec/ {gsub(/[()]/,""); print $3; exit}')
++avg=$(echo "$out" | awk '/avg:/ {print $2; exit}')
++# percentiles from histogram: lines "   value |  ***  count"
++pcts=$(echo "$out" | awk '
++  /Latency histogram/ {h=1; next}
++  h && /\|/ { v=$1; c=$NF; if (c ~ /^[0-9]+$/) { vals[n]=v; cnt[n]=c; tot+=c; n++ } }
++  h && /^$/ && n>0 {h=0}
++  END { s=0; p95=""; p99="";
++        for (i=0;i<n;i++){ s+=cnt[i]; if (p95=="" && s>=0.95*tot) p95=vals[i]; if (p99=="" && s>=0.99*tot) p99=vals[i]; }
++        printf "%s %s", p95, p99 }')
++cpu=$(paste <(echo "$before") <(echo "$after") | awk -v q="$q" '
++  { d=($4-$2)*1e6/q; if ($1 ~ /^vtgate/) g=d; else if ($1 ~ /^vttablet/) t+=d; else if ($1 ~ /^mysqld/) m+=d }
++  END { printf "vtgate=%.0f tablets=%.0f mysqld=%.0f", g, t, m }')
++printf "%-12s %-4s thr=%-3s qps=%-8s avg=%-5s p95=%-6s p99=%-6s %s load=%s\n" "$LABEL" "$MODE" "$THREADS" "$qps" "$avg" $pcts "$cpu" "$load"
+diff --git a/perf-findings/harness/P1-c.sh b/perf-findings/harness/P1-c.sh
+new file mode 100755
+index 0000000..4d39946
+--- /dev/null
++++ b/perf-findings/harness/P1-c.sh
+@@ -0,0 +1,3 @@
++#!/bin/bash
++# wrapper: run cluster.sh as vt with P1 settings. GATE_ENV / TABLET_ENV: space separated VAR=val for vtgate / vttablet.
++exec runuser -u vt -- env BASE=30000 HOME=/home/vt BIN="${BIN:-/home/vt/bin}" VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" GATE_ENV="${GATE_ENV:-}" TABLET_ENV="${TABLET_ENV:-}" /home/vt/perf/P1/cluster.sh "$@"
+diff --git a/perf-findings/harness/P1-cluster.sh b/perf-findings/harness/P1-cluster.sh
+new file mode 100755
+index 0000000..c6f98a1
+--- /dev/null
++++ b/perf-findings/harness/P1-cluster.sh
+@@ -0,0 +1,269 @@
++#!/bin/bash
++# Local Vitess cluster for performance profiling.
++#
++# Usage (run as the unprivileged `vt` user, e.g. `runuser -u vt -- env BASE=20000 ./cluster.sh up`):
++#   cluster.sh up        start etcd, vtctld, mysqld+vttablet per tablet, vtgate; elect primaries; load schema/vschema
++#   cluster.sh down      stop everything and delete the data dir
++#   cluster.sh status    show processes and tablets
++#   cluster.sh env       print the ports of this cluster
++#   cluster.sh prepare   (re)load sysbench data through vtgate: TABLES tables x TABLE_SIZE rows (default 100000)
++#   cluster.sh cpu       print cumulative CPU seconds (user+sys) per process: vtgate, vttablet_<uid>, mysqld_<uid>
++#                        (diff two snapshots around a run to get CPU per query)
++#   cluster.sh sb ARGS   run sysbench against vtgate with the right connection flags, e.g.
++#                        cluster.sh sb oltp_point_select --threads=8 --time=30 run
++#
++# Environment:
++#   BASE      port base (default 20000). Use different bases (20000, 30000) for concurrent clusters.
++#   NAME      cluster name / data dir suffix (default c$BASE)
++#   KEYSPACE  keyspace name (default sbtest)
++#   SHARDS    space separated shard list (default "-80 80-"; use "0" for unsharded)
++#   REPLICAS  replicas per shard in addition to the primary (default 0)
++#   TABLES    number of sysbench tables to declare in the vschema (default 4)
++#   VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS  extra flags
++#   BIN       directory with the Vitess binaries (default /home/vt/bin)
++#
++# Ports (relative to BASE): etcd +10/+11, vtctld web +20 grpc +21, vtgate web +1 grpc +2 mysql +3,
++# tablet i (0-based): web +100+i, grpc +200+i, mysqld +400+i.
++# pprof is available at http://localhost:<web port>/debug/pprof/ on vtgate and every vttablet.
++
++set -euo pipefail
++
++BASE=${BASE:-20000}
++NAME=${NAME:-c$BASE}
++KEYSPACE=${KEYSPACE:-sbtest}
++SHARDS=${SHARDS:-"-80 80-"}
++REPLICAS=${REPLICAS:-0}
++TABLES=${TABLES:-4}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:$PATH"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++# tablet index -> uid; uids are unique per cluster (VTDATAROOT is per cluster).
++tablet_uid() { echo $((100 + $1)); }
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOF'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOF
++}
++
++start_tablets() {
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid alias; uid=$(tablet_uid $i); printf -v alias '%s-%010d' "$CELL" "$uid"
++      env ${TABLET_ENV:-} vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$KEYSPACE" --init-shard "$shard" \
++        --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++        --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++        --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++        --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++        --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++        --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++        ${VTTABLET_EXTRA_FLAGS:-} >"$LOGDIR/vttablet_$uid.log" 2>&1 &
++      i=$((i + 1))
++    done
++  done
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do wait_http $((BASE + 100 + i)); i=$((i + 1)); done
++  done
++
++}
++
++start_vtgate() {
++  env ${GATE_ENV:-} vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY,REPLICA \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  for _ in $(seq 1 100); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select 1' "$KEYSPACE" >/dev/null 2>&1 && break
++    sleep 0.3
++  done
++}
++
++# restart vtgate and vttablets only (keep mysqld, topo, data); picks up BIN / *_EXTRA_FLAGS / env (GOGC, GOMAXPROCS...)
++restart() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  for _ in $(seq 1 100); do
++    local alive=0
++    for f in "$VTDATAROOT"/vt_*/vttablet.pid "$VTDATAROOT/vtgate.pid"; do [[ -f $f ]] && kill -0 "$(cat "$f")" 2>/dev/null && alive=1; done
++    [[ $alive == 0 ]] && break; sleep 0.2
++  done
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++  start_tablets
++  sleep 3
++  start_vtgate
++  for _ in $(seq 1 100); do
++    [[ $(mysql -N -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select count(*) from sbtest1 where id in (1,2,3,4,5,6,7,8)' "$KEYSPACE" 2>/dev/null) == 8 ]] && break
++    sleep 0.3
++  done
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  vtctldclient CreateKeyspace --durability-policy=none "$KEYSPACE" >/dev/null 2>&1 || true
++
++  local i=0 pids=()
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid; uid=$(tablet_uid $i)
++      mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++        --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++      pids+=($!)
++      i=$((i + 1))
++    done
++  done
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  start_tablets
++
++  # Elect the first tablet of every shard as primary.
++  i=0
++  for shard in $SHARDS; do
++    local alias; printf -v alias '%s-%010d' "$CELL" "$(tablet_uid $i)"
++    vtctldclient PlannedReparentShard "$KEYSPACE/$shard" --new-primary "$alias" >/dev/null
++    i=$((i + REPLICAS + 1))
++  done
++
++  load_schema
++
++  start_vtgate
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables=""
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  vtctldclient ApplySchema --sql "$sql" "$KEYSPACE" >/dev/null
++  if [[ $SHARDS == "0" ]]; then
++    vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$KEYSPACE" >/dev/null
++  else
++    vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$KEYSPACE" >/dev/null
++  fi
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  cat <<EOF
++cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspace $KEYSPACE shards [$SHARDS] replicas/shard $REPLICAS
++  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root $KEYSPACE
++  vtgate web/pprof: http://localhost:$VTGATE_WEB/debug/pprof/
++  vtctldclient: vtctldclient --server localhost:$VTCTLD_GRPC
++  tablet i: web/pprof $((BASE + 100))+i, grpc $((BASE + 200))+i, mysqld $((BASE + 400))+i (socket $VTDATAROOT/vt_<uid>/mysql.sock, user vt_dba)
++EOF
++}
++
++SB_ARGS() {
++  echo "--db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=$VTGATE_MYSQL --mysql-user=root --mysql-db=$KEYSPACE --tables=$TABLES --table-size=${TABLE_SIZE:-100000} --auto_inc=off"
++}
++
++prepare() {
++  for t in $(seq 1 "$TABLES"); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root "$KEYSPACE" -e "DROP TABLE IF EXISTS sbtest$t"
++  done
++  # shellcheck disable=SC2046
++  sysbench $(SB_ARGS) oltp_read_write --threads=4 prepare
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck; tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++status() {
++  env_info
++  vtctldclient GetTablets 2>/dev/null || true
++}
++
++case "${1:-}" in
++  up) up ;;
++  restart) restart ;;
++  down) down ;;
++  status) status ;;
++  env) env_info ;;
++  prepare) prepare ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  sb) shift; # shellcheck disable=SC2046
++      sysbench $(SB_ARGS) "$@" ;;
++  *) echo "usage: $0 up|down|status|env" >&2; exit 2 ;;
++esac
