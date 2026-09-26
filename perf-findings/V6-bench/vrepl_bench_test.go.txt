@@ -1,0 +1,72 @@
+package vreplication
+
+import (
+	"context"
+	"fmt"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+)
+
+// buildReplicatorPlan is called once per table copy cycle (copyTable), per catchup and
+// per fastForward vplayer, so its cost is paid O(T) times during a T-table MoveTables.
+func BenchmarkBuildReplicatorPlan(b *testing.B) {
+	vttablet.InitVReplicationConfigDefaults()
+	for _, n := range []int{100, 1000, 3000} {
+		colInfo := make(map[string][]*ColumnInfo, n)
+		rules := make([]*binlogdatapb.Rule, 0, n)
+		for i := range n {
+			name := fmt.Sprintf("table_%05d", i)
+			colInfo[name] = []*ColumnInfo{
+				{Name: "id", IsPK: true, DataType: "bigint", ColumnType: "bigint"},
+				{Name: "c1", DataType: "varchar", ColumnType: "varchar(64)"},
+				{Name: "c2", DataType: "int", ColumnType: "int"},
+			}
+			rules = append(rules, &binlogdatapb.Rule{Match: name, Filter: "select * from " + name})
+		}
+		vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+		parser := sqlparser.NewTestParser()
+		for _, tc := range []struct {
+			name  string
+			rules []*binlogdatapb.Rule
+		}{
+			{"movetables", rules},
+			{"reshard", []*binlogdatapb.Rule{{Match: "/.*", Filter: "-80"}}},
+		} {
+			src := &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: tc.rules}}
+			b.Run(fmt.Sprintf("%s/tables=%d", tc.name, n), func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					if _, err := vr.buildReplicatorPlan(src, colInfo, nil, binlogplayer.NewStats(), collations.MySQL8(), parser); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
+
+// relayLog: one Send + one Fetch per source packet (i.e. per replicated transaction when idle-ish).
+func BenchmarkRelayLogSendFetch(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var lt atomic.Int64
+	rl := newRelayLog(ctx, 5000, 250000, &lt)
+	ev := []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}, {Type: binlogdatapb.VEventType_GTID}, {Type: binlogdatapb.VEventType_COMMIT}}
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := rl.Send(ev); err != nil {
+			b.Fatal(err)
+		}
+		if _, err := rl.Fetch(); err != nil {
+			b.Fatal(err)
+		}
+	}
+	_ = time.Now
+}

@@ -1,0 +1,258 @@
+package v6bench
+
+import (
+	"bytes"
+	"fmt"
+	"regexp"
+	"strings"
+	"testing"
+
+	"vitess.io/vitess/go/mysql/binlog"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+)
+
+func mkRowEvent(nrows int) *binlogdatapb.VEvent {
+	rcs := make([]*binlogdatapb.RowChange, nrows)
+	for i := range rcs {
+		vals := []sqltypes.Value{
+			sqltypes.NewInt64(int64(i)),
+			sqltypes.NewInt64(int64(i * 7)),
+			sqltypes.NewVarChar(fmt.Sprintf("customer-%08d", i)),
+			sqltypes.NewVarChar("some text value that is moderately long for a row"),
+			sqltypes.NewVarChar("2024-01-02 03:04:05"),
+			sqltypes.NewInt64(12345),
+			sqltypes.NewVarChar("abcdefghij"),
+			sqltypes.NewFloat64(3.25),
+		}
+		rcs[i] = &binlogdatapb.RowChange{After: sqltypes.RowToProto3(vals)}
+	}
+	return &binlogdatapb.VEvent{
+		Type:     binlogdatapb.VEventType_ROW,
+		Keyspace: "commerce",
+		Shard:    "-80",
+		RowEvent: &binlogdatapb.RowEvent{TableName: "customer", RowChanges: rcs, Keyspace: "commerce", Shard: "-80"},
+	}
+}
+
+// vtgate maybeUpdateTableName: CloneVT of the whole event vs cloning only the shells.
+func BenchmarkMaybeUpdateTableName(b *testing.B) {
+	for _, n := range []int{1, 10, 100} {
+		ev := mkRowEvent(n)
+		b.Run(fmt.Sprintf("clone/rows=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				e := ev.CloneVT()
+				e.RowEvent.TableName = "commerce." + e.RowEvent.TableName
+			}
+		})
+		b.Run(fmt.Sprintf("shell/rows=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				rc := ev.RowEvent.RowChanges
+				ev.RowEvent.RowChanges = nil
+				e := ev.CloneVT()
+				ev.RowEvent.RowChanges = rc
+				e.RowEvent.RowChanges = rc
+				e.RowEvent.TableName = "commerce." + e.RowEvent.TableName
+			}
+		})
+		b.Run(fmt.Sprintf("sizevt/rows=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				_ = ev.SizeVT()
+			}
+		})
+		b.Run(fmt.Sprintf("marshal/rows=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				_, _ = ev.MarshalVT()
+			}
+		})
+	}
+}
+
+// vstreamer ruleMatches for a table that doesn't match the filter: regexp compiled per TableMap event.
+func BenchmarkRuleMatchesRegexp(b *testing.B) {
+	b.Run("MatchString", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_, _ = regexp.MatchString(strings.Trim("/^customer.*", "/"), "orders_2024")
+		}
+	})
+	re := regexp.MustCompile("^customer.*")
+	b.Run("precompiled", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = re.MatchString("orders_2024")
+		}
+	})
+	b.Run("mapcache", func(b *testing.B) {
+		m := map[string]bool{"orders_2024": false}
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = m["orders_2024"]
+		}
+	})
+}
+
+// uvstreamer copy phase: one VEvent per row vs one ROW event per packet.
+func BenchmarkUVStreamerCopyEvents(b *testing.B) {
+	const n = 1000
+	ev := mkRowEvent(n)
+	rows := make([]*querypb.Row, n)
+	for i, rc := range ev.RowEvent.RowChanges {
+		rows[i] = rc.After
+	}
+	perRow := func() *binlogdatapb.VStreamResponse {
+		evs := make([]*binlogdatapb.VEvent, 0, n+2)
+		for _, row := range rows {
+			evs = append(evs, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_ROW, Keyspace: "commerce", Shard: "-80",
+				RowEvent: &binlogdatapb.RowEvent{TableName: "customer", Keyspace: "commerce", Shard: "-80",
+					RowChanges: []*binlogdatapb.RowChange{{After: row}}},
+			})
+		}
+		return &binlogdatapb.VStreamResponse{Events: evs}
+	}
+	batched := func() *binlogdatapb.VStreamResponse {
+		rcs := make([]*binlogdatapb.RowChange, 0, n)
+		for _, row := range rows {
+			rcs = append(rcs, &binlogdatapb.RowChange{After: row})
+		}
+		return &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_ROW, Keyspace: "commerce", Shard: "-80",
+			RowEvent: &binlogdatapb.RowEvent{TableName: "customer", Keyspace: "commerce", Shard: "-80", RowChanges: rcs},
+		}}}
+	}
+	for _, c := range []struct {
+		name string
+		f    func() *binlogdatapb.VStreamResponse
+	}{{"perRow", perRow}, {"batched", batched}} {
+		b.Run(c.name, func(b *testing.B) {
+			b.ReportAllocs()
+			sz := 0
+			for b.Loop() {
+				r := c.f()
+				buf, _ := r.MarshalVT()
+				sz = len(buf)
+				var out binlogdatapb.VStreamResponse
+				_ = out.UnmarshalVT(buf)
+			}
+			b.ReportMetric(float64(sz)/n, "wireB/row")
+		})
+	}
+}
+
+// VDiff per-column comparison: NullsafeCompare vs a byte-equality fast path.
+func BenchmarkVDiffCompare(b *testing.B) {
+	env := collations.MySQL8()
+	src := []sqltypes.Value{
+		sqltypes.NewInt64(123456789),
+		sqltypes.NewVarChar("customer-00001234"),
+		sqltypes.NewVarChar("some text value that is moderately long for a row"),
+		sqltypes.NewDatetime("2024-01-02 03:04:05"),
+		sqltypes.NewDecimal("1234.5600"),
+		sqltypes.NULL,
+	}
+	tgt := make([]sqltypes.Value, len(src))
+	for i, v := range src {
+		tgt[i] = sqltypes.MakeTrusted(v.Type(), append([]byte(nil), v.Raw()...))
+	}
+	coll := []collations.ID{collations.CollationBinaryID, 255, 255, collations.CollationBinaryID, collations.CollationBinaryID, collations.CollationBinaryID}
+	b.Run("NullsafeCompare", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			for i := range src {
+				c, err := evalengine.NullsafeCompare(src[i], tgt[i], env, coll[i], nil)
+				if err != nil || c != 0 {
+					b.Fatal(c, err)
+				}
+			}
+		}
+	})
+	b.Run("fastpath", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			for i := range src {
+				a, t := src[i], tgt[i]
+				if a.Type() == t.Type() && bytes.Equal(a.Raw(), t.Raw()) {
+					continue
+				}
+				c, err := evalengine.NullsafeCompare(a, t, env, coll[i], nil)
+				if err != nil || c != 0 {
+					b.Fatal(c, err)
+				}
+			}
+		}
+	})
+}
+
+type cellSpec struct {
+	typ  byte
+	meta uint16
+	styp querypb.Type
+	data []byte
+}
+
+// vstreamer.getValues decodes every column of both images before the filter
+// (in_keyrange) runs; a reshard stream then drops (N-1)/N of the rows.
+func BenchmarkRowDecodeVsSkip(b *testing.B) {
+	cols := []cellSpec{
+		{binlog.TypeLongLong, 0, querypb.Type_INT64, []byte{1, 2, 3, 4, 5, 6, 7, 0}},
+		{binlog.TypeLong, 0, querypb.Type_INT32, []byte{1, 2, 3, 0}},
+		{binlog.TypeVarchar, 384, querypb.Type_VARCHAR, append([]byte{40, 0}, []byte("some text value that is 40 bytes long...")...)},
+		{binlog.TypeVarchar, 20, querypb.Type_VARCHAR, append([]byte{12}, []byte("customer-123")...)},
+		{binlog.TypeDateTime2, 0, querypb.Type_DATETIME, []byte{0x99, 0x8c, 0xaa, 0xfb, 0x51}},
+		{binlog.TypeTimestamp2, 0, querypb.Type_TIMESTAMP, []byte{0x58, 0xd1, 0x37, 0xc5}},
+		{binlog.TypeNewDecimal, 14<<8 | 4, querypb.Type_DECIMAL, []byte{0x81, 0x0D, 0xFB, 0x38, 0xD2, 0x04, 0xD2}},
+		{binlog.TypeLongLong, 0, querypb.Type_INT64, []byte{9, 9, 9, 9, 0, 0, 0, 0}},
+	}
+	var data []byte
+	fields := make([]*querypb.Field, len(cols))
+	for i, c := range cols {
+		data = append(data, c.data...)
+		fields[i] = &querypb.Field{Name: fmt.Sprintf("c%d", i), Type: c.styp, Charset: 255}
+	}
+	b.Run("decodeAll", func(b *testing.B) {
+		b.ReportAllocs()
+		values := make([]sqltypes.Value, len(cols))
+		for b.Loop() {
+			pos := 0
+			for i, c := range cols {
+				v, l, err := binlog.CellValue(data, pos, c.typ, c.meta, fields[i], false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				values[i] = v
+				pos += l
+			}
+		}
+	})
+	b.Run("decodeKeyOnly", func(b *testing.B) {
+		b.ReportAllocs()
+		values := make([]sqltypes.Value, len(cols))
+		for b.Loop() {
+			pos := 0
+			for i, c := range cols {
+				if i == 0 {
+					v, l, err := binlog.CellValue(data, pos, c.typ, c.meta, fields[i], false)
+					if err != nil {
+						b.Fatal(err)
+					}
+					values[i] = v
+					pos += l
+					continue
+				}
+				l, err := binlog.CellLength(data, pos, c.typ, c.meta)
+				if err != nil {
+					b.Fatal(err)
+				}
+				pos += l
+			}
+		}
+	})
+}

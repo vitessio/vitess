@@ -1,0 +1,419 @@
+diff --git a/go/vt/vtctl/workflow/server.go b/go/vt/vtctl/workflow/server.go
+index 4b0f62b413..833fe62e00 100644
+--- a/go/vt/vtctl/workflow/server.go
++++ b/go/vt/vtctl/workflow/server.go
+@@ -3321,7 +3321,12 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
+ 				}
+ 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
+ 				// and thus the locks released.
+-				time.Sleep(lockTablesCycleDelay)
++				// The pause gives writes that raced past the deny list check before the first lock a
++				// chance to reach mysqld before the next cycle. There is nothing left to catch after
++				// the last cycle, so we don't pause there: writes are blocked during this time.
++				if cnt < lockTablesCycles {
++					time.Sleep(lockTablesCycleDelay)
++				}
+ 			}
+ 		}
+ 		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
+diff --git a/go/vt/vtctl/workflow/traffic_switcher.go b/go/vt/vtctl/workflow/traffic_switcher.go
+index 6ec3059eac..bbd2584ac9 100644
+--- a/go/vt/vtctl/workflow/traffic_switcher.go
++++ b/go/vt/vtctl/workflow/traffic_switcher.go
+@@ -1493,7 +1493,9 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error
+ 			Query:          []byte(lockStmt),
+ 			MaxRows:        uint64(1),
+ 			DisableBinlogs: false,
+-			ReloadSchema:   true,
++			// LOCK TABLES does not change the schema. Reloading it here would add a full
++			// schema reload on every source primary to each cycle, while writes are blocked.
++			ReloadSchema: false,
+ 		})
+ 		if err != nil {
+ 			ts.Logger().Errorf("Error executing %s on source tablet %v: %v", lockStmt, tablet, err)
+diff --git a/go/vt/vtctl/workflow/workflows.go b/go/vt/vtctl/workflow/workflows.go
+index a1b4393f2c..5afb448eb9 100644
+--- a/go/vt/vtctl/workflow/workflows.go
++++ b/go/vt/vtctl/workflow/workflows.go
+@@ -68,6 +68,12 @@ type workflowFetcher struct {
+ 
+ 	logger logutil.Logger
+ 	parser *sqlparser.Parser
++
++	// shardInfos holds the shard records read by fetchWorkflowsByShard, keyed
++	// by shard name, so that scanWorkflow does not re-read the same shard
++	// record from the topo, serially, for every workflow on that shard.
++	shardInfosMu sync.Mutex
++	shardInfos   map[string]*topo.ShardInfo
+ }
+ 
+ type workflowMetadata struct {
+@@ -132,6 +138,12 @@ func (wf *workflowFetcher) fetchWorkflowsByShard(
+ 		if err != nil {
+ 			return err
+ 		}
++		wf.shardInfosMu.Lock()
++		if wf.shardInfos == nil {
++			wf.shardInfos = make(map[string]*topo.ShardInfo, len(shards))
++		}
++		wf.shardInfos[si.ShardName()] = si
++		wf.shardInfosMu.Unlock()
+ 		m.Lock()
+ 		defer m.Unlock()
+ 		results[primary] = wres
+@@ -336,12 +348,18 @@ func (wf *workflowFetcher) scanWorkflow(
+ 	shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
+ 	shardStream, ok := workflow.ShardStreams[shardStreamKey]
+ 	if !ok {
+-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+-		defer cancel()
+-
+-		si, err := wf.ts.GetShard(ctx, keyspace, tablet.Shard)
+-		if err != nil {
+-			return err
++		wf.shardInfosMu.Lock()
++		si := wf.shardInfos[tablet.Shard]
++		wf.shardInfosMu.Unlock()
++		if si == nil {
++			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
++			defer cancel()
++
++			var err error
++			si, err = wf.ts.GetShard(ctx, keyspace, tablet.Shard)
++			if err != nil {
++				return err
++			}
+ 		}
+ 
+ 		shardStream = &vtctldatapb.Workflow_ShardStream{
+diff --git a/go/vt/vtgate/vstream_manager.go b/go/vt/vtgate/vstream_manager.go
+index 20f239806d..46956e8852 100644
+--- a/go/vt/vtgate/vstream_manager.go
++++ b/go/vt/vtgate/vstream_manager.go
+@@ -816,10 +816,15 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 			aligningStreamsErr := fmt.Sprintf("error aligning streams across %s/%s", sgtid.Keyspace, sgtid.Shard)
+ 			sendingEventsErr := "error sending event batch from tablet " + tabletAliasString
+ 
++			chunkingEnabled := vs.isChunkingEnabled()
+ 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
+ 			for i, event := range events {
+ 				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
+-				accumulatedSize += event.SizeVT()
++				if chunkingEnabled {
++					// Only needed to decide when to chunk a transaction. SizeVT walks
++					// the whole event, including every row value.
++					accumulatedSize += event.SizeVT()
++				}
+ 				switch event.Type {
+ 				case binlogdatapb.VEventType_BEGIN:
+ 					// Mark the start of a transaction.
+@@ -1029,7 +1034,26 @@ func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKe
+ 	if excludeKeyspaceFromTableName {
+ 		return event
+ 	}
+-	ev := event.CloneVT()
++	// Clone only the event and its RowEvent/FieldEvent shells: the row
++	// changes and fields are shared with the original, and never modified
++	// here. A deep clone copied every row value of every ROW event.
++	var ev *binlogdatapb.VEvent
++	switch {
++	case event.RowEvent != nil:
++		rowChanges := event.RowEvent.RowChanges
++		event.RowEvent.RowChanges = nil
++		ev = event.CloneVT()
++		event.RowEvent.RowChanges = rowChanges
++		ev.RowEvent.RowChanges = rowChanges
++	case event.FieldEvent != nil:
++		fields := event.FieldEvent.Fields
++		event.FieldEvent.Fields = nil
++		ev = event.CloneVT()
++		event.FieldEvent.Fields = fields
++		ev.FieldEvent.Fields = fields
++	default:
++		ev = event.CloneVT()
++	}
+ 	tableName := tableNameExtractor(ev)
+ 	*tableName = keyspace + "." + *tableName
+ 	return ev
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/table_differ.go b/go/vt/vttablet/tabletmanager/vdiff/table_differ.go
+index 62738c8e2e..7ec80133d1 100644
+--- a/go/vt/vttablet/tabletmanager/vdiff/table_differ.go
++++ b/go/vt/vttablet/tabletmanager/vdiff/table_differ.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package vdiff
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"encoding/json"
+ 	"errors"
+@@ -568,6 +569,9 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
+ 		}
+ 	}
+ 	dr.TableName = td.table.Name
++	// dr may carry the rows processed by earlier attempts (resume or restart after
++	// --max-diff-duration). Only the rows compared by this attempt are new.
++	initialProcessedRows := dr.ProcessedRows
+ 
+ 	// Scope executor goroutines to this single diff attempt, rather
+ 	// than surviving until the controller context is canceled.
+@@ -585,7 +589,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
+ 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
+ 			log.Error(fmt.Sprintf("Failed to update vdiff %s progress on %s table: %v", td.wd.ct.uuid, td.table.Name, err))
+ 		}
+-		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
++		globalStats.RowsDiffedCount.Add(dr.ProcessedRows - initialProcessedRows)
+ 	}()
+ 
+ 	rowsToCompare := coreOpts.GetMaxRows()
+@@ -782,12 +786,19 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
+ 			err         error
+ 			collationID collations.ID
+ 		)
++		// Values of the same type with identical bytes are equal under any
++		// collation. This is by far the most common case, and it's much cheaper
++		// than NullsafeCompare.
++		sv, tv := sourceRow[compareIndex], targetRow[compareIndex]
++		if sv.Type() == tv.Type() && bytes.Equal(sv.Raw(), tv.Raw()) {
++			continue
++		}
+ 		// If the collation is nil or unknown, use binary collation to compare as bytes.
+ 		collationID = col.collation
+ 		if collationID == collations.Unknown {
+ 			collationID = collations.CollationBinaryID
+ 		}
+-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID, nil)
++		c, err = evalengine.NullsafeCompare(sv, tv, td.wd.collationEnv, collationID, nil)
+ 		if err != nil {
+ 			return 0, err
+ 		}
+@@ -872,7 +883,10 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
+ 		return vterrors.Wrapf(errWithoutQueryEcho(err), "failed to save diff report for table %s", td.table.Name)
+ 	}
+ 
+-	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
++	// TableDiffRowCounts is the live number of rows compared for the table, and
++	// dr.ProcessedRows is already cumulative: add only what changed since the
++	// last update rather than the running total again.
++	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows-td.wd.ct.TableDiffRowCounts.Counts()[td.table.Name])
+ 	return nil
+ }
+ 
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go b/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go
+index fa38ce4d9c..8e0f2dca97 100644
+--- a/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go
++++ b/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go
+@@ -1027,3 +1027,33 @@ func TestUpdateTableStateAndReportDropsQueryEcho(t *testing.T) {
+ 	require.NotContains(t, err.Error(), huge, "the report payload must not be carried in the persisted error")
+ 	dbc.Wait()
+ }
++
++// TestUpdateTableProgressRowCounts confirms that the live VDiffRowsCompared
++// value for a table is the number of rows compared so far, and not the sum of
++// the cumulative counts reported at every progress update.
++func TestUpdateTableProgressRowCounts(t *testing.T) {
++	wd := &workflowDiffer{
++		ct: &controller{
++			id:                 1,
++			TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
++		},
++		opts: &tabletmanagerdatapb.VDiffOptions{
++			CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
++		},
++	}
++	table := &tabletmanagerdatapb.TableDefinition{Name: "test"}
++	td := &tableDiffer{
++		wd:        wd,
++		table:     table,
++		tablePlan: &tablePlan{table: table},
++	}
++
++	dbc := binlogplayer.NewMockDBClient(t)
++	for _, processed := range []int64{10000, 20000, 30000} {
++		dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, nil)
++		dr := &DiffReport{TableName: table.Name, ProcessedRows: processed}
++		require.NoError(t, td.updateTableProgress(dbc, dr, nil))
++		require.Equal(t, processed, wd.ct.TableDiffRowCounts.Counts()[table.Name])
++	}
++	dbc.Wait()
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
+index 2abe4d1805..8c2cb7014d 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
+@@ -84,15 +84,19 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
+ 	if err := rl.checkDone(); err != nil {
+ 		return err
+ 	}
+-	cancelTimer := rl.startSendTimer()
+-	defer cancelTimer()
+-	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
+-		rl.canAccept.Wait()
+-		if rl.timedout {
+-			return vterrors.Wrap(errVPlayerStalled, relayLogIOStalledMsg)
+-		}
+-		if err := rl.checkDone(); err != nil {
+-			return err
++	// Only arm the stall timer when we actually have to wait: the relay log
++	// usually has room, and arming it costs a goroutine and a timer per Send.
++	if rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
++		cancelTimer := rl.startSendTimer()
++		defer cancelTimer()
++		for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
++			rl.canAccept.Wait()
++			if rl.timedout {
++				return vterrors.Wrap(errVPlayerStalled, relayLogIOStalledMsg)
++			}
++			if err := rl.checkDone(); err != nil {
++				return err
++			}
+ 		}
+ 	}
+ 	rl.timedout = false
+@@ -110,12 +114,15 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
+ 	if err := rl.checkDone(); err != nil {
+ 		return nil, err
+ 	}
+-	cancelTimer := rl.startFetchTimer()
+-	defer cancelTimer()
+-	for len(rl.items) == 0 && !rl.timedout {
+-		rl.hasItems.Wait()
+-		if err := rl.checkDone(); err != nil {
+-			return nil, err
++	// Only arm the idle timer when we actually have to wait for items.
++	if len(rl.items) == 0 && !rl.timedout {
++		cancelTimer := rl.startFetchTimer()
++		defer cancelTimer()
++		for len(rl.items) == 0 && !rl.timedout {
++			rl.hasItems.Wait()
++			if err := rl.checkDone(); err != nil {
++				return nil, err
++			}
+ 		}
+ 	}
+ 	rl.timedout = false
+@@ -199,21 +206,15 @@ func (rl *relayLog) stallDeferral(deadline time.Duration) time.Duration {
+ // startFetchTimer starts a timer that will wake up the fetcher after
+ // idleTimeout to be sure that we're regularly checking for new events.
+ func (rl *relayLog) startFetchTimer() (cancel func()) {
+-	timer := time.NewTimer(idleTimeout)
+-	timerDone := make(chan struct{})
+-	go func() {
+-		select {
+-		case <-timer.C:
+-			rl.mu.Lock()
+-			defer rl.mu.Unlock()
+-			rl.timedout = true
+-			rl.hasItems.Broadcast()
+-		case <-timerDone:
+-		}
+-	}()
++	// time.AfterFunc only starts a goroutine if the timer fires.
++	timer := time.AfterFunc(idleTimeout, func() {
++		rl.mu.Lock()
++		defer rl.mu.Unlock()
++		rl.timedout = true
++		rl.hasItems.Broadcast()
++	})
+ 	return func() {
+ 		timer.Stop()
+-		close(timerDone)
+ 	}
+ }
+ 
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/copy.go b/go/vt/vttablet/tabletserver/vstreamer/copy.go
+index 7fe6c5c441..81877fee99 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/copy.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/copy.go
+@@ -105,6 +105,10 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
+ 			// Make sure vplayer returns before returning.
+ 			<-errch
+ 			return io.EOF
++		case <-uvs.lagUpdated:
++			// Re-check the lag as soon as the catchup stream has seen events,
++			// rather than on the next tick: each table copy used to wait for at
++			// least one full CatchupRetryTime here.
+ 		case <-tkr.C:
+ 		}
+ 	}
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go
+index 082517679e..7cb4f79a18 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go
+@@ -87,6 +87,10 @@ type uvstreamer struct {
+ 	lastTimestampNs       int64
+ 	ReplicationLagSeconds int64
+ 	mu                    sync.Mutex
++	// lagUpdated is signaled (without blocking) whenever ReplicationLagSeconds
++	// changes, so that catchup can re-check the lag as soon as events arrive
++	// instead of waiting for its next CatchupRetryTime tick.
++	lagUpdated chan struct{}
+ 
+ 	config *uvstreamerConfig
+ 
+@@ -135,6 +139,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se
+ 		inTablePKs:   tablePKs,
+ 		throttlerApp: throttlerApp,
+ 		options:      options,
++		lagUpdated:   make(chan struct{}, 1),
+ 	}
+ 
+ 	return uvs
+@@ -614,6 +619,10 @@ func (uvs *uvstreamer) getReplicationLagSeconds() int64 {
+ 
+ func (uvs *uvstreamer) setReplicationLagSeconds(sbm int64) {
+ 	uvs.mu.Lock()
+-	defer uvs.mu.Unlock()
+ 	uvs.ReplicationLagSeconds = sbm
++	uvs.mu.Unlock()
++	select {
++	case uvs.lagUpdated <- struct{}{}:
++	default:
++	}
+ }
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+index 0c35885efe..8ed5bcd6ff 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+@@ -107,6 +107,11 @@ type vstreamer struct {
+ 	markHistorianRefreshedForStartup func()
+ 
+ 	eventTypesToStream map[binlogdatapb.VEventType]bool
++
++	// ruleMatchCache caches ruleMatches per table name. Tables that do not match
++	// the filter get no cached plan, so without it every TableMap event of such a
++	// table re-evaluated all the rules, compiling each regexp rule again.
++	ruleMatchCache map[string]bool
+ }
+ 
+ // streamerPlan extends the original plan to also include
+@@ -785,7 +790,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 			vs.plans[id] = nil
+ 			return nil, nil
+ 		}
+-		if !ruleMatches(tm.Name, vs.filter) {
++		if !vs.tableMatchesFilter(tm.Name) {
+ 			return nil, nil
+ 		}
+ 
+@@ -901,6 +906,20 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 	return vevents, nil
+ }
+ 
++// tableMatchesFilter returns ruleMatches(tableName, vs.filter), memoized: the
++// filter does not change during the life of the stream.
++func (vs *vstreamer) tableMatchesFilter(tableName string) bool {
++	if matches, ok := vs.ruleMatchCache[tableName]; ok {
++		return matches
++	}
++	matches := ruleMatches(tableName, vs.filter)
++	if vs.ruleMatchCache == nil {
++		vs.ruleMatchCache = make(map[string]bool)
++	}
++	vs.ruleMatchCache[tableName] = matches
++	return matches
++}
++
+ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*binlogdatapb.VEvent, error) {
+ 	tableName := tm.Name
+ 	switch tableName {
