@@ -614,6 +614,8 @@ func (cfg *OltpConfig) UnmarshalJSON(data []byte) (err error) {
 		TxTimeout    string `json:"txTimeoutSeconds,omitempty"`
 	}
 
+	tmp.Proxy = Proxy(*cfg)
+
 	if err = json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
