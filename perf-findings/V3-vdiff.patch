@@ -1,0 +1,1682 @@
+diff --git a/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff.go b/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff.go
+index 1a4e2dfc52..416a7330f2 100644
+--- a/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff.go
++++ b/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff.go
+@@ -17,6 +17,8 @@ limitations under the License.
+ package vdiff
+ 
+ import (
++	"bytes"
++	"context"
+ 	"errors"
+ 	"fmt"
+ 	"html/template"
+@@ -308,48 +310,85 @@ func commandCreate(cmd *cobra.Command, args []string) error {
+ 	}
+ 
+ 	if createOptions.Wait {
+-		tkr := time.NewTicker(createOptions.WaitUpdateInterval)
+-		defer tkr.Stop()
+-		var state vdiff.VDiffState
+ 		ctx := common.GetCommandCtx()
+ 		vtctldClient := common.GetClient()
+ 		uuidStr := createOptions.UUID.String()
+-		for {
+-			select {
+-			case <-ctx.Done():
+-				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+-			case <-tkr.C:
+-				resp, err := vtctldClient.VDiffShow(ctx, &vtctldatapb.VDiffShowRequest{
+-					Workflow:       common.BaseOptions.Workflow,
+-					TargetKeyspace: common.BaseOptions.TargetKeyspace,
+-					Arg:            uuidStr,
+-					NoSamples:      true,
+-				})
+-				if err != nil {
+-					return err
+-				}
+-				if state, err = displayShowSingleSummary(cmd.OutOrStdout(), format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false); err != nil {
+-					return err
+-				}
+-				if state == vdiff.CompletedState {
+-					return nil
+-				}
++		return waitForVDiff(ctx, cmd.OutOrStdout(), createOptions.WaitUpdateInterval, func(out io.Writer) (vdiff.VDiffState, error) {
++			resp, err := vtctldClient.VDiffShow(ctx, &vtctldatapb.VDiffShowRequest{
++				Workflow:       common.BaseOptions.Workflow,
++				TargetKeyspace: common.BaseOptions.TargetKeyspace,
++				Arg:            uuidStr,
++				NoSamples:      true,
++			})
++			if err != nil {
++				return vdiff.UnknownState, err
+ 			}
++			return displayShowSingleSummary(out, format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false)
++		})
++	}
++
++	var data []byte
++	if format == "json" {
++		data, err = cli.MarshalJSONPretty(resp)
++		if err != nil {
++			return err
+ 		}
+ 	} else {
+-		var data []byte
+-		if format == "json" {
+-			data, err = cli.MarshalJSONPretty(resp)
+-			if err != nil {
++		data = fmt.Appendf(nil, "VDiff %s scheduled on target shards, use show to view progress", resp.UUID)
++	}
++	fmt.Println(string(data))
++
++	return nil
++}
++
++// initialWaitCheckInterval and maxWaitCheckInterval are the first and the longest
++// times between two checks for the completion of a vdiff that we wait for.
++var (
++	initialWaitCheckInterval = 1 * time.Second
++	maxWaitCheckInterval     = 10 * time.Second
++)
++
++// waitForVDiff waits for a vdiff to complete. It displays its progress every
++// updateInterval, and the final summary when it completes. It checks the state
++// more often than that, starting at initialWaitCheckInterval and backing off up
++// to maxWaitCheckInterval, so that it returns soon after the vdiff completes rather
++// than on the next update interval: waiting for a vdiff that takes a few seconds
++// would otherwise take a full update interval (1 minute by default).
++// show writes the summary to out and returns the state of the vdiff.
++func waitForVDiff(ctx context.Context, out io.Writer, updateInterval time.Duration, show func(out io.Writer) (vdiff.VDiffState, error)) error {
++	if updateInterval <= 0 {
++		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid wait update interval %v: it must be positive", updateInterval)
++	}
++	checkInterval := min(initialWaitCheckInterval, updateInterval)
++	nextDisplay := time.Now().Add(updateInterval)
++	timer := time.NewTimer(checkInterval)
++	defer timer.Stop()
++	for {
++		select {
++		case <-ctx.Done():
++			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
++		case <-timer.C:
++		}
++		display := !time.Now().Before(nextDisplay)
++		if display {
++			nextDisplay = time.Now().Add(updateInterval)
++		}
++		var summary bytes.Buffer
++		state, err := show(&summary)
++		if err != nil {
++			return err
++		}
++		if display || state == vdiff.CompletedState {
++			if _, err := out.Write(summary.Bytes()); err != nil {
+ 				return err
+ 			}
+-		} else {
+-			data = fmt.Appendf(nil, "VDiff %s scheduled on target shards, use show to view progress", resp.UUID)
+ 		}
+-		fmt.Println(string(data))
++		if state == vdiff.CompletedState {
++			return nil
++		}
++		checkInterval = min(2*checkInterval, maxWaitCheckInterval, updateInterval)
++		timer.Reset(min(checkInterval, max(time.Until(nextDisplay), 0)))
+ 	}
+-
+-	return nil
+ }
+ 
+ func commandDelete(cmd *cobra.Command, args []string) error {
+diff --git a/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff_test.go b/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff_test.go
+index 69d3fb3076..28b1b3dbad 100644
+--- a/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff_test.go
++++ b/go/cmd/vtctldclient/command/vreplication/vdiff/vdiff_test.go
+@@ -17,7 +17,10 @@ limitations under the License.
+ package vdiff
+ 
+ import (
++	"bytes"
+ 	"fmt"
++	"io"
++	"strings"
+ 	"testing"
+ 	"time"
+ 
+@@ -827,3 +830,59 @@ func TestShowNoSamplesFlag(t *testing.T) {
+ 	require.Equal(t, "false", flag.DefValue, "--no-samples must default to false")
+ 	require.Contains(t, flag.Usage, "gRPC message limits")
+ }
++
++// TestWaitForVDiff tests that waiting for a vdiff returns as soon as the vdiff
++// is seen completed, rather than on the next wait update interval, and that
++// the progress is displayed every update interval and once completed.
++func TestWaitForVDiff(t *testing.T) {
++	savedInitial, savedMax := initialWaitCheckInterval, maxWaitCheckInterval
++	t.Cleanup(func() {
++		initialWaitCheckInterval, maxWaitCheckInterval = savedInitial, savedMax
++	})
++	initialWaitCheckInterval, maxWaitCheckInterval = 10*time.Millisecond, 20*time.Millisecond
++
++	// show reports the vdiff as started until its completeAfter-th call.
++	newShow := func(completeAfter int) (func(io.Writer) (vdiff.VDiffState, error), *int) {
++		calls := 0
++		return func(out io.Writer) (vdiff.VDiffState, error) {
++			calls++
++			state := vdiff.StartedState
++			if calls >= completeAfter {
++				state = vdiff.CompletedState
++			}
++			_, err := fmt.Fprintf(out, "%s\n", state)
++			return state, err
++		}, &calls
++	}
++
++	t.Run("completes before the first update", func(t *testing.T) {
++		show, calls := newShow(3)
++		var out bytes.Buffer
++		start := time.Now()
++		require.NoError(t, waitForVDiff(t.Context(), &out, time.Hour, show))
++		require.Less(t, time.Since(start), 30*time.Second)
++		require.Equal(t, 3, *calls)
++		// Only the final summary is displayed.
++		require.Equal(t, "completed\n", out.String())
++	})
++
++	t.Run("displays the progress every update interval", func(t *testing.T) {
++		show, calls := newShow(20)
++		var out bytes.Buffer
++		require.NoError(t, waitForVDiff(t.Context(), &out, 50*time.Millisecond, show))
++		require.Equal(t, 20, *calls)
++		lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
++		require.Greater(t, len(lines), 1)
++		require.Less(t, len(lines), 20)
++		require.Equal(t, "completed", lines[len(lines)-1])
++		for _, line := range lines[:len(lines)-1] {
++			require.Equal(t, "started", line)
++		}
++	})
++
++	t.Run("invalid update interval", func(t *testing.T) {
++		show, calls := newShow(1)
++		require.ErrorContains(t, waitForVDiff(t.Context(), io.Discard, 0, show), "invalid wait update interval")
++		require.Zero(t, *calls)
++	})
++}
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/row_iterator.go b/go/vt/vttablet/tabletmanager/vdiff/row_iterator.go
+new file mode 100644
+index 0000000000..cde703f7e1
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vdiff/row_iterator.go
+@@ -0,0 +1,125 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vdiff
++
++import (
++	"context"
++
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/vterrors"
++	"vitess.io/vitess/go/vt/vtgate/evalengine"
++)
++
++// rowIterator returns the rows of one side of a table diff in primary key
++// order. next returns a nil row, and a nil error, once all rows were returned.
++type rowIterator interface {
++	next() ([]sqltypes.Value, error)
++}
++
++var (
++	_ rowIterator = (*primitiveExecutor)(nil)
++	_ rowIterator = (*shardRowIterator)(nil)
++	_ rowIterator = (*mergeRowIterator)(nil)
++)
++
++// newShardsRowIterator returns a rowIterator that reads the batches of rows
++// sent by the given shard streamers, which each return their rows in primary
++// key order, directly in the calling goroutine. With one streamer the rows
++// are returned as they are, otherwise they are merged using orderBy.
++//
++// Unlike an engine.MergeSort executed through a primitiveExecutor, this does
++// not pass every row through two channels and two more goroutines, which cost
++// more than the comparison of the row itself.
++func newShardsRowIterator(ctx context.Context, streamers []*shardStreamer, orderBy evalengine.Comparison) rowIterator {
++	shards := make([]*shardRowIterator, len(streamers))
++	for i, streamer := range streamers {
++		shards[i] = &shardRowIterator{ctx: ctx, streamer: streamer}
++	}
++	if len(shards) == 1 {
++		return shards[0]
++	}
++	return &mergeRowIterator{shards: shards, merger: &evalengine.Merger{Compare: orderBy}}
++}
++
++// shardRowIterator returns the rows of one shard streamer.
++type shardRowIterator struct {
++	ctx      context.Context
++	streamer *shardStreamer
++	rows     [][]sqltypes.Value
++}
++
++func (it *shardRowIterator) next() ([]sqltypes.Value, error) {
++	for len(it.rows) == 0 {
++		select {
++		case qr, ok := <-it.streamer.result:
++			if !ok {
++				// The streamer sets its error before it closes the channel.
++				return nil, it.streamer.err
++			}
++			it.rows = qr.Rows
++		case <-it.ctx.Done():
++			return nil, vterrors.Wrap(it.ctx.Err(), "row stream")
++		}
++	}
++	row := it.rows[0]
++	it.rows = it.rows[1:]
++	return row, nil
++}
++
++// mergeRowIterator merges the rows of several shards, each in primary key
++// order, into one stream in primary key order.
++type mergeRowIterator struct {
++	shards []*shardRowIterator
++	merger *evalengine.Merger
++	primed bool
++}
++
++func (it *mergeRowIterator) next() (row []sqltypes.Value, err error) {
++	// The comparison panics on errors, like it does for engine.MergeSort.
++	defer evalengine.PanicHandler(&err)
++	m := it.merger
++	if !it.primed {
++		it.primed = true
++		for i, shard := range it.shards {
++			r, err := shard.next()
++			if err != nil {
++				return nil, err
++			}
++			if r != nil {
++				m.Push(r, i)
++			}
++		}
++		m.Init()
++	} else if m.Len() > 0 {
++		// Replace the row returned last time with the next row of its shard.
++		_, i := m.Peek()
++		r, err := it.shards[i].next()
++		if err != nil {
++			return nil, err
++		}
++		if r == nil {
++			m.Pop()
++		} else {
++			m.ReplaceMin(r, i)
++		}
++	}
++	if m.Len() == 0 {
++		return nil, nil
++	}
++	row, _ = m.Peek()
++	return row, nil
++}
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/row_iterator_test.go b/go/vt/vttablet/tabletmanager/vdiff/row_iterator_test.go
+new file mode 100644
+index 0000000000..130c1aa291
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vdiff/row_iterator_test.go
+@@ -0,0 +1,182 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vdiff
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/binlog/binlogplayer"
++	"vitess.io/vitess/go/vt/sqlparser"
++
++	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
++)
++
++// newTestShardStreamer returns a shardStreamer that sends the given batches of
++// rows, as streamOneShard does, and then ends with err.
++func newTestShardStreamer(t *testing.T, err error, batches ...[][]sqltypes.Value) *shardStreamer {
++	sm := &shardStreamer{result: make(chan *sqltypes.Result, 1)}
++	go func() {
++		defer close(sm.result)
++		for i, rows := range batches {
++			qr := &sqltypes.Result{Rows: rows}
++			if i == 0 {
++				qr.Fields = drainTestFields
++			}
++			select {
++			case sm.result <- qr:
++			case <-t.Context().Done():
++				return
++			}
++		}
++		sm.err = err
++	}()
++	return sm
++}
++
++func readAllRows(it rowIterator) ([][]sqltypes.Value, error) {
++	var rows [][]sqltypes.Value
++	for {
++		row, err := it.next()
++		if err != nil {
++			return rows, err
++		}
++		if row == nil {
++			return rows, nil
++		}
++		rows = append(rows, row)
++	}
++}
++
++func TestShardsRowIterator(t *testing.T) {
++	row := drainTestRow
++	// Order by c2, a varchar column with a case insensitive collation: the
++	// merged order must follow the collation, not the bytes ("B" < "c").
++	orderBy := pkOrderBy([]compareColInfo{{colIndex: 1, collation: collations.CollationUtf8mb4ID, isPK: true}}, collations.MySQL8())
++	streamErr := errors.New("stream failed")
++
++	testCases := []struct {
++		name    string
++		shards  func(t *testing.T) []*shardStreamer
++		want    [][]sqltypes.Value
++		wantErr error
++	}{{
++		name: "one shard, several batches, some empty",
++		shards: func(t *testing.T) []*shardStreamer {
++			return []*shardStreamer{newTestShardStreamer(t, nil,
++				[][]sqltypes.Value{row(1, "a"), row(2, "B")},
++				nil,
++				[][]sqltypes.Value{row(3, "c")},
++			)}
++		},
++		want: [][]sqltypes.Value{row(1, "a"), row(2, "B"), row(3, "c")},
++	}, {
++		name: "several shards merged in collation order",
++		shards: func(t *testing.T) []*shardStreamer {
++			return []*shardStreamer{
++				newTestShardStreamer(t, nil, [][]sqltypes.Value{row(1, "a")}, [][]sqltypes.Value{row(4, "d")}),
++				newTestShardStreamer(t, nil, [][]sqltypes.Value{row(2, "B"), row(5, "E")}),
++				newTestShardStreamer(t, nil),
++				newTestShardStreamer(t, nil, nil, [][]sqltypes.Value{row(3, "c"), row(6, "f")}),
++			}
++		},
++		want: [][]sqltypes.Value{row(1, "a"), row(2, "B"), row(3, "c"), row(4, "d"), row(5, "E"), row(6, "f")},
++	}, {
++		name: "no rows",
++		shards: func(t *testing.T) []*shardStreamer {
++			return []*shardStreamer{newTestShardStreamer(t, nil), newTestShardStreamer(t, nil)}
++		},
++	}, {
++		name: "one shard fails",
++		shards: func(t *testing.T) []*shardStreamer {
++			return []*shardStreamer{newTestShardStreamer(t, streamErr, [][]sqltypes.Value{row(1, "a")})}
++		},
++		want:    [][]sqltypes.Value{row(1, "a")},
++		wantErr: streamErr,
++	}, {
++		name: "one of several shards fails",
++		shards: func(t *testing.T) []*shardStreamer {
++			return []*shardStreamer{
++				newTestShardStreamer(t, nil, [][]sqltypes.Value{row(1, "a"), row(3, "c")}),
++				newTestShardStreamer(t, streamErr, [][]sqltypes.Value{row(2, "B")}),
++			}
++		},
++		// The error is returned when the next row of the failed shard is needed.
++		want:    [][]sqltypes.Value{row(1, "a"), row(2, "B")},
++		wantErr: streamErr,
++	}}
++	for _, tc := range testCases {
++		t.Run(tc.name, func(t *testing.T) {
++			rows, err := readAllRows(newShardsRowIterator(t.Context(), tc.shards(t), orderBy))
++			require.ErrorIs(t, err, tc.wantErr)
++			require.Equal(t, tc.want, rows)
++		})
++	}
++
++	t.Run("canceled", func(t *testing.T) {
++		ctx, cancel := context.WithCancel(t.Context())
++		cancel()
++		// This streamer never sends anything.
++		sm := &shardStreamer{result: make(chan *sqltypes.Result)}
++		_, err := newShardsRowIterator(ctx, []*shardStreamer{sm}, orderBy).next()
++		require.ErrorContains(t, err, context.Canceled.Error())
++	})
++}
++
++// TestDiffShardStreamers tests a diff that reads the rows of the shard
++// streamers directly: two source shards are merged and compared with the
++// target shard.
++func TestDiffShardStreamers(t *testing.T) {
++	row := drainTestRow
++	dbc := binlogplayer.NewMockDBClient(t)
++	td := newDrainTestDiffer(dbc, nil, nil)
++	td.sourceStreamers = []*shardStreamer{
++		newTestShardStreamer(t, nil, [][]sqltypes.Value{row(1, "a"), row(3, "c")}, [][]sqltypes.Value{row(5, "e")}),
++		newTestShardStreamer(t, nil, [][]sqltypes.Value{row(2, "b")}, [][]sqltypes.Value{row(4, "d")}),
++	}
++	td.targetStreamers = []*shardStreamer{
++		newTestShardStreamer(t, nil, [][]sqltypes.Value{row(1, "a"), row(2, "B")}, [][]sqltypes.Value{row(3, "c"), row(5, "e"), row(6, "f")}),
++	}
++
++	stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
++		sqltypes.Int64BindVariable(td.wd.ct.id),
++		sqltypes.StringBindVariable(td.table.Name),
++	)
++	require.NoError(t, err)
++	dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
++		"lastpk|mismatch|report",
++		"varbinary|int64|varbinary",
++	), "|0|{}"), nil)
++	dbc.ExpectRequestRE("update _vt.vdiff_table set mismatch = .*", &sqltypes.Result{}, nil)
++	dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, nil)
++
++	dr, err := td.diff(t.Context(), &tabletmanagerdatapb.VDiffCoreOptions{MaxRows: 100, MaxExtraRowsToCompare: 100},
++		&tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10}, nil)
++	require.NoError(t, err)
++	require.Equal(t, int64(6), dr.ProcessedRows)
++	require.Equal(t, int64(3), dr.MatchingRows)
++	// c2 is compared as binary: "b" != "B".
++	require.Equal(t, int64(1), dr.MismatchedRows)
++	require.Equal(t, int64(1), dr.ExtraRowsSource)
++	require.Equal(t, int64(1), dr.ExtraRowsTarget)
++	dbc.Wait()
++}
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/table_differ.go b/go/vt/vttablet/tabletmanager/vdiff/table_differ.go
+index 62738c8e2e..934f000d5f 100644
+--- a/go/vt/vttablet/tabletmanager/vdiff/table_differ.go
++++ b/go/vt/vttablet/tabletmanager/vdiff/table_differ.go
+@@ -17,6 +17,7 @@ limitations under the License.
+ package vdiff
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"encoding/json"
+ 	"errors"
+@@ -31,6 +32,7 @@ import (
+ 	"golang.org/x/exp/maps"
+ 	"google.golang.org/protobuf/encoding/prototext"
+ 
++	"vitess.io/vitess/go/constants/sidecar"
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/mysql/replication"
+ 	"vitess.io/vitess/go/mysql/sqlerror"
+@@ -92,6 +94,10 @@ type tableDiffer struct {
+ 	// sourcePrimitive and targetPrimitive are used for streaming
+ 	sourcePrimitive engine.Primitive
+ 	targetPrimitive engine.Primitive
++	// sourceStreamers and targetStreamers, when set, are read directly
++	// instead of executing sourcePrimitive and targetPrimitive.
++	sourceStreamers []*shardStreamer
++	targetStreamers []*shardStreamer
+ 
+ 	// sourceQuery is computed from the associated query for this table in the vreplication workflow's Rule Filter
+ 	sourceQuery  string
+@@ -176,7 +182,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
+ 		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow for vdiff %s on target tablets in keyspace %q", td.wd.ct.workflow, td.wd.ct.uuid, targetKeyspace))
+ 		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
+ 		defer restartCancel()
+-		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
++		if err := td.restartTargetVReplicationStreams(restartCtx, dbClient); err != nil {
+ 			log.Error(fmt.Sprintf("error restarting target streams for vdiff %s: %v", td.wd.ct.uuid, err))
+ 		}
+ 	}()
+@@ -402,21 +408,39 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
+ 	return nil
+ }
+ 
+-func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
++func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
+ 	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, restartingVreplication), time.Now())
+ 	ct := td.wd.ct
+ 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
+ 		encodeString(ct.vde.dbName), encodeString(ct.workflow))
+ 	log.Info(fmt.Sprintf("Restarting the %q VReplication workflow for vdiff %s using %q", ct.workflow, td.wd.ct.uuid, query))
+-	var err error
++	// Restart the streams through the local vreplication engine, as they were
++	// stopped, rather than through a tabletmanager RPC to this same tablet: when
++	// the tablet is shutting down, its gRPC server no longer accepts that RPC and
++	// retrying it kept the workflow lock (see initialize) held until the process
++	// exited, which orphaned the lock in the topo server for NamedLockTTL.
++	query, err := ct.vde.parser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
++	if err != nil {
++		return err
++	}
+ 	// Let's retry a few times if we get a retryable error.
+ 	for i := 1; i <= 3; i++ {
+-		_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
++		_, err = ct.vde.vre.ExecWithDBA(query)
+ 		if err == nil || !sqlerror.IsEphemeralError(err) {
+ 			break
+ 		}
+ 		log.Warn(fmt.Sprintf("Encountered the following error while restarting the %q VReplication workflow, will retry (attempt #%d): %v", ct.workflow, i, err))
+ 	}
++	if err != nil && !ct.vde.vre.IsOpen() {
++		// The engine was closed, e.g. because the tablet is shutting down. Save
++		// the state of the streams so that they run again when it is opened,
++		// instead of stopping at the position of the vdiff snapshot.
++		log.Warn(fmt.Sprintf("Could not restart the %q VReplication workflow through the closed VReplication engine (%v), updating its state for when the engine opens", ct.workflow, err))
++		_, err = dbClient.ExecuteFetch(query, 1)
++	}
+ 	return err
+ }
+ 
+@@ -454,14 +478,14 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
+ 			Target: target, Query: query, Lastpk: lastPK, Options: &binlogdatapb.VStreamOptions{NoTimeouts: true},
+ 		}
+ 		return conn.VStreamRows(ctx, req, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
+-			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
+-			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
+-			// can safely process it while the next VStreamRowsResponse message is getting prepared by the
+-			// shardStreamer. Without doing this, we would have to serialize the row processing by using
+-			// unbuffered channels which would present a major performance bottleneck.
++			// We take the fields and rows out of the VStreamRowsResponse -- which contains a vstream packet
++			// with N rows and their corresponding GTID position/snapshot along with the LastPK in the row set --
++			// so that we can safely process them while the next VStreamRowsResponse message is getting
++			// prepared by the shardStreamer. Without doing this, we would have to serialize the row processing
++			// by using unbuffered channels which would present a major performance bottleneck.
+ 			// This need arises from the gRPC VStreamRowsResponse pooling and re-use/recycling done for
+ 			// gRPCQueryClient.VStreamRows() in vttablet/grpctabletconn/conn.
+-			vsr := vsrRaw.CloneVT()
++			vsr := takeVStreamRowsResponse(vsrRaw)
+ 			if len(fields) == 0 {
+ 				if len(vsr.Fields) == 0 {
+ 					return fmt.Errorf("did not received expected fields in response %+v on tablet %v",
+@@ -495,6 +519,16 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
+ 	}()
+ }
+ 
++// takeVStreamRowsResponse returns the fields, rows and GTID of a VStreamRowsResponse
++// that is reset and reused for the next message once the callback returns (see
++// gRPCQueryClient.VStreamRows). It takes the fields and rows out of vsr rather than
++// copying them: the next message is then unmarshaled into new ones.
++func takeVStreamRowsResponse(vsr *binlogdatapb.VStreamRowsResponse) *binlogdatapb.VStreamRowsResponse {
++	taken := &binlogdatapb.VStreamRowsResponse{Fields: vsr.Fields, Rows: vsr.Rows, Gtid: vsr.Gtid}
++	vsr.Fields, vsr.Rows = nil, nil
++	return taken
++}
++
+ func (td *tableDiffer) setupRowSorters() {
+ 	// Combine all sources into a slice and create a merge sorter for it.
+ 	sources := make(map[string]*shardStreamer)
+@@ -502,6 +536,8 @@ func (td *tableDiffer) setupRowSorters() {
+ 		sources[shard] = source.shardStreamer
+ 	}
+ 	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs, td.wd.collationEnv)
++	td.sourceStreamers = nil
++	td.targetStreamers = nil
+ 
+ 	// Create a merge sorter for the target.
+ 	targets := make(map[string]*shardStreamer)
+@@ -516,7 +552,19 @@ func (td *tableDiffer) setupRowSorters() {
+ 			GroupByKeys: pkColsToGroupByParams(td.tablePlan.pkCols, td.wd.collationEnv),
+ 			Input:       td.sourcePrimitive,
+ 		}
++		return
++	}
++	// Without aggregates, the diff reads the shard streamers directly.
++	td.sourceStreamers = maps.Values(sources)
++	td.targetStreamers = maps.Values(targets)
++}
++
++// newRowIterator returns the rows of the source or target side of the diff.
++func (td *tableDiffer) newRowIterator(ctx context.Context, streamers []*shardStreamer, prim engine.Primitive, name string) rowIterator {
++	if len(streamers) > 0 {
++		return newShardsRowIterator(ctx, streamers, pkOrderBy(td.tablePlan.comparePKs, td.wd.collationEnv))
+ 	}
++	return newPrimitiveExecutor(ctx, prim, name)
+ }
+ 
+ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.VDiffCoreOptions, reportOpts *tabletmanagerdatapb.VDiffReportOptions, stop <-chan time.Time) (*DiffReport, error) {
+@@ -568,14 +616,17 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
+ 		}
+ 	}
+ 	dr.TableName = td.table.Name
++	// dr may carry the rows processed by earlier attempts (resume or restart after
++	// --max-diff-duration). Only the rows compared by this attempt are new.
++	initialProcessedRows := dr.ProcessedRows
+ 
+ 	// Scope executor goroutines to this single diff attempt, rather
+ 	// than surviving until the controller context is canceled.
+ 	execCtx, cancelExec := context.WithCancel(ctx)
+ 	defer cancelExec()
+ 
+-	sourceExecutor := newPrimitiveExecutor(execCtx, td.sourcePrimitive, "source")
+-	targetExecutor := newPrimitiveExecutor(execCtx, td.targetPrimitive, "target")
++	sourceExecutor := td.newRowIterator(execCtx, td.sourceStreamers, td.sourcePrimitive, "source")
++	targetExecutor := td.newRowIterator(execCtx, td.targetStreamers, td.targetPrimitive, "target")
+ 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
+ 	advanceSource := true
+ 	advanceTarget := true
+@@ -585,7 +636,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
+ 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
+ 			log.Error(fmt.Sprintf("Failed to update vdiff %s progress on %s table: %v", td.wd.ct.uuid, td.table.Name, err))
+ 		}
+-		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
++		globalStats.RowsDiffedCount.Add(dr.ProcessedRows - initialProcessedRows)
+ 	}()
+ 
+ 	rowsToCompare := coreOpts.GetMaxRows()
+@@ -782,12 +833,19 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
+ 			err         error
+ 			collationID collations.ID
+ 		)
++		// Values of the same type with identical bytes are equal under any
++		// collation. This is by far the most common case, and it's much cheaper
++		// than NullsafeCompare.
++		sv, tv := sourceRow[compareIndex], targetRow[compareIndex]
++		if sv.Type() == tv.Type() && bytes.Equal(sv.Raw(), tv.Raw()) {
++			continue
++		}
+ 		// If the collation is nil or unknown, use binary collation to compare as bytes.
+ 		collationID = col.collation
+ 		if collationID == collations.Unknown {
+ 			collationID = collations.CollationBinaryID
+ 		}
+-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID, nil)
++		c, err = evalengine.NullsafeCompare(sv, tv, td.wd.collationEnv, collationID, nil)
+ 		if err != nil {
+ 			return 0, err
+ 		}
+@@ -872,7 +930,10 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
+ 		return vterrors.Wrapf(errWithoutQueryEcho(err), "failed to save diff report for table %s", td.table.Name)
+ 	}
+ 
+-	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
++	// TableDiffRowCounts is the live number of rows compared for the table, and
++	// dr.ProcessedRows is already cumulative: add only what changed since the
++	// last update rather than the running total again.
++	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows-td.wd.ct.TableDiffRowCounts.Counts()[td.table.Name])
+ 	return nil
+ }
+ 
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go b/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go
+index fa38ce4d9c..b48aca648b 100644
+--- a/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go
++++ b/go/vt/vttablet/tabletmanager/vdiff/table_differ_test.go
+@@ -26,6 +26,7 @@ import (
+ 	"testing"
+ 
+ 	"github.com/stretchr/testify/require"
++	"google.golang.org/protobuf/proto"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/mysql/sqlerror"
+@@ -35,6 +36,7 @@ import (
+ 	"vitess.io/vitess/go/vt/sqlparser"
+ 	"vitess.io/vitess/go/vt/vtgate/engine"
+ 
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+ 	querypb "vitess.io/vitess/go/vt/proto/query"
+ 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+ )
+@@ -1027,3 +1029,118 @@ func TestUpdateTableStateAndReportDropsQueryEcho(t *testing.T) {
+ 	require.NotContains(t, err.Error(), huge, "the report payload must not be carried in the persisted error")
+ 	dbc.Wait()
+ }
++
++// TestUpdateTableProgressRowCounts confirms that the live VDiffRowsCompared
++// value for a table is the number of rows compared so far, and not the sum of
++// the cumulative counts reported at every progress update.
++func TestUpdateTableProgressRowCounts(t *testing.T) {
++	wd := &workflowDiffer{
++		ct: &controller{
++			id:                 1,
++			TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
++		},
++		opts: &tabletmanagerdatapb.VDiffOptions{
++			CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
++		},
++	}
++	table := &tabletmanagerdatapb.TableDefinition{Name: "test"}
++	td := &tableDiffer{
++		wd:        wd,
++		table:     table,
++		tablePlan: &tablePlan{table: table},
++	}
++
++	dbc := binlogplayer.NewMockDBClient(t)
++	for _, processed := range []int64{10000, 20000, 30000} {
++		dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, nil)
++		dr := &DiffReport{TableName: table.Name, ProcessedRows: processed}
++		require.NoError(t, td.updateTableProgress(dbc, dr, nil))
++		require.Equal(t, processed, wd.ct.TableDiffRowCounts.Counts()[table.Name])
++	}
++	dbc.Wait()
++}
++
++// TestTakeVStreamRowsResponse tests that the rows taken out of a pooled
++// VStreamRowsResponse are not overwritten when the response is reset and
++// reused for the next message, as gRPCQueryClient.VStreamRows does.
++func TestTakeVStreamRowsResponse(t *testing.T) {
++	newResponse := func(gtid string, vals ...string) *binlogdatapb.VStreamRowsResponse {
++		result := sqltypes.MakeTestResult(drainTestFields)
++		for i, val := range vals {
++			result.Rows = append(result.Rows, drainTestRow(int64(i), val))
++		}
++		qr := sqltypes.ResultToProto3(result)
++		return &binlogdatapb.VStreamRowsResponse{Fields: qr.Fields, Rows: qr.Rows, Gtid: gtid}
++	}
++	first := newResponse("pos1", "aaaa", "bbbb")
++	second := newResponse("pos2", "cccc", "dddd", "eeee")
++	firstBytes, err := first.MarshalVT()
++	require.NoError(t, err)
++	secondBytes, err := second.MarshalVT()
++	require.NoError(t, err)
++
++	vsr := binlogdatapb.VStreamRowsResponseFromVTPool()
++	defer vsr.ReturnToVTPool()
++	require.NoError(t, vsr.UnmarshalVT(firstBytes))
++	taken := takeVStreamRowsResponse(vsr)
++	vsr.ResetVT()
++	require.NoError(t, vsr.UnmarshalVT(secondBytes))
++
++	require.True(t, proto.Equal(first, taken), "taken: %v, want: %v", taken, first)
++	require.True(t, proto.Equal(second, vsr), "reused: %v, want: %v", vsr, second)
++}
++
++// TestRestartTargetVReplicationStreams tests that the target streams stopped
++// for a table diff are restarted without a tabletmanager RPC to this same
++// tablet, which fails while the tablet is shutting down: retrying it kept the
++// workflow lock held until the process exited, which orphaned the lock in the
++// topo server, and left the streams stopped at the vdiff snapshot position.
++func TestRestartTargetVReplicationStreams(t *testing.T) {
++	for _, closeEngine := range []bool{false, true} {
++		t.Run(fmt.Sprintf("engine closed %t", closeEngine), func(t *testing.T) {
++			vdenv := newTestVDiffEnv(t)
++			t.Cleanup(vdenv.close)
++			// The tabletmanager RPC to this tablet fails, as when its gRPC server is stopping.
++			restartQuery := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='%s' and workflow='%s'", vdiffDBName, vdenv.workflow)
++			delete(vdenv.tmc.vrQueries[100], restartQuery)
++
++			// A stream stopped for the diff. Its source keyspace does not exist, so it
++			// does not replicate anything once it runs.
++			source := &binlogdatapb.BinlogSource{
++				Keyspace: "nosuchkeyspace",
++				Shard:    "0",
++				Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1"}}},
++			}
++			qr, err := vdenv.vre.Exec(binlogplayer.CreateVReplicationState(vdenv.workflow, source, "", binlogdatapb.VReplicationWorkflowState_Stopped,
++				vdiffDBName, binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowSubType_None))
++			require.NoError(t, err)
++			id := qr.InsertID
++
++			dbClient := realDBClientFactory()
++			require.NoError(t, dbClient.Connect())
++			t.Cleanup(func() {
++				_, err := dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
++				require.NoError(t, err)
++				dbClient.Close()
++			})
++			if closeEngine {
++				vdenv.vre.Close()
++			}
++
++			td := &tableDiffer{
++				wd: &workflowDiffer{ct: &controller{
++					vde:                   vdenv.vde,
++					workflow:              vdenv.workflow,
++					TableDiffPhaseTimings: stats.NewTimings("", "", ""),
++				}},
++				table: &tabletmanagerdatapb.TableDefinition{Name: "t1"},
++			}
++			require.NoError(t, td.restartTargetVReplicationStreams(t.Context(), dbClient))
++			qr, err = dbClient.ExecuteFetch(fmt.Sprintf("select state, stop_pos from _vt.vreplication where id = %d", id), 1)
++			require.NoError(t, err)
++			require.Len(t, qr.Rows, 1)
++			require.Equal(t, binlogdatapb.VReplicationWorkflowState_Running.String(), qr.Rows[0][0].ToString())
++			require.Empty(t, qr.Rows[0][1].ToString())
++		})
++	}
++}
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/utils.go b/go/vt/vttablet/tabletmanager/vdiff/utils.go
+index 75db7749cf..adaf923418 100644
+--- a/go/vt/vttablet/tabletmanager/vdiff/utils.go
++++ b/go/vt/vttablet/tabletmanager/vdiff/utils.go
+@@ -40,6 +40,14 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
+ 	for _, participant := range participants {
+ 		prims = append(prims, participant)
+ 	}
++	return &engine.MergeSort{
++		Primitives: prims,
++		OrderBy:    pkOrderBy(comparePKs, collationEnv),
++	}
++}
++
++// pkOrderBy returns the order of the rows streamed from the shards: by the pk columns.
++func pkOrderBy(comparePKs []compareColInfo, collationEnv *collations.Environment) evalengine.Comparison {
+ 	ob := make([]evalengine.OrderByParams, len(comparePKs))
+ 	for i, cpk := range comparePKs {
+ 		weightStringCol := -1
+@@ -50,10 +58,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
+ 		}
+ 		ob[i] = evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: evalengine.NewType(sqltypes.Unknown, collation), CollationEnv: collationEnv}
+ 	}
+-	return &engine.MergeSort{
+-		Primitives: prims,
+-		OrderBy:    ob,
+-	}
++	return ob
+ }
+ 
+ // -----------------------------------------------------------------
+diff --git a/perf-findings/V3-scripts/ab.sh b/perf-findings/V3-scripts/ab.sh
+new file mode 100755
+index 0000000000..1d4563ba51
+--- /dev/null
++++ b/perf-findings/V3-scripts/ab.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash
++# A/B VDiff runs. Usage: ab.sh PREFIX ROUNDS ARM...   where ARM is NAME=BIN[:VDIFF_V3_OFF]
++# e.g. ab.sh r 3 base=/home/vt/bin all=/home/vt/bin-V3 fast=/home/vt/bin-V3:merge,steal
++# Restarts the vttablets for every arm (outside of the bench lock), then runs vd.sh inside the lock.
++set -uo pipefail
++D=/home/vt/perf/V3
++DR=/home/vt/perf/c30000
++PREFIX=$1; ROUNDS=$2; shift 2
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++for r in $(seq 1 "$ROUNDS"); do
++  for arm in "$@"; do
++    name=${arm%%=*}; spec=${arm#*=}; bin=${spec%%:*}; off=""
++    [[ $spec == *:* ]] && off=${spec#*:}
++    # Only the target tablets run the vdiff: restarting the source too makes the streams' tablet picker sleep 30 s.
++    for i in 1 2; do
++      BIN=$bin VDIFF_V3_OFF=$off VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" "$D/c.sh" restart-tablet $i >/dev/null 2>&1
++    done
++    for _ in $(seq 1 150); do
++      s1=$(q $DR/vt_0000000101/mysql.sock "select state from _vt.vreplication where workflow='wf'")
++      s2=$(q $DR/vt_0000000102/mysql.sock "select state from _vt.vreplication where workflow='wf'")
++      [[ $s1 == Running && $s2 == Running ]] && break
++      sleep 0.2
++    done
++    sleep 8
++    flock -o /home/vt/perf/bench.lock env WF=${WF:-wf} VD_FLAGS="${VD_FLAGS:-}" VERBOSE=${VERBOSE:-0} "$D/vd.sh" "${PREFIX}-$name-$r" "${PROF:-0}" | head -8
++  done
++done
+diff --git a/perf-findings/V3-scripts/c.sh b/perf-findings/V3-scripts/c.sh
+new file mode 100755
+index 0000000000..22883ed50c
+--- /dev/null
++++ b/perf-findings/V3-scripts/c.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Run the V1 harness as the vt user.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=30000 BIN=${BIN:-/home/vt/bin} \
++  KEYSPACES="${KEYSPACES:-src:0 dst:-80,80-}" TABLES=${TABLES:-1} TABLE_SIZE=${TABLE_SIZE:-500000} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/perf/V3/cluster.sh "$@"
+diff --git a/perf-findings/V3-scripts/cluster.sh b/perf-findings/V3-scripts/cluster.sh
+new file mode 100755
+index 0000000000..9f398f4da9
+--- /dev/null
++++ b/perf-findings/V3-scripts/cluster.sh
+@@ -0,0 +1,260 @@
++#!/bin/bash
++# P4 VReplication harness: a copy of perf-findings/harness/cluster.sh that runs several keyspaces in one cluster.
++#
++# Usage (as the vt user): BASE=40000 ./cluster.sh up|down|cpu|pids|restart-tablets|load|purge-binlogs|env
++#
++# Environment (in addition to the base harness):
++#   KEYSPACES  space separated "keyspace:shard,shard" list (default "src:0 dst:-80,80-").
++#              The first keyspace is unsharded (vschema {"sharded":false}) and gets the sysbench schema;
++#              the others get a hash-on-id vschema for the same tables (no schema: MoveTables creates it).
++#   TABLES / TABLE_SIZE   sysbench tables loaded into the first keyspace by `load` (directly into its mysqld).
++#   BIN        Vitess binaries. `restart-tablets` restarts only the vttablets (mysqld kept) with $BIN.
++# Tablet i (0-based, in KEYSPACES order): uid 100+i, web BASE+100+i, grpc BASE+200+i, mysqld BASE+400+i.
++set -euo pipefail
++
++BASE=${BASE:-30000}
++NAME=${NAME:-c$BASE}
++KEYSPACES=${KEYSPACES:-"src:0 dst:-80,80-"}
++TABLES=${TABLES:-4}
++TABLE_SIZE=${TABLE_SIZE:-500000}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++tablet_uid() { echo $((100 + $1)); }
++
++# Prints "index keyspace shard" for every tablet.
++tablets() {
++  local i=0
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*} shards=${spec#*:}
++    for shard in ${shards//,/ }; do echo "$i $ks $shard"; i=$((i + 1)); done
++  done
++}
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOC'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOC
++}
++
++start_tablet() {
++  local i=$1 ks=$2 shard=$3 uid alias
++  uid=$(tablet_uid "$i")
++  printf -v alias '%s-%010d' "$CELL" "$uid"
++  # shellcheck disable=SC2086
++  vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$ks" --init-shard "$shard" \
++    --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++    --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++    --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++    ${VTTABLET_EXTRA_FLAGS:-} >>"$LOGDIR/vttablet_$uid.log" 2>&1 &
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  for spec in $KEYSPACES; do vtctldclient CreateKeyspace --durability-policy=none "${spec%%:*}" >/dev/null 2>&1 || true; done
++
++  local pids=()
++  while read -r i ks shard; do
++    local uid
++    uid=$(tablet_uid "$i")
++    mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++      --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++    pids+=($!)
++  done < <(tablets)
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++  while read -r i ks shard; do
++    local alias
++    printf -v alias '%s-%010d' "$CELL" "$(tablet_uid "$i")"
++    vtctldclient PlannedReparentShard "$ks/$shard" --new-primary "$alias" >/dev/null
++  done < <(tablets)
++
++  load_schema
++
++  # shellcheck disable=SC2086
++  vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables="" first=1
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL AUTO_INCREMENT, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  sql+="CREATE TABLE IF NOT EXISTS wide (id BIGINT NOT NULL AUTO_INCREMENT, user_id INT NOT NULL, created_at DATETIME(6) NOT NULL, status VARCHAR(16) NOT NULL, title VARCHAR(255) NOT NULL, amount DECIMAL(12,2) NOT NULL, body TEXT, attrs JSON, PRIMARY KEY (id), KEY idx_user_created (user_id, created_at), KEY idx_status (status), KEY idx_title (title(32))) ENGINE=InnoDB;"
++  vs_tables+=",\"wide\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  sql+="CREATE TABLE IF NOT EXISTS coll (name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL, grp VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL, val INT NOT NULL, note VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (name), KEY idx_grp (grp)) ENGINE=InnoDB;"
++  vs_tables+=",\"coll\":{\"column_vindexes\":[{\"column\":\"name\",\"name\":\"xxhash\"}]}"
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*}
++    if ((first)); then
++      vtctldclient ApplySchema --sql "$sql" "$ks" >/dev/null
++      vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$ks" >/dev/null
++      first=0
++    else
++      vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"},\"xxhash\":{\"type\":\"xxhash\"}},\"tables\":{$vs_tables}}" "$ks" >/dev/null
++    fi
++  done
++}
++
++# Load sysbench tables into the first keyspace directly through its primary's socket (fast, no vtgate).
++load() {
++  local sock=$VTDATAROOT/vt_0000000100/mysql.sock ks=${KEYSPACES%%:*}
++  for t in $(seq 1 "$TABLES"); do mysql -S "$sock" -u vt_dba "vt_$ks" -e "DROP TABLE IF EXISTS sbtest$t"; done
++  sysbench --db-driver=mysql --mysql-socket="$sock" --mysql-user=vt_dba --mysql-db="vt_$ks" --tables="$TABLES" \
++    --table-size="$TABLE_SIZE" --threads="$TABLES" oltp_write_only prepare
++  purge_binlogs 0
++}
++
++# Rotate binlogs and purge the files older than $1 seconds (default 120: running streams may still need recent files).
++purge_binlogs() {
++  local age=${1:-120}
++  for d in "$VTDATAROOT"/vt_*; do
++    if [[ $age == 0 ]]; then
++      mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS" 2>&1 | grep -v Warning || true
++      local cur
++      cur=$(mysql -N -S "$d/mysql.sock" -u vt_dba -e "SHOW MASTER STATUS" 2>/dev/null | awk '{print $1}')
++      [[ -n $cur ]] && mysql -S "$d/mysql.sock" -u vt_dba -e "PURGE BINARY LOGS TO '$cur'" 2>&1 | grep -v Warning || true
++    else
++      mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS; PURGE BINARY LOGS BEFORE NOW() - INTERVAL $age SECOND;" 2>&1 | grep -v Warning || true
++    fi
++  done
++}
++
++# Stop the vttablet with index $1: the one in its pid file and any other one still holding its web port.
++kill_tablet() {
++  local idx=$1 f pids p
++  f=$VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$idx")")/vttablet.pid
++  pids="$(cat "$f" 2>/dev/null || true) $(pgrep -f -- "--port $((BASE + 100 + idx)) " || true)"
++  for p in $pids; do kill "$p" 2>/dev/null || true; done
++  for p in $pids; do while kill -0 "$p" 2>/dev/null; do sleep 0.2; done; done
++}
++
++restart_tablets() {
++  while read -r i ks shard; do kill_tablet "$i" & done < <(tablets)
++  wait
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++}
++
++# Restart the vttablet with index $1 only (mysqld kept).
++restart_tablet() {
++  local idx=$1
++  kill_tablet "$idx"
++  while read -r i ks shard; do [[ $i == "$idx" ]] && start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  wait_http $((BASE + 100 + idx))
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  echo "cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspaces [$KEYSPACES]"
++  echo "  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root ; vtctldclient --server localhost:$VTCTLD_GRPC"
++  tablets | while read -r i ks shard; do
++    echo "  tablet $i uid $(tablet_uid "$i") $ks/$shard web $((BASE + 100 + i)) sock $VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$i")")/mysql.sock"
++  done
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck
++  tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++case "${1:-}" in
++  up) up ;;
++  down) down ;;
++  env) env_info ;;
++  load) load ;;
++  purge-binlogs) purge_binlogs "${2:-120}" ;;
++  restart-tablets) restart_tablets ;;
++  restart-tablet) restart_tablet "$2" ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  vtctldclient) shift; vtctldclient "$@" ;;
++  *) echo "usage: $0 up|down|env|load|purge-binlogs|restart-tablets|pids|cpu|vtctldclient ARGS" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/V3-scripts/fixpos.sh b/perf-findings/V3-scripts/fixpos.sh
+new file mode 100755
+index 0000000000..cab17fb141
+--- /dev/null
++++ b/perf-findings/V3-scripts/fixpos.sh
+@@ -0,0 +1,8 @@
++#!/bin/bash
++# Reset the dst.wf streams' position to the source's current GTID set (only valid when the source tables had no writes).
++set -euo pipefail
++DR=/home/vt/perf/c30000
++G=$(mysql -N -S $DR/vt_0000000100/mysql.sock -u vt_dba -e "select @@global.gtid_executed")
++for u in 101 102; do
++  mysql -S $DR/vt_0000000$u/mysql.sock -u vt_dba -e "update _vt.vreplication set pos='MySQL56/$G', stop_pos='', state='Running', message='' where workflow='wf'"
++done
+diff --git a/perf-findings/V3-scripts/fixwf2.sh b/perf-findings/V3-scripts/fixwf2.sh
+new file mode 100755
+index 0000000000..d35086604d
+--- /dev/null
++++ b/perf-findings/V3-scripts/fixwf2.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# Clear a leftover vdiff stop position on the wf2 streams and restart the target tablets.
++for u in 101 102; do
++  mysql -S /home/vt/perf/c30000/vt_0000000$u/mysql.sock -u vt_dba -e "update _vt.vreplication set state='Running', stop_pos='', message='' where workflow='wf2'"
++done
++BIN=${BIN:-/home/vt/bin-V3f}
++for i in 1 2; do BIN=$BIN /home/vt/perf/V3/c.sh restart-tablet $i >/dev/null 2>&1; done
+diff --git a/perf-findings/V3-scripts/load.sh b/perf-findings/V3-scripts/load.sh
+new file mode 100755
+index 0000000000..ddba5ea786
+--- /dev/null
++++ b/perf-findings/V3-scripts/load.sh
+@@ -0,0 +1,29 @@
++#!/bin/bash
++# Load the V3 dataset into src: sbtest1 (1M rows), wide (250k rows, TEXT+JSON, 3 secondary keys),
++# coll (250k rows, utf8mb4_general_ci varchar PK, a unicode_ci column).
++set -euo pipefail
++D=/home/vt/perf/V3
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++q() { mysql -S $S -u vt_dba vt_src -e "$1"; }
++TABLES=1 "$D/c.sh" load
++q "insert into sbtest1 (k, c, pad) select k, c, pad from sbtest1 order by id"
++q "truncate table wide"
++for b in $(seq 0 4); do
++  q "set session cte_max_recursion_depth=100000; insert into wide (user_id, created_at, status, title, amount, body, attrs)
++     with recursive seq(n) as (select 1 union all select n+1 from seq where n < 50000)
++     select floor(rand()*100000), now(6) - interval floor(rand()*1e8) second, elt(1+floor(rand()*4),'new','paid','shipped','cancelled'),
++       concat('title ', md5(rand()), ' ', n), round(rand()*10000, 2),
++       concat_ws(' ', md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()),
++                      md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand())),
++       json_object('n', n, 'batch', $b, 'h', md5(rand()), 'tags', json_array(md5(rand()), floor(rand()*1000), true), 'nested', json_object('x', rand(), 'y', 'yy')) from seq"
++done
++q "truncate table coll"
++for b in $(seq 0 4); do
++  q "set session cte_max_recursion_depth=100000; insert into coll (name, grp, val, note)
++     with recursive seq(n) as (select 1 union all select n+1 from seq where n < 50000)
++     select concat(elt(1+(n%6),'Ångström','zebra','Éclair','apple','Über','ñandú'), ' ', if(n%2,upper(md5(n*7+$b)),md5(n*7+$b)), ' ', $b, '-', n),
++       elt(1+floor(rand()*5),'Alpha','beta','GAMMA','délta','Epsilon'), floor(rand()*1e6),
++       concat('Nöte ', md5(rand()), ' ', md5(rand())) from seq"
++done
++q "analyze table sbtest1, wide, coll; select table_name, table_rows, round(data_length/1e6) data_mb, round(index_length/1e6) idx_mb from information_schema.tables where table_schema='vt_src'"
++"$D/c.sh" purge-binlogs 0
+diff --git a/perf-findings/V3-scripts/locktest.sh b/perf-findings/V3-scripts/locktest.sh
+new file mode 100755
+index 0000000000..daeed90bdd
+--- /dev/null
++++ b/perf-findings/V3-scripts/locktest.sh
+@@ -0,0 +1,28 @@
++#!/bin/bash
++# Restart a target vttablet while a VDiff of wf2 (30 small tables) is initializing its table diffs, then check
++# whether the workflow's named lock is left behind in the topo.
++# Usage: locktest.sh BIN
++set -uo pipefail
++D=/home/vt/perf/V3
++BIN=$1
++for i in 1 2; do BIN=$BIN "$D/c.sh" restart-tablet $i >/dev/null 2>&1; done
++sleep 10
++RATE=50 SECS=90 "$D/writes.sh" >/dev/null 2>&1 &
++wpid=$!
++sleep 2
++UUID=$(cat /proc/sys/kernel/random/uuid)
++"$D/c.sh" vtctldclient VDiff --workflow wf2 --target-keyspace dst create "$UUID" >/dev/null
++sleep 8
++echo "locks before the restart:"
++ETCDCTL_API=3 etcdctl --endpoints=localhost:30010 get --prefix --keys-only /vitess/global/internal/named_locks/ | grep .
++echo "restarting tablet 101 at $(date +%T)"
++BIN=$BIN "$D/c.sh" restart-tablet 1 >/dev/null 2>&1
++echo "restarted at $(date +%T)"
++grep -h "Unlocking named dst/wf2\|OnTermSync hooks timed out" /home/vt/perf/c30000/logs/vttablet_101.log | tail -3 | cut -c1-120
++"$D/c.sh" vtctldclient VDiff --workflow wf2 --target-keyspace dst stop "$UUID" >/dev/null 2>&1 &
++sleep 20
++echo "locks 20 s after the restart (vdiff stopped):"
++ETCDCTL_API=3 etcdctl --endpoints=localhost:30010 get --prefix /vitess/global/internal/named_locks/ | grep -A3 "^/vitess" | grep -v "HostName\|UserName"
++kill $wpid 2>/dev/null
++pkill -f "mysql -S /home/vt/perf/c30000/vt_0000000100/mysql.sock -u vt_dba vt_src$"
++wait
+diff --git a/perf-findings/V3-scripts/mt.sh b/perf-findings/V3-scripts/mt.sh
+new file mode 100755
+index 0000000000..380859bbb8
+--- /dev/null
++++ b/perf-findings/V3-scripts/mt.sh
+@@ -0,0 +1,68 @@
++#!/bin/bash
++# Time one MoveTables copy phase src -> dst (2 shards), with CPU per process, MySQL counters per mysqld, and optional pprof.
++# Usage: mt.sh LABEL [PROFILE_SECONDS]
++# Env: MT_FLAGS extra flags for `MoveTables create`; TABLES_LIST (default sbtest1,sbtest2,wide); VERBOSE=1 prints counters.
++set -uo pipefail
++LABEL=${1:-run}
++PROF=${2:-0}
++D=/home/vt/perf/V3
++DR=/home/vt/perf/c30000
++OUT=$D/out/$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++VC="$D/c.sh vtctldclient"
++TL=${TABLES_LIST:-sbtest1,sbtest2,wide}
++TSOCK1=$DR/vt_0000000101/mysql.sock
++TSOCK2=$DR/vt_0000000102/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++VARS="Handler_write Handler_read_next Handler_read_key Handler_read_rnd_next Handler_update Handler_delete Handler_commit Innodb_rows_inserted Innodb_rows_read Innodb_data_written Innodb_data_writes Innodb_os_log_written Innodb_pages_written Com_insert Com_commit Com_begin Com_select Com_set_option Com_alter_table Com_delete_multi Com_update Questions Bytes_received Bytes_sent Sort_rows Created_tmp_tables Binlog_cache_use"
++inlist=$(printf "'%s'," $VARS); inlist=${inlist%,}
++snap() { # $1 suffix
++  for u in 100 101 102; do
++    q $DR/vt_0000000$u/mysql.sock "show global status where variable_name in ($inlist)" >"$OUT/st_${u}_$1"
++    echo "BINLOG_BYTES $(q $DR/vt_0000000$u/mysql.sock "show binary logs" | awk '{s+=$2} END {print s}')" >>"$OUT/st_${u}_$1"
++  done
++}
++"$D/c.sh" cpu >"$OUT/cpu0"
++snap 0
++uptime >"$OUT/uptime0"
++t0=$(date +%s.%N)
++$VC MoveTables --workflow wf --target-keyspace dst create --source-keyspace src --tables "$TL" ${MT_FLAGS:-} >"$OUT/create.log" 2>&1 || { cat "$OUT/create.log"; exit 1; }
++if [[ $PROF -gt 0 ]]; then
++  sleep 2
++  curl -s -o "$OUT/src.pprof" "http://localhost:30100/debug/pprof/profile?seconds=$PROF" &
++  curl -s -o "$OUT/dst1.pprof" "http://localhost:30101/debug/pprof/profile?seconds=$PROF" &
++fi
++if [[ ${PERF:-0} -gt 0 ]]; then
++  sleep 1
++  /usr/lib/linux-tools-6.8.0-142/perf record -e cpu-clock -F 499 -g -o "$OUT/mysqld101.perf" -p "$(cat $DR/vt_0000000101/mysql.pid)" -- sleep "$PERF" >/dev/null 2>&1 &
++fi
++while :; do
++  n1=$(q $TSOCK1 "select count(*) from _vt.copy_state")
++  n2=$(q $TSOCK2 "select count(*) from _vt.copy_state")
++  s1=$(q $TSOCK1 "select state from _vt.vreplication where workflow='wf'")
++  s2=$(q $TSOCK2 "select state from _vt.vreplication where workflow='wf'")
++  p1=$(q $TSOCK1 "select length(pos) from _vt.vreplication where workflow='wf'")
++  p2=$(q $TSOCK2 "select length(pos) from _vt.vreplication where workflow='wf'")
++  if [[ $n1 == 0 && $n2 == 0 && $s1 == Running && $s2 == Running && ${p1:-0} -gt 0 && ${p2:-0} -gt 0 ]]; then break; fi
++  if [[ $s1 == Error || $s2 == Error ]]; then echo "ERROR"; q $TSOCK1 "select message from _vt.vreplication"; break; fi
++  sleep 0.2
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++snap 1
++uptime >"$OUT/uptime1"
++curl -s http://localhost:30101/debug/vars >"$OUT/vars101.json"
++curl -s http://localhost:30100/debug/vars >"$OUT/vars100.json"
++wait
++cq="select 0"
++for t in ${TL//,/ }; do cq+="+(select count(*) from vt_dst.$t)"; done
++rows=$(( $(q $TSOCK1 "$cq") + $(q $TSOCK2 "$cq") ))
++dur=$(echo "$t1 - $t0" | bc)
++echo "$LABEL rows=$rows dur=${dur}s rows/s=$(echo "$rows / $dur" | bc) load: $(cut -d, -f3- "$OUT/uptime1")" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$rows" '{d=$4-$2; printf "  %-14s %7.2f s  %6.2f s/1M rows\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
++if [[ ${VERBOSE:-0} == 1 ]]; then
++  for u in 100 101 102; do
++    echo "  mysqld_$u counters per 1M rows copied:" | tee -a "$OUT/summary"
++    join <(sort "$OUT/st_${u}_0") <(sort "$OUT/st_${u}_1") | awk -v r="$rows" '{d=$3-$2; if (d != 0) printf "    %-26s %14.0f\n", $1, d*1e6/r}' | tee -a "$OUT/summary"
++  done
++fi
+diff --git a/perf-findings/V3-scripts/mtcancel.sh b/perf-findings/V3-scripts/mtcancel.sh
+new file mode 100755
+index 0000000000..aee8b256ee
+--- /dev/null
++++ b/perf-findings/V3-scripts/mtcancel.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# Cancel the MoveTables workflow (drops the target tables) and purge binlogs.
++D=/home/vt/perf/V3
++"$D/c.sh" vtctldclient MoveTables --workflow wf --target-keyspace dst cancel >/dev/null 2>&1 || true
++"$D/c.sh" purge-binlogs 0
+diff --git a/perf-findings/V3-scripts/phases.py b/perf-findings/V3-scripts/phases.py
+new file mode 100644
+index 0000000000..06e603f7f4
+--- /dev/null
++++ b/perf-findings/V3-scripts/phases.py
+@@ -0,0 +1,34 @@
++#!/usr/bin/env python3
++"""Per-table phase times (s), averaged over the runs and target shards of an A/B prefix: phases.py PREFIX"""
++import collections
++import glob
++import json
++import sys
++
++prefix = sys.argv[1]
++res = collections.defaultdict(lambda: collections.defaultdict(list))
++for d in sorted(glob.glob(f"/home/vt/perf/V3/out/{prefix}-*")):
++    arm = d.rsplit("/", 1)[1][len(prefix) + 1:].rsplit("-", 1)[0]
++    uuid = open(d + "/summary").read().split("uuid=")[1].split()[0]
++    for t in ("101", "102"):
++        pt = {}
++        for f in (f"{d}/vars{t}_end.json", f"{d}/vars{t}.json"):
++            try:
++                v = json.load(open(f))
++            except Exception:
++                continue
++            pt = {k: x for k, x in v.get("VDiffPhaseTimings", {}).items() if uuid in k}
++            if pt:
++                break
++        for k, x in pt.items():
++            tbl, phase = k.split(uuid + ".")[1].rsplit(".", 1)
++            res[arm][(tbl, phase)].append(x / 1e9)
++for arm, r in res.items():
++    tables = sorted({k[0] for k in r})
++    for tbl in tables:
++        parts = []
++        for phase in ("initializing", "syncing_target_streams", "diffing_table"):
++            xs = r.get((tbl, phase), [])
++            if xs:
++                parts.append(f"{phase}={sum(xs) / len(xs):.2f}")
++        print(f"{arm:8} {tbl:10} " + " ".join(parts))
+diff --git a/perf-findings/V3-scripts/runtest.sh b/perf-findings/V3-scripts/runtest.sh
+new file mode 100755
+index 0000000000..bd9aa94af5
+--- /dev/null
++++ b/perf-findings/V3-scripts/runtest.sh
+@@ -0,0 +1,10 @@
++#!/bin/bash
++# Run a compiled vdiff test binary as vt. Usage: runtest.sh BINARY LOG [go test args...]
++BIN=$1; LOG=$2; shift 2
++cd /home/vt/perf/V3 || exit 1
++mkdir -p /home/vt/perf/V3/testdata
++chown vt:vt "$BIN" /home/vt/perf/V3/testdata
++timeout 900 setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt VTROOT=/home/vt VTDATAROOT=/home/vt/perf/V3/testdata \
++  VT_MYSQL_ROOT=/usr PATH=/home/vt/bin:/usr/sbin:/usr/bin:/bin "$BIN" "$@" >"$LOG" 2>&1
++echo "exit=$?"
++grep -E "^\s*(--- |PASS|FAIL|ok|panic)" "$LOG" | head -60
+diff --git a/perf-findings/V3-scripts/small.sh b/perf-findings/V3-scripts/small.sh
+new file mode 100755
+index 0000000000..9e275067c9
+--- /dev/null
++++ b/perf-findings/V3-scripts/small.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash
++# Create N small tables (small1..smallN, 1000 rows each) and an unrelated table `other` in src,
++# add them to the dst vschema, and MoveTables them in workflow wf2.
++set -euo pipefail
++D=/home/vt/perf/V3
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++N=${N:-30}
++q() { mysql -S $S -u vt_dba vt_src -e "$1"; }
++q "create table if not exists other (id bigint not null auto_increment primary key, v varchar(64)) engine=InnoDB"
++tl=""
++for i in $(seq 1 "$N"); do
++  q "create table if not exists small$i (id bigint not null primary key, a int, b varchar(64), c datetime) engine=InnoDB;
++     set session cte_max_recursion_depth=100000;
++     insert ignore into small$i with recursive seq(n) as (select 1 union all select n+1 from seq where n < 1000)
++     select n, n*7, md5(n), now() - interval n minute from seq"
++  tl+="small$i,"
++done
++tl=${tl%,}
++vs=$("$D/c.sh" vtctldclient GetVSchema dst)
++vs=$(python3 -c '
++import json, sys
++vs = json.loads(sys.argv[1])
++for i in range(1, int(sys.argv[2]) + 1):
++    vs["tables"]["small%d" % i] = {"column_vindexes": [{"column": "id", "name": "hash"}]}
++print(json.dumps(vs))' "$vs" "$N")
++"$D/c.sh" vtctldclient ApplyVSchema --vschema "$vs" dst >/dev/null
++"$D/c.sh" vtctldclient MoveTables --workflow wf2 --target-keyspace dst create --source-keyspace src --tables "$tl"
+diff --git a/perf-findings/V3-scripts/summ.py b/perf-findings/V3-scripts/summ.py
+new file mode 100644
+index 0000000000..b64d8c4d23
+--- /dev/null
++++ b/perf-findings/V3-scripts/summ.py
+@@ -0,0 +1,34 @@
++#!/usr/bin/env python3
++"""Summarize vd.sh runs: summ.py PREFIX -> per arm: wall times, rows/s, CPU s/1M rows per process (mean of target tablets)."""
++import glob
++import os
++import re
++import sys
++from collections import defaultdict
++
++prefix = sys.argv[1]
++arms = defaultdict(list)
++for d in sorted(glob.glob(f"/home/vt/perf/V3/out/{prefix}-*")):
++    f = os.path.join(d, "summary")
++    if not os.path.exists(f):
++        continue
++    name = os.path.basename(d)[len(prefix) + 1:]
++    arm = name.rsplit("-", 1)[0]
++    txt = open(f).read()
++    m = re.search(r"rows=(\d+) mismatch_tables=(\d+) dur=([\d.]+)s", txt)
++    load = re.search(r"load average: ([\d.]+)", txt).group(1)
++    cpu = dict(re.findall(r"^\s+(\S+)\s+[\d.]+ s\s+([\d.]+) s/1M rows", txt, re.M))
++    arms[arm].append((float(m.group(3)), int(m.group(1)), int(m.group(2)), {k: float(v) for k, v in cpu.items()}, load))
++
++print(f"{'arm':10} {'n':>2} {'wall s (each)':30} {'tgt tablet':>10} {'src tablet':>10} {'src mysqld':>10} {'tgt mysqld':>10} {'total':>7}  loads")
++for arm, runs in arms.items():
++    walls = " ".join(f"{r[0]:.2f}" for r in runs)
++    def avg(keys):
++        return sum(sum(r[3].get(k, 0) for k in keys) / len(keys) for r in runs) / len(runs)
++    tt = avg(["vttablet_101", "vttablet_102"])
++    st = avg(["vttablet_100"])
++    sm = avg(["mysqld_100"])
++    tm = avg(["mysqld_101", "mysqld_102"])
++    tot = st + sm + 2 * tt + 2 * tm
++    mm = sum(r[2] for r in runs)
++    print(f"{arm:10} {len(runs):>2} {walls:30} {tt:10.2f} {st:10.2f} {sm:10.2f} {tm:10.2f} {tot:7.2f}  {' '.join(r[4] for r in runs)}{'  MISMATCH' if mm else ''}")
+diff --git a/perf-findings/V3-scripts/vd.sh b/perf-findings/V3-scripts/vd.sh
+new file mode 100755
+index 0000000000..aae8c5d5a8
+--- /dev/null
++++ b/perf-findings/V3-scripts/vd.sh
+@@ -0,0 +1,91 @@
++#!/bin/bash
++# Time one VDiff of workflow dst.wf (targets: tablets 101, 102), with CPU per process, MySQL counters per mysqld,
++# VDiff phase timings and optional pprof of the target vttablet 101.
++# Usage: vd.sh LABEL [PROFILE_SECONDS]
++# Env: VD_FLAGS extra flags for `VDiff create`; VERBOSE=1 prints MySQL counters.
++set -uo pipefail
++LABEL=${1:-run}
++PROF=${2:-0}
++D=/home/vt/perf/V3
++DR=/home/vt/perf/c30000
++OUT=$D/out/$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++VC="$D/c.sh vtctldclient"
++TSOCK1=$DR/vt_0000000101/mysql.sock
++TSOCK2=$DR/vt_0000000102/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++VARS="Handler_read_next Handler_read_key Handler_read_first Handler_read_rnd_next Handler_write Handler_update Innodb_rows_read Innodb_data_written Innodb_os_log_written Com_insert Com_update Com_select Com_commit Com_begin Com_lock_tables Com_unlock_tables Com_show_binlogs Com_flush Questions Bytes_received Bytes_sent Sort_rows Created_tmp_tables"
++inlist=$(printf "'%s'," $VARS); inlist=${inlist%,}
++snap() { # $1 suffix
++  for u in 100 101 102; do
++    q $DR/vt_0000000$u/mysql.sock "show global status where variable_name in ($inlist)" >"$OUT/st_${u}_$1"
++  done
++}
++UUID=$(cat /proc/sys/kernel/random/uuid)
++"$D/c.sh" cpu >"$OUT/cpu0"
++snap 0
++uptime >"$OUT/uptime0"
++t0=$(date +%s.%N)
++$VC VDiff --workflow ${WF:-wf} --target-keyspace dst create ${VD_FLAGS:-} "$UUID" >"$OUT/create.log" 2>&1 || { cat "$OUT/create.log"; exit 1; }
++if [[ $PROF -gt 0 ]]; then
++  sleep 1
++  curl -s -o "$OUT/dst1.pprof" "http://localhost:30101/debug/pprof/profile?seconds=$PROF" &
++  curl -s -o "$OUT/src.pprof" "http://localhost:30100/debug/pprof/profile?seconds=$PROF" &
++fi
++if [[ ${PERF:-0} -gt 0 ]]; then
++  sleep 1
++  for u in 100 101; do
++    /usr/lib/linux-tools-6.8.0-142/perf record -e cpu-clock -F 499 -g -o "$OUT/mysqld$u.perf" -p "$(cat $DR/vt_0000000$u/mysql.pid)" -- sleep "$PERF" >/dev/null 2>&1 &
++  done
++fi
++n=0
++while :; do
++  s1=$(q $TSOCK1 "select state from _vt.vdiff where vdiff_uuid='$UUID'")
++  s2=$(q $TSOCK2 "select state from _vt.vdiff where vdiff_uuid='$UUID'")
++  [[ $s1 == completed && -z ${t1a:-} ]] && t1a=$(date +%s.%N)
++  [[ $s2 == completed && -z ${t2a:-} ]] && t2a=$(date +%s.%N)
++  if [[ $s1 == completed && $s2 == completed ]]; then break; fi
++  if ((n > 900)); then echo "TIMEOUT"; break; fi
++  if [[ $s1 == error || $s2 == error ]]; then echo "ERROR"; q $TSOCK1 "select last_error from _vt.vdiff where vdiff_uuid='$UUID'"; q $TSOCK2 "select last_error from _vt.vdiff where vdiff_uuid='$UUID'"; break; fi
++  if ((n % 5 == 0)); then
++    curl -s http://localhost:30101/debug/vars >"$OUT/vars101.json.tmp" && mv "$OUT/vars101.json.tmp" "$OUT/vars101.json"
++    curl -s http://localhost:30102/debug/vars >"$OUT/vars102.json.tmp" && mv "$OUT/vars102.json.tmp" "$OUT/vars102.json"
++  fi
++  n=$((n + 1))
++  sleep 0.2
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++snap 1
++uptime >"$OUT/uptime1"
++curl -s http://localhost:30101/debug/vars >"$OUT/vars101_end.json"
++curl -s http://localhost:30102/debug/vars >"$OUT/vars102_end.json"
++wait
++$VC VDiff --workflow ${WF:-wf} --target-keyspace dst show "$UUID" >"$OUT/show.txt" 2>&1
++rows=$(( $(q $TSOCK1 "select sum(rows_compared) from _vt.vdiff_table t join _vt.vdiff v on v.id=t.vdiff_id where v.vdiff_uuid='$UUID'") + $(q $TSOCK2 "select sum(rows_compared) from _vt.vdiff_table t join _vt.vdiff v on v.id=t.vdiff_id where v.vdiff_uuid='$UUID'") ))
++mm=$(( $(q $TSOCK1 "select sum(mismatch) from _vt.vdiff_table t join _vt.vdiff v on v.id=t.vdiff_id where v.vdiff_uuid='$UUID'") + $(q $TSOCK2 "select sum(mismatch) from _vt.vdiff_table t join _vt.vdiff v on v.id=t.vdiff_id where v.vdiff_uuid='$UUID'") ))
++dur=$(echo "$t1 - $t0" | bc)
++echo "$LABEL uuid=$UUID rows=$rows mismatch_tables=$mm dur=${dur}s shard1=$(echo "${t1a:-$t1} - $t0" | bc)s shard2=$(echo "${t2a:-$t1} - $t0" | bc)s rows/s=$(echo "$rows / $dur" | bc) load: $(cut -d, -f3- "$OUT/uptime1")" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$rows" '{d=$4-$2; printf "  %-14s %7.2f s  %6.2f s/1M rows\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
++python3 - "$OUT" "$UUID" <<'EOF' | tee -a "$OUT/summary"
++import json, sys
++out, uuid = sys.argv[1], sys.argv[2]
++for t in ("101", "102"):
++    try:
++        v = json.load(open(f"{out}/vars{t}_end.json"))
++    except Exception:
++        continue
++    pt = {k: x for k, x in v.get("VDiffPhaseTimings", {}).items() if uuid in k}
++    if not pt:
++        v = json.load(open(f"{out}/vars{t}.json"))
++        pt = {k: x for k, x in v.get("VDiffPhaseTimings", {}).items() if uuid in k}
++    print(f"  phases tablet {t} (ms):", ", ".join(f"{k.split(uuid + '.')[1]}={x / 1e6:.0f}" for k, x in sorted(pt.items())))
++    rc = {k: x for k, x in v.get("VDiffRowsCompared", {}).items() if uuid in k}
++    print(f"  VDiffRowsCompared {t}:", rc, "VDiffRowsComparedTotal:", v.get("VDiffRowsComparedTotal"))
++EOF
++if [[ ${VERBOSE:-0} == 1 ]]; then
++  for u in 100 101 102; do
++    echo "  mysqld_$u counters per 1M rows compared:" | tee -a "$OUT/summary"
++    join <(sort "$OUT/st_${u}_0") <(sort "$OUT/st_${u}_1") | awk -v r="$rows" '{d=$3-$2; if (d != 0) printf "    %-26s %14.0f\n", $1, d*1e6/r}' | tee -a "$OUT/summary"
++  done
++fi
+diff --git a/perf-findings/V3-scripts/vdstate.sh b/perf-findings/V3-scripts/vdstate.sh
+new file mode 100755
+index 0000000000..76abc79bb2
+--- /dev/null
++++ b/perf-findings/V3-scripts/vdstate.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# Print the state of the latest vdiff on both target shards.
++for u in 101 102; do
++  mysql -N -S /home/vt/perf/c30000/vt_0000000$u/mysql.sock -u vt_dba -e "select $u, id, state, left(last_error, 300) from _vt.vdiff order by id desc limit 1; select table_name, state, rows_compared from _vt.vdiff_table where vdiff_id=(select max(id) from _vt.vdiff)"
++done
+diff --git a/perf-findings/V3-scripts/waitab.sh b/perf-findings/V3-scripts/waitab.sh
+new file mode 100755
+index 0000000000..e1beaf0947
+--- /dev/null
++++ b/perf-findings/V3-scripts/waitab.sh
+@@ -0,0 +1,10 @@
++#!/bin/bash
++# Time `VDiff create --wait` (default --wait-update-interval 1m) with the base and the patched vtctldclient.
++for bin in /home/vt/bin /home/vt/bin-V3f; do
++  for r in 1 2; do
++    t0=$(date +%s.%N)
++    "$bin/vtctldclient" --server localhost:30021 VDiff --workflow wf --target-keyspace dst create --wait >/home/vt/perf/V3/out/wait-$r.log 2>&1
++    t1=$(date +%s.%N)
++    echo "$bin/vtctldclient create --wait: $(echo "$t1 - $t0" | bc) s ($(grep -c 'State:' /home/vt/perf/V3/out/wait-$r.log) summaries shown, $(grep 'State:' /home/vt/perf/V3/out/wait-$r.log | tail -1 | tr -s ' '))"
++  done
++done
+diff --git a/perf-findings/V3-scripts/wfstate.sh b/perf-findings/V3-scripts/wfstate.sh
+new file mode 100755
+index 0000000000..56456c8070
+--- /dev/null
++++ b/perf-findings/V3-scripts/wfstate.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# Print the dst.wf stream state on both target shards.
++for u in 101 102; do
++  mysql -N -S /home/vt/perf/c30000/vt_0000000$u/mysql.sock -u vt_dba -e "select $u, id, state, left(message, 80), pos from _vt.vreplication"
++done
+diff --git a/perf-findings/V3-scripts/writes.sh b/perf-findings/V3-scripts/writes.sh
+new file mode 100755
+index 0000000000..f0bca7f8f8
+--- /dev/null
++++ b/perf-findings/V3-scripts/writes.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++# Background write load on src: ~RATE single-row inserts per second into `other` (not in any workflow) for SECS seconds.
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++RATE=${RATE:-50}
++SECS=${SECS:-120}
++TABLE=${TABLE:-other}
++python3 -c "
++import sys
++rate, secs, table = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
++for i in range(rate * secs):
++    print(\"insert into %s (v) values ('w%d');\" % (table, i))
++    print('do sleep(%f);' % (1.0 / rate))
++" "$RATE" "$SECS" "$TABLE" | mysql -S $S -u vt_dba vt_src

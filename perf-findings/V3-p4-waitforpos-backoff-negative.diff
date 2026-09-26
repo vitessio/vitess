@@ -1,0 +1,66 @@
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine.go b/go/vt/vttablet/tabletmanager/vreplication/engine.go
+index 0f941131e7..c0e822289b 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/engine.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/engine.go
+@@ -72,6 +72,14 @@ const (
+ // stop replicating.
+ var waitRetryTime = 1 * time.Second
+ 
++// waitForPosPollInterval is how often WaitForPos checks the position of a stream.
++// Traffic switches and Online DDL cut-overs wait for a position while writes are
++// blocked, so this has to be short.
++var waitForPosPollInterval = 100 * time.Millisecond
++
++// waitForPosMinPollInterval is the first interval between two checks of WaitForPos.
++var waitForPosMinPollInterval = 10 * time.Millisecond
++
+ // How frequently vcopier will update _vt.vreplication rows_copied
+ var rowsCopiedUpdateInterval = 30 * time.Second
+ 
+@@ -809,7 +817,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 	}
+ 	defer dbClient.Close()
+ 
+-	tkr := time.NewTicker(waitRetryTime)
++	// Poll quickly at first, since the stream is usually about to reach the
++	// position, and back off up to waitForPosPollInterval.
++	pollInterval := min(waitForPosMinPollInterval, waitForPosPollInterval)
++	tkr := time.NewTimer(pollInterval)
+ 	defer tkr.Stop()
+ 	for {
+ 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(id), 10)
+@@ -848,6 +859,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 			if qr.Rows[0][1].ToString() == binlogdatapb.VReplicationWorkflowState_Stopped.String() {
+ 				return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
+ 			}
++			// The stream may already have applied everything up to mPos but
++			// not saved its position yet, because the last transactions were
++			// empty for it (e.g. filtered out). Ask it to save it now.
++			vre.requestPosFlush(id)
+ 		}
+ 
+ 		select {
+@@ -866,10 +881,23 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 		case <-vre.ctx.Done():
+ 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
+ 		case <-tkr.C:
++			pollInterval = min(2*pollInterval, waitForPosPollInterval)
++			tkr.Reset(pollInterval)
+ 		}
+ 	}
+ }
+ 
++// requestPosFlush asks the stream with the given id, if it is running, to save
++// its current position without waiting for idleTimeout.
++func (vre *Engine) requestPosFlush(id int32) {
++	vre.mu.Lock()
++	ct := vre.controllers[id]
++	vre.mu.Unlock()
++	if ct != nil {
++		ct.requestPosFlush()
++	}
++}
++
+ // UpdateStats must be called with lock held.
+ func (vre *Engine) updateStats() {
+ 	globalStats.mu.Lock()
