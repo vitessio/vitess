@@ -417,3 +417,12 @@ Not prototyped; the gain needs a cluster to measure (stream restart latency with
 
 **Not verified:** the vstreamer, vreplication and vdiff package tests. They need MySQL, and running a test binary as `vt` was
 refused in this sandbox. Someone with a cluster should run them before trusting #1, #7 and #9.
+
+## Addendum (orchestrator): MySQL-backed test run of the V6 patch
+
+The binaries were compiled as root from the V6 worktree and run as `vt`, with VTROOT=/home/vt (holding `bin/mysqlctl` and a copy of `config/`), VT_MYSQL_ROOT=/usr and MySQL 8.0.46:
+- `go/vt/vttablet/tabletmanager/vdiff`, full suite: PASS (165 tests, including the new `TestUpdateTableProgressRowCounts`).
+- `go/vt/vttablet/tabletserver/vstreamer`, full suite: PASS (189 tests).
+- `go/vt/vttablet/tabletmanager/vreplication`, `-run 'TestRelayLog|TestPlayer'`: PASS (289 tests).
+
+Not yet checked: whether `TestUpdateTableProgressRowCounts` fails on main.
