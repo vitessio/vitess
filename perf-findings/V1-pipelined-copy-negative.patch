@@ -1,0 +1,147 @@
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
+index 6aae4504b5..12661c0804 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
+@@ -38,6 +38,7 @@ import (
+ 	"vitess.io/vitess/go/vt/log"
+ 	"vitess.io/vitess/go/vt/sqlparser"
+ 	"vitess.io/vitess/go/vt/vterrors"
++	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+ 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+ 
+ 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+@@ -60,6 +61,9 @@ type vcopierCopyTask struct {
+ type vcopierCopyTaskArgs struct {
+ 	lastpk *querypb.Row
+ 	rows   []*querypb.Row
++	// queries, when set, are the already built INSERT statements for rows.
++	// The pipelined copy builds them before handing the task to the writer.
++	queries []string
+ }
+ 
+ // vcopierCopyTaskHooks contains callback functions to be triggered as a copy
+@@ -416,10 +420,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 	defer copyStateGCTicker.Stop()
+ 
+ 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
++	// A pipelined copy uses a single writer on its own connection, so that the
++	// rows of the next batch are received and turned into an INSERT while the
++	// previous batch is being written and committed.
++	pipelined := parallelism == 1 && vc.vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagPipelinedCopy != 0
+ 	maxQuerySize := vc.vr.maxQuerySize(vc.vr.dbClient)
+-	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, maxQuerySize)
+-	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
++	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, pipelined, maxQuerySize)
++	copyWorkQueue := vc.newCopyWorkQueue(parallelism, pipelined, copyWorkerFactory)
+ 	defer copyWorkQueue.close()
++	var tablePlan *TablePlan
++	var pipelineSQLBuffer bytes2.Buffer
+ 
+ 	// Allocate a result channel to collect results from tasks.
+ 	resultCh := make(chan *vcopierCopyTaskResult, parallelism*4)
+@@ -502,7 +512,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 			for _, f := range rows.Fields {
+ 				fieldEvent.Fields = append(fieldEvent.Fields, f.CloneVT())
+ 			}
+-			tablePlan, err := plan.buildExecutionPlan(fieldEvent)
++			var err error
++			tablePlan, err = plan.buildExecutionPlan(fieldEvent)
+ 			if err != nil {
+ 				return err
+ 			}
+@@ -523,8 +534,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 		}
+ 
+ 		// Clone rows, since pointer values will change while async work is
+-		// happening. Can skip this when there's no parallelism.
+-		if parallelism > 1 {
++		// happening. Can skip this when there's no parallelism. A pipelined
++		// copy builds its statements right here, so the writer never reads
++		// the rows.
++		var queries []string
++		if pipelined {
++			var err error
++			if queries, err = tablePlan.buildBulkInsertQueries(&pipelineSQLBuffer, rows.Rows, maxQuerySize); err != nil {
++				return err
++			}
++		} else if parallelism > 1 {
+ 			rows = rows.CloneVT()
+ 		}
+ 
+@@ -538,6 +557,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 		// TODO(maxeng) see if using a pre-allocated pool will speed things up.
+ 		currCh := make(chan *vcopierCopyTaskResult, 1)
+ 		currT := newVCopierCopyTask(newVCopierCopyTaskArgs(rows.Rows, rows.Lastpk))
++		currT.args.queries = queries
+ 
+ 		// Send result to the global resultCh and currCh. resultCh is used by
+ 		// the loop to return results to VStreamRows. currCh will be used to
+@@ -736,14 +756,15 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
+ 
+ func (vc *vcopier) newCopyWorkQueue(
+ 	parallelism int,
++	pipelined bool,
+ 	workerFactory func(context.Context) (*vcopierCopyWorker, error),
+ ) *vcopierCopyWorkQueue {
+-	concurrent := parallelism > 1
++	concurrent := parallelism > 1 || pipelined
+ 	return newVCopierCopyWorkQueue(concurrent, parallelism, workerFactory)
+ }
+ 
+-func (vc *vcopier) newCopyWorkerFactory(parallelism int, maxQuerySize int64) func(context.Context) (*vcopierCopyWorker, error) {
+-	if parallelism > 1 {
++func (vc *vcopier) newCopyWorkerFactory(parallelism int, pipelined bool, maxQuerySize int64) func(context.Context) (*vcopierCopyWorker, error) {
++	if parallelism > 1 || pipelined {
+ 		return func(ctx context.Context) (*vcopierCopyWorker, error) {
+ 			dbClient, err := vc.vr.newClientConnection(ctx)
+ 			if err != nil {
+@@ -1164,6 +1185,14 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
+ 			}
+ 		case vcopierCopyTaskInsertRows:
+ 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
++				if args.queries != nil {
++					for _, query := range args.queries {
++						if _, err := vbc.ExecuteWithRetry(ctx, query); err != nil {
++							return vterrors.Wrapf(err, "failed inserting rows")
++						}
++					}
++					return nil
++				}
+ 				if _, err := vbc.insertRows(ctx, args.rows); err != nil {
+ 					return vterrors.Wrapf(err, "failed inserting rows")
+ 				}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier_atomic.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier_atomic.go
+index 5a6802ab7a..a86ed27b0d 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier_atomic.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier_atomic.go
+@@ -93,7 +93,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
+ 
+ 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
+ 	maxQuerySize := vc.vr.maxQuerySize(vc.vr.dbClient)
+-	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, maxQuerySize)
++	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, false, maxQuerySize)
+ 	var copyWorkQueue *vcopierCopyWorkQueue
+ 
+ 	// Allocate a result channel to collect results from tasks. To not block fast workers, we allocate a buffer of
+@@ -145,7 +145,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
+ 			if copyWorkQueue != nil {
+ 				copyWorkQueue.close()
+ 			}
+-			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
++			copyWorkQueue = vc.newCopyWorkQueue(parallelism, false, copyWorkerFactory)
+ 			if state.currentTableName != "" {
+ 				log.Info(fmt.Sprintf("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv))
+ 				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
+index 5f921ce654..69bdee7fe9 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
+@@ -48,7 +48,7 @@ func TestNewCopyWorkerFactoryUsesMaxQuerySize(t *testing.T) {
+ 		stats:    stats,
+ 	}
+ 
+-	workerFactory := newVCopier(vr).newCopyWorkerFactory(1, 123)
++	workerFactory := newVCopier(vr).newCopyWorkerFactory(1, false, 123)
+ 	worker, err := workerFactory(t.Context())
+ 	require.NoError(t, err)
+ 	require.NotNil(t, worker)

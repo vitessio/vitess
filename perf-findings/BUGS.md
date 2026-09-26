@@ -21,6 +21,9 @@
 | VReplication `select *` rules drop `ConvertCharset` / `ConvertIntToEnum` | `vreplication/replicator_plan.go` (table plan built for `select *`) | MoveTables / Online DDL with charset or int→enum conversion rules copy unconverted values without any error | open; a test in `replicator_plan_test` can show it | F16, F30 #17a |
 | An explicit column list that selects a column generated on the target breaks `appendFromRow` | `replicator_plan.go` `appendFromRow` skip loop (no bounds check) | Panics with index out of range; with extra PK columns it **binds shifted values**, so wrong data is written | open; easy unit test | F30 #17b |
 
+| VReplication copy phase silently turns JSON doubles into DECIMAL (MoveTables/Reshard); VDiff doesn't detect it | copy phase JSON handling (`replicator_plan.go` / `table_plan_builder.go`) | Target JSON documents differ in number types from the source (`JSON_TYPE` DOUBLE → DECIMAL) | open; V1 adds an opt-in "JSON as text" mode that keeps doubles (but turns decimals into doubles); a consistent rule is still needed | V1 #3 |
+| `--vreplication-parallel-insert-workers` connections skip the session setup: no UTC time zone, no `set names binary`, no network timeouts | vcopier parallel insert worker connections | On a non-UTC target, TIMESTAMP values are shifted and non-utf8 bytes misread (opt-in flag) | patch ready (unit test fails on main; not reproduced end to end) | V1 #4 |
+
 ## P1: wrong results, user-visible errors, avoidable outages
 
 | Bug | Where | Impact | Status | Source |
@@ -44,6 +47,8 @@
 | A `ConvertCharset` entry mapped to nil panics | `replicator_plan.go` | vreplication crashes on a malformed rule | fixed in patch (nil now means no conversion) | F16 |
 | mysqld shutdown waits 2 s for Vitess's own idle dba-pool connection | `mysqlctl/mysqld.go` | Every backup, restore and tablet shutdown is 2–3 s slower | patch ready (`TestClosePooledConnections`) | P5 #3 |
 
+| The VDiff `VDiffRowsCompared` gauge re-adds the cumulative count every 10k rows (a 1M-row diff reads 50.5M), and `VDiffRowsComparedTotal` double-counts earlier attempts after a resume | `vdiff/table_differ.go:875`, `:588` | Misleading VDiff progress metrics | patch ready (`TestUpdateTableProgressRowCounts`; passes with the fix, not yet run on main) | V6 |
+
 ## P3: latent, tests only, or cosmetic
 
 | Bug | Where | Impact | Status | Source |
@@ -53,6 +58,8 @@
 | `charset.Convert` panics when a non-nil `dst` has capacity < 4 | `charset/convert.go` | No current caller does this | fixed in patch (`TestConvertSmallDestination` panics on main) | F13 |
 | `counters.String` uses `%q`, which is not valid JSON for control characters | `go/stats/counters.go` | `/debug/vars` can emit invalid JSON for odd label values | open | F30 #2 |
 | The throttler client doc comment says "not thread safe", which is wrong | `throttle/client.go` | Misleading docs | fixed in patch | F27 |
+| vtgate VStream skew check reads `vs.lowestTS`, which is never set | `vtgate/vstream_manager.go:601` | With minimize-skew on, every stream except the slowest always pauses (the tolerance check is dead code) | open | V6 |
+| Relay-log stall flag race: a stall timer that fires just as `Fetch` drains can report "relay log I/O stalled" | `vreplication/relaylog.go` | A spurious stall error (needs exact timing at the 5-min deadline) | open | V6 |
 | vtexplain test flakes on a background `select @@global.wait_timeout` (2/20 on base) | vtexplain tests | Flaky CI | open | P7 |
 | servenv cgroup tests fail in containers without cgroup metrics | `go/vt/servenv` | Test robustness | open | P3, P7 |
 

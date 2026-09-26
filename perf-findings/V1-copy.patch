@@ -1,0 +1,1303 @@
+diff --git a/go/vt/vttablet/common/flags.go b/go/vt/vttablet/common/flags.go
+index fcfbe18770..ed90ec7fe8 100644
+--- a/go/vt/vttablet/common/flags.go
++++ b/go/vt/vttablet/common/flags.go
+@@ -33,6 +33,14 @@ const (
+ 	VReplicationExperimentalFlagOptimizeInserts           = int64(1)
+ 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
+ 	VReplicationExperimentalFlagVPlayerBatching           = int64(4)
++	// VReplicationExperimentalFlagCopyJSONAsText makes the copy phase insert JSON column values as the JSON text
++	// read from the source instead of expanding them into JSON_OBJECT()/JSON_ARRAY() expressions. The target then
++	// parses the text, like a reload of a logical dump would: a fractional number becomes a DOUBLE, where the
++	// JSON_OBJECT() expression makes it a DECIMAL. Online DDL always does this, see TablePlan.copyJSONAsText.
++	VReplicationExperimentalFlagCopyJSONAsText = int64(8)
++	// VReplicationExperimentalFlagOnlineDDLDeferSecondaryKeys makes Online DDL (vitess strategy) migrations add
++	// the shadow table's non-unique secondary keys after its copy phase, like MoveTables does by default.
++	VReplicationExperimentalFlagOnlineDDLDeferSecondaryKeys = int64(16)
+ )
+ 
+ type (
+diff --git a/go/vt/vttablet/onlineddl/vrepl.go b/go/vt/vttablet/onlineddl/vrepl.go
+index 463b019c40..2bc9d94be0 100644
+--- a/go/vt/vttablet/onlineddl/vrepl.go
++++ b/go/vt/vttablet/onlineddl/vrepl.go
+@@ -40,6 +40,7 @@ import (
+ 	"vitess.io/vitess/go/vt/sqlparser"
+ 	"vitess.io/vitess/go/vt/vtenv"
+ 	"vitess.io/vitess/go/vt/vterrors"
++	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+ 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+ 
+ 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+@@ -434,9 +435,10 @@ func (v *VRepl) generateInsertStatement() (string, error) {
+ 	if err != nil {
+ 		return "", err
+ 	}
++	deferSecondaryKeys := vttablet.GetVReplicationConfigDefaults(true).ExperimentalFlags&vttablet.VReplicationExperimentalFlagOnlineDDLDeferSecondaryKeys != 0
+ 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
+ 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
+-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, options)
++		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, deferSecondaryKeys, options)
+ 
+ 	return ig.String(), nil
+ }
+diff --git a/go/vt/vttablet/onlineddl/vrepl_test.go b/go/vt/vttablet/onlineddl/vrepl_test.go
+index 6399af4a85..8836dee25f 100644
+--- a/go/vt/vttablet/onlineddl/vrepl_test.go
++++ b/go/vt/vttablet/onlineddl/vrepl_test.go
+@@ -58,6 +58,33 @@ func TestGenerateInsertStatementRetryForever(t *testing.T) {
+ 	assert.Zero(t, config.MaxTimeToRetryError)
+ }
+ 
++// TestGenerateInsertStatementDeferSecondaryKeys tests that Online DDL streams
++// defer the creation of secondary keys when the experimental flag is set, and
++// only then.
++func TestGenerateInsertStatementDeferSecondaryKeys(t *testing.T) {
++	config := vttablet.InitVReplicationConfigDefaults()
++	originalFlags := config.ExperimentalFlags
++	t.Cleanup(func() { config.ExperimentalFlags = originalFlags })
++	v := &VRepl{
++		workflow: "wf",
++		dbName:   "vt_test",
++		bls:      &binlogdatapb.BinlogSource{Keyspace: "ks", Shard: "0"},
++	}
++	// The row ends with: workflow_type, workflow_sub_type, defer_secondary_keys, options.
++	wantDefer := fmt.Sprintf("%d, %d, true, '", binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None)
++	wantNoDefer := fmt.Sprintf("%d, %d, false, '", binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None)
++
++	config.ExperimentalFlags = originalFlags &^ vttablet.VReplicationExperimentalFlagOnlineDDLDeferSecondaryKeys
++	insert, err := v.generateInsertStatement()
++	require.NoError(t, err)
++	assert.Contains(t, insert, wantNoDefer)
++
++	config.ExperimentalFlags = originalFlags | vttablet.VReplicationExperimentalFlagOnlineDDLDeferSecondaryKeys
++	insert, err = v.generateInsertStatement()
++	require.NoError(t, err)
++	assert.Contains(t, insert, wantDefer)
++}
++
+ func TestRevertible(t *testing.T) {
+ 	type revertibleTestCase struct {
+ 		name       string
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
+index 6b726d900d..093b7461d0 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
+@@ -214,9 +214,12 @@ type TablePlan struct {
+ 	// a primary key column (row move).
+ 	PKReferences []string
+ 	// PKIndices is an array, length = #columns, true if column is part of the PK
+-	PKIndices               []bool
+-	Stats                   *binlogplayer.Stats
+-	FieldsToSkip            map[string]bool
++	PKIndices    []bool
++	Stats        *binlogplayer.Stats
++	FieldsToSkip map[string]bool
++	// TextConvertedFields are the fields whose target expression is
++	// convert(<field> using utf8mb4).
++	TextConvertedFields     map[string]bool
+ 	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
+ 	HasExtraSourcePkColumns bool
+ 
+@@ -492,6 +495,20 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
+ 	return result, nil
+ }
+ 
++// copyJSONAsText returns true if the copy phase should insert the values of
++// the JSON field as their JSON text rather than as JSON_OBJECT()/JSON_ARRAY()
++// expressions. The copy phase reads JSON columns as MySQL's JSON text.
++//
++// This is always the case when the target converts the value to utf8mb4 text
++// (Online DDL does for all JSON columns): the target then stores the same
++// text either way, and skips building a JSON document only to print it.
++func (tp *TablePlan) copyJSONAsText(field string) bool {
++	if tp.TextConvertedFields[field] {
++		return true
++	}
++	return tp.WorkflowConfig != nil && tp.WorkflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagCopyJSONAsText != 0
++}
++
+ // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
+ // rows whose PK has already been copied. Ideally we should compare the PKs before applying the change and never send
+ // such rows to the target mysql server. However reliably comparing primary keys in a manner compatible to MySQL will require a lot of
+@@ -1106,7 +1123,10 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+ 				buf.WriteString(sqltypes.NullStr)
+ 			} else {
+ 				raw := row.Values[offset : offset+length]
+-				if err := vjson.AppendMarshalSQL(buf, raw); err != nil {
++				if tp.copyJSONAsText(field.Name) {
++					buf.WriteString("_utf8mb4")
++					sqltypes.MakeTrusted(querypb.Type_VARCHAR, raw).EncodeSQLBytes2(buf)
++				} else if err := vjson.AppendMarshalSQL(buf, raw); err != nil {
+ 					return err
+ 				}
+ 			}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
+index 621fafb737..79a54790d4 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
+@@ -2080,6 +2080,74 @@ func TestApplyChangeFailsFastForLargeExistingJSONWithTinyPartialUpdate(t *testin
+ 	require.ErrorContains(t, err, "largest_json_column=j")
+ }
+ 
++// TestCopyJSONAsTextWhenConvertedToText verifies that the copy phase inserts a
++// JSON value as its text when the target converts the column to utf8mb4 text
++// anyway, as Online DDL does for every JSON column, instead of building the
++// document with JSON_OBJECT() only for the target to print it again.
++func TestCopyJSONAsTextWhenConvertedToText(t *testing.T) {
++	vttablet.InitVReplicationConfigDefaults()
++	vr := &vreplicator{
++		workflowConfig: vttablet.DefaultVReplicationConfig,
++	}
++	source := getSource(&binlogdatapb.Filter{
++		Rules: []*binlogdatapb.Rule{{
++			Match:  "t1",
++			Filter: "select c1, convert(j1 using utf8mb4) as j1, j2 from t1",
++		}},
++	})
++	primaryKeyInfos := map[string][]*ColumnInfo{
++		"t1": {&ColumnInfo{Name: "c1", IsPK: true}},
++	}
++	plan, err := vr.buildReplicatorPlan(source, primaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
++	require.NoError(t, err)
++	tp, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
++		TableName: "t1",
++		Fields: []*querypb.Field{
++			{Name: "c1", Type: querypb.Type_INT64},
++			{Name: "j1", Type: querypb.Type_JSON},
++			{Name: "j2", Type: querypb.Type_JSON},
++		},
++	})
++	require.NoError(t, err)
++
++	doc := `{"a": 1.50, "s": "it's"}`
++	row := sqltypes.RowToProto3([]sqltypes.Value{
++		sqltypes.NewInt64(1),
++		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(doc)),
++		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(doc)),
++	})
++	buf := &bytes2.Buffer{}
++	require.NoError(t, tp.appendFromRow(buf, row))
++	// j1 is converted to text on the target: send the text. j2 is stored as
++	// JSON: keep building the document, so that the target keeps the types of
++	// its values.
++	assert.Equal(t, `(1,convert(_utf8mb4'{"a": 1.50, "s": "it\'s"}' using utf8mb4),JSON_OBJECT(_utf8mb4'a', 1.50, _utf8mb4's', _utf8mb4'it\'s'))`, buf.String())
++}
++
++// TestCopyJSONAsTextExperimentalFlag verifies that the experimental flag makes
++// the copy phase insert every JSON value as its text.
++func TestCopyJSONAsTextExperimentalFlag(t *testing.T) {
++	vttablet.InitVReplicationConfigDefaults()
++	config := *vttablet.DefaultVReplicationConfig
++	config.ExperimentalFlags |= vttablet.VReplicationExperimentalFlagCopyJSONAsText
++	tp := &TablePlan{
++		BulkInsertValues: sqlparser.BuildParsedQuery("(%a,%a)", ":c1", ":c2"),
++		Fields: []*querypb.Field{
++			{Name: "c1", Type: querypb.Type_JSON},
++			{Name: "c2", Type: querypb.Type_JSON},
++		},
++		FieldsToSkip:   map[string]bool{},
++		WorkflowConfig: &config,
++	}
++	row := sqltypes.RowToProto3([]sqltypes.Value{
++		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`[1, "a\\b"]`)),
++		sqltypes.NULL,
++	})
++	buf := &bytes2.Buffer{}
++	require.NoError(t, tp.appendFromRow(buf, row))
++	assert.Equal(t, `(_utf8mb4'[1, "a\\\\b"]',null)`, buf.String())
++}
++
+ func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
+ 	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+ 	tp := &TablePlan{
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go b/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
+index 7509d02924..3c34756750 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
+@@ -363,6 +363,19 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
+ 			fieldsToSkip[strings.ToLower(colInfo.Name)] = true
+ 		}
+ 	}
++	// Columns whose value is converted to utf8mb4 text on the target, e.g.
++	// convert(j using utf8mb4) for the JSON columns of an Online DDL. The
++	// copy phase can send such a JSON value as text, since the target turns
++	// it into text anyway.
++	var textConvertedFields map[string]bool
++	for _, cexpr := range tpb.colExprs {
++		if convert, ok := cexpr.expr.(*sqlparser.ConvertUsingExpr); ok && cexpr.operation == opExpr && strings.EqualFold(convert.Type, "utf8mb4") {
++			if textConvertedFields == nil {
++				textConvertedFields = make(map[string]bool)
++			}
++			textConvertedFields[cexpr.colName.String()] = true
++		}
++	}
+ 	return &TablePlan{
+ 		TargetName:              tpb.name.String(),
+ 		Lastpk:                  tpb.lastpk,
+@@ -377,6 +390,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
+ 		PKIndices:               tpb.pkIndices,
+ 		Stats:                   tpb.stats,
+ 		FieldsToSkip:            fieldsToSkip,
++		TextConvertedFields:     textConvertedFields,
+ 		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
+ 		TablePlanBuilder:        tpb,
+ 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
+index aaf32a6719..c1fbf589d1 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
+@@ -818,6 +818,12 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
+ 			if secondaryKey.Info.Type == sqlparser.IndexTypePrimary || secondaryKey.Info.Type == sqlparser.IndexTypeFullText {
+ 				continue
+ 			}
++			// Online DDL keeps unique keys during the copy: the migration may
++			// use one of them to identify rows, and a new unique key must
++			// fail the migration as soon as the copied data violates it.
++			if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) && secondaryKey.Info.IsUnique() {
++				continue
++			}
+ 			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
+ 				&sqlparser.DropKey{
+ 					Name: secondaryKey.Info.Name,
+@@ -1226,11 +1232,13 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
+ 
+ // supportsDeferredSecondaryKeys tells you if related work should be done
+ // for the workflow. Deferring secondary index generation is only supported
+-// with MoveTables, Migrate, and Reshard.
++// with MoveTables, Migrate, Reshard and Online DDL. Online DDL only defers
++// non-unique keys: see stashSecondaryKeys.
+ func (vr *vreplicator) supportsDeferredSecondaryKeys() bool {
+ 	return vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
+ 		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Migrate) ||
+-		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard)
++		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard) ||
++		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL)
+ }
+ 
+ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, error) {
+@@ -1239,6 +1247,13 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
+ 		return nil, vterrors.Wrap(err, "can't connect to database")
+ 	}
+ 	dbClient := newVDBClient(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems)
++	// Use the same session settings as the controller's connection: UTC time
++	// zone for temporal values, the binary character set to ship string bytes
++	// without conversion, and the network timeouts.
++	if err := setDBClientSettings(dbc, vr.workflowConfig); err != nil {
++		dbc.Close()
++		return nil, vterrors.Wrap(err, "failed to apply the vreplication session settings")
++	}
+ 	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
+ 		return nil, vterrors.Wrap(err, "failed to set sql_mode")
+ 	}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vreplicator_test.go b/go/vt/vttablet/tabletmanager/vreplication/vreplicator_test.go
+index 718507569e..c3bdd91328 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vreplicator_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vreplicator_test.go
+@@ -397,9 +397,28 @@ func TestDeferSecondaryKeys(t *testing.T) {
+ 			name:         "1SK:OnlineDDL",
+ 			tableName:    "t1",
+ 			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
+-			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
++			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key (id))",
++			actionDDL:    "alter table %s.t1 add key c1 (c1)",
+ 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL),
+-			wantStashErr: "deferring secondary key creation is not supported for OnlineDDL workflows",
++		},
++		{
++			// Online DDL keeps unique keys: the migration may use them to
++			// identify rows, and must fail as soon as the copied rows
++			// violate a unique key that the migration adds.
++			name:         "2SK1UK:OnlineDDL",
++			tableName:    "t1",
++			initialDDL:   "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), unique key c1 (c1), key c2 (c2))",
++			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), unique key c1 (c1))",
++			actionDDL:    "alter table %s.t1 add key c2 (c2)",
++			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL),
++		},
++		{
++			name:         "2SK1UK:MoveTables",
++			tableName:    "t1",
++			initialDDL:   "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), unique key c1 (c1), key c2 (c2))",
++			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
++			actionDDL:    "alter table %s.t1 add unique key c1 (c1), add key c2 (c2)",
++			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+ 		},
+ 		{
+ 			name:         "1SK",
+@@ -715,6 +734,56 @@ func (d *stalledDbaDaemon) GetDbaConnection(ctx context.Context) (*dbconnpool.DB
+ 	return nil, ctx.Err()
+ }
+ 
++// TestNewClientConnectionSessionSettings verifies that the extra connections
++// used by the copy phase's parallel insert workers get the same session
++// settings as the stream's own connection: the rows they insert are encoded
++// for a UTC time zone and the binary character set.
++func TestNewClientConnectionSessionSettings(t *testing.T) {
++	ctx := t.Context()
++	tablet := addTablet(100)
++	defer deleteTablet(tablet)
++	bls := &binlogdatapb.BinlogSource{
++		Keyspace: env.KeyspaceName,
++		Shard:    env.ShardName,
++		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1"}}},
++	}
++	id := int32(1)
++	stats := binlogplayer.NewStats()
++	defer stats.Stop()
++	dbClient := playerEngine.dbClientFactoryFiltered()
++	require.NoError(t, dbClient.Connect())
++	// Cleanups run in reverse order: the connection is closed last.
++	t.Cleanup(dbClient.Close)
++	dbName := dbClient.DBName()
++	_, err := dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
++		id, dbName, dbName), 1)
++	require.NoError(t, err)
++	t.Cleanup(func() {
++		_, err := dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
++		assert.NoError(t, err)
++	})
++	vr := newVReplicator(id, bls, newTabletConnector(tablet), stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
++
++	// Make the server's time zone differ from UTC, so that a connection that
++	// keeps it would insert shifted TIMESTAMP values.
++	_, err = dbClient.ExecuteFetch("set @@global.time_zone = '+05:00'", 1)
++	require.NoError(t, err)
++	t.Cleanup(func() {
++		_, err := dbClient.ExecuteFetch("set @@global.time_zone = 'SYSTEM'", 1)
++		assert.NoError(t, err)
++	})
++
++	workerClient, err := vr.newClientConnection(ctx)
++	require.NoError(t, err)
++	defer workerClient.Close()
++	qr, err := workerClient.ExecuteFetch("select @@session.time_zone, @@session.character_set_client, @@session.character_set_results", 1)
++	require.NoError(t, err)
++	require.Len(t, qr.Rows, 1)
++	assert.Equal(t, "+00:00", qr.Rows[0][0].ToString())
++	assert.Equal(t, "binary", qr.Rows[0][1].ToString())
++	assert.Equal(t, "binary", qr.Rows[0][2].ToString())
++}
++
+ func TestCancelledDeferSecondaryKeys(t *testing.T) {
+ 	// Skip the test for MariaDB as it does not have
+ 	// performance_schema enabled by default.
+diff --git a/perf-findings/V1-scripts/abcpd.sh b/perf-findings/V1-scripts/abcpd.sh
+new file mode 100755
+index 0000000000..030fa5cf02
+--- /dev/null
++++ b/perf-findings/V1-scripts/abcpd.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++# Copy phase duration A/B on sbtest1 (1M rows): default (1h) vs short durations that force copy/catchup cycles.
++D=/home/vt/perf/V1
++for r in 1 2; do
++  for cpd in 1h 2s; do
++    TABLES_LIST=sbtest1 MT_FLAGS="--config-overrides vreplication-copy-phase-duration=$cpd" \
++      flock -o /home/vt/perf/bench.lock "$D/mt.sh" "cpd$cpd-r$r" 0 | head -1
++    python3 -c "
++import json; d=json.load(open('$D/out/cpd$cpd-r$r/vars101.json'))
++print('   loops', d.get('VReplicationCopyLoopCountTotal'), 'phases(s)', {k.split('.')[-1]: round(v/1e9,2) for k,v in d.get('VReplicationPhaseTimings',{}).items()})"
++    "$D/mtcancel.sh" >/dev/null 2>&1
++  done
++done
+diff --git a/perf-findings/V1-scripts/abfinal_oddl.sh b/perf-findings/V1-scripts/abfinal_oddl.sh
+new file mode 100755
+index 0000000000..e654597611
+--- /dev/null
++++ b/perf-findings/V1-scripts/abfinal_oddl.sh
+@@ -0,0 +1,18 @@
++#!/bin/bash
++# Final Online DDL A/B: base binaries vs patched binaries (+ ODDL deferred secondary keys flag).
++D=/home/vt/perf/V1
++for r in $(seq 1 "${ROUNDS:-3}"); do
++  for arm in base patched; do
++    if [[ $arm == base ]]; then
++      BIN=/home/vt/bin VTTABLET_EXTRA_FLAGS="" "$D/c.sh" restart-tablets >/dev/null 2>&1
++    else
++      BIN=/home/vt/bin-V1 VTTABLET_EXTRA_FLAGS="--vreplication-experimental-flags=23" "$D/c.sh" restart-tablets >/dev/null 2>&1
++    fi
++    sleep 5
++    for t in ${ODDL_TABLES:-sbtest1 wide}; do
++      flock -o /home/vt/perf/bench.lock "$D/oddl.sh" "$arm-$t-r$r" "alter table $t engine=innodb" | grep -v "^    " | tr '\n' ' ' | sed -e 's/  */ /g'
++      echo
++      "$D/cleanup_artifacts.sh" >/dev/null 2>&1
++    done
++  done
++done
+diff --git a/perf-findings/V1-scripts/abflags.sh b/perf-findings/V1-scripts/abflags.sh
+new file mode 100755
+index 0000000000..66ee596073
+--- /dev/null
++++ b/perf-findings/V1-scripts/abflags.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++# Alternate MoveTables copy runs over several configurations (each run locked separately).
++# Usage: abflags.sh ROUNDS "label1|mt flags1" "label2|mt flags2" ...
++ROUNDS=$1
++shift
++D=/home/vt/perf/V1
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    label=${cfg%%|*}
++    flags=${cfg#*|}
++    [[ $flags == "$cfg" ]] && flags=""
++    MT_FLAGS="$flags" flock -o /home/vt/perf/bench.lock "$D/mt.sh" "$label-r$r" 0 | grep -E "rows=|vttablet_10|mysqld_10" | tr '\n' ' ' | sed -e 's/ s\/1M rows/\n/g' | awk '{printf "%s ", $0} END {print ""}' | sed -e 's/  */ /g'
++    "$D/mtcancel.sh" >/dev/null 2>&1
++    sleep 1
++  done
++done
+diff --git a/perf-findings/V1-scripts/abmulti.sh b/perf-findings/V1-scripts/abmulti.sh
+new file mode 100755
+index 0000000000..8d18c8e08c
+--- /dev/null
++++ b/perf-findings/V1-scripts/abmulti.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++# Alternate: one workflow with all tables vs one workflow per table.
++D=/home/vt/perf/V1
++for r in $(seq 1 "${ROUNDS:-2}"); do
++  flock -o /home/vt/perf/bench.lock "$D/mt.sh" "single-r$r" 0 2>&1 | grep -E "rows=|vttablet_10|mysqld_10"
++  "$D/mtcancel.sh"
++  flock -o /home/vt/perf/bench.lock "$D/mtmulti.sh" "multi-r$r" 2>&1 | grep -E "rows=|vttablet_10|mysqld_10"
++  "$D/multicancel.sh"
++done
+diff --git a/perf-findings/V1-scripts/aboddl.sh b/perf-findings/V1-scripts/aboddl.sh
+new file mode 100755
+index 0000000000..a95704d499
+--- /dev/null
++++ b/perf-findings/V1-scripts/aboddl.sh
+@@ -0,0 +1,15 @@
++#!/bin/bash
++# Alternate Online DDL runs: tablets restarted with --vreplication-experimental-flags=$1 vs $2.
++D=/home/vt/perf/V1
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++for r in $(seq 1 "${ROUNDS:-2}"); do
++  for fl in "$@"; do
++    BIN=/home/vt/bin-V1 VTTABLET_EXTRA_FLAGS="--vreplication-experimental-flags=$fl" "$D/c.sh" restart-tablets >/dev/null 2>&1
++    sleep 5
++    for t in ${ODDL_TABLES:-sbtest1 wide}; do
++      flock -o /home/vt/perf/bench.lock "$D/oddl.sh" "f$fl-$t-r$r" "alter table $t engine=innodb" | grep -v "^    "
++      mysql -N -S $S -u vt_dba vt_src -e "show create table $t" | grep -c "KEY" | sed 's/^/  keys: /'
++      "$D/cleanup_artifacts.sh" >/dev/null 2>&1
++    done
++  done
++done
+diff --git a/perf-findings/V1-scripts/c.sh b/perf-findings/V1-scripts/c.sh
+new file mode 100755
+index 0000000000..961f73aba5
+--- /dev/null
++++ b/perf-findings/V1-scripts/c.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Run the V1 harness as the vt user.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=30000 BIN=${BIN:-/home/vt/bin} \
++  KEYSPACES="${KEYSPACES:-src:0 dst:-80,80-}" TABLES=${TABLES:-2} TABLE_SIZE=${TABLE_SIZE:-500000} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/perf/V1/cluster.sh "$@"
+diff --git a/perf-findings/V1-scripts/cleanup_artifacts.sh b/perf-findings/V1-scripts/cleanup_artifacts.sh
+new file mode 100755
+index 0000000000..416150fe7b
+--- /dev/null
++++ b/perf-findings/V1-scripts/cleanup_artifacts.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# Drop Online DDL artifact tables (_vt_*) in vt_src and purge binlogs, to save disk.
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++for t in $(mysql -N -S $S -u vt_dba -e "select table_name from information_schema.tables where table_schema='vt_src' and table_name like '\_vt\_%'"); do
++  mysql -S $S -u vt_dba vt_src -e "drop table if exists \`$t\`"
++done
++/home/vt/perf/V1/c.sh purge-binlogs 0
+diff --git a/perf-findings/V1-scripts/cluster.sh b/perf-findings/V1-scripts/cluster.sh
+new file mode 100755
+index 0000000000..7a8b055026
+--- /dev/null
++++ b/perf-findings/V1-scripts/cluster.sh
+@@ -0,0 +1,258 @@
++#!/bin/bash
++# P4 VReplication harness: a copy of perf-findings/harness/cluster.sh that runs several keyspaces in one cluster.
++#
++# Usage (as the vt user): BASE=40000 ./cluster.sh up|down|cpu|pids|restart-tablets|load|purge-binlogs|env
++#
++# Environment (in addition to the base harness):
++#   KEYSPACES  space separated "keyspace:shard,shard" list (default "src:0 dst:-80,80-").
++#              The first keyspace is unsharded (vschema {"sharded":false}) and gets the sysbench schema;
++#              the others get a hash-on-id vschema for the same tables (no schema: MoveTables creates it).
++#   TABLES / TABLE_SIZE   sysbench tables loaded into the first keyspace by `load` (directly into its mysqld).
++#   BIN        Vitess binaries. `restart-tablets` restarts only the vttablets (mysqld kept) with $BIN.
++# Tablet i (0-based, in KEYSPACES order): uid 100+i, web BASE+100+i, grpc BASE+200+i, mysqld BASE+400+i.
++set -euo pipefail
++
++BASE=${BASE:-30000}
++NAME=${NAME:-c$BASE}
++KEYSPACES=${KEYSPACES:-"src:0 dst:-80,80-"}
++TABLES=${TABLES:-4}
++TABLE_SIZE=${TABLE_SIZE:-500000}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++tablet_uid() { echo $((100 + $1)); }
++
++# Prints "index keyspace shard" for every tablet.
++tablets() {
++  local i=0
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*} shards=${spec#*:}
++    for shard in ${shards//,/ }; do echo "$i $ks $shard"; i=$((i + 1)); done
++  done
++}
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOC'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOC
++}
++
++start_tablet() {
++  local i=$1 ks=$2 shard=$3 uid alias
++  uid=$(tablet_uid "$i")
++  printf -v alias '%s-%010d' "$CELL" "$uid"
++  # shellcheck disable=SC2086
++  vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$ks" --init-shard "$shard" \
++    --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++    --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++    --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++    ${VTTABLET_EXTRA_FLAGS:-} >>"$LOGDIR/vttablet_$uid.log" 2>&1 &
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  for spec in $KEYSPACES; do vtctldclient CreateKeyspace --durability-policy=none "${spec%%:*}" >/dev/null 2>&1 || true; done
++
++  local pids=()
++  while read -r i ks shard; do
++    local uid
++    uid=$(tablet_uid "$i")
++    mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++      --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++    pids+=($!)
++  done < <(tablets)
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++  while read -r i ks shard; do
++    local alias
++    printf -v alias '%s-%010d' "$CELL" "$(tablet_uid "$i")"
++    vtctldclient PlannedReparentShard "$ks/$shard" --new-primary "$alias" >/dev/null
++  done < <(tablets)
++
++  load_schema
++
++  # shellcheck disable=SC2086
++  vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables="" first=1
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL AUTO_INCREMENT, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  sql+="CREATE TABLE IF NOT EXISTS wide (id BIGINT NOT NULL AUTO_INCREMENT, user_id INT NOT NULL, created_at DATETIME(6) NOT NULL, status VARCHAR(16) NOT NULL, title VARCHAR(255) NOT NULL, amount DECIMAL(12,2) NOT NULL, body TEXT, attrs JSON, PRIMARY KEY (id), KEY idx_user_created (user_id, created_at), KEY idx_status (status), KEY idx_title (title(32))) ENGINE=InnoDB;"
++  vs_tables+=",\"wide\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  for spec in $KEYSPACES; do
++    local ks=${spec%%:*}
++    if ((first)); then
++      vtctldclient ApplySchema --sql "$sql" "$ks" >/dev/null
++      vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$ks" >/dev/null
++      first=0
++    else
++      vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$ks" >/dev/null
++    fi
++  done
++}
++
++# Load sysbench tables into the first keyspace directly through its primary's socket (fast, no vtgate).
++load() {
++  local sock=$VTDATAROOT/vt_0000000100/mysql.sock ks=${KEYSPACES%%:*}
++  for t in $(seq 1 "$TABLES"); do mysql -S "$sock" -u vt_dba "vt_$ks" -e "DROP TABLE IF EXISTS sbtest$t"; done
++  sysbench --db-driver=mysql --mysql-socket="$sock" --mysql-user=vt_dba --mysql-db="vt_$ks" --tables="$TABLES" \
++    --table-size="$TABLE_SIZE" --threads="$TABLES" oltp_write_only prepare
++  purge_binlogs 0
++}
++
++# Rotate binlogs and purge the files older than $1 seconds (default 120: running streams may still need recent files).
++purge_binlogs() {
++  local age=${1:-120}
++  for d in "$VTDATAROOT"/vt_*; do
++    if [[ $age == 0 ]]; then
++      mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS" 2>&1 | grep -v Warning || true
++      local cur
++      cur=$(mysql -N -S "$d/mysql.sock" -u vt_dba -e "SHOW MASTER STATUS" 2>/dev/null | awk '{print $1}')
++      [[ -n $cur ]] && mysql -S "$d/mysql.sock" -u vt_dba -e "PURGE BINARY LOGS TO '$cur'" 2>&1 | grep -v Warning || true
++    else
++      mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS; PURGE BINARY LOGS BEFORE NOW() - INTERVAL $age SECOND;" 2>&1 | grep -v Warning || true
++    fi
++  done
++}
++
++# Stop the vttablet with index $1: the one in its pid file and any other one still holding its web port.
++kill_tablet() {
++  local idx=$1 f pids p
++  f=$VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$idx")")/vttablet.pid
++  pids="$(cat "$f" 2>/dev/null || true) $(pgrep -f -- "--port $((BASE + 100 + idx)) " || true)"
++  for p in $pids; do kill "$p" 2>/dev/null || true; done
++  for p in $pids; do while kill -0 "$p" 2>/dev/null; do sleep 0.2; done; done
++}
++
++restart_tablets() {
++  while read -r i ks shard; do kill_tablet "$i" & done < <(tablets)
++  wait
++  while read -r i ks shard; do start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  while read -r i ks shard; do wait_http $((BASE + 100 + i)); done < <(tablets)
++}
++
++# Restart the vttablet with index $1 only (mysqld kept).
++restart_tablet() {
++  local idx=$1
++  kill_tablet "$idx"
++  while read -r i ks shard; do [[ $i == "$idx" ]] && start_tablet "$i" "$ks" "$shard"; done < <(tablets)
++  wait_http $((BASE + 100 + idx))
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  echo "cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspaces [$KEYSPACES]"
++  echo "  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root ; vtctldclient --server localhost:$VTCTLD_GRPC"
++  tablets | while read -r i ks shard; do
++    echo "  tablet $i uid $(tablet_uid "$i") $ks/$shard web $((BASE + 100 + i)) sock $VTDATAROOT/vt_$(printf '%010d' "$(tablet_uid "$i")")/mysql.sock"
++  done
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck
++  tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++case "${1:-}" in
++  up) up ;;
++  down) down ;;
++  env) env_info ;;
++  load) load ;;
++  purge-binlogs) purge_binlogs "${2:-120}" ;;
++  restart-tablets) restart_tablets ;;
++  restart-tablet) restart_tablet "$2" ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  vtctldclient) shift; vtctldclient "$@" ;;
++  *) echo "usage: $0 up|down|env|load|purge-binlogs|restart-tablets|pids|cpu|vtctldclient ARGS" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/V1-scripts/ddlbuf.sh b/perf-findings/V1-scripts/ddlbuf.sh
+new file mode 100755
+index 0000000000..9de8d23b5d
+--- /dev/null
++++ b/perf-findings/V1-scripts/ddlbuf.sh
+@@ -0,0 +1,22 @@
++#!/bin/bash
++# Time the deferred secondary key build (ALTER ... ADD KEY) on target mysqld 101 with different DDL buffer settings.
++# Requires vt_dst.wide and vt_dst.sbtest1 to exist on tablet 101 (after a MoveTables copy).
++T=/home/vt/perf/c30000/vt_0000000101/mysql.sock
++PID=$(cat /home/vt/perf/c30000/vt_0000000101/mysql.pid)
++q() { mysql -N -S $T -u vt_dba vt_dst -e "$1"; }
++cpu() { awk '{print ($14 + $15) / 100}' /proc/$PID/stat; }
++run() { # label settings table drop add
++  q "alter table $3 $4" >/dev/null
++  c0=$(cpu); t0=$(date +%s.%N)
++  q "$2 alter table $3 $5"
++  t1=$(date +%s.%N); c1=$(cpu)
++  echo "$1 $3 wall=$(echo "$t1 - $t0" | bc | cut -c1-5)s mysqld_cpu=$(echo "$c1 - $c0" | bc)s"
++}
++WD="drop key idx_user_created, drop key idx_status, drop key idx_title"
++WA="add key idx_user_created (user_id, created_at), add key idx_status (status), add key idx_title (title(32))"
++for r in 1 2; do
++  run default "" wide "$WD" "$WA"
++  run buf64M "set session innodb_ddl_buffer_size=67108864;" wide "$WD" "$WA"
++  run default "" sbtest1 "drop key k_1" "add key k_1 (k)"
++  run buf64M "set session innodb_ddl_buffer_size=67108864;" sbtest1 "drop key k_1" "add key k_1 (k)"
++done
+diff --git a/perf-findings/V1-scripts/durable.sh b/perf-findings/V1-scripts/durable.sh
+new file mode 100755
+index 0000000000..6023ca7550
+--- /dev/null
++++ b/perf-findings/V1-scripts/durable.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++# Set target mysqlds to durable (1) or relaxed (0) commit settings.
++for u in 101 102; do
++  if [[ $1 == 1 ]]; then
++    mysql -S /home/vt/perf/c30000/vt_0000000$u/mysql.sock -u vt_dba -e "set global sync_binlog=1; set global innodb_flush_log_at_trx_commit=1"
++  else
++    mysql -S /home/vt/perf/c30000/vt_0000000$u/mysql.sock -u vt_dba -e "set global sync_binlog=0; set global innodb_flush_log_at_trx_commit=2"
++  fi
++done
+diff --git a/perf-findings/V1-scripts/gensql.py b/perf-findings/V1-scripts/gensql.py
+new file mode 100644
+index 0000000000..5c4d08555d
+--- /dev/null
++++ b/perf-findings/V1-scripts/gensql.py
+@@ -0,0 +1,101 @@
++#!/usr/bin/env python3
++"""Generate INSERT workloads that mimic the vcopier's statements, in several forms, from TSV dumps of src tables.
++
++Usage: gensql.py wide.tsv sbtest.tsv OUTDIR
++"""
++import json
++import sys
++
++
++def sql_str(s, prefix=""):
++    out = s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r").replace("\x00", "\\0").replace("\x1a", "\\Z")
++    return prefix + "'" + out + "'"
++
++
++def unescape_tsv(s):
++    if s == "NULL":
++        return None
++    out = []
++    i = 0
++    while i < len(s):
++        c = s[i]
++        if c == "\\" and i + 1 < len(s):
++            n = s[i + 1]
++            out.append({"t": "\t", "n": "\n", "\\": "\\", "0": "\x00", "r": "\r"}.get(n, n))
++            i += 2
++        else:
++            out.append(c)
++            i += 1
++    return "".join(out)
++
++
++def json_sql(v, raw_num, top=True):
++    # Mimic vitess go/mysql/json marshalSQLInternal: objects/arrays as JSON_OBJECT/JSON_ARRAY, strings _utf8mb4'..'.
++    if isinstance(v, dict):
++        return "JSON_OBJECT(" + ", ".join(sql_str(k, "_utf8mb4") + ", " + json_sql(x, raw_num, False) for k, x in v.items()) + ")"
++    if isinstance(v, list):
++        return "JSON_ARRAY(" + ", ".join(json_sql(x, raw_num, False) for x in v) + ")"
++    if isinstance(v, bool):
++        return "true" if v else "false"
++    if v is None:
++        return "null"
++    if isinstance(v, str):
++        s = sql_str(v, "_utf8mb4")
++        return "CAST(JSON_QUOTE(" + s + ") as JSON)" if top else s
++    return raw_num(v)
++
++
++def numfmt(v):
++    if isinstance(v, float):
++        r = repr(v)
++        return r
++    return str(v)
++
++
++def gen(rows, table, cols, json_col, form, per_stmt, out, nums=(0, 1)):
++    with open(out, "w") as f:
++        for i in range(0, len(rows), per_stmt):
++            vals = []
++            for r in rows[i:i + per_stmt]:
++                parts = []
++                for ci, v in enumerate(r):
++                    if v is None:
++                        parts.append("null")
++                    elif ci == json_col:
++                        if form == "jsonobj":
++                            parts.append(json_sql(json.loads(v), numfmt))
++                        else:
++                            parts.append(sql_str(v, "_utf8mb4"))
++                    elif ci in nums:
++                        parts.append(v)
++                    else:
++                        parts.append(sql_str(v))
++                vals.append("(" + ",".join(parts) + ")")
++            f.write("begin;\ninsert into %s(%s) values %s;\ninsert into copy_state_x(lastpk) values ('x');\ncommit;\n" % (table, ",".join(cols), ", ".join(vals)))
++
++
++def load(path):
++    rows = []
++    with open(path) as f:
++        for line in f:
++            rows.append([unescape_tsv(x) for x in line.rstrip("\n").split("\t")])
++    return rows
++
++
++def main():
++    wide, sb, outdir = sys.argv[1:4]
++    wrows = load(wide)
++    wcols = ["id", "user_id", "created_at", "`status`", "title", "amount", "body", "attrs"]
++    # amount (index 5) is a decimal literal in vitess' output; keep it unquoted.
++    for r in wrows:
++        r[5] = r[5]
++    gen(wrows, "wide_x", wcols, 7, "jsonobj", 270, outdir + "/w_jsonobj.sql", (0, 1, 5))
++    gen(wrows, "wide_x", wcols, 7, "text", 270, outdir + "/w_text.sql", (0, 1, 5))
++    srows = load(sb)
++    scols = ["id", "k", "c", "pad"]
++    gen(srows, "sbtest_x", scols, -1, "", 1000, outdir + "/s_1000.sql")
++    gen(srows, "sbtest_x", scols, -1, "", 4000, outdir + "/s_4000.sql")
++    gen(srows, "sbtest_x", scols, -1, "", 250, outdir + "/s_250.sql")
++
++
++main()
+diff --git a/perf-findings/V1-scripts/glog.sh b/perf-findings/V1-scripts/glog.sh
+new file mode 100755
+index 0000000000..4f11112edc
+--- /dev/null
++++ b/perf-findings/V1-scripts/glog.sh
+@@ -0,0 +1,11 @@
++#!/bin/bash
++# Run a command with the general log enabled on mysqld of tablet $1, then print the vcopier inserts into $2.
++U=$1; PAT=$2; shift 2
++S=/home/vt/perf/c30000/vt_0000000$U/mysql.sock
++L=/home/vt/perf/c30000/vt_0000000$U/general.log
++rm -f "$L"
++mysql -S $S -u vt_dba -e "set global general_log_file='$L'; set global general_log=1"
++"$@" >/dev/null 2>&1
++mysql -S $S -u vt_dba -e "set global general_log=0"
++grep -i "$PAT" "$L" | cut -c1-${WIDTH:-700} | head -${N:-3}
++rm -f "$L"
+diff --git a/perf-findings/V1-scripts/jsontest.sh b/perf-findings/V1-scripts/jsontest.sh
+new file mode 100755
+index 0000000000..3451ac018a
+--- /dev/null
++++ b/perf-findings/V1-scripts/jsontest.sh
+@@ -0,0 +1,34 @@
++#!/bin/bash
++# JSON fidelity check of the copy path: create src.jt with tricky JSON values, keep a reference copy made by
++# MySQL itself (jt_ref, INSERT ... SELECT), run an Online DDL (vitess) on jt, and diff text and types.
++D=/home/vt/perf/V1
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++q() { mysql -N -S $S -u vt_dba vt_src -e "$1"; }
++q "drop table if exists jt, jt_ref; create table jt (id int primary key, j json, t varchar(100));"
++q "insert into jt values
++ (1, json_object('dec', 1.50, 'dec2', cast(10 as decimal(10,3)), 'dbl', 0.1e0, 'dbl2', 318.0e0, 'big', 18446744073709551615, 'neg', -9223372036854775808), 'numbers'),
++ (2, '{\"s\": \"quote\\\\\" backslash\\\\\\\\ pct\\\\\\\\% us\\\\\\\\_ nl\\\\n tab\\\\t uni é 😀 \\\\u0001\"}', 'escapes'),
++ (3, json_array(1, 'two', null, true, false, json_object(), json_array()), 'array'),
++ (4, 'null', 'json null'),
++ (5, null, 'sql null'),
++ (6, '\"just a string\"', 'scalar string'),
++ (7, '12.25', 'scalar number'),
++ (8, json_object('d', cast('2024-01-02' as date), 'dt', cast('2024-01-02 03:04:05.123456' as datetime(6)), 't', cast('03:04:05' as time)), 'temporal'),
++ (9, json_object('b', cast(x'00ff41' as binary)), 'opaque binary'),
++ (10, json_object('nested', json_object('a', json_array(json_object('b', 1.5e0)))), 'nested'),
++ (11, '{\"k\": \"it''s\"}', 'single quote'),
++ (12, '[1e300, -1.5e-300, 3.141592653589793]', 'extreme doubles')"
++q "create table jt_ref like jt; insert into jt_ref select * from jt"
++uuid=$("$D/c.sh" vtctldclient ApplySchema --ddl-strategy "vitess" --sql "alter table jt engine=innodb" src 2>&1 | tail -1)
++while :; do
++  ms=$(q "select migration_status from _vt.schema_migrations where migration_uuid='$uuid'")
++  [[ $ms == failed || $ms == complete || $ms == cancelled ]] && break
++  sleep 0.5
++done
++echo "migration: $ms $(q "select message from _vt.schema_migrations where migration_uuid='$uuid'")"
++q "select r.id, r.t, if(cast(r.j as char) <=> cast(n.j as char), 'same-text', 'DIFF-TEXT'), if(r.j <=> n.j, 'json-equal', 'JSON-NOT-EQUAL'),
++     cast(r.j as char), cast(n.j as char)
++   from jt_ref r join jt n using (id) where not (cast(r.j as char) <=> cast(n.j as char)) or not (r.j <=> n.j)"
++q "select 'types', r.id, json_type(r.j->'\$.dec'), json_type(n.j->'\$.dec'), json_type(r.j->'\$.dbl'), json_type(n.j->'\$.dbl'), json_type(r.j->'\$.big'), json_type(n.j->'\$.big'), json_type(r.j->'\$.d'), json_type(n.j->'\$.d') from jt_ref r join jt n using (id) where r.id in (1, 8)"
++q "select 'count', count(*) from jt"
++"$D/cleanup_artifacts.sh" >/dev/null 2>&1
+diff --git a/perf-findings/V1-scripts/jsontest_mt.sh b/perf-findings/V1-scripts/jsontest_mt.sh
+new file mode 100755
+index 0000000000..20151f041b
+--- /dev/null
++++ b/perf-findings/V1-scripts/jsontest_mt.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# JSON fidelity of MoveTables copy for src.jt (created by jsontest.sh) with experimental flags $1.
++D=/home/vt/perf/V1
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++q() { mysql -N -S $S -u vt_dba vt_src -e "$1"; }
++q "drop table if exists jt_ref; create table jt_ref like jt; insert into jt_ref select * from jt"
++"$D/c.sh" vtctldclient ApplyVSchema --vschema '{"sharded":true,"vindexes":{"hash":{"type":"hash"}},"tables":{"sbtest1":{"column_vindexes":[{"column":"id","name":"hash"}]},"sbtest2":{"column_vindexes":[{"column":"id","name":"hash"}]},"wide":{"column_vindexes":[{"column":"id","name":"hash"}]},"jt":{"column_vindexes":[{"column":"id","name":"hash"}]}}}' dst >/dev/null
++"$D/c.sh" vtctldclient MoveTables --workflow wfj --target-keyspace dst create --source-keyspace src --tables jt --config-overrides "vreplication-experimental-flags=$1" >/dev/null
++sleep 6
++for u in 101 102; do
++  T=/home/vt/perf/c30000/vt_0000000$u/mysql.sock
++  mysql -N -S $T -u vt_dba -e "select id, cast(j as char) from vt_dst.jt" >/tmp/claude-0/jt_$u.txt
++  mysql -N -S $T -u vt_dba -e "select id, json_type(j->'\$.dec'), json_type(j->'\$.dbl'), json_type(j->'\$.dbl2'), json_type(j->'\$.d') from vt_dst.jt where id in (1, 8)"
++done
++q "select id, cast(j as char) from jt_ref" >/tmp/claude-0/jt_src.txt
++echo "text diff vs source (lines differing):"
++sort /tmp/claude-0/jt_101.txt /tmp/claude-0/jt_102.txt | diff - <(sort /tmp/claude-0/jt_src.txt)
++"$D/c.sh" vtctldclient MoveTables --workflow wfj --target-keyspace dst cancel >/dev/null 2>&1
++"$D/c.sh" vtctldclient ApplyVSchema --vschema '{"sharded":true,"vindexes":{"hash":{"type":"hash"}},"tables":{"sbtest1":{"column_vindexes":[{"column":"id","name":"hash"}]},"sbtest2":{"column_vindexes":[{"column":"id","name":"hash"}]},"wide":{"column_vindexes":[{"column":"id","name":"hash"}]}}}' dst >/dev/null
+diff --git a/perf-findings/V1-scripts/load.sh b/perf-findings/V1-scripts/load.sh
+new file mode 100755
+index 0000000000..d98bcebb88
+--- /dev/null
++++ b/perf-findings/V1-scripts/load.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# Load the V1 dataset into src: sbtest1 (1M rows), sbtest2 (500k), wide (250k rows, TEXT+JSON, 3 secondary keys).
++set -euo pipefail
++D=/home/vt/perf/V1
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++q() { mysql -S $S -u vt_dba vt_src -e "$1"; }
++"$D/c.sh" load
++q "insert into sbtest1 (k, c, pad) select k, c, pad from sbtest1 order by id"
++q "truncate table wide"
++for b in $(seq 0 4); do
++  q "set session cte_max_recursion_depth=100000; insert into wide (user_id, created_at, status, title, amount, body, attrs)
++     with recursive seq(n) as (select 1 union all select n+1 from seq where n < 50000)
++     select floor(rand()*100000), now(6) - interval floor(rand()*1e8) second, elt(1+floor(rand()*4),'new','paid','shipped','cancelled'),
++       concat('title ', md5(rand()), ' ', n), round(rand()*10000, 2),
++       concat_ws(' ', md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()),
++                      md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand())),
++       json_object('n', n, 'batch', $b, 'h', md5(rand()), 'tags', json_array(md5(rand()), floor(rand()*1000), true), 'nested', json_object('x', rand(), 'y', 'yy')) from seq"
++done
++q "analyze table sbtest1, sbtest2, wide; select table_name, table_rows, round(data_length/1e6) data_mb, round(index_length/1e6) idx_mb from information_schema.tables where table_schema='vt_src'"
++"$D/c.sh" purge-binlogs 0
+diff --git a/perf-findings/V1-scripts/mt.sh b/perf-findings/V1-scripts/mt.sh
+new file mode 100755
+index 0000000000..06ffe3e191
+--- /dev/null
++++ b/perf-findings/V1-scripts/mt.sh
+@@ -0,0 +1,68 @@
++#!/bin/bash
++# Time one MoveTables copy phase src -> dst (2 shards), with CPU per process, MySQL counters per mysqld, and optional pprof.
++# Usage: mt.sh LABEL [PROFILE_SECONDS]
++# Env: MT_FLAGS extra flags for `MoveTables create`; TABLES_LIST (default sbtest1,sbtest2,wide); VERBOSE=1 prints counters.
++set -uo pipefail
++LABEL=${1:-run}
++PROF=${2:-0}
++D=/home/vt/perf/V1
++DR=/home/vt/perf/c30000
++OUT=$D/out/$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++VC="$D/c.sh vtctldclient"
++TL=${TABLES_LIST:-sbtest1,sbtest2,wide}
++TSOCK1=$DR/vt_0000000101/mysql.sock
++TSOCK2=$DR/vt_0000000102/mysql.sock
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++VARS="Handler_write Handler_read_next Handler_read_key Handler_read_rnd_next Handler_update Handler_delete Handler_commit Innodb_rows_inserted Innodb_rows_read Innodb_data_written Innodb_data_writes Innodb_os_log_written Innodb_pages_written Com_insert Com_commit Com_begin Com_select Com_set_option Com_alter_table Com_delete_multi Com_update Questions Bytes_received Bytes_sent Sort_rows Created_tmp_tables Binlog_cache_use"
++inlist=$(printf "'%s'," $VARS); inlist=${inlist%,}
++snap() { # $1 suffix
++  for u in 100 101 102; do
++    q $DR/vt_0000000$u/mysql.sock "show global status where variable_name in ($inlist)" >"$OUT/st_${u}_$1"
++    echo "BINLOG_BYTES $(q $DR/vt_0000000$u/mysql.sock "show binary logs" | awk '{s+=$2} END {print s}')" >>"$OUT/st_${u}_$1"
++  done
++}
++"$D/c.sh" cpu >"$OUT/cpu0"
++snap 0
++uptime >"$OUT/uptime0"
++t0=$(date +%s.%N)
++$VC MoveTables --workflow wf --target-keyspace dst create --source-keyspace src --tables "$TL" ${MT_FLAGS:-} >"$OUT/create.log" 2>&1 || { cat "$OUT/create.log"; exit 1; }
++if [[ $PROF -gt 0 ]]; then
++  sleep 2
++  curl -s -o "$OUT/src.pprof" "http://localhost:30100/debug/pprof/profile?seconds=$PROF" &
++  curl -s -o "$OUT/dst1.pprof" "http://localhost:30101/debug/pprof/profile?seconds=$PROF" &
++fi
++if [[ ${PERF:-0} -gt 0 ]]; then
++  sleep 1
++  /usr/lib/linux-tools-6.8.0-142/perf record -e cpu-clock -F 499 -g -o "$OUT/mysqld101.perf" -p "$(cat $DR/vt_0000000101/mysql.pid)" -- sleep "$PERF" >/dev/null 2>&1 &
++fi
++while :; do
++  n1=$(q $TSOCK1 "select count(*) from _vt.copy_state")
++  n2=$(q $TSOCK2 "select count(*) from _vt.copy_state")
++  s1=$(q $TSOCK1 "select state from _vt.vreplication where workflow='wf'")
++  s2=$(q $TSOCK2 "select state from _vt.vreplication where workflow='wf'")
++  p1=$(q $TSOCK1 "select length(pos) from _vt.vreplication where workflow='wf'")
++  p2=$(q $TSOCK2 "select length(pos) from _vt.vreplication where workflow='wf'")
++  if [[ $n1 == 0 && $n2 == 0 && $s1 == Running && $s2 == Running && ${p1:-0} -gt 0 && ${p2:-0} -gt 0 ]]; then break; fi
++  if [[ $s1 == Error || $s2 == Error ]]; then echo "ERROR"; q $TSOCK1 "select message from _vt.vreplication"; break; fi
++  sleep 0.2
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++snap 1
++uptime >"$OUT/uptime1"
++curl -s http://localhost:30101/debug/vars >"$OUT/vars101.json"
++curl -s http://localhost:30100/debug/vars >"$OUT/vars100.json"
++wait
++cq="select 0"
++for t in ${TL//,/ }; do cq+="+(select count(*) from vt_dst.$t)"; done
++rows=$(( $(q $TSOCK1 "$cq") + $(q $TSOCK2 "$cq") ))
++dur=$(echo "$t1 - $t0" | bc)
++echo "$LABEL rows=$rows dur=${dur}s rows/s=$(echo "$rows / $dur" | bc) load: $(cut -d, -f3- "$OUT/uptime1")" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$rows" '{d=$4-$2; printf "  %-14s %7.2f s  %6.2f s/1M rows\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
++if [[ ${VERBOSE:-0} == 1 ]]; then
++  for u in 100 101 102; do
++    echo "  mysqld_$u counters per 1M rows copied:" | tee -a "$OUT/summary"
++    join <(sort "$OUT/st_${u}_0") <(sort "$OUT/st_${u}_1") | awk -v r="$rows" '{d=$3-$2; if (d != 0) printf "    %-26s %14.0f\n", $1, d*1e6/r}' | tee -a "$OUT/summary"
++  done
++fi
+diff --git a/perf-findings/V1-scripts/mtcancel.sh b/perf-findings/V1-scripts/mtcancel.sh
+new file mode 100755
+index 0000000000..bc92dae8e3
+--- /dev/null
++++ b/perf-findings/V1-scripts/mtcancel.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# Cancel the MoveTables workflow (drops the target tables) and purge binlogs.
++D=/home/vt/perf/V1
++"$D/c.sh" vtctldclient MoveTables --workflow wf --target-keyspace dst cancel >/dev/null 2>&1 || true
++"$D/c.sh" purge-binlogs 0
+diff --git a/perf-findings/V1-scripts/mtmulti.sh b/perf-findings/V1-scripts/mtmulti.sh
+new file mode 100755
+index 0000000000..23bf9a5f64
+--- /dev/null
++++ b/perf-findings/V1-scripts/mtmulti.sh
+@@ -0,0 +1,39 @@
++#!/bin/bash
++# Upper bound for concurrent table copy: one MoveTables workflow per table, all started together.
++# Usage: mtmulti.sh LABEL   (env: TABLES_LIST, MT_FLAGS)
++set -uo pipefail
++LABEL=$1
++D=/home/vt/perf/V1
++DR=/home/vt/perf/c30000
++OUT=$D/out/$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++TL=${TABLES_LIST:-sbtest1,sbtest2,wide}
++q() { mysql -N -S "$1" -u vt_dba -e "$2" 2>/dev/null; }
++"$D/c.sh" cpu >"$OUT/cpu0"
++t0=$(date +%s.%N)
++n=0
++for t in ${TL//,/ }; do
++  n=$((n + 1))
++  "$D/c.sh" vtctldclient MoveTables --workflow "wf_$t" --target-keyspace dst create --source-keyspace src --tables "$t" ${MT_FLAGS:-} >"$OUT/create_$t.log" 2>&1 &
++done
++wait
++while :; do
++  done_=1
++  for s in $DR/vt_0000000101/mysql.sock $DR/vt_0000000102/mysql.sock; do
++    c=$(q $s "select count(*) from _vt.copy_state")
++    r=$(q $s "select count(*) from _vt.vreplication where state='Running' and length(pos) > 0")
++    e=$(q $s "select count(*) from _vt.vreplication where state='Error'")
++    [[ $e != 0 ]] && { echo ERROR; q $s "select message from _vt.vreplication"; exit 1; }
++    [[ $c == 0 && $r == "$n" ]] || done_=0
++  done
++  [[ $done_ == 1 ]] && break
++  sleep 0.2
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++cq="select 0"
++for t in ${TL//,/ }; do cq+="+(select count(*) from vt_dst.$t)"; done
++rows=$(( $(q $DR/vt_0000000101/mysql.sock "$cq") + $(q $DR/vt_0000000102/mysql.sock "$cq") ))
++dur=$(echo "$t1 - $t0" | bc)
++echo "$LABEL rows=$rows dur=${dur}s rows/s=$(echo "$rows / $dur" | bc) load: $(cut -d, -f3- /proc/loadavg | cut -c1-20)" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | awk -v r="$rows" '{d=$4-$2; printf "  %-14s %7.2f s  %6.2f s/1M rows\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
+diff --git a/perf-findings/V1-scripts/multicancel.sh b/perf-findings/V1-scripts/multicancel.sh
+new file mode 100755
+index 0000000000..694fd9fa18
+--- /dev/null
++++ b/perf-findings/V1-scripts/multicancel.sh
+@@ -0,0 +1,8 @@
++#!/bin/bash
++D=/home/vt/perf/V1
++TL=${TABLES_LIST:-sbtest1,sbtest2,wide}
++for t in ${TL//,/ }; do
++  "$D/c.sh" vtctldclient MoveTables --workflow "wf_$t" --target-keyspace dst cancel >/dev/null 2>&1 &
++done
++wait
++"$D/c.sh" purge-binlogs 0
+diff --git a/perf-findings/V1-scripts/oddl.sh b/perf-findings/V1-scripts/oddl.sh
+new file mode 100755
+index 0000000000..030ea942de
+--- /dev/null
++++ b/perf-findings/V1-scripts/oddl.sh
+@@ -0,0 +1,37 @@
++#!/bin/bash
++# Run one Online DDL (vitess strategy) on src and time its copy phase precisely (until the stream is Running with
++# an empty copy_state), with CPU per process. Then wait for completion and drop the artifact table.
++# Usage: oddl.sh LABEL [ALTER]
++LABEL=$1
++ALTER=${2:-"alter table sbtest1 engine=innodb"}
++D=/home/vt/perf/V1
++DR=/home/vt/perf/c30000
++OUT=$D/out/oddl-$LABEL
++rm -rf "$OUT"; mkdir -p "$OUT"
++S=$DR/vt_0000000100/mysql.sock
++q() { mysql -N -S "$S" -u vt_dba -e "$1" 2>/dev/null; }
++"$D/c.sh" cpu >"$OUT/cpu0"
++t0=$(date +%s.%N)
++uuid=$("$D/c.sh" vtctldclient ApplySchema --ddl-strategy "vitess ${ODDL_FLAGS:-}" --sql "$ALTER" src 2>&1 | tail -1)
++while :; do
++  st=$(q "select state from _vt.vreplication where workflow='$uuid'")
++  n=$(q "select count(*) from _vt.copy_state")
++  ms=$(q "select migration_status from _vt.schema_migrations where migration_uuid='$uuid'")
++  [[ $st == Running && $n == 0 ]] && break
++  [[ $ms == failed || $ms == complete || $ms == cancelled ]] && break
++  sleep 0.2
++done
++t1=$(date +%s.%N)
++"$D/c.sh" cpu >"$OUT/cpu1"
++uptime >"$OUT/uptime1"
++rows=$(q "select rows_copied from _vt.vreplication where workflow='$uuid'")
++while :; do
++  ms=$(q "select migration_status from _vt.schema_migrations where migration_uuid='$uuid'")
++  [[ $ms == failed || $ms == complete || $ms == cancelled ]] && break
++  sleep 0.5
++done
++t2=$(date +%s.%N)
++dur=$(echo "$t1 - $t0" | bc)
++echo "oddl-$LABEL $ms copy_dur=${dur}s total=$(echo "$t2 - $t0" | bc)s rows=$rows rows/s=$(echo "${rows:-0} / $dur" | bc) load: $(cut -d, -f3- "$OUT/uptime1")" | tee "$OUT/summary"
++paste -d' ' "$OUT/cpu0" "$OUT/cpu1" | grep _100 | awk -v r="${rows:-1}" '{d=$4-$2; printf "  %-14s %7.2f s  %6.2f s/1M rows\n", $1, d, d*1e6/r}' | tee -a "$OUT/summary"
++grep -hE "Copying table|post copy|Copy of .* finished" $DR/logs/vttablet_100.log | tail -3 | cut -c12-23,60-150 | sed 's/^/    /'
+diff --git a/perf-findings/V1-scripts/run1.sh b/perf-findings/V1-scripts/run1.sh
+new file mode 100755
+index 0000000000..ca1bcf81e6
+--- /dev/null
++++ b/perf-findings/V1-scripts/run1.sh
+@@ -0,0 +1,8 @@
++#!/bin/bash
++# One locked MoveTables copy run + cancel + per-table timeline of shard -80.
++# Usage: run1.sh LABEL   (env passed through: TABLES_LIST, MT_FLAGS, VERBOSE, PERF)
++D=/home/vt/perf/V1
++LABEL=$1
++flock -o /home/vt/perf/bench.lock "$D/mt.sh" "$LABEL" "${PROF:-0}" 2>&1 | grep -E "rows=|vttablet_10|mysqld_10|^    "
++"$D/mtcancel.sh"
++grep -hE "Copying table|post copy|Copy of .* finished" /home/vt/perf/c30000/logs/vttablet_101.log | tail -$((3 * $(echo "${TABLES_LIST:-a,b,c}" | tr ',' '\n' | wc -l))) | cut -c12-23,60-150 | sed 's/^/    /'
+diff --git a/perf-findings/V1-scripts/runtest.sh b/perf-findings/V1-scripts/runtest.sh
+new file mode 100755
+index 0000000000..08ff727de8
+--- /dev/null
++++ b/perf-findings/V1-scripts/runtest.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++# Run a compiled vreplication/onlineddl test binary as the vt user with a MySQL-backed env.
++# Usage: runtest.sh TESTBIN REGEX LOG
++cd /home/vt/perf/V1/vtroot || exit 1
++setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt VTROOT=/home/vt/perf/V1/vtroot \
++  VTDATAROOT=/home/vt/perf/V1/vtroot/data VT_MYSQL_ROOT=/usr PATH=/home/vt/bin-V1:/usr/sbin:/usr/bin:/bin \
++  "$1" -test.run "$2" -test.count=1 -test.v -test.timeout=20m >"$3" 2>&1
++echo "exit=$?"
++grep -E "^(--- |FAIL|PASS|ok)" "$3" | grep -v "^--- PASS.*/" | head -60
+diff --git a/perf-findings/V1-scripts/sqlab.sh b/perf-findings/V1-scripts/sqlab.sh
+new file mode 100755
+index 0000000000..7c57791748
+--- /dev/null
++++ b/perf-findings/V1-scripts/sqlab.sh
+@@ -0,0 +1,25 @@
++#!/bin/bash
++# A/B of INSERT forms on target mysqld (run inside the bench lock).
++D=/home/vt/perf/V1
++W_NOKEYS="create table wide_x (id BIGINT NOT NULL, user_id INT NOT NULL, created_at DATETIME(6) NOT NULL, status VARCHAR(16) NOT NULL, title VARCHAR(255) NOT NULL, amount DECIMAL(12,2) NOT NULL, body TEXT, attrs JSON, PRIMARY KEY (id))"
++W_KEYS="create table wide_x (id BIGINT NOT NULL, user_id INT NOT NULL, created_at DATETIME(6) NOT NULL, status VARCHAR(16) NOT NULL, title VARCHAR(255) NOT NULL, amount DECIMAL(12,2) NOT NULL, body TEXT, attrs JSON, PRIMARY KEY (id), KEY idx_user_created (user_id, created_at), KEY idx_status (status), KEY idx_title (title(32)))"
++S_NOKEYS="create table sbtest_x (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id))"
++S_KEYS="create table sbtest_x (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_1 (k))"
++for r in ${ROUNDS:-1}; do
++  for v in ${VARIANTS:-w_jsonobj w_text w_jsonobj_nobinlog w_jsonobj_keys s_1000 s_1000_nobinlog s_4000 s_250 s_1000_keys}; do
++    case $v in
++      w_jsonobj) "$D/sqlbench.sh" "$v" $D/sql/w_jsonobj.sql "$W_NOKEYS" 60000 ;;
++      w_text) "$D/sqlbench.sh" "$v" $D/sql/w_text.sql "$W_NOKEYS" 60000 ;;
++      w_jsonobj_nobinlog) "$D/sqlbench.sh" "$v" $D/sql/w_jsonobj.sql "$W_NOKEYS" 60000 "set sql_log_bin=0;" ;;
++      w_jsonobj_keys) "$D/sqlbench.sh" "$v" $D/sql/w_jsonobj.sql "$W_KEYS" 60000 ;;
++      w_text_keys) "$D/sqlbench.sh" "$v" $D/sql/w_text.sql "$W_KEYS" 60000 ;;
++      s_1000) "$D/sqlbench.sh" "$v" $D/sql/s_1000.sql "$S_NOKEYS" 200000 ;;
++      s_1000_nobinlog) "$D/sqlbench.sh" "$v" $D/sql/s_1000.sql "$S_NOKEYS" 200000 "set sql_log_bin=0;" ;;
++      s_1000_minimal) "$D/sqlbench.sh" "$v" $D/sql/s_1000.sql "$S_NOKEYS" 200000 "set binlog_row_image=minimal;" ;;
++      s_4000) "$D/sqlbench.sh" "$v" $D/sql/s_4000.sql "$S_NOKEYS" 200000 ;;
++      s_250) "$D/sqlbench.sh" "$v" $D/sql/s_250.sql "$S_NOKEYS" 200000 ;;
++      s_1000_keys) "$D/sqlbench.sh" "$v" $D/sql/s_1000.sql "$S_KEYS" 200000 ;;
++      s_1000_uc0) "$D/sqlbench.sh" "$v" $D/sql/s_1000.sql "$S_NOKEYS" 200000 "set unique_checks=0;" ;;
++    esac
++  done
++done
+diff --git a/perf-findings/V1-scripts/sqlbench.sh b/perf-findings/V1-scripts/sqlbench.sh
+new file mode 100755
+index 0000000000..cceb9fbe34
+--- /dev/null
++++ b/perf-findings/V1-scripts/sqlbench.sh
+@@ -0,0 +1,18 @@
++#!/bin/bash
++# Replay generated vcopier-like INSERT workloads directly against target mysqld 101 and report CPU/wall per row.
++# Usage: sqlbench.sh LABEL SQLFILE TABLE_DDL ROWS [SESSION_PREFIX]
++LABEL=$1 FILE=$2 DDL=$3 ROWS=$4 PREFIX=${5:-}
++S=/home/vt/perf/c30000/vt_0000000101/mysql.sock
++PID=$(cat /home/vt/perf/c30000/vt_0000000101/mysql.pid)
++q() { mysql -N -S $S -u vt_dba "$@"; }
++q -e "create database if not exists v1x"
++q v1x -e "drop table if exists wide_x, sbtest_x, copy_state_x; create table copy_state_x (id bigint auto_increment primary key, lastpk varbinary(2000)); $DDL"
++cpu() { awk '{print $14 + $15}' /proc/$PID/stat; }
++st() { q -e "show global status where variable_name in ('Innodb_os_log_written', 'Innodb_data_written')" | awk '{printf "%s ", $2}'; q -e "show binary logs" | awk '{s+=$2} END {print s}'; }
++b0=$(st); c0=$(cpu); t0=$(date +%s.%N)
++{ echo "$PREFIX"; cat "$FILE"; } | q v1x
++t1=$(date +%s.%N); c1=$(cpu); b1=$(st)
++tck=$(getconf CLK_TCK)
++read -r r0 d0 bl0 <<<"$b0"; read -r r1 d1 bl1 <<<"$b1"
++echo "$LABEL wall=$(echo "($t1-$t0)*1000000/$ROWS" | bc -l | xargs printf %.2f)us/row mysqld_cpu=$(echo "($c1-$c0)/$tck*1000000/$ROWS" | bc -l | xargs printf %.2f)us/row redo=$(((r1 - r0) / ROWS))B/row binlog=$(((bl1 - bl0) / ROWS))B/row load=$(cut -d, -f3- /proc/loadavg | cut -c1-40)"
++q -e "drop database v1x"
