@@ -1,0 +1,48 @@
+=== main arm=base round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=base mode=copy elapsed=6.01s first_event=0.04s responses=1520 events=1033177 rows=1030873 bytes=262569161 ev/s=171978 rows/s=171595 MB/s=43.7 client_cpu=1.62s copy_done=true BEGIN=763 COMMIT=763 ROW=1030873 FIELD=10 VGTID=765 COPY_COMPLETED=3
+cpu wall=6.02s vtgate=2.86 vttablets=1.96 mysqlds=0.61  mysqld_100=0.30 mysqld_101=0.31 vtgate=2.86 vttablet_100=0.97 vttablet_101=0.99
+uptime:  16:38:31 up 22:19,  0 user,  load average: 1.67, 3.75, 4.33
+=== main arm=v6 round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=v6 mode=copy elapsed=5.68s first_event=0.04s responses=1516 events=1033171 rows=1030873 bytes=262573977 ev/s=182031 rows/s=181626 MB/s=46.3 client_cpu=1.63s copy_done=true BEGIN=761 COMMIT=761 ROW=1030873 FIELD=10 VGTID=763 COPY_COMPLETED=3
+cpu wall=5.69s vtgate=2.50 vttablets=2.07 mysqlds=0.57  mysqld_100=0.28 mysqld_101=0.29 vtgate=2.50 vttablet_100=1.02 vttablet_101=1.05
+uptime:  16:39:16 up 22:19,  0 user,  load average: 2.32, 3.59, 4.25
+=== main arm=v5b round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=v5b mode=copy elapsed=1.87s first_event=0.04s responses=741 events=1033135 rows=1030873 bytes=262574332 ev/s=551582 rows/s=550375 MB/s=140.2 client_cpu=1.50s copy_done=true BEGIN=749 COMMIT=749 ROW=1030873 FIELD=10 VGTID=751 COPY_COMPLETED=3
+cpu wall=1.89s vtgate=2.18 vttablets=1.87 mysqlds=0.52  mysqld_100=0.27 mysqld_101=0.25 vtgate=2.18 vttablet_100=0.94 vttablet_101=0.93
+uptime:  16:40:04 up 22:20,  0 user,  load average: 2.59, 3.40, 4.14
+=== main arm=v5b+batch round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ -batch-copy]
+label=v5b+batch mode=copy elapsed=1.10s first_event=0.03s responses=515 events=2981 rows=1030873 bytes=212096927 ev/s=2711 rows/s=937561 MB/s=192.9 client_cpu=0.73s copy_done=true BEGIN=744 COMMIT=744 ROW=734 FIELD=10 VGTID=746 COPY_COMPLETED=3
+cpu wall=1.11s vtgate=0.95 vttablets=1.15 mysqlds=0.50  mysqld_100=0.23 mysqld_101=0.27 vtgate=0.95 vttablet_100=0.57 vttablet_101=0.58
+uptime:  16:40:45 up 22:21,  0 user,  load average: 1.74, 3.08, 4.00
+=== main arm=base round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=base mode=copy elapsed=6.28s first_event=0.03s responses=1560 events=1033237 rows=1030873 bytes=262580970 ev/s=164430 rows/s=164054 MB/s=41.8 client_cpu=1.75s copy_done=true BEGIN=783 COMMIT=783 ROW=1030873 FIELD=10 VGTID=785 COPY_COMPLETED=3
+cpu wall=6.30s vtgate=3.01 vttablets=2.09 mysqlds=0.58  mysqld_100=0.29 mysqld_101=0.29 vtgate=3.01 vttablet_100=1.04 vttablet_101=1.05
+uptime:  16:41:38 up 22:22,  0 user,  load average: 2.26, 2.91, 3.88
+=== main arm=v6 round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=v6 mode=copy elapsed=5.62s first_event=0.04s responses=1504 events=1033153 rows=1030873 bytes=262574137 ev/s=183685 rows/s=183279 MB/s=46.7 client_cpu=1.62s copy_done=true BEGIN=755 COMMIT=755 ROW=1030873 FIELD=10 VGTID=757 COPY_COMPLETED=3
+cpu wall=5.64s vtgate=2.37 vttablets=1.99 mysqlds=0.60  mysqld_100=0.29 mysqld_101=0.31 vtgate=2.37 vttablet_100=0.98 vttablet_101=1.01
+uptime:  16:42:23 up 22:23,  0 user,  load average: 3.02, 2.99, 3.87
+=== main arm=v5b round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=v5b mode=copy elapsed=1.75s first_event=0.05s responses=737 events=1033141 rows=1030873 bytes=262575398 ev/s=589105 rows/s=587811 MB/s=149.7 client_cpu=1.37s copy_done=true BEGIN=751 COMMIT=751 ROW=1030873 FIELD=10 VGTID=753 COPY_COMPLETED=3
+cpu wall=1.77s vtgate=1.93 vttablets=1.70 mysqlds=0.52  mysqld_100=0.26 mysqld_101=0.26 vtgate=1.93 vttablet_100=0.84 vttablet_101=0.86
+uptime:  16:43:11 up 22:23,  0 user,  load average: 2.81, 2.92, 3.80
+=== main arm=v5b+batch round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ -batch-copy]
+label=v5b+batch mode=copy elapsed=1.65s first_event=0.06s responses=538 events=2969 rows=1030873 bytes=212090065 ev/s=1801 rows/s=625363 MB/s=128.7 client_cpu=0.83s copy_done=true BEGIN=741 COMMIT=741 ROW=731 FIELD=10 VGTID=743 COPY_COMPLETED=3
+cpu wall=1.66s vtgate=1.01 vttablets=1.27 mysqlds=0.54  mysqld_100=0.26 mysqld_101=0.28 vtgate=1.01 vttablet_100=0.64 vttablet_101=0.63
+uptime:  16:43:50 up 22:24,  0 user,  load average: 2.99, 2.96, 3.77
+=== main arm=base round=3 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=base mode=copy elapsed=6.68s first_event=0.04s responses=1510 events=1033162 rows=1030873 bytes=262576435 ev/s=154613 rows/s=154270 MB/s=39.3 client_cpu=1.67s copy_done=true BEGIN=758 COMMIT=758 ROW=1030873 FIELD=10 VGTID=760 COPY_COMPLETED=3
+cpu wall=6.70s vtgate=2.87 vttablets=2.05 mysqlds=0.60  mysqld_100=0.30 mysqld_101=0.30 vtgate=2.87 vttablet_100=1.03 vttablet_101=1.02
+uptime:  16:44:34 up 22:25,  0 user,  load average: 1.91, 2.68, 3.64
+=== main arm=v6 round=3 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=v6 mode=copy elapsed=5.42s first_event=0.05s responses=1500 events=1033147 rows=1030873 bytes=262573724 ev/s=190578 rows/s=190159 MB/s=48.4 client_cpu=1.55s copy_done=true BEGIN=753 COMMIT=753 ROW=1030873 FIELD=10 VGTID=755 COPY_COMPLETED=3
+cpu wall=5.44s vtgate=2.29 vttablets=1.90 mysqlds=0.55  mysqld_100=0.28 mysqld_101=0.27 vtgate=2.29 vttablet_100=0.97 vttablet_101=0.93
+uptime:  16:45:17 up 22:25,  0 user,  load average: 1.13, 2.39, 3.50
+=== main arm=v5b round=3 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=v5b mode=copy elapsed=1.63s first_event=0.04s responses=747 events=1033156 rows=1030873 bytes=262576576 ev/s=635031 rows/s=633628 MB/s=161.4 client_cpu=1.34s copy_done=true BEGIN=756 COMMIT=756 ROW=1030873 FIELD=10 VGTID=758 COPY_COMPLETED=3
+cpu wall=1.64s vtgate=1.92 vttablets=1.71 mysqlds=0.52  mysqld_100=0.27 mysqld_101=0.25 vtgate=1.92 vttablet_100=0.85 vttablet_101=0.86
+uptime:  16:45:56 up 22:26,  0 user,  load average: 0.67, 2.12, 3.36
+=== main arm=v5b+batch round=3 flags=[-tables /^(sbtest[0-9]|v5probe)$ -batch-copy]
+label=v5b+batch mode=copy elapsed=1.02s first_event=0.04s responses=463 events=2973 rows=1030873 bytes=212093249 ev/s=2904 rows/s=1006874 MB/s=207.2 client_cpu=0.72s copy_done=true BEGIN=742 COMMIT=742 ROW=732 FIELD=10 VGTID=744 COPY_COMPLETED=3
+cpu wall=1.04s vtgate=1.00 vttablets=1.20 mysqlds=0.50  mysqld_100=0.25 mysqld_101=0.25 vtgate=1.00 vttablet_100=0.58 vttablet_101=0.62
+uptime:  16:46:35 up 22:27,  0 user,  load average: 0.39, 1.86, 3.22

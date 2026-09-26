@@ -1,0 +1,1 @@
+label=fin#1 mode=drain elapsed=4.79s first_event=0.03s responses=17941 events=1227888 rows=626846 bytes=360576055 ev/s=256586 rows/s=130989 MB/s=75.3 client_cpu=2.91s BEGIN=200342 COMMIT=200342 ROW=626846 FIELD=16 VGTID=200342 commit_lag_avg_ms=2385918 commit_lag_max_ms=2404567

@@ -1,0 +1,1 @@
+label=v5c#4 mode=live elapsed=34.00s first_event=0.02s responses=17466 events=113264 rows=48519 bytes=28092594 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.58s BEGIN=21577 COMMIT=21577 OTHER=2 ROW=48519 FIELD=10 VGTID=21579 commit_lag_avg_ms=505 commit_lag_max_ms=1003

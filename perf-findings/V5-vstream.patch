@@ -1,0 +1,2946 @@
+diff --git a/go/vt/binlog/binlog_connection.go b/go/vt/binlog/binlog_connection.go
+index 1cac5bb458..86f08f4c9c 100644
+--- a/go/vt/binlog/binlog_connection.go
++++ b/go/vt/binlog/binlog_connection.go
+@@ -25,6 +25,7 @@ import (
+ 	"math/big"
+ 	"slices"
+ 	"sync"
++	"time"
+ 
+ 	"vitess.io/vitess/go/mysql"
+ 	"vitess.io/vitess/go/mysql/replication"
+@@ -38,6 +39,44 @@ import (
+ // cannot find a suitable binlog to satisfy the request.
+ var ErrBinlogUnavailable = errors.New("cannot find relevant binlogs on this server")
+ 
++const (
++	// EventQueueSize is the buffer size of the channels that hand binlog
++	// events from the goroutine reading them to their consumer. Handing each
++	// event over an unbuffered channel costs a goroutine switch per event,
++	// which was a large part of the vstreamer's CPU usage at high event rates.
++	EventQueueSize = 16
++
++	// largeEventSize is the size above which SendEvent waits for the queue to
++	// be empty before queueing an event, so that queued events use at most
++	// about EventQueueSize*largeEventSize bytes plus one large event.
++	largeEventSize = 64 * 1024
++
++	// largeEventWaitInterval is how often SendEvent checks whether the queue is
++	// empty before queueing a large event.
++	largeEventWaitInterval = 100 * time.Microsecond
++)
++
++// SendEvent queues ev on ch, a channel with a buffer of EventQueueSize, unless
++// ctx is done first. Large events are only queued once ch is empty, so that ch
++// holds at most one of them. It returns false if ctx is done.
++func SendEvent(ctx context.Context, ch chan<- mysql.BinlogEvent, ev mysql.BinlogEvent) bool {
++	if len(ev.Bytes()) > largeEventSize {
++		for len(ch) > 0 {
++			select {
++			case <-ctx.Done():
++				return false
++			case <-time.After(largeEventWaitInterval):
++			}
++		}
++	}
++	select {
++	case ch <- ev:
++		return true
++	case <-ctx.Done():
++		return false
++	}
++}
++
+ // BinlogConnection represents a connection to mysqld that pretends to be a replica
+ // connecting for replication. Each such connection must identify itself to
+ // mysqld with a server ID that is unique both among other BinlogConnections and
+@@ -142,8 +181,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
+ // streamEvents returns a channel on which events are streamed and a channel on
+ // which errors are propagated.
+ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.BinlogEvent, chan error) {
+-	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
+-	eventChan := make(chan mysql.BinlogEvent)
++	eventChan := make(chan mysql.BinlogEvent, EventQueueSize)
+ 	errChan := make(chan error)
+ 
+ 	// Start reading events.
+@@ -172,9 +210,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
+ 				return
+ 			}
+ 
+-			select {
+-			case eventChan <- event:
+-			case <-ctx.Done():
++			if !SendEvent(ctx, eventChan, event) {
+ 				return
+ 			}
+ 		}
+diff --git a/go/vt/proto/binlogdata/binlogdata.pb.go b/go/vt/proto/binlogdata/binlogdata.pb.go
+index 1429d52195..9e58ee26f5 100644
+--- a/go/vt/proto/binlogdata/binlogdata.pb.go
++++ b/go/vt/proto/binlogdata/binlogdata.pb.go
+@@ -2214,7 +2214,13 @@ type VStreamOptions struct {
+ 	// row streamer should not add a MAX_EXECUTION_TIME query hint.
+ 	NoTimeouts bool `protobuf:"varint,4,opt,name=no_timeouts,json=noTimeouts,proto3" json:"no_timeouts,omitempty"`
+ 	// Only stream events for these types. If not provided, the default behavior is to send all event types.
+-	EventTypes    []VEventType `protobuf:"varint,5,rep,packed,name=event_types,json=eventTypes,proto3,enum=binlogdata.VEventType" json:"event_types,omitempty"`
++	EventTypes []VEventType `protobuf:"varint,5,rep,packed,name=event_types,json=eventTypes,proto3,enum=binlogdata.VEventType" json:"event_types,omitempty"`
++	// In the replication phase, the stream may send several transactions in one response
++	// when more binlog events are already waiting to be processed.
++	CoalesceTransactions bool `protobuf:"varint,6,opt,name=coalesce_transactions,json=coalesceTransactions,proto3" json:"coalesce_transactions,omitempty"`
++	// In the copy phase, send the rows of each batch of copied rows in one ROW event with many
++	// row changes, instead of one ROW event per copied row.
++	BatchCopyRows bool `protobuf:"varint,7,opt,name=batch_copy_rows,json=batchCopyRows,proto3" json:"batch_copy_rows,omitempty"`
+ 	unknownFields protoimpl.UnknownFields
+ 	sizeCache     protoimpl.SizeCache
+ }
+@@ -2284,6 +2290,20 @@ func (x *VStreamOptions) GetEventTypes() []VEventType {
+ 	return nil
+ }
+ 
++func (x *VStreamOptions) GetCoalesceTransactions() bool {
++	if x != nil {
++		return x.CoalesceTransactions
++	}
++	return false
++}
++
++func (x *VStreamOptions) GetBatchCopyRows() bool {
++	if x != nil {
++		return x.BatchCopyRows
++	}
++	return false
++}
++
+ // VStreamRequest is the payload for VStreamer
+ type VStreamRequest struct {
+ 	state             protoimpl.MessageState `protogen:"open.v1"`
+@@ -3437,7 +3457,7 @@ const file_binlogdata_proto_rawDesc = "" +
+ 	"\vp_k_columns\x18\x03 \x03(\x03R\tpKColumns\x12#\n" +
+ 	"\x0ep_k_index_name\x18\x04 \x01(\tR\vpKIndexName\"A\n" +
+ 	"\rMinimalSchema\x120\n" +
+-	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xd9\x02\n" +
++	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xb6\x03\n" +
+ 	"\x0eVStreamOptions\x12'\n" +
+ 	"\x0finternal_tables\x18\x01 \x03(\tR\x0einternalTables\x12Z\n" +
+ 	"\x10config_overrides\x18\x02 \x03(\v2/.binlogdata.VStreamOptions.ConfigOverridesEntryR\x0fconfigOverrides\x12$\n" +
+@@ -3445,7 +3465,9 @@ const file_binlogdata_proto_rawDesc = "" +
+ 	"\vno_timeouts\x18\x04 \x01(\bR\n" +
+ 	"noTimeouts\x127\n" +
+ 	"\vevent_types\x18\x05 \x03(\x0e2\x16.binlogdata.VEventTypeR\n" +
+-	"eventTypes\x1aB\n" +
++	"eventTypes\x123\n" +
++	"\x15coalesce_transactions\x18\x06 \x01(\bR\x14coalesceTransactions\x12&\n" +
++	"\x0fbatch_copy_rows\x18\a \x01(\bR\rbatchCopyRows\x1aB\n" +
+ 	"\x14ConfigOverridesEntry\x12\x10\n" +
+ 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+ 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfd\x02\n" +
+diff --git a/go/vt/proto/binlogdata/binlogdata_vtproto.pb.go b/go/vt/proto/binlogdata/binlogdata_vtproto.pb.go
+index 027ac2d5bc..c4dbc0b3d1 100644
+--- a/go/vt/proto/binlogdata/binlogdata_vtproto.pb.go
++++ b/go/vt/proto/binlogdata/binlogdata_vtproto.pb.go
+@@ -586,6 +586,8 @@ func (m *VStreamOptions) CloneVT() *VStreamOptions {
+ 	}
+ 	r := new(VStreamOptions)
+ 	r.NoTimeouts = m.NoTimeouts
++	r.CoalesceTransactions = m.CoalesceTransactions
++	r.BatchCopyRows = m.BatchCopyRows
+ 	if rhs := m.InternalTables; rhs != nil {
+ 		tmpContainer := make([]string, len(rhs))
+ 		copy(tmpContainer, rhs)
+@@ -2549,6 +2551,26 @@ func (m *VStreamOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+ 		i -= len(m.unknownFields)
+ 		copy(dAtA[i:], m.unknownFields)
+ 	}
++	if m.BatchCopyRows {
++		i--
++		if m.BatchCopyRows {
++			dAtA[i] = 1
++		} else {
++			dAtA[i] = 0
++		}
++		i--
++		dAtA[i] = 0x38
++	}
++	if m.CoalesceTransactions {
++		i--
++		if m.CoalesceTransactions {
++			dAtA[i] = 1
++		} else {
++			dAtA[i] = 0
++		}
++		i--
++		dAtA[i] = 0x30
++	}
+ 	if len(m.EventTypes) > 0 {
+ 		var pksize2 int
+ 		for _, num := range m.EventTypes {
+@@ -4274,6 +4296,12 @@ func (m *VStreamOptions) SizeVT() (n int) {
+ 		}
+ 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
+ 	}
++	if m.CoalesceTransactions {
++		n += 2
++	}
++	if m.BatchCopyRows {
++		n += 2
++	}
+ 	n += len(m.unknownFields)
+ 	return n
+ }
+@@ -9354,6 +9382,46 @@ func (m *VStreamOptions) UnmarshalVT(dAtA []byte) error {
+ 			} else {
+ 				return fmt.Errorf("proto: wrong wireType = %d for field EventTypes", wireType)
+ 			}
++		case 6:
++			if wireType != 0 {
++				return fmt.Errorf("proto: wrong wireType = %d for field CoalesceTransactions", wireType)
++			}
++			var v int
++			for shift := uint(0); ; shift += 7 {
++				if shift >= 64 {
++					return protohelpers.ErrIntOverflow
++				}
++				if iNdEx >= l {
++					return io.ErrUnexpectedEOF
++				}
++				b := dAtA[iNdEx]
++				iNdEx++
++				v |= int(b&0x7F) << shift
++				if b < 0x80 {
++					break
++				}
++			}
++			m.CoalesceTransactions = bool(v != 0)
++		case 7:
++			if wireType != 0 {
++				return fmt.Errorf("proto: wrong wireType = %d for field BatchCopyRows", wireType)
++			}
++			var v int
++			for shift := uint(0); ; shift += 7 {
++				if shift >= 64 {
++					return protohelpers.ErrIntOverflow
++				}
++				if iNdEx >= l {
++					return io.ErrUnexpectedEOF
++				}
++				b := dAtA[iNdEx]
++				iNdEx++
++				v |= int(b&0x7F) << shift
++				if b < 0x80 {
++					break
++				}
++			}
++			m.BatchCopyRows = bool(v != 0)
+ 		default:
+ 			iNdEx = preIndex
+ 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+diff --git a/go/vt/proto/vtgate/vtgate.pb.go b/go/vt/proto/vtgate/vtgate.pb.go
+index 10239e362e..7ec6663295 100644
+--- a/go/vt/proto/vtgate/vtgate.pb.go
++++ b/go/vt/proto/vtgate/vtgate.pb.go
+@@ -1356,8 +1356,16 @@ type VStreamFlags struct {
+ 	// A random jitter of +/-10% is added to spread out reconnections.
+ 	// 0 means no maximum age.
+ 	MaxStreamAgeSeconds uint32 `protobuf:"varint,12,opt,name=max_stream_age_seconds,json=maxStreamAgeSeconds,proto3" json:"max_stream_age_seconds,omitempty"`
+-	unknownFields       protoimpl.UnknownFields
+-	sizeCache           protoimpl.SizeCache
++	// In the copy phase, send the rows of each batch of copied rows in one ROW event with many
++	// row changes, instead of one ROW event per copied row. Tablets that do not support it
++	// ignore it and send one ROW event per row.
++	BatchCopyRows bool `protobuf:"varint,13,opt,name=batch_copy_rows,json=batchCopyRows,proto3" json:"batch_copy_rows,omitempty"`
++	// Allow VTGate to send several transactions in one VStreamResponse when they are
++	// ready to be sent at the same time. Transactions are still complete (unless chunked)
++	// and in order. This lowers the CPU cost and the number of messages at high event rates.
++	CoalesceTransactions bool `protobuf:"varint,14,opt,name=coalesce_transactions,json=coalesceTransactions,proto3" json:"coalesce_transactions,omitempty"`
++	unknownFields        protoimpl.UnknownFields
++	sizeCache            protoimpl.SizeCache
+ }
+ 
+ func (x *VStreamFlags) Reset() {
+@@ -1474,6 +1482,20 @@ func (x *VStreamFlags) GetMaxStreamAgeSeconds() uint32 {
+ 	return 0
+ }
+ 
++func (x *VStreamFlags) GetBatchCopyRows() bool {
++	if x != nil {
++		return x.BatchCopyRows
++	}
++	return false
++}
++
++func (x *VStreamFlags) GetCoalesceTransactions() bool {
++	if x != nil {
++		return x.CoalesceTransactions
++	}
++	return false
++}
++
+ // VStreamRequest is the payload for VStream.
+ type VStreamRequest struct {
+ 	state      protoimpl.MessageState `protogen:"open.v1"`
+@@ -2219,7 +2241,7 @@ const file_vtgate_proto_rawDesc = "" +
+ 	"\x19ResolveTransactionRequest\x12,\n" +
+ 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x12\x12\n" +
+ 	"\x04dtid\x18\x02 \x01(\tR\x04dtid\"\x1c\n" +
+-	"\x1aResolveTransactionResponse\"\xc8\x04\n" +
++	"\x1aResolveTransactionResponse\"\xa5\x05\n" +
+ 	"\fVStreamFlags\x12#\n" +
+ 	"\rminimize_skew\x18\x01 \x01(\bR\fminimizeSkew\x12-\n" +
+ 	"\x12heartbeat_interval\x18\x02 \x01(\rR\x11heartbeatInterval\x12&\n" +
+@@ -2233,7 +2255,9 @@ const file_vtgate_proto_rawDesc = "" +
+ 	" exclude_keyspace_from_table_name\x18\n" +
+ 	" \x01(\bR\x1cexcludeKeyspaceFromTableName\x124\n" +
+ 	"\x16transaction_chunk_size\x18\v \x01(\x03R\x14transactionChunkSize\x123\n" +
+-	"\x16max_stream_age_seconds\x18\f \x01(\rR\x13maxStreamAgeSeconds\"\xf6\x01\n" +
++	"\x16max_stream_age_seconds\x18\f \x01(\rR\x13maxStreamAgeSeconds\x12&\n" +
++	"\x0fbatch_copy_rows\x18\r \x01(\bR\rbatchCopyRows\x123\n" +
++	"\x15coalesce_transactions\x18\x0e \x01(\bR\x14coalesceTransactions\"\xf6\x01\n" +
+ 	"\x0eVStreamRequest\x12,\n" +
+ 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x125\n" +
+ 	"\vtablet_type\x18\x02 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
+diff --git a/go/vt/proto/vtgate/vtgate_vtproto.pb.go b/go/vt/proto/vtgate/vtgate_vtproto.pb.go
+index 5411c198c0..103be85305 100644
+--- a/go/vt/proto/vtgate/vtgate_vtproto.pb.go
++++ b/go/vt/proto/vtgate/vtgate_vtproto.pb.go
+@@ -438,6 +438,8 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
+ 	r.ExcludeKeyspaceFromTableName = m.ExcludeKeyspaceFromTableName
+ 	r.TransactionChunkSize = m.TransactionChunkSize
+ 	r.MaxStreamAgeSeconds = m.MaxStreamAgeSeconds
++	r.BatchCopyRows = m.BatchCopyRows
++	r.CoalesceTransactions = m.CoalesceTransactions
+ 	if rhs := m.TablesToCopy; rhs != nil {
+ 		tmpContainer := make([]string, len(rhs))
+ 		copy(tmpContainer, rhs)
+@@ -1895,6 +1897,26 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+ 		i -= len(m.unknownFields)
+ 		copy(dAtA[i:], m.unknownFields)
+ 	}
++	if m.CoalesceTransactions {
++		i--
++		if m.CoalesceTransactions {
++			dAtA[i] = 1
++		} else {
++			dAtA[i] = 0
++		}
++		i--
++		dAtA[i] = 0x70
++	}
++	if m.BatchCopyRows {
++		i--
++		if m.BatchCopyRows {
++			dAtA[i] = 1
++		} else {
++			dAtA[i] = 0
++		}
++		i--
++		dAtA[i] = 0x68
++	}
+ 	if m.MaxStreamAgeSeconds != 0 {
+ 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.MaxStreamAgeSeconds))
+ 		i--
+@@ -2994,6 +3016,12 @@ func (m *VStreamFlags) SizeVT() (n int) {
+ 	if m.MaxStreamAgeSeconds != 0 {
+ 		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxStreamAgeSeconds))
+ 	}
++	if m.BatchCopyRows {
++		n += 2
++	}
++	if m.CoalesceTransactions {
++		n += 2
++	}
+ 	n += len(m.unknownFields)
+ 	return n
+ }
+@@ -6813,6 +6841,46 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
+ 					break
+ 				}
+ 			}
++		case 13:
++			if wireType != 0 {
++				return fmt.Errorf("proto: wrong wireType = %d for field BatchCopyRows", wireType)
++			}
++			var v int
++			for shift := uint(0); ; shift += 7 {
++				if shift >= 64 {
++					return protohelpers.ErrIntOverflow
++				}
++				if iNdEx >= l {
++					return io.ErrUnexpectedEOF
++				}
++				b := dAtA[iNdEx]
++				iNdEx++
++				v |= int(b&0x7F) << shift
++				if b < 0x80 {
++					break
++				}
++			}
++			m.BatchCopyRows = bool(v != 0)
++		case 14:
++			if wireType != 0 {
++				return fmt.Errorf("proto: wrong wireType = %d for field CoalesceTransactions", wireType)
++			}
++			var v int
++			for shift := uint(0); ; shift += 7 {
++				if shift >= 64 {
++					return protohelpers.ErrIntOverflow
++				}
++				if iNdEx >= l {
++					return io.ErrUnexpectedEOF
++				}
++				b := dAtA[iNdEx]
++				iNdEx++
++				v |= int(b&0x7F) << shift
++				if b < 0x80 {
++					break
++				}
++			}
++			m.CoalesceTransactions = bool(v != 0)
+ 		default:
+ 			iNdEx = preIndex
+ 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+diff --git a/go/vt/servenv/grpc_codec.go b/go/vt/servenv/grpc_codec.go
+index c9025c20a4..45427d4110 100644
+--- a/go/vt/servenv/grpc_codec.go
++++ b/go/vt/servenv/grpc_codec.go
+@@ -17,6 +17,9 @@ limitations under the License.
+ package servenv
+ 
+ import (
++	"math/bits"
++	"sync"
++
+ 	"google.golang.org/grpc/encoding"
+ 	"google.golang.org/grpc/mem"
+ 
+@@ -40,7 +43,65 @@ type Codec struct {
+ 
+ func (Codec) Name() string { return Name }
+ 
+-var defaultBufferPool = mem.DefaultBufferPool()
++// defaultBufferPool holds the buffers that messages are marshaled into and received
++// messages are assembled in. Both overwrite the whole requested length, so the buffers are
++// not zeroed. gRPC's default pool zeroes each buffer's whole capacity on every Get, and
++// only has tiers of 32KB and 1MB above 16KB: every message between 32KB and 1MB (e.g. every
++// full vstreamer packet or copy batch) cleared a 1MB buffer on both sides.
++var defaultBufferPool mem.BufferPool = newCodecBufferPool()
++
++const (
++	codecBufferPoolMinExponent = 8  // 256B
++	codecBufferPoolMaxExponent = 24 // 16MB
++)
++
++// codecBufferPool is a mem.BufferPool with a sub-pool for each power of two between
++// 2^codecBufferPoolMinExponent and 2^codecBufferPoolMaxExponent bytes, that returns
++// buffers without zeroing them. Larger buffers are allocated and dropped.
++type codecBufferPool struct {
++	pools [codecBufferPoolMaxExponent + 1]sync.Pool
++}
++
++func newCodecBufferPool() *codecBufferPool {
++	return &codecBufferPool{}
++}
++
++// exponent returns the exponent of the smallest pooled power of two >= size.
++func codecBufferExponent(size int) int {
++	if size <= 1<<codecBufferPoolMinExponent {
++		return codecBufferPoolMinExponent
++	}
++	return bits.Len(uint(size - 1))
++}
++
++// Get implements mem.BufferPool.
++func (p *codecBufferPool) Get(length int) *[]byte {
++	exp := codecBufferExponent(length)
++	if exp > codecBufferPoolMaxExponent {
++		buf := make([]byte, length)
++		return &buf
++	}
++	if buf, ok := p.pools[exp].Get().(*[]byte); ok {
++		*buf = (*buf)[:length]
++		return buf
++	}
++	buf := make([]byte, length, 1<<exp)
++	return &buf
++}
++
++// Put implements mem.BufferPool.
++func (p *codecBufferPool) Put(buf *[]byte) {
++	c := cap(*buf)
++	if c < 1<<codecBufferPoolMinExponent {
++		return
++	}
++	// The largest power of two <= c: a buffer only goes to a pool whose Get it can serve.
++	exp := bits.Len(uint(c)) - 1
++	if exp > codecBufferPoolMaxExponent {
++		return
++	}
++	p.pools[exp].Put(buf)
++}
+ 
+ func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
+ 	if m, ok := v.(vtprotoMessage); ok {
+diff --git a/go/vt/servenv/grpc_codec_test.go b/go/vt/servenv/grpc_codec_test.go
+new file mode 100644
+index 0000000000..be39184cb0
+--- /dev/null
++++ b/go/vt/servenv/grpc_codec_test.go
+@@ -0,0 +1,72 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package servenv
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"google.golang.org/grpc/mem"
++	"google.golang.org/protobuf/proto"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++func TestCodecBufferPool(t *testing.T) {
++	p := newCodecBufferPool()
++	for _, length := range []int{0, 1, 255, 256, 257, 4096, 40 << 10, 250_000, 1 << 20, (1 << 20) + 1, 20 << 20} {
++		buf := p.Get(length)
++		require.Len(t, *buf, length)
++		for i := range *buf {
++			(*buf)[i] = 1
++		}
++		p.Put(buf)
++		// Whatever buffer we get back, it has the requested length.
++		buf = p.Get(length)
++		require.Len(t, *buf, length)
++		p.Put(buf)
++	}
++	// A buffer is only reused for lengths it can hold.
++	small := p.Get(300)
++	assert.Equal(t, 512, cap(*small))
++	p.Put(small)
++	big := p.Get(513)
++	assert.GreaterOrEqual(t, cap(*big), 513)
++}
++
++func TestCodecRoundTrip(t *testing.T) {
++	c := &Codec{}
++	msg := &querypb.QueryResult{RowsAffected: 7, Rows: []*querypb.Row{{Lengths: []int64{3}, Values: make([]byte, 100_000)}}}
++	for i := range msg.Rows[0].Values {
++		msg.Rows[0].Values[i] = byte(i)
++	}
++	data, err := c.Marshal(msg)
++	require.NoError(t, err)
++	// Split the data into frames, as the transport does.
++	flat := data.Materialize()
++	data.Free()
++	var frames mem.BufferSlice
++	for len(flat) > 0 {
++		n := min(len(flat), 16<<10)
++		frames = append(frames, mem.SliceBuffer(flat[:n]))
++		flat = flat[n:]
++	}
++	got := &querypb.QueryResult{}
++	require.NoError(t, c.Unmarshal(frames, got))
++	assert.True(t, proto.Equal(msg, got))
++}
+diff --git a/go/vt/vtgate/vstream_coalesce_test.go b/go/vt/vtgate/vstream_coalesce_test.go
+new file mode 100644
+index 0000000000..fb17b94541
+--- /dev/null
++++ b/go/vt/vtgate/vstream_coalesce_test.go
+@@ -0,0 +1,161 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vtgate
++
++import (
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/stats"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
++)
++
++func TestCoalesceQueuedEvents(t *testing.T) {
++	coalesceFlags := &vtgatepb.VStreamFlags{CoalesceTransactions: true}
++	trx := func(gtid string, valueBytes int) []*binlogdatapb.VEvent {
++		return []*binlogdatapb.VEvent{
++			{Type: binlogdatapb.VEventType_BEGIN},
++			{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
++				RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: make([]byte, valueBytes)}}},
++			}},
++			{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Gtid: gtid}}}},
++			{Type: binlogdatapb.VEventType_COMMIT},
++		}
++	}
++	gtids := func(evs []*binlogdatapb.VEvent) []string {
++		var res []string
++		for _, ev := range evs {
++			if ev.Type == binlogdatapb.VEventType_VGTID {
++				res = append(res, ev.Vgtid.ShardGtids[0].Gtid)
++			}
++		}
++		return res
++	}
++
++	t.Run("merges the queued transactions in order", func(t *testing.T) {
++		vs := &vstream{eventCh: make(chan []*binlogdatapb.VEvent, vstreamEventQueueSize), flags: coalesceFlags}
++		first := trx("1", 10)
++		vs.eventCh <- trx("2", 10)
++		vs.eventCh <- trx("3", 10)
++		evs, closed := vs.coalesceQueuedEvents(first)
++		require.False(t, closed)
++		assert.Equal(t, []string{"1", "2", "3"}, gtids(evs))
++		assert.Len(t, evs, 12)
++		assert.Len(t, first, 4, "the first batch must not be modified")
++		assert.Empty(t, vs.eventCh)
++	})
++
++	t.Run("stops at the size limit", func(t *testing.T) {
++		vs := &vstream{eventCh: make(chan []*binlogdatapb.VEvent, vstreamEventQueueSize), flags: coalesceFlags}
++		vs.eventCh <- trx("2", maxCoalescedSendBytes)
++		vs.eventCh <- trx("3", 10)
++		evs, closed := vs.coalesceQueuedEvents(trx("1", 10))
++		require.False(t, closed)
++		assert.Equal(t, []string{"1", "2"}, gtids(evs))
++		require.Len(t, vs.eventCh, 1)
++	})
++
++	t.Run("reports a closed channel", func(t *testing.T) {
++		vs := &vstream{eventCh: make(chan []*binlogdatapb.VEvent, vstreamEventQueueSize), flags: coalesceFlags}
++		vs.eventCh <- trx("2", 10)
++		close(vs.eventCh)
++		evs, closed := vs.coalesceQueuedEvents(trx("1", 10))
++		require.True(t, closed)
++		assert.Equal(t, []string{"1", "2"}, gtids(evs))
++	})
++
++	t.Run("does nothing unless the client allows it", func(t *testing.T) {
++		vs := &vstream{eventCh: make(chan []*binlogdatapb.VEvent, vstreamEventQueueSize), flags: &vtgatepb.VStreamFlags{}}
++		vs.eventCh <- trx("2", 10)
++		evs, closed := vs.coalesceQueuedEvents(trx("1", 10))
++		require.False(t, closed)
++		assert.Equal(t, []string{"1"}, gtids(evs))
++		require.Len(t, vs.eventCh, 1)
++	})
++
++	t.Run("does nothing on an unbuffered channel", func(t *testing.T) {
++		vs := &vstream{eventCh: make(chan []*binlogdatapb.VEvent), flags: coalesceFlags}
++		evs, closed := vs.coalesceQueuedEvents(trx("1", 10))
++		require.False(t, closed)
++		assert.Equal(t, []string{"1"}, gtids(evs))
++	})
++}
++
++// skewEvent returns an event whose commit timestamp is secondsAgo seconds in the past, as
++// computeSkew sees it.
++func skewEvent(secondsAgo int64) *binlogdatapb.VEvent {
++	now := time.Now()
++	return &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: now.Unix() - secondsAgo, CurrentTime: now.UnixNano()}
++}
++
++func newSkewTestVStream(t *testing.T) *vstream {
++	if vstreamSkewDelayCount == nil {
++		vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
++			"Number of events that had to wait because the skew across shards was too high")
++	}
++	// Other tests expect the delay counter to start at 0.
++	t.Cleanup(vstreamSkewDelayCount.Reset)
++	return &vstream{timestamps: make(map[string]int64), vsm: &vstreamManager{}}
++}
++
++// TestComputeSkewDoesNotPauseStreamsCloseToTheLaggard checks that, when a skew is detected, a
++// stream that is not the laggard but within MaxSkew of it keeps going. It used to pause as well,
++// because the laggard's timestamp (lowestTS) was never set. If that stream is as slow as the
++// laggard, it can then never catch up, and all streams stay paused until the skew timeout.
++func TestComputeSkewDoesNotPauseStreamsCloseToTheLaggard(t *testing.T) {
++	vs := newSkewTestVStream(t)
++	require.False(t, vs.computeSkew("ks/a", skewEvent(100)))
++	require.False(t, vs.computeSkew("ks/b", skewEvent(100)))
++	// ks/c is far ahead of both: skew, and ks/c must pause.
++	require.True(t, vs.computeSkew("ks/c", skewEvent(0)))
++	require.Contains(t, []string{"ks/a", "ks/b"}, vs.laggard)
++	other := "ks/a"
++	if vs.laggard == "ks/a" {
++		other = "ks/b"
++	}
++	// The other slow stream is within MaxSkew of the laggard: it must not pause.
++	require.False(t, vs.computeSkew(other, skewEvent(99)))
++}
++
++// TestComputeSkewLaggardOvertakesPausedStream checks that when the laggard moves past a paused
++// stream (e.g. after a gap in its binlog timestamps), the paused streams are woken up and the
++// slowest stream becomes the laggard. The paused stream used to stay paused until the skew
++// timeout (10 minutes), since the skew could never be fixed while it was paused.
++func TestComputeSkewLaggardOvertakesPausedStream(t *testing.T) {
++	vs := newSkewTestVStream(t)
++	require.False(t, vs.computeSkew("ks/a", skewEvent(100)))
++	require.True(t, vs.computeSkew("ks/b", skewEvent(50)))
++	require.Equal(t, "ks/a", vs.laggard)
++	pausedCh := vs.skewCh
++
++	// ks/a jumps ahead of the paused ks/b: ks/b is woken up and becomes the laggard, and
++	// ks/a now waits for it.
++	require.True(t, vs.computeSkew("ks/a", skewEvent(10)))
++	select {
++	case <-pausedCh:
++	default:
++		require.Fail(t, "the paused streams were not woken up")
++	}
++	require.Equal(t, "ks/b", vs.laggard)
++	require.False(t, vs.computeSkew("ks/b", skewEvent(50)))
++}
+diff --git a/go/vt/vtgate/vstream_manager.go b/go/vt/vtgate/vstream_manager.go
+index 20f239806d..be85ebbfd1 100644
+--- a/go/vt/vtgate/vstream_manager.go
++++ b/go/vt/vtgate/vstream_manager.go
+@@ -272,7 +272,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
+ 		skewTimeoutSeconds:          maxSkewTimeoutSeconds,
+ 		timestamps:                  make(map[string]int64),
+ 		vsm:                         vsm,
+-		eventCh:                     make(chan []*binlogdatapb.VEvent),
++		eventCh:                     make(chan []*binlogdatapb.VEvent, vstreamEventQueueSize),
+ 		heartbeatInterval:           flags.GetHeartbeatInterval(),
+ 		ts:                          ts,
+ 		copyCompletedShard:          make(map[string]struct{}),
+@@ -483,6 +483,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
+ 				// there are no more events to send.
+ 				return
+ 			}
++			evs, closed := vs.coalesceQueuedEvents(evs)
+ 			if err := send(evs); err != nil {
+ 				log.Info(fmt.Sprintf("Error in vstream send events to client: %v", err))
+ 				vs.once.Do(func() {
+@@ -490,6 +491,9 @@ func (vs *vstream) sendEvents(ctx context.Context) {
+ 				})
+ 				return
+ 			}
++			if closed {
++				return
++			}
+ 			resetHeartbeat()
+ 		case t := <-heartbeat:
+ 			now := t.UnixNano()
+@@ -516,6 +520,63 @@ func (vs *vstream) sendEvents(ctx context.Context) {
+ 	}
+ }
+ 
++const (
++	// vstreamEventQueueSize is the number of event batches (usually one transaction each) that the
++	// shard streams can queue for the goroutine that sends them to the client.
++	vstreamEventQueueSize = 16
++	// maxCoalescedSendBytes bounds the (approximate) size of the events that coalesceQueuedEvents
++	// merges into one send to the client.
++	maxCoalescedSendBytes = 256 * 1024
++	// coalescedEventOverheadBytes approximates the size of an event without its row values.
++	coalescedEventOverheadBytes = 64
++)
++
++// coalesceQueuedEvents appends the event batches that are already queued in eventCh to evs, so
++// that they are sent to the client in one message rather than one message (and usually one
++// write syscall) per transaction, when the client allows it (VStreamFlags.CoalesceTransactions).
++// It never waits for more events, so it adds no latency. It
++// returns true if it found eventCh closed.
++func (vs *vstream) coalesceQueuedEvents(evs []*binlogdatapb.VEvent) ([]*binlogdatapb.VEvent, bool) {
++	if !vs.flags.GetCoalesceTransactions() || cap(vs.eventCh) == 0 {
++		return evs, false
++	}
++	size := approxEventsSize(evs)
++	merged := false
++	for size < maxCoalescedSendBytes {
++		select {
++		case more, ok := <-vs.eventCh:
++			if !ok {
++				return evs, true
++			}
++			if !merged {
++				// Don't append to the caller's slice.
++				evs = append(make([]*binlogdatapb.VEvent, 0, 2*(len(evs)+len(more))), evs...)
++				merged = true
++			}
++			evs = append(evs, more...)
++			size += approxEventsSize(more)
++		default:
++			return evs, false
++		}
++	}
++	return evs, false
++}
++
++// approxEventsSize is a cheap estimate of the serialized size of events: the row values plus a
++// fixed overhead per event.
++func approxEventsSize(evs []*binlogdatapb.VEvent) int {
++	size := 0
++	for _, ev := range evs {
++		size += coalescedEventOverheadBytes
++		if ev.RowEvent != nil {
++			for _, rc := range ev.RowEvent.RowChanges {
++				size += len(rc.Before.GetValues()) + len(rc.After.GetValues())
++			}
++		}
++	}
++	return size
++}
++
+ // startOneStream sets up one shard stream.
+ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.ShardGtid) {
+ 	vs.wg.Go(func() {
+@@ -573,10 +634,21 @@ func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) bool
+ 			maxTs = ts
+ 		}
+ 	}
++	// mustPause lets the streams that are within MaxSkew of the slowest one proceed.
++	vs.lowestTS = minTs
+ 	if vs.laggard != "" { // we are skewed, check if this event has fixed the skew
+ 		if (maxTs - minTs) <= MaxSkew {
+ 			vs.laggard = ""
+ 			close(vs.skewCh)
++		} else if vs.timestamps[vs.laggard] > minTs {
++			// The laggard has overtaken a stream that is paused, so that stream is now the
++			// slowest one. Wake the paused streams up and make the slowest stream the
++			// laggard, otherwise it would stay paused (and the skew unfixed) until the
++			// skew timeout.
++			log.Info(fmt.Sprintf("Skew persists, new laggard is %s, %+v", laggardStream, vs.timestamps))
++			close(vs.skewCh)
++			vs.laggard = laggardStream
++			vs.skewCh = make(chan bool)
+ 		}
+ 	} else {
+ 		if (maxTs - minTs) > MaxSkew { // check if we are skewed due to this event
+@@ -770,6 +842,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 		// cause copy resume cycles and in doing so adding additional operational complexity, chance for failure
+ 		// (not all clients support copy resume well if at all), and extended copy/sync execution time.
+ 		options.NoTimeouts = true
++		// The events of each transaction are grouped again below, so the tablet may send
++		// several transactions per message.
++		options.CoalesceTransactions = true
++		options.BatchCopyRows = vs.flags.GetBatchCopyRows()
+ 
+ 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
+ 		req := &binlogdatapb.VStreamRequest{
+@@ -813,13 +889,31 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 			default:
+ 			}
+ 
+-			aligningStreamsErr := fmt.Sprintf("error aligning streams across %s/%s", sgtid.Keyspace, sgtid.Shard)
+-			sendingEventsErr := "error sending event batch from tablet " + tabletAliasString
++			// These are only needed on errors: don't format them for every batch.
++			aligningStreamsErr := func(err error) error {
++				return vterrors.Wrapf(err, "error aligning streams across %s/%s", sgtid.Keyspace, sgtid.Shard)
++			}
++			sendingEventsErr := func(err error) error {
++				return vterrors.Wrap(err, "error sending event batch from tablet "+tabletAliasString)
++			}
++
++			if len(events) > 0 {
++				// Any event in the stream demonstrates liveness. Resetting the timer once per batch
++				// rather than once per event is equivalent.
++				vs.streamLivenessTimer.Reset(livenessTimeout)
++				// Likewise, the lag gauge only keeps the last value set, so set it once per batch.
++				last := events[len(events)-1]
++				defer vs.vsm.vstreamsLag.Set(labelValues, last.CurrentTime/1e9-last.Timestamp)
++			}
+ 
++			chunkingEnabled := vs.isChunkingEnabled()
+ 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
+ 			for i, event := range events {
+-				vs.streamLivenessTimer.Reset(livenessTimeout) // Any event in the stream demonstrates liveness
+-				accumulatedSize += event.SizeVT()
++				if chunkingEnabled {
++					// Only needed to decide when to chunk a transaction. SizeVT walks
++					// the whole event, including every row value.
++					accumulatedSize += event.SizeVT()
++				}
+ 				switch event.Type {
+ 				case binlogdatapb.VEventType_BEGIN:
+ 					// Mark the start of a transaction.
+@@ -839,7 +933,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 					eventss = append(eventss, sendevents)
+ 
+ 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+-						return vterrors.Wrap(err, aligningStreamsErr)
++						return aligningStreamsErr(err)
+ 					}
+ 
+ 					var sendErr error
+@@ -855,7 +949,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 					}
+ 					if sendErr != nil {
+ 						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr))
+-						return vterrors.Wrap(sendErr, sendingEventsErr)
++						return sendingEventsErr(sendErr)
+ 					}
+ 					eventss = nil //nolint:prealloc
+ 					sendevents = nil
+@@ -867,12 +961,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 					eventss = append(eventss, sendevents)
+ 
+ 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+-						return vterrors.Wrap(err, aligningStreamsErr)
++						return aligningStreamsErr(err)
+ 					}
+ 
+ 					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+ 						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll, on copy completed event: %v", sgtid.Keyspace, sgtid.Shard, err))
+-						return vterrors.Wrap(err, sendingEventsErr)
++						return sendingEventsErr(err)
+ 					}
+ 					eventss = nil
+ 					sendevents = nil
+@@ -881,7 +975,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 					// Otherwise they can accumulate indefinitely if there are no real events.
+ 					// TODO(sougou): figure out a model for this.
+ 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+-						return vterrors.Wrap(err, aligningStreamsErr)
++						return aligningStreamsErr(err)
+ 					}
+ 				case binlogdatapb.VEventType_JOURNAL:
+ 					journal := event.Journal
+@@ -903,7 +997,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 						eventss = append(eventss, sendevents)
+ 						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+ 							log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll, on journal event: %v", sgtid.Keyspace, sgtid.Shard, err))
+-							return vterrors.Wrap(err, sendingEventsErr)
++							return sendingEventsErr(err)
+ 						}
+ 						eventss = nil
+ 						sendevents = nil
+@@ -944,8 +1038,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 				default:
+ 					sendevents = append(sendevents, event)
+ 				}
+-				lag := event.CurrentTime/1e9 - event.Timestamp
+-				vs.vsm.vstreamsLag.Set(labelValues, lag)
+ 			}
+ 			if len(sendevents) != 0 {
+ 				eventss = append(eventss, sendevents)
+@@ -963,7 +1055,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 			if vs.isChunkingEnabled() && txLockHeld && len(eventss) > 0 {
+ 				if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
+ 					log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll at end of callback: %v", sgtid.Keyspace, sgtid.Shard, err))
+-					return vterrors.Wrap(err, sendingEventsErr)
++					return sendingEventsErr(err)
+ 				}
+ 				eventss = nil
+ 			}
+@@ -978,7 +1070,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
+ 				if len(eventss) > 0 {
+ 					if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
+ 						log.Info(fmt.Sprintf("vstream for %s/%s, error sending events after acquiring lock: %v", sgtid.Keyspace, sgtid.Shard, err))
+-						return vterrors.Wrap(err, sendingEventsErr)
++						return sendingEventsErr(err)
+ 					}
+ 					eventss = nil
+ 				}
+@@ -1029,7 +1121,26 @@ func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKe
+ 	if excludeKeyspaceFromTableName {
+ 		return event
+ 	}
+-	ev := event.CloneVT()
++	// Clone only the event and its RowEvent/FieldEvent shells: the row
++	// changes and fields are shared with the original, and never modified
++	// here. A deep clone copied every row value of every ROW event.
++	var ev *binlogdatapb.VEvent
++	switch {
++	case event.RowEvent != nil:
++		rowChanges := event.RowEvent.RowChanges
++		event.RowEvent.RowChanges = nil
++		ev = event.CloneVT()
++		event.RowEvent.RowChanges = rowChanges
++		ev.RowEvent.RowChanges = rowChanges
++	case event.FieldEvent != nil:
++		fields := event.FieldEvent.Fields
++		event.FieldEvent.Fields = nil
++		ev = event.CloneVT()
++		event.FieldEvent.Fields = fields
++		ev.FieldEvent.Fields = fields
++	default:
++		ev = event.CloneVT()
++	}
+ 	tableName := tableNameExtractor(ev)
+ 	*tableName = keyspace + "." + *tableName
+ 	return ev
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/copy.go b/go/vt/vttablet/tabletserver/vstreamer/copy.go
+index 7fe6c5c441..bcf42cc2b6 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/copy.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/copy.go
+@@ -50,7 +50,14 @@ func (uvs *uvstreamer) copy(ctx context.Context) error {
+ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) error {
+ 	log.Info("catchupAndCopy for " + tableName)
+ 	if !uvs.pos.IsZero() {
+-		if err := uvs.catchup(ctx); err != nil {
++		if !uvs.lastCopySnapshot.IsZero() && time.Since(uvs.lastCopySnapshot) < uvs.config.CatchupSkipMaxSnapshotAge {
++			// uvs.pos is the snapshot position of the previous table's copy, which is recent:
++			// the fastForward of the next copy replays the events since then, just as catchup
++			// would, without catchup's wait for the lag to be measured (up to a heartbeat or
++			// a CatchupRetryTime tick per table on an idle source).
++			log.Info("catchupAndCopy: skipping catchup, the last copy snapshot is recent")
++			uvs.vse.vstreamerCopyCatchupsSkipped.Add(1)
++		} else if err := uvs.catchup(ctx); err != nil {
+ 			log.Info(fmt.Sprintf("catchupAndCopy: catchup returned %v", err))
+ 			uvs.vse.errorCounts.Add("Catchup", 1)
+ 			return err
+@@ -105,6 +112,10 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
+ 			// Make sure vplayer returns before returning.
+ 			<-errch
+ 			return io.EOF
++		case <-uvs.lagUpdated:
++			// Re-check the lag as soon as the catchup stream has seen events,
++			// rather than on the next tick: each table copy used to wait for at
++			// least one full CatchupRetryTime here.
+ 		case <-tkr.C:
+ 		}
+ 	}
+@@ -128,8 +139,29 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
+ 	return nil
+ }
+ 
+-// send one RowEvent per row, followed by a LastPK (merged in VTGate with vgtid)
++// sendEventsForRows sends one RowEvent per row (or, with the BatchCopyRows option, one RowEvent
++// for all the rows), followed by a LastPK (merged in VTGate with vgtid).
+ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, rows *binlogdatapb.VStreamRowsResponse, qr *querypb.QueryResult) error {
++	if uvs.options.GetBatchCopyRows() {
++		// One ROW event for the whole batch.
++		rowChanges := make([]binlogdatapb.RowChange, len(rows.Rows))
++		rowEvent := &binlogdatapb.RowEvent{
++			TableName:  tableName,
++			Keyspace:   uvs.vse.keyspace,
++			Shard:      uvs.vse.shard,
++			RowChanges: make([]*binlogdatapb.RowChange, len(rows.Rows)),
++		}
++		for i, row := range rows.Rows {
++			rowChanges[i].After = row
++			rowEvent.RowChanges[i] = &rowChanges[i]
++		}
++		return uvs.sendRowsAndLastPK(tableName, []*binlogdatapb.VEvent{{
++			Type:     binlogdatapb.VEventType_ROW,
++			Keyspace: uvs.vse.keyspace,
++			Shard:    uvs.vse.shard,
++			RowEvent: rowEvent,
++		}}, qr)
++	}
+ 	evs := make([]*binlogdatapb.VEvent, 0, len(rows.Rows)+2)
+ 	for _, row := range rows.Rows {
+ 		ev := &binlogdatapb.VEvent{
+@@ -148,6 +180,12 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string,
+ 		}
+ 		evs = append(evs, ev)
+ 	}
++	return uvs.sendRowsAndLastPK(tableName, evs, qr)
++}
++
++// sendRowsAndLastPK sends the ROW events of a batch of copied rows followed by a LastPK
++// (merged in VTGate with vgtid) and a COMMIT.
++func (uvs *uvstreamer) sendRowsAndLastPK(tableName string, evs []*binlogdatapb.VEvent, qr *querypb.QueryResult) error {
+ 	lastPKEvent := &binlogdatapb.LastPKEvent{
+ 		TableLastPK: &binlogdatapb.TableLastPK{
+ 			TableName: tableName,
+@@ -216,6 +254,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
+ 	log.Info(fmt.Sprintf("Starting copyTable for %s, Filter: %s, LastPK: %v", tableName, filter, lastPK))
+ 	uvs.sendTestEvent("Copy Start " + tableName)
+ 
++	uvs.lastCopySnapshot = time.Now()
+ 	err := uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
+ 		select {
+ 		case <-ctx.Done():
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/engine.go b/go/vt/vttablet/tabletserver/vstreamer/engine.go
+index 813342a5fb..422ebb8ae6 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/engine.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/engine.go
+@@ -92,6 +92,8 @@ type Engine struct {
+ 	vstreamerCompressedTransactionsDecoded *stats.Counter
+ 	vstreamerPacketSize                    *stats.GaugeFunc
+ 	vstreamerNumPackets                    *stats.Counter
++	vstreamerTransactionsCoalesced         *stats.Counter
++	vstreamerCopyCatchupsSkipped           *stats.Counter
+ 	resultStreamerNumRows                  *stats.Counter
+ 	resultStreamerNumPackets               *stats.Counter
+ 	rowStreamerNumRows                     *stats.Counter
+@@ -136,6 +138,8 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
+ 		vstreamerCompressedTransactionsDecoded: env.Exporter().NewCounter("VStreamerCompressedTransactionsDecoded", "Count of compressed transactions (MySQL's binlog_transaction_compression=ON) decoded in the VStream API"),
+ 		vstreamerPacketSize:                    env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
+ 		vstreamerNumPackets:                    env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
++		vstreamerTransactionsCoalesced:         env.Exporter().NewCounter("VStreamerTransactionsCoalesced", "Number of transactions held to be sent together with the next ones"),
++		vstreamerCopyCatchupsSkipped:           env.Exporter().NewCounter("VStreamerCopyCatchupsSkipped", "Number of copy-phase catchups skipped because the previous copy snapshot was recent"),
+ 		resultStreamerNumPackets:               env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
+ 		resultStreamerNumRows:                  env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
+ 		rowStreamerNumPackets:                  env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go
+index 082517679e..29a8296c96 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/uvstreamer.go
+@@ -83,10 +83,18 @@ type uvstreamer struct {
+ 	// fast forward uses this to stop replicating upto the point of the last snapshot
+ 	stopPos replication.Position
+ 
++	// lastCopySnapshot is the time just before the row stream of the last table copy took
++	// its snapshot: uvs.pos is at most that old after the copy of a table.
++	lastCopySnapshot time.Time
++
+ 	// lastTimestampNs is the last timestamp seen so far.
+ 	lastTimestampNs       int64
+ 	ReplicationLagSeconds int64
+ 	mu                    sync.Mutex
++	// lagUpdated is signaled (without blocking) whenever ReplicationLagSeconds
++	// changes, so that catchup can re-check the lag as soon as events arrive
++	// instead of waiting for its next CatchupRetryTime tick.
++	lagUpdated chan struct{}
+ 
+ 	config *uvstreamerConfig
+ 
+@@ -98,6 +106,10 @@ type uvstreamer struct {
+ type uvstreamerConfig struct {
+ 	MaxReplicationLag time.Duration
+ 	CatchupRetryTime  time.Duration
++	// CatchupSkipMaxSnapshotAge: the catchup before copying a table is skipped if the snapshot of
++	// the previous table's copy is younger than this. The fastForward of the next table's copy
++	// then replays the same events that catchup would have.
++	CatchupSkipMaxSnapshotAge time.Duration
+ }
+ 
+ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
+@@ -106,8 +118,9 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se
+ ) *uvstreamer {
+ 	ctx, cancel := context.WithCancel(ctx)
+ 	config := &uvstreamerConfig{
+-		MaxReplicationLag: 1 * time.Nanosecond,
+-		CatchupRetryTime:  1 * time.Second,
++		MaxReplicationLag:         1 * time.Nanosecond,
++		CatchupRetryTime:          1 * time.Second,
++		CatchupSkipMaxSnapshotAge: 10 * time.Second,
+ 	}
+ 	send2 := func(evs []*binlogdatapb.VEvent) error {
+ 		vse.vstreamerEventsStreamed.Add(int64(len(evs)))
+@@ -135,6 +148,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se
+ 		inTablePKs:   tablePKs,
+ 		throttlerApp: throttlerApp,
+ 		options:      options,
++		lagUpdated:   make(chan struct{}, 1),
+ 	}
+ 
+ 	return uvs
+@@ -383,7 +397,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
+ 			return wrapError(err, curPos, uvs.vse)
+ 		}
+ 		uvs.pos = curPos
+-		vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(curPos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
++		vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(curPos), replication.EncodePosition(uvs.stopPos), uvs.send, replicatePhase, uvs.options)
+ 		if err := vs.refreshHistorianForStartup(uvs.ctx); err != nil {
+ 			return wrapError(err, curPos, uvs.vse)
+ 		}
+@@ -461,7 +475,7 @@ func (uvs *uvstreamer) Stream() error {
+ 	}
+ 	vs := uvs.vs
+ 	if vs == nil {
+-		vs = uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
++		vs = uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos), uvs.send, replicatePhase, uvs.options)
+ 		uvs.setVs(vs)
+ 	}
+ 	return vs.Stream()
+@@ -614,6 +628,10 @@ func (uvs *uvstreamer) getReplicationLagSeconds() int64 {
+ 
+ func (uvs *uvstreamer) setReplicationLagSeconds(sbm int64) {
+ 	uvs.mu.Lock()
+-	defer uvs.mu.Unlock()
+ 	uvs.ReplicationLagSeconds = sbm
++	uvs.mu.Unlock()
++	select {
++	case uvs.lagUpdated <- struct{}{}:
++	default:
++	}
+ }
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/uvstreamer_flaky_test.go b/go/vt/vttablet/tabletserver/vstreamer/uvstreamer_flaky_test.go
+index 1889b002f7..1319db84a3 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/uvstreamer_flaky_test.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/uvstreamer_flaky_test.go
+@@ -253,8 +253,11 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
+ 	}
+ 
+ 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
+-	numCopyEvents += 2                                    /* GTID + Event after all copy is done */
+-	numCatchupEvents := 4 * 5                             /* 3 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT */
++	numCopyEvents += 2 /* GTID + Event after all copy is done */
++	// The catchup before copying t2 and t3 is skipped (the previous copy snapshot is recent), so
++	// the fastforward of the next copy replays those events, and sends each table's FIELD event
++	// once instead of once in catchup and once more in fastforward.
++	numCatchupEvents := 4*5 - 2                           /* 3 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT, minus 2 repeated t1 FIELDs */
+ 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
+ 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
+ 	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 6 /* begin/field/2 inserts/gtid/commit */
+@@ -337,6 +340,7 @@ func resetMetrics(t *testing.T) {
+ 	engine.rowStreamerNumRows.Reset()
+ 	engine.vstreamerPhaseTimings.Reset()
+ 	engine.rowStreamerWaits.Reset()
++	engine.vstreamerCopyCatchupsSkipped.Reset()
+ }
+ 
+ func validateMetrics(t *testing.T) {
+@@ -344,7 +348,8 @@ func validateMetrics(t *testing.T) {
+ 	require.Equal(t, int64(0), engine.resultStreamerNumRows.Get())
+ 	require.Equal(t, int64(31), engine.rowStreamerNumRows.Get())
+ 	require.Equal(t, int64(3), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"])
+-	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"])
++	require.Equal(t, int64(0), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"])
++	require.Equal(t, int64(2), engine.vstreamerCopyCatchupsSkipped.Get())
+ 	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"])
+ 	require.Equal(t, int64(0), engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"])
+ }
+@@ -514,14 +519,13 @@ var expectedEvents = []string{
+ 	"type:BEGIN",
+ 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
+ 	"type:COMMIT",
++	fmt.Sprintf("type:OTHER gtid:\"%s t2\"", copyPhaseStart),
+ 	"type:BEGIN",
+ 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
+ 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
+ 	"type:GTID",
+ 	"type:COMMIT", // insert for t2 done along with t1 does not generate an event since t2 is not yet copied
+-	fmt.Sprintf("type:OTHER gtid:\"%s t2\"", copyPhaseStart),
+ 	"type:BEGIN",
+-	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
+ 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"12120\"}}}",
+ 	"type:GTID",
+ 	"type:COMMIT",
+@@ -543,14 +547,13 @@ var expectedEvents = []string{
+ 	"type:BEGIN",
+ 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\"} completed:true}",
+ 	"type:COMMIT",
++	fmt.Sprintf("type:OTHER gtid:\"%s t3\"", copyPhaseStart),
+ 	"type:BEGIN",
+ 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
+ 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:3 lengths:4 values:\"1101100\"}}}",
+ 	"type:GTID",
+ 	"type:COMMIT",
+-	fmt.Sprintf("type:OTHER gtid:\"%s t3\"", copyPhaseStart),
+ 	"type:BEGIN",
+-	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
+ 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"13130\"}}}",
+ 	"type:GTID",
+ 	"type:COMMIT",
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstream_batching_test.go b/go/vt/vttablet/tabletserver/vstreamer/vstream_batching_test.go
+new file mode 100644
+index 0000000000..dec0a18bcd
+--- /dev/null
++++ b/go/vt/vttablet/tabletserver/vstreamer/vstream_batching_test.go
+@@ -0,0 +1,174 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vstreamer
++
++import (
++	"context"
++	"fmt"
++	"io"
++	"strconv"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++)
++
++// TestVStreamCoalescesTransactions checks that with the CoalesceTransactions option, a stream
++// that is behind the binlog sends several complete transactions per send, in order.
++func TestVStreamCoalescesTransactions(t *testing.T) {
++	execStatements(t, []string{"create table coalesce_t(id int, val varbinary(128), primary key(id))"})
++	t.Cleanup(func() { execStatements(t, []string{"drop table coalesce_t"}) })
++	require.NoError(t, engine.se.Reload(t.Context()))
++
++	pos := primaryPosition(t)
++	const numTrx = 200
++	queries := make([]string, 0, numTrx)
++	for i := 1; i <= numTrx; i++ {
++		queries = append(queries, fmt.Sprintf("insert into coalesce_t values (%d, 'val%d')", i, i))
++	}
++	execStatements(t, queries)
++
++	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "coalesce_t", Filter: "select * from coalesce_t"}}}
++	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancel()
++	var ids []int
++	sends, maxTrxPerSend := 0, 0
++	err := engine.Stream(ctx, pos, nil, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
++		if sends == 0 {
++			// Let the binlog events queue up behind the first send.
++			time.Sleep(200 * time.Millisecond)
++		}
++		sends++
++		trx, rowsInTrx := 0, false
++		for _, ev := range evs {
++			switch ev.Type {
++			case binlogdatapb.VEventType_ROW:
++				for _, rc := range ev.RowEvent.RowChanges {
++					id, err := strconv.Atoi(string(rc.After.Values[:rc.After.Lengths[0]]))
++					require.NoError(t, err)
++					ids = append(ids, id)
++				}
++				rowsInTrx = true
++			case binlogdatapb.VEventType_COMMIT:
++				if rowsInTrx {
++					trx++
++				}
++				rowsInTrx = false
++			}
++		}
++		maxTrxPerSend = max(maxTrxPerSend, trx)
++		if len(ids) >= numTrx {
++			return io.EOF
++		}
++		return nil
++	}, &binlogdatapb.VStreamOptions{CoalesceTransactions: true})
++	requireNoErrorOrEOF(t, err)
++	require.Len(t, ids, numTrx)
++	for i, id := range ids {
++		require.Equal(t, i+1, id)
++	}
++	require.Greater(t, maxTrxPerSend, 1, "no send had more than one transaction")
++	require.Less(t, sends, numTrx)
++}
++
++// TestVStreamCopyBatchCopyRows checks that with the BatchCopyRows option, the copy phase sends
++// each batch of copied rows as one ROW event.
++func TestVStreamCopyBatchCopyRows(t *testing.T) {
++	execStatements(t, []string{"create table batch_copy_t(id int, val varbinary(128), primary key(id))"})
++	t.Cleanup(func() { execStatements(t, []string{"drop table batch_copy_t"}) })
++	const numRows = 10
++	queries := make([]string, 0, numRows)
++	for i := 1; i <= numRows; i++ {
++		queries = append(queries, fmt.Sprintf("insert into batch_copy_t values (%d, 'val%d')", i, i))
++	}
++	execStatements(t, queries)
++	require.NoError(t, engine.se.Reload(t.Context()))
++
++	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "batch_copy_t", Filter: "select * from batch_copy_t"}}}
++	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancel()
++	var rowEvents []*binlogdatapb.RowEvent
++	err := engine.Stream(ctx, "", nil, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
++		for _, ev := range evs {
++			switch ev.Type {
++			case binlogdatapb.VEventType_ROW:
++				rowEvents = append(rowEvents, ev.RowEvent)
++			case binlogdatapb.VEventType_COPY_COMPLETED:
++				return io.EOF
++			}
++		}
++		return nil
++	}, &binlogdatapb.VStreamOptions{BatchCopyRows: true})
++	requireNoErrorOrEOF(t, err)
++	// The table is small enough to be copied in one batch.
++	require.Len(t, rowEvents, 1)
++	require.Equal(t, "batch_copy_t", rowEvents[0].TableName)
++	require.Len(t, rowEvents[0].RowChanges, numRows)
++	for i, rc := range rowEvents[0].RowChanges {
++		require.Nil(t, rc.Before)
++		require.Equal(t, strconv.Itoa(i+1), string(rc.After.Values[:rc.After.Lengths[0]]))
++	}
++}
++
++// TestVStreamCopySkipsCatchupAfterRecentSnapshot checks that the copy of a table does not start
++// with a catchup when the snapshot of the previous table's copy is recent: the catchup waited for
++// at least a heartbeat on an idle source, for every table after the first.
++func TestVStreamCopySkipsCatchupAfterRecentSnapshot(t *testing.T) {
++	tables := []string{"skip_catchup_t1", "skip_catchup_t2", "skip_catchup_t3"}
++	filter := &binlogdatapb.Filter{}
++	for _, table := range tables {
++		execStatements(t, []string{
++			fmt.Sprintf("create table %s(id int, primary key(id))", table),
++			fmt.Sprintf("insert into %s values (1), (2)", table),
++		})
++		t.Cleanup(func() { execStatements(t, []string{"drop table " + table}) })
++		filter.Rules = append(filter.Rules, &binlogdatapb.Rule{Match: table, Filter: "select * from " + table})
++	}
++	require.NoError(t, engine.se.Reload(t.Context()))
++
++	skippedBefore := engine.vstreamerCopyCatchupsSkipped.Get()
++	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancel()
++	copied := map[string]bool{}
++	err := engine.Stream(ctx, "", nil, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
++		for _, ev := range evs {
++			if ev.Type == binlogdatapb.VEventType_ROW {
++				copied[ev.RowEvent.TableName] = true
++			}
++		}
++		if len(copied) == len(tables) {
++			return io.EOF
++		}
++		return nil
++	}, nil)
++	requireNoErrorOrEOF(t, err)
++	require.Len(t, copied, len(tables))
++	// The catchups before the second and the third table were skipped.
++	require.Equal(t, int64(len(tables)-1), engine.vstreamerCopyCatchupsSkipped.Get()-skippedBefore)
++}
++
++// requireNoErrorOrEOF accepts the io.EOF that a stream may return after its callback ended it.
++func requireNoErrorOrEOF(t *testing.T, err error) {
++	t.Helper()
++	if err != nil {
++		require.ErrorIs(t, err, io.EOF)
++	}
++}
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+index 0c35885efe..c449eaa6c6 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+@@ -58,6 +58,12 @@ const (
+ 	legacyLagQuery            = `show slave status`
+ 	hostQuery                 = `select @@hostname as hostname, @@port as port`
+ 	fullyThrottledMetricLabel = "FullyThrottledTimeout"
++
++	// replicatePhase is the phase of the vstreamer that streams the binlog after the copy phase
++	// (or without a copy phase).
++	replicatePhase = "replicate"
++	// maxCoalescedEvents bounds the number of events of the transactions held for coalescing.
++	maxCoalescedEvents = 1000
+ )
+ 
+ // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
+@@ -96,6 +102,9 @@ type vstreamer struct {
+ 	commitParent   int64
+ 	sequenceNumber int64
+ 	eventGTID      replication.GTID
++	// eventGTIDStr caches eventGTID.String(). It is computed at most once per GTID,
++	// and only when an event of that transaction is emitted.
++	eventGTIDStr string
+ 
+ 	phase   string
+ 	vse     *Engine
+@@ -107,6 +116,15 @@ type vstreamer struct {
+ 	markHistorianRefreshedForStartup func()
+ 
+ 	eventTypesToStream map[binlogdatapb.VEventType]bool
++
++	// coalesceTransactions allows sending several complete transactions in one send
++	// when more binlog events are already queued (see heldEvents in parseEvents).
++	coalesceTransactions bool
++
++	// ruleMatchCache caches ruleMatches per table name. Tables that do not match
++	// the filter get no cached plan, so without it every TableMap event of such a
++	// table re-evaluated all the rules, compiling each regexp rule again.
++	ruleMatchCache map[string]bool
+ }
+ 
+ // streamerPlan extends the original plan to also include
+@@ -165,6 +183,9 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
+ 		vse:          vse,
+ 		options:      options,
+ 		config:       config,
++		// Only the replication phase can send several transactions at once: catchup and
++		// fastforward (copy phase) must stop exactly at a position.
++		coalesceTransactions: phase == replicatePhase && options.GetCoalesceTransactions(),
+ 	}
+ }
+ 
+@@ -266,6 +287,38 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 		curSize        int
+ 	)
+ 
++	// throttledEvents can be read just like you would read from events
++	// throttledEvents pulls data from events, but throttles pulling data,
++	// which in turn blocks the BinlogConnection from pushing events to the channel
++	throttledEvents := make(chan mysql.BinlogEvent, binlog.EventQueueSize)
++
++	// With coalesceTransactions, heldEvents holds complete transactions that were not sent
++	// yet because more binlog events were already queued: they are sent along with the
++	// next events that are sent, or on their own as soon as the queue is empty. This sends
++	// several small transactions per message when the stream is behind (e.g. under a
++	// high write rate, or when catching up), and adds no latency otherwise.
++	var (
++		heldEvents []*binlogdatapb.VEvent
++		heldSize   int
++	)
++	send := func(vevents []*binlogdatapb.VEvent) error {
++		if len(heldEvents) > 0 {
++			vevents = append(heldEvents, vevents...)
++			heldEvents = nil
++			heldSize = 0
++		}
++		return vs.send(vevents)
++	}
++	flushHeldEvents := func() error {
++		if len(heldEvents) == 0 {
++			return nil
++		}
++		vevents := heldEvents
++		heldEvents = nil
++		heldSize = 0
++		return vs.send(vevents)
++	}
++
+ 	// Only the following patterns are possible:
+ 	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
+ 	// BEGIN->JOURNAL->GTID->COMMIT
+@@ -321,12 +374,21 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				bufferedEvents = append(bufferedEvents, vevent)
+ 			}
+ 			vevents := bufferedEvents
++			size := curSize
+ 			bufferedEvents = nil
+ 			curSize = 0
+ 			if len(vevents) == 0 {
+ 				return nil
+ 			}
+-			return vs.send(vevents)
++			if vevent.Type == binlogdatapb.VEventType_COMMIT && vs.coalesceTransactions && len(throttledEvents) > 0 &&
++				heldSize+size < vs.config.VStreamPacketSize && len(heldEvents)+len(vevents) < maxCoalescedEvents {
++				// More binlog events are already queued: send this transaction with the next ones.
++				heldEvents = append(heldEvents, vevents...)
++				heldSize += size
++				vs.vse.vstreamerTransactionsCoalesced.Add(1)
++				return nil
++			}
++			return send(vevents)
+ 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
+ 			if !shouldBuffer(vevent) {
+ 				return nil
+@@ -337,7 +399,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vevents := bufferedEvents
+ 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+ 				curSize = newSize
+-				return vs.send(vevents)
++				return send(vevents)
+ 			}
+ 			curSize += newSize
+ 			bufferedEvents = append(bufferedEvents, vevent)
+@@ -361,7 +423,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vevents := bufferedEvents
+ 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+ 				curSize = newSize
+-				return vs.send(vevents)
++				return send(vevents)
+ 			}
+ 			curSize += newSize
+ 			bufferedEvents = append(bufferedEvents, vevent)
+@@ -428,9 +490,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 			select {
+ 			case ev, ok := <-events:
+ 				if ok {
+-					select {
+-					case throttledEvents <- ev:
+-					case <-ctx.Done():
++					if !binlog.SendEvent(ctx, throttledEvents, ev) {
+ 						return
+ 					}
+ 				} else {
+@@ -442,22 +502,17 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 			}
+ 		}
+ 	}
+-	// throttledEvents can be read just like you would read from events
+-	// throttledEvents pulls data from events, but throttles pulling data,
+-	// which in turn blocks the BinlogConnection from pushing events to the channel
+-	throttledEvents := make(chan mysql.BinlogEvent)
+ 	go throttleEvents(throttledEvents)
+ 
++	// A heartbeat is sent after HeartbeatTime without anything else to do.
++	// Resetting hbTimer for every binlog event is costly at high event rates,
++	// so we only remember when the loop was last busy: when hbTimer fires
++	// early, it is re-armed for the remaining idle time.
++	lastBusy := time.Now()
+ 	for {
+-		hbTimer.Reset(HeartbeatTime)
+-		// Drain event if timer fired before reset.
+-		select {
+-		case <-hbTimer.C:
+-		default:
+-		}
+-
+ 		select {
+ 		case ev, ok := <-throttledEvents:
++			lastBusy = time.Now()
+ 			if !ok {
+ 				select {
+ 				case err := <-errs:
+@@ -482,7 +537,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 					return vterrors.Wrapf(err, "error sending event: %+v", vevent)
+ 				}
+ 			}
++			if len(heldEvents) > 0 && len(throttledEvents) == 0 {
++				// Caught up with the binlog: send the held transactions now.
++				if err := flushHeldEvents(); err != nil {
++					if err == io.EOF {
++						return nil
++					}
++					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
++					return vterrors.Wrap(err, "error sending held transactions")
++				}
++			}
+ 		case vs.vschema = <-vs.vevents:
++			lastBusy = time.Now()
+ 			select {
+ 			case err := <-errs:
+ 				return err
+@@ -501,6 +567,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 		case <-ctx.Done():
+ 			return nil
+ 		case <-hbTimer.C:
++			if idle := time.Since(lastBusy); idle < HeartbeatTime {
++				hbTimer.Reset(HeartbeatTime - idle)
++				continue
++			}
+ 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
+ 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
+ 				if err == io.EOF {
+@@ -509,6 +579,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vs.vse.errorCounts.Add("Send", 1)
+ 				return vterrors.Wrapf(err, "failed to send heartbeat event")
+ 			}
++			lastBusy = time.Now()
++			hbTimer.Reset(HeartbeatTime)
+ 		}
+ 	}
+ }
+@@ -590,6 +662,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 		vs.commitParent = commitParent
+ 		vs.sequenceNumber = sequenceNumber
+ 		vs.eventGTID = gtid
++		vs.eventGTIDStr = ""
+ 	case ev.IsXID():
+ 		if shouldSend(binlogdatapb.VEventType_GTID) {
+ 			vevents = append(vevents, &binlogdatapb.VEvent{
+@@ -785,7 +858,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 			vs.plans[id] = nil
+ 			return nil, nil
+ 		}
+-		if !ruleMatches(tm.Name, vs.filter) {
++		if !vs.tableMatchesFilter(tm.Name) {
+ 			return nil, nil
+ 		}
+ 
+@@ -885,9 +958,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 		}
+ 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
+ 	}
+-	vsEventGTIDString := ""
+-	if vs.eventGTID != nil {
+-		vsEventGTIDString = vs.eventGTID.String()
++	if len(vevents) == 0 {
++		// Most binlog events of a transaction (TABLE_MAP, rows filtered out, ...) produce no
++		// vevents: don't format the GTID for them.
++		return vevents, nil
++	}
++	if vs.eventGTID != nil && vs.eventGTIDStr == "" {
++		vs.eventGTIDStr = vs.eventGTID.String()
+ 	}
+ 	for _, vevent := range vevents {
+ 		vevent.Timestamp = int64(ev.Timestamp())
+@@ -895,12 +972,26 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 		vevent.SequenceNumber = vs.sequenceNumber
+ 		vevent.CommitParent = vs.commitParent
+ 		if vs.eventGTID != nil {
+-			vevent.EventGtid = vsEventGTIDString
++			vevent.EventGtid = vs.eventGTIDStr
+ 		}
+ 	}
+ 	return vevents, nil
+ }
+ 
++// tableMatchesFilter returns ruleMatches(tableName, vs.filter), memoized: the
++// filter does not change during the life of the stream.
++func (vs *vstreamer) tableMatchesFilter(tableName string) bool {
++	if matches, ok := vs.ruleMatchCache[tableName]; ok {
++		return matches
++	}
++	matches := ruleMatches(tableName, vs.filter)
++	if vs.ruleMatchCache == nil {
++		vs.ruleMatchCache = make(map[string]bool)
++	}
++	vs.ruleMatchCache[tableName] = matches
++	return matches
++}
++
+ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*binlogdatapb.VEvent, error) {
+ 	tableName := tm.Name
+ 	switch tableName {
+diff --git a/perf-findings/V5-scripts/ab.sh b/perf-findings/V5-scripts/ab.sh
+new file mode 100755
+index 0000000000..48afbdd282
+--- /dev/null
++++ b/perf-findings/V5-scripts/ab.sh
+@@ -0,0 +1,18 @@
++#!/bin/bash
++# A/B drain: for each round, for each arm (a bin dir suffix: base=/home/vt/bin, X=/home/vt/bin-V5X),
++# restart vtgate+vttablets with that arm (outside the lock), then drain the recorded backlog under the lock.
++# Usage: ab.sh TAG ROUNDS "ARMS" NCLIENTS [vsclient flags...]
++# The backlog is out/$TAG.start .. out/$TAG.stop; results are appended to out/ab.$TAG.txt.
++set -uo pipefail
++TAG=$1; R=$2; ARMS=$3; N=$4; shift 4
++O=/home/vt/perf/V5/out
++for r in $(seq 1 "$R"); do
++  for arm in $ARMS; do
++    if [[ $arm == base ]]; then B=/home/vt/bin; else B=/home/vt/bin-V5$arm; fi
++    [[ -x $B/vttablet ]] || { echo "no binaries in $B" >&2; exit 1; }
++    BIN=$B /home/vt/perf/V5/c.sh restart >/dev/null 2>&1
++    sleep 3
++    echo "=== $TAG arm=$arm round=$r flags=[$*]" | tee -a "$O/ab.$TAG.txt"
++    flock -o /home/vt/perf/bench.lock /home/vt/perf/V5/drain.sh "$arm" "$O/$TAG.start" "$O/$TAG.stop" "$N" "$@" | tee -a "$O/ab.$TAG.txt"
++  done
++done
+diff --git a/perf-findings/V5-scripts/abcopy.sh b/perf-findings/V5-scripts/abcopy.sh
+new file mode 100755
+index 0000000000..20d152665c
+--- /dev/null
++++ b/perf-findings/V5-scripts/abcopy.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# A/B VStream copy: for each round, for each arm (base=/home/vt/bin, X=/home/vt/bin-V5X; "X+batch" adds
++# -batch-copy), restart vtgate+vttablets with that arm (outside the lock), then copy under the lock.
++# Usage: abcopy.sh TAG ROUNDS "ARMS" [vsclient flags...]
++set -uo pipefail
++TAG=$1; R=$2; ARMS=$3; shift 3
++O=/home/vt/perf/V5/out
++for r in $(seq 1 "$R"); do
++  for arm in $ARMS; do
++    extra=()
++    a=${arm%+batch}
++    [[ $arm == *+batch ]] && extra=(-batch-copy)
++    if [[ $a == base ]]; then B=/home/vt/bin; else B=/home/vt/bin-V5$a; fi
++    [[ -x $B/vttablet ]] || { echo "no binaries in $B" >&2; exit 1; }
++    BIN=$B /home/vt/perf/V5/c.sh restart >/dev/null 2>&1
++    sleep 3
++    echo "=== $TAG arm=$arm round=$r flags=[$* ${extra[*]}]" | tee -a "$O/abcopy.$TAG.txt"
++    flock -o /home/vt/perf/bench.lock /home/vt/perf/V5/copy.sh "$arm" "$@" "${extra[@]}" | tee -a "$O/abcopy.$TAG.txt"
++  done
++done
+diff --git a/perf-findings/V5-scripts/ablive.sh b/perf-findings/V5-scripts/ablive.sh
+new file mode 100755
+index 0000000000..4ba3502b43
+--- /dev/null
++++ b/perf-findings/V5-scripts/ablive.sh
+@@ -0,0 +1,21 @@
++#!/bin/bash
++# A/B steady state: for each round and arm, restart once, then run live.sh cases (each locked).
++# Cases file lines: NAME NCLIENTS RATE SECONDS SYSBENCH_TEST [vsclient flags...]
++# Usage: ablive.sh NAME ROUNDS "ARMS" CASEFILE      Results: out/abl.NAME.CASENAME.log
++set -uo pipefail
++NAME=$1; R=$2; ARMS=$3; CASES=$4
++O=/home/vt/perf/V5/out
++for r in $(seq 1 "$R"); do
++  for arm in $ARMS; do
++    if [[ $arm == base ]]; then B=/home/vt/bin; else B=/home/vt/bin-V5$arm; fi
++    [[ -x $B/vttablet ]] || { echo "no binaries in $B" >&2; exit 1; }
++    BIN=$B /home/vt/perf/V5/c.sh restart >/dev/null 2>&1
++    sleep 3
++    while read -r cname n rate secs test flags; do
++      [[ -z $cname || $cname == \#* ]] && continue
++      echo "=== $cname arm=$arm round=$r flags=[$flags]" >> "$O/abl.$NAME.$cname.log"
++      # shellcheck disable=SC2086
++      flock -o /home/vt/perf/bench.lock /home/vt/perf/V5/live.sh "$arm" "$n" "$rate" "$secs" "$test" $flags >> "$O/abl.$NAME.$cname.log" 2>&1 < /dev/null
++    done < "$CASES"
++  done
++done
+diff --git a/perf-findings/V5-scripts/abmulti.sh b/perf-findings/V5-scripts/abmulti.sh
+new file mode 100755
+index 0000000000..f51d7c0b2b
+--- /dev/null
++++ b/perf-findings/V5-scripts/abmulti.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# A/B drains of several recorded backlogs: for each round and arm, restart vtgate+vttablets once (outside
++# the lock), then drain each backlog TAG (out/TAG.start..TAG.stop) in its own locked section.
++# Usage: abmulti.sh NAME ROUNDS "ARMS" "TAGS" NCLIENTS [vsclient flags...]
++# Results go to out/abm.NAME.TAG.log (one per backlog).
++set -uo pipefail
++NAME=$1; R=$2; ARMS=$3; TAGS=$4; N=$5; shift 5
++O=/home/vt/perf/V5/out
++for r in $(seq 1 "$R"); do
++  for arm in $ARMS; do
++    if [[ $arm == base ]]; then B=/home/vt/bin; else B=/home/vt/bin-V5$arm; fi
++    [[ -x $B/vttablet ]] || { echo "no binaries in $B" >&2; exit 1; }
++    BIN=$B /home/vt/perf/V5/c.sh restart >/dev/null 2>&1
++    sleep 3
++    for tag in $TAGS; do
++      echo "=== $tag arm=$arm round=$r flags=[$*]" >> "$O/abm.$NAME.$tag.log"
++      flock -o /home/vt/perf/bench.lock /home/vt/perf/V5/drain.sh "$arm" "$O/$tag.start" "$O/$tag.stop" "$N" "$@" >> "$O/abm.$NAME.$tag.log" 2>&1
++    done
++  done
++done
+diff --git a/perf-findings/V5-scripts/abopts.sh b/perf-findings/V5-scripts/abopts.sh
+new file mode 100755
+index 0000000000..bc21e8625d
+--- /dev/null
++++ b/perf-findings/V5-scripts/abopts.sh
+@@ -0,0 +1,21 @@
++#!/bin/bash
++# A/B of VStream options: for each round and arm, restart once, then run each case in its own locked section.
++# Cases are read from CASEFILE, one per line: NAME TAG NCLIENTS [vsclient flags...]
++# Usage: abopts.sh NAME ROUNDS "ARMS" CASEFILE      Results: out/abo.NAME.CASENAME.log
++set -uo pipefail
++NAME=$1; R=$2; ARMS=$3; CASES=$4
++O=/home/vt/perf/V5/out
++for r in $(seq 1 "$R"); do
++  for arm in $ARMS; do
++    if [[ $arm == base ]]; then B=/home/vt/bin; else B=/home/vt/bin-V5$arm; fi
++    [[ -x $B/vttablet ]] || { echo "no binaries in $B" >&2; exit 1; }
++    BIN=$B /home/vt/perf/V5/c.sh restart >/dev/null 2>&1
++    sleep 3
++    while read -r cname tag n flags; do
++      [[ -z $cname || $cname == \#* ]] && continue
++      echo "=== $cname arm=$arm round=$r flags=[$flags]" >> "$O/abo.$NAME.$cname.log"
++      # shellcheck disable=SC2086
++      flock -o /home/vt/perf/bench.lock /home/vt/perf/V5/drain.sh "$arm" "$O/$tag.start" "$O/$tag.stop" "$n" $flags >> "$O/abo.$NAME.$cname.log" 2>&1 < /dev/null
++    done < "$CASES"
++  done
++done
+diff --git a/perf-findings/V5-scripts/abstats.py b/perf-findings/V5-scripts/abstats.py
+new file mode 100644
+index 0000000000..0ff043b46c
+--- /dev/null
++++ b/perf-findings/V5-scripts/abstats.py
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""Summarize ab.sh / abcopy.sh logs: per arm, median and range of wall time and CPU per unit.
++
++Usage: abstats.py LOG [unit]   unit: trx (COMMIT events, default for drains) or rows.
++"""
++import re
++import statistics
++import sys
++from collections import defaultdict
++
++log = sys.argv[1]
++unit = sys.argv[2] if len(sys.argv) > 2 else "trx"
++runs = defaultdict(list)
++arm = None
++cur = {}
++for line in open(log):
++    m = re.match(r"=== \S+ arm=(\S+) round=(\d+)", line)
++    if m:
++        arm = m.group(1)
++        cur = {}
++        continue
++    if line.startswith("label="):
++        kv = dict(re.findall(r"(\S+?)=(\S+)", line))
++        cur.setdefault("clients", []).append(kv)
++    elif line.startswith("cpu wall="):
++        kv = dict(re.findall(r"(\S+?)=([\d.]+)s?", line))
++        c = cur.get("clients", [])
++        if not c:
++            continue
++        n = float(c[0]["COMMIT"]) if unit == "trx" else float(c[0]["rows"])
++        runs[arm].append({
++            "wall": max(float(x["elapsed"].rstrip("s")) for x in c),
++            "vtgate": float(kv["vtgate"]) / n * 1e6,
++            "vttablet": float(kv["vttablets"]) / n * 1e6,
++            "mysqld": float(kv["mysqlds"]) / n * 1e6,
++            "client": sum(float(x["client_cpu"].rstrip("s")) for x in c) / n * 1e6,
++            "resp": sum(float(x["responses"]) for x in c) / len(c),
++            "bytes": float(c[0]["bytes"]) / n,
++        })
++
++print(f"{'arm':10} {'n':>2} {'wall s':>18} {'vtgate us/'+unit:>22} {'vttablets us/'+unit:>22} {'client us/'+unit:>20} {'responses':>10} {'B/'+unit:>7}")
++for arm, rs in runs.items():
++    def f(k, fmt="%.2f"):
++        v = [r[k] for r in rs]
++        return (fmt % statistics.median(v)) + " [" + (fmt % min(v)) + "-" + (fmt % max(v)) + "]"
++    print(f"{arm:10} {len(rs):>2} {f('wall'):>18} {f('vtgate'):>22} {f('vttablet'):>22} {f('client'):>20} {statistics.median([r['resp'] for r in rs]):>10.0f} {statistics.median([r['bytes'] for r in rs]):>7.0f}")
+diff --git a/perf-findings/V5-scripts/c.sh b/perf-findings/V5-scripts/c.sh
+new file mode 100755
+index 0000000000..da8e19657e
+--- /dev/null
++++ b/perf-findings/V5-scripts/c.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Run the V5 harness as the vt user.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=30000 BIN=${BIN:-/home/vt/bin} \
++  SHARDS="${SHARDS:--80 80-}" TABLES=${TABLES:-4} TABLE_SIZE=${TABLE_SIZE:-250000} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/perf/V5/cluster.sh "$@"
+diff --git a/perf-findings/V5-scripts/cases-4s.txt b/perf-findings/V5-scripts/cases-4s.txt
+new file mode 100644
+index 0000000000..51b80038dc
+--- /dev/null
++++ b/perf-findings/V5-scripts/cases-4s.txt
+@@ -0,0 +1,3 @@
++# name tag nclients flags
++wo wo4s 1
++skew wo4s 1 -minimize-skew -timeout 3m
+diff --git a/perf-findings/V5-scripts/cases-fin.txt b/perf-findings/V5-scripts/cases-fin.txt
+new file mode 100644
+index 0000000000..0976e95397
+--- /dev/null
++++ b/perf-findings/V5-scripts/cases-fin.txt
+@@ -0,0 +1,3 @@
++# name tag nclients flags
++nocoal wo4s 1
++coal wo4s 1 -coalesce
+diff --git a/perf-findings/V5-scripts/cases-live.txt b/perf-findings/V5-scripts/cases-live.txt
+new file mode 100644
+index 0000000000..1131ad899f
+--- /dev/null
++++ b/perf-findings/V5-scripts/cases-live.txt
+@@ -0,0 +1,3 @@
++# name nclients rate seconds test flags
++wo1 1 400 30 oltp_write_only
++wo4 4 400 30 oltp_write_only
+diff --git a/perf-findings/V5-scripts/cases-opts.txt b/perf-findings/V5-scripts/cases-opts.txt
+new file mode 100644
+index 0000000000..8e6b529829
+--- /dev/null
++++ b/perf-findings/V5-scripts/cases-opts.txt
+@@ -0,0 +1,6 @@
++# name tag nclients flags
++filtered wo 1 -tables sbtest1
++consumers4 wo 4
++skew wo 1 -minimize-skew
++chunk u100 1 -chunk-size 65536
++excludeks wo 1 -exclude-ks
+diff --git a/perf-findings/V5-scripts/cluster.sh b/perf-findings/V5-scripts/cluster.sh
+new file mode 100755
+index 0000000000..a24266b942
+--- /dev/null
++++ b/perf-findings/V5-scripts/cluster.sh
+@@ -0,0 +1,283 @@
++#!/bin/bash
++# Local Vitess cluster for performance profiling.
++#
++# Usage (run as the unprivileged `vt` user, e.g. `runuser -u vt -- env BASE=20000 ./cluster.sh up`):
++#   cluster.sh up        start etcd, vtctld, mysqld+vttablet per tablet, vtgate; elect primaries; load schema/vschema
++#   cluster.sh down      stop everything and delete the data dir
++#   cluster.sh status    show processes and tablets
++#   cluster.sh env       print the ports of this cluster
++#   cluster.sh prepare   (re)load sysbench data through vtgate: TABLES tables x TABLE_SIZE rows (default 100000)
++#   cluster.sh cpu       print cumulative CPU seconds (user+sys) per process: vtgate, vttablet_<uid>, mysqld_<uid>
++#                        (diff two snapshots around a run to get CPU per query)
++#   cluster.sh sb ARGS   run sysbench against vtgate with the right connection flags, e.g.
++#                        cluster.sh sb oltp_point_select --threads=8 --time=30 run
++#
++# Environment:
++#   BASE      port base (default 20000). Use different bases (20000, 30000) for concurrent clusters.
++#   NAME      cluster name / data dir suffix (default c$BASE)
++#   KEYSPACE  keyspace name (default sbtest)
++#   SHARDS    space separated shard list (default "-80 80-"; use "0" for unsharded)
++#   REPLICAS  replicas per shard in addition to the primary (default 0)
++#   TABLES    number of sysbench tables to declare in the vschema (default 4)
++#   VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS  extra flags
++#   BIN       directory with the Vitess binaries (default /home/vt/bin)
++#
++# Ports (relative to BASE): etcd +10/+11, vtctld web +20 grpc +21, vtgate web +1 grpc +2 mysql +3,
++# tablet i (0-based): web +100+i, grpc +200+i, mysqld +400+i.
++# pprof is available at http://localhost:<web port>/debug/pprof/ on vtgate and every vttablet.
++
++set -euo pipefail
++
++BASE=${BASE:-30000}
++NAME=${NAME:-c$BASE}
++KEYSPACE=${KEYSPACE:-sbtest}
++SHARDS=${SHARDS:-"-80 80-"}
++REPLICAS=${REPLICAS:-0}
++TABLES=${TABLES:-4}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:$PATH"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++# tablet index -> uid; uids are unique per cluster (VTDATAROOT is per cluster).
++tablet_uid() { echo $((100 + $1)); }
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOF'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOF
++}
++
++start_tablet() {
++  local i=$1 shard=$2 uid alias
++  uid=$(tablet_uid "$i"); printf -v alias '%s-%010d' "$CELL" "$uid"
++  # shellcheck disable=SC2086
++  vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$KEYSPACE" --init-shard "$shard" \
++    --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++    --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++    --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++    ${VTTABLET_EXTRA_FLAGS:-} >>"$LOGDIR/vttablet_$uid.log" 2>&1 &
++}
++
++start_vtgate() {
++  # shellcheck disable=SC2086
++  vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY,REPLICA \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >>"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  for _ in $(seq 1 100); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select 1' "$KEYSPACE" >/dev/null 2>&1 && break
++    sleep 0.3
++  done
++}
++
++# Restart vtgate and all vttablets (mysqld kept) with the binaries in $BIN.
++restart() {
++  if [[ -f $VTDATAROOT/vtgate.pid ]]; then
++    local p; p=$(cat "$VTDATAROOT/vtgate.pid"); kill "$p" 2>/dev/null || true
++    while kill -0 "$p" 2>/dev/null; do sleep 0.2; done
++  fi
++  local f pids=()
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && pids+=("$(cat "$f")"); done
++  for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done
++  for p in "${pids[@]}"; do while kill -0 "$p" 2>/dev/null; do sleep 0.2; done; done
++  local i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do start_tablet "$i" "$shard"; i=$((i + 1)); done
++  done
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do wait_http $((BASE + 100 + i)); i=$((i + 1)); done
++  done
++  for _ in $(seq 1 100); do
++    [[ $(vtctldclient GetTablets --keyspace "$KEYSPACE" 2>/dev/null | grep -c ' primary ') -ge $(echo $SHARDS | wc -w) ]] && break
++    sleep 0.3
++  done
++  start_vtgate
++}
++
++purge_binlogs() {
++  local age=${1:-120}
++  for d in "$VTDATAROOT"/vt_*; do
++    mysql -S "$d/mysql.sock" -u vt_dba -e "FLUSH BINARY LOGS; PURGE BINARY LOGS BEFORE NOW() - INTERVAL $age SECOND;" 2>&1 | grep -v Warning || true
++  done
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  vtctldclient CreateKeyspace --durability-policy=none "$KEYSPACE" >/dev/null 2>&1 || true
++
++  local i=0 pids=()
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid; uid=$(tablet_uid $i)
++      mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++        --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++      pids+=($!)
++      i=$((i + 1))
++    done
++  done
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do start_tablet "$i" "$shard"; i=$((i + 1)); done
++  done
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do wait_http $((BASE + 100 + i)); i=$((i + 1)); done
++  done
++
++  # Elect the first tablet of every shard as primary.
++  i=0
++  for shard in $SHARDS; do
++    local alias; printf -v alias '%s-%010d' "$CELL" "$(tablet_uid $i)"
++    vtctldclient PlannedReparentShard "$KEYSPACE/$shard" --new-primary "$alias" >/dev/null
++    i=$((i + REPLICAS + 1))
++  done
++
++  load_schema
++
++  start_vtgate
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables=""
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  vtctldclient ApplySchema --sql "$sql" "$KEYSPACE" >/dev/null
++  if [[ $SHARDS == "0" ]]; then
++    vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$KEYSPACE" >/dev/null
++  else
++    vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$KEYSPACE" >/dev/null
++  fi
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  cat <<EOF
++cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspace $KEYSPACE shards [$SHARDS] replicas/shard $REPLICAS
++  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root $KEYSPACE
++  vtgate web/pprof: http://localhost:$VTGATE_WEB/debug/pprof/
++  vtctldclient: vtctldclient --server localhost:$VTCTLD_GRPC
++  tablet i: web/pprof $((BASE + 100))+i, grpc $((BASE + 200))+i, mysqld $((BASE + 400))+i (socket $VTDATAROOT/vt_<uid>/mysql.sock, user vt_dba)
++EOF
++}
++
++SB_ARGS() {
++  echo "--db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=$VTGATE_MYSQL --mysql-user=root --mysql-db=$KEYSPACE --tables=$TABLES --table-size=${TABLE_SIZE:-100000} --auto_inc=off"
++}
++
++prepare() {
++  for t in $(seq 1 "$TABLES"); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root "$KEYSPACE" -e "DROP TABLE IF EXISTS sbtest$t"
++  done
++  # shellcheck disable=SC2046
++  sysbench $(SB_ARGS) oltp_read_write --threads=4 prepare
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck; tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++status() {
++  env_info
++  vtctldclient GetTablets 2>/dev/null || true
++}
++
++case "${1:-}" in
++  up) up ;;
++  down) down ;;
++  status) status ;;
++  env) env_info ;;
++  prepare) prepare ;;
++  restart) restart ;;
++  purge-binlogs) purge_binlogs "${2:-120}" ;;
++  vtctldclient) shift; vtctldclient "$@" ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  sb) shift; # shellcheck disable=SC2046
++      sysbench $(SB_ARGS) "$@" ;;
++  *) echo "usage: $0 up|down|status|env" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/V5-scripts/copy.sh b/perf-findings/V5-scripts/copy.sh
+new file mode 100755
+index 0000000000..bec2f272fa
+--- /dev/null
++++ b/perf-findings/V5-scripts/copy.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++# Full-table-copy via vtgate VStream (empty GTID), timed until the final COPY_COMPLETED.
++# Usage: copy.sh LABEL [vsclient flags...]
++set -uo pipefail
++L=$1; shift
++C=/home/vt/perf/V5/c.sh
++before=$($C cpu | tr '\n' ' ')
++t0=$(date +%s.%N)
++/home/vt/perf/V5/bin/vsclient -mode copy -label "$L" -quiet -timeout 20m "$@"
++t1=$(date +%s.%N)
++after=$($C cpu | tr '\n' ' ')
++python3 /home/vt/perf/V5/cpudiff.py "$before" "$after" "$t0" "$t1"
++echo "uptime: $(uptime)"
+diff --git a/perf-findings/V5-scripts/cpudiff.py b/perf-findings/V5-scripts/cpudiff.py
+new file mode 100644
+index 0000000000..016eccd2d5
+--- /dev/null
++++ b/perf-findings/V5-scripts/cpudiff.py
+@@ -0,0 +1,12 @@
++import sys
++
++b = sys.argv[1].split()
++a = sys.argv[2].split()
++bd = dict(zip(b[0::2], map(float, b[1::2])))
++ad = dict(zip(a[0::2], map(float, a[1::2])))
++d = {k: ad[k] - bd.get(k, 0) for k in ad}
++vtt = sum(v for k, v in d.items() if k.startswith('vttablet'))
++my = sum(v for k, v in d.items() if k.startswith('mysqld'))
++print("cpu wall=%.2fs vtgate=%.2f vttablets=%.2f mysqlds=%.2f  %s" % (
++    float(sys.argv[4]) - float(sys.argv[3]), d.get('vtgate', 0), vtt, my,
++    ' '.join('%s=%.2f' % (k, v) for k, v in sorted(d.items()))))
+diff --git a/perf-findings/V5-scripts/drain.sh b/perf-findings/V5-scripts/drain.sh
+new file mode 100755
+index 0000000000..146a93d6eb
+--- /dev/null
++++ b/perf-findings/V5-scripts/drain.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# Drain a recorded backlog through vtgate VStream and print the client summary plus CPU seconds per process.
++# Usage: drain.sh LABEL STARTFILE STOPFILE NCLIENTS [vsclient flags...]
++set -uo pipefail
++L=$1; S=$2; E=$3; N=$4; shift 4
++C=/home/vt/perf/V5/c.sh
++before=$($C cpu | tr '\n' ' ')
++t0=$(date +%s.%N)
++pids=()
++for i in $(seq 1 "$N"); do
++  /home/vt/perf/V5/bin/vsclient -mode drain -start "$S" -stop "$E" -label "$L#$i" -quiet "$@" > /home/vt/perf/V5/out/drain.$i.txt &
++  pids+=($!)
++done
++for p in "${pids[@]}"; do wait "$p"; done
++t1=$(date +%s.%N)
++after=$($C cpu | tr '\n' ' ')
++for i in $(seq 1 "$N"); do cat /home/vt/perf/V5/out/drain.$i.txt; done
++python3 /home/vt/perf/V5/cpudiff.py "$before" "$after" "$t0" "$t1"
++echo "uptime: $(uptime)"
+diff --git a/perf-findings/V5-scripts/gen.sh b/perf-findings/V5-scripts/gen.sh
+new file mode 100755
+index 0000000000..8135aef86a
+--- /dev/null
++++ b/perf-findings/V5-scripts/gen.sh
+@@ -0,0 +1,18 @@
++#!/bin/bash
++# Generate a binlog backlog directly on every shard primary's mysqld.
++# Usage: gen.sh WORKLOAD EVENTS_PER_SHARD   (WORKLOAD: write_only | update_non_index | upd100)
++set -euo pipefail
++W=$1; N=$2
++D=/home/vt/perf/c30000
++pids=()
++for s in $D/vt_*/mysql.sock; do
++  case $W in
++    write_only) T=oltp_write_only ;;
++    update_non_index) T=oltp_update_non_index ;;
++    upd100) T=/home/vt/perf/V5/upd100.lua ;;
++  esac
++  sysbench --db-driver=mysql --mysql-socket=$s --mysql-user=vt_dba --mysql-db=vt_sbtest --tables=4 --table-size=250000 \
++    --threads=4 --events=$N --time=0 $T run >/dev/null 2>&1 &
++  pids+=($!)
++done
++for p in "${pids[@]}"; do wait $p; done
+diff --git a/perf-findings/V5-scripts/live.sh b/perf-findings/V5-scripts/live.sh
+new file mode 100755
+index 0000000000..46277aefca
+--- /dev/null
++++ b/perf-findings/V5-scripts/live.sh
+@@ -0,0 +1,28 @@
++#!/bin/bash
++# Steady-state CDC under a fixed-rate sysbench load through vtgate: N VStream consumers from "current"
++# (the first one also inserts probe rows every 50 ms and reports the commit->receive latency),
++# CPU seconds per process over the run.
++# Usage: live.sh LABEL NCLIENTS RATE SECONDS SBTEST [vsclient flags...]
++set -uo pipefail
++L=$1; N=$2; RATE=$3; SECS=$4; T=$5; shift 5
++C=/home/vt/perf/V5/c.sh
++O=/home/vt/perf/V5/out
++pids=()
++for i in $(seq 1 "$N"); do
++  PROBE=""
++  if [[ $i == 1 ]]; then PROBE="-probe-table v5probe -probe-base $(( $(date +%s%N) / 1000 ))"; fi
++  # shellcheck disable=SC2086
++  /home/vt/perf/V5/bin/vsclient -mode live -duration $((SECS + 4))s -label "$L#$i" -quiet $PROBE "$@" > "$O/live.$i.txt" &
++  pids+=($!)
++done
++sleep 2
++before=$($C cpu | tr '\n' ' ')
++t0=$(date +%s.%N)
++$C sb "$T" --threads=8 --time="$SECS" --rate="$RATE" --report-interval=0 run 2>&1 | grep -E 'transactions:|queries:|avg:|95th' | tr -s ' ' | tr '\n' ' '
++echo
++t1=$(date +%s.%N)
++after=$($C cpu | tr '\n' ' ')
++for p in "${pids[@]}"; do wait "$p"; done
++for i in $(seq 1 "$N"); do cat "$O/live.$i.txt"; done
++python3 /home/vt/perf/V5/cpudiff.py "$before" "$after" "$t0" "$t1"
++echo "uptime: $(uptime)"
+diff --git a/perf-findings/V5-scripts/livestats.py b/perf-findings/V5-scripts/livestats.py
+new file mode 100644
+index 0000000000..117dc0ae74
+--- /dev/null
++++ b/perf-findings/V5-scripts/livestats.py
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""Summarize ablive.sh logs: per arm, sysbench trx/s, probe latency, CPU us per sysbench transaction."""
++import re
++import statistics
++import sys
++from collections import defaultdict
++
++runs = defaultdict(list)
++arm = None
++cur = None
++for line in open(sys.argv[1]):
++    m = re.match(r"=== \S+ arm=(\S+) round=(\d+)", line)
++    if m:
++        arm = m.group(1)
++        cur = {"clients": []}
++        continue
++    if "transactions:" in line:
++        m = re.search(r"transactions: (\d+) \(([\d.]+) per sec", line)
++        cur["trx"] = float(m.group(1))
++        cur["tps"] = float(m.group(2))
++        m = re.search(r"avg: ([\d.]+)", line)
++        cur["sb_avg"] = float(m.group(1)) if m else 0
++        m = re.search(r"95th percentile: ([\d.]+)", line)
++        cur["sb_p95"] = float(m.group(1)) if m else 0
++    elif line.startswith("label="):
++        cur["clients"].append(dict(re.findall(r"(\S+?)=(\S+)", line)))
++    elif line.startswith("cpu wall=") and cur and "trx" in cur:
++        kv = dict(re.findall(r"(\S+?)=([\d.]+)s?", line))
++        n = cur["trx"]
++        c0 = cur["clients"][0] if cur["clients"] else {}
++        runs[arm].append({
++            "tps": cur["tps"], "sb_avg": cur["sb_avg"], "sb_p95": cur["sb_p95"],
++            "vtgate": float(kv["vtgate"]) / n * 1e6, "vttablet": float(kv["vttablets"]) / n * 1e6,
++            "mysqld": float(kv["mysqlds"]) / n * 1e6,
++            "p50": float(c0.get("probe_p50_ms", "nan")), "p99": float(c0.get("probe_p99_ms", "nan")),
++            "pmax": float(c0.get("probe_max_ms", "nan")),
++        })
++
++cols = ["tps", "sb_avg", "sb_p95", "vtgate", "vttablet", "mysqld", "p50", "p99", "pmax"]
++print("arm        n " + " ".join(f"{c:>20}" for c in cols))
++for arm, rs in runs.items():
++    out = []
++    for c in cols:
++        v = [r[c] for r in rs]
++        out.append(f"{statistics.median(v):.1f} [{min(v):.1f}-{max(v):.1f}]")
++    print(f"{arm:10} {len(rs)} " + " ".join(f"{o:>20}" for o in out))
+diff --git a/perf-findings/V5-scripts/mkmany.sh b/perf-findings/V5-scripts/mkmany.sh
+new file mode 100755
+index 0000000000..f9522e13c2
+--- /dev/null
++++ b/perf-findings/V5-scripts/mkmany.sh
+@@ -0,0 +1,14 @@
++#!/bin/bash
++# Create N small tables many_1..many_N (ROWS rows each, on every shard) for the many-tables copy test.
++set -euo pipefail
++N=${1:-40}; ROWS=${2:-1000}
++sql=""
++for i in $(seq 1 "$N"); do
++  sql+="CREATE TABLE IF NOT EXISTS many_$i (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id)) ENGINE=InnoDB;"
++done
++/home/vt/perf/V5/c.sh vtctldclient ApplySchema --sql "$sql" sbtest >/dev/null
++for s in /home/vt/perf/c30000/vt_*/mysql.sock; do
++  for i in $(seq 1 "$N"); do
++    mysql -S "$s" -u vt_dba vt_sbtest -e "INSERT INTO many_$i (id, k, c) SELECT seq, seq, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' FROM (WITH RECURSIVE r(seq) AS (SELECT 1 UNION ALL SELECT seq+1 FROM r WHERE seq < $ROWS) SELECT seq FROM r) t"
++  done
++done
+diff --git a/perf-findings/V5-scripts/prof.sh b/perf-findings/V5-scripts/prof.sh
+new file mode 100755
+index 0000000000..e13b16e61d
+--- /dev/null
++++ b/perf-findings/V5-scripts/prof.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++# Run drain.sh while taking CPU profiles of vtgate and the first vttablet.
++# Usage: prof.sh NAME SECONDS DELAY drain.sh-args...
++set -uo pipefail
++NAME=$1; SECS=$2; DELAY=$3; shift 3
++O=/home/vt/perf/V5/out
++/home/vt/perf/V5/drain.sh "$@" > "$O/$NAME.drain.txt" &
++dp=$!
++sleep "$DELAY"
++curl -s -o "$O/$NAME.vtgate.pprof" "http://localhost:30001/debug/pprof/profile?seconds=$SECS" &
++curl -s -o "$O/$NAME.vttablet.pprof" "http://localhost:30100/debug/pprof/profile?seconds=$SECS" &
++wait
++cat "$O/$NAME.drain.txt"
+diff --git a/perf-findings/V5-scripts/runtest.sh b/perf-findings/V5-scripts/runtest.sh
+new file mode 100755
+index 0000000000..bec3528a2c
+--- /dev/null
++++ b/perf-findings/V5-scripts/runtest.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# Run a MySQL-backed Go test binary as the vt user. Usage: runtest.sh BINARY [test flags...]
++B=$1; shift
++cd /home/vt/perf/V5/testdata || exit 1
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt VTROOT=/home/vt VT_MYSQL_ROOT=/usr \
++  VTDATAROOT=/home/vt/perf/V5/testdata PATH=/home/vt/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin "$B" "$@"
+diff --git a/perf-findings/V5-scripts/upd100.lua b/perf-findings/V5-scripts/upd100.lua
+new file mode 100644
+index 0000000000..64b097828e
+--- /dev/null
++++ b/perf-findings/V5-scripts/upd100.lua
+@@ -0,0 +1,10 @@
++-- One UPDATE of ~100 rows per transaction (run directly against one shard's mysqld).
++function thread_init()
++  drv = sysbench.sql.driver()
++  con = drv:connect()
++end
++function event()
++  local t = math.random(1, 4)
++  local id = math.random(1, 249000)
++  con:query(string.format("UPDATE sbtest%d SET k=k+1 WHERE id BETWEEN %d AND %d", t, id, id + 199))
++end
+diff --git a/perf-findings/V5-scripts/vsclient.go.txt b/perf-findings/V5-scripts/vsclient.go.txt
+new file mode 100644
+index 0000000000..6e267c2463
+--- /dev/null
++++ b/perf-findings/V5-scripts/vsclient.go.txt
+@@ -0,0 +1,434 @@
++// Command vsclient is a VStream (CDC) benchmark client for vtgate.
++//
++// Modes:
++//
++//	pos    stream from "current" until every shard has a real position, write that VGTID to -out, exit.
++//	drain  stream from the VGTID in -start until every shard's position contains the one in -stop.
++//	copy   stream from an empty position (full table copy) until the final COPY_COMPLETED event.
++//	live   stream from "current" for -duration, optionally inserting probe rows into -probe-table
++//	       every -probe-interval and measuring the commit->receive latency of each probe row.
++//
++// It prints one summary line (key=value) on stdout.
++package main
++
++import (
++	"context"
++	"flag"
++	"fmt"
++	"io"
++	"log"
++	"math"
++	"os"
++	"slices"
++	"strconv"
++	"strings"
++	"sync"
++	"sync/atomic"
++	"syscall"
++	"time"
++
++	"vitess.io/vitess/go/mysql/replication"
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
++	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
++	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
++)
++
++var (
++	server        = flag.String("server", "localhost:30002", "vtgate grpc address")
++	keyspace      = flag.String("keyspace", "sbtest", "keyspace")
++	mode          = flag.String("mode", "live", "pos|drain|copy|live")
++	startFile     = flag.String("start", "", "drain: file with the start VGTID")
++	stopFile      = flag.String("stop", "", "drain: file with the stop VGTID")
++	outFile       = flag.String("out", "", "pos: output file for the VGTID")
++	tables        = flag.String("tables", "", "comma separated tables to stream (default: all, /.*)")
++	minimizeSkew  = flag.Bool("minimize-skew", false, "VStreamFlags.minimize_skew")
++	heartbeat     = flag.Uint("heartbeat", 0, "VStreamFlags.heartbeat_interval (s)")
++	ksHeartbeats  = flag.Bool("keyspace-heartbeats", false, "VStreamFlags.stream_keyspace_heartbeats")
++	journalEvents = flag.Bool("journal-events", false, "VStreamFlags.include_reshard_journal_events")
++	chunkSize     = flag.Int64("chunk-size", 0, "VStreamFlags.transaction_chunk_size (bytes)")
++	excludeKs     = flag.Bool("exclude-ks", false, "VStreamFlags.exclude_keyspace_from_table_name")
++	batchCopy     = flag.Bool("batch-copy", false, "VStreamFlags.batch_copy_rows")
++	coalesce      = flag.Bool("coalesce", false, "VStreamFlags.coalesce_transactions")
++	duration      = flag.Duration("duration", 30*time.Second, "live: how long to stream")
++	timeout       = flag.Duration("timeout", 10*time.Minute, "overall timeout")
++	probeTable    = flag.String("probe-table", "", "live: table (id bigint, ts bigint) to insert probe rows into")
++	probeInterval = flag.Duration("probe-interval", 50*time.Millisecond, "live: probe insert interval")
++	probeBase     = flag.Int64("probe-base", 0, "live: first probe id (use distinct ranges for concurrent clients)")
++	label         = flag.String("label", "", "label printed with the summary")
++	quiet         = flag.Bool("quiet", false, "do not print per-second progress to stderr")
++	tabletType    = flag.String("tablet-type", "primary", "tablet type")
++)
++
++type stats struct {
++	responses, events, rowChanges, bytes atomic.Int64
++	byType                               [32]atomic.Int64
++	lagSumMs, lagN, lagMax               atomic.Int64 // seconds-granularity event lag, ms
++}
++
++func main() {
++	flag.Parse()
++	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
++	defer cancel()
++
++	conn, err := vtgateconn.Dial(ctx, *server)
++	if err != nil {
++		log.Fatal(err)
++	}
++	defer conn.Close()
++
++	var vgtid *binlogdatapb.VGtid
++	switch *mode {
++	case "pos", "live":
++		vgtid = &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: *keyspace, Gtid: "current"}}}
++	case "copy":
++		vgtid = &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: *keyspace, Gtid: ""}}}
++	case "drain":
++		vgtid = readVGtid(*startFile)
++	default:
++		log.Fatalf("unknown mode %s", *mode)
++	}
++	var stopPos map[string]replication.Position
++	stopSeq := map[string]int64{}
++	if *mode == "drain" {
++		stopPos = map[string]replication.Position{}
++		for _, sg := range readVGtid(*stopFile).ShardGtids {
++			p, err := replication.DecodePosition(sg.Gtid)
++			if err != nil {
++				log.Fatal(err)
++			}
++			stopPos[sg.Keyspace+"/"+sg.Shard] = p
++			if seq, ok := gtidSeq(sg.Gtid); ok {
++				stopSeq[sg.Keyspace+"/"+sg.Shard] = seq
++			}
++		}
++	}
++
++	filter := &binlogdatapb.Filter{}
++	if *tables == "" {
++		filter.Rules = []*binlogdatapb.Rule{{Match: "/.*"}}
++	} else {
++		for _, t := range strings.Split(*tables, ",") {
++			if strings.HasPrefix(t, "/") {
++				filter.Rules = append(filter.Rules, &binlogdatapb.Rule{Match: t})
++				continue
++			}
++			filter.Rules = append(filter.Rules, &binlogdatapb.Rule{Match: t, Filter: "select * from " + t})
++		}
++	}
++	flags := &vtgatepb.VStreamFlags{
++		MinimizeSkew:                 *minimizeSkew,
++		HeartbeatInterval:            uint32(*heartbeat),
++		StreamKeyspaceHeartbeats:     *ksHeartbeats,
++		IncludeReshardJournalEvents:  *journalEvents,
++		TransactionChunkSize:         *chunkSize,
++		ExcludeKeyspaceFromTableName: *excludeKs,
++		BatchCopyRows:                *batchCopy,
++		CoalesceTransactions:         *coalesce,
++	}
++	tt, ok := topodatapb.TabletType_value[strings.ToUpper(*tabletType)]
++	if !ok {
++		log.Fatalf("bad tablet type %s", *tabletType)
++	}
++
++	var st stats
++	var latMu sync.Mutex
++	var latencies []float64 // ms
++	probeSent := map[int64]int64{}
++	probeTableName := *probeTable
++	if !*excludeKs && probeTableName != "" {
++		probeTableName = *keyspace + "." + probeTableName
++	}
++
++	start := time.Now()
++	var ru0 syscall.Rusage
++	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru0)
++
++	sctx, scancel := context.WithCancel(ctx)
++	defer scancel()
++	reader, err := conn.VStream(sctx, topodatapb.TabletType(tt), vgtid, filter, flags)
++	if err != nil {
++		log.Fatal(err)
++	}
++
++	// Progress reporter.
++	var lastVGtid atomic.Pointer[binlogdatapb.VGtid]
++	done := make(chan struct{})
++	var firstEvent atomic.Int64
++	go func() {
++		tk := time.NewTicker(time.Second)
++		defer tk.Stop()
++		var prevEv, prevRows int64
++		for {
++			select {
++			case <-done:
++				return
++			case <-tk.C:
++				ev, rows := st.events.Load(), st.rowChanges.Load()
++				if !*quiet {
++					fmt.Fprintf(os.Stderr, "%s t=%.0fs events/s=%d rows/s=%d\n", *label, time.Since(start).Seconds(), ev-prevEv, rows-prevRows)
++				}
++				prevEv, prevRows = ev, rows
++			}
++		}
++	}()
++
++	// Probe writer.
++	var probeWG sync.WaitGroup
++	if *mode == "live" && *probeTable != "" {
++		probeWG.Go(func() {
++			sess := conn.Session(*keyspace+"@primary", nil)
++			id := *probeBase
++			tk := time.NewTicker(*probeInterval)
++			defer tk.Stop()
++			for {
++				select {
++				case <-sctx.Done():
++					return
++				case <-tk.C:
++				}
++				id++
++				now := time.Now().UnixNano()
++				latMu.Lock()
++				probeSent[id] = now
++				latMu.Unlock()
++				_, err := sess.Execute(sctx, fmt.Sprintf("insert into %s(id, ts) values (%d, %d)", *probeTable, id, now), nil, false)
++				if err != nil && sctx.Err() == nil {
++					log.Printf("probe insert: %v", err)
++				}
++			}
++		})
++	}
++
++	// Stop checker for drain/pos modes.
++	reachedStop := func(v *binlogdatapb.VGtid) bool {
++		if v == nil {
++			return false
++		}
++		n := 0
++		for _, sg := range v.ShardGtids {
++			key := sg.Keyspace + "/" + sg.Shard
++			sp, ok := stopPos[key]
++			if !ok {
++				continue
++			}
++			p, err := replication.DecodePosition(sg.Gtid)
++			if err != nil || !p.AtLeast(sp) {
++				return false
++			}
++			n++
++		}
++		return n == len(stopPos)
++	}
++	var stopOnce sync.Once
++	var endTime atomic.Int64
++	stopNow := func() {
++		stopOnce.Do(func() {
++			endTime.Store(time.Now().UnixNano())
++			scancel()
++		})
++	}
++	if *mode == "drain" {
++		go func() {
++			tk := time.NewTicker(20 * time.Millisecond)
++			defer tk.Stop()
++			for {
++				select {
++				case <-sctx.Done():
++					return
++				case <-tk.C:
++					if reachedStop(lastVGtid.Load()) {
++						stopNow()
++						return
++					}
++				}
++			}
++		}()
++	}
++	if *mode == "live" {
++		time.AfterFunc(*duration, stopNow)
++	}
++
++	copyDone := false
++	stopAfterCommit := false
++recvLoop:
++	for {
++		evs, err := reader.Recv()
++		if err != nil {
++			if err == io.EOF || sctx.Err() != nil {
++				break
++			}
++			log.Fatalf("recv: %v", err)
++		}
++		now := time.Now().UnixNano()
++		if firstEvent.Load() == 0 {
++			firstEvent.Store(now)
++		}
++		st.responses.Add(1)
++		for _, ev := range evs {
++			st.events.Add(1)
++			st.bytes.Add(int64(ev.SizeVT()))
++			if int(ev.Type) < len(st.byType) {
++				st.byType[ev.Type].Add(1)
++			}
++			if ev.Timestamp > 0 && ev.Type == binlogdatapb.VEventType_COMMIT {
++				lag := now/1e6 - ev.Timestamp*1000
++				st.lagSumMs.Add(lag)
++				st.lagN.Add(1)
++				if lag > st.lagMax.Load() {
++					st.lagMax.Store(lag)
++				}
++			}
++			if stopAfterCommit && ev.Type == binlogdatapb.VEventType_COMMIT {
++				stopNow()
++				break recvLoop
++			}
++			switch ev.Type {
++			case binlogdatapb.VEventType_ROW:
++				st.rowChanges.Add(int64(len(ev.RowEvent.RowChanges)))
++				if probeTableName != "" && ev.RowEvent.TableName == probeTableName {
++					for _, rc := range ev.RowEvent.RowChanges {
++						if rc.After == nil {
++							continue
++						}
++						id, ts := probeValues(rc.After)
++						latMu.Lock()
++						if _, ok := probeSent[id]; ok {
++							latencies = append(latencies, float64(now-ts)/1e6)
++							delete(probeSent, id)
++						}
++						latMu.Unlock()
++					}
++				}
++			case binlogdatapb.VEventType_VGTID:
++				lastVGtid.Store(ev.Vgtid)
++				if *mode == "drain" && len(stopSeq) == len(stopPos) && !stopAfterCommit {
++					// Fast, exact stop check for single-source GTID sets: the stream stops
++					// counting at the COMMIT of the transaction that reaches the stop position.
++					n := 0
++					for _, sg := range ev.Vgtid.ShardGtids {
++						if want, ok := stopSeq[sg.Keyspace+"/"+sg.Shard]; ok {
++							if seq, ok := gtidSeq(sg.Gtid); ok && seq >= want {
++								n++
++							}
++						}
++					}
++					if n == len(stopSeq) {
++						stopAfterCommit = true
++					}
++				}
++				if *mode == "pos" {
++					complete := true
++					for _, sg := range ev.Vgtid.ShardGtids {
++						if sg.Gtid == "current" || sg.Gtid == "" {
++							complete = false
++						}
++					}
++					if complete {
++						b, err := ev.Vgtid.MarshalVT()
++						if err != nil {
++							log.Fatal(err)
++						}
++						if err := os.WriteFile(*outFile, b, 0o644); err != nil {
++							log.Fatal(err)
++						}
++						stopNow()
++					}
++				}
++			case binlogdatapb.VEventType_COPY_COMPLETED:
++				if *mode == "copy" && ev.Keyspace == "" && ev.Shard == "" {
++					copyDone = true
++					stopNow()
++				}
++			}
++		}
++		if sctx.Err() != nil {
++			break
++		}
++	}
++	close(done)
++	scancel()
++	probeWG.Wait()
++	end := endTime.Load()
++	if end == 0 {
++		end = time.Now().UnixNano()
++	}
++	elapsed := time.Duration(end - start.UnixNano())
++	var ru1 syscall.Rusage
++	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru1)
++	cpu := tv(ru1.Utime) + tv(ru1.Stime) - tv(ru0.Utime) - tv(ru0.Stime)
++
++	if *mode == "pos" {
++		return
++	}
++	secs := elapsed.Seconds()
++	var b strings.Builder
++	fmt.Fprintf(&b, "label=%s mode=%s elapsed=%.2fs first_event=%.2fs responses=%d events=%d rows=%d bytes=%d ev/s=%.0f rows/s=%.0f MB/s=%.1f client_cpu=%.2fs",
++		*label, *mode, secs, float64(firstEvent.Load()-start.UnixNano())/1e9, st.responses.Load(), st.events.Load(), st.rowChanges.Load(), st.bytes.Load(),
++		float64(st.events.Load())/secs, float64(st.rowChanges.Load())/secs, float64(st.bytes.Load())/secs/1e6, cpu)
++	if *mode == "copy" {
++		fmt.Fprintf(&b, " copy_done=%v", copyDone)
++	}
++	for t := range st.byType {
++		if v := st.byType[t].Load(); v > 0 {
++			fmt.Fprintf(&b, " %s=%d", binlogdatapb.VEventType(t).String(), v)
++		}
++	}
++	if n := st.lagN.Load(); n > 0 {
++		fmt.Fprintf(&b, " commit_lag_avg_ms=%d commit_lag_max_ms=%d", st.lagSumMs.Load()/n, st.lagMax.Load())
++	}
++	if len(latencies) > 0 {
++		slices.Sort(latencies)
++		fmt.Fprintf(&b, " probes=%d probe_lost=%d probe_p50_ms=%.1f probe_p90_ms=%.1f probe_p99_ms=%.1f probe_max_ms=%.1f",
++			len(latencies), len(probeSent), pct(latencies, 50), pct(latencies, 90), pct(latencies, 99), latencies[len(latencies)-1])
++	}
++	fmt.Println(b.String())
++}
++
++func tv(t syscall.Timeval) float64 { return float64(t.Sec) + float64(t.Usec)/1e6 }
++
++func pct(s []float64, p float64) float64 {
++	i := int(math.Ceil(p/100*float64(len(s)))) - 1
++	if i < 0 {
++		i = 0
++	}
++	return s[i]
++}
++
++// probeValues decodes a (id bigint, ts bigint) row.
++func probeValues(r *querypb.Row) (int64, int64) {
++	if len(r.Lengths) < 2 {
++		return 0, 0
++	}
++	l0 := int(r.Lengths[0])
++	id, _ := strconv.ParseInt(string(r.Values[:l0]), 10, 64)
++	ts, _ := strconv.ParseInt(string(r.Values[l0:l0+int(r.Lengths[1])]), 10, 64)
++	return id, ts
++}
++
++// gtidSeq returns N for a GTID set of a single source "flavor/uuid:1-N".
++func gtidSeq(gtid string) (int64, bool) {
++	if strings.Contains(gtid, ",") {
++		return 0, false
++	}
++	i := strings.LastIndexAny(gtid, ":-")
++	if i < 0 {
++		return 0, false
++	}
++	n, err := strconv.ParseInt(gtid[i+1:], 10, 64)
++	return n, err == nil
++}
++
++func readVGtid(file string) *binlogdatapb.VGtid {
++	b, err := os.ReadFile(file)
++	if err != nil {
++		log.Fatal(err)
++	}
++	v := &binlogdatapb.VGtid{}
++	if err := v.UnmarshalVT(b); err != nil {
++		log.Fatal(err)
++	}
++	return v
++}
+diff --git a/proto/binlogdata.proto b/proto/binlogdata.proto
+index 37424c0f9f..ffc29c1370 100644
+--- a/proto/binlogdata.proto
++++ b/proto/binlogdata.proto
+@@ -528,6 +528,12 @@ message VStreamOptions {
+   bool no_timeouts = 4;
+   // Only stream events for these types. If not provided, the default behavior is to send all event types.
+   repeated VEventType event_types = 5;
++  // In the replication phase, the stream may send several transactions in one response
++  // when more binlog events are already waiting to be processed.
++  bool coalesce_transactions = 6;
++  // In the copy phase, send the rows of each batch of copied rows in one ROW event with many
++  // row changes, instead of one ROW event per copied row.
++  bool batch_copy_rows = 7;
+ }
+ 
+ // VStreamRequest is the payload for VStreamer
+diff --git a/proto/vtgate.proto b/proto/vtgate.proto
+index 1ecb3627e6..bd644cc5e1 100644
+--- a/proto/vtgate.proto
++++ b/proto/vtgate.proto
+@@ -387,6 +387,14 @@ message VStreamFlags {
+   // A random jitter of +/-10% is added to spread out reconnections.
+   // 0 means no maximum age.
+   uint32 max_stream_age_seconds = 12;
++  // In the copy phase, send the rows of each batch of copied rows in one ROW event with many
++  // row changes, instead of one ROW event per copied row. Tablets that do not support it
++  // ignore it and send one ROW event per row.
++  bool batch_copy_rows = 13;
++  // Allow VTGate to send several transactions in one VStreamResponse when they are
++  // ready to be sent at the same time. Transactions are still complete (unless chunked)
++  // and in order. This lowers the CPU cost and the number of messages at high event rates.
++  bool coalesce_transactions = 14;
+ }
+ 
+ // VStreamRequest is the payload for VStream.

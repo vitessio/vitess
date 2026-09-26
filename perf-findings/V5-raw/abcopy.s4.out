@@ -1,0 +1,24 @@
+=== s4 arm=base round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=base mode=copy elapsed=5.75s first_event=0.06s responses=1656 events=1059967 rows=1057438 bytes=271667286 ev/s=184214 rows/s=183774 MB/s=47.2 client_cpu=1.57s copy_done=true BEGIN=836 COMMIT=832 ROW=1057438 FIELD=20 VGTID=836 COPY_COMPLETED=5
+cpu wall=5.77s vtgate=2.88 vttablets=2.22 mysqlds=0.75  mysqld_100=0.19 mysqld_101=0.18 mysqld_102=0.19 mysqld_103=0.19 vtgate=2.88 vttablet_100=0.55 vttablet_101=0.55 vttablet_102=0.55 vttablet_103=0.57
+uptime:  17:57:06 up 23:37,  0 user,  load average: 0.35, 1.01, 1.55
+=== s4 arm=fin round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=fin mode=copy elapsed=1.85s first_event=0.04s responses=1656 events=1059967 rows=1057438 bytes=271693287 ev/s=573661 rows/s=572293 MB/s=147.0 client_cpu=1.50s copy_done=true BEGIN=836 COMMIT=832 ROW=1057438 FIELD=20 VGTID=836 COPY_COMPLETED=5
+cpu wall=1.86s vtgate=2.05 vttablets=2.12 mysqlds=0.61  mysqld_100=0.16 mysqld_101=0.16 mysqld_102=0.15 mysqld_103=0.14 vtgate=2.05 vttablet_100=0.54 vttablet_101=0.52 vttablet_102=0.52 vttablet_103=0.54
+uptime:  17:57:45 up 23:38,  0 user,  load average: 0.32, 0.92, 1.50
+=== s4 arm=fin+batch round=1 flags=[-tables /^(sbtest[0-9]|v5probe)$ -batch-copy]
+label=fin+batch mode=copy elapsed=1.06s first_event=0.03s responses=1656 events=3341 rows=1057438 bytes=217801062 ev/s=3145 rows/s=995279 MB/s=205.0 client_cpu=0.69s copy_done=true BEGIN=836 COMMIT=832 ROW=812 FIELD=20 VGTID=836 COPY_COMPLETED=5
+cpu wall=1.08s vtgate=0.94 vttablets=1.36 mysqlds=0.60  mysqld_100=0.15 mysqld_101=0.15 mysqld_102=0.15 mysqld_103=0.15 vtgate=0.94 vttablet_100=0.34 vttablet_101=0.35 vttablet_102=0.33 vttablet_103=0.34
+uptime:  17:58:23 up 23:39,  0 user,  load average: 0.16, 0.80, 1.43
+=== s4 arm=base round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=base mode=copy elapsed=5.90s first_event=0.04s responses=1656 events=1059967 rows=1057438 bytes=271667332 ev/s=179515 rows/s=179087 MB/s=46.0 client_cpu=1.66s copy_done=true BEGIN=836 COMMIT=832 ROW=1057438 FIELD=20 VGTID=836 COPY_COMPLETED=5
+cpu wall=5.92s vtgate=3.09 vttablets=2.37 mysqlds=0.78  mysqld_100=0.20 mysqld_101=0.19 mysqld_102=0.20 mysqld_103=0.19 vtgate=3.09 vttablet_100=0.61 vttablet_101=0.57 vttablet_102=0.58 vttablet_103=0.61
+uptime:  17:59:07 up 23:39,  0 user,  load average: 0.30, 0.74, 1.38
+=== s4 arm=fin round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ ]
+label=fin mode=copy elapsed=1.84s first_event=0.06s responses=1656 events=1059967 rows=1057438 bytes=271689813 ev/s=574834 rows/s=573462 MB/s=147.3 client_cpu=1.51s copy_done=true BEGIN=836 COMMIT=832 ROW=1057438 FIELD=20 VGTID=836 COPY_COMPLETED=5
+cpu wall=1.86s vtgate=2.08 vttablets=2.06 mysqlds=0.62  mysqld_100=0.16 mysqld_101=0.15 mysqld_102=0.15 mysqld_103=0.16 vtgate=2.08 vttablet_100=0.51 vttablet_101=0.52 vttablet_102=0.51 vttablet_103=0.52
+uptime:  17:59:47 up 23:40,  0 user,  load average: 0.79, 0.78, 1.36
+=== s4 arm=fin+batch round=2 flags=[-tables /^(sbtest[0-9]|v5probe)$ -batch-copy]
+label=fin+batch mode=copy elapsed=1.09s first_event=0.03s responses=1656 events=3341 rows=1057438 bytes=217806143 ev/s=3069 rows/s=971405 MB/s=200.1 client_cpu=0.77s copy_done=true BEGIN=836 COMMIT=832 ROW=812 FIELD=20 VGTID=836 COPY_COMPLETED=5
+cpu wall=1.11s vtgate=0.99 vttablets=1.36 mysqlds=0.61  mysqld_100=0.16 mysqld_101=0.15 mysqld_102=0.15 mysqld_103=0.15 vtgate=0.99 vttablet_100=0.33 vttablet_101=0.34 vttablet_102=0.34 vttablet_103=0.35
+uptime:  18:00:26 up 23:41,  0 user,  load average: 0.63, 0.74, 1.33

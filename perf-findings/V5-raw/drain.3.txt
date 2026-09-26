@@ -1,0 +1,1 @@
+label=v5c#3 mode=drain elapsed=16.49s first_event=0.06s responses=16591 events=1392415 rows=728747 bytes=386620857 ev/s=84448 rows/s=44198 MB/s=23.4 client_cpu=3.83s BEGIN=221220 COMMIT=221220 ROW=728747 FIELD=8 VGTID=221220 commit_lag_avg_ms=5708787 commit_lag_max_ms=5877274

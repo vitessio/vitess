@@ -1,0 +1,36 @@
+=== wo arm=base round=1 flags=[]
+label=base#1 mode=drain elapsed=5.73s first_event=0.02s responses=200018 events=1226916 rows=626846 bytes=360421184 ev/s=214303 rows/s=109490 MB/s=63.0 client_cpu=3.30s BEGIN=200018 COMMIT=200018 ROW=626846 FIELD=16 VGTID=200018 commit_lag_avg_ms=65228 commit_lag_max_ms=80919
+cpu wall=5.75s vtgate=5.67 vttablets=10.04 mysqlds=0.62  mysqld_100=0.15 mysqld_101=0.16 mysqld_102=0.16 mysqld_103=0.15 vtgate=5.67 vttablet_100=2.41 vttablet_101=2.60 vttablet_102=2.42 vttablet_103=2.61
+uptime:  17:25:08 up 23:05,  0 user,  load average: 5.90, 6.08, 4.52
+=== wo arm=v6 round=1 flags=[]
+label=v6#1 mode=drain elapsed=5.47s first_event=0.02s responses=200036 events=1226970 rows=626846 bytes=360430376 ev/s=224421 rows/s=114654 MB/s=65.9 client_cpu=3.59s BEGIN=200036 COMMIT=200036 ROW=626846 FIELD=16 VGTID=200036 commit_lag_avg_ms=288492 commit_lag_max_ms=304320
+cpu wall=5.48s vtgate=5.66 vttablets=9.75 mysqlds=0.67  mysqld_100=0.16 mysqld_101=0.17 mysqld_102=0.17 mysqld_103=0.17 vtgate=5.66 vttablet_100=2.37 vttablet_101=2.36 vttablet_102=2.55 vttablet_103=2.47
+uptime:  17:28:51 up 23:09,  0 user,  load average: 2.49, 3.54, 3.80
+=== wo arm=v5c round=1 flags=[]
+label=v5c#1 mode=drain elapsed=4.23s first_event=0.03s responses=17898 events=1227024 rows=626846 bytes=360437715 ev/s=290059 rows/s=148181 MB/s=85.2 client_cpu=2.73s BEGIN=200054 COMMIT=200054 ROW=626846 FIELD=16 VGTID=200054 commit_lag_avg_ms=511262 commit_lag_max_ms=527635
+cpu wall=4.25s vtgate=4.15 vttablets=7.74 mysqlds=0.56  mysqld_100=0.13 mysqld_101=0.14 mysqld_102=0.15 mysqld_103=0.14 vtgate=4.15 vttablet_100=1.93 vttablet_101=1.84 vttablet_102=2.03 vttablet_103=1.94
+uptime:  17:32:33 up 23:13,  0 user,  load average: 1.52, 2.06, 3.11
+=== wo arm=base round=2 flags=[]
+label=base#1 mode=drain elapsed=6.36s first_event=0.02s responses=200072 events=1227078 rows=626846 bytes=360447256 ev/s=192957 rows/s=98571 MB/s=56.7 client_cpu=3.74s BEGIN=200072 COMMIT=200072 ROW=626846 FIELD=16 VGTID=200072 commit_lag_avg_ms=558246 commit_lag_max_ms=573796
+cpu wall=6.38s vtgate=6.50 vttablets=11.08 mysqlds=0.62  mysqld_100=0.15 mysqld_101=0.16 mysqld_102=0.15 mysqld_103=0.16 vtgate=6.50 vttablet_100=3.00 vttablet_101=2.74 vttablet_102=2.67 vttablet_103=2.67
+uptime:  17:33:21 up 23:14,  0 user,  load average: 3.84, 2.54, 3.22
+=== wo arm=v6 round=2 flags=[]
+label=v6#1 mode=drain elapsed=5.11s first_event=0.03s responses=200090 events=1227132 rows=626846 bytes=360456629 ev/s=240236 rows/s=122718 MB/s=70.6 client_cpu=3.25s BEGIN=200090 COMMIT=200090 ROW=626846 FIELD=16 VGTID=200090 commit_lag_avg_ms=781989 commit_lag_max_ms=798107
+cpu wall=5.13s vtgate=5.28 vttablets=9.02 mysqlds=0.58  mysqld_100=0.15 mysqld_101=0.15 mysqld_102=0.14 mysqld_103=0.14 vtgate=5.28 vttablet_100=2.16 vttablet_101=2.20 vttablet_102=2.18 vttablet_103=2.48
+uptime:  17:37:05 up 23:17,  0 user,  load average: 1.74, 1.81, 2.76
+=== wo arm=v5c round=2 flags=[]
+label=v5c#1 mode=drain elapsed=3.94s first_event=0.04s responses=17269 events=1227186 rows=626846 bytes=360466020 ev/s=311435 rows/s=159081 MB/s=91.5 client_cpu=2.46s BEGIN=200108 COMMIT=200108 ROW=626846 FIELD=16 VGTID=200108 commit_lag_avg_ms=1003767 commit_lag_max_ms=1020500
+cpu wall=3.96s vtgate=3.81 vttablets=7.26 mysqlds=0.61  mysqld_100=0.15 mysqld_101=0.15 mysqld_102=0.16 mysqld_103=0.15 vtgate=3.81 vttablet_100=1.77 vttablet_101=1.79 vttablet_102=1.92 vttablet_103=1.78
+uptime:  17:40:46 up 23:21,  0 user,  load average: 0.35, 1.13, 2.29
+=== wo arm=base round=3 flags=[]
+label=base#1 mode=drain elapsed=5.88s first_event=0.03s responses=200126 events=1227240 rows=626846 bytes=360474525 ev/s=208733 rows/s=106616 MB/s=61.3 client_cpu=3.59s BEGIN=200126 COMMIT=200126 ROW=626846 FIELD=16 VGTID=200126 commit_lag_avg_ms=1050757 commit_lag_max_ms=1066701
+cpu wall=5.90s vtgate=6.10 vttablets=10.17 mysqlds=0.63  mysqld_100=0.16 mysqld_101=0.16 mysqld_102=0.16 mysqld_103=0.15 vtgate=6.10 vttablet_100=2.51 vttablet_101=2.68 vttablet_102=2.45 vttablet_103=2.53
+uptime:  17:41:34 up 23:22,  0 user,  load average: 2.29, 1.50, 2.35
+=== wo arm=v6 round=3 flags=[]
+label=v6#1 mode=drain elapsed=5.29s first_event=0.02s responses=200144 events=1227294 rows=626846 bytes=360482862 ev/s=231988 rows/s=118489 MB/s=68.1 client_cpu=3.40s BEGIN=200144 COMMIT=200144 ROW=626846 FIELD=16 VGTID=200144 commit_lag_avg_ms=1273963 commit_lag_max_ms=1290320
+cpu wall=5.31s vtgate=5.38 vttablets=9.39 mysqlds=0.57  mysqld_100=0.14 mysqld_101=0.15 mysqld_102=0.14 mysqld_103=0.14 vtgate=5.38 vttablet_100=2.34 vttablet_101=2.24 vttablet_102=2.55 vttablet_103=2.26
+uptime:  17:45:17 up 23:25,  0 user,  load average: 1.86, 1.33, 2.09
+=== wo arm=v5c round=3 flags=[]
+label=v5c#1 mode=drain elapsed=4.36s first_event=0.03s responses=17910 events=1227348 rows=626846 bytes=360490927 ev/s=281618 rows/s=143831 MB/s=82.7 client_cpu=2.68s BEGIN=200162 COMMIT=200162 ROW=626846 FIELD=16 VGTID=200162 commit_lag_avg_ms=1496676 commit_lag_max_ms=1513585
+cpu wall=4.37s vtgate=4.22 vttablets=8.05 mysqlds=0.60  mysqld_100=0.15 mysqld_101=0.15 mysqld_102=0.15 mysqld_103=0.15 vtgate=4.22 vttablet_100=2.03 vttablet_101=2.00 vttablet_102=1.95 vttablet_103=2.07
+uptime:  17:48:59 up 23:29,  0 user,  load average: 2.22, 1.15, 1.82

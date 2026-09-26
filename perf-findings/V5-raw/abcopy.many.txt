@@ -1,0 +1,24 @@
+=== many arm=base round=1 flags=[-tables /^many_ ]
+label=base mode=copy elapsed=39.53s first_event=0.03s responses=244 events=80565 rows=80000 bytes=10016602 ev/s=2038 rows/s=2024 MB/s=0.3 client_cpu=0.20s copy_done=true BEGIN=160 COMMIT=160 ROW=80000 FIELD=80 VGTID=162 COPY_COMPLETED=3
+cpu wall=39.55s vtgate=0.45 vttablets=1.29 mysqlds=1.19  mysqld_100=0.59 mysqld_101=0.60 vtgate=0.45 vttablet_100=0.66 vttablet_101=0.63
+uptime:  16:49:41 up 22:30,  0 user,  load average: 0.20, 1.10, 2.67
+=== many arm=v6 round=1 flags=[-tables /^many_ ]
+label=v6 mode=copy elapsed=35.77s first_event=0.04s responses=244 events=80565 rows=80000 bytes=10016680 ev/s=2252 rows/s=2236 MB/s=0.3 client_cpu=0.20s copy_done=true BEGIN=160 COMMIT=160 ROW=80000 FIELD=80 VGTID=162 COPY_COMPLETED=3
+cpu wall=35.79s vtgate=0.40 vttablets=1.22 mysqlds=1.16  mysqld_100=0.58 mysqld_101=0.58 vtgate=0.40 vttablet_100=0.61 vttablet_101=0.61
+uptime:  16:50:54 up 22:31,  0 user,  load average: 0.21, 0.91, 2.49
+=== many arm=v5b round=1 flags=[-tables /^many_ ]
+label=v5b mode=copy elapsed=0.51s first_event=0.03s responses=105 events=80565 rows=80000 bytes=10016754 ev/s=159243 rows/s=158126 MB/s=19.8 client_cpu=0.14s copy_done=true BEGIN=160 COMMIT=160 ROW=80000 FIELD=80 VGTID=162 COPY_COMPLETED=3
+cpu wall=0.52s vtgate=0.24 vttablets=0.46 mysqlds=0.52  mysqld_100=0.26 mysqld_101=0.26 vtgate=0.24 vttablet_100=0.22 vttablet_101=0.24
+uptime:  16:51:32 up 22:32,  0 user,  load average: 0.20, 0.83, 2.39
+=== many arm=base round=2 flags=[-tables /^many_ ]
+label=base mode=copy elapsed=39.53s first_event=0.03s responses=244 events=80565 rows=80000 bytes=10016524 ev/s=2038 rows/s=2024 MB/s=0.3 client_cpu=0.21s copy_done=true BEGIN=160 COMMIT=160 ROW=80000 FIELD=80 VGTID=162 COPY_COMPLETED=3
+cpu wall=39.55s vtgate=0.43 vttablets=1.22 mysqlds=1.15  mysqld_100=0.57 mysqld_101=0.58 vtgate=0.43 vttablet_100=0.59 vttablet_101=0.63
+uptime:  16:52:49 up 22:33,  0 user,  load average: 0.08, 0.65, 2.21
+=== many arm=v6 round=2 flags=[-tables /^many_ ]
+label=v6 mode=copy elapsed=35.72s first_event=0.03s responses=244 events=80565 rows=80000 bytes=10016524 ev/s=2255 rows/s=2239 MB/s=0.3 client_cpu=0.21s copy_done=true BEGIN=160 COMMIT=160 ROW=80000 FIELD=80 VGTID=162 COPY_COMPLETED=3
+cpu wall=35.74s vtgate=0.39 vttablets=1.27 mysqlds=1.09  mysqld_100=0.54 mysqld_101=0.55 vtgate=0.39 vttablet_100=0.64 vttablet_101=0.63
+uptime:  16:54:02 up 22:34,  0 user,  load average: 0.32, 0.60, 2.07
+=== many arm=v5b round=2 flags=[-tables /^many_ ]
+label=v5b mode=copy elapsed=0.55s first_event=0.03s responses=110 events=80565 rows=80000 bytes=10016680 ev/s=147569 rows/s=146534 MB/s=18.3 client_cpu=0.16s copy_done=true BEGIN=160 COMMIT=160 ROW=80000 FIELD=80 VGTID=162 COPY_COMPLETED=3
+cpu wall=0.56s vtgate=0.25 vttablets=0.49 mysqlds=0.53  mysqld_100=0.26 mysqld_101=0.27 vtgate=0.25 vttablet_100=0.25 vttablet_101=0.24
+uptime:  16:54:40 up 22:35,  0 user,  load average: 0.16, 0.52, 1.98

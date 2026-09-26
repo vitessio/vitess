@@ -1,0 +1,16 @@
+=== skew arm=base round=1 flags=[-minimize-skew]
+label=base#1 mode=drain elapsed=6.54s first_event=0.02s responses=200000 events=1307589 rows=707581 bytes=368238075 ev/s=200064 rows/s=108261 MB/s=56.3 client_cpu=4.09s BEGIN=200000 COMMIT=200000 ROW=707581 FIELD=8 VGTID=200000 commit_lag_avg_ms=5625092 commit_lag_max_ms=5657332
+cpu wall=6.55s vtgate=6.84 vttablets=10.40 mysqlds=0.59  mysqld_100=0.29 mysqld_101=0.30 vtgate=6.84 vttablet_100=5.12 vttablet_101=5.28
+uptime:  17:10:49 up 22:51,  0 user,  load average: 6.28, 2.22, 1.89
+=== skew arm=v5c round=1 flags=[-minimize-skew]
+label=v5c#1 mode=drain elapsed=5.55s first_event=0.03s responses=22993 events=1307589 rows=707581 bytes=368235457 ev/s=235811 rows/s=127606 MB/s=66.4 client_cpu=3.42s BEGIN=200000 COMMIT=200000 ROW=707581 FIELD=8 VGTID=200000 commit_lag_avg_ms=5706583 commit_lag_max_ms=5739321
+cpu wall=5.56s vtgate=5.35 vttablets=8.81 mysqlds=0.60  mysqld_100=0.30 mysqld_101=0.30 vtgate=5.35 vttablet_100=4.55 vttablet_101=4.26
+uptime:  17:12:10 up 22:52,  0 user,  load average: 8.80, 3.64, 2.40
+=== skew arm=base round=2 flags=[-minimize-skew]
+label=base#1 mode=drain elapsed=6.30s first_event=0.01s responses=200000 events=1307589 rows=707581 bytes=368239355 ev/s=207521 rows/s=112296 MB/s=58.4 client_cpu=3.86s BEGIN=200000 COMMIT=200000 ROW=707581 FIELD=8 VGTID=200000 commit_lag_avg_ms=5788428 commit_lag_max_ms=5820718
+cpu wall=6.32s vtgate=6.57 vttablets=10.09 mysqlds=0.58  mysqld_100=0.29 mysqld_101=0.29 vtgate=6.57 vttablet_100=4.98 vttablet_101=5.11
+uptime:  17:13:32 up 22:54,  0 user,  load average: 9.70, 4.82, 2.89
+=== skew arm=v5c round=2 flags=[-minimize-skew]
+label=v5c#1 mode=drain elapsed=4.81s first_event=0.03s responses=22039 events=1307589 rows=707581 bytes=368236034 ev/s=271603 rows/s=146974 MB/s=76.5 client_cpu=2.99s BEGIN=200000 COMMIT=200000 ROW=707581 FIELD=8 VGTID=200000 commit_lag_avg_ms=5861006 commit_lag_max_ms=5893988
+cpu wall=4.83s vtgate=4.79 vttablets=7.85 mysqlds=0.57  mysqld_100=0.29 mysqld_101=0.28 vtgate=4.79 vttablet_100=3.94 vttablet_101=3.91
+uptime:  17:14:44 up 22:55,  0 user,  load average: 8.49, 5.21, 3.15

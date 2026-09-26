@@ -1,0 +1,32 @@
+=== wo4 arm=base round=1 flags=[]
+ transactions: 11960 (398.56 per sec.)  queries: 71760 (2391.34 per sec.)  avg: 15.24  95th percentile: 33.72 
+label=base#1 mode=live elapsed=34.00s first_event=0.02s responses=21573 events=113246 rows=48519 bytes=28003539 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.79s BEGIN=21571 COMMIT=21571 OTHER=2 ROW=48519 FIELD=10 VGTID=21573 commit_lag_avg_ms=503 commit_lag_max_ms=1003 probes=679 probe_lost=0 probe_p50_ms=2.7 probe_p90_ms=5.2 probe_p99_ms=10.6 probe_max_ms=64.7
+label=base#2 mode=live elapsed=34.00s first_event=0.02s responses=21573 events=113246 rows=48519 bytes=28003539 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.55s BEGIN=21571 COMMIT=21571 OTHER=2 ROW=48519 FIELD=10 VGTID=21573 commit_lag_avg_ms=503 commit_lag_max_ms=1003
+label=base#3 mode=live elapsed=34.00s first_event=0.01s responses=21573 events=113246 rows=48519 bytes=28003539 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.56s BEGIN=21571 COMMIT=21571 OTHER=2 ROW=48519 FIELD=10 VGTID=21573 commit_lag_avg_ms=503 commit_lag_max_ms=1003
+label=base#4 mode=live elapsed=34.00s first_event=0.02s responses=21573 events=113246 rows=48519 bytes=28003539 ev/s=3330 rows/s=1427 MB/s=0.8 client_cpu=2.51s BEGIN=21571 COMMIT=21571 OTHER=2 ROW=48519 FIELD=10 VGTID=21573 commit_lag_avg_ms=503 commit_lag_max_ms=1003
+cpu wall=30.04s vtgate=24.48 vttablets=30.37 mysqlds=22.19  mysqld_100=11.24 mysqld_101=10.95 vtgate=24.48 vttablet_100=15.35 vttablet_101=15.02
+uptime:  17:16:47 up 22:57,  0 user,  load average: 6.43, 5.23, 3.40
+=== wo4 arm=v5c round=1 flags=[]
+ transactions: 11954 (398.28 per sec.)  queries: 71724 (2389.70 per sec.)  avg: 14.91  95th percentile: 29.72 
+label=v5c#1 mode=live elapsed=34.00s first_event=0.01s responses=17546 events=113330 rows=48495 bytes=28092803 ev/s=3333 rows/s=1426 MB/s=0.8 client_cpu=2.84s BEGIN=21607 COMMIT=21607 OTHER=2 ROW=48495 FIELD=10 VGTID=21609 commit_lag_avg_ms=500 commit_lag_max_ms=1002 probes=679 probe_lost=1 probe_p50_ms=2.7 probe_p90_ms=5.3 probe_p99_ms=9.9 probe_max_ms=88.1
+label=v5c#2 mode=live elapsed=34.00s first_event=0.02s responses=17450 events=113330 rows=48495 bytes=28092803 ev/s=3333 rows/s=1426 MB/s=0.8 client_cpu=2.56s BEGIN=21607 COMMIT=21607 OTHER=2 ROW=48495 FIELD=10 VGTID=21609 commit_lag_avg_ms=500 commit_lag_max_ms=1002
+label=v5c#3 mode=live elapsed=34.00s first_event=0.01s responses=17512 events=113330 rows=48495 bytes=28092803 ev/s=3333 rows/s=1426 MB/s=0.8 client_cpu=2.60s BEGIN=21607 COMMIT=21607 OTHER=2 ROW=48495 FIELD=10 VGTID=21609 commit_lag_avg_ms=500 commit_lag_max_ms=1003
+label=v5c#4 mode=live elapsed=34.00s first_event=0.02s responses=17520 events=113330 rows=48495 bytes=28092803 ev/s=3333 rows/s=1426 MB/s=0.8 client_cpu=2.54s BEGIN=21607 COMMIT=21607 OTHER=2 ROW=48495 FIELD=10 VGTID=21609 commit_lag_avg_ms=500 commit_lag_max_ms=1002
+cpu wall=30.04s vtgate=24.61 vttablets=29.28 mysqlds=22.57  mysqld_100=11.35 mysqld_101=11.22 vtgate=24.61 vttablet_100=14.75 vttablet_101=14.53
+uptime:  17:18:33 up 22:59,  0 user,  load average: 7.21, 5.44, 3.64
+=== wo4 arm=base round=2 flags=[]
+ transactions: 11929 (397.56 per sec.)  queries: 71574 (2385.36 per sec.)  avg: 15.66  95th percentile: 33.72 
+label=base#1 mode=live elapsed=34.00s first_event=0.01s responses=21568 events=113107 rows=48395 bytes=28035385 ev/s=3327 rows/s=1423 MB/s=0.8 client_cpu=2.77s BEGIN=21566 COMMIT=21566 OTHER=2 ROW=48395 FIELD=10 VGTID=21568 commit_lag_avg_ms=500 commit_lag_max_ms=1032 probes=679 probe_lost=1 probe_p50_ms=2.7 probe_p90_ms=5.7 probe_p99_ms=13.3 probe_max_ms=61.0
+label=base#2 mode=live elapsed=34.00s first_event=0.01s responses=21568 events=113107 rows=48395 bytes=28035385 ev/s=3326 rows/s=1423 MB/s=0.8 client_cpu=2.49s BEGIN=21566 COMMIT=21566 OTHER=2 ROW=48395 FIELD=10 VGTID=21568 commit_lag_avg_ms=500 commit_lag_max_ms=1002
+label=base#3 mode=live elapsed=34.00s first_event=0.03s responses=21568 events=113107 rows=48395 bytes=28035385 ev/s=3326 rows/s=1423 MB/s=0.8 client_cpu=2.54s BEGIN=21566 COMMIT=21566 OTHER=2 ROW=48395 FIELD=10 VGTID=21568 commit_lag_avg_ms=500 commit_lag_max_ms=1027
+label=base#4 mode=live elapsed=34.00s first_event=0.02s responses=21568 events=113107 rows=48395 bytes=28035385 ev/s=3327 rows/s=1423 MB/s=0.8 client_cpu=2.51s BEGIN=21566 COMMIT=21566 OTHER=2 ROW=48395 FIELD=10 VGTID=21568 commit_lag_avg_ms=500 commit_lag_max_ms=1022
+cpu wall=30.04s vtgate=24.40 vttablets=30.22 mysqlds=22.19  mysqld_100=11.29 mysqld_101=10.90 vtgate=24.40 vttablet_100=15.35 vttablet_101=14.87
+uptime:  17:20:19 up 23:01,  0 user,  load average: 8.94, 5.98, 3.99
+=== wo4 arm=v5c round=2 flags=[]
+ transactions: 11960 (398.55 per sec.)  queries: 71760 (2391.33 per sec.)  avg: 14.38  95th percentile: 29.19 
+label=v5c#1 mode=live elapsed=34.00s first_event=0.04s responses=17484 events=113264 rows=48519 bytes=28092594 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.84s BEGIN=21577 COMMIT=21577 OTHER=2 ROW=48519 FIELD=10 VGTID=21579 commit_lag_avg_ms=505 commit_lag_max_ms=1002 probes=679 probe_lost=1 probe_p50_ms=2.7 probe_p90_ms=5.0 probe_p99_ms=11.2 probe_max_ms=159.4
+label=v5c#2 mode=live elapsed=34.00s first_event=0.02s responses=17452 events=113264 rows=48519 bytes=28092594 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.57s BEGIN=21577 COMMIT=21577 OTHER=2 ROW=48519 FIELD=10 VGTID=21579 commit_lag_avg_ms=505 commit_lag_max_ms=1002
+label=v5c#3 mode=live elapsed=34.00s first_event=0.03s responses=17496 events=113264 rows=48519 bytes=28092594 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.58s BEGIN=21577 COMMIT=21577 OTHER=2 ROW=48519 FIELD=10 VGTID=21579 commit_lag_avg_ms=505 commit_lag_max_ms=1003
+label=v5c#4 mode=live elapsed=34.00s first_event=0.02s responses=17466 events=113264 rows=48519 bytes=28092594 ev/s=3331 rows/s=1427 MB/s=0.8 client_cpu=2.58s BEGIN=21577 COMMIT=21577 OTHER=2 ROW=48519 FIELD=10 VGTID=21579 commit_lag_avg_ms=505 commit_lag_max_ms=1003
+cpu wall=30.03s vtgate=24.56 vttablets=29.46 mysqlds=22.46  mysqld_100=11.42 mysqld_101=11.04 vtgate=24.56 vttablet_100=15.04 vttablet_101=14.42
+uptime:  17:22:05 up 23:02,  0 user,  load average: 8.97, 6.29, 4.28

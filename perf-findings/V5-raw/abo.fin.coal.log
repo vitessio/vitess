@@ -1,0 +1,16 @@
+=== coal arm=base round=1 flags=[-coalesce]
+label=base#1 mode=drain elapsed=6.77s first_event=0.02s responses=200288 events=1227726 rows=626846 bytes=360550846 ev/s=181314 rows/s=92575 MB/s=53.2 client_cpu=4.06s BEGIN=200288 COMMIT=200288 ROW=626846 FIELD=16 VGTID=200288 commit_lag_avg_ms=2239913 commit_lag_max_ms=2256925
+cpu wall=6.79s vtgate=6.58 vttablets=11.02 mysqlds=0.66  mysqld_100=0.17 mysqld_101=0.16 mysqld_102=0.16 mysqld_103=0.17 vtgate=6.58 vttablet_100=2.75 vttablet_101=2.73 vttablet_102=2.79 vttablet_103=2.75
+uptime:  18:01:25 up 23:42,  0 user,  load average: 4.53, 1.56, 1.56
+=== coal arm=fin round=1 flags=[-coalesce]
+label=fin#1 mode=drain elapsed=4.55s first_event=0.03s responses=18132 events=1227780 rows=626846 bytes=360558560 ev/s=270098 rows/s=137899 MB/s=79.3 client_cpu=2.87s BEGIN=200306 COMMIT=200306 ROW=626846 FIELD=16 VGTID=200306 commit_lag_avg_ms=2288353 commit_lag_max_ms=2306601
+cpu wall=4.56s vtgate=4.21 vttablets=7.85 mysqlds=0.59  mysqld_100=0.15 mysqld_101=0.15 mysqld_102=0.14 mysqld_103=0.15 vtgate=4.21 vttablet_100=2.07 vttablet_101=1.91 vttablet_102=1.97 vttablet_103=1.90
+uptime:  18:02:13 up 23:42,  0 user,  load average: 3.86, 1.73, 1.61
+=== coal arm=base round=2 flags=[-coalesce]
+label=base#1 mode=drain elapsed=6.14s first_event=0.02s responses=200324 events=1227834 rows=626846 bytes=360567321 ev/s=199892 rows/s=102051 MB/s=58.7 client_cpu=3.75s BEGIN=200324 COMMIT=200324 ROW=626846 FIELD=16 VGTID=200324 commit_lag_avg_ms=2338147 commit_lag_max_ms=2355974
+cpu wall=6.16s vtgate=6.19 vttablets=10.53 mysqlds=0.62  mysqld_100=0.16 mysqld_101=0.16 mysqld_102=0.15 mysqld_103=0.15 vtgate=6.19 vttablet_100=2.60 vttablet_101=2.73 vttablet_102=2.56 vttablet_103=2.64
+uptime:  18:03:03 up 23:43,  0 user,  load average: 4.70, 2.14, 1.75
+=== coal arm=fin round=2 flags=[-coalesce]
+label=fin#1 mode=drain elapsed=4.79s first_event=0.03s responses=17941 events=1227888 rows=626846 bytes=360576055 ev/s=256586 rows/s=130989 MB/s=75.3 client_cpu=2.91s BEGIN=200342 COMMIT=200342 ROW=626846 FIELD=16 VGTID=200342 commit_lag_avg_ms=2385918 commit_lag_max_ms=2404567
+cpu wall=4.80s vtgate=4.56 vttablets=8.60 mysqlds=0.61  mysqld_100=0.15 mysqld_101=0.17 mysqld_102=0.15 mysqld_103=0.14 vtgate=4.56 vttablet_100=2.09 vttablet_101=2.25 vttablet_102=2.15 vttablet_103=2.11
+uptime:  18:03:51 up 23:44,  0 user,  load average: 4.74, 2.39, 1.84

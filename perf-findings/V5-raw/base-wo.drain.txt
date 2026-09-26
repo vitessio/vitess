@@ -1,0 +1,3 @@
+label=base#1 mode=drain elapsed=7.24s first_event=0.02s responses=200000 events=1307589 rows=707581 bytes=368235490 ev/s=180558 rows/s=97706 MB/s=50.8 client_cpu=5.00s BEGIN=200000 COMMIT=200000 ROW=707581 FIELD=8 VGTID=200000 commit_lag_avg_ms=43581 commit_lag_max_ms=75497
+cpu wall=7.26s vtgate=6.56 vttablets=10.39 mysqlds=0.84  mysqld_100=0.44 mysqld_101=0.40 vtgate=6.56 vttablet_100=5.13 vttablet_101=5.26
+uptime:  15:37:48 up 21:18,  0 user,  load average: 11.52, 5.96, 4.43
