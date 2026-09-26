@@ -1,5 +1,5 @@
 diff --git a/go.mod b/go.mod
-index 2f2ebcf..e1bf23f 100644
+index 2f2ebcff59..e1bf23fc31 100644
 --- a/go.mod
 +++ b/go.mod
 @@ -57,7 +57,6 @@ require (
@@ -11,7 +11,7 @@ index 2f2ebcf..e1bf23f 100644
  	github.com/prometheus/client_golang v1.24.1
  	github.com/prometheus/common v0.71.0
 diff --git a/go.sum b/go.sum
-index ad09cea..4d4d913 100644
+index ad09ceaada..4d4d913a47 100644
 --- a/go.sum
 +++ b/go.sum
 @@ -383,8 +383,6 @@ github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
@@ -24,7 +24,7 @@ index ad09cea..4d4d913 100644
  github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25/go.mod h1:ZQntvDG8TkPgljxtA0R9frDoND4QORU1VXz015N5Ks4=
  github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 diff --git a/go/cache/theine/sketch.go b/go/cache/theine/sketch.go
-index 7d241d9..97af2f1 100644
+index 7d241d94fc..97af2f1fca 100644
 --- a/go/cache/theine/sketch.go
 +++ b/go/cache/theine/sketch.go
 @@ -30,12 +30,15 @@ func NewCountMinSketch() *CountMinSketch {
@@ -73,7 +73,7 @@ index 7d241d9..97af2f1 100644
  	return h
  }
 diff --git a/go/cache/theine/sketch_test.go b/go/cache/theine/sketch_test.go
-index 91d19ae..f33544f 100644
+index 91d19ae681..f33544fd8c 100644
 --- a/go/cache/theine/sketch_test.go
 +++ b/go/cache/theine/sketch_test.go
 @@ -68,3 +68,70 @@ func TestSketch(t *testing.T) {
@@ -148,7 +148,7 @@ index 91d19ae..f33544f 100644
 +	}
 +}
 diff --git a/go/cache/theine/store.go b/go/cache/theine/store.go
-index 6526365..12a37c8 100644
+index 6526365a8f..12a37c8912 100644
 --- a/go/cache/theine/store.go
 +++ b/go/cache/theine/store.go
 @@ -439,6 +439,8 @@ func (s *Store[K, V]) Len() int {
@@ -171,7 +171,7 @@ index 6526365..12a37c8 100644
  }
  
 diff --git a/go/cache/theine/store_test.go b/go/cache/theine/store_test.go
-index 7f16307..77ea12c 100644
+index 7f16307f2a..77ea12c6e9 100644
 --- a/go/cache/theine/store_test.go
 +++ b/go/cache/theine/store_test.go
 @@ -19,7 +19,9 @@ package theine
@@ -205,7 +205,7 @@ index 7f16307..77ea12c 100644
 +	}, 30*time.Second, 10*time.Millisecond, "len %d, used capacity %d", store.Len(), store.UsedCapacity())
 +}
 diff --git a/go/flags/endtoend/mysqlctld.txt b/go/flags/endtoend/mysqlctld.txt
-index 71ebd7c..2e3e440 100644
+index 71ebd7c13a..2e3e440895 100644
 --- a/go/flags/endtoend/mysqlctld.txt
 +++ b/go/flags/endtoend/mysqlctld.txt
 @@ -87,6 +87,7 @@ Flags:
@@ -217,7 +217,7 @@ index 71ebd7c..2e3e440 100644
        --init-db-sql-file string                                          Path to .sql file to run after mysqld initialization
        --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
 diff --git a/go/flags/endtoend/vtcombo.txt b/go/flags/endtoend/vtcombo.txt
-index c826c1a..c7dea4d 100644
+index c826c1a65f..26b873e0c9 100644
 --- a/go/flags/endtoend/vtcombo.txt
 +++ b/go/flags/endtoend/vtcombo.txt
 @@ -167,6 +167,7 @@ Flags:
@@ -228,8 +228,16 @@ index c826c1a..c7dea4d 100644
        --grpc-use-effective-callerid                                      If set, and no username is available from a verified client certificate, sets the immediate caller ID from the client-supplied effective caller ID's principal. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any principal.
        --grpc-use-effective-groups                                        If set with --grpc-use-effective-callerid, and no username is available from a verified client certificate, copies non-empty client-supplied effective caller ID groups to the immediate caller's security groups. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any groups.
        --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
+@@ -187,6 +188,7 @@ Flags:
+       --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
+       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
+       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
++      --join-rhs-concurrency int                                         Maximum number of right-hand side queries that a vtgate nested-loop join runs at the same time for one query, outside transactions and reserved connections. 1 runs them one at a time. (default 8)
+       --json-topo vttest.TopoData                                        vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.
+       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
 diff --git a/go/flags/endtoend/vtctld.txt b/go/flags/endtoend/vtctld.txt
-index e526cf5..c0d930e 100644
+index e526cf5113..c0d930e844 100644
 --- a/go/flags/endtoend/vtctld.txt
 +++ b/go/flags/endtoend/vtctld.txt
 @@ -84,6 +84,7 @@ Flags:
@@ -241,7 +249,7 @@ index e526cf5..c0d930e 100644
        --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
        --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
 diff --git a/go/flags/endtoend/vtgate.txt b/go/flags/endtoend/vtgate.txt
-index 6932e6d..c6a0cc8 100644
+index 6932e6d6f5..c6a0cc8c65 100644
 --- a/go/flags/endtoend/vtgate.txt
 +++ b/go/flags/endtoend/vtgate.txt
 @@ -97,12 +97,14 @@ Flags:
@@ -260,7 +268,7 @@ index 6932e6d..c6a0cc8 100644
        --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
        --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
 diff --git a/go/flags/endtoend/vtgateclienttest.txt b/go/flags/endtoend/vtgateclienttest.txt
-index 84429d0..cd72970 100644
+index 84429d018c..cd729705bf 100644
 --- a/go/flags/endtoend/vtgateclienttest.txt
 +++ b/go/flags/endtoend/vtgateclienttest.txt
 @@ -44,6 +44,7 @@ Flags:
@@ -272,7 +280,7 @@ index 84429d0..cd72970 100644
        --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
        --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
 diff --git a/go/flags/endtoend/vttablet.txt b/go/flags/endtoend/vttablet.txt
-index aad760b..2a78556 100644
+index aad760bc2c..2a78556ebd 100644
 --- a/go/flags/endtoend/vttablet.txt
 +++ b/go/flags/endtoend/vttablet.txt
 @@ -198,6 +198,7 @@ Flags:
@@ -284,7 +292,7 @@ index aad760b..2a78556 100644
        --heartbeat-enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
        --heartbeat-interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
 diff --git a/go/flags/endtoend/vttestserver.txt b/go/flags/endtoend/vttestserver.txt
-index c5fd0b6..40b8060 100644
+index c5fd0b6dbf..40b8060985 100644
 --- a/go/flags/endtoend/vttestserver.txt
 +++ b/go/flags/endtoend/vttestserver.txt
 @@ -79,6 +79,7 @@ Flags:
@@ -297,7 +305,7 @@ index c5fd0b6..40b8060 100644
        --initialize-with-vt-dba-tcp                                       If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.
 diff --git a/go/mysql/binary_row_ref_test.go b/go/mysql/binary_row_ref_test.go
 new file mode 100644
-index 0000000..4b07220
+index 0000000000..4b0722039d
 --- /dev/null
 +++ b/go/mysql/binary_row_ref_test.go
 @@ -0,0 +1,387 @@
@@ -690,7 +698,7 @@ index 0000000..4b07220
 +}
 diff --git a/go/mysql/binary_row_test.go b/go/mysql/binary_row_test.go
 new file mode 100644
-index 0000000..f88c3c2
+index 0000000000..f88c3c2f2a
 --- /dev/null
 +++ b/go/mysql/binary_row_test.go
 @@ -0,0 +1,356 @@
@@ -1052,7 +1060,7 @@ index 0000000..f88c3c2
 +}
 diff --git a/go/mysql/binlog/binlog_json_bench_test.go b/go/mysql/binlog/binlog_json_bench_test.go
 new file mode 100644
-index 0000000..91f5a45
+index 0000000000..91f5a45026
 --- /dev/null
 +++ b/go/mysql/binlog/binlog_json_bench_test.go
 @@ -0,0 +1,93 @@
@@ -1150,7 +1158,7 @@ index 0000000..91f5a45
 +	}
 +}
 diff --git a/go/mysql/binlog/rbr.go b/go/mysql/binlog/rbr.go
-index 42cdd52..26a2e79 100644
+index 42cdd52a18..26a2e7959b 100644
 --- a/go/mysql/binlog/rbr.go
 +++ b/go/mysql/binlog/rbr.go
 @@ -17,9 +17,7 @@ limitations under the License.
@@ -1884,7 +1892,7 @@ index 42cdd52..26a2e79 100644
 +}
 diff --git a/go/mysql/binlog/rbr_format_test.go b/go/mysql/binlog/rbr_format_test.go
 new file mode 100644
-index 0000000..759b615
+index 0000000000..759b615d39
 --- /dev/null
 +++ b/go/mysql/binlog/rbr_format_test.go
 @@ -0,0 +1,404 @@
@@ -2294,7 +2302,7 @@ index 0000000..759b615
 +}
 diff --git a/go/mysql/binlog/rbr_reference_test.go b/go/mysql/binlog/rbr_reference_test.go
 new file mode 100644
-index 0000000..a37dfd2
+index 0000000000..a37dfd2109
 --- /dev/null
 +++ b/go/mysql/binlog/rbr_reference_test.go
 @@ -0,0 +1,691 @@
@@ -2990,7 +2998,7 @@ index 0000000..a37dfd2
 +	}
 +}
 diff --git a/go/mysql/binlog/rbr_test.go b/go/mysql/binlog/rbr_test.go
-index ec32724..40c5499 100644
+index ec32724d89..40c5499bb3 100644
 --- a/go/mysql/binlog/rbr_test.go
 +++ b/go/mysql/binlog/rbr_test.go
 @@ -621,6 +621,6 @@ func TestCellLengthAndData(t *testing.T) {
@@ -3002,7 +3010,7 @@ index ec32724..40c5499 100644
  	assert.Equal(t, "2025-03-12 15:49:04", result)
  }
 diff --git a/go/mysql/binlog_event.go b/go/mysql/binlog_event.go
-index 6fd7e03..9b6c3c0 100644
+index 6fd7e0340f..9b6c3c001a 100644
 --- a/go/mysql/binlog_event.go
 +++ b/go/mysql/binlog_event.go
 @@ -18,6 +18,7 @@ package mysql
@@ -3033,7 +3041,7 @@ index 6fd7e03..9b6c3c0 100644
  	return sum
  }
 diff --git a/go/mysql/collations/charset/convert.go b/go/mysql/collations/charset/convert.go
-index 2bbc703..4289bc0 100644
+index 2bbc7030d3..4289bc0924 100644
 --- a/go/mysql/collations/charset/convert.go
 +++ b/go/mysql/collations/charset/convert.go
 @@ -17,7 +17,12 @@ limitations under the License.
@@ -3281,7 +3289,7 @@ index 2bbc703..4289bc0 100644
  		w := dstCharset.EncodeRune(dst[nDst:], cp)
 diff --git a/go/mysql/collations/charset/convert_ascii_test.go b/go/mysql/collations/charset/convert_ascii_test.go
 new file mode 100644
-index 0000000..219b15b
+index 0000000000..219b15beeb
 --- /dev/null
 +++ b/go/mysql/collations/charset/convert_ascii_test.go
 @@ -0,0 +1,260 @@
@@ -3547,7 +3555,7 @@ index 0000000..219b15b
 +}
 diff --git a/go/mysql/collations/charset/convert_bench_test.go b/go/mysql/collations/charset/convert_bench_test.go
 new file mode 100644
-index 0000000..1fa2f70
+index 0000000000..1fa2f7016d
 --- /dev/null
 +++ b/go/mysql/collations/charset/convert_bench_test.go
 @@ -0,0 +1,98 @@
@@ -3651,7 +3659,7 @@ index 0000000..1fa2f70
 +}
 diff --git a/go/mysql/collations/charset/convert_legacy_test.go b/go/mysql/collations/charset/convert_legacy_test.go
 new file mode 100644
-index 0000000..44c8e0b
+index 0000000000..44c8e0b4cf
 --- /dev/null
 +++ b/go/mysql/collations/charset/convert_legacy_test.go
 @@ -0,0 +1,115 @@
@@ -3772,7 +3780,7 @@ index 0000000..44c8e0b
 +}
 diff --git a/go/mysql/collations/charset/export_test.go b/go/mysql/collations/charset/export_test.go
 new file mode 100644
-index 0000000..0d67773
+index 0000000000..0d67773fbf
 --- /dev/null
 +++ b/go/mysql/collations/charset/export_test.go
 @@ -0,0 +1,27 @@
@@ -3804,7 +3812,7 @@ index 0000000..0d67773
 +	CountNonASCII = countNonASCII
 +)
 diff --git a/go/mysql/collations/charset/unicode/utf8.go b/go/mysql/collations/charset/unicode/utf8.go
-index a4bd70c..71ea83f 100644
+index a4bd70ccd3..71ea83f24a 100644
 --- a/go/mysql/collations/charset/unicode/utf8.go
 +++ b/go/mysql/collations/charset/unicode/utf8.go
 @@ -17,6 +17,7 @@ limitations under the License.
@@ -3960,7 +3968,7 @@ index a4bd70c..71ea83f 100644
 +}
 diff --git a/go/mysql/collations/charset/unicode/utf8_bench_test.go b/go/mysql/collations/charset/unicode/utf8_bench_test.go
 new file mode 100644
-index 0000000..9052e74
+index 0000000000..9052e74f61
 --- /dev/null
 +++ b/go/mysql/collations/charset/unicode/utf8_bench_test.go
 @@ -0,0 +1,106 @@
@@ -4072,7 +4080,7 @@ index 0000000..9052e74
 +}
 diff --git a/go/mysql/collations/charset/unicode/utf8_test.go b/go/mysql/collations/charset/unicode/utf8_test.go
 new file mode 100644
-index 0000000..765357e
+index 0000000000..765357e037
 --- /dev/null
 +++ b/go/mysql/collations/charset/unicode/utf8_test.go
 @@ -0,0 +1,236 @@
@@ -4313,7 +4321,7 @@ index 0000000..765357e
 +	}
 +}
 diff --git a/go/mysql/collations/colldata/8bit.go b/go/mysql/collations/colldata/8bit.go
-index 05936e2..d9fb431 100644
+index 05936e2d02..d9fb431afd 100644
 --- a/go/mysql/collations/colldata/8bit.go
 +++ b/go/mysql/collations/colldata/8bit.go
 @@ -97,12 +97,7 @@ func (c *Collation_8bit_bin) Hash(hasher *vthash.Hasher, src []byte, numCodepoin
@@ -4372,7 +4380,7 @@ index 05936e2..d9fb431 100644
  }
  
 diff --git a/go/mysql/collations/colldata/benchmarks_test.go b/go/mysql/collations/colldata/benchmarks_test.go
-index bdd8bba..dc158ec 100644
+index bdd8bbaf36..dc158ecab5 100644
 --- a/go/mysql/collations/colldata/benchmarks_test.go
 +++ b/go/mysql/collations/colldata/benchmarks_test.go
 @@ -150,6 +150,41 @@ func BenchmarkCollationHash(b *testing.B) {
@@ -4419,7 +4427,7 @@ index bdd8bba..dc158ec 100644
  		coll := benchCollation(b, name)
 diff --git a/go/mysql/collations/colldata/collate_fastpath_test.go b/go/mysql/collations/colldata/collate_fastpath_test.go
 new file mode 100644
-index 0000000..3bc3a00
+index 0000000000..3bc3a00ef6
 --- /dev/null
 +++ b/go/mysql/collations/colldata/collate_fastpath_test.go
 @@ -0,0 +1,299 @@
@@ -4724,7 +4732,7 @@ index 0000000..3bc3a00
 +}
 diff --git a/go/mysql/collations/colldata/hash_test.go b/go/mysql/collations/colldata/hash_test.go
 new file mode 100644
-index 0000000..b35c41a
+index 0000000000..b35c41acb8
 --- /dev/null
 +++ b/go/mysql/collations/colldata/hash_test.go
 @@ -0,0 +1,193 @@
@@ -4923,7 +4931,7 @@ index 0000000..b35c41a
 +}
 diff --git a/go/mysql/collations/colldata/hashbuf.go b/go/mysql/collations/colldata/hashbuf.go
 new file mode 100644
-index 0000000..08164f5
+index 0000000000..08164f5483
 --- /dev/null
 +++ b/go/mysql/collations/colldata/hashbuf.go
 @@ -0,0 +1,86 @@
@@ -5014,7 +5022,7 @@ index 0000000..08164f5
 +	b.n += copy(b.buf[b.n:], p)
 +}
 diff --git a/go/mysql/collations/colldata/multibyte.go b/go/mysql/collations/colldata/multibyte.go
-index 6ffa012..1c23d46 100644
+index 6ffa01250a..1c23d46f4e 100644
 --- a/go/mysql/collations/colldata/multibyte.go
 +++ b/go/mysql/collations/colldata/multibyte.go
 @@ -156,27 +156,29 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
@@ -5051,7 +5059,7 @@ index 6ffa012..1c23d46 100644
  
  func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 diff --git a/go/mysql/collations/colldata/uca.go b/go/mysql/collations/colldata/uca.go
-index 43904a2..c6ddfa1 100644
+index 43904a206b..c6ddfa1a41 100644
 --- a/go/mysql/collations/colldata/uca.go
 +++ b/go/mysql/collations/colldata/uca.go
 @@ -19,7 +19,6 @@ package colldata
@@ -5108,7 +5116,7 @@ index 43904a2..c6ddfa1 100644
  
  func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
 diff --git a/go/mysql/collations/colldata/unicase.go b/go/mysql/collations/colldata/unicase.go
-index 91b0537..b8fd04b 100644
+index 91b0537b45..b8fd04b470 100644
 --- a/go/mysql/collations/colldata/unicase.go
 +++ b/go/mysql/collations/colldata/unicase.go
 @@ -17,6 +17,9 @@ limitations under the License.
@@ -5143,7 +5151,7 @@ index 91b0537..b8fd04b 100644
  
  func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
 diff --git a/go/mysql/collations/colldata/unicode.go b/go/mysql/collations/colldata/unicode.go
-index 8dba199..ad4fb38 100644
+index 8dba1990d2..ad4fb383b4 100644
 --- a/go/mysql/collations/colldata/unicode.go
 +++ b/go/mysql/collations/colldata/unicode.go
 @@ -18,8 +18,10 @@ package colldata
@@ -5457,7 +5465,7 @@ index 8dba199..ad4fb38 100644
  
  func (c *Collation_unicode_bin) WeightStringLen(numBytes int) int {
 diff --git a/go/mysql/conn.go b/go/mysql/conn.go
-index abe3e61..2293a1d 100644
+index abe3e6112a..2293a1d950 100644
 --- a/go/mysql/conn.go
 +++ b/go/mysql/conn.go
 @@ -151,7 +151,10 @@ type Conn struct {
@@ -5569,7 +5577,7 @@ index abe3e61..2293a1d 100644
  					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
 diff --git a/go/mysql/conn_flush_test.go b/go/mysql/conn_flush_test.go
 new file mode 100644
-index 0000000..3f5b78a
+index 0000000000..3f5b78a86e
 --- /dev/null
 +++ b/go/mysql/conn_flush_test.go
 @@ -0,0 +1,174 @@
@@ -5748,7 +5756,7 @@ index 0000000..3f5b78a
 +	})
 +}
 diff --git a/go/mysql/encoding.go b/go/mysql/encoding.go
-index 20e09f3..1c3901d 100644
+index 20e09f32fe..1c3901de00 100644
 --- a/go/mysql/encoding.go
 +++ b/go/mysql/encoding.go
 @@ -311,6 +311,21 @@ func readLenEncStringAsBytes(data []byte, pos int) ([]byte, int, bool) {
@@ -5775,7 +5783,7 @@ index 20e09f3..1c3901d 100644
  	if !ok {
 diff --git a/go/mysql/json/escape.go b/go/mysql/json/escape.go
 new file mode 100644
-index 0000000..167e43d
+index 0000000000..167e43d74f
 --- /dev/null
 +++ b/go/mysql/json/escape.go
 @@ -0,0 +1,188 @@
@@ -5969,7 +5977,7 @@ index 0000000..167e43d
 +}
 diff --git a/go/mysql/json/escape_bench_test.go b/go/mysql/json/escape_bench_test.go
 new file mode 100644
-index 0000000..28400bc
+index 0000000000..28400bc1b8
 --- /dev/null
 +++ b/go/mysql/json/escape_bench_test.go
 @@ -0,0 +1,101 @@
@@ -6076,7 +6084,7 @@ index 0000000..28400bc
 +}
 diff --git a/go/mysql/json/escape_old_test.go b/go/mysql/json/escape_old_test.go
 new file mode 100644
-index 0000000..1f484f8
+index 0000000000..1f484f8158
 --- /dev/null
 +++ b/go/mysql/json/escape_old_test.go
 @@ -0,0 +1,170 @@
@@ -6252,7 +6260,7 @@ index 0000000..1f484f8
 +}
 diff --git a/go/mysql/json/escape_test.go b/go/mysql/json/escape_test.go
 new file mode 100644
-index 0000000..80b5f51
+index 0000000000..80b5f51766
 --- /dev/null
 +++ b/go/mysql/json/escape_test.go
 @@ -0,0 +1,204 @@
@@ -6461,7 +6469,7 @@ index 0000000..80b5f51
 +	})
 +}
 diff --git a/go/mysql/json/marshal.go b/go/mysql/json/marshal.go
-index 5d303ba..bd5b870 100644
+index 5d303bae5a..bd5b87099d 100644
 --- a/go/mysql/json/marshal.go
 +++ b/go/mysql/json/marshal.go
 @@ -17,6 +17,7 @@ limitations under the License.
@@ -6529,7 +6537,7 @@ index 5d303ba..bd5b870 100644
  		}
 diff --git a/go/mysql/json/marshal_bench_test.go b/go/mysql/json/marshal_bench_test.go
 new file mode 100644
-index 0000000..2230da2
+index 0000000000..2230da2098
 --- /dev/null
 +++ b/go/mysql/json/marshal_bench_test.go
 @@ -0,0 +1,96 @@
@@ -6630,7 +6638,7 @@ index 0000000..2230da2
 +	}
 +}
 diff --git a/go/mysql/json/parser.go b/go/mysql/json/parser.go
-index c379c19..95044e3 100644
+index c379c196cd..95044e33c1 100644
 --- a/go/mysql/json/parser.go
 +++ b/go/mysql/json/parser.go
 @@ -30,7 +30,6 @@ import (
@@ -6720,7 +6728,7 @@ index c379c19..95044e3 100644
  	n := strings.IndexByte(s, '\\')
  	if n < 0 {
 diff --git a/go/mysql/query.go b/go/mysql/query.go
-index 86db97b..6585aa2 100644
+index 86db97b97c..6585aa23b0 100644
 --- a/go/mysql/query.go
 +++ b/go/mysql/query.go
 @@ -17,12 +17,14 @@ limitations under the License.
@@ -7370,7 +7378,7 @@ index 86db97b..6585aa2 100644
  func val2MySQLLen(v sqltypes.Value) (int, error) {
 diff --git a/go/mysql/read_query_result_ref_test.go b/go/mysql/read_query_result_ref_test.go
 new file mode 100644
-index 0000000..dd6caac
+index 0000000000..dd6caac690
 --- /dev/null
 +++ b/go/mysql/read_query_result_ref_test.go
 @@ -0,0 +1,168 @@
@@ -7544,7 +7552,7 @@ index 0000000..dd6caac
 +}
 diff --git a/go/mysql/read_query_result_test.go b/go/mysql/read_query_result_test.go
 new file mode 100644
-index 0000000..4535651
+index 0000000000..45356512d7
 --- /dev/null
 +++ b/go/mysql/read_query_result_test.go
 @@ -0,0 +1,191 @@
@@ -7740,7 +7748,7 @@ index 0000000..4535651
 +	}
 +}
 diff --git a/go/mysql/replication/mysql56_gtid.go b/go/mysql/replication/mysql56_gtid.go
-index 490e2c7..af19b9d 100644
+index 490e2c72cb..af19b9d03b 100644
 --- a/go/mysql/replication/mysql56_gtid.go
 +++ b/go/mysql/replication/mysql56_gtid.go
 @@ -19,6 +19,7 @@ package replication
@@ -7791,7 +7799,7 @@ index 490e2c7..af19b9d 100644
  func ParseSID(s string) (sid SID, err error) {
  	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
 diff --git a/go/mysql/replication/mysql56_gtid_set.go b/go/mysql/replication/mysql56_gtid_set.go
-index b336b1d..b6d75e1 100644
+index b336b1d4ef..b6d75e1a58 100644
 --- a/go/mysql/replication/mysql56_gtid_set.go
 +++ b/go/mysql/replication/mysql56_gtid_set.go
 @@ -23,6 +23,7 @@ import (
@@ -7983,7 +7991,7 @@ index b336b1d..b6d75e1 100644
  }
 diff --git a/go/mysql/replication/mysql56_gtid_set_string_test.go b/go/mysql/replication/mysql56_gtid_set_string_test.go
 new file mode 100644
-index 0000000..f07d2c6
+index 0000000000..f07d2c6e86
 --- /dev/null
 +++ b/go/mysql/replication/mysql56_gtid_set_string_test.go
 @@ -0,0 +1,398 @@
@@ -8386,7 +8394,7 @@ index 0000000..f07d2c6
 +	}
 +}
 diff --git a/go/mysql/replication/replication_position.go b/go/mysql/replication/replication_position.go
-index c438873..33bfd1f 100644
+index c4388735cb..33bfd1f125 100644
 --- a/go/mysql/replication/replication_position.go
 +++ b/go/mysql/replication/replication_position.go
 @@ -18,9 +18,9 @@ package replication
@@ -8418,7 +8426,7 @@ index c438873..33bfd1f 100644
  // DecodePosition converts a string in the format returned by
 diff --git a/go/mysql/zz_f30_bench_test.go b/go/mysql/zz_f30_bench_test.go
 new file mode 100644
-index 0000000..778901e
+index 0000000000..778901e7b4
 --- /dev/null
 +++ b/go/mysql/zz_f30_bench_test.go
 @@ -0,0 +1,53 @@
@@ -8476,7 +8484,7 @@ index 0000000..778901e
 +	}
 +}
 diff --git a/go/pools/smartconnpool/pool.go b/go/pools/smartconnpool/pool.go
-index e023450..31e0f10 100644
+index e0234506d6..31e0f106e7 100644
 --- a/go/pools/smartconnpool/pool.go
 +++ b/go/pools/smartconnpool/pool.go
 @@ -252,6 +252,37 @@ func (pool *ConnPool[C]) runWorker(close <-chan struct{}, interval time.Duration
@@ -8538,7 +8546,7 @@ index e023450..31e0f10 100644
  
  	idleTimeout := pool.IdleTimeout()
 diff --git a/go/pools/smartconnpool/pool_test.go b/go/pools/smartconnpool/pool_test.go
-index b5cada1..e98d44c 100644
+index b5cada1bef..e98d44c824 100644
 --- a/go/pools/smartconnpool/pool_test.go
 +++ b/go/pools/smartconnpool/pool_test.go
 @@ -1299,6 +1299,43 @@ func TestTimeout(t *testing.T) {
@@ -8586,7 +8594,7 @@ index b5cada1..e98d44c 100644
  	var state TestState
  
 diff --git a/go/pools/smartconnpool/waitlist.go b/go/pools/smartconnpool/waitlist.go
-index 7c9ae5f..87561ba 100644
+index 7c9ae5fc8f..87561ba98c 100644
 --- a/go/pools/smartconnpool/waitlist.go
 +++ b/go/pools/smartconnpool/waitlist.go
 @@ -20,6 +20,7 @@ import (
@@ -8633,7 +8641,7 @@ index 7c9ae5f..87561ba 100644
  		return &list.Element[waiter[C]]{
  			// buffered (cap 1) so returners never block handing off a
 diff --git a/go/sqltypes/bind_variables.go b/go/sqltypes/bind_variables.go
-index 5ce1e6f..e5473be 100644
+index 5ce1e6f35f..e5473be63b 100644
 --- a/go/sqltypes/bind_variables.go
 +++ b/go/sqltypes/bind_variables.go
 @@ -356,15 +356,20 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
@@ -8660,7 +8668,7 @@ index 5ce1e6f..e5473be 100644
  }
  
 diff --git a/go/sqltypes/bind_variables_test.go b/go/sqltypes/bind_variables_test.go
-index 526ca71..849e27b 100644
+index 526ca71d16..849e27b56a 100644
 --- a/go/sqltypes/bind_variables_test.go
 +++ b/go/sqltypes/bind_variables_test.go
 @@ -370,6 +370,17 @@ func TestValidateBindVarables(t *testing.T) {
@@ -8702,7 +8710,7 @@ index 526ca71..849e27b 100644
 +	}
 +}
 diff --git a/go/sqltypes/proto3.go b/go/sqltypes/proto3.go
-index 4b7ef30..4969b21 100644
+index 4b7ef3013d..4969b21e4a 100644
 --- a/go/sqltypes/proto3.go
 +++ b/go/sqltypes/proto3.go
 @@ -66,18 +66,59 @@ func RowToProto3Inplace(row []Value, result *querypb.Row) int {
@@ -8794,7 +8802,7 @@ index 4b7ef30..4969b21 100644
  }
 diff --git a/go/sqltypes/proto3_slab_test.go b/go/sqltypes/proto3_slab_test.go
 new file mode 100644
-index 0000000..9e7f308
+index 0000000000..9e7f308ee7
 --- /dev/null
 +++ b/go/sqltypes/proto3_slab_test.go
 @@ -0,0 +1,225 @@
@@ -9024,7 +9032,7 @@ index 0000000..9e7f308
 +	}
 +}
 diff --git a/go/sqltypes/result.go b/go/sqltypes/result.go
-index d27cc86..6d44761 100644
+index d27cc86f35..6d447612e3 100644
 --- a/go/sqltypes/result.go
 +++ b/go/sqltypes/result.go
 @@ -312,7 +312,12 @@ func hashCodeForRow(val []Value) string {
@@ -9042,7 +9050,7 @@ index d27cc86..6d44761 100644
  	for i, length := range row.Lengths {
  		if length < 0 {
 diff --git a/go/sqltypes/value.go b/go/sqltypes/value.go
-index 479e4a5..dff71f0 100644
+index 479e4a5c31..dff71f0b6a 100644
 --- a/go/sqltypes/value.go
 +++ b/go/sqltypes/value.go
 @@ -24,9 +24,11 @@ import (
@@ -9346,7 +9354,7 @@ index 479e4a5..dff71f0 100644
  
 diff --git a/go/sqltypes/value_escape_legacy_test.go b/go/sqltypes/value_escape_legacy_test.go
 new file mode 100644
-index 0000000..ddb0440
+index 0000000000..ddb0440c6f
 --- /dev/null
 +++ b/go/sqltypes/value_escape_legacy_test.go
 @@ -0,0 +1,88 @@
@@ -9440,7 +9448,7 @@ index 0000000..ddb0440
 +}
 diff --git a/go/sqltypes/value_escape_test.go b/go/sqltypes/value_escape_test.go
 new file mode 100644
-index 0000000..6188a54
+index 0000000000..6188a54800
 --- /dev/null
 +++ b/go/sqltypes/value_escape_test.go
 @@ -0,0 +1,304 @@
@@ -9749,7 +9757,7 @@ index 0000000..6188a54
 +	}
 +}
 diff --git a/go/sqltypes/value_test.go b/go/sqltypes/value_test.go
-index 2021566..04a2b48 100644
+index 20215662c3..04a2b489fc 100644
 --- a/go/sqltypes/value_test.go
 +++ b/go/sqltypes/value_test.go
 @@ -17,7 +17,10 @@ limitations under the License.
@@ -9888,7 +9896,7 @@ index 2021566..04a2b48 100644
  	testcases := []struct {
  		in    Value
 diff --git a/go/stats/counters.go b/go/stats/counters.go
-index 1046d23..e240893 100644
+index 1046d2322f..e240893db1 100644
 --- a/go/stats/counters.go
 +++ b/go/stats/counters.go
 @@ -46,7 +46,25 @@ func (c *counters) getOrCreate(key string) *atomic.Int64 {
@@ -9948,7 +9956,7 @@ index 1046d23..e240893 100644
  
  // ResetKey resets a specific key.
 diff --git a/go/stats/export.go b/go/stats/export.go
-index 94865c2..dd00a93 100644
+index 94865c2151..dd00a93539 100644
 --- a/go/stats/export.go
 +++ b/go/stats/export.go
 @@ -384,6 +384,11 @@ func IsDimensionCombined(name string) bool {
@@ -10053,7 +10061,7 @@ index 94865c2..dd00a93 100644
  }
  
 diff --git a/go/stats/histogram.go b/go/stats/histogram.go
-index b90d6db..0fb50f8 100644
+index b90d6db731..0fb50f85ef 100644
 --- a/go/stats/histogram.go
 +++ b/go/stats/histogram.go
 @@ -17,8 +17,6 @@ limitations under the License.
@@ -10104,7 +10112,7 @@ index b90d6db..0fb50f8 100644
  // Counts returns a map from labels to the current count in the Histogram for that label.
 diff --git a/go/stats/multilabel_bench_test.go b/go/stats/multilabel_bench_test.go
 new file mode 100644
-index 0000000..ae4fd30
+index 0000000000..ae4fd30c69
 --- /dev/null
 +++ b/go/stats/multilabel_bench_test.go
 @@ -0,0 +1,87 @@
@@ -10197,7 +10205,7 @@ index 0000000..ae4fd30
 +}
 diff --git a/go/stats/multilabel_key_test.go b/go/stats/multilabel_key_test.go
 new file mode 100644
-index 0000000..40dcd39
+index 0000000000..40dcd39a7f
 --- /dev/null
 +++ b/go/stats/multilabel_key_test.go
 @@ -0,0 +1,107 @@
@@ -10309,7 +10317,7 @@ index 0000000..40dcd39
 +	assert.Equal(t, int64(2), mt.Counts()["x_y.z"])
 +}
 diff --git a/go/stats/timings.go b/go/stats/timings.go
-index a1f30f5..222f771 100644
+index a1f30f5fd6..222f771c11 100644
 --- a/go/stats/timings.go
 +++ b/go/stats/timings.go
 @@ -64,11 +64,11 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
@@ -10403,7 +10411,7 @@ index a1f30f5..222f771 100644
  // Cutoffs returns the cutoffs used in the component histograms.
 diff --git a/go/stats/zz_f30_bench_test.go b/go/stats/zz_f30_bench_test.go
 new file mode 100644
-index 0000000..871dd97
+index 0000000000..871dd97a47
 --- /dev/null
 +++ b/go/stats/zz_f30_bench_test.go
 @@ -0,0 +1,73 @@
@@ -10481,7 +10489,7 @@ index 0000000..871dd97
 +	}
 +}
 diff --git a/go/streamlog/streamlog.go b/go/streamlog/streamlog.go
-index 721c0d2..38fb59b 100644
+index 721c0d28dc..38fb59b169 100644
 --- a/go/streamlog/streamlog.go
 +++ b/go/streamlog/streamlog.go
 @@ -27,6 +27,7 @@ import (
@@ -10558,7 +10566,7 @@ index 721c0d2..38fb59b 100644
  
  // Name returns the name of StreamLogger.
 diff --git a/go/streamlog/streamlog_test.go b/go/streamlog/streamlog_test.go
-index ca03cab..2a2f708 100644
+index ca03cabadf..2a2f708d9f 100644
 --- a/go/streamlog/streamlog_test.go
 +++ b/go/streamlog/streamlog_test.go
 @@ -602,3 +602,31 @@ func (mf *mockFormatter) Logf(w io.Writer, params url.Values) error {
@@ -10594,7 +10602,7 @@ index ca03cab..2a2f708 100644
 +	assert.Equal(t, "hello", msg.val)
 +}
 diff --git a/go/test/endtoend/transaction/twopc/twopc_test.go b/go/test/endtoend/transaction/twopc/twopc_test.go
-index 3d565f5..a03dab0 100644
+index 3d565f5b0d..a03dab05f8 100644
 --- a/go/test/endtoend/transaction/twopc/twopc_test.go
 +++ b/go/test/endtoend/transaction/twopc/twopc_test.go
 @@ -173,9 +173,9 @@ func TestDTCommit(t *testing.T) {
@@ -10754,7 +10762,7 @@ index 3d565f5..a03dab0 100644
  				"ks.redo_statement:40-80": {
  					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
 diff --git a/go/tools/astfmtgen/main.go b/go/tools/astfmtgen/main.go
-index 10acea7..34ac926 100644
+index 10acea71a2..34ac926557 100644
 --- a/go/tools/astfmtgen/main.go
 +++ b/go/tools/astfmtgen/main.go
 @@ -101,8 +101,6 @@ func (r *Rewriter) Rewrite() error {
@@ -10814,7 +10822,7 @@ index 10acea7..34ac926 100644
  			inputExpr := expr.Args[2+fieldnum]
  			inputType := r.pkg.TypesInfo.Types[inputExpr].Type
 diff --git a/go/tools/astfmtgen/main_test.go b/go/tools/astfmtgen/main_test.go
-index f0013cf..1d2beca 100644
+index f0013cf399..1d2beca397 100644
 --- a/go/tools/astfmtgen/main_test.go
 +++ b/go/tools/astfmtgen/main_test.go
 @@ -481,15 +481,55 @@ func TestRewriteAstPrintf_FormatSpecifiers(t *testing.T) {
@@ -10921,7 +10929,7 @@ index f0013cf..1d2beca 100644
  			name:   "invalid literal argument (non-unquotable)",
  			format: `"test`,
 diff --git a/go/vt/callinfo/plugin_grpc.go b/go/vt/callinfo/plugin_grpc.go
-index e402f2f..c8b06c2 100644
+index e402f2f796..c8b06c2b40 100644
 --- a/go/vt/callinfo/plugin_grpc.go
 +++ b/go/vt/callinfo/plugin_grpc.go
 @@ -21,6 +21,7 @@ package callinfo
@@ -10981,7 +10989,7 @@ index e402f2f..c8b06c2 100644
  	if err != nil {
  		panic(err)
 diff --git a/go/vt/callinfo/plugin_grpc_test.go b/go/vt/callinfo/plugin_grpc_test.go
-index 7946198..d94f72f 100644
+index 794619899b..d94f72f261 100644
 --- a/go/vt/callinfo/plugin_grpc_test.go
 +++ b/go/vt/callinfo/plugin_grpc_test.go
 @@ -17,9 +17,13 @@ limitations under the License.
@@ -11023,7 +11031,7 @@ index 7946198..d94f72f 100644
 +	require.Equal(t, "127.0.0.1:15991:/queryservice.Query/Execute(gRPC)", ci.Text())
 +}
 diff --git a/go/vt/callinfo/plugin_mysql.go b/go/vt/callinfo/plugin_mysql.go
-index 37f743c..f9a83d2 100644
+index 37f743c89f..f9a83d24f2 100644
 --- a/go/vt/callinfo/plugin_mysql.go
 +++ b/go/vt/callinfo/plugin_mysql.go
 @@ -21,6 +21,7 @@ package callinfo
@@ -11081,7 +11089,7 @@ index 37f743c..f9a83d2 100644
  	if err != nil {
  		panic(err)
 diff --git a/go/vt/dbconfigs/dbconfigs.go b/go/vt/dbconfigs/dbconfigs.go
-index 757ac45..6ae4554 100644
+index 757ac45646..6ae455485d 100644
 --- a/go/vt/dbconfigs/dbconfigs.go
 +++ b/go/vt/dbconfigs/dbconfigs.go
 @@ -234,6 +234,16 @@ func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
@@ -11102,7 +11110,7 @@ index 757ac45..6ae4554 100644
  func (c Connector) DBName() string {
  	return c.connParams.DbName
 diff --git a/go/vt/discovery/healthcheck.go b/go/vt/discovery/healthcheck.go
-index 36728cf..40e7423 100644
+index 36728cf989..40e74230e3 100644
 --- a/go/vt/discovery/healthcheck.go
 +++ b/go/vt/discovery/healthcheck.go
 @@ -285,8 +285,9 @@ type HealthCheckImpl struct {
@@ -11140,7 +11148,7 @@ index 36728cf..40e7423 100644
  	result := make([]*TabletHealth, 0, len(ths))
  	for _, th := range ths {
 diff --git a/go/vt/discovery/tablet_picker.go b/go/vt/discovery/tablet_picker.go
-index 148c158..e1ba60f 100644
+index 148c158d35..e1ba60f9c5 100644
 --- a/go/vt/discovery/tablet_picker.go
 +++ b/go/vt/discovery/tablet_picker.go
 @@ -61,10 +61,19 @@ const (
@@ -11194,7 +11202,7 @@ index 148c158..e1ba60f 100644
  		}
  		log.Info("Tablet picker found a healthy tablet for streaming: " + candidates[0].Tablet.String())
 diff --git a/go/vt/discovery/tablet_picker_test.go b/go/vt/discovery/tablet_picker_test.go
-index 3c34597..b413cce 100644
+index 3c34597e82..b413ccea9e 100644
 --- a/go/vt/discovery/tablet_picker_test.go
 +++ b/go/vt/discovery/tablet_picker_test.go
 @@ -518,6 +518,45 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
@@ -11244,7 +11252,7 @@ index 3c34597..b413cce 100644
  	ctx := utils.LeakCheckContext(t)
  
 diff --git a/go/vt/key/destination.go b/go/vt/key/destination.go
-index 7f190c5..befc3d3 100644
+index 7f190c5e69..befc3d32fa 100644
 --- a/go/vt/key/destination.go
 +++ b/go/vt/key/destination.go
 @@ -17,9 +17,10 @@ limitations under the License.
@@ -11335,7 +11343,7 @@ index 7f190c5..befc3d3 100644
  //
 diff --git a/go/vt/key/destination_bench_test.go b/go/vt/key/destination_bench_test.go
 new file mode 100644
-index 0000000..8afc9f4
+index 0000000000..8afc9f4b02
 --- /dev/null
 +++ b/go/vt/key/destination_bench_test.go
 @@ -0,0 +1,231 @@
@@ -11572,7 +11580,7 @@ index 0000000..8afc9f4
 +}
 diff --git a/go/vt/key/zz_f30_test.go b/go/vt/key/zz_f30_test.go
 new file mode 100644
-index 0000000..f188f9e
+index 0000000000..f188f9e00e
 --- /dev/null
 +++ b/go/vt/key/zz_f30_test.go
 @@ -0,0 +1,29 @@
@@ -11606,7 +11614,7 @@ index 0000000..f188f9e
 +	assert.Equal(t, orig, shards)
 +}
 diff --git a/go/vt/mysqlctl/compression.go b/go/vt/mysqlctl/compression.go
-index c58a70a..17f0366 100644
+index c58a70af01..17f0366627 100644
 --- a/go/vt/mysqlctl/compression.go
 +++ b/go/vt/mysqlctl/compression.go
 @@ -29,10 +29,10 @@ import (
@@ -11623,7 +11631,7 @@ index c58a70a..17f0366 100644
  )
 diff --git a/go/vt/mysqlctl/internal/pargzip/pargzip.go b/go/vt/mysqlctl/internal/pargzip/pargzip.go
 new file mode 100644
-index 0000000..3fa17a7
+index 0000000000..3fa17a7c64
 --- /dev/null
 +++ b/go/vt/mysqlctl/internal/pargzip/pargzip.go
 @@ -0,0 +1,326 @@
@@ -11955,7 +11963,7 @@ index 0000000..3fa17a7
 +}
 diff --git a/go/vt/mysqlctl/internal/pargzip/pargzip_test.go b/go/vt/mysqlctl/internal/pargzip/pargzip_test.go
 new file mode 100644
-index 0000000..b0777dc
+index 0000000000..b0777dc6d3
 --- /dev/null
 +++ b/go/vt/mysqlctl/internal/pargzip/pargzip_test.go
 @@ -0,0 +1,228 @@
@@ -12188,7 +12196,7 @@ index 0000000..b0777dc
 +	}
 +}
 diff --git a/go/vt/mysqlctl/mysqld.go b/go/vt/mysqlctl/mysqld.go
-index 8f807d7..0eff94f 100644
+index 8f807d7ab6..0eff94f618 100644
 --- a/go/vt/mysqlctl/mysqld.go
 +++ b/go/vt/mysqlctl/mysqld.go
 @@ -91,6 +91,14 @@ const (
@@ -12257,7 +12265,7 @@ index 8f807d7..0eff94f 100644
  // CLONE operation) to fully exit, then starts a new one. It polls for the
  // disappearance of the socket and pid files before calling Start.
 diff --git a/go/vt/mysqlctl/mysqld_test.go b/go/vt/mysqlctl/mysqld_test.go
-index a56e140..78f7e74 100644
+index a56e140d9f..78f7e74245 100644
 --- a/go/vt/mysqlctl/mysqld_test.go
 +++ b/go/vt/mysqlctl/mysqld_test.go
 @@ -328,6 +328,36 @@ func TestGetDbaConnection(t *testing.T) {
@@ -12298,7 +12306,7 @@ index a56e140..78f7e74 100644
  	db := fakesqldb.New(t)
  	defer db.Close()
 diff --git a/go/vt/mysqlctl/xtrabackupengine.go b/go/vt/mysqlctl/xtrabackupengine.go
-index e7cd3c2..7cb1e4b 100644
+index e7cd3c2d21..7cb1e4b1b1 100644
 --- a/go/vt/mysqlctl/xtrabackupengine.go
 +++ b/go/vt/mysqlctl/xtrabackupengine.go
 @@ -513,9 +513,9 @@ func (be *XtrabackupEngine) backupFiles(
@@ -12380,7 +12388,7 @@ index e7cd3c2..7cb1e4b 100644
  				// If we failed to copy exactly blockSize bytes for any
  				// reason other than EOF, we must abort.
 diff --git a/go/vt/mysqlctl/xtrabackupengine_test.go b/go/vt/mysqlctl/xtrabackupengine_test.go
-index 17cb144..29ec5fa 100644
+index 17cb1445cc..29ec5fa1cc 100644
 --- a/go/vt/mysqlctl/xtrabackupengine_test.go
 +++ b/go/vt/mysqlctl/xtrabackupengine_test.go
 @@ -150,6 +150,53 @@ func TestStripeRoundTrip(t *testing.T) {
@@ -12438,7 +12446,7 @@ index 17cb144..29ec5fa 100644
  	be := &XtrabackupEngine{}
  
 diff --git a/go/vt/servenv/grpc_codec.go b/go/vt/servenv/grpc_codec.go
-index c9025c2..28a7b1f 100644
+index c9025c20a4..28a7b1f3e7 100644
 --- a/go/vt/servenv/grpc_codec.go
 +++ b/go/vt/servenv/grpc_codec.go
 @@ -40,7 +40,9 @@ type Codec struct {
@@ -12454,7 +12462,7 @@ index c9025c2..28a7b1f 100644
  	if m, ok := v.(vtprotoMessage); ok {
 diff --git a/go/vt/servenv/grpc_codec_pool.go b/go/vt/servenv/grpc_codec_pool.go
 new file mode 100644
-index 0000000..3947e78
+index 0000000000..3947e78f4a
 --- /dev/null
 +++ b/go/vt/servenv/grpc_codec_pool.go
 @@ -0,0 +1,100 @@
@@ -12560,7 +12568,7 @@ index 0000000..3947e78
 +}
 diff --git a/go/vt/servenv/grpc_codec_pool_test.go b/go/vt/servenv/grpc_codec_pool_test.go
 new file mode 100644
-index 0000000..e1ce869
+index 0000000000..e1ce869ad7
 --- /dev/null
 +++ b/go/vt/servenv/grpc_codec_pool_test.go
 @@ -0,0 +1,133 @@
@@ -12698,7 +12706,7 @@ index 0000000..e1ce869
 +	}
 +}
 diff --git a/go/vt/servenv/grpc_server.go b/go/vt/servenv/grpc_server.go
-index c56410e..61889f6 100644
+index c56410ead1..61889f6e90 100644
 --- a/go/vt/servenv/grpc_server.go
 +++ b/go/vt/servenv/grpc_server.go
 @@ -114,6 +114,10 @@ var (
@@ -12753,7 +12761,7 @@ index c56410e..61889f6 100644
  func interceptors() []grpc.ServerOption {
  	interceptors := &serverInterceptorBuilder{}
 diff --git a/go/vt/servenv/grpc_server_test.go b/go/vt/servenv/grpc_server_test.go
-index 79e9c78..012f3e5 100644
+index 79e9c781cb..012f3e51e0 100644
 --- a/go/vt/servenv/grpc_server_test.go
 +++ b/go/vt/servenv/grpc_server_test.go
 @@ -20,6 +20,7 @@ import (
@@ -12784,7 +12792,7 @@ index 79e9c78..012f3e5 100644
  	Check(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
  }
 diff --git a/go/vt/sqlparser/analyzer.go b/go/vt/sqlparser/analyzer.go
-index e62bd06..27e8f9d 100644
+index e62bd06b05..27e8f9dccb 100644
 --- a/go/vt/sqlparser/analyzer.go
 +++ b/go/vt/sqlparser/analyzer.go
 @@ -23,6 +23,9 @@ import (
@@ -12862,7 +12870,7 @@ index e62bd06..27e8f9d 100644
  	switch s {
  	case StmtSelect:
 diff --git a/go/vt/sqlparser/ast_format.go b/go/vt/sqlparser/ast_format.go
-index b2f75ad..ef1d27e 100644
+index b2f75adcb9..ef1d27ee65 100644
 --- a/go/vt/sqlparser/ast_format.go
 +++ b/go/vt/sqlparser/ast_format.go
 @@ -1570,7 +1570,7 @@ func (node *AssignmentExpr) Format(buf *TrackedBuffer) {
@@ -12884,7 +12892,7 @@ index b2f75ad..ef1d27e 100644
  			buf.astPrintf(node, "(%d", node.Size)
  			if node.Scale != 0 {
 diff --git a/go/vt/sqlparser/ast_format_fast.go b/go/vt/sqlparser/ast_format_fast.go
-index e0ce935..9642d8a 100644
+index e0ce935ed6..9642d8a960 100644
 --- a/go/vt/sqlparser/ast_format_fast.go
 +++ b/go/vt/sqlparser/ast_format_fast.go
 @@ -18,8 +18,6 @@ limitations under the License.
@@ -13090,7 +13098,7 @@ index e0ce935..9642d8a 100644
 +	buf.WriteUint(node.ProcesslistID)
  }
 diff --git a/go/vt/sqlparser/ast_funcs.go b/go/vt/sqlparser/ast_funcs.go
-index 9ac2f88..5f8ee08 100644
+index 9ac2f88a5d..5f8ee08d6d 100644
 --- a/go/vt/sqlparser/ast_funcs.go
 +++ b/go/vt/sqlparser/ast_funcs.go
 @@ -24,6 +24,7 @@ import (
@@ -13191,7 +13199,7 @@ index 9ac2f88..5f8ee08 100644
  			}
 diff --git a/go/vt/sqlparser/compliant_name_test.go b/go/vt/sqlparser/compliant_name_test.go
 new file mode 100644
-index 0000000..26a15dd
+index 0000000000..26a15dd6eb
 --- /dev/null
 +++ b/go/vt/sqlparser/compliant_name_test.go
 @@ -0,0 +1,160 @@
@@ -13356,7 +13364,7 @@ index 0000000..26a15dd
 +	}
 +}
 diff --git a/go/vt/sqlparser/keywords.go b/go/vt/sqlparser/keywords.go
-index 42c873e..f81c3fc 100644
+index 42c873e03e..f81c3fcbb7 100644
 --- a/go/vt/sqlparser/keywords.go
 +++ b/go/vt/sqlparser/keywords.go
 @@ -18,6 +18,7 @@ package sqlparser
@@ -13533,7 +13541,7 @@ index 42c873e..f81c3fc 100644
 -	return h
 -}
 diff --git a/go/vt/sqlparser/keywords_test.go b/go/vt/sqlparser/keywords_test.go
-index cf439b4..ac44c09 100644
+index cf439b40f0..ac44c09c2c 100644
 --- a/go/vt/sqlparser/keywords_test.go
 +++ b/go/vt/sqlparser/keywords_test.go
 @@ -19,6 +19,7 @@ package sqlparser
@@ -13664,7 +13672,7 @@ index cf439b4..ac44c09 100644
 +}
 diff --git a/go/vt/sqlparser/literal_format_bench_test.go b/go/vt/sqlparser/literal_format_bench_test.go
 new file mode 100644
-index 0000000..ed6722f
+index 0000000000..ed6722f653
 --- /dev/null
 +++ b/go/vt/sqlparser/literal_format_bench_test.go
 @@ -0,0 +1,66 @@
@@ -13735,7 +13743,7 @@ index 0000000..ed6722f
 +	}
 +}
 diff --git a/go/vt/sqlparser/normalizer.go b/go/vt/sqlparser/normalizer.go
-index cc53c68..cf89142 100644
+index cc53c6828f..cf891420dd 100644
 --- a/go/vt/sqlparser/normalizer.go
 +++ b/go/vt/sqlparser/normalizer.go
 @@ -18,9 +18,12 @@ package sqlparser
@@ -14061,7 +14069,7 @@ index cc53c68..cf89142 100644
  
  // getBindvars extracts bind variables from a SQL statement.
 diff --git a/go/vt/sqlparser/normalizer_test.go b/go/vt/sqlparser/normalizer_test.go
-index 3ecc291..f27fa6a 100644
+index 3ecc2910f8..f27fa6a659 100644
 --- a/go/vt/sqlparser/normalizer_test.go
 +++ b/go/vt/sqlparser/normalizer_test.go
 @@ -17,6 +17,7 @@ limitations under the License.
@@ -14283,7 +14291,7 @@ index 3ecc291..f27fa6a 100644
 +}
 diff --git a/go/vt/sqlparser/parse_stack_test.go b/go/vt/sqlparser/parse_stack_test.go
 new file mode 100644
-index 0000000..7d45919
+index 0000000000..7d45919e40
 --- /dev/null
 +++ b/go/vt/sqlparser/parse_stack_test.go
 @@ -0,0 +1,80 @@
@@ -14368,7 +14376,7 @@ index 0000000..7d45919
 +	assert.Less(t, perGoroutine, uint64(16<<10), "Parse grows a new goroutine's stack beyond 8 KiB")
 +}
 diff --git a/go/vt/sqlparser/parsed_query_test.go b/go/vt/sqlparser/parsed_query_test.go
-index 4b83075..690a38a 100644
+index 4b83075ba2..690a38af23 100644
 --- a/go/vt/sqlparser/parsed_query_test.go
 +++ b/go/vt/sqlparser/parsed_query_test.go
 @@ -17,6 +17,8 @@ limitations under the License.
@@ -14449,7 +14457,7 @@ index 4b83075..690a38a 100644
 +	}
 +}
 diff --git a/go/vt/sqlparser/reserved_vars.go b/go/vt/sqlparser/reserved_vars.go
-index d224e96..23e58de 100644
+index d224e9698b..23e58de6b9 100644
 --- a/go/vt/sqlparser/reserved_vars.go
 +++ b/go/vt/sqlparser/reserved_vars.go
 @@ -53,26 +53,38 @@ func (r *ReservedVars) ReserveAll(names ...string) bool {
@@ -14499,10 +14507,10 @@ index d224e96..23e58de 100644
  }
  
 diff --git a/go/vt/sqlparser/sql.go b/go/vt/sqlparser/sql.go
-index 56434a5..8237c7f 100644
+index 56434a5c40..8237c7f0c3 100644
 Binary files a/go/vt/sqlparser/sql.go and b/go/vt/sqlparser/sql.go differ
 diff --git a/go/vt/sqlparser/token.go b/go/vt/sqlparser/token.go
-index 8f43d4f..0308ece 100644
+index 8f43d4f6c1..0308ece7ba 100644
 --- a/go/vt/sqlparser/token.go
 +++ b/go/vt/sqlparser/token.go
 @@ -430,33 +430,28 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
@@ -14850,7 +14858,7 @@ index 8f43d4f..0308ece 100644
  func (tkn *Tokenizer) cur() uint16 {
 diff --git a/go/vt/sqlparser/token_equivalence_test.go b/go/vt/sqlparser/token_equivalence_test.go
 new file mode 100644
-index 0000000..5804948
+index 0000000000..5804948e07
 --- /dev/null
 +++ b/go/vt/sqlparser/token_equivalence_test.go
 @@ -0,0 +1,167 @@
@@ -15023,7 +15031,7 @@ index 0000000..5804948
 +}
 diff --git a/go/vt/sqlparser/token_ref_test.go b/go/vt/sqlparser/token_ref_test.go
 new file mode 100644
-index 0000000..fda83ab
+index 0000000000..fda83ab255
 --- /dev/null
 +++ b/go/vt/sqlparser/token_ref_test.go
 @@ -0,0 +1,657 @@
@@ -15685,7 +15693,7 @@ index 0000000..fda83ab
 +	return uint16(tkn.buf[tkn.Pos+dist])
 +}
 diff --git a/go/vt/sqlparser/tracked_buffer.go b/go/vt/sqlparser/tracked_buffer.go
-index 14fe6fe..9d65c01 100644
+index 14fe6fe772..9d65c01337 100644
 --- a/go/vt/sqlparser/tracked_buffer.go
 +++ b/go/vt/sqlparser/tracked_buffer.go
 @@ -22,7 +22,9 @@ import (
@@ -15787,7 +15795,7 @@ index 14fe6fe..9d65c01 100644
  
  // UnescapedString will return a string where no identifiers have been escaped.
 diff --git a/go/vt/sqlparser/tracked_buffer_test.go b/go/vt/sqlparser/tracked_buffer_test.go
-index d798fd7..a2cb6a9 100644
+index d798fd76f1..a2cb6a9926 100644
 --- a/go/vt/sqlparser/tracked_buffer_test.go
 +++ b/go/vt/sqlparser/tracked_buffer_test.go
 @@ -17,10 +17,18 @@ limitations under the License.
@@ -15917,7 +15925,7 @@ index d798fd7..a2cb6a9 100644
 +}
 diff --git a/go/vt/sqlparser/zz_f30_bench_test.go b/go/vt/sqlparser/zz_f30_bench_test.go
 new file mode 100644
-index 0000000..2f7cdae
+index 0000000000..2f7cdae25c
 --- /dev/null
 +++ b/go/vt/sqlparser/zz_f30_bench_test.go
 @@ -0,0 +1,129 @@
@@ -16051,7 +16059,7 @@ index 0000000..2f7cdae
 +	}
 +}
 diff --git a/go/vt/srvtopo/resolver.go b/go/vt/srvtopo/resolver.go
-index 4e512c6..f8d8b0e 100644
+index 4e512c6347..f8d8b0ec9b 100644
 --- a/go/vt/srvtopo/resolver.go
 +++ b/go/vt/srvtopo/resolver.go
 @@ -181,8 +181,12 @@ func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace str
@@ -16203,7 +16211,7 @@ index 4e512c6..f8d8b0e 100644
  	}
 diff --git a/go/vt/srvtopo/resolver_bench_test.go b/go/vt/srvtopo/resolver_bench_test.go
 new file mode 100644
-index 0000000..48c41f0
+index 0000000000..48c41f0ca1
 --- /dev/null
 +++ b/go/vt/srvtopo/resolver_bench_test.go
 @@ -0,0 +1,85 @@
@@ -16293,7 +16301,7 @@ index 0000000..48c41f0
 +	}
 +}
 diff --git a/go/vt/srvtopo/watch.go b/go/vt/srvtopo/watch.go
-index e2af2fb..6e72ac8 100644
+index e2af2fbf4d..6e72ac8a28 100644
 --- a/go/vt/srvtopo/watch.go
 +++ b/go/vt/srvtopo/watch.go
 @@ -20,6 +20,7 @@ import (
@@ -16380,7 +16388,7 @@ index e2af2fb..6e72ac8 100644
  
  	entry.lastErrorTime = time.Now()
 diff --git a/go/vt/srvtopo/watch_test.go b/go/vt/srvtopo/watch_test.go
-index 1e8a3e7..628167d 100644
+index 1e8a3e764d..628167d920 100644
 --- a/go/vt/srvtopo/watch_test.go
 +++ b/go/vt/srvtopo/watch_test.go
 @@ -237,3 +237,43 @@ func TestWatcherShouldOnlyNotifyOnActualChanges(t *testing.T) {
@@ -16428,7 +16436,7 @@ index 1e8a3e7..628167d 100644
 +	assert.Nil(t, entry.running.Load())
 +}
 diff --git a/go/vt/topo/topoproto/tablet.go b/go/vt/topo/topoproto/tablet.go
-index 4a7eac0..5ea611e 100644
+index 4a7eac01ba..5ea611e7dc 100644
 --- a/go/vt/topo/topoproto/tablet.go
 +++ b/go/vt/topo/topoproto/tablet.go
 @@ -78,7 +78,18 @@ func TabletAliasString(ta *topodatapb.TabletAlias) string {
@@ -16469,7 +16477,7 @@ index 4a7eac0..5ea611e 100644
  // Use it with AllTabletTypes for instance.
  func IsTypeInList(tabletType topodatapb.TabletType, types []topodatapb.TabletType) bool {
 diff --git a/go/vt/topo/topoproto/tablet_test.go b/go/vt/topo/topoproto/tablet_test.go
-index 56bfa45..35e438d 100644
+index 56bfa45065..35e438d90d 100644
 --- a/go/vt/topo/topoproto/tablet_test.go
 +++ b/go/vt/topo/topoproto/tablet_test.go
 @@ -115,3 +115,14 @@ func TestIsTabletsInList(t *testing.T) {
@@ -16489,7 +16497,7 @@ index 56bfa45..35e438d 100644
 +}
 diff --git a/go/vt/topo/topoproto/zz_f30_bench_test.go b/go/vt/topo/topoproto/zz_f30_bench_test.go
 new file mode 100644
-index 0000000..4dcd41d
+index 0000000000..4dcd41d626
 --- /dev/null
 +++ b/go/vt/topo/topoproto/zz_f30_bench_test.go
 @@ -0,0 +1,36 @@
@@ -16530,7 +16538,7 @@ index 0000000..4dcd41d
 +	}
 +}
 diff --git a/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt b/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt
-index d88fddb..3728ef7 100644
+index d88fddbfd4..3728ef7c4b 100644
 --- a/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt
 +++ b/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt
 @@ -1,16 +1,12 @@
@@ -16553,7 +16561,7 @@ index d88fddb..3728ef7 100644
  ----------------------------------------------------------------------
  delete from user where id=1
 diff --git a/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt b/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt
-index b63683c..b6303ce 100644
+index b63683ca27..b6303ce892 100644
 --- a/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt
 +++ b/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt
 @@ -30,9 +30,7 @@ update t1 set floatval = 9.99
@@ -16567,797 +16575,24 @@ index b63683c..b6303ce 100644
  
  ----------------------------------------------------------------------
  insert into t1 (id,intval,floatval) values (1,2,3.14) on duplicate key update intval=3, floatval=3.14
-diff --git a/go/vt/vtexplain/testdata/plan_test1174510225/selectsharded-output.txt b/go/vt/vtexplain/testdata/plan_test1174510225/selectsharded-output.txt
-new file mode 100644
-index 0000000..59a25f6
---- /dev/null
-+++ b/go/vt/vtexplain/testdata/plan_test1174510225/selectsharded-output.txt
-@@ -0,0 +1,209 @@
-+----------------------------------------------------------------------
-+select * from user /* scatter */
-+
-+1 ks_sharded/-40: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/40-80: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/80-c0: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/c0-: select * from `user` limit 10001 /* scatter */
-+
-+----------------------------------------------------------------------
-+select * from user where id = 1 /* equal unique */
-+
-+1 ks_sharded/-40: select * from `user` where id = 1 limit 10001 /* INT64 */ /* equal unique */
-+
-+----------------------------------------------------------------------
-+select * from user where id > 100 /* scatter range */
-+
-+1 ks_sharded/-40: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/40-80: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/80-c0: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/c0-: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+
-+----------------------------------------------------------------------
-+select * from user where name = 'bob' /* vindex lookup */
-+
-+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('bob') limit 10001 /* vindex lookup */
-+2 ks_sharded/-40: select * from `user` where `name` = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+
-+----------------------------------------------------------------------
-+select * from user where name = 'bob' or nickname = 'bob' /* vindex lookup */
-+
-+1 ks_sharded/-40: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/40-80: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/80-c0: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/c0-: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+
-+----------------------------------------------------------------------
-+select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */
-+
-+1 ks_sharded/-40: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/40-80: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/80-c0: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/c0-: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+5 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
-+
-+----------------------------------------------------------------------
-+select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
-+
-+1 ks_sharded/80-c0: select m.id, m.song from music as m where m.user_id = 100 limit 10001 /* INT64 */ /* join on int */
-+2 ks_sharded/-40: select e.extra from music_extra as e where e.id = 1 limit 10001 /* join on int */
-+
-+----------------------------------------------------------------------
-+select count(*) from user where id = 1 /* point aggregate */
-+
-+1 ks_sharded/-40: select count(*) from `user` where id = 1 limit 10001 /* INT64 */ /* point aggregate */
-+
-+----------------------------------------------------------------------
-+select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate */
-+
-+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('a') limit 10001 /* scatter aggregate */
-+2 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('b') limit 10001 /* scatter aggregate */
-+3 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('c') limit 10001 /* scatter aggregate */
-+4 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('d') limit 10001 /* scatter aggregate */
-+5 ks_sharded/80-c0: select `name`, user_id from name_user_map where `name` in ('e') limit 10001 /* scatter aggregate */
-+6 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('f') limit 10001 /* scatter aggregate */
-+7 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('g') limit 10001 /* scatter aggregate */
-+8 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('h') limit 10001 /* scatter aggregate */
-+9 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('i') limit 10001 /* scatter aggregate */
-+10 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('j') limit 10001 /* scatter aggregate */
-+11 ks_sharded/-40: select count(*) from `user` where `name` in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate */
-+
-+----------------------------------------------------------------------
-+select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate with batching */
-+
-+1 ks_sharded/-40: select email, user_id from email_customer_map where email in ('f', 'g', 'i', 'j') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/40-80: select email, user_id from email_customer_map where email in ('b', 'c', 'h') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/80-c0: select email, user_id from email_customer_map where email in ('e') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/c0-: select email, user_id from email_customer_map where email in ('a', 'd') limit 10001 /* scatter aggregate with batching */
-+2 ks_sharded/-40: select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate with batching */
-+
-+----------------------------------------------------------------------
-+select name, count(*) from user group by name /* scatter aggregate */
-+
-+1 ks_sharded/-40: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/40-80: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/80-c0: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/c0-: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+
-+----------------------------------------------------------------------
-+select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */
-+
-+1 ks_sharded/-40: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/40-80: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/80-c0: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/c0-: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+
-+----------------------------------------------------------------------
-+select * from (select id from user) s /* scatter paren select */
-+
-+1 ks_sharded/-40: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/40-80: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/80-c0: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/c0-: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+
-+----------------------------------------------------------------------
-+select name from user where id = (select id from t1) /* non-correlated subquery as value */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as value */
-+2 ks_sharded/-40: select `name` from `user` where id = 1 limit 10001 /* non-correlated subquery as value */
-+
-+----------------------------------------------------------------------
-+select name from user where id in (select id from t1) /* non-correlated subquery in IN clause */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in IN clause */
-+2 ks_sharded/-40: select `name` from `user` where 1 and id in (1) limit 10001 /* non-correlated subquery in IN clause */
-+
-+----------------------------------------------------------------------
-+select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/-40: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/40-80: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/80-c0: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/c0-: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+
-+----------------------------------------------------------------------
-+select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */
-+
-+1 ks_unsharded/-: select 1 from t1 limit 1 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/-40: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/40-80: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/80-c0: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/c0-: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+
-+----------------------------------------------------------------------
-+select * from name_info order by info /* select * and order by varchar column */
-+
-+1 ks_sharded/-40: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/40-80: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/80-c0: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/c0-: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+
-+----------------------------------------------------------------------
-+select distinct(name) from user where id = 1 /* select distinct */
-+
-+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
-+
-+----------------------------------------------------------------------
-+select distinct name from user where id = 1 /* select distinct */
-+
-+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
-+
-+----------------------------------------------------------------------
-+select id, substring(name, 1, -1) from user where id = 123 /* select substring */
-+
-+1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
-+
-+----------------------------------------------------------------------
-+select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */
-+
-+1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
-+
-+----------------------------------------------------------------------
-+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when substr(`name`, 1, 5) = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 union all select id, 'ghi' as test from user where id = 1 /* union all */
-+
-+1 ks_sharded/-40: select id, 'abc' as test from `user` where id = 1 union all select id, 'def' as test from `user` where id = 1 union all select id, 'ghi' as test from `user` where id = 1 limit 10001 /* INT64 */ /* union all */
-+
-+----------------------------------------------------------------------
-+select id from user where not id in (select col from music where music.user_id = 42) and id in (select col from music where music.user_id = 411)
-+
-+1 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001 /* INT64 */
-+2 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001 /* INT64 */
-+
-+----------------------------------------------------------------------
-+SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name)
-+
-+1 ks_sharded/-40: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/40-80: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/80-c0: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/c0-: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+5 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
-+
-+----------------------------------------------------------------------
-+SELECT id FROM orders WHERE id IN (1, "1", 1)
-+
-+1 ks_sharded/-40: select id, keyspace_id from orders_id_lookup where id in (1, '1', 1) limit 10001
-+2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
-+
-+----------------------------------------------------------------------
-+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 3)
-+
-+1 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 1) as dt(c0, c1) limit 10001
-+1 ks_sharded/40-80: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 3) as dt(c0, c1) limit 10001
-+
-+----------------------------------------------------------------------
-diff --git a/go/vt/vtexplain/testdata/plan_test2669252524/uneven-keyspace-output.txt b/go/vt/vtexplain/testdata/plan_test2669252524/uneven-keyspace-output.txt
-new file mode 100644
-index 0000000..38ed7b5
---- /dev/null
-+++ b/go/vt/vtexplain/testdata/plan_test2669252524/uneven-keyspace-output.txt
-@@ -0,0 +1,17 @@
-+----------------------------------------------------------------------
-+select * from user
-+
-+0 ks_sharded/-80: select @@global.wait_timeout
-+1 ks_sharded/-80: select * from `user` limit 10001
-+1 ks_sharded/80-90: select * from `user` limit 10001
-+1 ks_sharded/90-a0: select * from `user` limit 10001
-+1 ks_sharded/a0-e8: select * from `user` limit 10001
-+1 ks_sharded/e8-: select * from `user` limit 10001
-+
-+----------------------------------------------------------------------
-+select * from user where id in (10, 17, 42, 100000)
-+
-+1 ks_sharded/-80: select * from `user` where id in (10, 17, 42) limit 10001
-+1 ks_sharded/80-90: select * from `user` where id in (100000) limit 10001
-+
-+----------------------------------------------------------------------
-diff --git a/go/vt/vtexplain/testdata/plan_test555317297/selectsharded-output.txt b/go/vt/vtexplain/testdata/plan_test555317297/selectsharded-output.txt
-new file mode 100644
-index 0000000..59a25f6
---- /dev/null
-+++ b/go/vt/vtexplain/testdata/plan_test555317297/selectsharded-output.txt
-@@ -0,0 +1,209 @@
-+----------------------------------------------------------------------
-+select * from user /* scatter */
-+
-+1 ks_sharded/-40: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/40-80: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/80-c0: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/c0-: select * from `user` limit 10001 /* scatter */
-+
-+----------------------------------------------------------------------
-+select * from user where id = 1 /* equal unique */
-+
-+1 ks_sharded/-40: select * from `user` where id = 1 limit 10001 /* INT64 */ /* equal unique */
-+
-+----------------------------------------------------------------------
-+select * from user where id > 100 /* scatter range */
-+
-+1 ks_sharded/-40: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/40-80: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/80-c0: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/c0-: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+
-+----------------------------------------------------------------------
-+select * from user where name = 'bob' /* vindex lookup */
-+
-+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('bob') limit 10001 /* vindex lookup */
-+2 ks_sharded/-40: select * from `user` where `name` = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+
-+----------------------------------------------------------------------
-+select * from user where name = 'bob' or nickname = 'bob' /* vindex lookup */
-+
-+1 ks_sharded/-40: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/40-80: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/80-c0: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/c0-: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+
-+----------------------------------------------------------------------
-+select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */
-+
-+1 ks_sharded/-40: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/40-80: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/80-c0: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/c0-: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+5 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
-+
-+----------------------------------------------------------------------
-+select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
-+
-+1 ks_sharded/80-c0: select m.id, m.song from music as m where m.user_id = 100 limit 10001 /* INT64 */ /* join on int */
-+2 ks_sharded/-40: select e.extra from music_extra as e where e.id = 1 limit 10001 /* join on int */
-+
-+----------------------------------------------------------------------
-+select count(*) from user where id = 1 /* point aggregate */
-+
-+1 ks_sharded/-40: select count(*) from `user` where id = 1 limit 10001 /* INT64 */ /* point aggregate */
-+
-+----------------------------------------------------------------------
-+select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate */
-+
-+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('a') limit 10001 /* scatter aggregate */
-+2 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('b') limit 10001 /* scatter aggregate */
-+3 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('c') limit 10001 /* scatter aggregate */
-+4 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('d') limit 10001 /* scatter aggregate */
-+5 ks_sharded/80-c0: select `name`, user_id from name_user_map where `name` in ('e') limit 10001 /* scatter aggregate */
-+6 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('f') limit 10001 /* scatter aggregate */
-+7 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('g') limit 10001 /* scatter aggregate */
-+8 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('h') limit 10001 /* scatter aggregate */
-+9 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('i') limit 10001 /* scatter aggregate */
-+10 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('j') limit 10001 /* scatter aggregate */
-+11 ks_sharded/-40: select count(*) from `user` where `name` in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate */
-+
-+----------------------------------------------------------------------
-+select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate with batching */
-+
-+1 ks_sharded/-40: select email, user_id from email_customer_map where email in ('f', 'g', 'i', 'j') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/40-80: select email, user_id from email_customer_map where email in ('b', 'c', 'h') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/80-c0: select email, user_id from email_customer_map where email in ('e') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/c0-: select email, user_id from email_customer_map where email in ('a', 'd') limit 10001 /* scatter aggregate with batching */
-+2 ks_sharded/-40: select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate with batching */
-+
-+----------------------------------------------------------------------
-+select name, count(*) from user group by name /* scatter aggregate */
-+
-+1 ks_sharded/-40: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/40-80: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/80-c0: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/c0-: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+
-+----------------------------------------------------------------------
-+select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */
-+
-+1 ks_sharded/-40: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/40-80: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/80-c0: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/c0-: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+
-+----------------------------------------------------------------------
-+select * from (select id from user) s /* scatter paren select */
-+
-+1 ks_sharded/-40: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/40-80: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/80-c0: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/c0-: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+
-+----------------------------------------------------------------------
-+select name from user where id = (select id from t1) /* non-correlated subquery as value */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as value */
-+2 ks_sharded/-40: select `name` from `user` where id = 1 limit 10001 /* non-correlated subquery as value */
-+
-+----------------------------------------------------------------------
-+select name from user where id in (select id from t1) /* non-correlated subquery in IN clause */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in IN clause */
-+2 ks_sharded/-40: select `name` from `user` where 1 and id in (1) limit 10001 /* non-correlated subquery in IN clause */
-+
-+----------------------------------------------------------------------
-+select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/-40: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/40-80: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/80-c0: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/c0-: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+
-+----------------------------------------------------------------------
-+select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */
-+
-+1 ks_unsharded/-: select 1 from t1 limit 1 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/-40: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/40-80: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/80-c0: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/c0-: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+
-+----------------------------------------------------------------------
-+select * from name_info order by info /* select * and order by varchar column */
-+
-+1 ks_sharded/-40: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/40-80: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/80-c0: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/c0-: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+
-+----------------------------------------------------------------------
-+select distinct(name) from user where id = 1 /* select distinct */
-+
-+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
-+
-+----------------------------------------------------------------------
-+select distinct name from user where id = 1 /* select distinct */
-+
-+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
-+
-+----------------------------------------------------------------------
-+select id, substring(name, 1, -1) from user where id = 123 /* select substring */
-+
-+1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
-+
-+----------------------------------------------------------------------
-+select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */
-+
-+1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
-+
-+----------------------------------------------------------------------
-+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when substr(`name`, 1, 5) = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 union all select id, 'ghi' as test from user where id = 1 /* union all */
-+
-+1 ks_sharded/-40: select id, 'abc' as test from `user` where id = 1 union all select id, 'def' as test from `user` where id = 1 union all select id, 'ghi' as test from `user` where id = 1 limit 10001 /* INT64 */ /* union all */
-+
-+----------------------------------------------------------------------
-+select id from user where not id in (select col from music where music.user_id = 42) and id in (select col from music where music.user_id = 411)
-+
-+1 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001 /* INT64 */
-+2 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001 /* INT64 */
-+
-+----------------------------------------------------------------------
-+SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name)
-+
-+1 ks_sharded/-40: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/40-80: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/80-c0: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/c0-: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+5 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
-+
-+----------------------------------------------------------------------
-+SELECT id FROM orders WHERE id IN (1, "1", 1)
-+
-+1 ks_sharded/-40: select id, keyspace_id from orders_id_lookup where id in (1, '1', 1) limit 10001
-+2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
-+
-+----------------------------------------------------------------------
-+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 3)
-+
-+1 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 1) as dt(c0, c1) limit 10001
-+1 ks_sharded/40-80: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 3) as dt(c0, c1) limit 10001
-+
-+----------------------------------------------------------------------
-diff --git a/go/vt/vtexplain/testdata/plan_test732150978/selectsharded-output.txt b/go/vt/vtexplain/testdata/plan_test732150978/selectsharded-output.txt
-new file mode 100644
-index 0000000..59a25f6
---- /dev/null
-+++ b/go/vt/vtexplain/testdata/plan_test732150978/selectsharded-output.txt
-@@ -0,0 +1,209 @@
-+----------------------------------------------------------------------
-+select * from user /* scatter */
-+
-+1 ks_sharded/-40: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/40-80: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/80-c0: select * from `user` limit 10001 /* scatter */
-+1 ks_sharded/c0-: select * from `user` limit 10001 /* scatter */
-+
-+----------------------------------------------------------------------
-+select * from user where id = 1 /* equal unique */
-+
-+1 ks_sharded/-40: select * from `user` where id = 1 limit 10001 /* INT64 */ /* equal unique */
-+
-+----------------------------------------------------------------------
-+select * from user where id > 100 /* scatter range */
-+
-+1 ks_sharded/-40: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/40-80: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/80-c0: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+1 ks_sharded/c0-: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
-+
-+----------------------------------------------------------------------
-+select * from user where name = 'bob' /* vindex lookup */
-+
-+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('bob') limit 10001 /* vindex lookup */
-+2 ks_sharded/-40: select * from `user` where `name` = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+
-+----------------------------------------------------------------------
-+select * from user where name = 'bob' or nickname = 'bob' /* vindex lookup */
-+
-+1 ks_sharded/-40: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/40-80: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/80-c0: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+1 ks_sharded/c0-: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
-+
-+----------------------------------------------------------------------
-+select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */
-+
-+1 ks_sharded/-40: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/40-80: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/80-c0: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+1 ks_sharded/c0-: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
-+5 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
-+
-+----------------------------------------------------------------------
-+select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
-+
-+1 ks_sharded/80-c0: select m.id, m.song from music as m where m.user_id = 100 limit 10001 /* INT64 */ /* join on int */
-+2 ks_sharded/-40: select e.extra from music_extra as e where e.id = 1 limit 10001 /* join on int */
-+
-+----------------------------------------------------------------------
-+select count(*) from user where id = 1 /* point aggregate */
-+
-+1 ks_sharded/-40: select count(*) from `user` where id = 1 limit 10001 /* INT64 */ /* point aggregate */
-+
-+----------------------------------------------------------------------
-+select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate */
-+
-+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('a') limit 10001 /* scatter aggregate */
-+2 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('b') limit 10001 /* scatter aggregate */
-+3 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('c') limit 10001 /* scatter aggregate */
-+4 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('d') limit 10001 /* scatter aggregate */
-+5 ks_sharded/80-c0: select `name`, user_id from name_user_map where `name` in ('e') limit 10001 /* scatter aggregate */
-+6 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('f') limit 10001 /* scatter aggregate */
-+7 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('g') limit 10001 /* scatter aggregate */
-+8 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('h') limit 10001 /* scatter aggregate */
-+9 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('i') limit 10001 /* scatter aggregate */
-+10 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('j') limit 10001 /* scatter aggregate */
-+11 ks_sharded/-40: select count(*) from `user` where `name` in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate */
-+
-+----------------------------------------------------------------------
-+select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate with batching */
-+
-+1 ks_sharded/-40: select email, user_id from email_customer_map where email in ('f', 'g', 'i', 'j') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/40-80: select email, user_id from email_customer_map where email in ('b', 'c', 'h') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/80-c0: select email, user_id from email_customer_map where email in ('e') limit 10001 /* scatter aggregate with batching */
-+1 ks_sharded/c0-: select email, user_id from email_customer_map where email in ('a', 'd') limit 10001 /* scatter aggregate with batching */
-+2 ks_sharded/-40: select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate with batching */
-+
-+----------------------------------------------------------------------
-+select name, count(*) from user group by name /* scatter aggregate */
-+
-+1 ks_sharded/-40: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/40-80: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/80-c0: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+1 ks_sharded/c0-: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
-+
-+----------------------------------------------------------------------
-+select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */
-+
-+1 ks_sharded/-40: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/40-80: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/80-c0: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+1 ks_sharded/c0-: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-+
-+----------------------------------------------------------------------
-+select * from (select id from user) s /* scatter paren select */
-+
-+1 ks_sharded/-40: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/40-80: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/80-c0: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+1 ks_sharded/c0-: select id from (select id from `user`) as s limit 10001 /* scatter paren select */
-+
-+----------------------------------------------------------------------
-+select name from user where id = (select id from t1) /* non-correlated subquery as value */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as value */
-+2 ks_sharded/-40: select `name` from `user` where id = 1 limit 10001 /* non-correlated subquery as value */
-+
-+----------------------------------------------------------------------
-+select name from user where id in (select id from t1) /* non-correlated subquery in IN clause */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in IN clause */
-+2 ks_sharded/-40: select `name` from `user` where 1 and id in (1) limit 10001 /* non-correlated subquery in IN clause */
-+
-+----------------------------------------------------------------------
-+select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */
-+
-+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/-40: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/40-80: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/80-c0: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+2 ks_sharded/c0-: select `name` from `user` where not 1 or id not in (1) limit 10001 /* non-correlated subquery in NOT IN clause */
-+
-+----------------------------------------------------------------------
-+select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */
-+
-+1 ks_unsharded/-: select 1 from t1 limit 1 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/-40: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/40-80: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/80-c0: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+2 ks_sharded/c0-: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
-+
-+----------------------------------------------------------------------
-+select * from name_info order by info /* select * and order by varchar column */
-+
-+1 ks_sharded/-40: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/40-80: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/80-c0: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+1 ks_sharded/c0-: select `name`, info, weight_string(info) from name_info order by name_info.info asc limit 10001 /* select * and order by varchar column */
-+
-+----------------------------------------------------------------------
-+select distinct(name) from user where id = 1 /* select distinct */
-+
-+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
-+
-+----------------------------------------------------------------------
-+select distinct name from user where id = 1 /* select distinct */
-+
-+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
-+
-+----------------------------------------------------------------------
-+select id, substring(name, 1, -1) from user where id = 123 /* select substring */
-+
-+1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
-+
-+----------------------------------------------------------------------
-+select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */
-+
-+1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
-+
-+----------------------------------------------------------------------
-+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
-+
-+1 ks_sharded/-40: select id, case when substr(`name`, 1, 5) = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
-+
-+----------------------------------------------------------------------
-+select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 union all select id, 'ghi' as test from user where id = 1 /* union all */
-+
-+1 ks_sharded/-40: select id, 'abc' as test from `user` where id = 1 union all select id, 'def' as test from `user` where id = 1 union all select id, 'ghi' as test from `user` where id = 1 limit 10001 /* INT64 */ /* union all */
-+
-+----------------------------------------------------------------------
-+select id from user where not id in (select col from music where music.user_id = 42) and id in (select col from music where music.user_id = 411)
-+
-+1 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001 /* INT64 */
-+2 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001 /* INT64 */
-+
-+----------------------------------------------------------------------
-+SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name)
-+
-+1 ks_sharded/-40: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/40-80: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/80-c0: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+1 ks_sharded/c0-: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
-+5 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
-+
-+----------------------------------------------------------------------
-+SELECT id FROM orders WHERE id IN (1, "1", 1)
-+
-+1 ks_sharded/-40: select id, keyspace_id from orders_id_lookup where id in (1, '1', 1) limit 10001
-+2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
-+
-+----------------------------------------------------------------------
-+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 3)
-+
-+1 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 1) as dt(c0, c1) limit 10001
-+1 ks_sharded/40-80: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 3) as dt(c0, c1) limit 10001
-+
-+----------------------------------------------------------------------
-diff --git a/go/vt/vtexplain/testdata/plan_test924100833/insertsharded-output.txt b/go/vt/vtexplain/testdata/plan_test924100833/insertsharded-output.txt
-new file mode 100644
-index 0000000..dca3425
---- /dev/null
-+++ b/go/vt/vtexplain/testdata/plan_test924100833/insertsharded-output.txt
-@@ -0,0 +1,97 @@
-+----------------------------------------------------------------------
-+insert into user (id, name) values(1, 'alice')
-+
-+1 ks_sharded/40-80: begin
-+1 ks_sharded/40-80: insert into name_user_map(`name`, user_id) values ('alice', 1)
-+2 ks_sharded/-40: begin
-+2 ks_sharded/-40: insert into `user`(id, `name`) values (1, 'alice')
-+3 ks_sharded/40-80: commit
-+4 ks_sharded/-40: commit
-+
-+----------------------------------------------------------------------
-+insert into user (id, name) values(2, 'bob')
-+
-+0 ks_sharded/c0-: select @@global.wait_timeout
-+1 ks_sharded/c0-: begin
-+1 ks_sharded/c0-: insert into name_user_map(`name`, user_id) values ('bob', 2)
-+2 ks_sharded/-40: begin
-+2 ks_sharded/-40: insert into `user`(id, `name`) values (2, 'bob')
-+3 ks_sharded/c0-: commit
-+4 ks_sharded/-40: commit
-+
-+----------------------------------------------------------------------
-+insert ignore into user (id, name) values(2, 'bob')
-+
-+1 ks_sharded/c0-: begin
-+1 ks_sharded/c0-: insert ignore into name_user_map(`name`, user_id) values ('bob', 2)
-+2 ks_sharded/c0-: select `name` from name_user_map where `name` = 'bob' and user_id = 2 limit 10001
-+3 ks_sharded/-40: begin
-+3 ks_sharded/-40: insert ignore into `user`(id, `name`) values (2, 'bob')
-+4 ks_sharded/c0-: commit
-+5 ks_sharded/-40: commit
-+
-+----------------------------------------------------------------------
-+insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')
-+
-+1 ks_sharded/c0-: begin
-+1 ks_sharded/c0-: insert ignore into name_user_map(`name`, user_id) values ('bob', 2)
-+2 ks_sharded/c0-: select `name` from name_user_map where `name` = 'bob' and user_id = 2 limit 10001
-+3 ks_sharded/-40: begin
-+3 ks_sharded/-40: insert ignore into `user`(id, `name`, nickname) values (2, 'bob', 'bob')
-+4 ks_sharded/c0-: commit
-+5 ks_sharded/-40: commit
-+
-+----------------------------------------------------------------------
-+insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key update nickname='bobby'
-+
-+1 ks_sharded/c0-: begin
-+1 ks_sharded/c0-: insert ignore into name_user_map(`name`, user_id) values ('bob', 2)
-+2 ks_sharded/c0-: select `name` from name_user_map where `name` = 'bob' and user_id = 2 limit 10001
-+3 ks_sharded/-40: begin
-+3 ks_sharded/-40: insert into `user`(id, `name`, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby' /* VARCHAR */
-+4 ks_sharded/c0-: commit
-+5 ks_sharded/-40: commit
-+
-+----------------------------------------------------------------------
-+insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st') on duplicate key update nickname=values(nickname), address=values(address)
-+
-+1 ks_sharded/c0-: begin
-+1 ks_sharded/c0-: insert ignore into name_user_map(`name`, user_id) values ('bob', 2)
-+2 ks_sharded/c0-: select `name` from name_user_map where `name` = 'bob' and user_id = 2 limit 10001
-+3 ks_sharded/-40: begin
-+3 ks_sharded/-40: insert into `user`(id, `name`, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address)
-+4 ks_sharded/c0-: commit
-+5 ks_sharded/-40: commit
-+
-+----------------------------------------------------------------------
-+insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c')
-+
-+1 ks_sharded/-40: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra(id, extra) values (1, 'a'), (2, 'b')
-+1 ks_sharded/40-80: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra(id, extra) values (3, 'c')
-+
-+----------------------------------------------------------------------
-+begin
-+
-+
-+----------------------------------------------------------------------
-+insert into member (lkp, more_id, id) values ("a", 1, 1), ("b", 1, 3), ("c", 1, 1) on duplicate key update more_id = 2
-+
-+1 ks_sharded/40-80: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ ignore into lkp_idx(lkp, id) values ('b', 3), ('c', 1)
-+1 ks_sharded/c0-: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ ignore into lkp_idx(lkp, id) values ('a', 1)
-+2 ks_sharded/c0-: select lkp from lkp_idx where lkp = 'a' and id = 1 limit 10001
-+3 ks_sharded/40-80: select lkp from lkp_idx where lkp = 'b' and id = 3 limit 10001
-+4 ks_sharded/40-80: select lkp from lkp_idx where lkp = 'c' and id = 1 limit 10001
-+5 ks_sharded/-40: begin
-+5 ks_sharded/-40: savepoint x1
-+5 ks_sharded/-40: insert into `member`(lkp, more_id, id) values ('a', 1, 1), ('c', 1, 1) on duplicate key update more_id = 2 /* INT64 */
-+5 ks_sharded/40-80: begin
-+5 ks_sharded/40-80: savepoint x1
-+5 ks_sharded/40-80: insert into `member`(lkp, more_id, id) values ('b', 1, 3) on duplicate key update more_id = 2 /* INT64 */
-+
-+----------------------------------------------------------------------
-+commit
-+
-+6 ks_sharded/-40: commit
-+7 ks_sharded/40-80: commit
-+
-+----------------------------------------------------------------------
 diff --git a/go/vt/vtexplain/vtexplain_vtgate.go b/go/vt/vtexplain/vtexplain_vtgate.go
-index b3ad91b..b850e53 100644
+index b3ad91ba33..fcc5ad4482 100644
 --- a/go/vt/vtexplain/vtexplain_vtgate.go
 +++ b/go/vt/vtexplain/vtexplain_vtgate.go
-@@ -53,7 +53,12 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, v
+@@ -53,6 +53,11 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, v
  	vte.explainTopo.TopoServer = ts
  	vte.healthCheck = discovery.NewFakeHealthCheck(nil)
  
--	resolver := vte.newFakeResolver(ctx, opts, vte.explainTopo, Cell)
 +	// vtexplain reports the queries of a statement in logical time order, which
 +	// requires the right-hand side of a join to run once per left-hand side row,
 +	// one after the other.
 +	engine.JoinRHSConcurrency = 1
 +
-+	resolver :=vte.newFakeResolver(ctx, opts, vte.explainTopo, Cell)
+ 	resolver := vte.newFakeResolver(ctx, opts, vte.explainTopo, Cell)
  
  	err := vte.buildTopology(ctx, ts, opts, vSchemaStr, ksShardMapStr, opts.NumShards, srvTopoCounts)
- 	if err != nil {
 diff --git a/go/vt/vtgate/engine/cached_size.go b/go/vt/vtgate/engine/cached_size.go
-index 8ee199b..e431e2f 100644
+index 8ee199b084..e431e2fb66 100644
 --- a/go/vt/vtgate/engine/cached_size.go
 +++ b/go/vt/vtgate/engine/cached_size.go
 @@ -495,7 +495,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
@@ -17442,7 +16677,7 @@ index 8ee199b..e431e2f 100644
  	if cached == nil {
  		return int64(0)
 diff --git a/go/vt/vtgate/engine/distinct.go b/go/vt/vtgate/engine/distinct.go
-index 3e0355e..75a5d33 100644
+index 3e0355e6e5..75a5d33d82 100644
 --- a/go/vt/vtgate/engine/distinct.go
 +++ b/go/vt/vtgate/engine/distinct.go
 @@ -51,6 +51,8 @@ type (
@@ -17513,7 +16748,7 @@ index 3e0355e..75a5d33 100644
  		result := &sqltypes.Result{
  			Fields:   input.Fields,
 diff --git a/go/vt/vtgate/engine/distinct_test.go b/go/vt/vtgate/engine/distinct_test.go
-index c29c950..01baba7 100644
+index c29c9503ee..01baba7eb0 100644
 --- a/go/vt/vtgate/engine/distinct_test.go
 +++ b/go/vt/vtgate/engine/distinct_test.go
 @@ -31,6 +31,40 @@ import (
@@ -17558,7 +16793,7 @@ index c29c950..01baba7 100644
  	type testCase struct {
  		testName       string
 diff --git a/go/vt/vtgate/engine/fake_vcursor_test.go b/go/vt/vtgate/engine/fake_vcursor_test.go
-index d7910d7..01189e8 100644
+index d7910d7e83..01189e86d8 100644
 --- a/go/vt/vtgate/engine/fake_vcursor_test.go
 +++ b/go/vt/vtgate/engine/fake_vcursor_test.go
 @@ -327,7 +327,7 @@ func (t *noopVCursor) SetSysVar(name string, expr string) {
@@ -17571,7 +16806,7 @@ index d7910d7..01189e8 100644
  
  func (t *noopVCursor) ShardSession() []*srvtopo.ResolvedShard {
 diff --git a/go/vt/vtgate/engine/insert.go b/go/vt/vtgate/engine/insert.go
-index ca40774..1a1cc28 100644
+index ca4077417f..1a1cc287ff 100644
 --- a/go/vt/vtgate/engine/insert.go
 +++ b/go/vt/vtgate/engine/insert.go
 @@ -21,9 +21,9 @@ import (
@@ -17804,7 +17039,7 @@ index ca40774..1a1cc28 100644
  	rowCount := 0
 diff --git a/go/vt/vtgate/engine/insert_bench_test.go b/go/vt/vtgate/engine/insert_bench_test.go
 new file mode 100644
-index 0000000..3c2ce7a
+index 0000000000..3c2ce7a6f3
 --- /dev/null
 +++ b/go/vt/vtgate/engine/insert_bench_test.go
 @@ -0,0 +1,204 @@
@@ -18013,7 +17248,7 @@ index 0000000..3c2ce7a
 +	wg.Wait()
 +}
 diff --git a/go/vt/vtgate/engine/insert_common.go b/go/vt/vtgate/engine/insert_common.go
-index 13dbce2..b379908 100644
+index 13dbce27ae..b3799085f3 100644
 --- a/go/vt/vtgate/engine/insert_common.go
 +++ b/go/vt/vtgate/engine/insert_common.go
 @@ -480,3 +480,38 @@ func shouldGenerate(v sqltypes.Value, sqlmode evalengine.SQLMode) bool {
@@ -18057,7 +17292,7 @@ index 13dbce2..b379908 100644
 +}
 diff --git a/go/vt/vtgate/engine/insert_old_test.go b/go/vt/vtgate/engine/insert_old_test.go
 new file mode 100644
-index 0000000..9dbfe6f
+index 0000000000..9dbfe6ff10
 --- /dev/null
 +++ b/go/vt/vtgate/engine/insert_old_test.go
 @@ -0,0 +1,130 @@
@@ -18193,7 +17428,7 @@ index 0000000..9dbfe6f
 +}
 diff --git a/go/vt/vtgate/engine/insert_rowdest_test.go b/go/vt/vtgate/engine/insert_rowdest_test.go
 new file mode 100644
-index 0000000..872f83d
+index 0000000000..872f83d999
 --- /dev/null
 +++ b/go/vt/vtgate/engine/insert_rowdest_test.go
 @@ -0,0 +1,92 @@
@@ -18290,7 +17525,7 @@ index 0000000..872f83d
 +	}
 +}
 diff --git a/go/vt/vtgate/engine/insert_select.go b/go/vt/vtgate/engine/insert_select.go
-index ce30e8c..13acddd 100644
+index ce30e8cb09..13acdddc6f 100644
 --- a/go/vt/vtgate/engine/insert_select.go
 +++ b/go/vt/vtgate/engine/insert_select.go
 @@ -25,7 +25,6 @@ import (
@@ -18320,7 +17555,7 @@ index ce30e8c..13acddd 100644
  		// In this case, all we have is nil KeyspaceIds, we don't do
  		// anything at all.
 diff --git a/go/vt/vtgate/engine/join.go b/go/vt/vtgate/engine/join.go
-index 39b38d8..1a7b4fc 100644
+index 39b38d8448..1a7b4fc641 100644
 --- a/go/vt/vtgate/engine/join.go
 +++ b/go/vt/vtgate/engine/join.go
 @@ -27,6 +27,7 @@ import (
@@ -18445,7 +17680,7 @@ index 39b38d8..1a7b4fc 100644
  	maps.Copy(out, bv1)
 diff --git a/go/vt/vtgate/engine/join_concurrent_test.go b/go/vt/vtgate/engine/join_concurrent_test.go
 new file mode 100644
-index 0000000..3368541
+index 0000000000..3368541d5a
 --- /dev/null
 +++ b/go/vt/vtgate/engine/join_concurrent_test.go
 @@ -0,0 +1,206 @@
@@ -18656,7 +17891,7 @@ index 0000000..3368541
 +	assert.Equal(t, 1, rhs.maxSeen, "RHS executions inside a transaction must not run concurrently")
 +}
 diff --git a/go/vt/vtgate/engine/merge_sort.go b/go/vt/vtgate/engine/merge_sort.go
-index 83dae7f..a282440 100644
+index 83dae7fe9f..a282440f6f 100644
 --- a/go/vt/vtgate/engine/merge_sort.go
 +++ b/go/vt/vtgate/engine/merge_sort.go
 @@ -19,6 +19,7 @@ package engine
@@ -18882,7 +18117,7 @@ index 83dae7f..a282440 100644
  		})
 diff --git a/go/vt/vtgate/engine/merge_sort_bench_test.go b/go/vt/vtgate/engine/merge_sort_bench_test.go
 new file mode 100644
-index 0000000..3d3cde8
+index 0000000000..3d3cde8137
 --- /dev/null
 +++ b/go/vt/vtgate/engine/merge_sort_bench_test.go
 @@ -0,0 +1,81 @@
@@ -18969,7 +18204,7 @@ index 0000000..3d3cde8
 +}
 diff --git a/go/vt/vtgate/engine/merge_sort_old_bench_test.go b/go/vt/vtgate/engine/merge_sort_old_bench_test.go
 new file mode 100644
-index 0000000..5f5bd7d
+index 0000000000..5f5bd7de6e
 --- /dev/null
 +++ b/go/vt/vtgate/engine/merge_sort_old_bench_test.go
 @@ -0,0 +1,211 @@
@@ -19185,7 +18420,7 @@ index 0000000..5f5bd7d
 +	return handle
 +}
 diff --git a/go/vt/vtgate/engine/merge_sort_test.go b/go/vt/vtgate/engine/merge_sort_test.go
-index 6089028..e14efe0 100644
+index 60890283f8..e14efe080a 100644
 --- a/go/vt/vtgate/engine/merge_sort_test.go
 +++ b/go/vt/vtgate/engine/merge_sort_test.go
 @@ -19,7 +19,10 @@ package engine
@@ -19522,7 +18757,7 @@ index 6089028..e14efe0 100644
 +	require.Equal(t, 1, calls)
 +}
 diff --git a/go/vt/vtgate/evalengine/api_compare.go b/go/vt/vtgate/evalengine/api_compare.go
-index 70629cc..0c9a888 100644
+index 70629cca24..0c9a888f69 100644
 --- a/go/vt/vtgate/evalengine/api_compare.go
 +++ b/go/vt/vtgate/evalengine/api_compare.go
 @@ -305,11 +305,89 @@ func (cmp Comparison) SortResult(out *sqltypes.Result) (err error) {
@@ -19617,7 +18852,7 @@ index 70629cc..0c9a888 100644
  	Limit   int
 diff --git a/go/vt/vtgate/evalengine/api_compare_runs_test.go b/go/vt/vtgate/evalengine/api_compare_runs_test.go
 new file mode 100644
-index 0000000..ae50400
+index 0000000000..ae504007ed
 --- /dev/null
 +++ b/go/vt/vtgate/evalengine/api_compare_runs_test.go
 @@ -0,0 +1,114 @@
@@ -19736,7 +18971,7 @@ index 0000000..ae50400
 +	}
 +}
 diff --git a/go/vt/vtgate/evalengine/api_hash_test.go b/go/vt/vtgate/evalengine/api_hash_test.go
-index f366e1b..2f99ee6 100644
+index f366e1bfa1..2f99ee65f9 100644
 --- a/go/vt/vtgate/evalengine/api_hash_test.go
 +++ b/go/vt/vtgate/evalengine/api_hash_test.go
 @@ -31,6 +31,38 @@ import (
@@ -19779,7 +19014,7 @@ index f366e1b..2f99ee6 100644
  	cases := []struct {
  		static, dynamic sqltypes.Value
 diff --git a/go/vt/vtgate/evalengine/perf_test.go b/go/vt/vtgate/evalengine/perf_test.go
-index 0cd7be8..f71a4cb 100644
+index 0cd7be82af..f71a4cb8d7 100644
 --- a/go/vt/vtgate/evalengine/perf_test.go
 +++ b/go/vt/vtgate/evalengine/perf_test.go
 @@ -17,6 +17,7 @@ limitations under the License.
@@ -19814,7 +19049,7 @@ index 0cd7be8..f71a4cb 100644
  
  	venv := vtenv.NewTestEnv()
 diff --git a/go/vt/vtgate/executor.go b/go/vt/vtgate/executor.go
-index e73e059..d0cca47 100644
+index e73e059d1b..d0cca47937 100644
 --- a/go/vt/vtgate/executor.go
 +++ b/go/vt/vtgate/executor.go
 @@ -136,7 +136,7 @@ type (
@@ -19892,7 +19127,7 @@ index e73e059..d0cca47 100644
  		return &VSchemaStats{
  			Error: "No VSchema loaded yet.",
 diff --git a/go/vt/vtgate/plan_execute.go b/go/vt/vtgate/plan_execute.go
-index 5f17eb2..c962db8 100644
+index 5f17eb2bb6..c962db85e6 100644
 --- a/go/vt/vtgate/plan_execute.go
 +++ b/go/vt/vtgate/plan_execute.go
 @@ -28,6 +28,7 @@ import (
@@ -19922,7 +19157,7 @@ index 5f17eb2..c962db8 100644
  	return errCount
  }
 diff --git a/go/vt/vtgate/scatter_conn.go b/go/vt/vtgate/scatter_conn.go
-index d49b078..f154eb1 100644
+index d49b078f1e..f154eb12a0 100644
 --- a/go/vt/vtgate/scatter_conn.go
 +++ b/go/vt/vtgate/scatter_conn.go
 @@ -755,7 +755,14 @@ func (stc *ScatterConn) multiGoTransaction(
@@ -19942,7 +19177,7 @@ index d49b078..f154eb1 100644
  			return
  		}
 diff --git a/go/vt/vtgate/status.go b/go/vt/vtgate/status.go
-index b220de8..a36cb46 100644
+index b220de873c..a36cb46ddf 100644
 --- a/go/vt/vtgate/status.go
 +++ b/go/vt/vtgate/status.go
 @@ -28,8 +28,6 @@ import (
@@ -20022,7 +19257,7 @@ index b220de8..a36cb46 100644
  
  func (tsa *TabletStatusAggregator) processQueryInfo(qi *queryInfo) {
 diff --git a/go/vt/vtgate/tabletgateway.go b/go/vt/vtgate/tabletgateway.go
-index 856dcf7..7ac35de 100644
+index 856dcf741a..7ac35de102 100644
 --- a/go/vt/vtgate/tabletgateway.go
 +++ b/go/vt/vtgate/tabletgateway.go
 @@ -100,10 +100,9 @@ type TabletGateway struct {
@@ -20088,7 +19323,7 @@ index 856dcf7..7ac35de 100644
  	return aggr
  }
 diff --git a/go/vt/vtgate/tabletgateway_test.go b/go/vt/vtgate/tabletgateway_test.go
-index 4756287..1f86508 100644
+index 4756287a16..1f86508d52 100644
 --- a/go/vt/vtgate/tabletgateway_test.go
 +++ b/go/vt/vtgate/tabletgateway_test.go
 @@ -20,6 +20,7 @@ import (
@@ -20136,7 +19371,7 @@ index 4756287..1f86508 100644
 +	assert.EqualValues(t, 0, byName["ks/-80/REPLICA"].QueryError)
 +}
 diff --git a/go/vt/vtgate/vtgate.go b/go/vt/vtgate/vtgate.go
-index c8ab73a..f837320 100644
+index c8ab73a346..f837320791 100644
 --- a/go/vt/vtgate/vtgate.go
 +++ b/go/vt/vtgate/vtgate.go
 @@ -60,6 +60,7 @@ import (
@@ -20156,7 +19391,7 @@ index c8ab73a..f837320 100644
  	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
  	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 diff --git a/go/vt/vthash/metro/metro.go b/go/vt/vthash/metro/metro.go
-index 5940b25..b42a65a 100644
+index 5940b25e65..b42a65a35b 100644
 --- a/go/vt/vthash/metro/metro.go
 +++ b/go/vt/vthash/metro/metro.go
 @@ -49,27 +49,74 @@ func (m *Metro128) Reset() {
@@ -20246,7 +19481,7 @@ index 5940b25..b42a65a 100644
  
  func (m *Metro128) WriteString(str string) (int, error) {
 diff --git a/go/vt/vthash/metro/metro_test.go b/go/vt/vthash/metro/metro_test.go
-index 5f9f9bf..866d361 100644
+index 5f9f9bfd36..866d361dce 100644
 --- a/go/vt/vthash/metro/metro_test.go
 +++ b/go/vt/vthash/metro/metro_test.go
 @@ -17,11 +17,60 @@ limitations under the License.
@@ -20311,7 +19546,7 @@ index 5f9f9bf..866d361 100644
  	const TestString = "012345678901234567890123456789012345678901234567890123456789012"
  
 diff --git a/go/vt/vtorc/inst/instance_dao.go b/go/vt/vtorc/inst/instance_dao.go
-index 1616d5b..456fd73 100644
+index 1616d5baa4..456fd73e24 100644
 --- a/go/vt/vtorc/inst/instance_dao.go
 +++ b/go/vt/vtorc/inst/instance_dao.go
 @@ -644,7 +644,9 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
@@ -20346,7 +19581,7 @@ index 1616d5b..456fd73 100644
  		END
  	UNION
 diff --git a/go/vt/vtorc/inst/instance_dao_test.go b/go/vt/vtorc/inst/instance_dao_test.go
-index 558a5ce..85f7558 100644
+index 558a5ce8cc..85f7558860 100644
 --- a/go/vt/vtorc/inst/instance_dao_test.go
 +++ b/go/vt/vtorc/inst/instance_dao_test.go
 @@ -207,6 +207,38 @@ func TestReadInstance(t *testing.T) {
@@ -20405,7 +19640,7 @@ index 558a5ce..85f7558 100644
  			name: "One instance doesn't have myql data",
  			sql: []string{
 diff --git a/go/vt/vtorc/logic/vtorc.go b/go/vt/vtorc/logic/vtorc.go
-index 83e258f..a061435 100644
+index 83e258f085..a061435e53 100644
 --- a/go/vt/vtorc/logic/vtorc.go
 +++ b/go/vt/vtorc/logic/vtorc.go
 @@ -133,6 +133,18 @@ func handleDiscoveryRequests() {
@@ -20437,7 +19672,7 @@ index 83e258f..a061435 100644
  		return
  	}
 diff --git a/go/vt/vttablet/endtoend/queries_test.go b/go/vt/vttablet/endtoend/queries_test.go
-index 4a85557..cca6a02 100644
+index 4a855578cf..cca6a02314 100644
 --- a/go/vt/vttablet/endtoend/queries_test.go
 +++ b/go/vt/vttablet/endtoend/queries_test.go
 @@ -962,7 +962,7 @@ var TestQueryCases = []framework.Testable{
@@ -20467,9 +19702,31 @@ index 4a85557..cca6a02 100644
  				},
  				RowsAffected: 1,
  			},
+diff --git a/go/vt/vttablet/endtoend/transaction_test.go b/go/vt/vttablet/endtoend/transaction_test.go
+index 128836195c..ec6897c4b0 100644
+--- a/go/vt/vttablet/endtoend/transaction_test.go
++++ b/go/vt/vttablet/endtoend/transaction_test.go
+@@ -83,7 +83,7 @@ func TestCommit(t *testing.T) {
+ 		tag:  "Queries/Histograms/Insert/Count",
+ 		diff: 1,
+ 	}, {
+-		tag:  "Queries/Histograms/DeleteLimit/Count",
++		tag:  "Queries/Histograms/Delete/Count",
+ 		diff: 1,
+ 	}, {
+ 		tag:  "Queries/Histograms/Select/Count",
+@@ -180,7 +180,7 @@ func TestAutoCommit(t *testing.T) {
+ 		tag:  "Queries/Histograms/Insert/Count",
+ 		diff: 1,
+ 	}, {
+-		tag:  "Queries/Histograms/DeleteLimit/Count",
++		tag:  "Queries/Histograms/Delete/Count",
+ 		diff: 1,
+ 	}, {
+ 		tag:  "Queries/Histograms/Select/Count",
 diff --git a/go/vt/vttablet/grpctabletconn/bench_rows_test.go b/go/vt/vttablet/grpctabletconn/bench_rows_test.go
 new file mode 100644
-index 0000000..133f927
+index 0000000000..133f927320
 --- /dev/null
 +++ b/go/vt/vttablet/grpctabletconn/bench_rows_test.go
 @@ -0,0 +1,120 @@
@@ -20594,7 +19851,7 @@ index 0000000..133f927
 +	}
 +}
 diff --git a/go/vt/vttablet/tabletmanager/rpc_replication.go b/go/vt/vttablet/tabletmanager/rpc_replication.go
-index 570194a..d800672 100644
+index 570194a48c..d800672728 100644
 --- a/go/vt/vttablet/tabletmanager/rpc_replication.go
 +++ b/go/vt/vttablet/tabletmanager/rpc_replication.go
 @@ -578,7 +578,10 @@ func init() {
@@ -20659,7 +19916,7 @@ index 570194a..d800672 100644
  
  	// Return the current replication position.
 diff --git a/go/vt/vttablet/tabletmanager/rpc_replication_test.go b/go/vt/vttablet/tabletmanager/rpc_replication_test.go
-index 075a325..ff45ef3 100644
+index 075a32557f..ff45ef3c37 100644
 --- a/go/vt/vttablet/tabletmanager/rpc_replication_test.go
 +++ b/go/vt/vttablet/tabletmanager/rpc_replication_test.go
 @@ -231,6 +231,36 @@ func TestDemotePrimaryIncludesServerVersion(t *testing.T) {
@@ -20700,7 +19957,7 @@ index 075a325..ff45ef3 100644
  	if rmd.cancel != nil {
  		rmd.cancel()
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/controller.go b/go/vt/vttablet/tabletmanager/vreplication/controller.go
-index 7f00125..957879a 100644
+index 7f00125845..957879a0a9 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/controller.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/controller.go
 @@ -86,6 +86,10 @@ type controller struct {
@@ -20746,7 +20003,7 @@ index 7f00125..957879a 100644
 +	}
 +}
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine.go b/go/vt/vttablet/tabletmanager/vreplication/engine.go
-index 0f94113..281d897 100644
+index 0f941131e7..281d897953 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/engine.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/engine.go
 @@ -72,6 +72,11 @@ const (
@@ -20800,7 +20057,7 @@ index 0f94113..281d897 100644
  func (vre *Engine) updateStats() {
  	globalStats.mu.Lock()
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine_test.go b/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
-index 4f456b8..e737e9a 100644
+index 4f456b8bbc..e737e9ac54 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
 @@ -332,9 +332,9 @@ func TestEngineSelect(t *testing.T) {
@@ -20817,7 +20074,7 @@ index 4f456b8..e737e9a 100644
  	dbClient := binlogplayer.NewMockDBClient(t)
  	mysqld := &mysqlctl.FakeMysqlDaemon{}
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
-index 2abe4d1..bc41810 100644
+index 2abe4d1805..bc41810038 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
 @@ -49,6 +49,8 @@ type relayLog struct {
@@ -20862,7 +20119,7 @@ index 2abe4d1..bc41810 100644
  	select {
  	case <-rl.ctx.Done():
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
-index 6b726d9..ca26ec1 100644
+index 6b726d900d..ca26ec1b0e 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan.go
 @@ -88,6 +88,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
@@ -21295,7 +20552,7 @@ index 6b726d9..ca26ec1 100644
  					out, err := tp.convertStringCharset(raw, conversion, field.Name)
  					if err != nil {
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
-index 621fafb..ea10e04 100644
+index 621fafb737..ea10e041e3 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
 @@ -18,6 +18,8 @@ package vreplication
@@ -21528,7 +20785,7 @@ index 621fafb..ea10e04 100644
 +	}
 +}
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
-index 6aae450..ab11374 100644
+index 6aae4504b5..ab11374149 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
 @@ -341,6 +341,16 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
@@ -21566,7 +20823,7 @@ index 6aae450..ab11374 100644
  				TableName: initialPlan.SendRule.Match,
  			}
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
-index 5f921ce..fcfc7f7 100644
+index 5f921ce654..fcfc7f7d3b 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
 @@ -40,6 +40,29 @@ import (
@@ -21600,7 +20857,7 @@ index 5f921ce..fcfc7f7 100644
  	stats := binlogplayer.NewStats()
  	dbClient := binlogplayer.NewMockDBClient(t)
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
-index cea9c25..c8b4d03 100644
+index cea9c25b34..c8b4d0384f 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
 @@ -85,6 +85,10 @@ type vplayer struct {
@@ -21648,7 +20905,7 @@ index cea9c25..c8b4d03 100644
  			if err != nil {
  				return err
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
-index 196097f..79bec77 100644
+index 196097f29e..79bec772b0 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
 @@ -2439,6 +2439,59 @@ func TestPlayerIdleUpdate(t *testing.T) {
@@ -21712,7 +20969,7 @@ index 196097f..79bec77 100644
  	defer deleteTablet(addTablet(100))
  	setFlag("vstream_packet_size", "10")
 diff --git a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
-index aaf32a6..7049cd7 100644
+index aaf32a6719..7049cd73d8 100644
 --- a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
 +++ b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
 @@ -126,6 +126,16 @@ type vreplicator struct {
@@ -21733,7 +20990,7 @@ index aaf32a6..7049cd7 100644
  
  // newVReplicator creates a new vreplicator. The valid fields from the source are:
 diff --git a/go/vt/vttablet/tabletserver/connpool/pool.go b/go/vt/vttablet/tabletserver/connpool/pool.go
-index 33cf37d..8293493 100644
+index 33cf37dfc5..8293493310 100644
 --- a/go/vt/vttablet/tabletserver/connpool/pool.go
 +++ b/go/vt/vttablet/tabletserver/connpool/pool.go
 @@ -173,13 +173,15 @@ func (cp *Pool) StatsJSON() string {
@@ -21758,7 +21015,7 @@ index 33cf37d..8293493 100644
 +	return params != nil && callerID.Username == params.Uname
  }
 diff --git a/go/vt/vttablet/tabletserver/dt_executor_test.go b/go/vt/vttablet/tabletserver/dt_executor_test.go
-index 235e256..b1fd6ba 100644
+index 235e256a4f..b1fd6baf63 100644
 --- a/go/vt/vttablet/tabletserver/dt_executor_test.go
 +++ b/go/vt/vttablet/tabletserver/dt_executor_test.go
 @@ -688,7 +688,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv
@@ -21780,7 +21037,7 @@ index 235e256..b1fd6ba 100644
  		ctx:      ctx,
  		logStats: logStats,
 diff --git a/go/vt/vttablet/tabletserver/planbuilder/builder.go b/go/vt/vttablet/tabletserver/planbuilder/builder.go
-index ee28656..32750af 100644
+index ee28656912..32750af479 100644
 --- a/go/vt/vttablet/tabletserver/planbuilder/builder.go
 +++ b/go/vt/vttablet/tabletserver/planbuilder/builder.go
 @@ -19,6 +19,7 @@ package planbuilder
@@ -21873,7 +21130,7 @@ index ee28656..32750af 100644
  		PlanID:    PlanInsert,
 diff --git a/go/vt/vttablet/tabletserver/planbuilder/builder_test.go b/go/vt/vttablet/tabletserver/planbuilder/builder_test.go
 new file mode 100644
-index 0000000..18e06b9
+index 0000000000..18e06b9899
 --- /dev/null
 +++ b/go/vt/vttablet/tabletserver/planbuilder/builder_test.go
 @@ -0,0 +1,111 @@
@@ -21989,7 +21246,7 @@ index 0000000..18e06b9
 +	}
 +}
 diff --git a/go/vt/vttablet/tabletserver/query_engine.go b/go/vt/vttablet/tabletserver/query_engine.go
-index bc85d25..5dc4d25 100644
+index bc85d2566d..5dc4d25263 100644
 --- a/go/vt/vttablet/tabletserver/query_engine.go
 +++ b/go/vt/vttablet/tabletserver/query_engine.go
 @@ -45,6 +45,7 @@ import (
@@ -22010,7 +21267,7 @@ index bc85d25..5dc4d25 100644
  	// queryErrorCountsWithCode is similar to queryErrorCounts except we have an additional dimension
  	// of error code.
 diff --git a/go/vt/vttablet/tabletserver/query_executor.go b/go/vt/vttablet/tabletserver/query_executor.go
-index 50c1966..47c9fb9 100644
+index 50c1966ec6..47c9fb9287 100644
 --- a/go/vt/vttablet/tabletserver/query_executor.go
 +++ b/go/vt/vttablet/tabletserver/query_executor.go
 @@ -43,6 +43,7 @@ import (
@@ -22079,7 +21336,7 @@ index 50c1966..47c9fb9 100644
  			case <-ruleCancelCtx.Done():
  				// good! We have buffered the query, and buffering is completed
 diff --git a/go/vt/vttablet/tabletserver/query_executor_test.go b/go/vt/vttablet/tabletserver/query_executor_test.go
-index 997e3d0..b96dce9 100644
+index 997e3d044c..b96dce9413 100644
 --- a/go/vt/vttablet/tabletserver/query_executor_test.go
 +++ b/go/vt/vttablet/tabletserver/query_executor_test.go
 @@ -1933,8 +1933,8 @@ func TestQueryExecutorStreamDML(t *testing.T) {
@@ -22094,7 +21351,7 @@ index 997e3d0..b96dce9 100644
  	}
  
 diff --git a/go/vt/vttablet/tabletserver/rules/rules.go b/go/vt/vttablet/tabletserver/rules/rules.go
-index 0a5c623..36581e9 100644
+index 0a5c62367f..36581e9168 100644
 --- a/go/vt/vttablet/tabletserver/rules/rules.go
 +++ b/go/vt/vttablet/tabletserver/rules/rules.go
 @@ -101,6 +101,11 @@ func (qrs *Rules) Add(qr *Rule) {
@@ -22110,7 +21367,7 @@ index 0a5c623..36581e9 100644
  // the Name field. It returns nil if the rule was not found.
  func (qrs *Rules) Find(name string) (qr *Rule) {
 diff --git a/go/vt/vttablet/tabletserver/stream_execute_compat_test.go b/go/vt/vttablet/tabletserver/stream_execute_compat_test.go
-index 8ce735e..532529d 100644
+index 8ce735eb4d..532529dfa6 100644
 --- a/go/vt/vttablet/tabletserver/stream_execute_compat_test.go
 +++ b/go/vt/vttablet/tabletserver/stream_execute_compat_test.go
 @@ -230,12 +230,12 @@ func TestStreamExecuteCompat_DMLViaTabletServer(t *testing.T) {
@@ -22129,7 +21386,7 @@ index 8ce735e..532529d 100644
  	}
  
 diff --git a/go/vt/vttablet/tabletserver/tabletserver_test.go b/go/vt/vttablet/tabletserver/tabletserver_test.go
-index cacc7d4..6d041b5 100644
+index cacc7d4b8b..6d041b56d8 100644
 --- a/go/vt/vttablet/tabletserver/tabletserver_test.go
 +++ b/go/vt/vttablet/tabletserver/tabletserver_test.go
 @@ -227,7 +227,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
@@ -22252,7 +21509,7 @@ index cacc7d4..6d041b5 100644
  		},
  		// queries for schema info
 diff --git a/go/vt/vttablet/tabletserver/throttle/client.go b/go/vt/vttablet/tabletserver/throttle/client.go
-index 5bed60c..876faf1 100644
+index 5bed60c248..876faf1da0 100644
 --- a/go/vt/vttablet/tabletserver/throttle/client.go
 +++ b/go/vt/vttablet/tabletserver/throttle/client.go
 @@ -55,11 +55,15 @@ type Client struct {
@@ -22342,7 +21599,7 @@ index 5bed60c..876faf1 100644
  
 diff --git a/go/vt/vttablet/tabletserver/throttle/client_test.go b/go/vt/vttablet/tabletserver/throttle/client_test.go
 new file mode 100644
-index 0000000..aad20be
+index 0000000000..aad20be12f
 --- /dev/null
 +++ b/go/vt/vttablet/tabletserver/throttle/client_test.go
 @@ -0,0 +1,136 @@
@@ -22483,7 +21740,7 @@ index 0000000..aad20be
 +	})
 +}
 diff --git a/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go b/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
-index a59ac71..e39a048 100644
+index a59ac71d9b..e39a048532 100644
 --- a/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
 +++ b/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
 @@ -320,11 +320,18 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
@@ -22540,7 +21797,7 @@ index a59ac71..e39a048 100644
  	for _, col := range vindexColumns {
  		vindexValues = append(vindexValues, values[col])
 diff --git a/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go b/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
-index 439ae56..7b57a21 100644
+index 439ae56e1b..7b57a215cf 100644
 --- a/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
 +++ b/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
 @@ -1044,3 +1044,85 @@ func TestPlanMapBitmap(t *testing.T) {
@@ -22630,7 +21887,7 @@ index 439ae56..7b57a21 100644
 +	assert.NotSame(t, &buf[0], &got[0])
 +}
 diff --git a/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
-index 4f0715a..a27ce36 100644
+index 4f0715aa4b..a27ce36017 100644
 --- a/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
 +++ b/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
 @@ -391,6 +391,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse)
@@ -22661,7 +21918,7 @@ index 4f0715a..a27ce36 100644
  		}
  
 diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
-index 0c35885..f074f29 100644
+index 0c35885efe..f074f29186 100644
 --- a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
 +++ b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
 @@ -115,6 +115,11 @@ type vstreamer struct {
