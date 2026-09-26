@@ -1,0 +1,87 @@
+r1-base        setvar+BASE_LUA=oltp_write_only ps   thr=8   tps=547.66   qps=3285.99  avg=14.60  p95=25.278 p99=36.236 vtgate=1212 tablets=1462 mysqld=1358 myq=7.49 mybegin=1.75 mycommit=1.75 err/s=0.00 load=17.48 commitMulti=4.40ms commitSingle=2.11ms tabletBEGIN=0.54ms tabletCOMMIT=1.21ms
+r1-base        setvar+BASE_LUA=oltp_write_only,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=528.26   qps=3169.94  avg=15.14  p95=25.278 p99=33.116 vtgate=1179 tablets=1453 mysqld=1399 myq=7.49 mybegin=1.75 mycommit=1.75 err/s=0.00 load=19.07 commitMulti=4.43ms commitSingle=2.09ms tabletBEGIN=0.51ms tabletCOMMIT=1.16ms
+r1-base        setvar+BASE_LUA=oltp_point_select,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=3706.46  qps=3706.86  avg=2.16   p95=4.823  p99=9.057  vtgate=188 tablets=229 mysqld=166 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=22.43 
+r1-base        oltp_point_select      ps   thr=8   tps=3848.46  qps=3848.46  avg=2.08   p95=4.652  p99=9.057  vtgate=183 tablets=220 mysqld=143 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=24.31 
+r1-base        tx1shard               ps   thr=8   tps=1007.89  qps=4031.57  avg=7.93   p95=14.465 p99=20.736 vtgate=626 tablets=721 mysqld=675 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=24.55 commitSingle=2.04ms tabletBEGIN=0.48ms tabletCOMMIT=0.99ms
+r1-base        tx1shard+FOR_UPDATE=1  ps   thr=8   tps=1009.18  qps=4036.71  avg=7.92   p95=14.728 p99=21.886 vtgate=630 tablets=738 mysqld=672 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=27.21 commitSingle=2.12ms tabletBEGIN=0.53ms tabletCOMMIT=1.10ms
+r1-base        insert_seq+SEQ=1       text thr=8   tps=1905.34  qps=1905.34  avg=4.19   p95=8.737  p99=14.995 vtgate=333 tablets=409 mysqld=298 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=26.01 
+r1-base /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '1000005734' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"1000005734\""vtg2: "type:INT64 value:\"49969\""vtg3: "type:VARCHAR value:\"07263652864-85180008094-45669563217-79524356291-59195577281-96161577273-70089383177-235329553) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (1000005734, 49969, '07263652864-85180008094-45669563217-79524356291-59195577281-96161577273-70089383177-23532955306-56045485815-44556367407', '69992649443-91458223393-21529596915-03957222147-40446523030')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '1000005734' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"1000005734\""vtg2: "type:INT64 value:\"49969\""vtg3: "type:VARCHAR value:\"07263652864-85180008094-45669563217-79524356291-59195577281-96161577273-70089383177-235329553
+r1-reserved    setvar+BASE_LUA=oltp_write_only ps   thr=8   tps=726.34   qps=4358.03  avg=11.01  p95=18.612 p99=25.737 vtgate=1143 tablets=1355 mysqld=1270 myq=7.50 mybegin=1.75 mycommit=1.75 err/s=0.00 load=18.62 commitMulti=3.07ms commitSingle=1.51ms tabletBEGIN=0.35ms tabletCOMMIT=0.76ms
+r1-reserved    setvar+BASE_LUA=oltp_write_only,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=546.11   qps=3277.08  avg=14.64  p95=25.278 p99=36.236 vtgate=1190 tablets=1453 mysqld=1338 myq=7.51 mybegin=1.75 mycommit=1.75 err/s=0.00 load=19.98 commitMulti=4.39ms commitSingle=2.16ms tabletBEGIN=0.56ms tabletCOMMIT=1.26ms
+r1-reserved    setvar+BASE_LUA=oltp_point_select,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=3837.32  qps=3837.72  avg=2.08   p95=4.823  p99=10.844 vtgate=178 tablets=219 mysqld=147 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=21.72 
+r1-reserved    oltp_point_select      ps   thr=8   tps=4151.41  qps=4151.41  avg=1.92   p95=4.176  p99=7.842  vtgate=175 tablets=216 mysqld=139 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=23.68 
+r1-reserved    tx1shard               ps   thr=8   tps=1051.17  qps=4204.68  avg=7.61   p95=14.207 p99=21.496 vtgate=633 tablets=753 mysqld=680 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=23.13 commitSingle=2.06ms tabletBEGIN=0.51ms tabletCOMMIT=1.11ms
+r1-reserved    tx1shard+FOR_UPDATE=1  ps   thr=8   tps=1132.94  qps=4531.75  avg=7.06   p95=12.984 p99=18.612 vtgate=612 tablets=722 mysqld=661 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=22.95 commitSingle=1.86ms tabletBEGIN=0.45ms tabletCOMMIT=0.94ms
+r1-reserved /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '1000076280' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(k, c, pad, id) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */, :vtg3 /* VARCHAR */, :_id_0)", BindVars: {_id_0: "type:INT64 value:\"1000076280\""vtg1: "type:INT64 value:\"49884\""vtg2: "type:VARCHAR value:\"77515413435-11870883445-52505890606-66008348225-61121769989-77650771128-43266990896-389572286) for query 'INSERT INTO sbtest9 (k, c, pad) VALUES (49884, '77515413435-11870883445-52505890606-66008348225-61121769989-77650771128-43266990896-38957228636-00741428836-04317991117', '89929352507-01123513887-45534563360-15227794381-84968009932')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:15: SQL error, errno = 1062, state = '23000': target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '1000076280' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(k, c, pad, id) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */, :vtg3 /* VARCHAR */, :_id_0)", BindVars: {_id_0: "type:INT64 value:\"1000076280\""vtg1: "type:INT64 value:\"49884\""vtg2: "type:VARCHAR value:\"77515413435-11870883445-52505890606-66008348225-61121769989-77650771128-43266990896-389572286
+r1-reserved    insert_seq+SEQ=0       text thr=8   tps=3680.18  qps=3680.18  avg=2.17   p95=3.956  p99=5.879  vtgate=248 tablets=260 mysqld=293 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=18.56 
+r2-base        setvar+BASE_LUA=oltp_write_only ps   thr=8   tps=793.35   qps=4760.10  avg=10.08  p95=15.268 p99=21.112 vtgate=1128 tablets=1361 mysqld=1346 myq=7.51 mybegin=1.75 mycommit=1.75 err/s=0.00 load=10.36 commitMulti=2.82ms commitSingle=1.36ms tabletBEGIN=0.32ms tabletCOMMIT=0.71ms
+r2-base        setvar+BASE_LUA=oltp_write_only,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=735.58   qps=4413.87  avg=10.87  p95=16.706 p99=21.886 vtgate=1194 tablets=1446 mysqld=1501 myq=7.50 mybegin=1.75 mycommit=1.75 err/s=0.00 load=11.34 commitMulti=3.01ms commitSingle=1.45ms tabletBEGIN=0.34ms tabletCOMMIT=0.77ms
+r2-base        setvar+BASE_LUA=oltp_point_select,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=5310.69  qps=5311.09  avg=1.50   p95=2.913  p99=4.652  vtgate=182 tablets=210 mysqld=170 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=11.34 tabletBEGIN=0.41ms
+r2-base        oltp_point_select      ps   thr=8   tps=5402.74  qps=5402.74  avg=1.48   p95=2.810  p99=4.407  vtgate=182 tablets=210 mysqld=158 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=11.74 tabletBEGIN=0.30ms
+r2-base        tx1shard               ps   thr=8   tps=1449.97  qps=5799.90  avg=5.51   p95=9.222  p99=13.704 vtgate=634 tablets=723 mysqld=713 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=12.02 commitSingle=1.40ms tabletBEGIN=0.32ms tabletCOMMIT=0.70ms
+r2-base        tx1shard+FOR_UPDATE=1  ps   thr=8   tps=963.36   qps=3853.42  avg=8.27   p95=15.545 p99=24.827 vtgate=671 tablets=767 mysqld=800 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=15.92 commitSingle=2.21ms tabletBEGIN=0.52ms tabletCOMMIT=1.17ms
+r2-base        insert_seq+SEQ=1       text thr=8   tps=1962.42  qps=1962.42  avg=4.07   p95=7.985  p99=12.081 vtgate=335 tablets=414 mysqld=314 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=18.34 
+r2-base        insert_seq+SEQ=0       text thr=8   tps=2666.86  qps=2666.86  avg=2.99   p95=6.095  p99=9.734  vtgate=237 tablets=256 mysqld=285 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=18.75 
+r2-reserved    setvar+BASE_LUA=oltp_write_only ps   thr=8   tps=777.06   qps=4662.39  avg=10.29  p95=15.545 p99=20.002 vtgate=1143 tablets=1369 mysqld=1293 myq=7.49 mybegin=1.75 mycommit=1.75 err/s=0.00 load=14.71 commitMulti=2.83ms commitSingle=1.37ms tabletBEGIN=0.31ms tabletCOMMIT=0.68ms
+r2-reserved    setvar+BASE_LUA=oltp_write_only,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=794.61   qps=4768.05  avg=10.06  p95=14.995 p99=18.612 vtgate=1129 tablets=1356 mysqld=1279 myq=7.50 mybegin=1.75 mycommit=1.75 err/s=0.00 load=14.98 commitMulti=2.76ms commitSingle=1.34ms tabletBEGIN=0.31ms tabletCOMMIT=0.66ms
+r2-reserved    setvar+BASE_LUA=oltp_point_select,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=5443.10  qps=5443.50  avg=1.47   p95=2.861  p99=4.737  vtgate=178 tablets=206 mysqld=142 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=13.25 
+r2-reserved    oltp_point_select      ps   thr=8   tps=5833.67  qps=5833.67  avg=1.37   p95=2.568  p99=3.885  vtgate=173 tablets=197 mysqld=133 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=11.96 
+r2-reserved    tx1shard               ps   thr=8   tps=1184.06  qps=4736.26  avg=6.75   p95=12.081 p99=17.954 vtgate=616 tablets=734 mysqld=675 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=13.95 commitSingle=1.78ms tabletBEGIN=0.43ms tabletCOMMIT=0.92ms
+r2-reserved    tx1shard+FOR_UPDATE=1  ps   thr=8   tps=1271.51  qps=5086.03  avg=6.29   p95=11.446 p99=16.408 vtgate=619 tablets=721 mysqld=654 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=15.02 commitSingle=1.61ms tabletBEGIN=0.39ms tabletCOMMIT=0.81ms
+r2-reserved    insert_seq+SEQ=1       text thr=8   tps=2131.30  qps=2131.30  avg=3.75   p95=7.430  p99=11.242 vtgate=313 tablets=405 mysqld=289 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=15.17 
+r2-reserved /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '7129778636' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"7129778636\""vtg2: "type:INT64 value:\"50138\""vtg3: "type:VARCHAR value:\"85697287784-41199707834-30198137856-79714219953-75214057182-32135540468-95039019404-414974626) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (7129778636, 50138, '85697287784-41199707834-30198137856-79714219953-75214057182-32135540468-95039019404-41497462634-45248858212-22641787797', '80137220159-55890334796-70528210318-97308427736-78795125818')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '7129778636' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"7129778636\""vtg2: "type:INT64 value:\"50138\""vtg3: "type:VARCHAR value:\"85697287784-41199707834-30198137856-79714219953-75214057182-32135540468-95039019404-414974626
+r3-base        setvar+BASE_LUA=oltp_write_only ps   thr=8   tps=615.65   qps=3693.88  avg=12.97  p95=25.278 p99=36.894 vtgate=1198 tablets=1420 mysqld=1333 myq=7.49 mybegin=1.75 mycommit=1.75 err/s=0.00 load=10.50 commitMulti=3.75ms commitSingle=1.76ms tabletBEGIN=0.43ms tabletCOMMIT=0.96ms
+r3-base        setvar+BASE_LUA=oltp_write_only,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=394.73   qps=2368.79  avg=20.26  p95=35.589 p99=53.850 vtgate=1243 tablets=1452 mysqld=1435 myq=7.50 mybegin=1.75 mycommit=1.75 err/s=0.00 load=13.76 commitMulti=6.19ms commitSingle=2.93ms tabletBEGIN=0.82ms tabletCOMMIT=1.82ms
+r3-base        setvar+BASE_LUA=oltp_point_select,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=2622.45  qps=2622.85  avg=3.05   p95=8.277  p99=23.521 vtgate=196 tablets=227 mysqld=167 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=20.37 
+r3-base        oltp_point_select      ps   thr=8   tps=3419.38  qps=3419.38  avg=2.34   p95=5.570  p99=14.465 vtgate=182 tablets=217 mysqld=142 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=21.41 
+r3-base        tx1shard               ps   thr=8   tps=903.60   qps=3614.39  avg=8.85   p95=17.319 p99=27.659 vtgate=646 tablets=751 mysqld=697 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=21.38 commitSingle=2.35ms tabletBEGIN=0.69ms tabletCOMMIT=1.34ms
+r3-base        tx1shard+FOR_UPDATE=1  ps   thr=8   tps=1345.96  qps=5383.86  avg=5.94   p95=10.844 p99=17.633 vtgate=608 tablets=706 mysqld=644 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=19.38 commitSingle=1.52ms tabletBEGIN=0.36ms tabletCOMMIT=0.75ms
+r3-base        insert_seq+SEQ=1       text thr=8   tps=2749.23  qps=2749.23  avg=2.91   p95=5.090  p99=7.039  vtgate=343 tablets=399 mysqld=308 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=17.46 
+r3-base        insert_seq+SEQ=0       text thr=8   tps=2073.65  qps=2073.65  avg=3.85   p95=8.130  p99=17.954 vtgate=240 tablets=239 mysqld=247 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=23.95 
+r3-reserved    setvar+BASE_LUA=oltp_write_only ps   thr=8   tps=454.36   qps=2726.16  avg=17.60  p95=34.330 p99=62.193 vtgate=1174 tablets=1404 mysqld=1326 myq=7.52 mybegin=1.76 mycommit=1.76 err/s=0.00 load=24.03 commitMulti=5.24ms commitSingle=2.59ms tabletBEGIN=0.78ms tabletCOMMIT=1.53ms
+r3-reserved    setvar+BASE_LUA=oltp_write_only,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=562.90   qps=3377.82  avg=14.20  p95=26.681 p99=41.851 vtgate=1173 tablets=1409 mysqld=1325 myq=7.51 mybegin=1.75 mycommit=1.75 err/s=0.00 load=20.87 commitMulti=4.23ms commitSingle=1.96ms tabletBEGIN=0.54ms tabletCOMMIT=1.17ms
+r3-reserved    setvar+BASE_LUA=oltp_point_select,SETVAR=sql_mode:STRICT_TRANS_TABLES ps   thr=8   tps=5364.98  qps=5365.38  avg=1.49   p95=2.861  p99=4.569  vtgate=182 tablets=207 mysqld=144 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=17.80 
+r3-reserved    oltp_point_select      ps   thr=8   tps=3642.19  qps=3642.19  avg=2.19   p95=5.373  p99=12.301 vtgate=187 tablets=216 mysqld=139 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=21.37 
+r3-reserved    tx1shard               ps   thr=8   tps=633.94   qps=2535.75  avg=12.61  p95=29.194 p99=57.871 vtgate=694 tablets=737 mysqld=694 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=26.30 commitSingle=3.65ms tabletBEGIN=1.19ms tabletCOMMIT=2.58ms
+r3-reserved    tx1shard+FOR_UPDATE=1  ps   thr=8   tps=666.02   qps=2664.09  avg=12.01  p95=29.725 p99=62.193 vtgate=662 tablets=718 mysqld=665 myq=4.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=31.88 commitSingle=3.31ms tabletBEGIN=1.24ms tabletCOMMIT=2.30ms
+r3-reserved    insert_seq+SEQ=1       text thr=8   tps=1207.02  qps=1207.02  avg=6.62   p95=17.319 p99=51.945 vtgate=350 tablets=388 mysqld=283 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=35.61 
+r3-reserved    insert_seq+SEQ=0       text thr=8   tps=1596.17  qps=1596.17  avg=5.01   p95=12.752 p99=42.611 vtgate=259 tablets=259 mysqld=268 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=34.37 

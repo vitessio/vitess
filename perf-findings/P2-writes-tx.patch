@@ -1,0 +1,1766 @@
+diff --git a/go/flags/endtoend/vtcombo.txt b/go/flags/endtoend/vtcombo.txt
+index c826c1a..40d0890 100644
+--- a/go/flags/endtoend/vtcombo.txt
++++ b/go/flags/endtoend/vtcombo.txt
+@@ -292,6 +292,7 @@ Flags:
+       --querylog-time-threshold duration                                 Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.
+       --queryserver-config-acl-exempt-acl string                         an acl that exempt from table acl checking (this acl is free to access any vitess tables).
+       --queryserver-config-annotate-queries                              prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
++      --queryserver-config-defer-begin                                   send the BEGIN of a transaction to MySQL together with the transaction's first statement, as one multi-statement query, instead of in a round trip of its own
+       --queryserver-config-enable-table-acl-dry-run                      If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
+       --queryserver-config-idle-timeout duration                         query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 30m0s)
+       --queryserver-config-max-result-size int                           query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries. (default 10000)
+diff --git a/go/flags/endtoend/vttablet.txt b/go/flags/endtoend/vttablet.txt
+index aad760b..3d9203a 100644
+--- a/go/flags/endtoend/vttablet.txt
++++ b/go/flags/endtoend/vttablet.txt
+@@ -282,6 +282,7 @@ Flags:
+       --querylog-time-threshold duration                                 Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.
+       --queryserver-config-acl-exempt-acl string                         an acl that exempt from table acl checking (this acl is free to access any vitess tables).
+       --queryserver-config-annotate-queries                              prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
++      --queryserver-config-defer-begin                                   send the BEGIN of a transaction to MySQL together with the transaction's first statement, as one multi-statement query, instead of in a round trip of its own
+       --queryserver-config-enable-table-acl-dry-run                      If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
+       --queryserver-config-idle-timeout duration                         query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 30m0s)
+       --queryserver-config-max-result-size int                           query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries. (default 10000)
+diff --git a/go/mysql/query.go b/go/mysql/query.go
+index 86db97b..c9fee68 100644
+--- a/go/mysql/query.go
++++ b/go/mysql/query.go
+@@ -326,6 +326,41 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result
+ 	return result, err
+ }
+ 
++// ExecuteFetchWithPrefix sends prefix and query in one COM_QUERY packet, as the
++// multi-statement "prefix;query", and returns the result of query, like
++// ExecuteFetch(query) would after a separate ExecuteFetch(prefix). It saves
++// the round trip to the server for prefix. prefix must be one statement that
++// returns no rows, e.g. "begin". If prefix fails, the server does not run query.
++func (c *Conn) ExecuteFetchWithPrefix(prefix, query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
++	failed := query
++	defer func() {
++		if err != nil {
++			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
++				sqlerr.Query = sqlparser.TruncateQuery(failed, c.truncateErrLen)
++			}
++		}
++	}()
++
++	if err = c.WriteComQuery(prefix + ";" + query); err != nil {
++		return nil, err
++	}
++	_, more, _, err := c.ReadQueryResult(FETCH_NO_ROWS, false)
++	if err != nil {
++		failed = prefix
++		return nil, err
++	}
++	if !more {
++		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] no result for %q after %q", sqlparser.TruncateQuery(query, c.truncateErrLen), prefix)
++	}
++	result, more, _, err = c.ReadQueryResult(maxrows, wantfields)
++	if more {
++		// Same as ExecuteFetch: query must return a single result.
++		err = errors.Join(ErrExecuteFetchMultipleResults, err)
++	}
++	err = c.drainMoreResults(more, err)
++	return result, err
++}
++
+ // ExecuteFetchMultiDrain is for executing multiple statements in one call, but without
+ // caring for any results. The function returns an error if any of the statements fail.
+ // The function drains the query results of all statements, even if there's an error.
+diff --git a/go/test/endtoend/transaction/twopc/twopc_test.go b/go/test/endtoend/transaction/twopc/twopc_test.go
+index 3d565f5..a03dab0 100644
+--- a/go/test/endtoend/transaction/twopc/twopc_test.go
++++ b/go/test/endtoend/transaction/twopc/twopc_test.go
+@@ -173,9 +173,9 @@ func TestDTCommit(t *testing.T) {
+ 		},
+ 		"ks.redo_statement:40-80": {
+ 			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
+-			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 /* INT64 */\")]",
+ 			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
+-			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 /* INT64 */\")]",
+ 		},
+ 		"ks.twopc_user:40-80": {"update:[INT64(8) VARCHAR(\"newfoo\")]"},
+ 		"ks.twopc_user:80-":   {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
+@@ -206,9 +206,9 @@ func TestDTCommit(t *testing.T) {
+ 		},
+ 		"ks.redo_statement:-40": {
+ 			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
+-			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 /* INT64 */\")]",
+ 			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
+-			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 /* INT64 */\")]",
+ 		},
+ 		"ks.twopc_user:-40": {"delete:[INT64(10) VARCHAR(\"apa\")]"},
+ 		"ks.twopc_user:80-": {"delete:[INT64(9) VARCHAR(\"baz\")]"},
+@@ -435,8 +435,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
+ 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+ 		},
+ 		"ks.redo_statement:80-": {
+-			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
+-			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 /* INT64 */\")]",
+ 		},
+ 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
+ 	}
+@@ -465,8 +465,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
+ 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+ 		},
+ 		"ks.redo_statement:80-": {
+-			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
+-			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 /* INT64 */\")]",
+ 		},
+ 		"ks.twopc_user:80-": {"delete:[INT64(7) VARCHAR(\"newfoo\")]"},
+ 	}
+@@ -664,9 +664,9 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
+ 		},
+ 		"ks.redo_statement:-40": {
+ 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 /* INT64 */\")]",
+ 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 /* INT64 */\")]",
+ 		},
+ 		"ks.redo_statement:40-80": {
+ 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+@@ -765,8 +765,8 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
+ 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+ 		},
+ 		"ks.redo_statement:-40": {
+-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 /* INT64 */\")]",
+ 		},
+ 		"ks.consistent_lookup:-40": {
+ 			"insert:[INT64(22) INT64(4) VARBINARY(\" \\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+@@ -1280,8 +1280,8 @@ func TestDTSavepoint(t *testing.T) {
+ 			"delete:[VARCHAR(\"dtid-4\") VARCHAR(\"PREPARE\")]",
+ 		},
+ 		"ks.redo_statement:80-": {
+-			"insert:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
+-			"delete:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
++			"insert:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 /* INT64 */\")]",
++			"delete:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 /* INT64 */\")]",
+ 		},
+ 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"temp1\")]"},
+ 	}
+@@ -1550,9 +1550,9 @@ func TestVindexes(t *testing.T) {
+ 			},
+ 			logExpected: map[string][]string{
+ 				"ks.redo_statement:80-": {
+-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+ 				},
+ 				"ks.twopc_lookup:40-80": {
+@@ -1578,9 +1578,9 @@ func TestVindexes(t *testing.T) {
+ 			},
+ 			logExpected: map[string][]string{
+ 				"ks.redo_statement:80-": {
+-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup_unique(col_unique, keyspace_id) values (20, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup_unique(col_unique, keyspace_id) values (20, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+ 				},
+ 				"ks.twopc_lookup:40-80": {
+@@ -1606,10 +1606,10 @@ func TestVindexes(t *testing.T) {
+ 			},
+ 			logExpected: map[string][]string{
+ 				"ks.redo_statement:80-": {
+-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 				},
+ 				"ks.twopc_lookup:40-80": {
+ 					"delete:[INT64(6) INT64(4) INT64(9)]",
+@@ -1667,17 +1667,17 @@ func TestVindexes(t *testing.T) {
+ 			logExpected: map[string][]string{
+ 				"ks.redo_statement:80-": {
+ 					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+-					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 					"insert:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+-					"insert:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"insert:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"insert:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete from twopc_lookup where id = 9 limit 10001 /* INT64 */\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"insert:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete from twopc_lookup where id = 9 /* INT64 */\")]",
+ 					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
+ 					"delete:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+-					"delete:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete from twopc_lookup where id = 9 limit 10001 /* INT64 */\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0'\")]",
++					"delete:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete from twopc_lookup where id = 9 /* INT64 */\")]",
+ 				},
+ 				"ks.redo_statement:40-80": {
+ 					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"update twopc_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+@@ -1790,8 +1790,8 @@ func TestVindexes(t *testing.T) {
+ 			},
+ 			logExpected: map[string][]string{
+ 				"ks.redo_statement:80-": {
+-					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+-					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
++					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 /* INT64 */\")]",
++					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 /* INT64 */\")]",
+ 				},
+ 				"ks.redo_statement:40-80": {
+ 					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+diff --git a/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt b/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt
+index d88fddb..3728ef7 100644
+--- a/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt
++++ b/go/vt/vtexplain/testdata/multi-output/deletesharded-output.txt
+@@ -1,16 +1,12 @@
+ ----------------------------------------------------------------------
+ delete from music_extra where id=1
+ 
+-1 ks_sharded/-40: begin
+-1 ks_sharded/-40: delete from music_extra where id = 1 limit 10001 /* INT64 */
+-1 ks_sharded/-40: commit
++1 ks_sharded/-40: delete from music_extra where id = 1 /* INT64 */
+ 
+ ----------------------------------------------------------------------
+ delete from music_extra where id=1 and extra='abc'
+ 
+-1 ks_sharded/-40: begin
+-1 ks_sharded/-40: delete from music_extra where id = 1 and extra = 'abc' limit 10001 /* VARCHAR */
+-1 ks_sharded/-40: commit
++1 ks_sharded/-40: delete from music_extra where id = 1 and extra = 'abc' /* VARCHAR */
+ 
+ ----------------------------------------------------------------------
+ delete from user where id=1
+diff --git a/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt b/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt
+index b63683c..b6303ce 100644
+--- a/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt
++++ b/go/vt/vtexplain/testdata/multi-output/unsharded-output.txt
+@@ -30,9 +30,7 @@ update t1 set floatval = 9.99
+ ----------------------------------------------------------------------
+ delete from t1 where id = 100
+ 
+-1 ks_unsharded/-: begin
+-1 ks_unsharded/-: delete from t1 where id = 100 limit 10001 /* INT64 */
+-1 ks_unsharded/-: commit
++1 ks_unsharded/-: delete from t1 where id = 100 /* INT64 */
+ 
+ ----------------------------------------------------------------------
+ insert into t1 (id,intval,floatval) values (1,2,3.14) on duplicate key update intval=3, floatval=3.14
+diff --git a/go/vt/vttablet/endtoend/queries_test.go b/go/vt/vttablet/endtoend/queries_test.go
+index 4a85557..cca6a02 100644
+--- a/go/vt/vttablet/endtoend/queries_test.go
++++ b/go/vt/vttablet/endtoend/queries_test.go
+@@ -962,7 +962,7 @@ var TestQueryCases = []framework.Testable{
+ 			&framework.TestCase{
+ 				Query: "update /* pk */ vitess_a set foo='bar' where eid = 1 and id = 1",
+ 				Rewritten: []string{
+-					"update /* pk */ vitess_a set foo = 'bar' where eid = 1 and id = 1 limit 10001",
++					"update /* pk */ vitess_a set foo = 'bar' where eid = 1 and id = 1",
+ 				},
+ 				RowsAffected: 1,
+ 			},
+@@ -1057,7 +1057,7 @@ var TestQueryCases = []framework.Testable{
+ 			&framework.TestCase{
+ 				Query: "update vitess_a set eid = 2 where eid = 1 and id = 1",
+ 				Rewritten: []string{
+-					"update vitess_a set eid = 2 where eid = 1 and id = 1 limit 10001",
++					"update vitess_a set eid = 2 where eid = 1 and id = 1",
+ 				},
+ 				RowsAffected: 1,
+ 			},
+@@ -1282,7 +1282,7 @@ var TestQueryCases = []framework.Testable{
+ 			&framework.TestCase{
+ 				Query: "delete /* pk */ from vitess_a where eid = 2 and id = 1",
+ 				Rewritten: []string{
+-					"delete /* pk */ from vitess_a where eid = 2 and id = 1 limit 10001",
++					"delete /* pk */ from vitess_a where eid = 2 and id = 1",
+ 				},
+ 				RowsAffected: 1,
+ 			},
+diff --git a/go/vt/vttablet/tabletserver/connpool/dbconn.go b/go/vt/vttablet/tabletserver/connpool/dbconn.go
+index e457db9..80589d4 100644
+--- a/go/vt/vttablet/tabletserver/connpool/dbconn.go
++++ b/go/vt/vttablet/tabletserver/connpool/dbconn.go
+@@ -160,7 +160,46 @@ func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields
+ 	panic("unreachable")
+ }
+ 
++// ExecWithPrefix executes prefix and then query in a single round trip (see
++// mysql.Conn.ExecuteFetchWithPrefix) and returns the result of query. prefix
++// is typically the "begin" of a transaction that query is the first statement
++// of. Like Exec, it reconnects and retries once if the connection was found
++// broken before the statements ran. Like ExecOnce, a context expiring while
++// the statements run kills the connection.
++func (dbc *Conn) ExecWithPrefix(ctx context.Context, prefix, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
++	fetch := func() (*sqltypes.Result, error) {
++		return dbc.conn.ExecuteFetchWithPrefix(prefix, query, maxrows, wantfields)
++	}
++	for attempt := 1; attempt <= 2; attempt++ {
++		r, err := dbc.execOnceWith(ctx, query, true /* insideTxn */, fetch)
++		switch {
++		case err == nil:
++			return r, nil
++		case sqlerror.IsConnLostDuringQuery(err), !sqlerror.IsConnErr(err), attempt == 2:
++			return nil, err
++		}
++		select {
++		case <-ctx.Done():
++			return nil, err
++		default:
++		}
++		if reconnectErr := dbc.Reconnect(ctx); reconnectErr != nil {
++			dbc.env.CheckMySQL()
++			return nil, reconnectErr
++		}
++	}
++	panic("unreachable")
++}
++
+ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
++	return dbc.execOnceWith(ctx, query, insideTxn, func() (*sqltypes.Result, error) {
++		return dbc.conn.ExecuteFetch(query, maxrows, wantfields)
++	})
++}
++
++// execOnceWith runs fetch, which executes query on dbc.conn, and kills the
++// query or the connection (see terminate) if ctx expires meanwhile.
++func (dbc *Conn) execOnceWith(ctx context.Context, query string, insideTxn bool, fetch func() (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+ 	dbc.current.Store(&query)
+ 	defer dbc.current.Store(nil)
+ 
+@@ -184,7 +223,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
+ 		defer wg.Done()
+ 		dbc.terminate(ctx, insideTxn, now, fetchDone)
+ 	})
+-	result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
++	result, err := fetch()
+ 	close(fetchDone)
+ 	if !stop() {
+ 		// The context was cancelled and terminate has started. Wait for
+diff --git a/go/vt/vttablet/tabletserver/connpool/dbconn_test.go b/go/vt/vttablet/tabletserver/connpool/dbconn_test.go
+index 01c5717..e742864 100644
+--- a/go/vt/vttablet/tabletserver/connpool/dbconn_test.go
++++ b/go/vt/vttablet/tabletserver/connpool/dbconn_test.go
+@@ -111,6 +111,59 @@ func TestDBConnExec(t *testing.T) {
+ 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
+ }
+ 
++// TestDBConnExecWithPrefix checks that ExecWithPrefix runs the prefix and the
++// query in one round trip, returns the query's result, and does not run the
++// query when the prefix fails.
++func TestDBConnExecWithPrefix(t *testing.T) {
++	db := fakesqldb.New(t)
++	defer db.Close()
++
++	sql := "select * from test_table limit 1000"
++	expectedResult := &sqltypes.Result{
++		Fields: []*querypb.Field{
++			{Type: sqltypes.VarChar},
++		},
++		Rows: [][]sqltypes.Value{
++			{sqltypes.NewVarChar("123")},
++		},
++	}
++	db.AddQuery(sql, expectedResult)
++	db.AddQuery("begin", &sqltypes.Result{})
++	connPool := newPool()
++	mysqlTimings := connPool.env.Stats().MySQLTimings
++	params := dbconfigs.New(db.ConnParams())
++	connPool.Open(params, params, params)
++	defer connPool.Close()
++	dbConn, err := newPooledConn(t.Context(), connPool, params)
++	require.NoError(t, err)
++	defer dbConn.Close()
++
++	db.ResetQueryLog() // drop the connection setup
++	startCounts := mysqlTimings.Counts()
++	result, err := dbConn.ExecWithPrefix(t.Context(), "begin", sql, 10, true)
++	require.NoError(t, err)
++	assert.True(t, expectedResult.Equal(result), "got %v, want %v", result, expectedResult)
++	assert.Equal(t, "begin;"+sql, db.QueryLog())
++	// One round trip.
++	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
++
++	// An error of the query is reported for the query.
++	db.ResetQueryLog()
++	db.AddRejectedQuery(sql, sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry"))
++	_, err = dbConn.ExecWithPrefix(t.Context(), "begin", sql, 10, true)
++	require.ErrorContains(t, err, "Duplicate entry")
++	require.ErrorContains(t, err, "during query: "+sql)
++	assert.Equal(t, "begin;"+sql, db.QueryLog())
++
++	// If the prefix fails, the query does not run.
++	db.ResetQueryLog()
++	db.AddRejectedQuery("begin", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "begin failed"))
++	_, err = dbConn.ExecWithPrefix(t.Context(), "begin", sql, 10, true)
++	require.ErrorContains(t, err, "begin failed")
++	require.ErrorContains(t, err, "during query: begin")
++	assert.Equal(t, "begin", db.QueryLog())
++}
++
+ func TestDBConnExecLost(t *testing.T) {
+ 	db := fakesqldb.New(t)
+ 	defer db.Close()
+diff --git a/go/vt/vttablet/tabletserver/dt_executor_test.go b/go/vt/vttablet/tabletserver/dt_executor_test.go
+index 235e256..b1fd6ba 100644
+--- a/go/vt/vttablet/tabletserver/dt_executor_test.go
++++ b/go/vt/vttablet/tabletserver/dt_executor_test.go
+@@ -688,7 +688,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv
+ 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
+ 	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
+ 	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
+-	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
++	db.AddQuery("update test_table set `name` = 2 where pk = 1", &sqltypes.Result{})
+ 	db.AddRejectedQuery("bogus", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "bogus query"))
+ 	txe = &DTExecutor{
+ 		ctx:      ctx,
+@@ -712,7 +712,7 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, ts
+ 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
+ 	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
+ 	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
+-	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
++	db.AddQuery("update test_table set `name` = 2 where pk = 1", &sqltypes.Result{})
+ 	return &DTExecutor{
+ 		ctx:      ctx,
+ 		logStats: logStats,
+diff --git a/go/vt/vttablet/tabletserver/planbuilder/builder.go b/go/vt/vttablet/tabletserver/planbuilder/builder.go
+index ee28656..32750af 100644
+--- a/go/vt/vttablet/tabletserver/planbuilder/builder.go
++++ b/go/vt/vttablet/tabletserver/planbuilder/builder.go
+@@ -19,6 +19,7 @@ package planbuilder
+ import (
+ 	"strings"
+ 
++	"vitess.io/vitess/go/sqltypes"
+ 	"vitess.io/vitess/go/vt/sqlparser"
+ 	"vitess.io/vitess/go/vt/vtenv"
+ 	"vitess.io/vitess/go/vt/vterrors"
+@@ -95,7 +96,9 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
+ 	// PassthroughDMLs flag is set.
+ 	// plan.Table==nil: it's likely a multi-table statement. MySQL doesn't allow limit clauses for multi-table dmls.
+ 	// If there's an explicit Limit.
+-	if PassthroughDMLs || plan.Table == nil || upd.Limit != nil {
++	// The WHERE clause pins the full primary key: at most one row can change, so
++	// the row limit (and the transaction it needs, see execAsTransaction) is moot.
++	if PassthroughDMLs || plan.Table == nil || upd.Limit != nil || matchesAtMostOneRow(upd.Where, plan.Table) {
+ 		plan.FullQuery = GenerateFullQuery(upd)
+ 		return plan, nil
+ 	}
+@@ -120,7 +123,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
+ 		plan.WhereClause = buf.ParsedQuery()
+ 	}
+ 
+-	if PassthroughDMLs || plan.Table == nil || del.Limit != nil {
++	if PassthroughDMLs || plan.Table == nil || del.Limit != nil || matchesAtMostOneRow(del.Where, plan.Table) {
+ 		plan.FullQuery = GenerateFullQuery(del)
+ 		return plan, nil
+ 	}
+@@ -131,6 +134,59 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
+ 	return plan, nil
+ }
+ 
++// matchesAtMostOneRow reports whether a single-table DML with this WHERE clause
++// can match at most one row of table: the top-level AND of the WHERE clause
++// compares every primary key column for equality with a literal or a scalar
++// bind variable. Only integral primary key columns qualify: comparing an integer
++// with any scalar value (string, decimal, float) selects at most one integer,
++// whereas a string column compared with a number is compared as a double, so
++// that '1', '01' and '1.0' would all match.
++func matchesAtMostOneRow(where *sqlparser.Where, table *schema.Table) bool {
++	if where == nil || table == nil || len(table.PKColumns) == 0 {
++		return false
++	}
++	pinned := make([]bool, len(table.PKColumns))
++	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
++		cmp, ok := expr.(*sqlparser.ComparisonExpr)
++		if !ok || cmp.Operator != sqlparser.EqualOp {
++			continue
++		}
++		col, ok := cmp.Left.(*sqlparser.ColName)
++		val := cmp.Right
++		if !ok {
++			col, ok = cmp.Right.(*sqlparser.ColName)
++			val = cmp.Left
++		}
++		if !ok || !isScalarValue(val) {
++			continue
++		}
++		for i, pkIdx := range table.PKColumns {
++			if pkIdx >= len(table.Fields) {
++				return false
++			}
++			field := table.Fields[pkIdx]
++			if sqltypes.IsIntegral(field.Type) && col.Name.EqualString(field.Name) {
++				pinned[i] = true
++			}
++		}
++	}
++	for _, p := range pinned {
++		if !p {
++			return false
++		}
++	}
++	return true
++}
++
++// isScalarValue reports whether expr is a literal or a scalar bind variable.
++func isScalarValue(expr sqlparser.Expr) bool {
++	switch expr.(type) {
++	case *sqlparser.Literal, *sqlparser.Argument:
++		return true
++	}
++	return false
++}
++
+ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan *Plan, err error) {
+ 	plan = &Plan{
+ 		PlanID:    PlanInsert,
+diff --git a/go/vt/vttablet/tabletserver/planbuilder/builder_test.go b/go/vt/vttablet/tabletserver/planbuilder/builder_test.go
+new file mode 100644
+index 0000000..18e06b9
+--- /dev/null
++++ b/go/vt/vttablet/tabletserver/planbuilder/builder_test.go
+@@ -0,0 +1,111 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package planbuilder
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	"vitess.io/vitess/go/vt/sqlparser"
++	"vitess.io/vitess/go/vt/vtenv"
++	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
++)
++
++// TestDMLOnFullPrimaryKeySkipsRowLimit checks that an UPDATE or DELETE whose
++// WHERE clause pins every (integral) primary key column is planned without the
++// row limit, so that in autocommit mode it runs as one statement instead of
++// BEGIN, DML ... LIMIT, COMMIT. Anything that can match more than one row keeps
++// the limit.
++func TestDMLOnFullPrimaryKeySkipsRowLimit(t *testing.T) {
++	tables := map[string]*schema.Table{
++		"t1": {
++			Name: sqlparser.NewIdentifierCS("t1"),
++			Fields: []*querypb.Field{
++				{Name: "id", Type: querypb.Type_INT64},
++				{Name: "k", Type: querypb.Type_INT32},
++				{Name: "c", Type: querypb.Type_VARCHAR},
++			},
++			PKColumns: []int{0},
++		},
++		"t2": {
++			Name: sqlparser.NewIdentifierCS("t2"),
++			Fields: []*querypb.Field{
++				{Name: "a", Type: querypb.Type_UINT64},
++				{Name: "b", Type: querypb.Type_INT64},
++				{Name: "c", Type: querypb.Type_VARCHAR},
++			},
++			PKColumns: []int{0, 1},
++		},
++		"tstr": {
++			Name: sqlparser.NewIdentifierCS("tstr"),
++			Fields: []*querypb.Field{
++				{Name: "name", Type: querypb.Type_VARCHAR},
++				{Name: "c", Type: querypb.Type_VARCHAR},
++			},
++			PKColumns: []int{0},
++		},
++		"nopk": {
++			Name: sqlparser.NewIdentifierCS("nopk"),
++			Fields: []*querypb.Field{
++				{Name: "id", Type: querypb.Type_INT64},
++			},
++		},
++	}
++	tests := []struct {
++		query string
++		plan  PlanType
++		full  string
++	}{
++		{"update t1 set c = 'x' where id = 1", PlanUpdate, "update t1 set c = 'x' where id = 1"},
++		{"update t1 set c = 'x' where id = :id", PlanUpdate, "update t1 set c = 'x' where id = :id"},
++		{"update t1 set c = 'x' where :id = id and k > 3", PlanUpdate, "update t1 set c = 'x' where :id = id and k > 3"},
++		{"update t1 set k = k + 1 where t1.id = '5'", PlanUpdate, "update t1 set k = k + 1 where t1.id = '5'"},
++		{"delete from t1 where id = :id", PlanDelete, "delete from t1 where id = :id"},
++		{"update t2 set c = 'x' where a = 1 and b = 2", PlanUpdate, "update t2 set c = 'x' where a = 1 and b = 2"},
++		{"delete from t2 where b = :b and a = :a", PlanDelete, "delete from t2 where b = :b and a = :a"},
++		// Only part of the primary key is pinned.
++		{"update t2 set c = 'x' where a = 1", PlanUpdateLimit, "update t2 set c = 'x' where a = 1 limit :#maxLimit"},
++		// A disjunction can match several rows.
++		{"update t1 set c = 'x' where id = 1 or k = 2", PlanUpdateLimit, "update t1 set c = 'x' where id = 1 or k = 2 limit :#maxLimit"},
++		// Not an equality with a single value.
++		{"update t1 set c = 'x' where id in (1, 2)", PlanUpdateLimit, "update t1 set c = 'x' where id in (1, 2) limit :#maxLimit"},
++		{"update t1 set c = 'x' where id in ::ids", PlanUpdateLimit, "update t1 set c = 'x' where id in ::ids limit :#maxLimit"},
++		{"update t1 set c = 'x' where id >= 1", PlanUpdateLimit, "update t1 set c = 'x' where id >= 1 limit :#maxLimit"},
++		{"update t1 set c = 'x' where id = k", PlanUpdateLimit, "update t1 set c = 'x' where id = k limit :#maxLimit"},
++		{"delete from t1 where k = 1", PlanDeleteLimit, "delete from t1 where k = 1 limit :#maxLimit"},
++		{"delete from t1", PlanDeleteLimit, "delete from t1 limit :#maxLimit"},
++		// A string primary key compared with a number matches '1', '01', '1.0', ...
++		{"update tstr set c = 'x' where name = 1", PlanUpdateLimit, "update tstr set c = 'x' where `name` = 1 limit :#maxLimit"},
++		{"delete from tstr where name = :name", PlanDeleteLimit, "delete from tstr where `name` = :name limit :#maxLimit"},
++		// No primary key known.
++		{"update nopk set id = 2 where id = 1", PlanUpdateLimit, "update nopk set id = 2 where id = 1 limit :#maxLimit"},
++	}
++	env := vtenv.NewTestEnv()
++	for _, tc := range tests {
++		t.Run(tc.query, func(t *testing.T) {
++			stmt, err := env.Parser().Parse(tc.query)
++			require.NoError(t, err)
++			plan, err := Build(env, stmt, tables, "dbName", false)
++			require.NoError(t, err)
++			assert.Equal(t, tc.plan, plan.PlanID)
++			assert.Equal(t, tc.full, plan.FullQuery.Query)
++		})
++	}
++}
+diff --git a/go/vt/vttablet/tabletserver/query_executor.go b/go/vt/vttablet/tabletserver/query_executor.go
+index 50c1966..bc5cedc 100644
+--- a/go/vt/vttablet/tabletserver/query_executor.go
++++ b/go/vt/vttablet/tabletserver/query_executor.go
+@@ -680,6 +680,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
+ 			}
+ 		}
+ 
++		if err := txConn.FlushPendingBegin(qre.ctx); err != nil {
++			return err
++		}
+ 		conn := txConn.UnderlyingDBConn()
+ 		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
+ 		if qre.plan.PlanID == p.PlanCallProc {
+diff --git a/go/vt/vttablet/tabletserver/query_executor_test.go b/go/vt/vttablet/tabletserver/query_executor_test.go
+index 997e3d0..b96dce9 100644
+--- a/go/vt/vttablet/tabletserver/query_executor_test.go
++++ b/go/vt/vttablet/tabletserver/query_executor_test.go
+@@ -1933,8 +1933,8 @@ func TestQueryExecutorStreamDML(t *testing.T) {
+ 		},
+ 		{
+ 			input:    "delete from test_table where pk = 1",
+-			dbQuery:  "delete from test_table where pk = 1 limit 10001",
+-			planWant: planbuilder.PlanDeleteLimit,
++			dbQuery:  "delete from test_table where pk = 1",
++			planWant: planbuilder.PlanDelete,
+ 		},
+ 	}
+ 
+diff --git a/go/vt/vttablet/tabletserver/stateful_connection.go b/go/vt/vttablet/tabletserver/stateful_connection.go
+index c8366fa..c373545 100644
+--- a/go/vt/vttablet/tabletserver/stateful_connection.go
++++ b/go/vt/vttablet/tabletserver/stateful_connection.go
+@@ -70,6 +70,13 @@ type StatefulConnection struct {
+ 	// captured (fall back to the pool's global mirror). Written under the
+ 	// same exclusive-execution discipline as the marks above.
+ 	sessionWaitTimeout time.Duration
++
++	// pendingBegin is the statement that starts the connection's transaction
++	// ("begin" or "start transaction ..."), when the transaction pool deferred
++	// it (see TxPool.Begin). Exec sends it in the same round trip as the
++	// transaction's first statement. A transaction that ends before any
++	// statement ran needs neither the begin nor the commit or rollback.
++	pendingBegin string
+ }
+ 
+ // Properties contains meta information about the connection
+@@ -219,7 +226,11 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
+ 	}
+ 	var r *sqltypes.Result
+ 	var err error
+-	if !sc.IsInTransaction() && keepConnOnTimeout {
++	if sc.pendingBegin != "" {
++		begin := sc.pendingBegin
++		sc.pendingBegin = ""
++		r, err = sc.dbConn.Conn.ExecWithPrefix(ctx, begin, query, maxrows, wantfields)
++	} else if !sc.IsInTransaction() && keepConnOnTimeout {
+ 		r, err = sc.dbConn.Conn.ExecOnceKeepConnOnTimeout(ctx, query, maxrows, wantfields)
+ 	} else {
+ 		r, err = sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+@@ -357,14 +368,36 @@ func (sc *StatefulConnection) ReservedID() tx.ConnID {
+ 	return sc.ConnID
+ }
+ 
+-// UnderlyingDBConn returns the underlying database connection
++// UnderlyingDBConn returns the underlying database connection. Callers that
++// execute statements of the transaction on it must call FlushPendingBegin first.
+ func (sc *StatefulConnection) UnderlyingDBConn() *connpool.PooledConn {
+ 	return sc.dbConn
+ }
+ 
++// FlushPendingBegin executes the deferred begin of the connection's
++// transaction, if any, on its own.
++func (sc *StatefulConnection) FlushPendingBegin(ctx context.Context) error {
++	if sc.pendingBegin == "" {
++		return nil
++	}
++	begin := sc.pendingBegin
++	sc.pendingBegin = ""
++	_, err := sc.execWithRetry(ctx, begin, 1, false)
++	return err
++}
++
++// dropPendingBegin forgets a deferred begin and reports whether there was one:
++// the transaction ends without having executed any statement.
++func (sc *StatefulConnection) dropPendingBegin() bool {
++	pending := sc.pendingBegin != ""
++	sc.pendingBegin = ""
++	return pending
++}
++
+ // CleanTxState cleans out the current transaction state
+ func (sc *StatefulConnection) CleanTxState() {
+ 	sc.txProps = nil
++	sc.pendingBegin = ""
+ }
+ 
+ // Stats implements the tx.IStatefulConnection interface
+@@ -459,6 +492,11 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
+ 	if sc.dbConn.Conn.Setting() == setting {
+ 		return false, nil
+ 	}
++	// Keep the order of the statements: the setting applies inside the
++	// transaction.
++	if err := sc.FlushPendingBegin(ctx); err != nil {
++		return false, err
++	}
+ 	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
+ }
+ 
+diff --git a/go/vt/vttablet/tabletserver/stream_execute_compat_test.go b/go/vt/vttablet/tabletserver/stream_execute_compat_test.go
+index 8ce735e..532529d 100644
+--- a/go/vt/vttablet/tabletserver/stream_execute_compat_test.go
++++ b/go/vt/vttablet/tabletserver/stream_execute_compat_test.go
+@@ -230,12 +230,12 @@ func TestStreamExecuteCompat_DMLViaTabletServer(t *testing.T) {
+ 		{
+ 			name:  "UPDATE",
+ 			query: "update test_table set pk = 1 where pk = 2",
+-			dbSQL: "update test_table set pk = 1 where pk = 2 limit 10001",
++			dbSQL: "update test_table set pk = 1 where pk = 2",
+ 		},
+ 		{
+ 			name:  "DELETE",
+ 			query: "delete from test_table where pk = 1",
+-			dbSQL: "delete from test_table where pk = 1 limit 10001",
++			dbSQL: "delete from test_table where pk = 1",
+ 		},
+ 	}
+ 
+diff --git a/go/vt/vttablet/tabletserver/tabletenv/config.go b/go/vt/vttablet/tabletserver/tabletenv/config.go
+index 7b7ef2e..16fc966 100644
+--- a/go/vt/vttablet/tabletserver/tabletenv/config.go
++++ b/go/vt/vttablet/tabletserver/tabletenv/config.go
+@@ -134,6 +134,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
+ 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
+ 	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+ 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
++	fs.BoolVar(&currentConfig.DeferBegin, "queryserver-config-defer-begin", defaultConfig.DeferBegin, "send the BEGIN of a transaction to MySQL together with the transaction's first statement, as one multi-statement query, instead of in a round trip of its own")
+ 
+ 	fs.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream-buffer-size.")
+ 
+@@ -338,6 +339,7 @@ type TabletConfig struct {
+ 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
+ 	Consolidator                string        `json:"consolidator,omitempty"`
+ 	PassthroughDML              bool          `json:"passthroughDML,omitempty"`
++	DeferBegin                  bool          `json:"deferBegin,omitempty"`
+ 	StreamBufferSize            int           `json:"streamBufferSize,omitempty"`
+ 	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
+ 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
+diff --git a/go/vt/vttablet/tabletserver/tabletserver_test.go b/go/vt/vttablet/tabletserver/tabletserver_test.go
+index cacc7d4..6d041b5 100644
+--- a/go/vt/vttablet/tabletserver/tabletserver_test.go
++++ b/go/vt/vttablet/tabletserver/tabletserver_test.go
+@@ -227,7 +227,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
+ 			sqltypes.NewVarBinary("dtid0"),
+ 			sqltypes.NewInt64(RedoStatePrepared),
+ 			sqltypes.NewVarBinary(""),
+-			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
++			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1"),
+ 			sqltypes.NULL,
+ 		}},
+ 	})
+@@ -237,7 +237,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
+ 	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be loaded from redo log")
+ 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
+ 	want := []tx.Query{{
+-		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
++		Sql:    "update test_table set `name` = 2 where pk = 1",
+ 		Tables: []string{"test_table"},
+ 	}}
+ 	utils.MustMatch(t, want, got, "Prepared queries")
+@@ -266,7 +266,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
+ 			sqltypes.NewVarBinary("a:b:10"),
+ 			sqltypes.NewInt64(RedoStatePrepared),
+ 			sqltypes.NewVarBinary(""),
+-			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
++			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1"),
+ 			sqltypes.NULL,
+ 		}, {
+ 			sqltypes.NewVarBinary("a:b:20"),
+@@ -282,7 +282,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
+ 	}, 5*time.Second, 10*time.Millisecond, "only valid prepared transactions should be loaded from redo log")
+ 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
+ 	want = []tx.Query{{
+-		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
++		Sql:    "update test_table set `name` = 2 where pk = 1",
+ 		Tables: []string{"test_table"},
+ 	}}
+ 	utils.MustMatch(t, want, got, "Prepared queries")
+@@ -1107,7 +1107,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
+ 	// Make sure that tx3 could finish while tx2 could not.
+ 	tx3Finished := make(chan struct{})
+ 
+-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1",
+ 		func() {
+ 			close(tx1Started)
+ 			if !assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2)) {
+@@ -1219,7 +1219,7 @@ func TestSerializeTransactionsSameRow_StreamExecute(t *testing.T) {
+ 	// Make sure that tx3 could finish while tx2 could not.
+ 	tx3Finished := make(chan struct{})
+ 
+-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1",
+ 		func() {
+ 			close(tx1Started)
+ 			if !assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2)) {
+@@ -1347,7 +1347,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
+ 
+ 	tx1Started := make(chan struct{})
+ 	allQueriesPending := make(chan struct{})
+-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1",
+ 		func() {
+ 			close(tx1Started)
+ 
+@@ -1355,13 +1355,13 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
+ 			<-allQueriesPending
+ 		})
+ 
+-	db.SetBeforeFunc("update test_table set name_string = 'tx2' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx2' where pk = 1 and `name` = 1",
+ 		func() {
+ 			// Wait for other queries to be pending.
+ 			<-allQueriesPending
+ 		})
+ 
+-	db.SetBeforeFunc("update test_table set name_string = 'tx3' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx3' where pk = 1 and `name` = 1",
+ 		func() {
+ 			// Wait for other queries to be pending.
+ 			<-allQueriesPending
+@@ -1494,7 +1494,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
+ 	// Signal when tx2 is done.
+ 	tx2Failed := make(chan struct{})
+ 
+-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1",
+ 		func() {
+ 			close(tx1Started)
+ 			<-tx2Failed
+@@ -1578,7 +1578,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
+ 	// Signal when tx2 is done.
+ 	tx2Done := make(chan struct{})
+ 
+-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
++	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1",
+ 		func() {
+ 			close(tx1Started)
+ 			// Keep blocking until tx2 was canceled.
+@@ -3085,17 +3085,17 @@ func setupFakeDB(t testing.TB) *fakesqldb.DB {
+ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
+ 	queryResultMap := map[string]*sqltypes.Result{
+ 		// Queries for how row protection test (txserializer).
+-		"update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001": {
++		"update test_table set name_string = 'tx1' where pk = 1 and `name` = 1": {
+ 			RowsAffected: 1,
+ 		},
+-		"update test_table set name_string = 'tx2' where pk = 1 and `name` = 1 limit 10001": {
++		"update test_table set name_string = 'tx2' where pk = 1 and `name` = 1": {
+ 			RowsAffected: 1,
+ 		},
+-		"update test_table set name_string = 'tx3' where pk = 1 and `name` = 1 limit 10001": {
++		"update test_table set name_string = 'tx3' where pk = 1 and `name` = 1": {
+ 			RowsAffected: 1,
+ 		},
+ 		// tx3, but with different primary key.
+-		"update test_table set name_string = 'tx3' where pk = 2 and `name` = 1 limit 10001": {
++		"update test_table set name_string = 'tx3' where pk = 2 and `name` = 1": {
+ 			RowsAffected: 1,
+ 		},
+ 		// queries for schema info
+diff --git a/go/vt/vttablet/tabletserver/tx_engine.go b/go/vt/vttablet/tabletserver/tx_engine.go
+index 986b6a2..8e364d1 100644
+--- a/go/vt/vttablet/tabletserver/tx_engine.go
++++ b/go/vt/vttablet/tabletserver/tx_engine.go
+@@ -644,7 +644,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
+ 		return 0, "", err
+ 	}
+ 	defer conn.UnlockUpdateTime()
+-	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
++	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, false /* deferBegin */, conn)
+ 	if err != nil {
+ 		conn.Close()
+ 		conn.Release(tx.ConnInitFail)
+@@ -758,7 +758,7 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
+ 		env: te.env,
+ 	}
+ 
+-	if _, _, err = te.txPool.begin(ctx, nil, false, sc); err != nil {
++	if _, _, err = te.txPool.begin(ctx, nil, false, false /* deferBegin */, sc); err != nil {
+ 		sc.Close()
+ 		return nil, err
+ 	}
+diff --git a/go/vt/vttablet/tabletserver/tx_pool.go b/go/vt/vttablet/tabletserver/tx_pool.go
+index 7507a33..31e24e3 100644
+--- a/go/vt/vttablet/tabletserver/tx_pool.go
++++ b/go/vt/vttablet/tabletserver/tx_pool.go
+@@ -374,6 +374,10 @@ func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (strin
+ 	if txConn.TxProperties().Autocommit {
+ 		return "", nil
+ 	}
++	if txConn.dropPendingBegin() {
++		// The transaction never executed a statement.
++		return "", nil
++	}
+ 
+ 	if _, err := txConn.Exec(ctx, "commit", 1, false, false /* keepConnOnTimeout */); err != nil {
+ 		txConn.Close()
+@@ -403,6 +407,10 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
+ 		return nil
+ 	}
+ 	defer tp.txComplete(txConn, tx.TxRollback)
++	if txConn.dropPendingBegin() {
++		// The transaction never executed a statement.
++		return nil
++	}
+ 	if _, err := txConn.Exec(ctx, "rollback", 1, false, false /* keepConnOnTimeout */); err != nil {
+ 		txConn.Close()
+ 		return err
+@@ -449,7 +457,9 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
+ 	if err != nil {
+ 		return nil, "", "", err
+ 	}
+-	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, conn)
++	// A reserved connection may hold state that a BEGIN changes (LOCK TABLES), so it begins right away.
++	deferBegin := reservedID == 0 && tp.env.Config().DeferBegin
++	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, deferBegin, conn)
+ 	if err != nil {
+ 		conn.Close()
+ 		conn.Release(tx.ConnInitFail)
+@@ -476,10 +486,10 @@ func getTransactionTimeout(options *querypb.ExecuteOptions, config *tabletenv.Ta
+ 	return workloadTimeout
+ }
+ 
+-func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection) (string, string, error) {
++func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly, deferBegin bool, conn *StatefulConnection) (string, string, error) {
+ 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+ 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+-	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly)
++	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly, deferBegin)
+ 	if err != nil {
+ 		return "", "", err
+ 	}
+@@ -512,6 +522,7 @@ func createTransaction(
+ 	options *querypb.ExecuteOptions,
+ 	conn *StatefulConnection,
+ 	readOnly bool,
++	deferBegin bool,
+ ) (beginQueries string, autocommitTransaction bool, sessionStateChanges string, err error) {
+ 	switch options.GetTransactionIsolation() {
+ 	case querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY:
+@@ -539,9 +550,15 @@ func createTransaction(
+ 			return "", false, "", err
+ 		}
+ 
+-		execSQL, sessionStateChanges, err = startTransaction(ctx, conn, beginSQL)
+-		if err != nil {
+-			return "", false, "", err
++		if deferBegin {
++			// Sent with the transaction's first statement (see StatefulConnection.Exec).
++			conn.pendingBegin = beginSQL
++			execSQL = beginSQL
++		} else {
++			execSQL, sessionStateChanges, err = startTransaction(ctx, conn, beginSQL)
++			if err != nil {
++				return "", false, "", err
++			}
+ 		}
+ 
+ 		// Add the begin statement to the list of queries.
+diff --git a/go/vt/vttablet/tabletserver/tx_pool_test.go b/go/vt/vttablet/tabletserver/tx_pool_test.go
+index c23614b..79a5c90 100644
+--- a/go/vt/vttablet/tabletserver/tx_pool_test.go
++++ b/go/vt/vttablet/tabletserver/tx_pool_test.go
+@@ -78,6 +78,56 @@ func TestTxPoolExecuteCommit(t *testing.T) {
+ 	conn3.Release(tx.TxCommit)
+ }
+ 
++// TestTxPoolDeferBegin checks that with DeferBegin the transaction's BEGIN is
++// sent together with its first statement, and that a transaction that
++// executed no statement sends neither BEGIN nor COMMIT/ROLLBACK.
++func TestTxPoolDeferBegin(t *testing.T) {
++	ctx := t.Context()
++	env := newEnv("TabletServerTest")
++	env.Config().DeferBegin = true
++	db, txPool, _, closer := setupWithEnv(t, env)
++	defer closer()
++
++	sql := "update t set a = 1 where id = 1"
++	conn, beginSQL, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
++	require.NoError(t, err)
++	assert.Equal(t, "begin", beginSQL)
++	assert.NotContains(t, db.QueryLog(), "begin", "begin must wait for the first statement")
++	db.ResetQueryLog() // drop the connection setup
++	_, err = conn.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
++	require.NoError(t, err)
++	assert.Equal(t, "begin;"+sql, db.QueryLog())
++	commitSQL, err := txPool.Commit(ctx, conn)
++	require.NoError(t, err)
++	assert.Equal(t, "commit", commitSQL)
++	assert.Equal(t, "begin;"+sql+";commit", db.QueryLog())
++	conn.Release(tx.TxCommit)
++
++	// Nothing executed: nothing to send.
++	conn, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
++	require.NoError(t, err)
++	db.ResetQueryLog()
++	commitSQL, err = txPool.Commit(ctx, conn)
++	require.NoError(t, err)
++	assert.Empty(t, commitSQL)
++	conn.Release(tx.TxCommit)
++	conn, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
++	require.NoError(t, err)
++	require.NoError(t, txPool.Rollback(ctx, conn))
++	conn.Release(tx.TxRollback)
++	assert.Empty(t, db.QueryLog())
++
++	// Paths that use the connection directly send the begin first.
++	conn, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
++	require.NoError(t, err)
++	db.ResetQueryLog()
++	require.NoError(t, conn.FlushPendingBegin(ctx))
++	assert.Equal(t, "begin", db.QueryLog())
++	require.NoError(t, txPool.Rollback(ctx, conn))
++	conn.Release(tx.TxRollback)
++	assert.Equal(t, "begin;rollback", db.QueryLog())
++}
++
+ func TestTxPoolExecuteRollback(t *testing.T) {
+ 	ctx := t.Context()
+ 
+diff --git a/perf-findings/harness/P2-ab.sh b/perf-findings/harness/P2-ab.sh
+new file mode 100755
+index 0000000..0f44bb7
+--- /dev/null
++++ b/perf-findings/harness/P2-ab.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash
++# ab3.sh ROUNDS MATRIXFILE CFG1 CFG2 [CFG3...]
++# Like ab.sh, but matrix lines may start with VAR=value tokens that are exported for that run only
++# (and appended to the workload tag), e.g. "SEQ=0 /home/vt/perf/P2/lua/insert_seq.lua text 8".
++set -u
++ROUNDS=$1; MATRIX=$2; shift 2
++TIME=${TIME:-20}
++for r in $(seq 1 "$ROUNDS"); do
++  for cfg in "$@"; do
++    name=$(basename "$cfg" .cfg)
++    (
++      unset BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      # shellcheck disable=SC1090
++      source "$cfg"
++      export BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      /home/vt/perf/P2/c.sh restart >/dev/null 2>&1
++    )
++    bash /home/vt/perf/P2/purge.sh
++    /home/vt/perf/P2/c.sh sb oltp_write_only --threads=8 --time=5 --db-ps-mode=auto run >/dev/null 2>&1
++    while read -r -a tok; do
++      [[ ${#tok[@]} -eq 0 || ${tok[0]} == \#* ]] && continue
++      envs=(); tag=""
++      while [[ ${tok[0]} == *=* ]]; do envs+=("${tok[0]}"); tag+="${tok[0]},"; tok=("${tok[@]:1}"); done
++      env "${envs[@]}" TAG="${tag%,}" /home/vt/perf/P2/bench.sh "${tok[0]}" "${tok[1]}" "${tok[2]}" "$TIME" "r$r-$name" "${tok[@]:3}"
++    done <"$MATRIX"
++  done
++done
+diff --git a/perf-findings/harness/P2-agg.py b/perf-findings/harness/P2-agg.py
+new file mode 100755
+index 0000000..f29c304
+--- /dev/null
++++ b/perf-findings/harness/P2-agg.py
+@@ -0,0 +1,29 @@
++#!/usr/bin/env python3
++"""Aggregate bench.sh lines: mean (and min..max for CPU) per workload/mode/threads/config; % vs the first config."""
++import re, sys
++from collections import defaultdict
++rows = defaultdict(list); order = []
++pat = re.compile(r'(r\d+-)?(\S+)\s+(\S+)\s+(\S+)\s+thr=(\d+)\s+tps=(\S+)\s+qps=(\S+)\s+avg=(\S+)\s+p95=(\S+)\s+p99=(\S+)\s+'
++                 r'vtgate=(\d+) tablets=(\d+) mysqld=(\d+) myq=(\S+) mybegin=(\S+) mycommit=(\S+) err/s=(\S+) load=(\S+)')
++for path in sys.argv[1:]:
++    for line in open(path):
++        m = pat.match(line)
++        if not m: continue
++        key = (m.group(3), m.group(4), int(m.group(5)), m.group(2))
++        if key not in rows: order.append(key)
++        rows[key].append([float(m.group(i)) for i in range(6, 19)])
++names = ['tps','qps','avg','p95','p99','vtgate','tablets','mysqld','myq','mybegin','mycommit','err','load']
++print("| workload | mode | thr | config | n | TPS | avg ms | p95 ms | p99 ms | vtgate µs/tx | tablets µs/tx | mysqld µs/tx | MySQL stmts/tx | load |")
++print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
++base = {}
++for key in sorted(order, key=lambda k: (order.index([o for o in order if o[:3]==k[:3]][0]), order.index(k))):
++    v = rows[key]; n = len(v)
++    mean = [sum(x[i] for x in v)/n for i in range(13)]
++    lo = [min(x[i] for x in v) for i in range(13)]; hi = [max(x[i] for x in v) for i in range(13)]
++    b = base.setdefault(key[:3], mean)
++    def f(i, p, rng=False):
++        s = f"{mean[i]:.{p}f}"
++        if b is not mean and b[i]: s += f" ({(mean[i]/b[i]-1)*100:+.1f}%)"
++        if rng and n > 1: s += f" [{lo[i]:.{p}f}–{hi[i]:.{p}f}]"
++        return s
++    print(f"| {key[0]} | {key[1]} | {key[2]} | {key[3]} | {n} | {f(0,0)} | {f(2,2)} | {f(3,2)} | {f(4,2)} | {f(5,0,True)} | {f(6,0,True)} | {f(7,0,True)} | {mean[8]:.2f} | {mean[12]:.1f} |")
+diff --git a/perf-findings/harness/P2-aggvd.py b/perf-findings/harness/P2-aggvd.py
+new file mode 100755
+index 0000000..0e081dc
+--- /dev/null
++++ b/perf-findings/harness/P2-aggvd.py
+@@ -0,0 +1,27 @@
++#!/usr/bin/env python3
++"""Mean of the per-operation latencies (commitMulti=, commitSingle=, tabletBEGIN=, tabletCOMMIT=) per workload/config."""
++import re
++import sys
++from collections import defaultdict
++
++vals = defaultdict(lambda: defaultdict(list))
++order = []
++for path in sys.argv[1:]:
++    for line in open(path):
++        m = re.match(r'r\d+-(\S+)\s+(\S+)\s+(\S+)\s+thr=(\d+)', line)
++        if not m:
++            continue
++        key = (m.group(2), m.group(3), m.group(4), m.group(1))
++        if key not in vals:
++            order.append(key)
++        for k, v in re.findall(r'(commit\w+|tablet\w+)=([\d.]+)ms', line):
++            vals[key][k].append(float(v))
++cols = ['commitSingle', 'commitMulti', 'commitTwoPC', 'tabletBEGIN', 'tabletCOMMIT']
++print("| workload | mode | thr | config | " + " | ".join(c + " ms" for c in cols) + " |")
++print("|---|---|---|---|" + "---|" * len(cols))
++for key in sorted(order, key=lambda k: (order.index([o for o in order if o[:3] == k[:3]][0]), order.index(k))):
++    cells = []
++    for c in cols:
++        v = vals[key].get(c)
++        cells.append(f"{sum(v) / len(v):.2f}" if v else "–")
++    print(f"| {key[0]} | {key[1]} | {key[2]} | {key[3]} | " + " | ".join(cells) + " |")
+diff --git a/perf-findings/harness/P2-bench.sh b/perf-findings/harness/P2-bench.sh
+new file mode 100755
+index 0000000..d1f9414
+--- /dev/null
++++ b/perf-findings/harness/P2-bench.sh
+@@ -0,0 +1,45 @@
++#!/bin/bash
++# bench.sh WORKLOAD MODE THREADS TIME LABEL [extra sysbench args...]
++#   WORKLOAD: sysbench lua name (oltp_write_only, oltp_read_write, oltp_insert, ...) or a path to a lua script
++#   MODE: ps (prepared, --db-ps-mode=auto) | text (--db-ps-mode=disable)
++# Prints one line: label workload mode threads tps qps avg p95 p99 (latency per event = per transaction)
++#   CPU µs per event per process (vtgate, tablets sum, mysqld sum), MySQL statements per event
++#   (Questions, Com_begin, Com_commit summed over both mysqld) and load.
++set -u
++W=$1; MODE=$2; THREADS=$3; TIME=$4; LABEL=$5; shift 5
++C=/home/vt/perf/P2/c.sh
++WN=$(basename "$W" .lua); [[ -n ${TAG:-} ]] && WN="$WN+$TAG"; [[ $# -gt 0 ]] && WN="$WN+$(echo "$*" | sed 's/--//g; s/ /,/g')"
++if [[ $MODE == ps ]]; then PSM=auto; else PSM=disable; fi
++mstat() {
++  for u in 100 101; do
++    mysql -N -S /home/vt/perf/c30000/vt_0000000$u/mysql.sock -u vt_dba -e \
++      "show global status where Variable_name in ('Questions','Com_begin','Com_commit')" 2>/dev/null
++  done | awk '{s[$1]+=$2} END {printf "%d %d %d", s["Questions"], s["Com_begin"], s["Com_commit"]}'
++}
++V0=$(mktemp); V1=$(mktemp); /home/vt/perf/P2/vars.py snap > $V0
++m0=$(mstat)
++before=$($C cpu)
++out=$($C sb "$W" --threads="$THREADS" --time="$TIME" --db-ps-mode=$PSM --histogram=on --report-interval=0 "$@" run 2>&1)
++after=$($C cpu)
++m1=$(mstat)
++/home/vt/perf/P2/vars.py snap > $V1; vd=$(/home/vt/perf/P2/vars.py diff $V0 $V1); rm -f $V0 $V1
++load=$(cut -d' ' -f1 /proc/loadavg)
++ev=$(echo "$out" | awk '/total number of events:/ {print $5; exit}')
++tps=$(echo "$out" | awk '/transactions:/ && /per sec/ {gsub(/[()]/,""); print $3; exit}')
++qps=$(echo "$out" | awk '/queries:/ && /per sec/ {gsub(/[()]/,""); print $3; exit}')
++errs=$(echo "$out" | awk '/ignored errors:/ {gsub(/[()]/,""); print $4; exit}')
++avg=$(echo "$out" | awk '/avg:/ {print $2; exit}')
++if [[ -z $ev || $ev == 0 ]]; then echo "$LABEL $W FAILED"; echo "$out" | tail -20 >&2; exit 1; fi
++pcts=$(echo "$out" | awk '
++  /Latency histogram/ {h=1; next}
++  h && /\|/ { v=$1; c=$NF; if (c ~ /^[0-9]+$/) { vals[n]=v; cnt[n]=c; tot+=c; n++ } }
++  h && /^$/ && n>0 {h=0}
++  END { s=0; p95=""; p99="";
++        for (i=0;i<n;i++){ s+=cnt[i]; if (p95=="" && s>=0.95*tot) p95=vals[i]; if (p99=="" && s>=0.99*tot) p99=vals[i]; }
++        printf "%s %s", p95, p99 }')
++cpu=$(paste <(echo "$before") <(echo "$after") | awk -v q="$ev" '
++  { d=($4-$2)*1e6/q; if ($1 ~ /^vtgate/) g=d; else if ($1 ~ /^vttablet/) t+=d; else if ($1 ~ /^mysqld/) m+=d }
++  END { printf "vtgate=%.0f tablets=%.0f mysqld=%.0f", g, t, m }')
++my=$(echo "$m0 $m1" | awk -v q="$ev" '{printf "myq=%.2f mybegin=%.2f mycommit=%.2f", ($4-$1-4)/q, ($5-$2)/q, ($6-$3)/q}')
++printf "%-14s %-22s %-4s thr=%-3s tps=%-8s qps=%-8s avg=%-6s p95=%-6s p99=%-6s %s %s err/s=%s load=%s %s\n" \
++  "$LABEL" "$WN" "$MODE" "$THREADS" "$tps" "$qps" "$avg" $pcts "$cpu" "$my" "$errs" "$load" "$vd"
+diff --git a/perf-findings/harness/P2-c.sh b/perf-findings/harness/P2-c.sh
+new file mode 100755
+index 0000000..c24b946
+--- /dev/null
++++ b/perf-findings/harness/P2-c.sh
+@@ -0,0 +1,3 @@
++#!/bin/bash
++# wrapper: run cluster.sh as vt with P2 settings (BASE 30000). GATE_ENV / TABLET_ENV: space separated VAR=val.
++exec runuser -u vt -- env BASE=30000 HOME=/home/vt BIN="${BIN:-/home/vt/bin}" VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" GATE_ENV="${GATE_ENV:-}" TABLET_ENV="${TABLET_ENV:-}" TABLE_SIZE="${TABLE_SIZE:-100000}" /home/vt/perf/P2/cluster.sh "$@"
+diff --git a/perf-findings/harness/P2-cluster.sh b/perf-findings/harness/P2-cluster.sh
+new file mode 100755
+index 0000000..1730293
+--- /dev/null
++++ b/perf-findings/harness/P2-cluster.sh
+@@ -0,0 +1,305 @@
++#!/bin/bash
++# Local Vitess cluster for performance profiling.
++#
++# Usage (run as the unprivileged `vt` user, e.g. `runuser -u vt -- env BASE=20000 ./cluster.sh up`):
++#   cluster.sh up        start etcd, vtctld, mysqld+vttablet per tablet, vtgate; elect primaries; load schema/vschema
++#   cluster.sh down      stop everything and delete the data dir
++#   cluster.sh status    show processes and tablets
++#   cluster.sh env       print the ports of this cluster
++#   cluster.sh prepare   (re)load sysbench data through vtgate: TABLES tables x TABLE_SIZE rows (default 100000)
++#   cluster.sh cpu       print cumulative CPU seconds (user+sys) per process: vtgate, vttablet_<uid>, mysqld_<uid>
++#                        (diff two snapshots around a run to get CPU per query)
++#   cluster.sh sb ARGS   run sysbench against vtgate with the right connection flags, e.g.
++#                        cluster.sh sb oltp_point_select --threads=8 --time=30 run
++#
++# Environment:
++#   BASE      port base (default 20000). Use different bases (20000, 30000) for concurrent clusters.
++#   NAME      cluster name / data dir suffix (default c$BASE)
++#   KEYSPACE  keyspace name (default sbtest)
++#   SHARDS    space separated shard list (default "-80 80-"; use "0" for unsharded)
++#   REPLICAS  replicas per shard in addition to the primary (default 0)
++#   TABLES    number of sysbench tables to declare in the vschema (default 4)
++#   VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS  extra flags
++#   BIN       directory with the Vitess binaries (default /home/vt/bin)
++#
++# Ports (relative to BASE): etcd +10/+11, vtctld web +20 grpc +21, vtgate web +1 grpc +2 mysql +3,
++# tablet i (0-based): web +100+i, grpc +200+i, mysqld +400+i.
++# pprof is available at http://localhost:<web port>/debug/pprof/ on vtgate and every vttablet.
++
++set -euo pipefail
++
++BASE=${BASE:-20000}
++NAME=${NAME:-c$BASE}
++KEYSPACE=${KEYSPACE:-sbtest}
++SHARDS=${SHARDS:-"-80 80-"}
++REPLICAS=${REPLICAS:-0}
++TABLES=${TABLES:-4}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:$PATH"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++# tablet index -> uid; uids are unique per cluster (VTDATAROOT is per cluster).
++tablet_uid() { echo $((100 + $1)); }
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOF'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOF
++}
++
++start_tablets() {
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid alias; uid=$(tablet_uid $i); printf -v alias '%s-%010d' "$CELL" "$uid"
++      env ${TABLET_ENV:-} vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$KEYSPACE" --init-shard "$shard" \
++        --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++        --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++        --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++        --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++        --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++        --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++        ${VTTABLET_EXTRA_FLAGS:-} >"$LOGDIR/vttablet_$uid.log" 2>&1 &
++      i=$((i + 1))
++    done
++  done
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do wait_http $((BASE + 100 + i)); i=$((i + 1)); done
++  done
++
++}
++
++start_vtgate() {
++  env ${GATE_ENV:-} vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY,REPLICA \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  for _ in $(seq 1 100); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select 1' "$KEYSPACE" >/dev/null 2>&1 && break
++    sleep 0.3
++  done
++}
++
++# restart vtgate and vttablets only (keep mysqld, topo, data); picks up BIN / *_EXTRA_FLAGS / env (GOGC, GOMAXPROCS...)
++restart() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  for _ in $(seq 1 100); do
++    local alive=0
++    for f in "$VTDATAROOT"/vt_*/vttablet.pid "$VTDATAROOT/vtgate.pid"; do [[ -f $f ]] && kill -0 "$(cat "$f")" 2>/dev/null && alive=1; done
++    [[ $alive == 0 ]] && break; sleep 0.2
++  done
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++  start_tablets
++  [[ -d $VTDATAROOT/vt_$(printf '%010d' $SEQ_UID) ]] && start_seq_tablet
++  sleep 3
++  start_vtgate
++  for _ in $(seq 1 100); do
++    [[ $(mysql -N -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select count(*) from sbtest1 where id in (1,2,3,4,5,6,7,8)' "$KEYSPACE" 2>/dev/null) == 8 ]] && break
++    sleep 0.3
++  done
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  vtctldclient CreateKeyspace --durability-policy=none "$KEYSPACE" >/dev/null 2>&1 || true
++
++  local i=0 pids=()
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid; uid=$(tablet_uid $i)
++      mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++        --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++      pids+=($!)
++      i=$((i + 1))
++    done
++  done
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  start_tablets
++
++  # Elect the first tablet of every shard as primary.
++  i=0
++  for shard in $SHARDS; do
++    local alias; printf -v alias '%s-%010d' "$CELL" "$(tablet_uid $i)"
++    vtctldclient PlannedReparentShard "$KEYSPACE/$shard" --new-primary "$alias" >/dev/null
++    i=$((i + REPLICAS + 1))
++  done
++
++  load_schema
++
++  start_vtgate
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables=""
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  vtctldclient ApplySchema --sql "$sql" "$KEYSPACE" >/dev/null
++  if [[ $SHARDS == "0" ]]; then
++    vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$KEYSPACE" >/dev/null
++  else
++    vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$KEYSPACE" >/dev/null
++  fi
++}
++
++# Unsharded keyspace "seqks" with one tablet (index 9: uid 109, ports +109/+209/+409) holding the sequence table
++# sbtest_seq, and a sharded table sbtest9 in $KEYSPACE whose id is filled from it (auto_increment).
++SEQ_UID=109
++start_seq_tablet() {
++  local i=9 alias; printf -v alias '%s-%010d' "$CELL" "$SEQ_UID"
++  env ${TABLET_ENV:-} vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace seqks --init-shard 0 \
++    --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++    --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$SEQ_UID")/vttablet.pid" \
++    --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++    ${VTTABLET_EXTRA_FLAGS:-} >"$LOGDIR/vttablet_$SEQ_UID.log" 2>&1 &
++  wait_http $((BASE + 100 + i))
++}
++
++addseq() {
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++  vtctldclient CreateKeyspace --durability-policy=none seqks >/dev/null 2>&1 || true
++  mysqlctl --tablet-uid "$SEQ_UID" --mysql-port $((BASE + 409)) --log-format text \
++    --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$SEQ_UID.log" 2>&1
++  start_seq_tablet
++  local alias; printf -v alias '%s-%010d' "$CELL" "$SEQ_UID"
++  vtctldclient PlannedReparentShard seqks/0 --new-primary "$alias" >/dev/null
++  vtctldclient ApplySchema --sql "CREATE TABLE sbtest_seq (id INT, next_id BIGINT, cache BIGINT, PRIMARY KEY(id)) COMMENT 'vitess_sequence'" seqks >/dev/null
++  vtctldclient ApplyVSchema --vschema '{"sharded":false,"tables":{"sbtest_seq":{"type":"sequence"}}}' seqks >/dev/null
++  sleep 2
++  mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e "insert into sbtest_seq (id, next_id, cache) values (0, 1000000000, ${SEQ_CACHE:-1000})" seqks
++  vtctldclient ApplySchema --sql "CREATE TABLE IF NOT EXISTS sbtest9 (id BIGINT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_9 (k)) ENGINE=InnoDB" "$KEYSPACE" >/dev/null
++  local vs; vs=$(vtctldclient GetVSchema "$KEYSPACE")
++  vs=$(echo "$vs" | python3 -c 'import json,sys; v=json.load(sys.stdin); v["tables"]["sbtest9"]={"column_vindexes":[{"column":"id","name":"hash"}],"auto_increment":{"column":"id","sequence":"seqks.sbtest_seq"}}; print(json.dumps(v))')
++  vtctldclient ApplyVSchema --vschema "$vs" "$KEYSPACE" >/dev/null
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  cat <<EOF
++cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspace $KEYSPACE shards [$SHARDS] replicas/shard $REPLICAS
++  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root $KEYSPACE
++  vtgate web/pprof: http://localhost:$VTGATE_WEB/debug/pprof/
++  vtctldclient: vtctldclient --server localhost:$VTCTLD_GRPC
++  tablet i: web/pprof $((BASE + 100))+i, grpc $((BASE + 200))+i, mysqld $((BASE + 400))+i (socket $VTDATAROOT/vt_<uid>/mysql.sock, user vt_dba)
++EOF
++}
++
++SB_ARGS() {
++  echo "--db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=$VTGATE_MYSQL --mysql-user=root --mysql-db=$KEYSPACE --tables=$TABLES --table-size=${TABLE_SIZE:-100000} --auto_inc=off"
++}
++
++prepare() {
++  for t in $(seq 1 "$TABLES"); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root "$KEYSPACE" -e "DROP TABLE IF EXISTS sbtest$t"
++  done
++  # shellcheck disable=SC2046
++  sysbench $(SB_ARGS) oltp_read_write --threads=4 prepare
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck; tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++status() {
++  env_info
++  vtctldclient GetTablets 2>/dev/null || true
++}
++
++case "${1:-}" in
++  up) up ;;
++  addseq) addseq ;;
++  restart) restart ;;
++  down) down ;;
++  status) status ;;
++  env) env_info ;;
++  prepare) prepare ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  sb) shift; # shellcheck disable=SC2046
++      sysbench $(SB_ARGS) "$@" ;;
++  *) echo "usage: $0 up|down|status|env" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/harness/P2-glog.sh b/perf-findings/harness/P2-glog.sh
+new file mode 100755
+index 0000000..3d7e1d3
+--- /dev/null
++++ b/perf-findings/harness/P2-glog.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++# glog.sh "sysbench args..." : run a short sysbench (1 thread, N events) with the general log on for mysqld uid 100; print log
++S=/home/vt/perf/c30000/vt_0000000100/mysql.sock
++L=/home/vt/perf/c30000/glog100.log
++M="mysql -S $S -u vt_dba"
++runuser -u vt -- $M -e "set global general_log_file='$L'; set global general_log=1"
++/home/vt/perf/P2/c.sh sb "$@" >/dev/null 2>&1
++runuser -u vt -- $M -e "set global general_log=0"
++cat $L; rm -f $L
+diff --git a/perf-findings/harness/P2-insert_seq.lua b/perf-findings/harness/P2-insert_seq.lua
+new file mode 100644
+index 0000000..fee0eee
+--- /dev/null
++++ b/perf-findings/harness/P2-insert_seq.lua
+@@ -0,0 +1,20 @@
++-- Autocommit single-row INSERT into sbtest9, whose id comes from the vitess sequence seqks.sbtest_seq
++-- (SEQ=1, default) or is given explicitly by the client (SEQ=0).
++require("oltp_common")
++
++local use_seq = os.getenv("SEQ") ~= "0"
++
++function prepare_statements()
++end
++
++function event()
++   local k_val = sysbench.rand.default(1, sysbench.opt.table_size)
++   local c_val = get_c_value()
++   local pad_val = get_pad_value()
++   if use_seq then
++      con:query(string.format("INSERT INTO sbtest9 (k, c, pad) VALUES (%d, '%s', '%s')", k_val, c_val, pad_val))
++   else
++      local id = 5000000000 + sysbench.rand.unique()
++      con:query(string.format("INSERT INTO sbtest9 (id, k, c, pad) VALUES (%d, %d, '%s', '%s')", id, k_val, c_val, pad_val))
++   end
++end
+diff --git a/perf-findings/harness/P2-prof.sh b/perf-findings/harness/P2-prof.sh
+new file mode 100755
+index 0000000..d0dca76
+--- /dev/null
++++ b/perf-findings/harness/P2-prof.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++# prof.sh OUTDIR KIND WORKLOAD MODE THREADS [extra]   KIND=profile|allocs|mutex|block
++# Runs a 25s sysbench and captures a 15s profile from vtgate and tablet 100 concurrently.
++set -u
++OUT=$1; KIND=$2; shift 2
++mkdir -p "$OUT"
++W=$1; M=$2; T=$3; shift 3
++/home/vt/perf/P2/bench.sh "$W" "$M" "$T" 25 "prof-$KIND" "$@" > "$OUT/bench-$KIND.txt" &
++sleep 5
++curl -s -o "$OUT/vtgate-$KIND.pprof" "http://localhost:30001/debug/pprof/$KIND?seconds=15" &
++curl -s -o "$OUT/tablet-$KIND.pprof" "http://localhost:30100/debug/pprof/$KIND?seconds=15" &
++wait
++cat "$OUT/bench-$KIND.txt"
+diff --git a/perf-findings/harness/P2-purge.sh b/perf-findings/harness/P2-purge.sh
+new file mode 100644
+index 0000000..c01ccde
+--- /dev/null
++++ b/perf-findings/harness/P2-purge.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# purge.sh: rotate and purge binary logs on all mysqlds of the P2 cluster (no replicas, disk is shared and small)
++for s in /home/vt/perf/c30000/vt_*/mysql.sock; do
++  mysql -S "$s" -u vt_dba -e "flush binary logs; purge binary logs before now() + interval 1 second" 2>/dev/null
++done
+diff --git a/perf-findings/harness/P2-seqfinish.sh b/perf-findings/harness/P2-seqfinish.sh
+new file mode 100644
+index 0000000..ac6fd47
+--- /dev/null
++++ b/perf-findings/harness/P2-seqfinish.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++# Finish addseq after the seqks tablet is visible to vtgate.
++V="runuser -u vt -- /home/vt/bin/vtctldclient --server localhost:30021"
++for i in $(seq 1 30); do
++  mysql -h 127.0.0.1 -P 30003 -u root seqks -e "insert into sbtest_seq (id, next_id, cache) values (0, 1000000000, ${SEQ_CACHE:-1000})" 2>/dev/null && break
++  sleep 1
++done
++$V ApplySchema --sql "CREATE TABLE IF NOT EXISTS sbtest9 (id BIGINT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_9 (k)) ENGINE=InnoDB" sbtest
++vs=$($V GetVSchema sbtest | python3 -c 'import json,sys; v=json.load(sys.stdin); v["tables"]["sbtest9"]={"column_vindexes":[{"column":"id","name":"hash"}],"auto_increment":{"column":"id","sequence":"seqks.sbtest_seq"}}; print(json.dumps(v))')
++$V ApplyVSchema --vschema "$vs" sbtest >/dev/null
++sleep 2
++mysql -h 127.0.0.1 -P 30003 -u root sbtest -e "insert into sbtest9 (k,c,pad) values (1,'a','b'); select id,k from sbtest9; select * from seqks.sbtest_seq"
+diff --git a/perf-findings/harness/P2-setvar.lua b/perf-findings/harness/P2-setvar.lua
+new file mode 100644
+index 0000000..7241cea
+--- /dev/null
++++ b/perf-findings/harness/P2-setvar.lua
+@@ -0,0 +1,22 @@
++-- Runs the sysbench script $BASE_LUA (e.g. oltp_write_only) after executing
++-- "set session <name> = '<value>'" on every connection, with SETVAR=<name>:<value>,
++-- e.g. SETVAR=sql_mode:STRICT_TRANS_TABLES to make vtgate carry a session setting.
++dofile("/usr/share/sysbench/" .. os.getenv("BASE_LUA") .. ".lua")
++
++local orig_thread_init = thread_init
++function thread_init()
++   orig_thread_init()
++   local sv = os.getenv("SETVAR")
++   if sv and sv ~= "" then
++      local name, value = sv:match("^([^:]+):(.*)$")
++      if value:match("^%d+$") then
++         con:query(string.format("set session %s = %s", name, value))
++      else
++         con:query(string.format("set session %s = '%s'", name, value))
++      end
++   end
++   -- RESERVE=temp: create a temporary table, which pins the session to reserved connections
++   if os.getenv("RESERVE") == "temp" then
++      con:query("create temporary table p2tmp (id int primary key)")
++   end
++end
+diff --git a/perf-findings/harness/P2-tx1shard.lua b/perf-findings/harness/P2-tx1shard.lua
+new file mode 100644
+index 0000000..faa8f69
+--- /dev/null
++++ b/perf-findings/harness/P2-tx1shard.lua
+@@ -0,0 +1,31 @@
++-- Explicit single-shard transaction: BEGIN; SELECT c ... WHERE id=? [FOR UPDATE]; UPDATE ... SET k=k+1 WHERE id=?; COMMIT
++-- (same id, so one shard). FOR_UPDATE=1 adds FOR UPDATE to the select. Prepared statements unless --db-ps-mode=disable.
++require("oltp_common")
++
++local for_update = os.getenv("FOR_UPDATE") == "1"
++
++function prepare_statements()
++   local sel = "SELECT c FROM sbtest%u WHERE id=?"
++   if for_update then sel = sel .. " FOR UPDATE" end
++   for t = 1, sysbench.opt.tables do
++      stmt[t].sel = con:prepare(string.format(sel, t))
++      param[t].sel = { stmt[t].sel:bind_create(sysbench.sql.type.INT) }
++      stmt[t].sel:bind_param(unpack(param[t].sel))
++      stmt[t].upd = con:prepare(string.format("UPDATE sbtest%u SET k=k+1 WHERE id=?", t))
++      param[t].upd = { stmt[t].upd:bind_create(sysbench.sql.type.INT) }
++      stmt[t].upd:bind_param(unpack(param[t].upd))
++   end
++   stmt.begin = con:prepare("BEGIN")
++   stmt.commit = con:prepare("COMMIT")
++end
++
++function event()
++   local t = sysbench.rand.uniform(1, sysbench.opt.tables)
++   local id = sysbench.rand.default(1, sysbench.opt.table_size)
++   stmt.begin:execute()
++   param[t].sel[1]:set(id)
++   stmt[t].sel:execute()
++   param[t].upd[1]:set(id)
++   stmt[t].upd:execute()
++   stmt.commit:execute()
++end
+diff --git a/perf-findings/harness/P2-vars.py b/perf-findings/harness/P2-vars.py
+new file mode 100755
+index 0000000..a5696a7
+--- /dev/null
++++ b/perf-findings/harness/P2-vars.py
+@@ -0,0 +1,48 @@
++#!/usr/bin/env python3
++"""vars.py snap > file | vars.py diff before after
++Snapshots vtgate CommitModeTimings and the tablets' Queries timings (BEGIN, COMMIT) and prints the average
++latency (ms) per operation between two snapshots."""
++import json
++import sys
++import urllib.request
++
++
++def get(port):
++    try:
++        with urllib.request.urlopen(f"http://localhost:{port}/debug/vars", timeout=5) as r:
++            return json.load(r)
++    except Exception:
++        return {}
++
++
++def snap():
++    out = {}
++    g = get(30001)
++    for k, h in g.get("CommitModeTimings", {}).get("Histograms", {}).items():
++        out["commit" + k] = [h["Count"], h["Time"]]
++    for port in (30100, 30101):
++        t = get(port)
++        for k in ("BEGIN", "COMMIT"):
++            h = t.get("Queries", {}).get("Histograms", {}).get(k)
++            if h:
++                c = out.setdefault("tablet" + k, [0, 0])
++                c[0] += h["Count"]
++                c[1] += h["Time"]
++    json.dump(out, sys.stdout)
++
++
++def diff(a, b):
++    a, b = json.load(open(a)), json.load(open(b))
++    parts = []
++    for k in sorted(b):
++        c = b[k][0] - a.get(k, [0, 0])[0]
++        t = b[k][1] - a.get(k, [0, 0])[1]
++        if c > 0:
++            parts.append(f"{k}={t / c / 1e6:.2f}ms")
++    print(" ".join(parts))
++
++
++if sys.argv[1] == "snap":
++    snap()
++else:
++    diff(sys.argv[2], sys.argv[3])

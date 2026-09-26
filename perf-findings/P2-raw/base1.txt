@@ -1,0 +1,34 @@
+r1-base        oltp_write_only        ps   thr=8   tps=741.12   qps=4446.85  avg=10.79  p95=16.706 p99=21.112 vtgate=1165 tablets=1413 mysqld=1339 myq=7.50 mybegin=1.75 mycommit=1.75 err/s=0.05 load=7.74
+r1-base        oltp_write_only        text thr=8   tps=605.13   qps=3630.79  avg=13.21  p95=24.827 p99=41.104 vtgate=1307 tablets=1453 mysqld=1386 myq=7.50 mybegin=1.75 mycommit=1.75 err/s=0.00 load=10.23
+r1-base        oltp_write_only        ps   thr=32  tps=573.69   qps=3442.11  avg=55.73  p95=116.802 p99=170.479 vtgate=797 tablets=899 mysqld=1128 myq=7.52 mybegin=1.76 mycommit=1.76 err/s=0.00 load=16.29
+r1-base oltp_write_only FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_stmt_execute() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '50415' for key 'sbtest1.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest1(id, k, c, pad) values (:_id_0, :v2, :v3, :v4)", BindVars: {_id_0: "type:INT64 value:\"50415\""v2: "type:INT64 value:\"50266\""v3: "type:VARCHAR value:\"39704639371-16491207218-06713967242-04596242087-88713647846-96137882546-99555210360-15455036864-29092401302-13087424673\""v4: "type:VARCHAR value:\"85864) for query 'INSERT INTO sbtest1 (id, k, c, pad) VALUES (?, ?, ?, ?)'
+FATAL: `thread_run' function failed: /usr/share/sysbench/oltp_common.lua:488: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '50415' for key 'sbtest1.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest1(id, k, c, pad) values (:_id_0, :v2, :v3, :v4)", BindVars: {_id_0: "type:INT64 value:\"50415\""v2: "type:INT64 value:\"50266\""v3: "type:VARCHAR value:\"39704639371-16491207218-06713967242-04596242087-88713647846-96137882546-99555210360-15455036864-29092401302-13087424673\""v4: "type:VARCHAR value:\"85864
+r1-base        oltp_read_write        ps   thr=8   tps=92.27    qps=1845.47  avg=86.60  p95=153.021 p99=196.894 vtgate=5530 tablets=6368 mysqld=5227 myq=26.07 mybegin=2.00 mycommit=2.00 err/s=0.00 load=19.42
+r1-base oltp_insert FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '9192' for key 'sbtest1.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest1(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"9192\""vtg2: "type:INT64 value:\"50085\""vtg3: "type:VARCHAR value:\"74984855602-46614724202-35515876990-01688612068-18274944070-95010767174-50983568570-40027456463-255413774) for query 'INSERT INTO sbtest1 (id, k, c, pad) VALUES (9192, 50085, '74984855602-46614724202-35515876990-01688612068-18274944070-95010767174-50983568570-40027456463-25541377450-95234282355', '27736464564-48037643102-77558113116-36235061607-82388452799')'
+FATAL: `thread_run' function failed: /usr/share/sysbench/oltp_insert.lua:61: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '9192' for key 'sbtest1.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest1(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"9192\""vtg2: "type:INT64 value:\"50085\""vtg3: "type:VARCHAR value:\"74984855602-46614724202-35515876990-01688612068-18274944070-95010767174-50983568570-40027456463-255413774
+r1-base        oltp_update_index      ps   thr=8   tps=3033.89  qps=3033.89  avg=2.63   p95=4.999  p99=7.039  vtgate=234 tablets=333 mysqld=410 myq=3.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=17.16
+r1-base        oltp_update_non_index  text thr=8   tps=2925.53  qps=2925.53  avg=2.73   p95=5.090  p99=7.430  vtgate=265 tablets=332 mysqld=395 myq=3.00 mybegin=1.00 mycommit=1.00 err/s=0.00 load=15.12

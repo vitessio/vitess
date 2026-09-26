@@ -1,0 +1,104 @@
+diff --git a/go/vt/vtgate/engine/insert_common.go b/go/vt/vtgate/engine/insert_common.go
+index 13dbce2..34c4300 100644
+--- a/go/vt/vtgate/engine/insert_common.go
++++ b/go/vt/vtgate/engine/insert_common.go
+@@ -20,8 +20,10 @@ import (
+ 	"context"
+ 	"encoding/json"
+ 	"fmt"
++	"os"
+ 	"strconv"
+ 	"strings"
++	"sync"
+ 
+ 	"vitess.io/vitess/go/mysql/collations"
+ 	"vitess.io/vitess/go/vt/sqlparser"
+@@ -441,7 +443,40 @@ func (ic *InsertCommon) processGenerateFromValues(
+ 	return insertID, nil
+ }
+ 
++// P2 prototype (env P2_SEQ_BLOCK=N): vtgate reserves N sequence values per
++// round trip to the sequence tablet and hands them out locally.
++var (
++	prototypeSeqBlock = func() int64 {
++		n, _ := strconv.ParseInt(os.Getenv("P2_SEQ_BLOCK"), 10, 64)
++		return n
++	}()
++	prototypeSeqMu    sync.Mutex
++	prototypeSeqCache = map[string]*[2]int64{} // next, end (exclusive)
++)
++
+ func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, count int64) (int64, error) {
++	if prototypeSeqBlock <= 0 {
++		return ic.execGenerateRPC(ctx, vcursor, loggingPrimitive, count)
++	}
++	key := ic.Generate.Keyspace.Name + "." + ic.Generate.Query
++	prototypeSeqMu.Lock()
++	defer prototypeSeqMu.Unlock()
++	c := prototypeSeqCache[key]
++	if c == nil || c[1]-c[0] < count {
++		n := max(count, prototypeSeqBlock)
++		first, err := ic.execGenerateRPC(ctx, vcursor, loggingPrimitive, n)
++		if err != nil {
++			return 0, err
++		}
++		c = &[2]int64{first, first + n}
++		prototypeSeqCache[key] = c
++	}
++	first := c[0]
++	c[0] += count
++	return first, nil
++}
++
++func (ic *InsertCommon) execGenerateRPC(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, count int64) (int64, error) {
+ 	// If generation is needed, generate the requested number of values (as one call).
+ 	rss, _, err := vcursor.ResolveDestinations(ctx, ic.Generate.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
+ 	if err != nil {
+diff --git a/go/vt/vtgate/tx_conn.go b/go/vt/vtgate/tx_conn.go
+index 6933294..f046ae8 100644
+--- a/go/vt/vtgate/tx_conn.go
++++ b/go/vt/vtgate/tx_conn.go
+@@ -19,6 +19,7 @@ package vtgate
+ import (
+ 	"context"
+ 	"fmt"
++	"os"
+ 	"strings"
+ 	"sync"
+ 	"time"
+@@ -226,8 +227,20 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
+ 	return nil
+ }
+ 
++// prototypeParallelCommit (P2 prototype, env P2_PARALLEL_COMMIT=1) commits all
++// shard sessions of a MULTI transaction concurrently instead of one after another.
++var prototypeParallelCommit = os.Getenv("P2_PARALLEL_COMMIT") == "1"
++
+ func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSession) (txType, error) {
+ 	txnType := TXReadOnly
++	if prototypeParallelCommit && len(session.ShardSessions) > 1 {
++		for _, shardSession := range session.ShardSessions {
++			if shardSession.RowsAffected {
++				txnType = TXReadWrite
++			}
++		}
++		return txnType, txc.runSessions(ctx, session.ShardSessions, session.GetLogger(), txc.commitShard)
++	}
+ 	// Retain backward compatibility on commit order for the normal session.
+ 	for i, shardSession := range session.ShardSessions {
+ 		if txnType == TXReadOnly && shardSession.RowsAffected {
+diff --git a/go/vt/vttablet/tabletserver/tabletserver.go b/go/vt/vttablet/tabletserver/tabletserver.go
+index bea1a37..57229e2 100644
+--- a/go/vt/vttablet/tabletserver/tabletserver.go
++++ b/go/vt/vttablet/tabletserver/tabletserver.go
+@@ -2131,6 +2131,10 @@ func (tsv *TabletServer) RedoPreparedTransactions() {
+ // SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+ // The reason should be an enum value defined in the tabletserver.
+ func (tsv *TabletServer) SetTwoPCAllowed(reason int, allowed bool) {
++	// P2 benchmark-only hack: measure TWOPC on a cluster without semi-sync replicas.
++	if reason == TwoPCAllowed_SemiSync && os.Getenv("P2_TWOPC_IGNORE_SEMISYNC") == "1" {
++		allowed = true
++	}
+ 	tsv.te.twopcAllowed[reason] = allowed
+ }
+ 

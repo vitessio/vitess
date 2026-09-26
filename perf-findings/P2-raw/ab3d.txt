@@ -1,0 +1,154 @@
+r1-base        insert_seq+SEQ=1       text thr=8   tps=1440.28  qps=1440.28  avg=5.55   p95=11.654 p99=17.633 vtgate=347 tablets=411 mysqld=326 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=17.85 
+r1-base        insert_seq+SEQ=0       text thr=8   tps=1910.20  qps=1910.20  avg=4.18   p95=9.734  p99=17.010 vtgate=259 tablets=270 mysqld=291 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=19.23 
+r1-base        insert_seq+SEQ=1       text thr=1   tps=550.53   qps=550.53   avg=1.81   p95=3.615  p99=8.428  vtgate=769 tablets=774 mysqld=477 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=20.12 
+r1-base /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '7903098748' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"7903098748\""vtg2: "type:INT64 value:\"51446\""vtg3: "type:VARCHAR value:\"40776650385-27790741417-29196799401-72593092776-88521560341-76687673901-75819010164-239519379) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (7903098748, 51446, '40776650385-27790741417-29196799401-72593092776-88521560341-76687673901-75819010164-23951937961-47596306159-34107888627', '06560535646-19888319975-71163723730-80179737904-44467808888')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '7903098748' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"7903098748\""vtg2: "type:INT64 value:\"51446\""vtg3: "type:VARCHAR value:\"40776650385-27790741417-29196799401-72593092776-88521560341-76687673901-75819010164-239519379
+r1-p2seq       insert_seq+SEQ=1       text thr=8   tps=3553.27  qps=3553.27  avg=2.25   p95=4.101  p99=5.774  vtgate=250 tablets=268 mysqld=297 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=18.41 
+r1-p2seq /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5730915819' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5730915819\""vtg2: "type:INT64 value:\"50099\""vtg3: "type:VARCHAR value:\"25568968413-47530670236-39664356584-37731025412-88798841478-94274340095-62172008402-945576917) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (5730915819, 50099, '25568968413-47530670236-39664356584-37731025412-88798841478-94274340095-62172008402-94557691777-84057088475-03777351140', '55780166138-39105689784-63598442966-86492228677-12053609867')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5730915819' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5730915819\""vtg2: "type:INT64 value:\"50099\""vtg3: "type:VARCHAR value:\"25568968413-47530670236-39664356584-37731025412-88798841478-94274340095-62172008402-945576917
+r1-p2seq       insert_seq+SEQ=1       text thr=1   tps=795.11   qps=795.11   avg=1.25   p95=1.960  p99=3.885  vtgate=560 tablets=509 mysqld=441 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=18.75 
+r1-p2seq       insert_seq+SEQ=0       text thr=1   tps=747.43   qps=747.43   avg=1.33   p95=2.389  p99=5.879  vtgate=570 tablets=509 mysqld=451 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=17.61 
+r2-base        insert_seq+SEQ=1       text thr=8   tps=2699.38  qps=2699.38  avg=2.96   p95=5.277  p99=7.565  vtgate=347 tablets=406 mysqld=314 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=14.60 
+r2-base /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '8169424679' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"8169424679\""vtg2: "type:INT64 value:\"50352\""vtg3: "type:VARCHAR value:\"38583844686-69378048293-17758396421-13198184945-09371069390-32997028574-73280315917-507415523) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (8169424679, 50352, '38583844686-69378048293-17758396421-13198184945-09371069390-32997028574-73280315917-50741552359-35679219436-28053923833', '08277854532-73278825847-62363688604-84533963818-02447589559')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '8169424679' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"8169424679\""vtg2: "type:INT64 value:\"50352\""vtg3: "type:VARCHAR value:\"38583844686-69378048293-17758396421-13198184945-09371069390-32997028574-73280315917-507415523
+r2-base        insert_seq+SEQ=1       text thr=1   tps=545.46   qps=545.46   avg=1.83   p95=3.816  p99=9.560  vtgate=751 tablets=769 mysqld=474 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=18.32 
+r2-base /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '6048747700' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"6048747700\""vtg2: "type:INT64 value:\"49931\""vtg3: "type:VARCHAR value:\"94077880994-30481279107-98737960444-72109510822-14707585289-26293389485-81797469941-756239518) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (6048747700, 49931, '94077880994-30481279107-98737960444-72109510822-14707585289-26293389485-81797469941-75623951869-21166434518-40371173623', '34425353680-55492942942-83649837029-20321461368-47750244393')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '6048747700' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"6048747700\""vtg2: "type:INT64 value:\"49931\""vtg3: "type:VARCHAR value:\"94077880994-30481279107-98737960444-72109510822-14707585289-26293389485-81797469941-756239518
+r2-p2seq       insert_seq+SEQ=1       text thr=8   tps=2571.05  qps=2571.05  avg=3.11   p95=7.167  p99=12.081 vtgate=254 tablets=271 mysqld=302 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=12.92 
+r2-p2seq /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '8730556361' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"8730556361\""vtg2: "type:INT64 value:\"62692\""vtg3: "type:VARCHAR value:\"46471746827-35536650901-37267606931-17224726433-72611123242-64677435554-47260704584-398466324) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (8730556361, 62692, '46471746827-35536650901-37267606931-17224726433-72611123242-64677435554-47260704584-39846632494-91462691530-22346481161', '42793983594-68609079540-77828510939-55038656141-45736380278')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '8730556361' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"8730556361\""vtg2: "type:INT64 value:\"62692\""vtg3: "type:VARCHAR value:\"46471746827-35536650901-37267606931-17224726433-72611123242-64677435554-47260704584-398466324
+r2-p2seq       insert_seq+SEQ=1       text thr=1   tps=742.64   qps=742.64   avg=1.34   p95=2.662  p99=6.205  vtgate=542 tablets=491 mysqld=438 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=16.40 
+r2-p2seq /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5617809126' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5617809126\""vtg2: "type:INT64 value:\"49833\""vtg3: "type:VARCHAR value:\"69898667861-14671248050-70301256055-99149046806-04034456761-58146828859-28866099317-208292181) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (5617809126, 49833, '69898667861-14671248050-70301256055-99149046806-04034456761-58146828859-28866099317-20829218129-69311999325-37872519676', '06210398320-44994027859-56462735812-74905676727-76362571846')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5617809126' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5617809126\""vtg2: "type:INT64 value:\"49833\""vtg3: "type:VARCHAR value:\"69898667861-14671248050-70301256055-99149046806-04034456761-58146828859-28866099317-208292181
+r3-base        insert_seq+SEQ=1       text thr=8   tps=1751.81  qps=1751.81  avg=4.56   p95=9.560  p99=16.408 vtgate=338 tablets=411 mysqld=309 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=17.37 
+r3-base /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5655430328' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5655430328\""vtg2: "type:INT64 value:\"50098\""vtg3: "type:VARCHAR value:\"46789108075-26190228048-47946917685-93402380780-31512447492-72044457566-59270545071-972281094) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (5655430328, 50098, '46789108075-26190228048-47946917685-93402380780-31512447492-72044457566-59270545071-97228109486-90621714970-72539584431', '05766238273-22247921483-65344451558-67968933444-65603348383')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5655430328' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5655430328\""vtg2: "type:INT64 value:\"50098\""vtg3: "type:VARCHAR value:\"46789108075-26190228048-47946917685-93402380780-31512447492-72044457566-59270545071-972281094
+r3-base        insert_seq+SEQ=1       text thr=1   tps=641.82   qps=641.82   avg=1.55   p95=2.389  p99=4.487  vtgate=854 tablets=826 mysqld=469 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=16.50 
+r3-base /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5439726022' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5439726022\""vtg2: "type:INT64 value:\"50321\""vtg3: "type:VARCHAR value:\"63318150868-00016340186-02886894801-67321178851-34092677442-88113178560-02788504648-056181946) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (5439726022, 50321, '63318150868-00016340186-02886894801-67321178851-34092677442-88113178560-02788504648-05618194627-00611863604-43182693037', '66964714421-62796458553-61502912389-24475522236-30129268182')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.80-.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5439726022' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5439726022\""vtg2: "type:INT64 value:\"50321\""vtg3: "type:VARCHAR value:\"63318150868-00016340186-02886894801-67321178851-34092677442-88113178560-02788504648-056181946
+r3-p2seq       insert_seq+SEQ=1       text thr=8   tps=1897.79  qps=1897.79  avg=4.21   p95=9.560  p99=17.010 vtgate=246 tablets=266 mysqld=295 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=15.78 
+r3-p2seq /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 8
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '7696130873' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"7696130873\""vtg2: "type:INT64 value:\"49791\""vtg3: "type:VARCHAR value:\"84420027496-44836977336-89128543472-08134830239-85596790489-83022069031-14091714983-864234049) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (7696130873, 49791, '84420027496-44836977336-89128543472-08134830239-85596790489-83022069031-14091714983-86423404946-89351281292-43446895259', '70535868194-27764155187-29077025649-55914063978-73762002443')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '7696130873' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"7696130873\""vtg2: "type:INT64 value:\"49791\""vtg3: "type:VARCHAR value:\"84420027496-44836977336-89128543472-08134830239-85596790489-83022069031-14091714983-864234049
+r3-p2seq       insert_seq+SEQ=1       text thr=1   tps=755.67   qps=755.67   avg=1.32   p95=2.389  p99=6.095  vtgate=541 tablets=488 mysqld=430 myq=1.00 mybegin=0.00 mycommit=0.00 err/s=0.00 load=17.65 
+r3-p2seq /home/vt/perf/P2/lua/insert_seq.lua FAILED
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Initializing worker threads...
+
+Threads started!
+
+FATAL: mysql_drv_query() returned error 1062 (target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5269192159' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5269192159\""vtg2: "type:INT64 value:\"50068\""vtg3: "type:VARCHAR value:\"29582987883-10428378289-24174471029-63222012870-15271512044-19063995327-20093635946-825836069) for query 'INSERT INTO sbtest9 (id, k, c, pad) VALUES (5269192159, 50068, '29582987883-10428378289-24174471029-63222012870-15271512044-19063995327-20093635946-82583606990-06967233417-73029393386', '00645013442-23597916140-65059280330-68270278065-92062112630')'
+FATAL: `thread_run' function failed: /home/vt/perf/P2/lua/insert_seq.lua:18: SQL error, errno = 1062, state = '23000': target: sbtest.-80.primary: vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '5269192159' for key 'sbtest9.PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: "insert into sbtest9(id, k, c, pad) values (:_id_0, :vtg2 /* INT64 */, :vtg3 /* VARCHAR */, :vtg4 /* VARCHAR */)", BindVars: {_id_0: "type:INT64 value:\"5269192159\""vtg2: "type:INT64 value:\"50068\""vtg3: "type:VARCHAR value:\"29582987883-10428378289-24174471029-63222012870-15271512044-19063995327-20093635946-825836069
