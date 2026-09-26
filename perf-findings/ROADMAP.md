@@ -68,6 +68,14 @@ Many findings removed fixed waits or polled faster. They are NOT all equal: VRep
 - vtgate accepts a quoted-int `SET` that breaks the session (P2).
 - Plan-cache size metric shows about 4% of the real size (P6).
 
+**More configuration and ops guidance** (documentation only; complements item 2):
+- **vtgate `--enable-buffer`:** planned failovers go from 30–80 client errors to 0, at the cost of a 60–230 ms latency blip. A second failover within `--buffer-min-time-between-failovers` (1 min) isn't buffered. (P5 #6)
+- **TLS on the vtgate MySQL port:** use ECDSA P-256 certificates and client session resumption. At one connection per query, vtgate CPU per connection is 0.8 ms without TLS, 2.1 ms with RSA-2048 and 1.3 ms with ECDSA, and connect p99 is 41 ms with RSA vs 13 ms with ECDSA. RSA saturated vtgate at 800 connections/s. `GODEBUG=tlsmlkem=0` would halve the remaining handshake cost, but it drops post-quantum key exchange, so it's a security trade-off. (P6 #3)
+- **`--mysql-server-pool-conn-read-buffers`** for connection-churn workloads: −44% allocation per connection, −43% GCs, −2% CPU. (P6 #7)
+- **`--compression-engine-name=zstd` for backups:** −52% backup CPU; readable back to v15. Making it the default changes the backup format, so it needs staging. (P5 #4)
+- **Transaction mode:** TWOPC costs +43–58% vtgate, +69–85% tablet and +96–122% mysqld CPU, and 33–43% less TPS, compared with MULTI. MULTI commits shards sequentially (1.2–1.5 ms vs 0.6 ms single-shard), but costs the same as SINGLE for single-shard transactions. (P2 #4)
+- **Large reads:** OLTP reads of more than 10,000 rows per shard fail at the tablet's `max-result-size`; use OLAP/streaming for them. (P3)
+
 ## Wave 2: medium effort, big payoff
 
 | # | Item | Payoff | Effort | Notes |
