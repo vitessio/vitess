@@ -54,3 +54,15 @@ V4|V5)
   echo "R2 sum: $(checksum R2) gtid: $(q R2 'select @@gtid_executed')"; echo "R1 sum: $(checksum R1) gtid: $(q R1 'select @@gtid_executed')"
   grep -i -E "error|partial|rollback|incomplete" $B/R1/logs/error.log | tail -5;;
 esac
+case $1 in
+V6)
+  echo "=== V6: TLS receiver options while applier runs: R1 applier blocked, STOP IO, receiver-only CHANGE with SOURCE_SSL/CA/CERT/KEY to R2; kill P; release"
+  reset_env >/dev/null 2>&1; MODE=lock make_T 1000 2>&1 | egrep "commit returned|Retrieved|Executed_Gtid"
+  D=$B/R2/data
+  q R1 "STOP REPLICA IO_THREAD"
+  q R1 "CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=45003, SOURCE_USER='vt_repl', SOURCE_PASSWORD='replpw', SOURCE_CONNECT_RETRY=10, SOURCE_SSL=1, SOURCE_SSL_CA='$D/ca.pem', SOURCE_SSL_CERT='$D/client-cert.pem', SOURCE_SSL_KEY='$D/client-key.pem', SOURCE_HEARTBEAT_PERIOD=2" && echo "  CHANGE OK"
+  brief R1; rel R1
+  $C kill9 P; q R1 "START REPLICA IO_THREAD"; sleep 3
+  echo "R1 conn TLS: $(q R1 "select SSL_ALLOWED, SSL_CA_FILE from performance_schema.replication_connection_configuration")"
+  release_lock; sleep 4; brief R1; echo "R1 T rows: $(q R1 'select group_concat(id) from t.t where id>=1000')";;
+esac
