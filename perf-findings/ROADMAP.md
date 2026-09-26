@@ -8,13 +8,50 @@ Each item is ranked on four things:
 
 Evidence for each item is in the report named in the right-hand column (all under `perf-findings/`). Effort: S is under ~1 day plus review, M is days to a couple of weeks, and L is a multi-week project.
 
+## Fixed waits: long-running vs time-critical operations
+
+Many findings removed fixed waits or polled faster. They are NOT all equal: VReplication workflows (MoveTables, Reshard, Online DDL, VDiff on large tables) and continuous loops (VTOrc, health checks, heartbeats) run for days or forever, and polling faster there burns resources for the whole duration and across the whole fleet. Cutover windows (SwitchTraffic, failover steps) last seconds, and every millisecond is user-visible downtime.
+
+**How each fix works, and what it costs:**
+1. **Skip a wait that isn't needed** (a condition check): costs nothing extra, even on multi-day operations.
+2. **Poll faster, or back off from a short start:** costs as long as the wait lasts. Fine on a switchover lasting seconds; a real cost on a migration running for days, multiplied across the fleet.
+3. **Wake on an event** instead of a timer: fast and cheap at the same time, but needs more code.
+
+**Rule:**
+- Long-running operations and continuous loops get only type 1 or type 3 fixes, or intervals that scale with elapsed time. Never faster fixed polling.
+- Time-critical windows may poll aggressively, because the window itself is short. Bound it anyway: back off once a wait runs longer than a few seconds.
+- Anything that runs continuously is judged by its cost per second times the fleet size, not by the latency gain in a single test.
+
+**Throughput beats waits for long-running operations.** The dramatic wait numbers came from small test tables (MoveTables 47 s → 5.6 s, Online DDL 84 s → 40 s); on real multi-day migrations they're rounding errors. There, throughput matters: bulk UPDATE (R9), concurrent table copy (R19), deferred keys and JSON as text (R6), and the shared binlog reader (R18).
+
+### Long-running operations
+
+| Wait | Proposed fix | Type | Cost over days | Decision |
+|---|---|---|---|---|
+| Copy phase waits ≥1 s before each table (P4 #1) and in VStream copy (V5 #1) | Skip the catch-up when the last snapshot is younger than the lag tolerance | 1 | None | **Keep** (R2). Only matters with many tables. |
+| Online DDL 1-minute review tick (P4 #3) | Re-review a running migration every 5 s if it isn't ready | 2 | Review queries every 5 s for the whole migration | **Rework:** keep the 1-minute tick; trigger an immediate review when the stream reports copy complete and caught up, and poll fast only after that point (type 3). |
+| `VDiff create --wait` polled every minute (V3 #5) | Poll every 1 s, backing off to 10 s | 2 | A VDiff can run for hours; each poll fans out to every target shard | **Rework:** interval proportional to elapsed time (e.g. 10% of elapsed, capped at 1 minute). Short diffs return fast; long ones cost the same as today. |
+| Tablet picker flat 30 s retry (P4 #4) | Back off 1 s → 30 s | 2 (bounded) | Same steady state as today; only the first retries are faster | **Keep.** Recovery after an outage, bounded by the 30 s cap. |
+| VTOrc poll flags (P5 #2): `--instance-poll-time=1s`, faster recovery polling | Change defaults | 2 | Continuous 5x RPC and query load across the whole fleet | **Don't change defaults.** Fix only the off-by-one bug (free). Faster detection should come from push-based health signals (type 3). |
+| Heartbeat / `time_updated` writes (V4b #6) | (the opposite problem) | – | An idle 2000-table workflow writes ~700 MB/h of binlog | **Make long-running workflows cheaper:** raise the default interval, or move frequently updated fields out of the row that holds the rules (R21). |
+
+### Time-critical windows
+
+| Wait | Proposed fix | Type | Cost | Decision |
+|---|---|---|---|---|
+| WaitForPos polls every 1 s (P4 #2, V4b #1) | 5 ms doubling to 100 ms; the stream saves its position immediately while someone waits | 2 | Only for the duration of the wait | **Keep for cutovers.** WaitForPos is also called from longer waits, so back off further (e.g. to 1 s) once a wait passes a few seconds. |
+| SwitchTraffic: trailing 100 ms sleep, ReloadSchema per lock cycle, duplicate allowTargetWrites (V6 #6, V4) | Remove | 1 | None | **Keep** (R3). Pure critical-path time. |
+| SwitchTraffic 100 ms pause between lock cycles (V4b) | Tablet-side deny-list barrier | 3 | None | **Keep** (R22): ~170 ms → ~60 ms. |
+| Per-table VDiff setup while holding the keyspace lock (V3 #2) | Covered by the WaitForPos fix | 2 | Short | **Keep.** A keyspace-wide lock blocks other operations, so this path is time-critical. |
+| PRS with semi-sync (P5 #1); backup/restore mysqld shutdown wait (P5 #3); mysqld start-up socket poll | Remove the wait; poll at 100 ms during start-up only | 1 / 2 (bounded) | None / start-up only | **Keep.** |
+
 ## Wave 1: small changes with large or broad payoff (do first)
 
 | # | Item | Payoff (measured) | Effort | Notes / evidence |
 |---|---|---|---|---|
 | 1 | **Correctness bugs** | Prevents wrong data, panics, races and failover delays | S each | Details below the table |
 | 2 | **Config guidance:** static gRPC windows, GOMAXPROCS = real cores, GOGC=400 + GOMEMLIMIT, 256 KiB stream buffers (docs and examples; defaults unchanged for now) | +10–16% QPS; −20–27% CPU on every workload; p99 −15–26%; 1-thread latency 0.80 → 0.54 ms | S | P1, H1, P7. Windows cap per-stream throughput at window/RTT, so size them for cross-cell links. |
-| 3 | **Operation stalls** | MoveTables of 40 tables 47 s → 5.6 s; SwitchTraffic outage 2.3 → 0.4 s; PRS outage (semi-sync) 1.16 → 0.21 s; stream resume after restart 30 → 1.3 s; Online DDL 84 → 40 s; every backup/restore −2–3 s | S each | P4 #1–4, P5 #1, #3 |
+| 3 | **Time-critical outage windows** (see "Fixed waits" below; only waits on a short critical path) | SwitchTraffic write outage 2.3 → 0.4 s (1.3 s → 173 ms with R3); PRS outage with semi-sync 1.16 → 0.21 s; every backup/restore −2–3 s (mysqld shutdown wait); stream resume after a restart 30 → 1.3 s (bounded backoff) | S each | P4 #2 and #4, P5 #1 and #3, V4b #1 |
 | 4 | **Autocommit UPDATE/DELETE by PK:** 3 MySQL round trips → 1 | update TPS +16% (+30% tuned); p99 −30% at 1 thread; tablet and mysqld CPU −14–20% | S | P2 #1. Stats labels change; endtoend fixtures need a CI run. |
 | 5 | **vttablet gRPC stream workers**, plus the per-query micro fixes (P1) and per-query mutex removals (P6) | vttablet CPU −4–14%, QPS +6–14% at high concurrency; removes lock waits at many connections | S | P1 #2 and #5, P6 #4. Best combined with item 2. |
 | 6 | **Concurrent join RHS** (bounded, outside transactions) | Cross-shard joins 2x QPS, −50% latency | S/M | P3 #1. vtexplain needs concurrency 1; the flag must also be added to vtcombo. |
@@ -48,7 +85,7 @@ Evidence for each item is in the report named in the right-hand column (all unde
 | # | Item | Payoff | Effort | Notes |
 |---|---|---|---|---|
 | 16 | **Round-1 byte-level bundle:** F02 tokenizer, F03+F21 escaping and literal formatting, F12, F22, F23, F24 (parse, normalize, format), F06/F14 collations, F18 JSON, F20 BIT, F29 utf8, the rest of F30 | About 5–10% of parse+normalize+format on OLTP; 10x+ on huge literals and big IN lists; collation items only for non-0900 collations | S each, low risk | Merge-order notes are in `SUMMARY.md` and `P7-combined.md`. Most are already integrated and tested in `P7-combined.patch`. |
-| 17 | **Changes that need a behaviour or semantics review** | – | S/M | F25 flush timer (flushes after the first write, not the last); VTOrc faster poll defaults (scale-test first); PAD SPACE collation fix (matches MySQL, but changes results) |
+| 17 | **Changes that need a behaviour or semantics review** | – | S/M | F25 flush timer (flushes after the first write, not the last); PAD SPACE collation fix (matches MySQL, but changes results). VTOrc faster poll defaults moved to "Fixed waits": keep the defaults and fix only the off-by-one. |
 
 ## Strategic projects (plan separately)
 
@@ -82,13 +119,13 @@ Evidence for each item is in `V1-copy.md`, `V2-apply.md`, `V3-vdiff.md`, `V4-sca
 | # | Item | Payoff (measured) | Effort | Source |
 |---|---|---|---|---|
 | R1 | **Correctness bugs** | Prevents data drift, stuck workflows and failed streams | S–M | Details below the table |
-| R2 | **Remove fixed waits:** per-table copy catch-up tick (MoveTables and VStream copy), WaitForPos polling with a 5 ms→100 ms backoff, tablet-picker 30 s sleep, Online DDL 1-minute review tick, 1-minute `VDiff --wait` poll | MoveTables of 40 tables 47 s → 5.6 s; VStream copy of 40 tables 39.5 s → 0.5 s (1M rows 6.3 → 1.75 s); VDiff of 30 tables 65 s → 11 s; Online DDL 84 → 40 s; stream resume 30 s → 1.3 s; `VDiff create --wait` 60 s → 7 s | S each | P4, V5 #1, V4b #1, V3 #2 and #5 |
-| R3 | **SwitchTraffic outage:** drop the trailing 100 ms sleep and ReloadSchema per lock cycle, skip the second allowTargetWrites, add the WaitForPos backoff | Median write gap 1.3 s → 173 ms, with no client errors | S | V6 #6, V4, V4b #1 |
+| R2 | **Skip waits that aren't needed** (free condition checks, no extra polling): per-table copy catch-up when the last snapshot is younger than the lag tolerance (MoveTables and VStream copy) | Matters with many tables: seconds per table, i.e. minutes to hours for thousands of small tables; negligible for a few huge tables. VStream copy of 40 tables 39.5 s → 0.5 s. | S | P4 #1, V5 #1 |
+| R3 | **SwitchTraffic outage (time-critical):** drop the trailing 100 ms sleep and ReloadSchema per lock cycle, skip the second allowTargetWrites, WaitForPos backoff from 5 ms (capped; longer waits back off to ~1 s) | Median write gap 1.3 s → 173 ms, with no client errors | S | V6 #6, V4, V4b #1 |
 | R4 | **Many-table workflows:** indexed plan builder, per-table plan build in the copy, per-table PK query instead of a schema scan under the schema-engine lock, `GetSchema` reading only the named tables | 2000-table MoveTables 177 s → 110 s; per-stream start 20–28 ms → 0.8 ms | S | V6 #12/#13, V4, V4b #2 |
 | R5 | **VDiff:** byte-equal compare fast path and direct row pipeline | VDiff tablet CPU −47%, wall time −30%, whole-cluster CPU −28% | S–M | V3 #3/#4, V6 #7 |
 | R6 | **Online DDL copy:** JSON as text (always on) and deferred non-unique secondary keys | Copy of a JSON table ~30% faster; sbtest copy −15–20% | S | V1 #1/#2 |
 | R7 | **gRPC codec non-zeroing buffer pool** (all gRPC, including VReplication and VStream) | vtgate −11–16% and vttablet −5–8% on VStream; −16–27% on large result streams | S | P3 #2, V5 #5 |
-| R8 | **Ops guidance:** `--defer-secondary-keys=false` for many tiny tables, `--vreplication-heartbeat-update-interval` for large rule sets, `--vstream-packet-size=1MB`, per-table workflows for faster multi-table copies | 2000 tables 110 → 64 s; heartbeat binlog growth 10x lower; copy −8% CPU per row; multi-table copy −29% | docs | V4b #4/#6, P4, V1 #5 |
+| R8 | **Ops guidance:** `--defer-secondary-keys=false` for many tiny tables, a larger `--vreplication-heartbeat-update-interval` for long-running workflows with large rule sets, `--vstream-packet-size=1MB`, per-table workflows for faster multi-table copies | 2000 tables 110 → 64 s; heartbeat binlog growth 10x lower; copy −8% CPU per row; multi-table copy −29% | docs | V4b #4/#6, P4, V1 #5 |
 
 **R1 in detail:**
 - **P0:** JSON doubles silently become DECIMAL in the copy; parallel-insert-worker connections skip session setup; the generated-column panic or shifted values; `select *` dropping conversions.
