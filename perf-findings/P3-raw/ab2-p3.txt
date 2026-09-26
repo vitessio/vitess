@@ -1,0 +1,77 @@
+r1-pool        krange_ord100     thr=8   qps=805.71    avg=9.92    p95=22.284  p99=40.370  vtgate=610 tablets=720 mysqld=638 load=13.41
+r1-pool        idrange_ordc100   thr=8   qps=1184.55   avg=6.75    p95=13.219  p99=20.366  vtgate=488 tablets=568 mysqld=494 load=15.52
+r1-pool        grp_high10k       thr=8   qps=160.89    avg=49.67   p95=87.564  p99=116.802 vtgate=5252 tablets=3718 mysqld=5079 load=16.41
+r1-pool        distinct_k10k     thr=8   qps=219.66    avg=36.37   p95=70.548  p99=101.132 vtgate=4407 tablets=3145 mysqld=3211 load=17.86
+r1-pool        cnt_dist10k   thr=8   qps=234.80    avg=34.04   p95=64.474  p99=95.814  vtgate=3609 tablets=3110 mysqld=3933 load=18.45
+r1-pool        ord_agg_lim10k    thr=8   qps=202.46    avg=39.42   p95=90.775  p99=161.514 vtgate=2698 tablets=1949 mysqld=3865 load=21.12
+r1-pool        join_x10         thr=8   qps=143.98    avg=55.44   p95=106.745 p99=155.801 vtgate=2970 tablets=4742 mysqld=3570 load=21.56
+r1-pool        join_push100      thr=8   qps=929.79    avg=8.60    p95=17.633  p99=27.659  vtgate=670 tablets=810 mysqld=909 load=21.83
+r1-p3          krange_ord100     thr=8   qps=1022.81   avg=7.81    p95=16.408  p99=23.521  vtgate=559 tablets=667 mysqld=633 load=15.76
+r1-p3          idrange_ordc100   thr=8   qps=1315.21   avg=6.07    p95=12.081  p99=17.633  vtgate=463 tablets=550 mysqld=485 load=16.45
+r1-p3          grp_high10k       thr=8   qps=180.94    avg=44.15   p95=75.817  p99=90.775  vtgate=4471 tablets=3652 mysqld=5143 load=19.08
+r1-p3          distinct_k10k     thr=8   qps=169.05    avg=47.26   p95=84.467  p99=106.745 vtgate=3969 tablets=3324 mysqld=3686 load=20.27
+r1-p3          cnt_dist10k   thr=8   qps=232.13    avg=34.44   p95=57.871  p99=71.830  vtgate=3153 tablets=3221 mysqld=4504 load=19.52
+r1-p3          ord_agg_lim10k    thr=8   qps=395.12    avg=20.23   p95=37.565  p99=48.335  vtgate=2308 tablets=1774 mysqld=3876 load=18.49
+r1-p3          join_x10         thr=8   qps=526.12    avg=15.20   p95=23.948  p99=30.265  vtgate=1495 tablets=2474 mysqld=2293 load=17.23
+r1-p3          join_push100      thr=8   qps=1487.44   avg=5.37    p95=11.242  p99=17.319  vtgate=590 tablets=728 mysqld=837 load=17.56
+r1-p3seqjoin   krange_ord100     thr=8   qps=1005.50   avg=7.95    p95=16.408  p99=23.521  vtgate=552 tablets=659 mysqld=648 load=13.98
+r1-p3seqjoin   idrange_ordc100   thr=8   qps=1161.73   avg=6.88    p95=15.268  p99=23.101  vtgate=481 tablets=579 mysqld=501 load=14.50
+r1-p3seqjoin   grp_high10k       thr=8   qps=186.12    avg=42.95   p95=73.135  p99=89.155  vtgate=4532 tablets=3670 mysqld=5168 load=15.56
+r1-p3seqjoin   distinct_k10k     thr=8   qps=337.00    avg=23.72   p95=40.370  p99=58.923  vtgate=3574 tablets=3024 mysqld=3236 load=16.24
+r1-p3seqjoin   cnt_dist10k   thr=8   qps=250.79    avg=31.88   p95=58.923  p99=80.025  vtgate=3088 tablets=3152 mysqld=4015 load=17.06
+r1-p3seqjoin   ord_agg_lim10k    thr=8   qps=461.79    avg=17.31   p95=30.265  p99=41.851  vtgate=2272 tablets=1770 mysqld=3707 load=16.91
+r1-p3seqjoin   join_x10         thr=8   qps=306.19    avg=26.10   p95=41.104  p99=49.213  vtgate=2480 tablets=4261 mysqld=3633 load=17.39
+r1-p3seqjoin   join_push100      thr=8   qps=1555.22   avg=5.14    p95=10.460  p99=14.995  vtgate=605 tablets=738 mysqld=840 load=18.28
+r2-pool        krange_ord100     thr=8   qps=1959.65   avg=4.08    p95=7.702   p99=11.242  vtgate=479 tablets=562 mysqld=570 load=12.26
+r2-pool        idrange_ordc100   thr=8   qps=1523.00   avg=5.25    p95=12.081  p99=18.612  vtgate=459 tablets=543 mysqld=471 load=14.82
+r2-pool        grp_high10k       thr=8   qps=258.44    avg=30.93   p95=50.107  p99=62.193  vtgate=5112 tablets=3618 mysqld=4800 load=14.25
+r2-pool        distinct_k10k     thr=8   qps=263.91    avg=30.30   p95=64.474  p99=92.424  vtgate=4365 tablets=3136 mysqld=3332 load=14.84
+r2-pool        cnt_dist10k   thr=8   qps=330.92    avg=24.15   p95=39.650  p99=48.335  vtgate=3657 tablets=3119 mysqld=4063 load=14.70
+r2-pool        ord_agg_lim10k    thr=8   qps=459.95    avg=17.38   p95=29.725  p99=38.942  vtgate=2487 tablets=1753 mysqld=3772 load=16.05
+r2-pool        join_x10         thr=8   qps=293.45    avg=27.23   p95=45.793  p99=61.083  vtgate=2631 tablets=4493 mysqld=3774 load=15.31
+r2-pool        join_push100      thr=8   qps=1595.65   avg=5.01    p95=10.090  p99=14.995  vtgate=593 tablets=727 mysqld=829 load=16.84
+r2-p3          krange_ord100     thr=8   qps=2013.74   avg=3.97    p95=7.565   p99=10.844  vtgate=473 tablets=571 mysqld=574 load=11.54
+r2-p3          idrange_ordc100   thr=8   qps=2239.09   avg=3.57    p95=6.550   p99=9.560   vtgate=434 tablets=506 mysqld=457 load=12.47
+r2-p3          grp_high10k       thr=8   qps=279.54    avg=28.60   p95=47.472  p99=58.923  vtgate=4357 tablets=3545 mysqld=4781 load=14.33
+r2-p3          distinct_k10k     thr=8   qps=344.93    avg=23.18   p95=39.650  p99=49.213  vtgate=3638 tablets=3021 mysqld=3289 load=14.17
+r2-p3          cnt_dist10k   thr=8   qps=356.70    avg=22.41   p95=36.894  p99=46.625  vtgate=2939 tablets=3081 mysqld=4077 load=15.68
+r2-p3          ord_agg_lim10k    thr=8   qps=483.84    avg=16.52   p95=27.659  p99=34.330  vtgate=2220 tablets=1709 mysqld=3694 load=16.11
+r2-p3          join_x10         thr=8   qps=438.97    avg=18.21   p95=34.954  p99=52.889  vtgate=1515 tablets=2531 mysqld=2431 load=16.80
+r2-p3          join_push100      thr=8   qps=1580.99   avg=5.06    p95=10.274  p99=14.728  vtgate=593 tablets=725 mysqld=842 load=15.79
+r2-p3seqjoin   krange_ord100     thr=8   qps=1858.33   avg=4.29    p95=8.895   p99=13.953  vtgate=483 tablets=581 mysqld=571 load=12.35
+r2-p3seqjoin   idrange_ordc100   thr=8   qps=1104.12   avg=7.24    p95=15.268  p99=22.284  vtgate=506 tablets=609 mysqld=506 load=15.46
+r2-p3seqjoin   grp_high10k       thr=8   qps=143.92    avg=55.48   p95=97.555  p99=125.525 vtgate=4624 tablets=3789 mysqld=5242 load=18.12
+r2-p3seqjoin   distinct_k10k     thr=8   qps=170.43    avg=46.88   p95=89.155  p99=112.670 vtgate=3972 tablets=3238 mysqld=3609 load=20.67
+r2-p3seqjoin   cnt_dist10k   thr=8   qps=185.35    avg=43.13   p95=78.597  p99=99.327  vtgate=3178 tablets=3239 mysqld=4460 load=23.51
+r2-p3seqjoin   ord_agg_lim10k    thr=8   qps=379.45    avg=21.07   p95=43.385  p99=65.645  vtgate=2410 tablets=1852 mysqld=3978 load=23.50
+r2-p3seqjoin   join_x10         thr=8   qps=293.68    avg=27.22   p95=44.173  p99=55.824  vtgate=2567 tablets=4389 mysqld=3711 load=21.90
+r2-p3seqjoin   join_push100      thr=8   qps=1342.30   avg=5.95    p95=13.953  p99=22.284  vtgate=607 tablets=733 mysqld=832 load=22.07
+r3-pool        krange_ord100     thr=8   qps=1006.85   avg=7.94    p95=17.010  p99=24.827  vtgate=557 tablets=660 mysqld=625 load=19.57
+r3-pool        idrange_ordc100   thr=8   qps=1634.56   avg=4.89    p95=11.041  p99=17.319  vtgate=464 tablets=544 mysqld=471 load=19.30
+r3-pool        grp_high10k       thr=8   qps=253.03    avg=31.60   p95=53.850  p99=66.838  vtgate=5004 tablets=3561 mysqld=4780 load=18.41
+r3-pool        distinct_k10k     thr=8   qps=290.51    avg=27.51   p95=48.335  p99=69.289  vtgate=4372 tablets=3120 mysqld=3337 load=17.27
+r3-pool        cnt_dist10k   thr=8   qps=164.99    avg=48.44   p95=86.002  p99=114.717 vtgate=3960 tablets=3363 mysqld=4556 load=19.50
+r3-pool        ord_agg_lim10k    thr=8   qps=233.46    avg=34.22   p95=63.323  p99=84.467  vtgate=2697 tablets=1899 mysqld=4068 load=22.20
+r3-pool        join_x10         thr=8   qps=157.68    avg=50.65   p95=89.155  p99=116.802 vtgate=2805 tablets=4795 mysqld=3859 load=22.71
+r3-pool        join_push100      thr=8   qps=722.32    avg=11.06   p95=25.278  p99=38.942  vtgate=747 tablets=895 mysqld=992 load=24.91
+r3-p3          krange_ord100     thr=8   qps=1071.07   avg=7.46    p95=16.115  p99=24.827  vtgate=558 tablets=679 mysqld=628 load=16.24
+r3-p3          idrange_ordc100   thr=8   qps=1219.73   avg=6.55    p95=13.460  p99=20.366  vtgate=491 tablets=587 mysqld=494 load=17.70
+r3-p3          grp_high10k       thr=8   qps=156.32    avg=51.14   p95=89.155  p99=118.924 vtgate=4666 tablets=3832 mysqld=5215 load=19.23
+r3-p3          distinct_k10k     thr=8   qps=222.87    avg=35.86   p95=59.993  p99=78.597  vtgate=3861 tablets=3243 mysqld=3649 load=20.33
+r3-p3          cnt_dist10k   thr=8   qps=236.49    avg=33.80   p95=56.839  p99=71.830  vtgate=3191 tablets=3303 mysqld=4547 load=20.19
+r3-p3          ord_agg_lim10k    thr=8   qps=401.41    avg=19.92   p95=37.565  p99=49.213  vtgate=2280 tablets=1761 mysqld=3810 load=20.41
+r3-p3          join_x10         thr=8   qps=520.09    avg=15.37   p95=23.948  p99=30.265  vtgate=1496 tablets=2508 mysqld=2359 load=21.88
+r3-p3          join_push100      thr=8   qps=1487.01   avg=5.37    p95=11.041  p99=16.706  vtgate=602 tablets=727 mysqld=841 load=21.78
+r3-p3seqjoin   krange_ord100     thr=8   qps=1229.02   avg=6.50    p95=12.301  p99=17.633  vtgate=522 tablets=620 mysqld=632 load=18.64
+r3-p3seqjoin   idrange_ordc100   thr=8   qps=1391.85   avg=5.74    p95=11.041  p99=15.268  vtgate=466 tablets=546 mysqld=482 load=17.73
+r3-p3seqjoin   grp_high10k       thr=8   qps=196.12    avg=40.76   p95=75.817  p99=102.969 vtgate=4698 tablets=3893 mysqld=5482 load=17.61
+r3-p3seqjoin   distinct_k10k     thr=8   qps=337.14    avg=23.71   p95=39.650  p99=48.335  vtgate=3647 tablets=3102 mysqld=3311 load=16.81
+r3-p3seqjoin   cnt_dist10k   thr=8   qps=352.58    avg=22.67   p95=38.247  p99=48.335  vtgate=2993 tablets=3106 mysqld=4060 load=17.10
+r3-p3seqjoin ord_agg_lim10k FAILED: FATAL: mysql_drv_query() returned error 1053 (Server shutdown in progress) for query 'SELECT k % 1000 AS g, COUNT(*) AS cnt FROM sbtest1 WHERE id BETWEEN 207820 AND 217819 GROUP BY g ORDER BY cnt DESC, g LIMIT 10'
+FATAL: ord_agg_lim10k function failed: /home/vt/perf/P3/lua/p3.lua:145: SQL error, errno = 1053, state = '08S01': Server shutdown in progress
+r3-p3seqjoin join_x10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: join_x10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: join_x10 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3seqjoin join_push100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: join_push100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: join_push100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed

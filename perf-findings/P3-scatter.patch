@@ -1,0 +1,1598 @@
+diff --git a/go/flags/endtoend/vtgate.txt b/go/flags/endtoend/vtgate.txt
+index 6932e6d..d677ffa 100644
+--- a/go/flags/endtoend/vtgate.txt
++++ b/go/flags/endtoend/vtgate.txt
+@@ -103,6 +103,7 @@ Flags:
+       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
+       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
+   -h, --help                                                             help for vtgate
++      --join-rhs-concurrency int                                         Maximum number of right-hand side queries that a vtgate nested-loop join runs at the same time for one query, outside transactions and reserved connections. 1 runs them one at a time. (default 8)
+       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
+diff --git a/go/vt/servenv/grpc_codec.go b/go/vt/servenv/grpc_codec.go
+index c9025c2..28a7b1f 100644
+--- a/go/vt/servenv/grpc_codec.go
++++ b/go/vt/servenv/grpc_codec.go
+@@ -40,7 +40,9 @@ type Codec struct {
+ 
+ func (Codec) Name() string { return Name }
+ 
+-var defaultBufferPool = mem.DefaultBufferPool()
++// defaultBufferPool is the pool the codec marshals into and unmarshals from.
++// See codecBufferPool for why it is not mem.DefaultBufferPool().
++var defaultBufferPool mem.BufferPool = &codecBufferPool{}
+ 
+ func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
+ 	if m, ok := v.(vtprotoMessage); ok {
+diff --git a/go/vt/servenv/grpc_codec_pool.go b/go/vt/servenv/grpc_codec_pool.go
+new file mode 100644
+index 0000000..3947e78
+--- /dev/null
++++ b/go/vt/servenv/grpc_codec_pool.go
+@@ -0,0 +1,100 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package servenv
++
++import (
++	"math/bits"
++	"sync"
++
++	"google.golang.org/grpc/mem"
++)
++
++const (
++	// codecPoolMinExp and codecPoolMaxExp bound the power-of-two buffer tiers of
++	// codecBufferPool: 256 B .. 16 MiB. Larger buffers are allocated directly and
++	// not pooled.
++	codecPoolMinExp = 8
++	codecPoolMaxExp = 24
++)
++
++// codecBufferPool is the mem.BufferPool used by the vtproto codec for the
++// buffers it marshals into and unmarshals from.
++//
++// gRPC's default pool is a poor fit for Vitess result messages, for two reasons:
++//   - Its tiers are 256 B, 4 KiB, 16 KiB, 32 KiB and 1 MiB. A streaming result
++//     chunk is slightly larger than --queryserver-config-stream-buffer-size
++//     (32 KiB by default), so every chunk is served from the 1 MiB tier.
++//   - It zeroes the whole capacity of every pooled buffer it hands out.
++//
++// Together that clears 1 MiB of memory for every ~33 KiB streamed message, on
++// both the vttablet (marshal) and the vtgate (unmarshal) side.
++//
++// The codec always overwrites the full requested length before reading
++// (MarshalToSizedBufferVT fills [:size], MaterializeToBuffer copies [:size]),
++// and never reads past it, so zeroing is unnecessary. This pool uses one tier
++// per power of two, which bounds the over-allocation to 2x, and does not zero.
++type codecBufferPool struct {
++	tiers [codecPoolMaxExp - codecPoolMinExp + 1]sync.Pool
++}
++
++var _ mem.BufferPool = (*codecBufferPool)(nil)
++
++// tierForGet returns the index of the smallest tier that fits size, or -1 if
++// size is larger than the largest tier.
++func tierForGet(size int) int {
++	exp := bits.Len(uint(size - 1))
++	if exp < codecPoolMinExp {
++		exp = codecPoolMinExp
++	}
++	if exp > codecPoolMaxExp {
++		return -1
++	}
++	return exp - codecPoolMinExp
++}
++
++// Get returns a buffer of length size. Its contents are undefined.
++func (p *codecBufferPool) Get(size int) *[]byte {
++	if size <= 0 {
++		b := []byte{}
++		return &b
++	}
++	t := tierForGet(size)
++	if t < 0 {
++		b := make([]byte, size)
++		return &b
++	}
++	if buf, ok := p.tiers[t].Get().(*[]byte); ok {
++		*buf = (*buf)[:size]
++		return buf
++	}
++	b := make([]byte, size, 1<<(t+codecPoolMinExp))
++	return &b
++}
++
++// Put returns a buffer to the pool. Buffers whose capacity is not one of the
++// tier sizes are dropped.
++func (p *codecBufferPool) Put(buf *[]byte) {
++	c := cap(*buf)
++	if c == 0 || c&(c-1) != 0 {
++		return
++	}
++	exp := bits.Len(uint(c)) - 1
++	if exp < codecPoolMinExp || exp > codecPoolMaxExp {
++		return
++	}
++	p.tiers[exp-codecPoolMinExp].Put(buf)
++}
+diff --git a/go/vt/servenv/grpc_codec_pool_test.go b/go/vt/servenv/grpc_codec_pool_test.go
+new file mode 100644
+index 0000000..e1ce869
+--- /dev/null
++++ b/go/vt/servenv/grpc_codec_pool_test.go
+@@ -0,0 +1,133 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package servenv
++
++import (
++	"fmt"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"google.golang.org/grpc/mem"
++	"google.golang.org/protobuf/proto"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// TestCodecBufferPoolTiers checks that the codec pool hands out buffers from
++// the smallest power-of-two tier that fits. gRPC's default pool serves a
++// ~33 KiB streaming chunk from its 1 MiB tier and zeroes all of it.
++func TestCodecBufferPoolTiers(t *testing.T) {
++	cases := []struct {
++		size    int
++		wantCap int
++	}{
++		{size: 1, wantCap: 256},
++		{size: 256, wantCap: 256},
++		{size: 257, wantCap: 512},
++		{size: 33 * 1024, wantCap: 64 * 1024},
++		{size: 1<<20 + 1, wantCap: 2 << 20},
++		{size: 1 << 24, wantCap: 1 << 24},
++		{size: 1<<24 + 1, wantCap: 1<<24 + 1},
++	}
++	for _, tc := range cases {
++		t.Run(fmt.Sprint(tc.size), func(t *testing.T) {
++			buf := defaultBufferPool.Get(tc.size)
++			assert.Len(t, *buf, tc.size)
++			assert.Equal(t, tc.wantCap, cap(*buf))
++			defaultBufferPool.Put(buf)
++		})
++	}
++}
++
++func TestCodecBufferPoolPut(t *testing.T) {
++	p := &codecBufferPool{}
++	// buffers whose capacity is not a tier size are dropped, not handed out again
++	odd := make([]byte, 300, 300)
++	p.Put(&odd)
++	got := p.Get(300)
++	assert.Equal(t, 512, cap(*got))
++
++	// a returned buffer is reused for any size in its tier
++	p.Put(got)
++	again := p.Get(400)
++	assert.Len(t, *again, 400)
++	assert.Equal(t, 512, cap(*again))
++
++	empty := p.Get(0)
++	assert.Empty(t, *empty)
++}
++
++// TestCodecRoundTripDirtyBuffers marshals and unmarshals results through the
++// codec while the pool holds buffers full of garbage, to show that the codec
++// never reads bytes it did not write.
++func TestCodecRoundTripDirtyBuffers(t *testing.T) {
++	codec := &Codec{}
++	for _, rows := range []int{1, 10, 300, 5000} {
++		t.Run(fmt.Sprint(rows), func(t *testing.T) {
++			result := &sqltypes.Result{Fields: sqltypes.MakeTestFields("id|name", "int64|varchar")}
++			for i := range rows {
++				result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(int64(i)), sqltypes.NewVarChar(fmt.Sprintf("name-%d", i))})
++			}
++			in := &querypb.ExecuteResponse{Result: sqltypes.ResultToProto3(result)}
++
++			for range 3 {
++				// fill every tier the messages can use with garbage
++				size := in.SizeVT()
++				for _, s := range []int{size, size / 3, size / 2} {
++					if s == 0 {
++						continue
++					}
++					buf := defaultBufferPool.Get(s)
++					b := (*buf)[:cap(*buf)]
++					for i := range b {
++						b[i] = 0xff
++					}
++					defaultBufferPool.Put(buf)
++				}
++
++				data, err := codec.Marshal(in)
++				require.NoError(t, err)
++				// split the message into several buffers, as gRPC does with frames, so
++				// that Unmarshal has to materialize it into a pooled buffer
++				flat := data.Materialize()
++				data.Free()
++				var split mem.BufferSlice
++				for chunk := range chunks(flat, 1000) {
++					split = append(split, mem.SliceBuffer(chunk))
++				}
++
++				out := &querypb.ExecuteResponse{}
++				require.NoError(t, codec.Unmarshal(split, out))
++				assert.True(t, proto.Equal(in, out))
++			}
++		})
++	}
++}
++
++func chunks(b []byte, n int) func(func([]byte) bool) {
++	return func(yield func([]byte) bool) {
++		for len(b) > 0 {
++			c := b[:min(n, len(b))]
++			b = b[len(c):]
++			if !yield(c) {
++				return
++			}
++		}
++	}
++}
+diff --git a/go/vt/vtgate/engine/distinct.go b/go/vt/vtgate/engine/distinct.go
+index 3e0355e..75a5d33 100644
+--- a/go/vt/vtgate/engine/distinct.go
++++ b/go/vt/vtgate/engine/distinct.go
+@@ -51,6 +51,8 @@ type (
+ 		checkCols    []CheckCol
+ 		sqlmode      evalengine.SQLMode
+ 		collationEnv *collations.Environment
++		// hasher is reused for every row, so hashing a row does not allocate.
++		hasher vthash.Hasher
+ 	}
+ )
+ 
+@@ -69,20 +71,21 @@ func (pt *probeTable) exists(inputRow sqltypes.Row) (sqltypes.Row, error) {
+ }
+ 
+ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error) {
+-	hasher := vthash.New()
++	hasher := &pt.hasher
++	hasher.Reset()
+ 	for i, checkCol := range pt.checkCols {
+ 		if i >= len(inputRow) {
+ 			return vthash.Hash{}, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
+ 		}
+ 		col := inputRow[checkCol.Col]
+-		err := evalengine.NullsafeHashcode128(&hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
++		err := evalengine.NullsafeHashcode128(hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
+ 		if err != nil {
+ 			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
+ 				return vthash.Hash{}, err
+ 			}
+ 			checkCol = checkCol.SwitchToWeightString()
+ 			pt.checkCols[i] = checkCol
+-			err = evalengine.NullsafeHashcode128(&hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
++			err = evalengine.NullsafeHashcode128(hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
+ 			if err != nil {
+ 				return vthash.Hash{}, err
+ 			}
+@@ -91,11 +94,12 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error)
+ 	return hasher.Sum128(), nil
+ }
+ 
+-func newProbeTable(checkCols []CheckCol, collationEnv *collations.Environment) *probeTable {
++// newProbeTable returns a probe table sized for sizeHint distinct rows.
++func newProbeTable(checkCols []CheckCol, collationEnv *collations.Environment, sizeHint int) *probeTable {
+ 	cols := make([]CheckCol, len(checkCols))
+ 	copy(cols, checkCols)
+ 	return &probeTable{
+-		seenRows:     make(map[vthash.Hash]struct{}),
++		seenRows:     make(map[vthash.Hash]struct{}, sizeHint),
+ 		checkCols:    cols,
+ 		collationEnv: collationEnv,
+ 	}
+@@ -113,7 +117,7 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
+ 		InsertID: input.InsertID,
+ 	}
+ 
+-	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
++	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv(), len(input.Rows))
+ 
+ 	for _, row := range input.Rows {
+ 		appendRow, err := pt.exists(row)
+@@ -134,7 +138,7 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
+ func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+ 	var mu sync.Mutex
+ 
+-	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
++	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv(), 0)
+ 	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
+ 		result := &sqltypes.Result{
+ 			Fields:   input.Fields,
+diff --git a/go/vt/vtgate/engine/fake_vcursor_test.go b/go/vt/vtgate/engine/fake_vcursor_test.go
+index d7910d7..01189e8 100644
+--- a/go/vt/vtgate/engine/fake_vcursor_test.go
++++ b/go/vt/vtgate/engine/fake_vcursor_test.go
+@@ -327,7 +327,7 @@ func (t *noopVCursor) SetSysVar(name string, expr string) {
+ }
+ 
+ func (t *noopVCursor) InReservedConn() bool {
+-	panic("implement me")
++	return false
+ }
+ 
+ func (t *noopVCursor) ShardSession() []*srvtopo.ResolvedShard {
+diff --git a/go/vt/vtgate/engine/join.go b/go/vt/vtgate/engine/join.go
+index 39b38d8..1a7b4fc 100644
+--- a/go/vt/vtgate/engine/join.go
++++ b/go/vt/vtgate/engine/join.go
+@@ -27,6 +27,7 @@ import (
+ 
+ 	"vitess.io/vitess/go/sqltypes"
+ 	querypb "vitess.io/vitess/go/vt/proto/query"
++	"vitess.io/vitess/go/vt/vterrors"
+ )
+ 
+ var _ Primitive = (*Join)(nil)
+@@ -72,6 +73,9 @@ func (jn *Join) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
+ 		result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
+ 		return result, nil
+ 	}
++	if canRunJoinRHSConcurrently(vcursor, len(lresult.Rows)) {
++		return jn.executeRHSConcurrently(ctx, vcursor, bindVars, wantfields, lresult)
++	}
+ 	for _, lrow := range lresult.Rows {
+ 		for k, col := range jn.Vars {
+ 			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
+@@ -303,6 +307,101 @@ func (jn *Join) NeedsTransaction() bool {
+ 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()
+ }
+ 
++// JoinRHSConcurrency is the maximum number of right-hand side executions that
++// a nested-loop Join runs at the same time for one query. The right-hand side
++// runs once per left-hand side row; running those executions one after the
++// other makes the query latency grow linearly with the number of LHS rows.
++// 1 disables concurrent execution.
++var JoinRHSConcurrency = 8
++
++// canRunJoinRHSConcurrently reports whether the RHS executions of a join can
++// run concurrently. Queries inside a transaction or on a reserved connection
++// must run one at a time on their shard connections.
++func canRunJoinRHSConcurrently(vcursor VCursor, lhsRows int) bool {
++	if JoinRHSConcurrency <= 1 || lhsRows <= 1 {
++		return false
++	}
++	session := vcursor.Session()
++	return !session.InTransaction() && !session.InReservedConn()
++}
++
++// executeRHSConcurrently is the concurrent version of the nested loop in
++// TryExecute: it runs the RHS for every LHS row with up to JoinRHSConcurrency
++// executions at a time, then assembles the output in LHS row order.
++func (jn *Join) executeRHSConcurrently(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, lresult *sqltypes.Result) (*sqltypes.Result, error) {
++	ctx, cancel := context.WithCancel(ctx)
++	defer cancel()
++
++	rresults := make([]*sqltypes.Result, len(lresult.Rows))
++	var (
++		wg       sync.WaitGroup
++		errOnce  sync.Once
++		firstErr error
++		rowCount atomic.Int64
++	)
++	sem := make(chan struct{}, JoinRHSConcurrency)
++	for i, lrow := range lresult.Rows {
++		select {
++		case sem <- struct{}{}:
++		case <-ctx.Done():
++		}
++		if ctx.Err() != nil {
++			break
++		}
++		joinVars := make(map[string]*querypb.BindVariable, len(jn.Vars))
++		for k, col := range jn.Vars {
++			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
++		}
++		vars := combineVars(bindVars, joinVars)
++		// Only the first RHS execution needs to return the fields.
++		wantRHSFields := wantfields && i == 0
++		wg.Go(func() {
++			defer func() { <-sem }()
++			rresult, err := vcursor.ExecutePrimitive(ctx, jn.Right, vars, wantRHSFields)
++			if err == nil && vcursor.ExceedsMaxMemoryRows(int(rowCount.Add(int64(len(rresult.Rows))))) {
++				err = fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
++			}
++			if err != nil {
++				errOnce.Do(func() {
++					firstErr = err
++					cancel()
++				})
++				return
++			}
++			rresults[i] = rresult
++		})
++	}
++	wg.Wait()
++	if firstErr != nil {
++		return nil, firstErr
++	}
++
++	result := &sqltypes.Result{}
++	for i, lrow := range lresult.Rows {
++		rresult := rresults[i]
++		if rresult == nil {
++			// the loop above stopped early because the context was canceled
++			if err := context.Cause(ctx); err != nil {
++				return nil, err
++			}
++			return nil, vterrors.VT13001("missing join RHS result")
++		}
++		if wantfields && i == 0 {
++			result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
++		}
++		for _, rrow := range rresult.Rows {
++			result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
++		}
++		if jn.Opcode == LeftJoin && len(rresult.Rows) == 0 {
++			result.Rows = append(result.Rows, joinRows(lrow, nil, jn.Cols))
++		}
++		if vcursor.ExceedsMaxMemoryRows(len(result.Rows)) {
++			return nil, fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
++		}
++	}
++	return result, nil
++}
++
+ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+ 	out := make(map[string]*querypb.BindVariable)
+ 	maps.Copy(out, bv1)
+diff --git a/go/vt/vtgate/engine/join_concurrent_test.go b/go/vt/vtgate/engine/join_concurrent_test.go
+new file mode 100644
+index 0000000..3368541
+--- /dev/null
++++ b/go/vt/vtgate/engine/join_concurrent_test.go
+@@ -0,0 +1,206 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package engine
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"strconv"
++	"sync"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++func init() {
++	// The fakePrimitive used by most join tests hands out its results in call
++	// order and is not safe for concurrent use. Tests that exercise concurrent
++	// RHS execution set JoinRHSConcurrency themselves.
++	JoinRHSConcurrency = 1
++}
++
++func setJoinRHSConcurrency(t *testing.T, n int) {
++	old := JoinRHSConcurrency
++	JoinRHSConcurrency = n
++	t.Cleanup(func() { JoinRHSConcurrency = old })
++}
++
++// bindVarRHS is a join RHS whose result depends only on the "bv" bind variable,
++// so it returns the same results in any execution order. It returns "bv"
++// times one row, or an error for bv == failOn. Every execution waits until
++// waitFor executions are in flight at once (or until the context is done), so
++// a test using it only finishes quickly if the join runs its RHS concurrently.
++type bindVarRHS struct {
++	fakePrimitive
++	waitFor int
++	failOn  int64
++
++	mu       sync.Mutex
++	inFlight int
++	maxSeen  int
++	arrived  chan struct{}
++	closed   bool
++	calls    atomic.Int64
++}
++
++func newBindVarRHS(waitFor int) *bindVarRHS {
++	return &bindVarRHS{waitFor: waitFor, failOn: -1, arrived: make(chan struct{})}
++}
++
++var bindVarRHSFields = sqltypes.MakeTestFields("rcol", "int64")
++
++func (f *bindVarRHS) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
++	f.calls.Add(1)
++	f.mu.Lock()
++	f.inFlight++
++	f.maxSeen = max(f.maxSeen, f.inFlight)
++	if f.inFlight == f.waitFor && !f.closed {
++		close(f.arrived)
++		f.closed = true
++	}
++	f.mu.Unlock()
++	defer func() {
++		f.mu.Lock()
++		f.inFlight--
++		f.mu.Unlock()
++	}()
++
++	if f.waitFor > 1 {
++		select {
++		case <-f.arrived:
++		case <-ctx.Done():
++			return nil, ctx.Err()
++		case <-time.After(30 * time.Second):
++			return nil, errors.New("RHS executions did not run concurrently")
++		}
++	}
++
++	n, err := strconv.ParseInt(string(bindVars["bv"].Value), 10, 64)
++	if err != nil {
++		return nil, err
++	}
++	if n == f.failOn {
++		return nil, fmt.Errorf("rhs failed for %d", n)
++	}
++	result := &sqltypes.Result{}
++	if wantfields {
++		result.Fields = bindVarRHSFields
++	}
++	for i := range n {
++		result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(n*10 + i)})
++	}
++	return result, nil
++}
++
++func joinConcurrentLHS(n int) *fakePrimitive {
++	var rows []string
++	for i := range n {
++		rows = append(rows, strconv.Itoa(i))
++	}
++	return &fakePrimitive{
++		results: []*sqltypes.Result{
++			sqltypes.MakeTestResult(sqltypes.MakeTestFields("lcol", "int64"), rows...),
++		},
++	}
++}
++
++func TestJoinExecuteConcurrentRHS(t *testing.T) {
++	setJoinRHSConcurrency(t, 4)
++	for _, opcode := range []JoinOpcode{InnerJoin, LeftJoin} {
++		t.Run(opcode.String(), func(t *testing.T) {
++			rhs := newBindVarRHS(4)
++			jn := &Join{
++				Opcode: opcode,
++				Left:   joinConcurrentLHS(6),
++				Right:  rhs,
++				Cols:   []int{-1, 1},
++				Vars:   map[string]int{"bv": 0},
++			}
++			r, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
++			require.NoError(t, err)
++			assert.EqualValues(t, 6, rhs.calls.Load())
++			assert.Equal(t, 4, rhs.maxSeen, "RHS executions should run concurrently, up to JoinRHSConcurrency")
++
++			// the output keeps the LHS row order
++			want := []string{}
++			if opcode == LeftJoin {
++				want = append(want, "0|null")
++			}
++			for l := 1; l < 6; l++ {
++				for i := range l {
++					want = append(want, fmt.Sprintf("%d|%d", l, l*10+i))
++				}
++			}
++			expectResult(t, r, sqltypes.MakeTestResult(sqltypes.MakeTestFields("lcol|rcol", "int64|int64"), want...))
++		})
++	}
++}
++
++func TestJoinExecuteConcurrentRHSError(t *testing.T) {
++	setJoinRHSConcurrency(t, 4)
++	rhs := newBindVarRHS(1)
++	rhs.failOn = 3
++	jn := &Join{
++		Opcode: InnerJoin,
++		Left:   joinConcurrentLHS(10),
++		Right:  rhs,
++		Cols:   []int{-1, 1},
++		Vars:   map[string]int{"bv": 0},
++	}
++	_, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
++	require.ErrorContains(t, err, "rhs failed for 3")
++}
++
++func TestJoinExecuteConcurrentRHSMaxMemoryRows(t *testing.T) {
++	setJoinRHSConcurrency(t, 4)
++	saveMax := testMaxMemoryRows
++	testMaxMemoryRows = 5
++	t.Cleanup(func() { testMaxMemoryRows = saveMax })
++
++	jn := &Join{
++		Opcode: InnerJoin,
++		Left:   joinConcurrentLHS(10),
++		Right:  newBindVarRHS(1),
++		Cols:   []int{-1, 1},
++		Vars:   map[string]int{"bv": 0},
++	}
++	_, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
++	require.ErrorContains(t, err, "in-memory row count exceeded allowed limit of 5")
++}
++
++func TestJoinExecuteSequentialInTransaction(t *testing.T) {
++	setJoinRHSConcurrency(t, 4)
++	rhs := newBindVarRHS(1)
++	jn := &Join{
++		Opcode: InnerJoin,
++		Left:   joinConcurrentLHS(6),
++		Right:  rhs,
++		Cols:   []int{-1, 1},
++		Vars:   map[string]int{"bv": 0},
++	}
++	_, err := jn.TryExecute(t.Context(), &noopVCursor{inTx: true}, map[string]*querypb.BindVariable{}, true)
++	require.NoError(t, err)
++	assert.EqualValues(t, 6, rhs.calls.Load())
++	assert.Equal(t, 1, rhs.maxSeen, "RHS executions inside a transaction must not run concurrently")
++}
+diff --git a/go/vt/vtgate/evalengine/api_compare.go b/go/vt/vtgate/evalengine/api_compare.go
+index 70629cc..0c9a888 100644
+--- a/go/vt/vtgate/evalengine/api_compare.go
++++ b/go/vt/vtgate/evalengine/api_compare.go
+@@ -305,11 +305,89 @@ func (cmp Comparison) SortResult(out *sqltypes.Result) (err error) {
+ }
+ 
+ func (cmp Comparison) Sort(out []sqltypes.Row) {
++	if cmp.mergeRuns(out) {
++		return
++	}
+ 	slices.SortFunc(out, func(a, b sqltypes.Row) int {
+ 		return cmp.Compare(a, b)
+ 	})
+ }
+ 
++// maxMergeRuns is the largest number of ascending runs for which Sort merges
++// the runs instead of sorting from scratch.
++const maxMergeRuns = 64
++
++// mergeRuns sorts out if it consists of at most maxMergeRuns ascending runs,
++// and reports whether it did. A scatter query with an ORDER BY returns rows
++// that are already sorted within each shard, and the shard results are
++// concatenated, so the input usually has one run per shard. Merging k runs
++// takes n-1 comparisons to find them plus about n*log2(k) comparisons to merge,
++// instead of about n*log2(n) for a full sort. The merge is stable. Random input
++// is detected after about 2*maxMergeRuns comparisons.
++func (cmp Comparison) mergeRuns(out []sqltypes.Row) bool {
++	n := len(out)
++	if n < 2 {
++		return true
++	}
++	var boundsBuf [maxMergeRuns + 1]int
++	bounds := append(boundsBuf[:0], 0)
++	for i := 1; i < n; i++ {
++		if cmp.Compare(out[i-1], out[i]) > 0 {
++			if len(bounds) == maxMergeRuns {
++				return false
++			}
++			bounds = append(bounds, i)
++		}
++	}
++	if len(bounds) == 1 {
++		// already sorted
++		return true
++	}
++	bounds = append(bounds, n)
++
++	src, dst := out, make([]sqltypes.Row, n)
++	for len(bounds) > 2 {
++		next := 0
++		for i := 0; i+1 < len(bounds); i += 2 {
++			lo, mid := bounds[i], bounds[i+1]
++			if i+2 < len(bounds) {
++				hi := bounds[i+2]
++				cmp.merge(dst[lo:hi], src[lo:mid], src[mid:hi])
++			} else {
++				copy(dst[lo:mid], src[lo:mid])
++			}
++			// bounds is rewritten in place: every pass keeps every other boundary.
++			bounds[next] = lo
++			next++
++		}
++		bounds[next] = n
++		bounds = bounds[:next+1]
++		src, dst = dst, src
++	}
++	if &src[0] != &out[0] {
++		copy(out, src)
++	}
++	return true
++}
++
++// merge merges the sorted slices a and b into dst, which must have room for
++// len(a)+len(b) rows. Rows from a come first among equal rows.
++func (cmp Comparison) merge(dst, a, b []sqltypes.Row) {
++	i, j, k := 0, 0, 0
++	for i < len(a) && j < len(b) {
++		if cmp.Compare(b[j], a[i]) < 0 {
++			dst[k] = b[j]
++			j++
++		} else {
++			dst[k] = a[i]
++			i++
++		}
++		k++
++	}
++	k += copy(dst[k:], a[i:])
++	copy(dst[k:], b[j:])
++}
++
+ type Sorter struct {
+ 	Compare Comparison
+ 	Limit   int
+diff --git a/go/vt/vtgate/evalengine/api_compare_runs_test.go b/go/vt/vtgate/evalengine/api_compare_runs_test.go
+new file mode 100644
+index 0000000..ae50400
+--- /dev/null
++++ b/go/vt/vtgate/evalengine/api_compare_runs_test.go
+@@ -0,0 +1,114 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package evalengine
++
++import (
++	"fmt"
++	"math/rand/v2"
++	"slices"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/sqltypes"
++)
++
++// runsInput returns n rows split into k runs, each sorted by cmp. Column 0 has
++// many duplicates, column 1 is the row's position in the input.
++func runsInput(r *rand.Rand, cmp Comparison, n, k int) []sqltypes.Row {
++	rows := make([]sqltypes.Row, n)
++	for i := range rows {
++		rows[i] = sqltypes.Row{sqltypes.NewInt64(r.Int64N(int64(n/4 + 1)))}
++	}
++	for run := range k {
++		lo, hi := run*n/k, (run+1)*n/k
++		slices.SortFunc(rows[lo:hi], func(a, b sqltypes.Row) int { return cmp.Compare(a, b) })
++	}
++	for i := range rows {
++		rows[i] = append(rows[i], sqltypes.NewInt64(int64(i)))
++	}
++	return rows
++}
++
++func TestSortMergesSortedRuns(t *testing.T) {
++	r := rand.New(rand.NewPCG(1, 2))
++	for _, desc := range []bool{false, true} {
++		cmp := Comparison{{Col: 0, WeightStringCol: -1, Desc: desc, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
++		for _, n := range []int{0, 1, 2, 3, 10, 1000} {
++			for _, k := range []int{1, 2, 3, 4, 7, maxMergeRuns, maxMergeRuns + 1, 200} {
++				if k > max(n, 1) {
++					continue
++				}
++				t.Run(fmt.Sprintf("desc=%v/n=%d/k=%d", desc, n, k), func(t *testing.T) {
++					rows := runsInput(r, cmp, n, max(k, 1))
++					want := slices.Clone(rows)
++					slices.SortStableFunc(want, func(a, b sqltypes.Row) int { return cmp.Compare(a, b) })
++
++					merged := k <= maxMergeRuns
++					got := slices.Clone(rows)
++					assert.Equal(t, merged, cmp.mergeRuns(got), "mergeRuns should only handle up to %d runs", maxMergeRuns)
++
++					got = slices.Clone(rows)
++					cmp.Sort(got)
++					require.Len(t, got, len(want))
++					for i := range want {
++						if merged {
++							// the merge is stable: equal keys keep their input order
++							require.Equal(t, want[i], got[i], "row %d", i)
++						} else {
++							require.Zero(t, cmp.Compare(want[i], got[i]), "row %d", i)
++						}
++					}
++				})
++			}
++		}
++	}
++}
++
++func TestSortRandomInputFallsBack(t *testing.T) {
++	r := rand.New(rand.NewPCG(3, 4))
++	cmp := Comparison{{Col: 0, WeightStringCol: -1, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
++	rows := make([]sqltypes.Row, 10000)
++	for i := range rows {
++		rows[i] = sqltypes.Row{sqltypes.NewInt64(r.Int64())}
++	}
++	assert.False(t, cmp.mergeRuns(slices.Clone(rows)))
++	cmp.Sort(rows)
++	assert.True(t, slices.IsSortedFunc(rows, func(a, b sqltypes.Row) int { return cmp.Compare(a, b) }))
++}
++
++func BenchmarkSortShardRuns(b *testing.B) {
++	cmp := Comparison{{Col: 0, WeightStringCol: -1, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
++	for _, k := range []int{2, 4, 16} {
++		rows := runsInput(rand.New(rand.NewPCG(5, 6)), cmp, 10000, k)
++		work := make([]sqltypes.Row, len(rows))
++		b.Run(fmt.Sprintf("runs=%d/merge", k), func(b *testing.B) {
++			for b.Loop() {
++				copy(work, rows)
++				cmp.Sort(work)
++			}
++		})
++		b.Run(fmt.Sprintf("runs=%d/pdqsort", k), func(b *testing.B) {
++			for b.Loop() {
++				copy(work, rows)
++				slices.SortFunc(work, func(a, b sqltypes.Row) int { return cmp.Compare(a, b) })
++			}
++		})
++	}
++}
+diff --git a/go/vt/vtgate/vtgate.go b/go/vt/vtgate/vtgate.go
+index c8ab73a..f837320 100644
+--- a/go/vt/vtgate/vtgate.go
++++ b/go/vt/vtgate/vtgate.go
+@@ -60,6 +60,7 @@ import (
+ 	"vitess.io/vitess/go/vt/vtenv"
+ 	"vitess.io/vitess/go/vt/vterrors"
+ 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
++	"vitess.io/vitess/go/vt/vtgate/engine"
+ 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+ 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+ 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
+@@ -197,6 +198,7 @@ func registerFlags(fs *pflag.FlagSet) {
+ 	utils.SetFlagIntVar(fs, &streamBufferSize, "stream-buffer-size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
+ 	utils.SetFlagInt64Var(fs, &queryPlanCacheMemory, "gate-query-cache-memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+ 	utils.SetFlagIntVar(fs, &maxMemoryRows, "max-memory-rows", maxMemoryRows, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
++	utils.SetFlagIntVar(fs, &engine.JoinRHSConcurrency, "join-rhs-concurrency", engine.JoinRHSConcurrency, "Maximum number of right-hand side queries that a vtgate nested-loop join runs at the same time for one query, outside transactions and reserved connections. 1 runs them one at a time.")
+ 	utils.SetFlagIntVar(fs, &warnMemoryRows, "warn-memory-rows", warnMemoryRows, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
+ 	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
+ 	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
+diff --git a/perf-findings/harness/P3/ab.sh b/perf-findings/harness/P3/ab.sh
+new file mode 100755
+index 0000000..a3ddbfe
+--- /dev/null
++++ b/perf-findings/harness/P3/ab.sh
+@@ -0,0 +1,29 @@
++#!/bin/bash
++# ab.sh ROUNDS "SHAPES" CFG1 CFG2 [CFG3...]
++#   SHAPES: space separated names from suite.sh's table (regex anchors added), e.g. "big10k_olap grp_high10k"
++#   CFGn:   path to a shell snippet that sets BIN / GATE_ENV / TABLET_ENV / VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS
++# For every round and config: restart vtgate+vttablets with that config, warm up, run each shape for $TIME (default 15s).
++set -u
++ROUNDS=$1; SHAPES=$2; shift 2
++TIME=${TIME:-15}
++THR=${THR:-8}
++filter="^($(echo "$SHAPES" | tr ' ' '|'))$"
++for r in $(seq "${FIRST_ROUND:-1}" "$ROUNDS"); do
++  for cfg in "$@"; do
++    name=$(basename "$cfg" .cfg)
++    (
++      unset BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      # shellcheck disable=SC1090
++      source "$cfg"
++      export BIN GATE_ENV TABLET_ENV VTGATE_EXTRA_FLAGS VTTABLET_EXTRA_FLAGS
++      # retry: a listener port can collide with an ephemeral port of another connection
++      for _ in 1 2 3; do
++        /home/vt/perf/P3/c.sh restart >/dev/null 2>&1
++        mysql -h 127.0.0.1 -P 40003 -u root -e 'select 1' sbtest >/dev/null 2>&1 && break
++        echo "restart failed, retrying" >&2
++      done
++    )
++    /home/vt/perf/P3/bench.sh warm 8 4 krange --width=100 >/dev/null 2>&1
++    /home/vt/perf/P3/suite.sh "r$r-$name" "$THR" "$TIME" "$filter"
++  done
++done
+diff --git a/perf-findings/harness/P3/agg.py b/perf-findings/harness/P3/agg.py
+new file mode 100644
+index 0000000..8ea38ec
+--- /dev/null
++++ b/perf-findings/harness/P3/agg.py
+@@ -0,0 +1,41 @@
++#!/usr/bin/env python3
++"""Aggregate bench.sh lines from ab.sh output files: mean (and min..max) per config/mode/threads."""
++import re
++import sys
++from collections import defaultdict
++
++rows = defaultdict(list)
++order = []
++for path in sys.argv[1:]:
++    for line in open(path):
++        m = re.match(r'(r\d+-)?(\S+)\s+(\S+)\s+thr=(\d+)\s+qps=(\S+)\s+avg=(\S+)\s+p95=(\S+)\s+p99=(\S+)\s+vtgate=(\d+) tablets=(\d+) mysqld=(\d+) load=(\S+)', line)
++        if not m:
++            continue
++        cfg, mode, thr = m.group(2), m.group(3), int(m.group(4))
++        vals = [float(m.group(i)) for i in range(5, 13)]
++        key = (mode, thr, cfg)
++        if key not in rows:
++            order.append(key)
++        rows[key].append(vals)
++
++names = ['qps', 'avg', 'p95', 'p99', 'vtgate', 'tablets', 'mysqld', 'load']
++base = {}
++print(f"| shape | thr | config | n | QPS | avg ms | p95 ms | p99 ms | vtgate µs/q | tablets µs/q | mysqld µs/q | load |")
++print("|---|---|---|---|---|---|---|---|---|---|---|---|")
++for key in sorted(order, key=lambda k: (k[0], k[1], order.index(k))):
++    v = rows[key]
++    n = len(v)
++    mean = [sum(x[i] for x in v) / n for i in range(8)]
++    lo = [min(x[i] for x in v) for i in range(8)]
++    hi = [max(x[i] for x in v) for i in range(8)]
++    mode, thr, cfg = key
++    if (mode, thr) not in base:
++        base[(mode, thr)] = mean
++    b = base[(mode, thr)]
++
++    def fmt(i, prec):
++        s = f"{mean[i]:.{prec}f}"
++        if b is not mean and b[i]:
++            s += f" ({(mean[i] / b[i] - 1) * 100:+.1f}%)"
++        return s + f" [{lo[i]:.{prec}f}–{hi[i]:.{prec}f}]" if i in (4, 5) else s
++    print(f"| {mode} | {thr} | {cfg} | {n} | {fmt(0,0)} | {fmt(1,2)} | {fmt(2,2)} | {fmt(3,2)} | {fmt(4,0)} | {fmt(5,0)} | {fmt(6,0)} | {mean[7]:.1f} |")
+diff --git a/perf-findings/harness/P3/bench.sh b/perf-findings/harness/P3/bench.sh
+new file mode 100755
+index 0000000..9f23fd7
+--- /dev/null
++++ b/perf-findings/harness/P3/bench.sh
+@@ -0,0 +1,34 @@
++#!/bin/bash
++# bench.sh LABEL THREADS TIME SHAPE [extra sysbench args...]
++#   SHAPE: a p3.lua shape name (text protocol), or sb:<builtin> for a built-in sysbench test (e.g. sb:oltp_read_only)
++# Prints one line: label shape threads qps avg p95 p99 cpu_us/query per process (vtgate, tablets sum, mysqld sum) + load
++set -u
++LABEL=$1; THREADS=$2; TIME=$3; SHAPE=$4; shift 4
++C=/home/vt/perf/P3/c.sh
++if [[ $SHAPE == sb:* ]]; then
++  TEST=${SHAPE#sb:}
++else
++  TEST="/home/vt/perf/P3/lua/p3.lua --shape=$SHAPE"
++fi
++before=$($C cpu)
++# shellcheck disable=SC2086
++out=$($C sb $TEST --threads="$THREADS" --time="$TIME" --histogram=on --report-interval=0 "$@" run 2>&1)
++after=$($C cpu)
++load=$(cut -d' ' -f1 /proc/loadavg)
++q=$(echo "$out" | awk '/queries:/ && /per sec/ {gsub(/[()]/,""); print $2; exit}')
++qps=$(echo "$out" | awk '/queries:/ && /per sec/ {gsub(/[()]/,""); print $3; exit}')
++avg=$(echo "$out" | awk '/avg:/ {print $2; exit}')
++errs=$(echo "$out" | awk '/ignored errors:/ {print $3; exit}')
++if [[ -z $q ]]; then echo "$LABEL $SHAPE FAILED: $(echo "$out" | grep -iE 'error|fatal' | head -3)"; exit 1; fi
++pcts=$(echo "$out" | awk '
++  /Latency histogram/ {h=1; next}
++  h && /\|/ { v=$1; c=$NF; if (c ~ /^[0-9]+$/) { vals[n]=v; cnt[n]=c; tot+=c; n++ } }
++  h && /^$/ && n>0 {h=0}
++  END { s=0; p95=""; p99="";
++        for (i=0;i<n;i++){ s+=cnt[i]; if (p95=="" && s>=0.95*tot) p95=vals[i]; if (p99=="" && s>=0.99*tot) p99=vals[i]; }
++        if (p95=="") p95="0"; if (p99=="") p99=vals[n-1]; if (p99=="") p99="0";
++        printf "%s %s", p95, p99 }')
++cpu=$(paste <(echo "$before") <(echo "$after") | awk -v q="$q" '
++  { d=($4-$2)*1e6/q; if ($1 ~ /^vtgate/) g=d; else if ($1 ~ /^vttablet/) t+=d; else if ($1 ~ /^mysqld/) m+=d }
++  END { printf "vtgate=%.0f tablets=%.0f mysqld=%.0f", g, t, m }')
++printf "%-14s %-14s thr=%-3s qps=%-9s avg=%-7s p95=%-7s p99=%-7s %s load=%s\n" "$LABEL" "$SHAPE" "$THREADS" "$qps" "$avg" $pcts "$cpu" "$load"
+diff --git a/perf-findings/harness/P3/c.sh b/perf-findings/harness/P3/c.sh
+new file mode 100755
+index 0000000..3954c25
+--- /dev/null
++++ b/perf-findings/harness/P3/c.sh
+@@ -0,0 +1,3 @@
++#!/bin/bash
++# wrapper: run cluster.sh as vt with P3 settings.
++exec runuser -u vt -- env BASE=40000 HOME=/home/vt BIN="${BIN:-/home/vt/bin}" SHARDS="${SHARDS:--40 40-80 80-c0 c0-}" TABLE_SIZE="${TABLE_SIZE:-250000}" VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" GATE_ENV="${GATE_ENV:-}" TABLET_ENV="${TABLET_ENV:-}" /home/vt/perf/P3/cluster.sh "$@"
+diff --git a/perf-findings/harness/P3/cluster.sh b/perf-findings/harness/P3/cluster.sh
+new file mode 100755
+index 0000000..13dfc20
+--- /dev/null
++++ b/perf-findings/harness/P3/cluster.sh
+@@ -0,0 +1,275 @@
++#!/bin/bash
++# Local Vitess cluster for performance profiling.
++#
++# Usage (run as the unprivileged `vt` user, e.g. `runuser -u vt -- env BASE=20000 ./cluster.sh up`):
++#   cluster.sh up        start etcd, vtctld, mysqld+vttablet per tablet, vtgate; elect primaries; load schema/vschema
++#   cluster.sh down      stop everything and delete the data dir
++#   cluster.sh status    show processes and tablets
++#   cluster.sh env       print the ports of this cluster
++#   cluster.sh prepare   (re)load sysbench data through vtgate: TABLES tables x TABLE_SIZE rows (default 100000)
++#   cluster.sh cpu       print cumulative CPU seconds (user+sys) per process: vtgate, vttablet_<uid>, mysqld_<uid>
++#                        (diff two snapshots around a run to get CPU per query)
++#   cluster.sh sb ARGS   run sysbench against vtgate with the right connection flags, e.g.
++#                        cluster.sh sb oltp_point_select --threads=8 --time=30 run
++#
++# Environment:
++#   BASE      port base (default 20000). Use different bases (20000, 30000) for concurrent clusters.
++#   NAME      cluster name / data dir suffix (default c$BASE)
++#   KEYSPACE  keyspace name (default sbtest)
++#   SHARDS    space separated shard list (default "-80 80-"; use "0" for unsharded)
++#   REPLICAS  replicas per shard in addition to the primary (default 0)
++#   TABLES    number of sysbench tables to declare in the vschema (default 4)
++#   VTGATE_EXTRA_FLAGS / VTTABLET_EXTRA_FLAGS  extra flags
++#   BIN       directory with the Vitess binaries (default /home/vt/bin)
++#
++# Ports (relative to BASE): etcd +10/+11, vtctld web +20 grpc +21, vtgate web +1 grpc +2 mysql +3,
++# tablet i (0-based): web +100+i, grpc +200+i, mysqld +400+i.
++# pprof is available at http://localhost:<web port>/debug/pprof/ on vtgate and every vttablet.
++
++set -euo pipefail
++
++BASE=${BASE:-20000}
++NAME=${NAME:-c$BASE}
++KEYSPACE=${KEYSPACE:-sbtest}
++SHARDS=${SHARDS:-"-80 80-"}
++REPLICAS=${REPLICAS:-0}
++TABLES=${TABLES:-4}
++BIN=${BIN:-/home/vt/bin}
++CELL=zone1
++export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}
++export PATH="$BIN:/usr/sbin:$PATH"
++export VT_MYSQL_ROOT=/usr
++
++ETCD_PORT=$((BASE + 10))
++ETCD_PEER=$((BASE + 11))
++VTCTLD_WEB=$((BASE + 20))
++VTCTLD_GRPC=$((BASE + 21))
++VTGATE_WEB=$((BASE + 1))
++VTGATE_GRPC=$((BASE + 2))
++VTGATE_MYSQL=$((BASE + 3))
++TOPO="--topo-implementation etcd2 --topo-global-server-address localhost:$ETCD_PORT --topo-global-root /vitess/global"
++LOGDIR=$VTDATAROOT/logs
++
++vtctldclient() { command vtctldclient --server "localhost:$VTCTLD_GRPC" "$@"; }
++
++wait_http() {
++  for _ in $(seq 1 600); do
++    curl -sf "http://localhost:$1/debug/status" >/dev/null 2>&1 && return 0
++    sleep 0.2
++  done
++  echo "timeout waiting for http port $1" >&2
++  return 1
++}
++
++# tablet index -> uid; uids are unique per cluster (VTDATAROOT is per cluster).
++tablet_uid() { echo $((100 + $1)); }
++
++write_mycnf() {
++  cat >"$VTDATAROOT/extra.cnf" <<'EOF'
++innodb_buffer_pool_size = 512M
++innodb_flush_log_at_trx_commit = 2
++sync_binlog = 0
++innodb_log_file_size = 256M
++max_connections = 2000
++performance_schema = OFF
++EOF
++}
++
++start_tablets() {
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid alias; uid=$(tablet_uid $i); printf -v alias '%s-%010d' "$CELL" "$uid"
++      env ${TABLET_ENV:-} vttablet $TOPO --tablet-path "$alias" --tablet-hostname localhost --init-keyspace "$KEYSPACE" --init-shard "$shard" \
++        --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file \
++        --file-backup-storage-root "$VTDATAROOT/backups" --port $((BASE + 100 + i)) --grpc-port $((BASE + 200 + i)) \
++        --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
++        --pid-file "$VTDATAROOT/vt_$(printf '%010d' "$uid")/vttablet.pid" \
++        --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore \
++        --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 \
++        ${VTTABLET_EXTRA_FLAGS:-} >"$LOGDIR/vttablet_$uid.log" 2>&1 &
++      i=$((i + 1))
++    done
++  done
++  i=0
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do wait_http $((BASE + 100 + i)); i=$((i + 1)); done
++  done
++
++}
++
++start_vtgate() {
++  env ${GATE_ENV:-} vtgate $TOPO --cell "$CELL" --cells-to-watch "$CELL" --tablet-types-to-wait PRIMARY,REPLICA \
++    --port "$VTGATE_WEB" --grpc-port "$VTGATE_GRPC" --mysql-server-port "$VTGATE_MYSQL" \
++    --mysql-server-socket-path "$VTDATAROOT/vtgate.sock" --service-map 'grpc-vtgateservice' \
++    --mysql-auth-server-impl none --pprof-http --log-format text --config-file-not-found-handling=ignore \
++    ${VTGATE_EXTRA_FLAGS:-} >"$LOGDIR/vtgate.log" 2>&1 &
++  echo $! >"$VTDATAROOT/vtgate.pid"
++  wait_http "$VTGATE_WEB"
++  for _ in $(seq 1 100); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select 1' "$KEYSPACE" >/dev/null 2>&1 && break
++    sleep 0.3
++  done
++}
++
++# restart vtgate and vttablets only (keep mysqld, topo, data); picks up BIN / *_EXTRA_FLAGS / env (GOGC, GOMAXPROCS...)
++restart() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  for _ in $(seq 1 100); do
++    local alive=0
++    for f in "$VTDATAROOT"/vt_*/vttablet.pid "$VTDATAROOT/vtgate.pid"; do [[ -f $f ]] && kill -0 "$(cat "$f")" 2>/dev/null && alive=1; done
++    [[ $alive == 0 ]] && break; sleep 0.2
++  done
++  # also stop strays whose pid file was overwritten (e.g. a start that failed to bind its port)
++  pkill -f -- "^(vttablet|vtgate) .*--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  for _ in $(seq 1 100); do
++    pgrep -f -- "^(vttablet|vtgate) .*--topo-global-server-address localhost:$ETCD_PORT" >/dev/null || break
++    sleep 0.2
++  done
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++  start_tablets
++  sleep 3
++  start_vtgate
++  for _ in $(seq 1 100); do
++    [[ $(mysql -N -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root -e 'select count(*) from sbtest1 where id in (1,2,3,4,5,6,7,8)' "$KEYSPACE" 2>/dev/null) == 8 ]] && break
++    sleep 0.3
++  done
++}
++
++up() {
++  mkdir -p "$LOGDIR" "$VTDATAROOT/backups"
++  write_mycnf
++  export EXTRA_MY_CNF=$VTDATAROOT/extra.cnf
++
++  etcd --name "$NAME" --data-dir "$VTDATAROOT/etcd" \
++    --listen-client-urls "http://localhost:$ETCD_PORT" --advertise-client-urls "http://localhost:$ETCD_PORT" \
++    --listen-peer-urls "http://localhost:$ETCD_PEER" --initial-advertise-peer-urls "http://localhost:$ETCD_PEER" \
++    --initial-cluster "$NAME=http://localhost:$ETCD_PEER" >"$LOGDIR/etcd.log" 2>&1 &
++  echo $! >"$VTDATAROOT/etcd.pid"
++  for _ in $(seq 1 100); do curl -sf "http://localhost:$ETCD_PORT/health" >/dev/null && break; sleep 0.1; done
++  command vtctldclient --server internal $TOPO AddCellInfo --root "/vitess/$CELL" --server-address "localhost:$ETCD_PORT" "$CELL" >/dev/null 2>&1 || true
++
++  vtctld $TOPO --cell "$CELL" --service-map 'grpc-vtctl,grpc-vtctld' --backup-storage-implementation file \
++    --file-backup-storage-root "$VTDATAROOT/backups" --port "$VTCTLD_WEB" --grpc-port "$VTCTLD_GRPC" \
++    --log-format text --config-file-not-found-handling=ignore >"$LOGDIR/vtctld.log" 2>&1 &
++  wait_http "$VTCTLD_WEB"
++
++  vtctldclient CreateKeyspace --durability-policy=none "$KEYSPACE" >/dev/null 2>&1 || true
++
++  local i=0 pids=()
++  for shard in $SHARDS; do
++    for r in $(seq 0 "$REPLICAS"); do
++      local uid; uid=$(tablet_uid $i)
++      mysqlctl --tablet-uid "$uid" --mysql-port $((BASE + 400 + i)) --log-format text \
++        --config-file-not-found-handling=ignore init >"$LOGDIR/mysqlctl_$uid.log" 2>&1 &
++      pids+=($!)
++      i=$((i + 1))
++    done
++  done
++  for p in "${pids[@]}"; do wait "$p"; done
++
++  start_tablets
++
++  # Elect the first tablet of every shard as primary.
++  i=0
++  for shard in $SHARDS; do
++    local alias; printf -v alias '%s-%010d' "$CELL" "$(tablet_uid $i)"
++    vtctldclient PlannedReparentShard "$KEYSPACE/$shard" --new-primary "$alias" >/dev/null
++    i=$((i + REPLICAS + 1))
++  done
++
++  load_schema
++
++  start_vtgate
++  env_info
++}
++
++load_schema() {
++  local sql="" vs_tables=""
++  for t in $(seq 1 "$TABLES"); do
++    sql+="CREATE TABLE IF NOT EXISTS sbtest$t (id INT NOT NULL, k INT NOT NULL DEFAULT 0, c CHAR(120) NOT NULL DEFAULT '', pad CHAR(60) NOT NULL DEFAULT '', PRIMARY KEY (id), KEY k_$t (k)) ENGINE=InnoDB;"
++    [[ -n $vs_tables ]] && vs_tables+=","
++    vs_tables+="\"sbtest$t\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++  done
++  vtctldclient ApplySchema --sql "$sql" "$KEYSPACE" >/dev/null
++  if [[ $SHARDS == "0" ]]; then
++    vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$KEYSPACE" >/dev/null
++  else
++    vtctldclient ApplyVSchema --vschema "{\"sharded\":true,\"vindexes\":{\"hash\":{\"type\":\"hash\"}},\"tables\":{$vs_tables}}" "$KEYSPACE" >/dev/null
++  fi
++}
++
++down() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && kill "$(cat "$VTDATAROOT/vtgate.pid")" 2>/dev/null || true
++  for f in "$VTDATAROOT"/vt_*/vttablet.pid; do [[ -f $f ]] && kill "$(cat "$f")" 2>/dev/null || true; done
++  sleep 1
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    mysqlctl --tablet-uid "$uid" --log-format text --config-file-not-found-handling=ignore shutdown >/dev/null 2>&1 || true
++  done
++  pkill -f -- "--topo-global-server-address localhost:$ETCD_PORT" 2>/dev/null || true
++  [[ -f $VTDATAROOT/etcd.pid ]] && kill "$(cat "$VTDATAROOT/etcd.pid")" 2>/dev/null || true
++  sleep 1
++  rm -rf "$VTDATAROOT"
++}
++
++env_info() {
++  cat <<EOF
++cluster $NAME (VTDATAROOT=$VTDATAROOT), keyspace $KEYSPACE shards [$SHARDS] replicas/shard $REPLICAS
++  vtgate mysql: mysql -h 127.0.0.1 -P $VTGATE_MYSQL -u root $KEYSPACE
++  vtgate web/pprof: http://localhost:$VTGATE_WEB/debug/pprof/
++  vtctldclient: vtctldclient --server localhost:$VTCTLD_GRPC
++  tablet i: web/pprof $((BASE + 100))+i, grpc $((BASE + 200))+i, mysqld $((BASE + 400))+i (socket $VTDATAROOT/vt_<uid>/mysql.sock, user vt_dba)
++EOF
++}
++
++SB_ARGS() {
++  echo "--db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=$VTGATE_MYSQL --mysql-user=root --mysql-db=$KEYSPACE --tables=$TABLES --table-size=${TABLE_SIZE:-100000} --auto_inc=off"
++}
++
++prepare() {
++  for t in $(seq 1 "$TABLES"); do
++    mysql -h 127.0.0.1 -P "$VTGATE_MYSQL" -u root "$KEYSPACE" -e "DROP TABLE IF EXISTS sbtest$t"
++  done
++  # shellcheck disable=SC2046
++  sysbench $(SB_ARGS) oltp_read_write --threads=4 prepare
++}
++
++pids() {
++  [[ -f $VTDATAROOT/vtgate.pid ]] && echo "vtgate $(cat "$VTDATAROOT/vtgate.pid")"
++  for d in "$VTDATAROOT"/vt_*; do
++    [[ -d $d ]] || continue
++    local uid=$((10#${d##*vt_}))
++    [[ -f $d/vttablet.pid ]] && echo "vttablet_$uid $(cat "$d/vttablet.pid")"
++    [[ -f $d/mysql.pid ]] && echo "mysqld_$uid $(cat "$d/mysql.pid")"
++  done
++}
++
++cpu() {
++  local tck; tck=$(getconf CLK_TCK)
++  pids | while read -r name pid; do
++    [[ -r /proc/$pid/stat ]] || continue
++    awk -v n="$name" -v t="$tck" '{ printf "%s %.2f\n", n, ($14 + $15) / t }' "/proc/$pid/stat"
++  done
++}
++
++status() {
++  env_info
++  vtctldclient GetTablets 2>/dev/null || true
++}
++
++case "${1:-}" in
++  up) up ;;
++  restart) restart ;;
++  down) down ;;
++  status) status ;;
++  env) env_info ;;
++  prepare) prepare ;;
++  pids) pids ;;
++  cpu) cpu ;;
++  sb) shift; # shellcheck disable=SC2046
++      sysbench $(SB_ARGS) "$@" ;;
++  *) echo "usage: $0 up|down|status|env" >&2; exit 2 ;;
++esac
+diff --git a/perf-findings/harness/P3/p3.lua b/perf-findings/harness/P3/p3.lua
+new file mode 100644
+index 0000000..22b621d
+--- /dev/null
++++ b/perf-findings/harness/P3/p3.lua
+@@ -0,0 +1,146 @@
++-- P3 scatter workload shapes for a sharded sbtest keyspace (hash vindex on id).
++-- Usage: sysbench ... /home/vt/perf/P3/lua/p3.lua --shape=<name> [--width=N] [--olap=on] [--ps=on] run
++--
++-- k is skewed around 125000 in sysbench data; for 110000..122000 the density is ~1 row per k value,
++-- so "k BETWEEN s AND s+W" returns ~W rows.
++
++sysbench.cmdline.options = {
++  tables = {"Number of tables", 4},
++  table_size = {"Rows per table", 250000},
++  auto_inc = {"ignored", false},
++  shape = {"Query shape", "krange"},
++  width = {"Range width / list size / rows", 100},
++  limit = {"LIMIT for *_lim shapes", 10},
++  olap = {"set workload=olap on the connection", false},
++}
++
++local shapes = {}
++
++local function tbl()
++  return sysbench.rand.uniform(1, sysbench.opt.tables)
++end
++
++local function kstart()
++  return sysbench.rand.uniform(110000, 122000 - sysbench.opt.width)
++end
++
++local function idstart()
++  return sysbench.rand.uniform(1, sysbench.opt.table_size - sysbench.opt.width)
++end
++
++-- k range scans (scatter, non-vindex column)
++shapes.krange = function()
++  local s = kstart()
++  return string.format("SELECT c FROM sbtest%d WHERE k BETWEEN %d AND %d", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.krange_ord = function()
++  local s = kstart()
++  return string.format("SELECT c FROM sbtest%d WHERE k BETWEEN %d AND %d ORDER BY k", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.krange_lim = function()
++  local s = kstart()
++  return string.format("SELECT c FROM sbtest%d WHERE k BETWEEN %d AND %d ORDER BY k LIMIT %d", tbl(), s, s + sysbench.opt.width - 1, sysbench.opt.limit)
++end
++-- id ranges (sysbench *_ranges shapes; scatter because id is hashed)
++shapes.idrange = function()
++  local s = idstart()
++  return string.format("SELECT c FROM sbtest%d WHERE id BETWEEN %d AND %d", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.idrange_ordc = function()
++  local s = idstart()
++  return string.format("SELECT c FROM sbtest%d WHERE id BETWEEN %d AND %d ORDER BY c", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.distinct_c = function()
++  local s = idstart()
++  return string.format("SELECT DISTINCT c FROM sbtest%d WHERE id BETWEEN %d AND %d ORDER BY c", tbl(), s, s + sysbench.opt.width - 1)
++end
++-- aggregations
++shapes.count = function()
++  local s = idstart()
++  return string.format("SELECT COUNT(*), SUM(k) FROM sbtest%d WHERE id BETWEEN %d AND %d", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.grp_low = function()
++  local s = idstart()
++  return string.format("SELECT k %% 100 AS g, COUNT(*), SUM(k) FROM sbtest%d WHERE id BETWEEN %d AND %d GROUP BY g", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.grp_high = function()
++  local s = idstart()
++  return string.format("SELECT k, COUNT(*) FROM sbtest%d WHERE id BETWEEN %d AND %d GROUP BY k", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.grp_c = function()
++  local s = idstart()
++  return string.format("SELECT LEFT(c, 2) AS g, COUNT(*) FROM sbtest%d WHERE id BETWEEN %d AND %d GROUP BY g", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.distinct_k = function()
++  local s = idstart()
++  return string.format("SELECT DISTINCT k FROM sbtest%d WHERE id BETWEEN %d AND %d", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.cnt_distinct = function()
++  local s = idstart()
++  return string.format("SELECT COUNT(DISTINCT k) FROM sbtest%d WHERE id BETWEEN %d AND %d", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.ord_agg_lim = function()
++  local s = idstart()
++  return string.format("SELECT k %% 1000 AS g, COUNT(*) AS cnt FROM sbtest%d WHERE id BETWEEN %d AND %d GROUP BY g ORDER BY cnt DESC, g LIMIT 10", tbl(), s, s + sysbench.opt.width - 1)
++end
++-- IN lists on the primary vindex
++shapes.inlist = function()
++  local ids = {}
++  for i = 1, sysbench.opt.width do
++    ids[i] = sysbench.rand.uniform(1, sysbench.opt.table_size)
++  end
++  return string.format("SELECT c FROM sbtest%d WHERE id IN (%s)", tbl(), table.concat(ids, ","))
++end
++-- multi-row insert spanning shards (upsert on existing ids keeps the table size constant)
++shapes.insert = function()
++  local vals = {}
++  for i = 1, sysbench.opt.width do
++    local id = sysbench.rand.uniform(1, sysbench.opt.table_size)
++    vals[i] = string.format("(%d,%d,'%s','%s')", id, sysbench.rand.uniform(1, 250000),
++      sysbench.rand.string("###########-###########-###########-###########-###########-###########-###########-###########-###########-###########"),
++      sysbench.rand.string("###########-###########-###########-###########-###########"))
++  end
++  return string.format("INSERT INTO sbtest%d (id, k, c, pad) VALUES %s ON DUPLICATE KEY UPDATE c = VALUES(c)", tbl(), table.concat(vals, ","))
++end
++-- joins
++shapes.join_x = function()
++  local s = kstart()
++  local a = tbl()
++  local b = a % sysbench.opt.tables + 1
++  return string.format("SELECT a.c, b.c FROM sbtest%d a JOIN sbtest%d b ON a.k = b.k WHERE a.k BETWEEN %d AND %d", a, b, s, s + sysbench.opt.width - 1)
++end
++shapes.join_push = function()
++  local s = kstart()
++  local a = tbl()
++  local b = a % sysbench.opt.tables + 1
++  return string.format("SELECT a.c, b.c FROM sbtest%d a JOIN sbtest%d b ON a.id = b.id WHERE a.k BETWEEN %d AND %d", a, b, s, s + sysbench.opt.width - 1)
++end
++-- large results
++shapes.big = function()
++  local s = idstart()
++  return string.format("SELECT * FROM sbtest%d WHERE id BETWEEN %d AND %d", tbl(), s, s + sysbench.opt.width - 1)
++end
++shapes.big_ord = function()
++  local s = idstart()
++  return string.format("SELECT * FROM sbtest%d WHERE id BETWEEN %d AND %d ORDER BY id", tbl(), s, s + sysbench.opt.width - 1)
++end
++
++function thread_init()
++  drv = sysbench.sql.driver()
++  con = drv:connect()
++  if sysbench.opt.olap then
++    con:query("SET workload = 'olap'")
++  end
++  gen = shapes[sysbench.opt.shape]
++  if gen == nil then
++    error("unknown shape " .. sysbench.opt.shape)
++  end
++end
++
++function thread_done()
++  con:disconnect()
++end
++
++function event()
++  con:query(gen())
++end
+diff --git a/perf-findings/harness/P3/plans.sh b/perf-findings/harness/P3/plans.sh
+new file mode 100755
+index 0000000..f179898
+--- /dev/null
++++ b/perf-findings/harness/P3/plans.sh
+@@ -0,0 +1,31 @@
++#!/bin/bash
++# plans.sh: print vtgate plans for the P3 shapes
++cat > /tmp/p3plan.py <<'EOF'
++import sys, json
++def p(n, d=0):
++    extra = " ".join(f"{k}={v}" for k, v in n.items() if k in ("Query", "Aggregates", "GroupBy", "OrderBy", "JoinVars", "Count", "JoinColumnIndexes", "Values"))
++    print("  " * d + n.get("OperatorType", "?") + " " + str(n.get("Variant", "")) + " " + extra)
++    for c in n.get("Inputs", []):
++        p(c, d + 1)
++p(json.loads(sys.stdin.read()))
++EOF
++while IFS= read -r q; do
++  [[ -z $q ]] && continue
++  echo "== $q"
++  mysql -h 127.0.0.1 -P 40003 -u root sbtest -N --raw -e "vexplain plan $q" | python3 /tmp/p3plan.py
++done <<'EOF'
++SELECT c FROM sbtest1 WHERE k BETWEEN 110000 AND 110099 ORDER BY k LIMIT 10
++SELECT c FROM sbtest1 WHERE id BETWEEN 1 AND 100 ORDER BY c
++SELECT DISTINCT c FROM sbtest1 WHERE id BETWEEN 1 AND 100 ORDER BY c
++SELECT SUM(k) FROM sbtest1 WHERE id BETWEEN 1 AND 100
++SELECT k % 100 AS g, COUNT(*), SUM(k) FROM sbtest1 WHERE id BETWEEN 1 AND 100 GROUP BY g
++SELECT k, COUNT(*) FROM sbtest1 WHERE id BETWEEN 1 AND 100 GROUP BY k
++SELECT LEFT(c, 2) AS g, COUNT(*) FROM sbtest1 WHERE id BETWEEN 1 AND 100 GROUP BY g
++SELECT DISTINCT k FROM sbtest1 WHERE id BETWEEN 1 AND 100
++SELECT COUNT(DISTINCT k) FROM sbtest1 WHERE id BETWEEN 1 AND 100
++SELECT k % 1000 AS g, COUNT(*) AS cnt FROM sbtest1 WHERE id BETWEEN 1 AND 100 GROUP BY g ORDER BY cnt DESC, g LIMIT 10
++SELECT c FROM sbtest1 WHERE id IN (1,2,3,4,5)
++SELECT a.c, b.c FROM sbtest1 a JOIN sbtest2 b ON a.k = b.k WHERE a.k BETWEEN 110000 AND 110009
++SELECT a.c, b.c FROM sbtest1 a JOIN sbtest2 b ON a.id = b.id WHERE a.k BETWEEN 110000 AND 110009
++SELECT * FROM sbtest1 WHERE id BETWEEN 1 AND 100 ORDER BY id
++EOF
+diff --git a/perf-findings/harness/P3/prof.sh b/perf-findings/harness/P3/prof.sh
+new file mode 100755
+index 0000000..9f82211
+--- /dev/null
++++ b/perf-findings/harness/P3/prof.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++# prof.sh OUTDIR NAME KIND SHAPE [args...]   KIND=profile|allocs|heap
++# Runs a 25s bench of SHAPE and captures a 15s KIND profile from vtgate and tablet 100.
++set -u
++OUT=$1; NAME=$2; KIND=$3; SHAPE=$4; shift 4
++mkdir -p "$OUT"
++/home/vt/perf/P3/bench.sh "prof-$NAME" 8 25 "$SHAPE" "$@" > "$OUT/$NAME-bench-$KIND.txt" &
++sleep 6
++curl -s -o "$OUT/$NAME-vtgate-$KIND.pprof" "http://localhost:40001/debug/pprof/$KIND?seconds=15" &
++curl -s -o "$OUT/$NAME-tablet-$KIND.pprof" "http://localhost:40100/debug/pprof/$KIND?seconds=15" &
++wait
++cat "$OUT/$NAME-bench-$KIND.txt"
+diff --git a/perf-findings/harness/P3/shares.sh b/perf-findings/harness/P3/shares.sh
+new file mode 100644
+index 0000000..569fb67
+--- /dev/null
++++ b/perf-findings/harness/P3/shares.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# shares.sh BINARY PROFILE...: print the cumulative share of interesting stages
++BINARY=$1; shift
++for f in "$@"; do
++  echo "== $f"
++  go tool pprof -top -cum -nodecount=400 "$BINARY" "$f" 2>/dev/null | grep -E "Total samples|findRunnable$|gcBgMarkWorker$|runtime.mallocgc$|Codec..Unmarshal$|Conn..writeRows|Parser..Parse2$|sqlparser.Normalize$|http2Client..reader$|loopyWriter..run$|executeMultiShard.func1$|SortResult$|linux.Syscall6$|grpc.newClientStream$|fetchOrCreatePlan$|probeTable..exists$|memclrNoHeapPointers$|MergeSort..TryStreamExecute$|proto3ToRows$|OrderedAggregate..execute$|RoutingParameters..in$" | cut -c1-150
++done
+diff --git a/perf-findings/harness/P3/suite.sh b/perf-findings/harness/P3/suite.sh
+new file mode 100755
+index 0000000..c13c6d2
+--- /dev/null
++++ b/perf-findings/harness/P3/suite.sh
+@@ -0,0 +1,34 @@
++#!/bin/bash
++# suite.sh LABEL [THREADS] [TIME] [FILTER]: run all P3 shapes once, one line each.
++LABEL=$1; THR=${2:-8}; TIME=${3:-20}; FILTER=${4:-.}
++B=/home/vt/perf/P3/bench.sh
++while read -r name shape args; do
++  [[ -z $name || $name == \#* ]] && continue
++  [[ $name =~ $FILTER ]] || continue
++  # shellcheck disable=SC2086
++  $B "$LABEL" "$THR" "$TIME" "$shape" $args | sed "s/^\(\S*\s*\)\S*/\1$name/"
++done <<'EOF'
++krange100       krange      --width=100
++krange_ord100   krange_ord  --width=100
++krange_lim10    krange_lim  --width=100 --limit=10
++krange_lim100   krange_lim  --width=1000 --limit=100
++idrange_ordc100 idrange_ordc --width=100
++count1k         count       --width=1000
++grp_low10k      grp_low     --width=10000
++grp_high10k     grp_high    --width=10000
++grp_c10k        grp_c       --width=10000
++distinct_k10k   distinct_k  --width=10000
++cnt_dist10k     cnt_distinct --width=10000
++ord_agg_lim10k  ord_agg_lim --width=10000
++in10            inlist      --width=10
++in100           inlist      --width=100
++in1000          inlist      --width=1000
++insert100       insert      --width=100
++join_x10        join_x      --width=10
++join_push100    join_push   --width=100
++big10k          big         --width=10000
++big10k_olap     big         --width=10000 --olap=on
++big100k_olap    big         --width=100000 --olap=on
++bigord10k_olap  big_ord     --width=10000 --olap=on
++ro_ranges       sb:oltp_read_only --point-selects=0 --skip_trx=on
++EOF

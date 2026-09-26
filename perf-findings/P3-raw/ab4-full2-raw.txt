@@ -1,0 +1,234 @@
+r1-base        krange100         thr=8   qps=2070.34   avg=3.86    p95=7.430   p99=11.041  vtgate=456 tablets=550 mysqld=574 load=7.44
+r1-base        krange_ord100     thr=8   qps=1966.95   avg=4.06    p95=7.985   p99=12.081  vtgate=487 tablets=559 mysqld=583 load=9.89
+r1-base        krange_lim10     thr=8   qps=2175.87   avg=3.67    p95=7.565   p99=12.301  vtgate=351 tablets=431 mysqld=413 load=11.44
+r1-base        krange_lim100     thr=8   qps=1363.25   avg=5.86    p95=12.524  p99=19.645  vtgate=625 tablets=713 mysqld=786 load=12.81
+r1-base        idrange_ordc100   thr=8   qps=1930.69   avg=4.14    p95=8.428   p99=13.953  vtgate=431 tablets=495 mysqld=444 load=12.90
+r1-base        count1k          thr=8   qps=2207.45   avg=3.62    p95=7.430   p99=11.041  vtgate=429 tablets=516 mysqld=574 load=14.47
+r1-base        grp_low10k        thr=8   qps=485.07    avg=16.48   p95=30.265  p99=39.650  vtgate=1042 tablets=1067 mysqld=3684 load=16.38
+r1-base        grp_high10k       thr=8   qps=210.00    avg=38.05   p95=68.053  p99=86.002  vtgate=4878 tablets=3418 mysqld=4583 load=16.41
+r1-base        grp_c10k          thr=8   qps=510.77    avg=15.65   p95=27.165  p99=36.894  vtgate=1094 tablets=1127 mysqld=4585 load=15.94
+r1-base        distinct_k10k     thr=8   qps=299.57    avg=26.68   p95=45.793  p99=56.839  vtgate=4186 tablets=2920 mysqld=3247 load=16.02
+r1-base        cnt_dist10k   thr=8   qps=254.51    avg=31.41   p95=51.945  p99=64.474  vtgate=3821 tablets=3112 mysqld=4166 load=16.88
+r1-base        ord_agg_lim10k    thr=8   qps=358.48    avg=22.30   p95=38.942  p99=47.472  vtgate=2643 tablets=1800 mysqld=3808 load=16.67
+r1-base        in10         thr=8   qps=2913.63   avg=2.74    p95=4.910   p99=7.039   vtgate=345 tablets=386 mysqld=330 load=16.10
+r1-base        in100         thr=8   qps=1542.97   avg=5.18    p95=10.844  p99=17.319  vtgate=601 tablets=588 mysqld=576 load=16.12
+r1-base        in1000         thr=8   qps=357.55    avg=22.36   p95=44.173  p99=66.838  vtgate=2564 tablets=2106 mysqld=2694 load=19.13
+r1-base        insert100         thr=8   qps=384.51    avg=20.79   p95=37.565  p99=48.335  vtgate=1842 tablets=1975 mysqld=2083 load=19.44
+r1-base        join_x10         thr=8   qps=239.75    avg=33.33   p95=59.993  p99=81.479  vtgate=2585 tablets=4158 mysqld=3673 load=20.18
+r1-base        join_push100      thr=8   qps=1440.35   avg=5.55    p95=11.866  p99=18.280  vtgate=621 tablets=738 mysqld=869 load=20.33
+r1-base        big10k            thr=8   qps=148.25    avg=53.91   p95=82.959  p99=102.969 vtgate=7742 tablets=10081 mysqld=4444 load=18.82
+r1-base        big10k_olap            thr=8   qps=109.32    avg=73.46   p95=108.685 p99=132.492 vtgate=12320 tablets=13624 mysqld=4708 load=17.50
+r1-base        big100k_olap            thr=8   qps=12.25     avg=678.09  p95=831.464 p99=893.561 vtgate=109362 tablets=122394 mysqld=41383 load=17.48
+r1-base        bigord10k_olap        thr=8   qps=54.38     avg=148.26  p95=262.636 p99=325.984 vtgate=16117 tablets=14872 mysqld=4689 load=17.77
+r1-base        ro_ranges thr=8   qps=1395.78   avg=22.91   p95=36.236  p99=45.793  vtgate=412 tablets=507 mysqld=460 load=17.37
+r1-p3          krange100         thr=8   qps=2087.81   avg=3.83    p95=7.297   p99=10.460  vtgate=450 tablets=558 mysqld=560 load=11.33
+r1-p3          krange_ord100     thr=8   qps=1227.10   avg=6.51    p95=14.465  p99=21.112  vtgate=537 tablets=648 mysqld=626 load=14.07
+r1-p3          krange_lim10     thr=8   qps=1392.17   avg=5.74    p95=11.041  p99=16.408  vtgate=402 tablets=495 mysqld=459 load=14.89
+r1-p3          krange_lim100     thr=8   qps=967.76    avg=8.26    p95=16.706  p99=23.521  vtgate=653 tablets=783 mysqld=824 load=17.89
+r1-p3          idrange_ordc100   thr=8   qps=1660.33   avg=4.81    p95=10.274  p99=15.545  vtgate=451 tablets=534 mysqld=470 load=18.59
+r1-p3          count1k          thr=8   qps=2161.62   avg=3.70    p95=7.565   p99=11.041  vtgate=434 tablets=545 mysqld=586 load=17.78
+r1-p3          grp_low10k        thr=8   qps=616.80    avg=12.96   p95=21.496  p99=27.165  vtgate=1027 tablets=1103 mysqld=3809 load=16.86
+r1-p3          grp_high10k       thr=8   qps=158.09    avg=50.48   p95=86.002  p99=108.685 vtgate=4656 tablets=3804 mysqld=5168 load=18.92
+r1-p3          grp_c10k          thr=8   qps=301.24    avg=26.53   p95=44.173  p99=56.839  vtgate=1083 tablets=1163 mysqld=4980 load=20.18
+r1-p3          distinct_k10k     thr=8   qps=205.90    avg=38.77   p95=65.645  p99=84.467  vtgate=3925 tablets=3251 mysqld=3515 load=20.16
+r1-p3          cnt_dist10k   thr=8   qps=298.15    avg=26.81   p95=51.018  p99=69.289  vtgate=3109 tablets=3234 mysqld=4201 load=20.83
+r1-p3          ord_agg_lim10k    thr=8   qps=471.51    avg=16.95   p95=28.673  p99=36.236  vtgate=2258 tablets=1747 mysqld=3673 load=20.48
+r1-p3          in10         thr=8   qps=2409.85   avg=3.31    p95=6.669   p99=11.242  vtgate=355 tablets=419 mysqld=338 load=18.88
+r1-p3          in100         thr=8   qps=986.04    avg=8.10    p95=16.115  p99=22.689  vtgate=639 tablets=653 mysqld=611 load=18.04
+r1-p3          in1000         thr=8   qps=259.31    avg=30.83   p95=54.828  p99=69.289  vtgate=2830 tablets=2342 mysqld=3053 load=21.24
+r1-p3          insert100         thr=8   qps=277.32    avg=28.82   p95=49.213  p99=62.193  vtgate=1978 tablets=2220 mysqld=2499 load=19.24
+r1-p3          join_x10         thr=8   qps=489.40    avg=16.34   p95=27.165  p99=41.104  vtgate=1487 tablets=2510 mysqld=2415 load=18.32
+r1-p3          join_push100      thr=8   qps=1501.02   avg=5.33    p95=11.242  p99=16.706  vtgate=602 tablets=741 mysqld=861 load=18.17
+r1-p3          big10k            thr=8   qps=105.03    avg=76.02   p95=158.632 p99=227.402 vtgate=8226 tablets=10884 mysqld=4760 load=17.18
+r1-p3          big10k_olap            thr=8   qps=62.78     avg=128.34  p95=196.894 p99=248.825 vtgate=11144 tablets=12341 mysqld=4862 load=18.12
+r1-p3          big100k_olap            thr=8   qps=7.62      avg=1121.01 p95=1376.599 p99=1453.007 vtgate=94569 tablets=102500 mysqld=40517 load=19.64
+r1-p3          bigord10k_olap        thr=8   qps=68.66     avg=117.10  p95=193.380 p99=235.740 vtgate=14159 tablets=12205 mysqld=4623 load=18.72
+r1-p3          ro_ranges thr=8   qps=2334.74   avg=13.70   p95=20.002  p99=23.948  vtgate=396 tablets=509 mysqld=447 load=17.62
+r2-base        krange100         thr=8   qps=1163.34   avg=6.87    p95=13.953  p99=21.112  vtgate=523 tablets=637 mysqld=623 load=15.96
+r2-base        krange_ord100     thr=8   qps=1085.58   avg=7.36    p95=14.728  p99=21.886  vtgate=560 tablets=649 mysqld=654 load=17.52
+r2-base        krange_lim10     thr=8   qps=2553.45   avg=3.13    p95=5.986   p99=8.895   vtgate=365 tablets=441 mysqld=422 load=16.65
+r2-base        krange_lim100     thr=8   qps=1558.68   avg=5.13    p95=10.274  p99=14.465  vtgate=632 tablets=723 mysqld=806 load=16.01
+r2-base        idrange_ordc100   thr=8   qps=1610.79   avg=4.96    p95=10.844  p99=16.706  vtgate=459 tablets=519 mysqld=461 load=17.93
+r2-base        count1k          thr=8   qps=1263.31   avg=6.32    p95=12.752  p99=18.612  vtgate=477 tablets=551 mysqld=613 load=19.98
+r2-base        grp_low10k        thr=8   qps=349.29    avg=22.89   p95=38.942  p99=51.945  vtgate=1077 tablets=1087 mysqld=4009 load=22.06
+r2-base        grp_high10k       thr=8   qps=182.14    avg=43.87   p95=80.025  p99=104.840 vtgate=5141 tablets=3697 mysqld=5064 load=20.38
+r2-base        grp_c10k          thr=8   qps=546.60    avg=14.63   p95=23.521  p99=29.194  vtgate=1104 tablets=1126 mysqld=4589 load=19.54
+r2-base        distinct_k10k     thr=8   qps=308.51    avg=25.91   p95=44.976  p99=58.923  vtgate=4293 tablets=3091 mysqld=3361 load=18.41
+r2-base        cnt_dist10k   thr=8   qps=175.60    avg=45.51   p95=92.424  p99=142.387 vtgate=3866 tablets=3165 mysqld=4362 load=20.35
+r2-base        ord_agg_lim10k    thr=8   qps=278.95    avg=28.65   p95=49.213  p99=61.083  vtgate=2602 tablets=1790 mysqld=3979 load=21.50
+r2-base        in10         thr=8   qps=1646.83   avg=4.85    p95=9.389   p99=13.460  vtgate=376 tablets=429 mysqld=344 load=21.84
+r2-base        in100         thr=8   qps=1318.90   avg=6.06    p95=12.984  p99=19.295  vtgate=649 tablets=629 mysqld=607 load=19.83
+r2-base        in1000         thr=8   qps=462.38    avg=17.29   p95=29.194  p99=36.894  vtgate=2600 tablets=2126 mysqld=2759 load=18.74
+r2-base        insert100         thr=8   qps=492.53    avg=16.23   p95=27.659  p99=41.104  vtgate=1842 tablets=1959 mysqld=2274 load=17.85
+r2-base        join_x10         thr=8   qps=160.15    avg=49.88   p95=90.775  p99=130.128 vtgate=2919 tablets=4655 mysqld=4124 load=19.56
+r2-base        join_push100      thr=8   qps=830.90    avg=9.62    p95=20.736  p99=32.525  vtgate=705 tablets=819 mysqld=930 load=26.22
+r2-base        big10k            thr=8   qps=73.49     avg=108.69  p95=170.479 p99=211.599 vtgate=8430 tablets=11146 mysqld=4964 load=24.43
+r2-base        big10k_olap            thr=8   qps=94.63     avg=84.95   p95=176.731 p99=223.344 vtgate=12239 tablets=13361 mysqld=4646 load=23.64
+r2-base        big100k_olap            thr=8   qps=11.83     avg=704.18  p95=846.572 p99=960.295 vtgate=111823 tablets=125580 mysqld=41381 load=21.07
+r2-base        bigord10k_olap        thr=8   qps=103.20    avg=77.85   p95=116.802 p99=134.899 vtgate=15084 tablets=13731 mysqld=4562 load=18.59
+r2-base        ro_ranges thr=8   qps=2093.48   avg=15.27   p95=26.681  p99=33.718  vtgate=392 tablets=485 mysqld=440 load=19.65
+r2-p3 krange100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 krange_ord100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange_ord100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange_ord100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 krange_lim10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange_lim10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange_lim10 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 krange_lim100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange_lim100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange_lim100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 idrange_ordc100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: idrange_ordc100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: idrange_ordc100 to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r2-p3 count1k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: count1k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: count1k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 grp_low10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: grp_low10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: grp_low10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 grp_high10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: grp_high10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: grp_high10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 grp_c10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: grp_c10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: grp_c10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 distinct_k10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: distinct_k10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: distinct_k10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 cnt_dist10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: cnt_dist10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: cnt_dist10k to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r2-p3 ord_agg_lim10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: ord_agg_lim10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: ord_agg_lim10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 in10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: in10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: in10 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 in100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: in100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: in100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 in1000 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: in1000 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: in1000 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 insert100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: insert100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: insert100 to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r2-p3 join_x10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: join_x10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: join_x10 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 join_push100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: join_push100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: join_push100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 big10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: big10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: big10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 big10k_olap FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: big10k_olap 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: big10k_olap to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r2-p3 big100k_olap FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: big100k_olap 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: big100k_olap function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 bigord10k_olap FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: bigord10k_olap 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: bigord10k_olap function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r2-p3 ro_ranges FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: ro_ranges 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: ro_ranges function failed: /usr/share/sysbench/oltp_common.lua:349: connection creation failed
+restart failed, retrying
+restart failed, retrying
+restart failed, retrying
+r3-p3 krange100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 krange_ord100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange_ord100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange_ord100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 krange_lim10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange_lim10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange_lim10 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 krange_lim100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: krange_lim100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: krange_lim100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 idrange_ordc100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: idrange_ordc100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: idrange_ordc100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 count1k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: count1k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: count1k to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r3-p3 grp_low10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: grp_low10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: grp_low10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 grp_high10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: grp_high10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: grp_high10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 grp_c10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: grp_c10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: grp_c10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 distinct_k10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: distinct_k10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: distinct_k10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 cnt_dist10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: cnt_dist10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: cnt_dist10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 ord_agg_lim10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: ord_agg_lim10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: ord_agg_lim10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 in10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: in10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: in10 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 in100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: in100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: in100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 in1000 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: in1000 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: in1000 to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r3-p3 insert100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: insert100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: insert100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 join_x10 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: join_x10 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: join_x10 to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r3-p3 join_push100 FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: join_push100 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: join_push100 function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 big10k FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: big10k 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: big10k function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 big10k_olap FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: big10k_olap 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: big10k_olap function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 big100k_olap FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: big100k_olap 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: big100k_olap to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+r3-p3 bigord10k_olap FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: bigord10k_olap 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: bigord10k_olap function failed: /home/vt/perf/P3/lua/p3.lua:130: connection creation failed
+r3-p3 ro_ranges FAILED: FATAL: unable to connect to MySQL server on host '127.0.0.1', port 40003, aborting...
+FATAL: ro_ranges 2003: Can't connect to MySQL server on '127.0.0.1:40003' (111)
+FATAL: ro_ranges function failed: /usr/share/sysbench/oltp_common.lua:349: connection creation failed
+restart failed, retrying
+r3-base        krange100         thr=8   qps=2068.53   avg=3.86    p95=7.565   p99=11.041  vtgate=458 tablets=276 mysqld=562 load=5.41
+r3-base        krange_ord100     thr=8   qps=1727.80   avg=4.62    p95=9.734   p99=14.995  vtgate=501 tablets=289 mysqld=593 load=8.58
+r3-base        krange_lim10     thr=8   qps=2570.71   avg=3.11    p95=5.986   p99=9.222   vtgate=362 tablets=216 mysqld=415 load=9.35
+r3-base        krange_lim100     thr=8   qps=1550.87   avg=5.15    p95=10.274  p99=14.465  vtgate=628 tablets=361 mysqld=794 load=10.68
+r3-base        idrange_ordc100   thr=8   qps=2238.01   avg=3.57    p95=6.669   p99=9.734   vtgate=433 tablets=245 mysqld=450 load=10.81
+r3-base        count1k          thr=8   qps=1913.53   avg=4.18    p95=9.389   p99=14.728  vtgate=439 tablets=265 mysqld=582 load=12.81
+r3-base        grp_low10k        thr=8   qps=630.30    avg=12.68   p95=20.736  p99=26.205  vtgate=1026 tablets=528 mysqld=3728 load=13.73
+r3-base        grp_high10k       thr=8   qps=271.74    avg=29.42   p95=47.472  p99=55.824  vtgate=4909 tablets=1701 mysqld=4745 load=14.49
+r3-base        grp_c10k          thr=8   qps=452.36    avg=17.67   p95=39.650  p99=65.645  vtgate=1090 tablets=561 mysqld=4653 load=15.34
+r3-base        distinct_k10k     thr=8   qps=324.82    avg=24.61   p95=41.104  p99=52.889  vtgate=4261 tablets=1514 mysqld=3385 load=14.00
+r3-base        cnt_dist10k   thr=8   qps=339.12    avg=23.57   p95=38.942  p99=49.213  vtgate=3519 tablets=1486 mysqld=4039 load=13.95
+r3-base        ord_agg_lim10k    thr=8   qps=465.28    avg=17.18   p95=29.194  p99=38.247  vtgate=2413 tablets=849 mysqld=3650 load=14.59
+r3-base        in10         thr=8   qps=1785.04   avg=4.48    p95=9.222   p99=13.953  vtgate=364 tablets=208 mysqld=345 load=17.40
+r3-base        in100         thr=8   qps=1103.71   avg=7.24    p95=14.465  p99=20.366  vtgate=658 tablets=317 mysqld=627 load=16.66
+r3-base        in1000         thr=8   qps=297.91    avg=26.84   p95=46.625  p99=61.083  vtgate=2746 tablets=1115 mysqld=3008 load=17.36
+r3-base        insert100         thr=8   qps=446.28    avg=17.91   p95=32.525  p99=45.793  vtgate=1892 tablets=1015 mysqld=2343 load=15.80
+r3-base        join_x10         thr=8   qps=294.21    avg=27.16   p95=44.173  p99=54.828  vtgate=2648 tablets=2150 mysqld=3750 load=15.23
+r3-base        join_push100      thr=8   qps=1305.26   avg=6.12    p95=13.704  p99=23.948  vtgate=631 tablets=374 mysqld=875 load=16.92
+r3-base        big10k            thr=8   qps=92.21     avg=86.67   p95=137.350 p99=161.514 vtgate=8045 tablets=5224 mysqld=4747 load=18.36
+r3-base        big10k_olap            thr=8   qps=67.84     avg=118.67  p95=183.211 p99=211.599 vtgate=13020 tablets=7127 mysqld=4706 load=18.86
+r3-base        big100k_olap            thr=8   qps=7.69      avg=1110.51 p95=1327.905 p99=1589.895 vtgate=118376 tablets=62906 mysqld=41453 load=19.93
+r3-base        bigord10k_olap        thr=8   qps=99.26     avg=80.95   p95=123.285 p99=144.974 vtgate=15255 tablets=6957 mysqld=4705 load=17.31
+r3-base        ro_ranges thr=8   qps=2309.05   avg=13.85   p95=20.366  p99=25.737  vtgate=395 tablets=241 mysqld=441 load=16.11
