@@ -1147,6 +1147,11 @@ func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
 }
 
+// ResetReservedConn implements the SessionActions interface
+func (vc *VCursorImpl) ResetReservedConn() {
+	vc.SafeSession.SetReservedConn(false)
+}
+
 func (vc *VCursorImpl) InReservedConn() bool {
 	return vc.SafeSession.InReservedConn()
 }

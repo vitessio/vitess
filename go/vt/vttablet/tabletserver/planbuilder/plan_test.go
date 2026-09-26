@@ -50,6 +50,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		WhereClause        *sqlparser.ParsedQuery `json:",omitempty"`
 		NeedsReservedConn  bool                   `json:",omitempty"`
 		KillsConnOnTimeout bool                   `json:",omitempty"`
+		TablesUndetermined bool                   `json:",omitempty"`
 	}{
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
@@ -65,6 +66,9 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	}
 	if p.KillsConnOnTimeout {
 		mplan.KillsConnOnTimeout = true
+	}
+	if p.TablesUndetermined {
+		mplan.TablesUndetermined = true
 	}
 	return json.Marshal(&mplan)
 }

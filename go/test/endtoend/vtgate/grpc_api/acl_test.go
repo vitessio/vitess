@@ -88,6 +88,41 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 	assert.ErrorContains(t, err, "for table 'test_table' (ACL check error)")
 }
 
+// TestSelfNamedCTEDoesNotBypassACL verifies that wrapping a table in a
+// non-recursive CTE of the same name is checked like a plain read. A
+// non-recursive CTE is not visible inside its own body, so the reference
+// there is the real table: a user with access reads it and a user without
+// access is denied (GHSA-mv22-c3rp-c6m4).
+//
+// vtgate rejects the bare unqualified self-reference inside a CTE body as
+// unsupported, but forwards it as written once the query block also names
+// another real table, and it always accepts the keyspace-qualified form,
+// stripping the qualifier before sending the query to vttablet. This
+// keyspace has a single table, so the qualified form is the shape that
+// reaches the tablet's ACL check here.
+func TestSelfNamedCTEDoesNotBypassACL(t *testing.T) {
+	ctx := t.Context()
+	query := "WITH test_table AS (SELECT id FROM ks.test_table) SELECT id FROM test_table"
+
+	withAccess, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
+	require.NoError(t, err)
+	t.Cleanup(withAccess.Close)
+
+	session := withAccess.Session(keyspaceName+"@primary", nil)
+	_, err = session.Execute(ctx, query, nil, false)
+	require.NoError(t, err)
+
+	noAccess, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_no_access", "test_password")
+	require.NoError(t, err)
+	t.Cleanup(noAccess.Close)
+
+	session = noAccess.Session(keyspaceName+"@primary", nil)
+	_, err = session.Execute(ctx, query, nil, false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Select command denied to user")
+	assert.ErrorContains(t, err, "for table 'test_table' (ACL check error)")
+}
+
 // TestUnauthenticatedUser verifies that an unauthenticated gRPC user cannot execute queries
 func TestUnauthenticatedUser(t *testing.T) {
 	ctx := t.Context()

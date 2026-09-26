@@ -1,7 +1,7 @@
 import React from 'react';
 import { Intent } from '../intent';
 
-interface MenuItemProps {
+interface MenuItemProps extends React.PropsWithChildren {
     className?: string;
     intent?: Intent;
     disabled?: boolean;

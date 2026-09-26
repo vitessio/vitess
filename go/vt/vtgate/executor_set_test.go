@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/test/utils"
@@ -679,6 +680,57 @@ func TestSetVarShowVariables(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
 	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestShowVariablesTargetedSession checks that SHOW VARIABLES in a shard-targeted session
+// reports the values the session holds for variables that never reach the MySQL
+// connection, as it does in an untargeted session.
+func TestShowVariablesTargetedSession(t *testing.T) {
+	executor, sbc1, _, _, ctx := createCustomExecutor(t, "{}", "8.0.0")
+	executor.config.Normalize = true
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestSharded + ":-20"})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_select_limit = 10", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+		"sql_select_limit|18446744073709551615")})
+	qr, err := executorExecSession(ctx, executor, session, "show variables like 'sql_select_limit'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARCHAR("sql_select_limit") VARCHAR("10")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestShowGlobalVariablesIgnoresSessionValues checks that SHOW GLOBAL VARIABLES reports
+// the global values, not the ones the session holds, in an untargeted and in a
+// shard-targeted session, while still reporting the server version VTGate advertises.
+func TestShowGlobalVariablesIgnoresSessionValues(t *testing.T) {
+	for _, targeted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("targeted=%v", targeted), func(t *testing.T) {
+			executor, sbc1, _, sbclookup, ctx := createCustomExecutor(t, "{}", "8.0.0")
+			executor.config.Normalize = true
+
+			target, shard := KsTestUnsharded, sbclookup
+			if targeted {
+				target, shard = KsTestSharded+":-20", sbc1
+			}
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{
+				EnableSystemSettings: true,
+				TargetString:         target,
+				SystemVariables:      map[string]string{"sql_mode": "'only_full_group_by'"},
+				Options:              &querypb.ExecuteOptions{SqlSelectLimit: 10},
+			})
+
+			shard.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+				"sql_mode|STRICT_TRANS_TABLES",
+				"sql_select_limit|18446744073709551615",
+				"version|8.0.40")})
+			qr, err := executorExecSession(ctx, executor, session, "show global variables", map[string]*querypb.BindVariable{})
+			require.NoError(t, err)
+			assert.Equal(t, fmt.Sprintf(`[[VARCHAR("sql_mode") VARCHAR("STRICT_TRANS_TABLES")] [VARCHAR("sql_select_limit") VARCHAR("18446744073709551615")] [VARCHAR("version") VARCHAR(%q)]]`, servenv.AppVersion.MySQLVersion()), fmt.Sprintf("%v", qr.Rows))
+		})
+	}
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
