@@ -70,3 +70,50 @@ Evidence for each item is in the report named in the right-hand column (all unde
 ## Before committing to items 9, 18 and 19
 
 This VM makes waking a halted vCPU unusually expensive (about 20 µs), which inflates hop costs. Re-measure the Wave 1 config changes and items 9 and 18 on dedicated hardware, or with halt-polling enabled. The ranking of the transport items is the one most likely to move.
+
+---
+
+# VReplication roadmap (round 3: V1–V6, plus P4 and round-1 items)
+
+Evidence for each item is in `V1-copy.md`, `V2-apply.md`, `V3-vdiff.md`, `V4-scale.md`, `V4b-scale-cont.md`, `V5-vstream.md`, `V6-static.md` and `P4-vreplication.md`. Bugs are listed with priorities in `BUGS.md`.
+
+## VR Wave 1: small changes, large user-visible gains
+
+| # | Item | Payoff (measured) | Effort | Source |
+|---|---|---|---|---|
+| R1 | **Correctness bugs** | Prevents data drift, stuck workflows and failed streams | S–M | Details below the table |
+| R2 | **Remove fixed waits:** per-table copy catch-up tick (MoveTables and VStream copy), WaitForPos polling with a 5 ms→100 ms backoff, tablet-picker 30 s sleep, Online DDL 1-minute review tick, 1-minute `VDiff --wait` poll | MoveTables of 40 tables 47 s → 5.6 s; VStream copy of 40 tables 39.5 s → 0.5 s (1M rows 6.3 → 1.75 s); VDiff of 30 tables 65 s → 11 s; Online DDL 84 → 40 s; stream resume 30 s → 1.3 s; `VDiff create --wait` 60 s → 7 s | S each | P4, V5 #1, V4b #1, V3 #2 and #5 |
+| R3 | **SwitchTraffic outage:** drop the trailing 100 ms sleep and ReloadSchema per lock cycle, skip the second allowTargetWrites, add the WaitForPos backoff | Median write gap 1.3 s → 173 ms, with no client errors | S | V6 #6, V4, V4b #1 |
+| R4 | **Many-table workflows:** indexed plan builder, per-table plan build in the copy, per-table PK query instead of a schema scan under the schema-engine lock, `GetSchema` reading only the named tables | 2000-table MoveTables 177 s → 110 s; per-stream start 20–28 ms → 0.8 ms | S | V6 #12/#13, V4, V4b #2 |
+| R5 | **VDiff:** byte-equal compare fast path and direct row pipeline | VDiff tablet CPU −47%, wall time −30%, whole-cluster CPU −28% | S–M | V3 #3/#4, V6 #7 |
+| R6 | **Online DDL copy:** JSON as text (always on) and deferred non-unique secondary keys | Copy of a JSON table ~30% faster; sbtest copy −15–20% | S | V1 #1/#2 |
+| R7 | **gRPC codec non-zeroing buffer pool** (all gRPC, including VReplication and VStream) | vtgate −11–16% and vttablet −5–8% on VStream; −16–27% on large result streams | S | P3 #2, V5 #5 |
+| R8 | **Ops guidance:** `--defer-secondary-keys=false` for many tiny tables, `--vreplication-heartbeat-update-interval` for large rule sets, `--vstream-packet-size=1MB`, per-table workflows for faster multi-table copies | 2000 tables 110 → 64 s; heartbeat binlog growth 10x lower; copy −8% CPU per row; multi-table copy −29% | docs | V4b #4/#6, P4, V1 #5 |
+
+**R1 in detail:**
+- **P0:** JSON doubles silently become DECIMAL in the copy; parallel-insert-worker connections skip session setup; the generated-column panic or shifted values; `select *` dropping conversions.
+- **P1:** the orphaned VDiff workflow lock (24 h); cancelling a large MoveTables leaves a broken workflow; VStream `minimize_skew` stalls with 3+ shards.
+
+## VR Wave 2: medium effort, big throughput gains
+
+| # | Item | Payoff | Effort | Source |
+|---|---|---|---|---|
+| R9 | **Bulk UPDATE for multi-row UPDATE events** (CASE on an integer PK, capped at 100 rows) | Drain 2.8–2.9x; lag under 300 × 100-row updates/s goes from 24 s and growing to 0; target mysqld −62% per trx | M | V2 #1 |
+| R10 | **VStream running-phase bundle:** no deep row clone, lazy SizeVT, GTID string once, P4 event queue, response and transaction coalescing (opt-in) | Drain +48%; vtgate −37–58%, vttablet −24–31% CPU | M | V5 #4, V6 #2/#10, V4 |
+| R11 | **VStream `batch_copy_rows`** (opt-in proto option) | Copy 1.75 → 1.10 s; vtgate −48%, vttablet −30%, client −47% | M | V5 #3, V6 #11 |
+| R12 | **Coalesce empty/filtered transactions** with a small window (experimental flag; for upstream, a VStreamOptions field) | 50 workflows on one source: target vttablet −51%, all processes −27% | M | V4b #5, V4 #3, V6 #4 |
+| R13 | **Buffer row changes across consecutive transactions** of the same table (experimental flag bit) | Single-row insert drain +65–80%, target mysqld −55% | M | V2 #2 |
+| R14 | **Source-side per-stream cost:** GTID string once per GTID, keyrange pre-filter before full row decode | Source vttablet −6–11% per stream; more on wide rows | S | V4 #2, V6 #3 |
+| R15 | **Round-1 VReplication CPU bundle:** F05, F16, F17, F26, F27, F13, relay-log timers | Steady-state source −6%, target −3.5%; per-event costs down 2–10x | S each | round 1, P4 #7, V6 #5 |
+| R16 | **Parallel applier #19535:** experimental only, with a batching cap that adapts to transaction size, combined with R9 | 100-row updates 634–718 trx/s (with R9); write_only +35%; but update_index −15–25% and +80% mysqld CPU per trx without adaptive batching | M/L | V2 #3 |
+| R17 | **JSON number types:** one consistent rule across copy and running phases (fixes the P0 bug), plus an opt-in JSON-as-text MoveTables copy | Correctness, then −24% copy time on JSON tables | M | V1 #3 |
+
+## VR strategic projects
+
+| # | Item | Payoff | Effort |
+|---|---|---|---|
+| R18 | **Shared binlog reader per source tablet** (all streams and CDC consumers) | Removes the per-stream source cost of ~15–45 µs/trx, which hits Reshard fan-out, many workflows and multiple VStream consumers | L |
+| R19 | **Concurrent table copy within one workflow** (multiple streams per shard, or a multi-table snapshot) | −29% multi-table copy (measured via the per-table-workflow workaround) | L |
+| R20 | **Shared source scan for Reshard copy** | Source copy cost drops from N× to 1× (it only pays off at high fan-out, 1→16+) | L |
+| R21 | **`_vt.vreplication` row-image redesign:** keep the frequently updated columns out of the row that holds the filter rules | Heartbeat binlog growth of ~700 MB/h for a 2000-table workflow goes to near zero | M/L |
+| R22 | **Tablet-side deny-list barrier** instead of the 100 ms LOCK TABLES pause | SwitchTraffic write gap ~170 ms → ~60 ms | S/M |
