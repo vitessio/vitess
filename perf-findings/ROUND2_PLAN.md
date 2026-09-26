@@ -22,3 +22,14 @@ Prompted by the ~15x QPS gap to plain MySQL. Preliminary data is in HOP-OVERHEAD
 | P7-finish | write-up of the combined build: applied/skipped patches, tests, provenance | – | done |
 | H1-hop-rootcause | exact per-query cost breakdown (syscalls, context switches, goroutine hops, perf/kernel), Go-networking floor in this environment, mysqld CPU inflation, runtime/kernel/gRPC-option levers | 30000 | done |
 | H2-grpc-transport | unary vs bidi stream vs stream pool vs raw framing (microbenchmarks); evaluate PRs #19620/#20215; prototype pooled-stream Execute with raw MySQL rows | 40000 | done |
+
+## Round 3: VReplication deep dive (brief: BRIEF3-vreplication.md)
+
+| Wave | ID | Focus | BASE | Status |
+|---|---|---|---|---|
+| 1 | V1-copy | copy-phase throughput and CPU (MoveTables / Reshard / Online DDL): source scan, target inserts, batching, snapshot/locking, per-table overhead, wide rows/blobs | 30000 | running |
+| 1 | V2-apply | running-phase apply under heavy writes: max sustainable rate, lag, vplayer commit/position overhead, batching, parallel applier #19535 | 40000 | running |
+| 1 | V6-static | code review of VReplication hot paths not covered yet (no benchmarks) | – | running |
+| 2 | V3-vdiff | VDiff duration and CPU | 30000 | pending |
+| 2 | V4-scale | Reshard fan-out (N targets), many streams/tables per tablet, idle overhead, switch-traffic outage remainder | 40000 | pending |
+| 3 | V5-vstream | VStream CDC through vtgate: events/s, vtgate CPU, multi-shard merge, copy+stream | 30000 | pending |
