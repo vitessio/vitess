@@ -164,7 +164,7 @@ The `BackupEngine` interface is **not** changed. Engines can optionally report t
 
 **Impact**: This is a source-level Go API change; the wire protocol is unchanged. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
 
-See [#XXXXX](https://github.com/vitessio/vitess/pull/XXXXX) for details.
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -645,7 +645,7 @@ The `vtctldclient Backup` and `BackupShard` commands can now report a backup's o
 
 This is carried by three additive fields on the `BackupResponse` proto messages (`manifest`, `status`, and `backup_name`); see the [related breaking change](#tmclient-backup-stream) for the Go API impact. The change is safe for mixed-version (rolling upgrade and downgrade) clusters in both directions: a newer `vtctldclient`/`vtctld` talking to an older peer that does not populate these fields reports status `UNKNOWN` and preserves the previous behaviour, and the terminal stream message a newer `vttablet` sends carries an ordinary completion log event so an older `vtctld` handles it normally instead of choking on it.
 
-See [#XXXXX](https://github.com/vitessio/vitess/pull/XXXXX) for details.
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
