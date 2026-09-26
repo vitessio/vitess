@@ -1,0 +1,389 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package reparentutil
+
+// Audit tests: unplanned failover in a 3-cell, 1-tablet-per-cell shard with the
+// cross_cell durability policy (1 semi-sync ACK required from another cell).
+//
+//	P  = zone1-0000000100 (PRIMARY)
+//	R1 = zone2-0000000101 (REPLICA) - received and ACKed u1:101
+//	R2 = zone3-0000000102 (REPLICA) - only has u1:1-100
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+const (
+	auditP  = "zone1-0000000100"
+	auditR1 = "zone2-0000000101"
+	auditR2 = "zone3-0000000102"
+	auditR3 = "zone4-0000000103"
+)
+
+var (
+	auditPAlias  = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	auditR1Alias = &topodatapb.TabletAlias{Cell: "zone2", Uid: 101}
+	auditR2Alias = &topodatapb.TabletAlias{Cell: "zone3", Uid: 102}
+	auditR3Alias = &topodatapb.TabletAlias{Cell: "zone4", Uid: 103}
+
+	// u1 is the old primary's server UUID
+	auditR1Pos = getRelayLogPosition("1-101") // has the ACKed transaction u1:101
+	auditR2Pos = getRelayLogPosition("1-100") // missed it
+)
+
+// auditTMC records the RPCs ERS issues so tests can assert what it did to each tablet.
+type auditTMC struct {
+	*testutil.TabletManagerClient
+
+	mu           sync.Mutex
+	demoteErrs   map[string]error
+	stopCalled   map[string]bool
+	promoted     []string
+	restartedOld []string
+}
+
+func (fake *auditTMC) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
+	status, err := fake.TabletManagerClient.DemotePrimary(ctx, tablet, force)
+	fake.mu.Lock()
+	fake.demoteErrs[topoproto.TabletAliasString(tablet.Alias)] = err
+	fake.mu.Unlock()
+	return status, err
+}
+
+func (fake *auditTMC) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+	fake.mu.Lock()
+	fake.stopCalled[topoproto.TabletAliasString(tablet.Alias)] = true
+	fake.mu.Unlock()
+	return fake.TabletManagerClient.StopReplicationAndGetStatus(ctx, tablet, mode)
+}
+
+func (fake *auditTMC) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	fake.mu.Lock()
+	fake.promoted = append(fake.promoted, topoproto.TabletAliasString(tablet.Alias))
+	fake.mu.Unlock()
+	return fake.TabletManagerClient.PromoteReplica(ctx, tablet, semiSync)
+}
+
+func (fake *auditTMC) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	fake.mu.Lock()
+	fake.restartedOld = append(fake.restartedOld, topoproto.TabletAliasString(tablet.Alias))
+	fake.mu.Unlock()
+	return nil
+}
+
+func auditReplicaStatus(pos string) *replicationdatapb.StopReplicationStatus {
+	return &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+		After: &replicationdatapb.Status{
+			SourceUuid:       "00000000-0000-0000-0000-000000000001",
+			RelayLogPosition: pos,
+		},
+	}
+}
+
+// setupAuditShard builds the 3-cell shard. By default P is dead (every RPC fails)
+// and both replicas answer immediately.
+func setupAuditShard(t *testing.T) (*topo.Server, *auditTMC) {
+	return setupAuditShardWithExtraReplica(t, false)
+}
+
+// setupAuditShardWithExtraReplica optionally adds R3 = zone4-0000000103 at R2's position,
+// to show what the forward-progress check stops protecting once a second acker exists.
+func setupAuditShardWithExtraReplica(t *testing.T, withR3 bool) (*topo.Server, *auditTMC) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3", "zone4")
+	t.Cleanup(ts.Close)
+
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: auditPAlias, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "-",
+		MysqlHostname: "p", MysqlPort: 3306,
+	}, &testutil.AddTabletOptions{AlsoSetShardPrimary: true})
+	for _, alias := range []*topodatapb.TabletAlias{auditR1Alias, auditR2Alias} {
+		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+			Alias: alias, Type: topodatapb.TabletType_REPLICA, Keyspace: "ks", Shard: "-",
+			MysqlHostname: alias.Cell, MysqlPort: 3306,
+		}, nil)
+	}
+	if withR3 {
+		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+			Alias: auditR3Alias, Type: topodatapb.TabletType_REPLICA, Keyspace: "ks", Shard: "-",
+			MysqlHostname: "zone4", MysqlPort: 3306,
+		}, nil)
+	}
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityCrossCell)
+
+	tmc := &auditTMC{
+		demoteErrs: map[string]error{},
+		stopCalled: map[string]bool{},
+		TabletManagerClient: &testutil.TabletManagerClient{
+			StopReplicationAndGetStatusResults: map[string]struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Error      error
+			}{
+				auditP:  {Error: context.DeadlineExceeded},
+				auditR1: {StopStatus: auditReplicaStatus(auditR1Pos)},
+				auditR2: {StopStatus: auditReplicaStatus(auditR2Pos)},
+			},
+			DemotePrimaryResults: map[string]struct {
+				Status *replicationdatapb.PrimaryStatus
+				Error  error
+			}{},
+			WaitForPositionResults: map[string]map[string]error{
+				auditR1: {auditR1Pos: nil},
+				auditR2: {auditR2Pos: nil},
+			},
+			ReadReparentJournalInfoResults: map[string]int32{auditP: 1, auditR1: 1, auditR2: 1},
+			PromoteReplicaResults: map[string]struct {
+				Result string
+				Error  error
+			}{
+				auditP:  {Result: "ok"},
+				auditR1: {Result: "ok"},
+				auditR2: {Result: "ok"},
+			},
+			PopulateReparentJournalResults: map[string]error{auditP: nil, auditR1: nil, auditR2: nil},
+			SetReplicationSourceResults: map[string]error{
+				auditP:  context.DeadlineExceeded,
+				auditR1: nil,
+				auditR2: nil,
+			},
+		},
+	}
+	if withR3 {
+		tmc.StopReplicationAndGetStatusResults[auditR3] = struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Error      error
+		}{StopStatus: auditReplicaStatus(auditR2Pos)}
+		tmc.WaitForPositionResults[auditR3] = map[string]error{auditR2Pos: nil}
+		tmc.ReadReparentJournalInfoResults[auditR3] = 1
+		tmc.PromoteReplicaResults[auditR3] = struct {
+			Result string
+			Error  error
+		}{Result: "ok"}
+		tmc.PopulateReparentJournalResults[auditR3] = nil
+		tmc.SetReplicationSourceResults[auditR3] = nil
+	}
+	return ts, tmc
+}
+
+func runAuditERS(t *testing.T, ts *topo.Server, tmc *auditTMC, opts EmergencyReparentOptions) (*topodatapb.Tablet, error) {
+	if opts.WaitReplicasTimeout == 0 {
+		opts.WaitReplicasTimeout = 30 * time.Second
+	}
+	logger := logutil.NewMemoryLogger()
+	ev, err := NewEmergencyReparenter(ts, tmc, logger).ReparentShard(t.Context(), "ks", "-", opts)
+	t.Log(logger.String())
+	if ev == nil {
+		return nil, err
+	}
+	return ev.NewPrimary, err
+}
+
+// The only replica holding an ACKed write (R1) is unreachable while P is dead: ERS must not
+// promote R2. haveRevoked requires reaching every replica that could ACK for P, which with
+// 2 ackers and 1 required ACK means both replicas.
+func TestERSAudit_AckerUnreachableFailsClosed(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+	tmc.StopReplicationAndGetStatusResults[auditR1] = struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Error      error
+	}{Error: context.DeadlineExceeded}
+
+	newPrimary, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{})
+	require.ErrorContains(t, err, "could not reach sufficient tablets to guarantee safety")
+	assert.Nil(t, newPrimary)
+	assert.Empty(t, tmc.promoted)
+}
+
+// R1 holds the ACKed write but fails its relay log wait: ERS must fail rather than fall
+// back to R2, which is behind and was never waited on.
+func TestERSAudit_MostAdvancedRelayWaitFailsClosed(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+	tmc.WaitForPositionResults[auditR1] = map[string]error{auditR1Pos: context.DeadlineExceeded}
+
+	_, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{})
+	require.ErrorContains(t, err, "all candidates failed to apply relay logs")
+	assert.Empty(t, tmc.promoted)
+}
+
+// --ignore-replicas lowers the stop-replication success target to (non-ignored - 1),
+// and a lone primary error then skips haveRevoked entirely, although haveRevoked counts the
+// ignored tablet as a potential acker. In the 3-tablet reference shard the forward-progress
+// check still saves us: with R1 ignored and P dead, R2 has no reachable acker.
+func TestERSAudit_IgnoreReplicasThreeTablets(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+
+	_, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{IgnoreReplicas: sets.New(auditR1)})
+	require.ErrorContains(t, err, "no valid candidates for emergency reparent")
+	assert.Empty(t, tmc.promoted)
+}
+
+// With one more replica (4 cells), ignoring the only holder of the ACKed write lets ERS
+// promote a tablet that lacks it: haveRevoked would have refused, but it never runs.
+func TestERSAudit_IgnoreReplicasBypassesRevocation(t *testing.T) {
+	ts, tmc := setupAuditShardWithExtraReplica(t, true)
+
+	newPrimary, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{IgnoreReplicas: sets.New(auditR1)})
+	require.NoError(t, err)
+	require.NotNil(t, newPrimary)
+	assert.NotEqual(t, auditR1, topoproto.TabletAliasString(newPrimary.Alias), "promoted a tablet without the ACKed write u1:101")
+	assert.False(t, tmc.stopCalled[auditR1], "ignored R1 was never contacted")
+
+	// The revocation check ERS skipped would have failed
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityCrossCell)
+	require.NoError(t, err)
+	tabletMap, err := ts.GetTabletMapForShard(t.Context(), "ks", "-")
+	require.NoError(t, err)
+	var all []*topodatapb.Tablet
+	for _, ti := range tabletMap {
+		all = append(all, ti.Tablet)
+	}
+	reached := []*topodatapb.Tablet{tabletMap[auditR2].Tablet, tabletMap[auditR3].Tablet}
+	assert.False(t, haveRevoked(durability, reached, all))
+}
+
+// Same with P alive: once the non-ignored replicas answer, the errgroup cancels P's
+// in-flight DemotePrimary and the lone P error is tolerated. P is never demoted and the
+// ignored R1 is never stopped, so R1 keeps ACKing P's writes while another tablet is
+// promoted: a split brain in which writes ACKed by the old primary are lost.
+func TestERSAudit_IgnoreReplicasCancelsLivePrimaryDemotion(t *testing.T) {
+	ts, tmc := setupAuditShardWithExtraReplica(t, true)
+	tmc.StopReplicationAndGetStatusResults[auditP] = struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Error      error
+	}{Error: mysql.ErrNotReplica}
+	tmc.DemotePrimaryResults[auditP] = struct {
+		Status *replicationdatapb.PrimaryStatus
+		Error  error
+	}{Status: &replicationdatapb.PrimaryStatus{Position: getRelayLogPosition("1-105")}}
+	tmc.DemotePrimaryDelays = map[string]time.Duration{auditP: 2 * time.Second}
+
+	newPrimary, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{IgnoreReplicas: sets.New(auditR1)})
+	require.NoError(t, err)
+	require.NotNil(t, newPrimary)
+	assert.NotEqual(t, auditP, topoproto.TabletAliasString(newPrimary.Alias))
+	assert.ErrorIs(t, tmc.demoteErrs[auditP], context.Canceled, "live primary's demotion was cancelled")
+	assert.False(t, tmc.stopCalled[auditR1])
+}
+
+// Without --ignore-replicas, a reachable-but-slow primary also has its DemotePrimary
+// cancelled as soon as both replicas answer. This is safe only because both replicas'
+// IO threads are stopped (no ACKs), so the live primary can't commit; ERS never learns
+// P's position, which may be ahead of both replicas.
+func TestERSAudit_SlowLivePrimaryDemotionCancelled(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+	tmc.StopReplicationAndGetStatusResults[auditP] = struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Error      error
+	}{Error: mysql.ErrNotReplica}
+	tmc.DemotePrimaryResults[auditP] = struct {
+		Status *replicationdatapb.PrimaryStatus
+		Error  error
+	}{Status: &replicationdatapb.PrimaryStatus{Position: getRelayLogPosition("1-105")}}
+	tmc.DemotePrimaryDelays = map[string]time.Duration{auditP: 2 * time.Second}
+
+	newPrimary, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newPrimary)
+	assert.Equal(t, auditR1, topoproto.TabletAliasString(newPrimary.Alias))
+	assert.ErrorIs(t, tmc.demoteErrs[auditP], context.Canceled)
+}
+
+// PreventCrossCellPromotion with one tablet per cell: the only in-cell candidate is the
+// dead primary, so every ERS fails and the shard stays without a primary.
+func TestERSAudit_PreventCrossCellOneTabletPerCell(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+
+	_, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{PreventCrossCellPromotion: true})
+	require.ErrorContains(t, err, "no valid candidates for emergency reparent")
+	assert.Empty(t, tmc.promoted)
+	assert.ElementsMatch(t, []string{auditR1, auditR2}, tmc.restartedOld, "replicas restarted towards the dead primary")
+}
+
+// When P becomes unreachable, the replicas' IO threads sit in Connecting with a
+// LastIOError (MySQL keeps retrying). ERS stops them, and on abort the deferred cleanup
+// only restarts IO threads that were IOHealthy, so these are left stopped: if P was
+// alive and the partition heals, nothing is retrying the connection and P has no
+// semi-sync ackers until something else (VTOrc) restarts replication.
+func TestERSAudit_AbortLeavesRetryingIOThreadsStopped(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+	for alias, pos := range map[string]string{auditR1: auditR1Pos, auditR2: auditR2Pos} {
+		status := auditReplicaStatus(pos)
+		status.Before.IoState = int32(replication.ReplicationStateConnecting)
+		status.Before.LastIoError = "error reconnecting to source: Can't connect to MySQL server (111)"
+		tmc.StopReplicationAndGetStatusResults[alias] = struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Error      error
+		}{StopStatus: status}
+	}
+
+	_, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{PreventCrossCellPromotion: true})
+	require.ErrorContains(t, err, "no valid candidates for emergency reparent")
+	assert.True(t, tmc.stopCalled[auditR1])
+	assert.True(t, tmc.stopCalled[auditR2])
+	assert.Empty(t, tmc.restartedOld, "IO threads ERS stopped were not restarted")
+}
+
+// A previous ERS's PromoteReplica on R1 succeeded but its response was lost (or the
+// journal write failed): R1 is read-write, R2 was already repointed to R1 and ACKed
+// u2:1-3, the journal row is missing and the shard record still names the dead P. The
+// retry demotes R1 through the ERNotReplica path and re-promotes it without losing u2:1-3.
+func TestERSAudit_RetryAfterLostPromoteReplicaResponse(t *testing.T) {
+	ts, tmc := setupAuditShard(t)
+	halfPromoted := getRelayLogPosition("1-101", "1-3")
+	tmc.StopReplicationAndGetStatusResults[auditR1] = struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Error      error
+	}{Error: mysql.ErrNotReplica}
+	tmc.DemotePrimaryResults[auditR1] = struct {
+		Status *replicationdatapb.PrimaryStatus
+		Error  error
+	}{Status: &replicationdatapb.PrimaryStatus{Position: halfPromoted}}
+	r2Status := auditReplicaStatus(halfPromoted)
+	r2Status.After.SourceUuid = "00000000-0000-0000-0000-000000000002"
+	tmc.StopReplicationAndGetStatusResults[auditR2] = struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Error      error
+	}{StopStatus: r2Status}
+	tmc.WaitForPositionResults[auditR2] = map[string]error{halfPromoted: nil}
+
+	newPrimary, err := runAuditERS(t, ts, tmc, EmergencyReparentOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, newPrimary)
+	assert.Equal(t, auditR1, topoproto.TabletAliasString(newPrimary.Alias))
+	assert.NoError(t, tmc.demoteErrs[auditR1])
+}

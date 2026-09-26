@@ -1,0 +1,170 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package reparentutil
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"os/exec"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+)
+
+func auditFreePort(t *testing.T) int {
+	l, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func auditStartEtcd(t *testing.T, name string) (string, *exec.Cmd) {
+	clientAddr := fmt.Sprintf("http://localhost:%d", auditFreePort(t))
+	peerAddr := fmt.Sprintf("http://localhost:%d", auditFreePort(t))
+	cmd := exec.Command("etcd", "-name", name,
+		"-advertise-client-urls", clientAddr, "-initial-advertise-peer-urls", peerAddr,
+		"-listen-client-urls", clientAddr, "-listen-peer-urls", peerAddr,
+		"-initial-cluster", name+"="+peerAddr, "-data-dir", t.TempDir())
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{clientAddr}, DialTimeout: 5 * time.Second})
+	require.NoError(t, err)
+	defer cli.Close()
+	require.Eventually(t, func() bool {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		_, err := cli.Get(ctx, "/")
+		return err == nil
+	}, 30*time.Second, 50*time.Millisecond)
+	return clientAddr, cmd
+}
+
+func auditRelayStatus(pos string) struct {
+	StopStatus *replicationdatapb.StopReplicationStatus
+	Error      error
+} {
+	return struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Error      error
+	}{StopStatus: &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+		After:  &replicationdatapb.Status{SourceUuid: "3E11FA47-71CA-11E1-9E33-C80AA9429562", RelayLogPosition: pos},
+	}}
+}
+
+// TestERSWhenOldPrimaryCellTopoIsDown models the reference deployment: three
+// cells, each with its own cell-local topo, and the whole primary cell
+// (MySQL, vttablet and its cell topo) dies. The surviving replicas and the
+// global topo are healthy, so ERS should be able to promote a replica. It
+// cannot: ERS reads the old primary's tablet record and the tablet map from
+// every cell, and with the context VTOrc passes (no deadline) it blocks on the
+// dead cell topo.
+func TestERSWhenOldPrimaryCellTopoIsDown(t *testing.T) {
+	for _, tc := range []struct {
+		zone1Down   bool
+		primaryCell string
+	}{{false, "zone1"}, {true, "zone1"}, {true, "zone2"}} {
+		zone1Down := tc.zone1Down
+		t.Run(fmt.Sprintf("zone1TopoDown=%v/primaryIn=%s", zone1Down, tc.primaryCell), func(t *testing.T) {
+			globalAddr, _ := auditStartEtcd(t, "global")
+			zone1Addr, zone1Cmd := auditStartEtcd(t, "zone1")
+
+			ctx := t.Context()
+			ts, err := topo.OpenServer("etcd2", globalAddr, "/global")
+			require.NoError(t, err)
+			t.Cleanup(ts.Close)
+			require.NoError(t, ts.CreateCellInfo(ctx, "zone1", &topodatapb.CellInfo{ServerAddress: zone1Addr, Root: "/zone1"}))
+			require.NoError(t, ts.CreateCellInfo(ctx, "zone2", &topodatapb.CellInfo{ServerAddress: globalAddr, Root: "/zone2"}))
+			require.NoError(t, ts.CreateCellInfo(ctx, "zone3", &topodatapb.CellInfo{ServerAddress: globalAddr, Root: "/zone3"}))
+
+			// When the primary is in zone2, zone2-101 plays the dead primary and the
+			// zone1 tablet is a healthy-but-unlisted replica whose cell topo is down.
+			primary := &topodatapb.TabletAlias{Cell: tc.primaryCell, Uid: 100}
+			other := &topodatapb.TabletAlias{Cell: "zone2", Uid: 101}
+			if tc.primaryCell == "zone2" {
+				other = &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+			}
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{Keyspace: "ks", Name: "-", Shard: &topodatapb.Shard{PrimaryAlias: primary}})
+			testutil.AddTablets(ctx, t, ts, nil,
+				&topodatapb.Tablet{Alias: primary, Keyspace: "ks", Shard: "-", Type: topodatapb.TabletType_PRIMARY},
+				&topodatapb.Tablet{Alias: other, Keyspace: "ks", Shard: "-", Type: topodatapb.TabletType_REPLICA},
+				&topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone3", Uid: 102}, Keyspace: "ks", Shard: "-", Type: topodatapb.TabletType_REPLICA},
+			)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityCrossCell)
+
+			tmc := &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{"zone3-0000000102": nil},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{"zone3-0000000102": {Result: "ok"}},
+				SetReplicationSourceResults: map[string]error{topoproto.TabletAliasString(primary): nil, topoproto.TabletAliasString(other): nil},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					topoproto.TabletAliasString(primary): {Error: fmt.Errorf("tablet unreachable")},
+					topoproto.TabletAliasString(other):   auditRelayStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"),
+					"zone3-0000000102":                   auditRelayStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26"),
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					topoproto.TabletAliasString(other): {"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil},
+					"zone3-0000000102":                 {"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil},
+				},
+			}
+
+			if zone1Down {
+				require.NoError(t, zone1Cmd.Process.Kill())
+			}
+
+			// VTOrc runs ERS under LockShard(context.Background()), i.e. no deadline.
+			// Bound it here so the test terminates.
+			ersCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			start := time.Now()
+			erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+			ev, err := erp.ReparentShard(ersCtx, "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 5 * time.Second})
+			t.Logf("ERS returned after %v: err=%v", time.Since(start), err)
+			if !zone1Down {
+				require.NoError(t, err)
+				require.Equal(t, "zone3", ev.NewPrimary.Alias.Cell)
+				return
+			}
+			require.Error(t, err)
+			require.GreaterOrEqual(t, time.Since(start), 19*time.Second, "ERS should have blocked on the dead cell topo until its caller's deadline")
+		})
+	}
+}

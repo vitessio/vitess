@@ -1,0 +1,163 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package etcd2topo
+
+import (
+	"context"
+	"net"
+	"path"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+)
+
+func freePort(t *testing.T) int {
+	l, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func openAuditServers(t *testing.T, clientAddr string) (*topo.Server, *topo.Server) {
+	root := path.Join("/audit", t.Name(), topo.GlobalCell)
+	ts1, err := topo.OpenServer("etcd2", clientAddr, root)
+	require.NoError(t, err)
+	t.Cleanup(ts1.Close)
+	ts2, err := topo.OpenServer("etcd2", clientAddr, root)
+	require.NoError(t, err)
+	t.Cleanup(ts2.Close)
+	require.NoError(t, ts1.CreateKeyspace(t.Context(), "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts1.CreateShard(t.Context(), "ks", "0"))
+	return ts1, ts2
+}
+
+// TestShardLockLeaseExpiresWhileHolderIsAlive shows that a shard lock taken
+// through topo.Server.LockShard is only kept alive by CheckShardLocked: the
+// lease KeepAlive is bound to the acquisition context, which LockShard cancels
+// as soon as it returns. A healthy, connected holder that does not call
+// CheckShardLocked for longer than --topo-etcd-lease-ttl loses the lock, and a
+// second process acquires it while the first still believes it holds it.
+func TestShardLockLeaseExpiresWhileHolderIsAlive(t *testing.T) {
+	clientAddr, _ := startEtcd(t, freePort(t), freePort(t))
+	oldTTL := leaseTTL
+	leaseTTL = 2
+	t.Cleanup(func() { leaseTTL = oldTTL })
+
+	ts1, ts2 := openAuditServers(t, clientAddr)
+
+	lockCtx1, unlock1, err := ts1.LockShard(t.Context(), "ks", "0", "ERS-1")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		var e error
+		unlock1(&e)
+	})
+	acquiredAt := time.Now()
+
+	// Holder 1 is alive and connected but does not call CheckShardLocked
+	// (e.g. it is waiting for relay logs to apply for WaitReplicasTimeout).
+	lockCtx2, unlock2, err := ts2.LockShard(t.Context(), "ks", "0", "ERS-2")
+	require.NoError(t, err)
+	defer func() {
+		var e error
+		unlock2(&e)
+	}()
+	waited := time.Since(acquiredAt)
+	t.Logf("second holder acquired the shard lock %v after the first one, which never released it", waited)
+	assert.Less(t, waited, 10*time.Second)
+
+	// Both contexts carry a lock; only a round trip reveals holder 1 lost it.
+	require.NoError(t, topo.CheckShardLocked(lockCtx2, "ks", "0"))
+	err = topo.CheckShardLocked(lockCtx1, "ks", "0")
+	require.Error(t, err)
+	t.Logf("first holder's CheckShardLocked now returns: %v", err)
+}
+
+// TestShardLockKeptAliveOnlyByChecks is the control: if the holder calls
+// CheckShardLocked more often than the lease TTL, nobody else can take the lock.
+func TestShardLockKeptAliveOnlyByChecks(t *testing.T) {
+	clientAddr, _ := startEtcd(t, freePort(t), freePort(t))
+	oldTTL := leaseTTL
+	leaseTTL = 2
+	t.Cleanup(func() { leaseTTL = oldTTL })
+
+	ts1, ts2 := openAuditServers(t, clientAddr)
+
+	lockCtx1, unlock1, err := ts1.LockShard(t.Context(), "ks", "0", "ERS-1")
+	require.NoError(t, err)
+
+	tryCtx, tryCancel := context.WithTimeout(t.Context(), 6*time.Second)
+	defer tryCancel()
+	got := make(chan error, 1)
+	go func() {
+		_, unlock2, err := ts2.LockShard(tryCtx, "ks", "0", "ERS-2")
+		if err == nil {
+			var e error
+			unlock2(&e)
+		}
+		got <- err
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		require.NoError(t, topo.CheckShardLocked(lockCtx1, "ks", "0"))
+		time.Sleep(500 * time.Millisecond)
+	}
+	var e error
+	unlock1(&e)
+	require.NoError(t, e)
+	// The waiter only gets the lock after the explicit unlock.
+	require.NoError(t, <-got)
+}
+
+// TestCheckShardLockedHangsWhenEtcdUnreachable shows that CheckShardLocked has
+// no deadline of its own: the lock context returned by LockShard carries none,
+// and the etcd client retries KeepAliveOnce (WaitForReady) until the context
+// ends. A lock holder partitioned from etcd blocks in CheckShardLocked instead
+// of learning that it may have lost the lock.
+func TestCheckShardLockedHangsWhenEtcdUnreachable(t *testing.T) {
+	clientAddr, cmd := startEtcd(t, freePort(t), freePort(t))
+	ts1, _ := openAuditServers(t, clientAddr)
+
+	parent, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	lockCtx, _, err := ts1.LockShard(parent, "ks", "0", "ERS-1")
+	require.NoError(t, err)
+
+	require.NoError(t, cmd.Process.Kill())
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() { done <- topo.CheckShardLocked(lockCtx, "ks", "0") }()
+	select {
+	case err := <-done:
+		t.Fatalf("CheckShardLocked returned after %v: %v", time.Since(start), err)
+	case <-time.After(8 * time.Second):
+		t.Logf("CheckShardLocked still blocked after %v with etcd down", time.Since(start))
+	}
+	cancel()
+	select {
+	case err := <-done:
+		require.Error(t, err)
+		t.Logf("CheckShardLocked returned only after the caller's context was cancelled: %v", err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("CheckShardLocked did not return after cancel")
+	}
+}

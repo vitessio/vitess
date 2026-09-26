@@ -1,0 +1,293 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package logic
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	cache "github.com/patrickmn/go-cache"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
+)
+
+// auditTablet builds a tablet for the audit scenarios: one tablet per cell.
+func auditTablet(cell string, uid uint32, host string, tabletType topodatapb.TabletType, termSeconds int64) *topodatapb.Tablet {
+	t := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+		Hostname:      host,
+		MysqlHostname: host,
+		MysqlPort:     3306,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          tabletType,
+		PortMap:       map[string]int32{"vt": 15000 + int32(uid), "grpc": 16000 + int32(uid)},
+	}
+	if termSeconds > 0 {
+		t.PrimaryTermStartTime = &vttimepb.Time{Seconds: termSeconds}
+	}
+	return t
+}
+
+// writeAuditInstance writes a database_instance row as a successful VTOrc poll would have.
+// sourceHost == "" means the tablet is not replicating (looks like a primary to VTOrc).
+func writeAuditInstance(t *testing.T, tab *topodatapb.Tablet, serverID uint, readOnly bool, sourceHost string, replicating bool) {
+	instance := inst.NewInstance()
+	instance.InstanceAlias = tab.Alias
+	instance.Cell = tab.Alias.Cell
+	instance.Hostname = tab.MysqlHostname
+	instance.Port = int(tab.MysqlPort)
+	instance.ServerID = serverID
+	instance.Version = "8.0.31"
+	instance.TabletType = tab.Type
+	instance.ReadOnly = readOnly
+	instance.ReplicaNetTimeout = 8
+	instance.HeartbeatInterval = 4
+	instance.ReplicationIOThreadState = inst.ReplicationThreadStateNoThread
+	instance.ReplicationSQLThreadState = inst.ReplicationThreadStateNoThread
+	if sourceHost != "" {
+		instance.SourceHost = sourceHost
+		instance.SourcePort = 3306
+		instance.SemiSyncReplicaEnabled = true
+		instance.ReplicationSQLThreadRuning = true
+		instance.ReplicationSQLThreadState = inst.ReplicationThreadStateRunning
+		instance.ReplicationIOThreadRuning = replicating
+		instance.ReplicationIOThreadState = inst.ReplicationThreadStateOther // "Connecting"
+		if replicating {
+			instance.ReplicationIOThreadState = inst.ReplicationThreadStateRunning
+		}
+		instance.ReplicationDepth = 1
+	}
+	instance.IsLastCheckValid = true
+	instance.IsUpToDate = true
+	instance.IsRecentlyChecked = true
+	require.NoError(t, inst.WriteInstance(instance, true, nil))
+}
+
+// setupAuditBackend resets VTOrc's backend and the package globals the recovery path needs.
+func setupAuditBackend(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+	inst.InitializeForgetAliasesCache()
+	prevKeys := recentDiscoveryOperationKeys
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+	oldTS, oldTMC := ts, tmc
+	t.Cleanup(func() {
+		recentDiscoveryOperationKeys = prevKeys
+		ts, tmc = oldTS, oldTMC
+	})
+}
+
+// TestAuditStaleViewRepointsNewPrimaryAtOldPrimary demonstrates that the post-lock refresh is
+// skipped entirely when the topo returns a partial result, so a non-shard-wide recovery (fixReplica)
+// acts on VTOrc's stale tablet records and points the NEW primary at the OLD primary, even though the
+// shard record VTOrc just re-read from the global topo under the shard lock names the new primary.
+//
+// Scenario (reference deployment, durability cross_cell): zone1-100 is the old primary, zone2-200 was
+// promoted by another VTOrc's ERS, zone3-300 now replicates from zone2-200. This VTOrc cannot read
+// zone2's local topo, so its vitess_tablet row for zone2-200 still says REPLICA. The old primary
+// zone1-100 is reachable again and has not demoted itself yet. The instance rows below are what this
+// VTOrc's FullStatus polls return in that state.
+//
+// Note: VTOrc's inst package has its own TMC which is nil in this test, so the forced
+// DiscoverInstance calls made during recovery fail (recovered panic) and leave the rows untouched,
+// which is equivalent to them re-reading the same state.
+func TestAuditStaleViewRepointsNewPrimaryAtOldPrimary(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		zone2TopoReachable bool
+		wantRepoint        bool
+	}{
+		{name: "zone2 topo reachable (control)", zone2TopoReachable: true, wantRepoint: false},
+		{name: "zone2 topo unreachable", zone2TopoReachable: false, wantRepoint: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setupAuditBackend(t)
+			ctx := t.Context()
+
+			oldPrimary := auditTablet("zone1", 100, "h100", topodatapb.TabletType_PRIMARY, 1000)
+			newPrimary := auditTablet("zone2", 200, "h200", topodatapb.TabletType_PRIMARY, 2000)
+			replica := auditTablet("zone3", 300, "h300", topodatapb.TabletType_REPLICA, 0)
+
+			var factory *memorytopo.Factory
+			ts, factory = memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
+			require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityCrossCell}))
+			require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+			for _, tab := range []*topodatapb.Tablet{oldPrimary, newPrimary, replica} {
+				require.NoError(t, ts.CreateTablet(ctx, tab))
+			}
+			// The shard record (global topo) already names the new primary.
+			_, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+				si.PrimaryAlias = newPrimary.Alias
+				si.PrimaryTermStartTime = newPrimary.PrimaryTermStartTime
+				return nil
+			})
+			require.NoError(t, err)
+			require.NoError(t, RefreshKeyspaceAndShard("ks", "0"))
+
+			// VTOrc's stale tablet records: zone2-200 is still a REPLICA.
+			staleNewPrimary := auditTablet("zone2", 200, "h200", topodatapb.TabletType_REPLICA, 0)
+			for _, tab := range []*topodatapb.Tablet{oldPrimary, staleNewPrimary, replica} {
+				require.NoError(t, inst.SaveTablet(tab))
+			}
+			// VTOrc's (fresh) MySQL view.
+			writeAuditInstance(t, oldPrimary, 100, false, "", false)      // old primary, back, still writable
+			writeAuditInstance(t, staleNewPrimary, 200, false, "", false) // real new primary: no source, writable
+			writeAuditInstance(t, replica, 300, true, "h200", true)       // replicating from the new primary
+
+			if !tc.zone2TopoReachable {
+				factory.AddOperationError(memorytopo.Get, "tablets/zone2-", errors.New("zone2 topo unreachable"))
+			}
+
+			mockTMC := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+			var mu sync.Mutex
+			var readOnlyCalls []string
+			var repoints []string
+			mockTMC.EXPECT().SetReadOnly(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, tab *topodatapb.Tablet) error {
+					mu.Lock()
+					defer mu.Unlock()
+					readOnlyCalls = append(readOnlyCalls, topoproto.TabletAliasString(tab.Alias))
+					return nil
+				}).AnyTimes()
+			mockTMC.EXPECT().SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, tab *topodatapb.Tablet, parent *topodatapb.TabletAlias, _ int64, _ string, _ bool, semiSync bool, _ float64) error {
+					mu.Lock()
+					defer mu.Unlock()
+					repoints = append(repoints, fmt.Sprintf("%s->%s(semiSync=%v)", topoproto.TabletAliasString(tab.Alias), topoproto.TabletAliasString(parent), semiSync))
+					return nil
+				}).AnyTimes()
+			tmc = mockTMC
+
+			// VTOrc's analysis from its stale view: the real new primary looks like a misbehaving replica.
+			analyses, err := inst.GetDetectionAnalysis("ks", "0", &inst.DetectionAnalysisHints{})
+			require.NoError(t, err)
+			var entry *inst.DetectionAnalysis
+			for _, a := range analyses {
+				t.Logf("pre-lock analysis: %s %v", topoproto.TabletAliasString(a.AnalyzedInstanceAlias), a.Analysis)
+				if topoproto.TabletAliasEqual(a.AnalyzedInstanceAlias, newPrimary.Alias) {
+					entry = a
+				}
+			}
+			require.NotNil(t, entry, "expected an analysis for the new primary")
+			fixCode, _ := getCheckAndRecoverFunctionCode(entry)
+			require.Equal(t, fixReplicaFunc, fixCode, "analysis %v", entry.Analysis)
+
+			require.NoError(t, executeCheckAndRecoverFunction(entry))
+
+			shardPrimaryAlias, _, err := inst.ReadShardPrimaryInformation("ks", "0")
+			require.NoError(t, err)
+			assert.Equal(t, "zone2-0000000200", topoproto.TabletAliasString(shardPrimaryAlias), "shard record re-read under lock names the new primary")
+
+			mu.Lock()
+			defer mu.Unlock()
+			t.Logf("SetReadOnly calls: %v, SetReplicationSource calls: %v", readOnlyCalls, repoints)
+			if tc.wantRepoint {
+				assert.Contains(t, readOnlyCalls, "zone2-0000000200")
+				assert.Contains(t, repoints, "zone2-0000000200->zone1-0000000100(semiSync=true)")
+			} else {
+				assert.Empty(t, repoints)
+				assert.Empty(t, readOnlyCalls)
+			}
+		})
+	}
+}
+
+// TestAuditERSAbortsWhenDeadPrimaryCellTopoUnreachable demonstrates that when the dead primary's cell
+// topo is unreachable (a full cell outage with per-cell local topo servers), VTOrc detects
+// DeadPrimary, takes the shard lock, skips the post-lock refresh (partial result) and runs ERS, but ERS
+// aborts before touching any tablet because it cannot read the old primary's tablet record. VTOrc
+// retries every recovery poll with the same outcome, so no automatic failover happens.
+func TestAuditERSAbortsWhenDeadPrimaryCellTopoUnreachable(t *testing.T) {
+	setupAuditBackend(t)
+	ctx := t.Context()
+
+	primary := auditTablet("zone1", 100, "h100", topodatapb.TabletType_PRIMARY, 1000)
+	r2 := auditTablet("zone2", 200, "h200", topodatapb.TabletType_REPLICA, 0)
+	r3 := auditTablet("zone3", 300, "h300", topodatapb.TabletType_REPLICA, 0)
+
+	var factory *memorytopo.Factory
+	ts, factory = memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityCrossCell}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+	for _, tab := range []*topodatapb.Tablet{primary, r2, r3} {
+		require.NoError(t, ts.CreateTablet(ctx, tab))
+		require.NoError(t, inst.SaveTablet(tab))
+	}
+	_, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primary.Alias
+		si.PrimaryTermStartTime = primary.PrimaryTermStartTime
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, RefreshKeyspaceAndShard("ks", "0"))
+
+	writeAuditInstance(t, primary, 100, false, "", false)
+	writeAuditInstance(t, r2, 200, true, "h100", false) // IO thread "Connecting"
+	writeAuditInstance(t, r3, 300, true, "h100", false) // IO thread "Connecting"
+	// The primary's last poll failed: last_checked after last_seen.
+	_, err = db.ExecVTOrc(`UPDATE database_instance SET last_seen = DATETIME('now', '-1 minute'), last_checked = DATETIME('now') WHERE alias = 'zone1-0000000100'`)
+	require.NoError(t, err)
+
+	// Any tablet RPC issued by ERS would fail the test as an unexpected gomock call.
+	tmc = tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+
+	// Cell zone1 (the primary's cell) goes dark, including its local topo.
+	factory.AddOperationError(memorytopo.Get, "tablets/zone1-", errors.New("zone1 topo unreachable"))
+
+	analyses, err := inst.GetDetectionAnalysis("ks", "0", &inst.DetectionAnalysisHints{})
+	require.NoError(t, err)
+	var entry *inst.DetectionAnalysis
+	for _, a := range analyses {
+		if topoproto.TabletAliasEqual(a.AnalyzedInstanceAlias, primary.Alias) {
+			entry = a
+		}
+	}
+	require.NotNil(t, entry)
+	require.Equal(t, inst.DeadPrimary, entry.Analysis)
+
+	err = executeCheckAndRecoverFunction(entry)
+	t.Logf("executeCheckAndRecoverFunction returned: %v", err)
+	require.ErrorContains(t, err, "zone1 topo unreachable")
+
+	var attempted, successful int
+	require.NoError(t, db.QueryVTOrc(`SELECT COUNT(*) AS attempted, IFNULL(SUM(is_successful), 0) AS successful FROM topology_recovery WHERE analysis = 'DeadPrimary'`, nil, func(m sqlutils.RowMap) error {
+		attempted = m.GetInt("attempted")
+		successful = m.GetInt("successful")
+		return nil
+	}))
+	assert.Equal(t, 1, attempted, "ERS was attempted")
+	assert.Equal(t, 0, successful, "ERS did not fail over")
+}

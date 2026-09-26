@@ -1,0 +1,66 @@
+package discovery
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+// TestAuditOldPrimaryReacceptedAfterNewPrimaryBlips shows that once the
+// newest PRIMARY (higher PrimaryTermStartTime) is momentarily not serving, the
+// healthcheck forgets the highest known term and accepts a stale PRIMARY
+// (lower term) that is still advertising itself as serving.
+func TestAuditOldPrimaryReacceptedAfterNewPrimaryBlips(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+	resultChan := hc.Subscribe("audit")
+
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY}
+
+	oldPrimary := createTestTablet(0, "cell", "a")
+	in1 := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(oldPrimary, in1)
+	hc.AddTablet(oldPrimary)
+	<-resultChan
+
+	newPrimary := createTestTablet(1, "cell", "b")
+	in2 := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(newPrimary, in2)
+	hc.AddTablet(newPrimary)
+	<-resultChan
+
+	send := func(in chan *querypb.StreamHealthResponse, tab *topodatapb.Tablet, serving bool, pts int64) {
+		in <- &querypb.StreamHealthResponse{TabletAlias: tab.Alias, Target: target, Serving: serving,
+			PrimaryTermStartTimestamp: pts, RealtimeStats: &querypb.RealtimeStats{}}
+		<-resultChan
+	}
+
+	send(in1, oldPrimary, true, 10)
+	send(in2, newPrimary, true, 20)
+	h := hc.GetHealthyTabletStats(target)
+	require.Len(t, h, 1)
+	require.Equal(t, uint32(1), h[0].Tablet.Alias.Uid)
+
+	// Old primary keeps advertising itself: correctly ignored.
+	send(in1, oldPrimary, true, 10)
+	h = hc.GetHealthyTabletStats(target)
+	require.Equal(t, uint32(1), h[0].Tablet.Alias.Uid)
+
+	// New primary blips to not-serving (e.g. transient health error).
+	send(in2, newPrimary, false, 20)
+	// Old primary's next periodic broadcast.
+	send(in1, oldPrimary, true, 10)
+	h = hc.GetHealthyTabletStats(target)
+	require.Len(t, h, 1)
+	// The stale primary is now the routing target.
+	require.Equal(t, uint32(0), h[0].Tablet.Alias.Uid, "stale primary accepted")
+}

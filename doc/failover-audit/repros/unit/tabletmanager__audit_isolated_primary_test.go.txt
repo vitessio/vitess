@@ -1,0 +1,50 @@
+package tabletmanager
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+)
+
+// TestAuditIsolatedPrimaryKeepsServing shows that a PRIMARY tablet that loses
+// access to the topo keeps advertising PRIMARY and keeps serving queries
+// indefinitely (there is no lease / self-fencing), and only steps down once
+// the topo becomes reachable again and it observes a newer term.
+func TestAuditIsolatedPrimaryKeepsServing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	oldDelay := shardSyncRetryDelay
+	shardSyncRetryDelay = 200 * time.Millisecond
+	t.Cleanup(func() { shardSyncRetryDelay = oldDelay })
+
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "cell1")
+	tm := newTestTM(t, ts, 100, keyspace, shard, nil)
+	t.Cleanup(tm.Stop)
+
+	updatePrimaryInfoInShardRecord(ctx, t, tm, nil, time.Now().Add(-time.Hour))
+	require.NoError(t, tm.tmState.ChangeTabletType(ctx, topodata.TabletType_PRIMARY, DBActionSetReadWrite))
+	ti, err := ts.GetTablet(ctx, tm.tabletAlias)
+	require.NoError(t, err)
+	require.NoError(t, checkShardRecord(ctx, t, ts, ti.Alias, ti.PrimaryTermStartTime))
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	// Partition the tablet from the topo.
+	factory.SetError(errors.New("topo unreachable"))
+	assert.Never(t, func() bool {
+		return tm.Tablet().Type != topodata.TabletType_PRIMARY || !tm.QueryServiceControl.IsServing()
+	}, 3*time.Second, 100*time.Millisecond, "isolated primary should (by design) keep serving")
+
+	// A new primary is elected elsewhere, then the partition heals.
+	factory.SetError(nil)
+	updatePrimaryInfoInShardRecord(ctx, t, tm, nil, time.Now())
+	assert.Eventually(t, func() bool {
+		return tm.Tablet().Type == topodata.TabletType_REPLICA
+	}, 30*time.Second, 100*time.Millisecond, "old primary should step down after heal")
+}
