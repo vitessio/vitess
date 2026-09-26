@@ -31,5 +31,6 @@ Prompted by the ~15x QPS gap to plain MySQL. Preliminary data is in HOP-OVERHEAD
 | 1 | V2-apply | running-phase apply under heavy writes: max sustainable rate, lag, vplayer commit/position overhead, batching, parallel applier #19535 | 40000 | done |
 | 1 | V6-static | code review of VReplication hot paths not covered yet (no benchmarks) | – | done |
 | 2 | V3-vdiff | VDiff duration and CPU | 30000 | running |
-| 2 | V4-scale | Reshard fan-out (N targets), many streams/tables per tablet, idle overhead, switch-traffic outage remainder | 40000 | running |
+| 2 | V4-scale | Reshard fan-out (N targets), many streams/tables per tablet, idle overhead, switch-traffic outage remainder | 40000 | partial (fan-out + running-phase done) |
 | 3 | V5-vstream | VStream CDC through vtgate: events/s, vtgate CPU, multi-shard merge, copy+stream | 30000 | pending |
+| 2b | V4b-scale-cont | SwitchTraffic outage timeline + A\/B, many tables (500-3000), many workflows per tablet, more coalescing rounds | 40000 | running |
