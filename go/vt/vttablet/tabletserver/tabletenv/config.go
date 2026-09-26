@@ -606,15 +606,21 @@ func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
 }
 
 func (cfg *OltpConfig) UnmarshalJSON(data []byte) (err error) {
+	type Proxy OltpConfig
+
 	var tmp struct {
-		OltpConfig
+		Proxy
 		QueryTimeout string `json:"queryTimeoutSeconds,omitempty"`
 		TxTimeout    string `json:"txTimeoutSeconds,omitempty"`
 	}
 
+	tmp.Proxy = Proxy(*cfg)
+
 	if err = json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
+
+	*cfg = OltpConfig(tmp.Proxy)
 
 	if tmp.QueryTimeout != "" {
 		cfg.QueryTimeout, err = time.ParseDuration(tmp.QueryTimeout)
