@@ -1,0 +1,2 @@
+ab1-base-r1-p1 switchtraffic rc=0 cmd=18.502244596s gap=18.301582363s err=0 load=1.31 | gap=18302ms gap_start=  +16 gap_end_after_routed= +12 | stopw=  16 locks= 217(n2) catch=18014 rev=  30 journ=   3 allow=  16 route=   6
+ab1-base-r1-p1 reversetraffic rc=0 cmd=.504151432s gap=308.487385ms err=0 load=1.18 | gap= 308ms gap_start=  +16 gap_end_after_routed= +12 | stopw=  17 locks= 220(n2) catch=  15 rev=  26 journ=   6 allow=  19 route=   6

@@ -1,0 +1,2294 @@
+diff --git a/go/flags/endtoend/vtcombo.txt b/go/flags/endtoend/vtcombo.txt
+index c826c1a65f..a0de7aede4 100644
+--- a/go/flags/endtoend/vtcombo.txt
++++ b/go/flags/endtoend/vtcombo.txt
+@@ -441,6 +441,8 @@ Flags:
+       --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+       --vschema-persistence-dir string                                   If set, per-keyspace vschema will be persisted in this directory and reloaded into the in-memory topology server across restarts. Bookkeeping is performed using a simple watcher goroutine. This is useful when running vtcombo as an application development container (e.g. vttestserver) where you want to keep the same vschema even if developer's machine reboots. This works in tandem with vttestserver's --persistent_mode flag. Needless to say, this is neither a perfect nor a production solution for vschema persistence. Consider using the --external-topo-server flag if you require a more complete solution. This flag is ignored if --external-topo-server is set.
+       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
++      --vstream-coalesce-empty-transactions                              (Experimental) When a vstream is behind the binlog, do not send the transactions that are empty for its filter if a later transaction follows. Reduces the source and target CPU of streams that only replicate a part of the source (Reshard, sharded MoveTables, MoveTables of some tables).
++      --vstream-coalesce-empty-transactions-window duration              (Experimental) With --vstream-coalesce-empty-transactions, how long a vstream that has caught up with the binlog may hold a transaction that is empty for its filter before sending it, so that it can be coalesced with later ones. 0 sends it right away. A consumer waiting for a position (e.g. SwitchTraffic) may wait up to this long more.
+       --vstream-dynamic-packet-size                                      Enable dynamic packet sizing for vstreamers. This will adjust the packet size in vreplication workflows to improve performance. (default true)
+       --vstream-packet-size int                                          Suggested packet size for vstreamers. The actual packet size may be more or less than this amount. (default 250000)
+       --vtctld-sanitize-log-messages                                     When true, vtctld sanitizes logging.
+diff --git a/go/flags/endtoend/vttablet.txt b/go/flags/endtoend/vttablet.txt
+index aad760bc2c..6a06e16ab5 100644
+--- a/go/flags/endtoend/vttablet.txt
++++ b/go/flags/endtoend/vttablet.txt
+@@ -442,6 +442,8 @@ Flags:
+       --vreplication-retry-delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
+       --vreplication-store-compressed-gtid                               Store compressed gtids in the pos column of the sidecar database's vreplication table
+       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
++      --vstream-coalesce-empty-transactions                              (Experimental) When a vstream is behind the binlog, do not send the transactions that are empty for its filter if a later transaction follows. Reduces the source and target CPU of streams that only replicate a part of the source (Reshard, sharded MoveTables, MoveTables of some tables).
++      --vstream-coalesce-empty-transactions-window duration              (Experimental) With --vstream-coalesce-empty-transactions, how long a vstream that has caught up with the binlog may hold a transaction that is empty for its filter before sending it, so that it can be coalesced with later ones. 0 sends it right away. A consumer waiting for a position (e.g. SwitchTraffic) may wait up to this long more.
+       --vstream-dynamic-packet-size                                      Enable dynamic packet sizing for vstreamers. This will adjust the packet size in vreplication workflows to improve performance. (default true)
+       --vstream-packet-size int                                          Suggested packet size for vstreamers. The actual packet size may be more or less than this amount. (default 250000)
+       --vttablet-skip-buildinfo-tags string                              comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
+diff --git a/go/mysql/schema.go b/go/mysql/schema.go
+index 638af3d9a7..9313884117 100644
+--- a/go/mysql/schema.go
++++ b/go/mysql/schema.go
+@@ -32,6 +32,13 @@ const (
+ 		FROM information_schema.STATISTICS
+ 		WHERE TABLE_SCHEMA = DATABASE() AND LOWER(INDEX_NAME) = 'primary'
+ 		ORDER BY table_name, SEQ_IN_INDEX`
++	// ShowPrimaryForTable fetches the primary key info of one table, whose name is
++	// the SQL-encoded parameter. It returns the same fields as BaseShowPrimary.
++	ShowPrimaryForTable = `
++		SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
++		FROM information_schema.STATISTICS
++		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND LOWER(INDEX_NAME) = 'primary'
++		ORDER BY SEQ_IN_INDEX`
+ 	// ShowRowsRead is the query used to find the number of rows read.
+ 	ShowRowsRead = "show status like 'Innodb_rows_read'"
+ )
+diff --git a/go/vt/binlog/binlog_connection.go b/go/vt/binlog/binlog_connection.go
+index 1cac5bb458..86f08f4c9c 100644
+--- a/go/vt/binlog/binlog_connection.go
++++ b/go/vt/binlog/binlog_connection.go
+@@ -25,6 +25,7 @@ import (
+ 	"math/big"
+ 	"slices"
+ 	"sync"
++	"time"
+ 
+ 	"vitess.io/vitess/go/mysql"
+ 	"vitess.io/vitess/go/mysql/replication"
+@@ -38,6 +39,44 @@ import (
+ // cannot find a suitable binlog to satisfy the request.
+ var ErrBinlogUnavailable = errors.New("cannot find relevant binlogs on this server")
+ 
++const (
++	// EventQueueSize is the buffer size of the channels that hand binlog
++	// events from the goroutine reading them to their consumer. Handing each
++	// event over an unbuffered channel costs a goroutine switch per event,
++	// which was a large part of the vstreamer's CPU usage at high event rates.
++	EventQueueSize = 16
++
++	// largeEventSize is the size above which SendEvent waits for the queue to
++	// be empty before queueing an event, so that queued events use at most
++	// about EventQueueSize*largeEventSize bytes plus one large event.
++	largeEventSize = 64 * 1024
++
++	// largeEventWaitInterval is how often SendEvent checks whether the queue is
++	// empty before queueing a large event.
++	largeEventWaitInterval = 100 * time.Microsecond
++)
++
++// SendEvent queues ev on ch, a channel with a buffer of EventQueueSize, unless
++// ctx is done first. Large events are only queued once ch is empty, so that ch
++// holds at most one of them. It returns false if ctx is done.
++func SendEvent(ctx context.Context, ch chan<- mysql.BinlogEvent, ev mysql.BinlogEvent) bool {
++	if len(ev.Bytes()) > largeEventSize {
++		for len(ch) > 0 {
++			select {
++			case <-ctx.Done():
++				return false
++			case <-time.After(largeEventWaitInterval):
++			}
++		}
++	}
++	select {
++	case ch <- ev:
++		return true
++	case <-ctx.Done():
++		return false
++	}
++}
++
+ // BinlogConnection represents a connection to mysqld that pretends to be a replica
+ // connecting for replication. Each such connection must identify itself to
+ // mysqld with a server ID that is unique both among other BinlogConnections and
+@@ -142,8 +181,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
+ // streamEvents returns a channel on which events are streamed and a channel on
+ // which errors are propagated.
+ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.BinlogEvent, chan error) {
+-	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
+-	eventChan := make(chan mysql.BinlogEvent)
++	eventChan := make(chan mysql.BinlogEvent, EventQueueSize)
+ 	errChan := make(chan error)
+ 
+ 	// Start reading events.
+@@ -172,9 +210,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
+ 				return
+ 			}
+ 
+-			select {
+-			case eventChan <- event:
+-			case <-ctx.Done():
++			if !SendEvent(ctx, eventChan, event) {
+ 				return
+ 			}
+ 		}
+diff --git a/go/vt/binlog/binlog_connection_test.go b/go/vt/binlog/binlog_connection_test.go
+new file mode 100644
+index 0000000000..50bcbae020
+--- /dev/null
++++ b/go/vt/binlog/binlog_connection_test.go
+@@ -0,0 +1,82 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package binlog
++
++import (
++	"context"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql"
++)
++
++// TestSendEventQueuesSmallEvents checks that small events are queued without
++// waiting for the consumer, up to EventQueueSize.
++func TestSendEventQueuesSmallEvents(t *testing.T) {
++	ch := make(chan mysql.BinlogEvent, EventQueueSize)
++	for range EventQueueSize {
++		require.True(t, SendEvent(t.Context(), ch, mysql.NewMysql56BinlogEvent(make([]byte, 100))))
++	}
++	assert.Len(t, ch, EventQueueSize)
++
++	// The queue is full: SendEvent returns false once ctx is done.
++	ctx, cancel := context.WithCancel(t.Context())
++	cancel()
++	assert.False(t, SendEvent(ctx, ch, mysql.NewMysql56BinlogEvent(make([]byte, 100))))
++}
++
++// TestSendEventQueuesLargeEventsAlone checks that a large event is only
++// queued once the queue is empty, which bounds the memory used by queued events.
++func TestSendEventQueuesLargeEventsAlone(t *testing.T) {
++	ch := make(chan mysql.BinlogEvent, EventQueueSize)
++	small := mysql.NewMysql56BinlogEvent(make([]byte, 100))
++	large := mysql.NewMysql56BinlogEvent(make([]byte, largeEventSize+1))
++	require.True(t, SendEvent(t.Context(), ch, small))
++
++	sent := make(chan bool, 1)
++	go func() {
++		sent <- SendEvent(t.Context(), ch, large)
++	}()
++	assert.Never(t, func() bool { return len(ch) > 1 }, 100*time.Millisecond, 5*time.Millisecond)
++
++	assert.Equal(t, small, <-ch)
++	select {
++	case ok := <-sent:
++		assert.True(t, ok)
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "large event was not queued once the queue was empty")
++	}
++	assert.Equal(t, large, <-ch)
++
++	// A large event waiting for the queue to drain gives up when ctx is done.
++	require.True(t, SendEvent(t.Context(), ch, small))
++	ctx, cancel := context.WithCancel(t.Context())
++	go func() {
++		sent <- SendEvent(ctx, ch, large)
++	}()
++	cancel()
++	select {
++	case ok := <-sent:
++		assert.False(t, ok)
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "SendEvent did not return after ctx was canceled")
++	}
++	assert.Len(t, ch, 1)
++}
+diff --git a/go/vt/discovery/tablet_picker.go b/go/vt/discovery/tablet_picker.go
+index 148c158d35..e1ba60f9c5 100644
+--- a/go/vt/discovery/tablet_picker.go
++++ b/go/vt/discovery/tablet_picker.go
+@@ -61,10 +61,19 @@ const (
+ )
+ 
+ var (
++	// tabletPickerRetryDelay is the maximum delay between attempts to find a
++	// tablet for streaming.
+ 	tabletPickerRetryDelay   = 30 * time.Second
+ 	muTabletPickerRetryDelay sync.Mutex
+ 	globalTPStats            *tabletPickerStats
+ 
++	// tabletPickerInitialRetryDelay is the delay before the first retry. It
++	// doubles on each failed attempt, up to tabletPickerRetryDelay, so that a
++	// stream whose source tablet becomes serving a moment after the first
++	// attempt (e.g. when both tablets restart at the same time) does not wait
++	// for the full tabletPickerRetryDelay.
++	tabletPickerInitialRetryDelay = 1 * time.Second
++
+ 	tabletPickerCellPreferenceMap = map[string]TabletPickerCellPreference{
+ 		"preferlocalwithalias": TabletPickerCellPreference_PreferLocalWithAlias,
+ 		"onlyspecified":        TabletPickerCellPreference_OnlySpecified,
+@@ -344,8 +353,9 @@ func (tp *TabletPicker) sortCandidates(ctx context.Context, candidates []*topo.T
+ // Selection is based on CellPreference.
+ // See prioritizeTablets for prioritization logic.
+ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
+-	// Keep trying at intervals (tabletPickerRetryDelay) until a healthy
+-	// serving tablet is found or the context is cancelled.
++	// Keep trying at increasing intervals, up to tabletPickerRetryDelay,
++	// until a healthy serving tablet is found or the context is cancelled.
++	retryDelay := min(tabletPickerInitialRetryDelay, GetTabletPickerRetryDelay())
+ 	for {
+ 		select {
+ 		case <-ctx.Done():
+@@ -357,14 +367,15 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
+ 		if len(candidates) == 0 {
+ 			// If no viable candidates were found, sleep and try again.
+ 			tp.incNoTabletFoundStat()
+-			log.Info(fmt.Sprintf("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, maxReplicationLag: %v, sleeping for %.3f seconds.", tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, tp.options.ExcludeTabletsWithMaxReplicationLag, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0))
+-			timer := time.NewTimer(GetTabletPickerRetryDelay())
++			log.Info(fmt.Sprintf("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, maxReplicationLag: %v, sleeping for %.3f seconds.", tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, tp.options.ExcludeTabletsWithMaxReplicationLag, float64(retryDelay.Milliseconds())/1000.0))
++			timer := time.NewTimer(retryDelay)
+ 			select {
+ 			case <-ctx.Done():
+ 				timer.Stop()
+ 				return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+ 			case <-timer.C:
+ 			}
++			retryDelay = min(2*retryDelay, GetTabletPickerRetryDelay())
+ 			continue
+ 		}
+ 		log.Info("Tablet picker found a healthy tablet for streaming: " + candidates[0].Tablet.String())
+diff --git a/go/vt/discovery/tablet_picker_test.go b/go/vt/discovery/tablet_picker_test.go
+index 3c34597e82..b413ccea9e 100644
+--- a/go/vt/discovery/tablet_picker_test.go
++++ b/go/vt/discovery/tablet_picker_test.go
+@@ -518,6 +518,45 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
+ 	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
+ }
+ 
++// TestPickRetriesSoonAfterNoTablet checks that the first retries after
++// finding no tablet happen well before tabletPickerRetryDelay, so that a
++// stream does not wait for the full delay when its source tablet becomes
++// serving shortly after the first attempt, e.g. when both restart at once.
++func TestPickRetriesSoonAfterNoTablet(t *testing.T) {
++	ctx := utils.LeakCheckContext(t)
++
++	te := newPickerTestEnv(t, ctx, []string{"cell"})
++	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
++	require.NoError(t, err)
++
++	delay := GetTabletPickerRetryDelay()
++	t.Cleanup(func() {
++		SetTabletPickerRetryDelay(delay)
++	})
++	SetTabletPickerRetryDelay(time.Hour)
++
++	noTabletFound := func() int64 {
++		return globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"]
++	}
++	before := noTabletFound()
++	pickCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
++	defer cancel()
++	result := make(chan *topodatapb.Tablet, 1)
++	go func() {
++		tablet, err := tp.PickForStreaming(pickCtx)
++		assert.NoError(t, err)
++		result <- tablet
++	}()
++
++	// Add the tablet once the first attempt has failed.
++	require.Eventually(t, func() bool { return noTabletFound() > before }, 30*time.Second, time.Millisecond)
++	want := addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
++	defer deleteTablet(t, te, want)
++	got := <-result
++	require.NotNil(t, got, "Tablet should not be nil")
++	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
++}
++
+ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
+ 	ctx := utils.LeakCheckContext(t)
+ 
+diff --git a/go/vt/mysqlctl/schema.go b/go/vt/mysqlctl/schema.go
+index ad4f01e208..04d537321c 100644
+--- a/go/vt/mysqlctl/schema.go
++++ b/go/vt/mysqlctl/schema.go
+@@ -21,6 +21,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"regexp"
++	"slices"
+ 	"sort"
+ 	"strings"
+ 
+@@ -175,6 +176,17 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string,
+ 	if !includeViews {
+ 		sql += " AND table_type = '" + tmutils.TableBaseTable + "'"
+ 	}
++	// When only named tables are requested (no regular expressions), read only those
++	// rows: reading information_schema.tables for the whole schema is slow on schemas
++	// with thousands of tables, and VReplication asks for one table at a time. The
++	// filter below still decides which rows are kept.
++	if len(tables) > 0 && !slices.ContainsFunc(tables, func(table string) bool { return strings.HasPrefix(table, "/") }) {
++		encoded := make([]string, 0, len(tables))
++		for _, table := range tables {
++			encoded = append(encoded, sqltypes.EncodeStringSQL(table))
++		}
++		sql += " AND table_name IN (" + strings.Join(encoded, ", ") + ")"
++	}
+ 	qr, err := mysqld.FetchSuperQuery(ctx, sql)
+ 	if err != nil {
+ 		return nil, err
+diff --git a/go/vt/mysqlctl/schema_test.go b/go/vt/mysqlctl/schema_test.go
+index 20bde3a32c..607a1c3222 100644
+--- a/go/vt/mysqlctl/schema_test.go
++++ b/go/vt/mysqlctl/schema_test.go
+@@ -443,3 +443,32 @@ func TestGetPrimaryKeyColumns(t *testing.T) {
+ 	assert.Contains(t, res, "col1")
+ 	assert.Len(t, res, 1)
+ }
++
++// TestGetSchemaReadsOnlyRequestedTables checks that GetSchema for named tables reads only
++// their rows from information_schema.tables, not the rows of every table in the schema.
++func TestGetSchemaReadsOnlyRequestedTables(t *testing.T) {
++	db := fakesqldb.New(t)
++	defer db.Close()
++
++	params := db.ConnParams()
++	cp := *params
++	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
++
++	testMysqld := NewMysqld(dbc)
++	defer testMysqld.Close()
++
++	db.AddQuery("SELECT 1", &sqltypes.Result{})
++	db.AddQuery("SHOW CREATE DATABASE IF NOT EXISTS `fakesqldb`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|cmd", "varchar|varchar"), "create_db|create_db_cmd"))
++	db.AddQuery("SHOW CREATE TABLE `fakesqldb`.`t1`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|cmd", "varchar|varchar"), "create_table|create_table_cmd"))
++	// The query without the table_name predicate is not registered, so reading every
++	// table of the schema fails.
++	db.AddQuery("SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = 'fakesqldb' AND table_type = 'BASE TABLE' AND table_name IN ('t1')", sqltypes.MakeTestResult(
++		sqltypes.MakeTestFields("table_name|table_type|data_length|table_rows", "varchar|varchar|uint64|uint64"), "t1|BASE TABLE|16384|2"))
++
++	res, err := testMysqld.GetSchema(t.Context(), db.Name(), &tabletmanagerdata.GetSchemaRequest{Tables: []string{"t1"}, TableSchemaOnly: true})
++	require.NoError(t, err)
++	require.Len(t, res.TableDefinitions, 1)
++	assert.Equal(t, "t1", res.TableDefinitions[0].Name)
++	assert.Equal(t, "create_table_cmd", res.TableDefinitions[0].Schema)
++	assert.EqualValues(t, 2, res.TableDefinitions[0].RowCount)
++}
+diff --git a/go/vt/vtctl/workflow/framework_test.go b/go/vt/vtctl/workflow/framework_test.go
+index e0ee3c28b9..33e3b5abb7 100644
+--- a/go/vt/vtctl/workflow/framework_test.go
++++ b/go/vt/vtctl/workflow/framework_test.go
+@@ -282,6 +282,9 @@ type testTMClient struct {
+ 	primaryPositions                   map[uint32]string
+ 	vdiffRequests                      map[uint32]*vdiffRequestResponse
+ 	refreshStateErrors                 map[uint32]error
++	// schemaReloads counts, per tablet UID, the ReloadSchema calls and the
++	// ExecuteFetchAsDba requests that asked for a schema reload.
++	schemaReloads map[uint32]int
+ 
+ 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
+ 	readVReplicationWorkflowsResponses       map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
+@@ -528,6 +531,9 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
+ }
+ 
+ func (tmc *testTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
++	if req.ReloadSchema {
++		tmc.recordSchemaReload(tablet)
++	}
+ 	// Reuse VReplicationExec.
+ 	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
+ }
+@@ -886,9 +892,25 @@ func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletman
+ }
+ 
+ func (tmc *testTMClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
++	tmc.recordSchemaReload(tablet)
+ 	return nil
+ }
+ 
++func (tmc *testTMClient) recordSchemaReload(tablet *topodatapb.Tablet) {
++	tmc.mu.Lock()
++	defer tmc.mu.Unlock()
++	if tmc.schemaReloads == nil {
++		tmc.schemaReloads = make(map[uint32]int)
++	}
++	tmc.schemaReloads[tablet.Alias.Uid]++
++}
++
++func (tmc *testTMClient) getSchemaReloads(uid uint32) int {
++	tmc.mu.Lock()
++	defer tmc.mu.Unlock()
++	return tmc.schemaReloads[uid]
++}
++
+ func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+ 	expect := tmc.updateSequenceTablesRequests[tablet.Alias.Uid]
+ 	if expect == nil {
+diff --git a/go/vt/vtctl/workflow/server.go b/go/vt/vtctl/workflow/server.go
+index 4b0f62b413..f1268cad46 100644
+--- a/go/vt/vtctl/workflow/server.go
++++ b/go/vt/vtctl/workflow/server.go
+@@ -3179,6 +3179,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
+ 		return handleError("workflow validation failed", err)
+ 	}
+ 
++	// targetWritesAllowed is set once the target's denied tables have been removed.
++	targetWritesAllowed := false
++
+ 	if req.EnableReverseReplication {
+ 		// Does the source keyspace have tablets that are able to manage
+ 		// the reverse workflow?
+@@ -3287,6 +3290,10 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
+ 			}
+ 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
+ 		}
++		// For a table migration, stopping the source writes also removed the target's denied
++		// tables entries (see switchDeniedTables), so writes are already allowed on the target.
++		targetWritesAllowed = ts.MigrationType() == binlogdatapb.MigrationType_TABLES && !req.DryRun
++		ts.Logger().Infof("Stopped source writes")
+ 
+ 		ts.Logger().Infof("Stopping streams")
+ 		// Use a shorter context for this since since when doing a Reshard, if there are intra-keyspace
+@@ -3321,7 +3328,12 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
+ 				}
+ 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
+ 				// and thus the locks released.
+-				time.Sleep(lockTablesCycleDelay)
++				// The pause gives writes that raced past the deny list check before the first lock a
++				// chance to reach mysqld before the next cycle. There is nothing left to catch after
++				// the last cycle, so we don't pause there: writes are blocked during this time.
++				if cnt < lockTablesCycles {
++					time.Sleep(lockTablesCycleDelay)
++				}
+ 			}
+ 		}
+ 		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
+@@ -3423,11 +3435,17 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
+ 	}
+ 	ts.logger.Infof("Created journals for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+ 
+-	ts.logger.Infof("Allowing writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+-	if err := sw.allowTargetWrites(ctx); err != nil {
+-		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
++	if targetWritesAllowed {
++		// Doing it again would update the shard records and refresh every source and target
++		// tablet a second time, while writes are blocked.
++		ts.logger.Infof("Writes on target for workflow %s.%s were allowed when source writes were stopped", ts.targetKeyspace, ts.workflow)
++	} else {
++		ts.logger.Infof("Allowing writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
++		if err := sw.allowTargetWrites(ctx); err != nil {
++			return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
++		}
++		ts.logger.Infof("Allowed writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+ 	}
+-	ts.logger.Infof("Allowed writes on target for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+ 
+ 	ts.logger.Infof("Updating routing rules for workflow %s.%s", ts.targetKeyspace, ts.workflow)
+ 	if err := sw.changeRouting(ctx); err != nil {
+diff --git a/go/vt/vtctl/workflow/server_test.go b/go/vt/vtctl/workflow/server_test.go
+index aed3790f4c..ef2083c5f3 100644
+--- a/go/vt/vtctl/workflow/server_test.go
++++ b/go/vt/vtctl/workflow/server_test.go
+@@ -662,6 +662,10 @@ func TestWorkflowDelete(t *testing.T) {
+ 		wantErr                         string
+ 		postFunc                        func(t *testing.T, env *testEnv)
+ 		expectedLogs                    []string
++		// targetSchemaReloads, if not zero, is the number of schema reloads that each
++		// target primary must see: dropping the tables must not reload the schema once
++		// per table.
++		targetSchemaReloads int
+ 	}{
+ 		{
+ 			name: "delete workflow",
+@@ -698,6 +702,7 @@ func TestWorkflowDelete(t *testing.T) {
+ 					result: &querypb.QueryResult{},
+ 				},
+ 			},
++			targetSchemaReloads: 1,
+ 			want: &vtctldatapb.WorkflowDeleteResponse{
+ 				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+ 					workflowName, targetKeyspaceName),
+@@ -1486,6 +1491,12 @@ func TestWorkflowDelete(t *testing.T) {
+ 				require.NoError(t, err)
+ 				require.Equal(t, tc.want, got, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+ 			}
++			if tc.targetSchemaReloads != 0 {
++				for _, tablet := range env.tablets[tc.targetKeyspace.KeyspaceName] {
++					require.Equal(t, tc.targetSchemaReloads, env.tmc.getSchemaReloads(tablet.Alias.Uid),
++						"schema reloads on target tablet %d", tablet.Alias.Uid)
++				}
++			}
+ 			if tc.postFunc != nil {
+ 				tc.postFunc(t, env)
+ 			} else { // Default post checks
+diff --git a/go/vt/vtctl/workflow/traffic_switcher.go b/go/vt/vtctl/workflow/traffic_switcher.go
+index 6ec3059eac..65781e9fe8 100644
+--- a/go/vt/vtctl/workflow/traffic_switcher.go
++++ b/go/vt/vtctl/workflow/traffic_switcher.go
+@@ -581,9 +581,11 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
+ 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
+ 			}
+ 			_, err = ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+-				Query:                   []byte(query),
+-				MaxRows:                 1,
+-				ReloadSchema:            true,
++				Query:   []byte(query),
++				MaxRows: 1,
++				// The schema is reloaded once, after the last table: a reload per table
++				// is quadratic in the number of tables.
++				ReloadSchema:            false,
+ 				DisableForeignKeyChecks: true,
+ 			})
+ 			if err != nil {
+@@ -596,6 +598,7 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
+ 			}
+ 			ts.Logger().Infof("%s: Removed table %s.%s\n", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName)
+ 		}
++		ts.reloadSchemaAfterTableRemoval(ctx, source.GetPrimary().Tablet)
+ 		return nil
+ 	})
+ 	if err != nil {
+@@ -605,6 +608,15 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
+ 	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.SourceKeyspaceName())
+ }
+ 
++// reloadSchemaAfterTableRemoval reloads the schema of the tablet once after its tables
++// were dropped or renamed. Like the reload of ExecuteFetchAsDba, a failure is only logged:
++// the tablet reloads its schema on its own later.
++func (ts *trafficSwitcher) reloadSchemaAfterTableRemoval(ctx context.Context, tablet *topodatapb.Tablet) {
++	if err := ts.ws.tmc.ReloadSchema(ctx, tablet, ""); err != nil {
++		ts.Logger().Warningf("%s: Error reloading the schema after removing tables: %v", topoproto.TabletAliasString(tablet.Alias), err)
++	}
++}
++
+ // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
+ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
+ 	return ts.ForAllSources(func(source *MigrationSource) error {
+@@ -1279,7 +1291,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+ 				res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+ 					Query:                   []byte(query),
+ 					MaxRows:                 1,
+-					ReloadSchema:            true,
++					ReloadSchema:            false, // Reloaded once, after the last table.
+ 					DisableForeignKeyChecks: true,
+ 				})
+ 				ts.Logger().Infof("Removed target table with result: %+v", res)
+@@ -1295,6 +1307,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+ 				ts.Logger().Infof("%s: Removed table %s.%s\n",
+ 					topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+ 			}
++			ts.reloadSchemaAfterTableRemoval(ctx, target.GetPrimary().Tablet)
+ 			return nil
+ 		})
+ 		if err != nil {
+@@ -1346,7 +1359,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+ 					res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+ 						Query:                   []byte(query),
+ 						MaxRows:                 1,
+-						ReloadSchema:            true,
++						ReloadSchema:            false, // Reloaded once, after the last table.
+ 						DisableForeignKeyChecks: true,
+ 					})
+ 
+@@ -1370,7 +1383,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+ 					res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+ 						Query:                   []byte(query),
+ 						MaxRows:                 1,
+-						ReloadSchema:            true,
++						ReloadSchema:            false, // Reloaded once, after the last table.
+ 						DisableForeignKeyChecks: true,
+ 					})
+ 
+@@ -1388,6 +1401,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+ 						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+ 				}
+ 			}
++			ts.reloadSchemaAfterTableRemoval(ctx, target.GetPrimary().Tablet)
+ 
+ 			return nil
+ 		})
+@@ -1493,7 +1507,9 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error
+ 			Query:          []byte(lockStmt),
+ 			MaxRows:        uint64(1),
+ 			DisableBinlogs: false,
+-			ReloadSchema:   true,
++			// LOCK TABLES does not change the schema. Reloading it here would add a full
++			// schema reload on every source primary to each cycle, while writes are blocked.
++			ReloadSchema: false,
+ 		})
+ 		if err != nil {
+ 			ts.Logger().Errorf("Error executing %s on source tablet %v: %v", lockStmt, tablet, err)
+diff --git a/go/vt/vttablet/common/flags.go b/go/vt/vttablet/common/flags.go
+index fcfbe18770..26d1c6a8c6 100644
+--- a/go/vt/vttablet/common/flags.go
++++ b/go/vt/vttablet/common/flags.go
+@@ -89,6 +89,13 @@ var (
+ 	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
+ 	VStreamerDefaultPacketSize       = 250000
+ 	VStreamerUseDynamicPacketSize    = true
++
++	// VStreamerCoalesceEmptyTransactions lets a vstreamer that is behind the binlog skip sending
++	// the transactions that are empty for its filter when a later transaction follows.
++	VStreamerCoalesceEmptyTransactions = false
++	// VStreamerCoalesceEmptyTransactionsWindow is how long a caught-up vstreamer may hold a
++	// transaction that is empty for its filter, waiting for a later one that subsumes it.
++	VStreamerCoalesceEmptyTransactionsWindow time.Duration
+ )
+ 
+ func GetVReplicationNetReadTimeout() int {
+@@ -129,6 +136,12 @@ func registerFlags(fs *pflag.FlagSet) {
+ 
+ 	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
+ 
++	fs.BoolVar(&VStreamerCoalesceEmptyTransactions, "vstream-coalesce-empty-transactions", VStreamerCoalesceEmptyTransactions,
++		"(Experimental) When a vstream is behind the binlog, do not send the transactions that are empty for its filter if a later transaction follows. Reduces the source and target CPU of streams that only replicate a part of the source (Reshard, sharded MoveTables, MoveTables of some tables).")
++
++	fs.DurationVar(&VStreamerCoalesceEmptyTransactionsWindow, "vstream-coalesce-empty-transactions-window", VStreamerCoalesceEmptyTransactionsWindow,
++		"(Experimental) With --vstream-coalesce-empty-transactions, how long a vstream that has caught up with the binlog may hold a transaction that is empty for its filter before sending it, so that it can be coalesced with later ones. 0 sends it right away. A consumer waiting for a position (e.g. SwitchTraffic) may wait up to this long more.")
++
+ 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
+ 
+ 	fs.Var(nonNegativeInt64Flag{value: &vreplicationMaxRowJSONBytes}, "vreplication-max-row-json-bytes", "Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.")
+diff --git a/go/vt/vttablet/onlineddl/executor.go b/go/vt/vttablet/onlineddl/executor.go
+index c143c428c4..cafee89b3b 100644
+--- a/go/vt/vttablet/onlineddl/executor.go
++++ b/go/vt/vttablet/onlineddl/executor.go
+@@ -94,6 +94,12 @@ var (
+ 
+ 	migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+ 	cutoverIntervals            = []time.Duration{0, 1 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute}
++
++	// vreplMigrationReviewInterval is how soon a running vreplication migration that is
++	// not yet ready to cut over is reviewed again. Without it, a migration whose copy
++	// completes after the last of migrationNextCheckIntervals waits for the next
++	// migrationCheckInterval tick before its cut-over.
++	vreplMigrationReviewInterval = 5 * time.Second
+ )
+ 
+ const (
+@@ -4037,7 +4043,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
+ 				// understand whether "now is a good time" or "not there yet"
+ 				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
+ 				if !isReady {
+-					// The migration is not ready yet.
++					// The migration is not ready yet. Review it again soon.
++					e.ticks.TriggerAfter(vreplMigrationReviewInterval)
+ 					return nil
+ 				}
+ 				if strategySetting.IsInOrderCompletion() {
+diff --git a/go/vt/vttablet/onlineddl/executor_test.go b/go/vt/vttablet/onlineddl/executor_test.go
+index 12ce36b5e0..f38ef50a22 100644
+--- a/go/vt/vttablet/onlineddl/executor_test.go
++++ b/go/vt/vttablet/onlineddl/executor_test.go
+@@ -1685,6 +1685,75 @@ func TestReviewRunningMigrationsRefreshesLivenessOnAdoption(t *testing.T) {
+ 		"the first review after adoption must refresh liveness without waiting for the stream to write, or the stale review later in the tick fails an active migration")
+ }
+ 
++// TestReviewRunningMigrationsReviewsNotReadyMigrationSoon checks that a
++// running vreplication migration that is not yet ready to cut over schedules
++// another review after vreplMigrationReviewInterval, so that its cut-over does
++// not wait for the next migrationCheckInterval tick once its copy completes.
++func TestReviewRunningMigrationsReviewsNotReadyMigrationSoon(t *testing.T) {
++	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
++	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
++	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
++	const timeUpdated = "1700000000"
++
++	savedInterval := vreplMigrationReviewInterval
++	t.Cleanup(func() { vreplMigrationReviewInterval = savedInterval })
++	vreplMigrationReviewInterval = time.Millisecond
++
++	e := &Executor{
++		env:                       env,
++		tabletAlias:               alias,
++		vreplicationLastError:     map[string]*vterrors.LastError{},
++		vreplicationPendingCancel: map[string]string{},
++		vreplicationProgress:      map[string]vreplStreamProgress{},
++		ticks:                     timer.NewTimer(time.Hour),
++		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
++			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
++		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
++			q := strings.ToLower(query)
++			switch {
++			case strings.Contains(q, "migration_status='running'"):
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
++			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
++				return &sqltypes.Result{}, nil
++			case strings.Contains(q, "from _vt.vreplication_log"):
++				return &sqltypes.Result{}, nil
++			case strings.Contains(q, "copy_state"):
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
++			case strings.Contains(q, "from _vt.vreplication"):
++				// A stream that is still copying: not ready to cut over.
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("id|workflow|source|pos|state|message|time_updated", "int32|varchar|varchar|varchar|varchar|varchar|int64"),
++					"1|"+uuid+"|||Copying||"+timeUpdated), nil
++			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
++				return sqltypes.MakeTestResult(
++					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy|vitess_liveness_indicator", "varchar|varchar|varchar|int64"),
++					uuid+"|running|vitess|"+timeUpdated), nil
++			}
++			return &sqltypes.Result{RowsAffected: 1}, nil
++		},
++	}
++	e.isOpen.Store(1)
++
++	reviewed := make(chan struct{}, 1)
++	e.ticks.Start(func() {
++		select {
++		case reviewed <- struct{}{}:
++		default:
++		}
++	})
++	t.Cleanup(e.ticks.Stop)
++
++	_, _, err := e.reviewRunningMigrations(t.Context())
++	require.NoError(t, err)
++	select {
++	case <-reviewed:
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "a running migration that is not ready to cut over must be reviewed again soon")
++	}
++}
++
+ // TestReviewRunningMigrationsRepairOutcomes pins the two outcomes of a
+ // repair RPC. A successful one is followed by the retirement of the park
+ // record in the same review. A failed one — the engine applies the update
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/controller.go b/go/vt/vttablet/tabletmanager/vreplication/controller.go
+index 7f00125845..957879a0a9 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/controller.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/controller.go
+@@ -86,6 +86,10 @@ type controller struct {
+ 	cancel context.CancelFunc
+ 	done   chan struct{}
+ 
++	// posFlushRequests asks the running vplayer to save its position now if it
++	// has only skipped empty transactions since its last save. See requestPosFlush.
++	posFlushRequests chan struct{}
++
+ 	// The following fields are updated after start. So, they need synchronization.
+ 	sourceTablet atomic.Value
+ 
+@@ -146,6 +150,8 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
+ 		done:            make(chan struct{}),
+ 		source:          &binlogdatapb.BinlogSource{},
+ 		WorkflowConfig:  workflowConfig,
++
++		posFlushRequests: make(chan struct{}, 1),
+ 	}
+ 	blpStats.WorkflowConfig = workflowConfig.String()
+ 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
+@@ -350,6 +356,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
+ 		defer vsClient.Close(ctx)
+ 
+ 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
++		vr.posFlushRequests = ct.posFlushRequests
+ 		err = vr.Replicate(ctx)
+ 		ct.lastWorkflowError.Record(err)
+ 
+@@ -464,3 +471,13 @@ func (ct *controller) Stop(stopStats bool) {
+ 	}
+ 	<-ct.done
+ }
++
++// requestPosFlush asks the running vplayer, if any, to save its current
++// position right away if it has skipped empty transactions since its last
++// save, instead of waiting for idleTimeout. It does not block.
++func (ct *controller) requestPosFlush() {
++	select {
++	case ct.posFlushRequests <- struct{}{}:
++	default:
++	}
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine.go b/go/vt/vttablet/tabletmanager/vreplication/engine.go
+index 0f941131e7..244e79c638 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/engine.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/engine.go
+@@ -72,6 +72,17 @@ const (
+ // stop replicating.
+ var waitRetryTime = 1 * time.Second
+ 
++// waitForPosPollInterval is how often WaitForPos checks the position of a stream.
++// Traffic switches and Online DDL cut-overs wait for a position while writes are
++// blocked, so this has to be short.
++var waitForPosPollInterval = 100 * time.Millisecond
++
++// waitForPosMinPollInterval is the first interval between WaitForPos checks. It
++// doubles after each check up to waitForPosPollInterval. The stream usually
++// reaches the position within a few ms of the first check (after a position
++// flush request), so a short first interval cuts the time writes are blocked.
++var waitForPosMinPollInterval = 5 * time.Millisecond
++
+ // How frequently vcopier will update _vt.vreplication rows_copied
+ var rowsCopiedUpdateInterval = 30 * time.Second
+ 
+@@ -809,8 +820,9 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 	}
+ 	defer dbClient.Close()
+ 
+-	tkr := time.NewTicker(waitRetryTime)
+-	defer tkr.Stop()
++	pollInterval := min(waitForPosMinPollInterval, waitForPosPollInterval)
++	tmr := time.NewTimer(pollInterval)
++	defer tmr.Stop()
+ 	for {
+ 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(id), 10)
+ 		switch {
+@@ -848,6 +860,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 			if qr.Rows[0][1].ToString() == binlogdatapb.VReplicationWorkflowState_Stopped.String() {
+ 				return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
+ 			}
++			// The stream may already have applied everything up to mPos but
++			// not saved its position yet, because the last transactions were
++			// empty for it (e.g. filtered out). Ask it to save it now.
++			vre.requestPosFlush(id)
+ 		}
+ 
+ 		select {
+@@ -865,8 +881,21 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
+ 			return doneErr
+ 		case <-vre.ctx.Done():
+ 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
+-		case <-tkr.C:
++		case <-tmr.C:
+ 		}
++		pollInterval = min(2*pollInterval, waitForPosPollInterval)
++		tmr.Reset(pollInterval)
++	}
++}
++
++// requestPosFlush asks the stream with the given id, if it is running, to save
++// its current position without waiting for idleTimeout.
++func (vre *Engine) requestPosFlush(id int32) {
++	vre.mu.Lock()
++	ct := vre.controllers[id]
++	vre.mu.Unlock()
++	if ct != nil {
++		ct.requestPosFlush()
+ 	}
+ }
+ 
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/engine_test.go b/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
+index 4f456b8bbc..8aaa631eb3 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/engine_test.go
+@@ -332,9 +332,9 @@ func TestEngineSelect(t *testing.T) {
+ }
+ 
+ func TestWaitForPos(t *testing.T) {
+-	savedRetryTime := waitRetryTime
+-	defer func() { waitRetryTime = savedRetryTime }()
+-	waitRetryTime = 10 * time.Millisecond
++	savedPollInterval := waitForPosPollInterval
++	defer func() { waitForPosPollInterval = savedPollInterval }()
++	waitForPosPollInterval = 10 * time.Millisecond
+ 
+ 	dbClient := binlogplayer.NewMockDBClient(t)
+ 	mysqld := &mysqlctl.FakeMysqlDaemon{}
+@@ -362,6 +362,39 @@ func TestWaitForPos(t *testing.T) {
+ 	assert.GreaterOrEqualf(t, duration, 10*time.Microsecond, "duration: %v, want >= 10us", duration)
+ }
+ 
++// TestWaitForPosPollsSoonAfterFirstCheck checks that WaitForPos checks the position again
++// soon after a first check that fails, instead of waiting for the full poll interval:
++// SwitchTraffic waits for the position while writes are blocked, and the stream usually
++// reaches it within a few ms.
++func TestWaitForPosPollsSoonAfterFirstCheck(t *testing.T) {
++	savedPollInterval := waitForPosPollInterval
++	t.Cleanup(func() { waitForPosPollInterval = savedPollInterval })
++	// Far longer than the test timeout: only the short first intervals can let it pass.
++	waitForPosPollInterval = 10 * time.Minute
++
++	dbClient := binlogplayer.NewMockDBClient(t)
++	mysqld := &mysqlctl.FakeMysqlDaemon{}
++	mysqld.MysqlPort.Store(3306)
++
++	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
++	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
++
++	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
++	vre.Open(t.Context())
++	t.Cleanup(vre.Close)
++
++	for _, pos := range []string{"MariaDB/0-1-1082", "MariaDB/0-1-1083", "MariaDB/0-1-1084"} {
++		dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
++			sqltypes.NewVarBinary(pos),
++			sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
++			sqltypes.NewVarBinary(""),
++		}}}, nil)
++	}
++	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancel()
++	require.NoError(t, vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084"))
++}
++
+ func TestWaitForPosError(t *testing.T) {
+ 	dbClient := binlogplayer.NewMockDBClient(t)
+ 	mysqld := &mysqlctl.FakeMysqlDaemon{}
+@@ -393,6 +426,11 @@ func TestWaitForPosError(t *testing.T) {
+ }
+ 
+ func TestWaitForPosCancel(t *testing.T) {
++	// Each WaitForPos below must check the position only once before it is canceled.
++	savedMinPollInterval := waitForPosMinPollInterval
++	t.Cleanup(func() { waitForPosMinPollInterval = savedMinPollInterval })
++	waitForPosMinPollInterval = time.Minute
++
+ 	dbClient := binlogplayer.NewMockDBClient(t)
+ 	mysqld := &mysqlctl.FakeMysqlDaemon{}
+ 	mysqld.MysqlPort.Store(3306)
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
+index 2abe4d1805..3ffe687b63 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/relaylog.go
+@@ -49,6 +49,8 @@ type relayLog struct {
+ 	curSize  int
+ 	items    [][]*binlogdatapb.VEvent
+ 	timedout bool
++	// interrupted makes the current or next Fetch return even if there are no items.
++	interrupted bool
+ 	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, and ctx is not Done.
+ 	canAccept sync.Cond
+ 	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.
+@@ -84,15 +86,19 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
+ 	if err := rl.checkDone(); err != nil {
+ 		return err
+ 	}
+-	cancelTimer := rl.startSendTimer()
+-	defer cancelTimer()
+-	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
+-		rl.canAccept.Wait()
+-		if rl.timedout {
+-			return vterrors.Wrap(errVPlayerStalled, relayLogIOStalledMsg)
+-		}
+-		if err := rl.checkDone(); err != nil {
+-			return err
++	// Only arm the stall timer when we actually have to wait: the relay log
++	// usually has room, and arming it costs a goroutine and a timer per Send.
++	if rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
++		cancelTimer := rl.startSendTimer()
++		defer cancelTimer()
++		for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
++			rl.canAccept.Wait()
++			if rl.timedout {
++				return vterrors.Wrap(errVPlayerStalled, relayLogIOStalledMsg)
++			}
++			if err := rl.checkDone(); err != nil {
++				return err
++			}
+ 		}
+ 	}
+ 	rl.timedout = false
+@@ -110,15 +116,19 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
+ 	if err := rl.checkDone(); err != nil {
+ 		return nil, err
+ 	}
+-	cancelTimer := rl.startFetchTimer()
+-	defer cancelTimer()
+-	for len(rl.items) == 0 && !rl.timedout {
+-		rl.hasItems.Wait()
+-		if err := rl.checkDone(); err != nil {
+-			return nil, err
++	// Only arm the idle timer when we actually have to wait for items.
++	if len(rl.items) == 0 && !rl.timedout && !rl.interrupted {
++		cancelTimer := rl.startFetchTimer()
++		defer cancelTimer()
++		for len(rl.items) == 0 && !rl.timedout && !rl.interrupted {
++			rl.hasItems.Wait()
++			if err := rl.checkDone(); err != nil {
++				return nil, err
++			}
+ 		}
+ 	}
+ 	rl.timedout = false
++	rl.interrupted = false
+ 	items := rl.items
+ 	rl.items = nil
+ 	rl.curSize = 0
+@@ -126,6 +136,15 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
+ 	return items, nil
+ }
+ 
++// interruptFetch makes the current, or else the next, Fetch return without
++// waiting for items or for idleTimeout.
++func (rl *relayLog) interruptFetch() {
++	rl.mu.Lock()
++	defer rl.mu.Unlock()
++	rl.interrupted = true
++	rl.hasItems.Broadcast()
++}
++
+ func (rl *relayLog) checkDone() error {
+ 	select {
+ 	case <-rl.ctx.Done():
+@@ -199,21 +218,15 @@ func (rl *relayLog) stallDeferral(deadline time.Duration) time.Duration {
+ // startFetchTimer starts a timer that will wake up the fetcher after
+ // idleTimeout to be sure that we're regularly checking for new events.
+ func (rl *relayLog) startFetchTimer() (cancel func()) {
+-	timer := time.NewTimer(idleTimeout)
+-	timerDone := make(chan struct{})
+-	go func() {
+-		select {
+-		case <-timer.C:
+-			rl.mu.Lock()
+-			defer rl.mu.Unlock()
+-			rl.timedout = true
+-			rl.hasItems.Broadcast()
+-		case <-timerDone:
+-		}
+-	}()
++	// time.AfterFunc only starts a goroutine if the timer fires.
++	timer := time.AfterFunc(idleTimeout, func() {
++		rl.mu.Lock()
++		defer rl.mu.Unlock()
++		rl.timedout = true
++		rl.hasItems.Broadcast()
++	})
+ 	return func() {
+ 		timer.Stop()
+-		close(timerDone)
+ 	}
+ }
+ 
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
+index 621fafb737..cd4061fb65 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_test.go
+@@ -2108,3 +2108,30 @@ func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
+ 		}
+ 	}
+ }
++
++// TestTableRuleMatcher checks that tableRuleMatcher picks the same rule as MatchTable, the
++// first matching rule in order, for exact and regular expression rules.
++func TestTableRuleMatcher(t *testing.T) {
++	filters := []*binlogdatapb.Filter{
++		{Rules: []*binlogdatapb.Rule{{Match: "t1"}, {Match: "t2"}, {Match: "t1", Filter: "second"}}},
++		{Rules: []*binlogdatapb.Rule{{Match: "t1"}, {Match: "/.*/"}}},
++		{Rules: []*binlogdatapb.Rule{{Match: "/^t/", Filter: "re"}, {Match: "t1"}, {Match: "x1"}}},
++		{Rules: []*binlogdatapb.Rule{{Match: "x1"}, {Match: "/1$/"}, {Match: "t1"}, {Match: "/^t/"}}},
++		{Rules: []*binlogdatapb.Rule{{Match: "t1"}, {Match: "/(/"}}},
++		{},
++	}
++	tables := []string{"t1", "t2", "t3", "x1", "x2", "y"}
++	for i, filter := range filters {
++		matcher := newTableRuleMatcher(filter)
++		for _, table := range tables {
++			want, wantErr := MatchTable(table, filter)
++			got, err := matcher.match(table)
++			if wantErr != nil {
++				assert.Error(t, err, "filter %d, table %s", i, table)
++				continue
++			}
++			require.NoError(t, err, "filter %d, table %s", i, table)
++			assert.Same(t, want, got, "filter %d, table %s", i, table)
++		}
++	}
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go b/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
+index 7509d02924..643d0d99cd 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/table_plan_builder.go
+@@ -146,13 +146,14 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
+ 		collationEnv:   collationEnv,
+ 		workflowConfig: vr.workflowConfig,
+ 	}
++	matcher := newTableRuleMatcher(filter)
+ 	for tableName := range colInfoMap {
+ 		lastpk, ok := copyState[tableName]
+ 		if ok && lastpk == nil {
+ 			// Don't replicate uncopied tables.
+ 			continue
+ 		}
+-		rule, err := MatchTable(tableName, filter)
++		rule, err := matcher.match(tableName)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+@@ -181,6 +182,65 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
+ 	return plan, nil
+ }
+ 
++// tableRuleMatcher returns the same rule as MatchTable, for many table names: the rules
++// that match a table by name are indexed, and the regular expressions are compiled once.
++// A MoveTables workflow has one rule per table, so matching every table of the schema with
++// MatchTable is quadratic in the number of tables.
++type tableRuleMatcher struct {
++	rules []*binlogdatapb.Rule
++	// exact maps a table name to the index of the first rule that names it.
++	exact map[string]int
++	// regexps holds the indexes of the regular expression rules, in order.
++	regexps []int
++	// compiled holds the compiled regular expression of each regexps entry, or the
++	// error from compiling it.
++	compiled    []*regexp.Regexp
++	compileErrs []error
++}
++
++func newTableRuleMatcher(filter *binlogdatapb.Filter) *tableRuleMatcher {
++	m := &tableRuleMatcher{
++		rules: filter.Rules,
++		exact: make(map[string]int, len(filter.Rules)),
++	}
++	for i, rule := range filter.Rules {
++		if strings.HasPrefix(rule.Match, "/") {
++			re, err := regexp.Compile(strings.Trim(rule.Match, "/"))
++			m.regexps = append(m.regexps, i)
++			m.compiled = append(m.compiled, re)
++			m.compileErrs = append(m.compileErrs, err)
++			continue
++		}
++		if _, ok := m.exact[rule.Match]; !ok {
++			m.exact[rule.Match] = i
++		}
++	}
++	return m
++}
++
++// match returns the first rule that matches tableName, like MatchTable.
++func (m *tableRuleMatcher) match(tableName string) (*binlogdatapb.Rule, error) {
++	first, ok := m.exact[tableName]
++	if !ok {
++		first = len(m.rules)
++	}
++	for j, i := range m.regexps {
++		if i > first {
++			break
++		}
++		if m.compileErrs[j] != nil {
++			return nil, m.compileErrs[j]
++		}
++		if m.compiled[j].MatchString(tableName) {
++			return m.rules[i], nil
++		}
++	}
++	if ok {
++		return m.rules[first], nil
++	}
++	return nil, nil
++}
++
+ // MatchTable is similar to tableMatches and buildPlan defined in vstreamer/planbuilder.go.
+ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
+ 	for _, rule := range filter.Rules {
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
+index 6aae4504b5..aa50bcbede 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier.go
+@@ -341,6 +341,16 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
+ 	if settings.StartPos.IsZero() {
+ 		return nil
+ 	}
++	// If this stream was fast-forwarded to a copy snapshot less than
++	// ReplicaLagTolerance ago, it can be at most that far behind, which is
++	// the condition catchup waits for below. Skip catchup: the fastForward of
++	// the next copy cycle replays the same events. Otherwise, catchup would
++	// start a vplayer and then wait for at least one waitRetryTime tick (1s),
++	// or for the first source heartbeat if the source is idle, before copying
++	// each table.
++	if last := vc.vr.lastCopySnapshotTime; !last.IsZero() && time.Since(last) < vc.vr.workflowConfig.ReplicaLagTolerance {
++		return nil
++	}
+ 
+ 	// Start vreplication.
+ 	errch := make(chan error, 1)
+@@ -385,7 +395,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 
+ 	log.Info(fmt.Sprintf("Copying table %s, lastpk: %v", tableName, copyState[tableName]))
+ 
+-	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
++	// Only this table's plan is needed: building the plans of every table of the schema for
++	// each table copied is quadratic in the number of tables.
++	colInfoMap := vc.vr.colInfoMap
++	if colInfos, ok := colInfoMap[tableName]; ok {
++		colInfoMap = map[string][]*ColumnInfo{tableName: colInfos}
++	}
++	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -439,6 +455,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 	vstreamOptions := &binlogdatapb.VStreamOptions{
+ 		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+ 	}
++	// The source takes its row snapshot after this time.
++	streamStart := time.Now()
+ 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+ 		for {
+ 			select {
+@@ -496,6 +514,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
+ 			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
+ 				return err
+ 			}
++			vc.vr.lastCopySnapshotTime = streamStart
+ 			fieldEvent := &binlogdatapb.FieldEvent{
+ 				TableName: initialPlan.SendRule.Match,
+ 			}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
+index 5f921ce654..fcfc7f7d3b 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier_test.go
+@@ -40,6 +40,29 @@ import (
+ 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+ )
+ 
++// TestCatchupSkippedAfterRecentCopySnapshot checks that catchup returns
++// without starting a vplayer, and so without waiting for waitRetryTime, when
++// the stream was fast-forwarded to a copy snapshot less than
++// ReplicaLagTolerance ago. This removed a ~1s pause before copying each table.
++func TestCatchupSkippedAfterRecentCopySnapshot(t *testing.T) {
++	stats := binlogplayer.NewStats()
++	t.Cleanup(stats.Stop)
++	dbClient := binlogplayer.NewMockDBClient(t)
++	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
++
++	// The vreplicator has no source vstreamer and no engine, so starting a
++	// catchup vplayer would fail.
++	vr := &vreplicator{
++		id:                   1,
++		dbClient:             newVDBClient(dbClient, stats, 0),
++		stats:                stats,
++		workflowConfig:       vttablet.GetDefaultVReplicationConfig(),
++		lastCopySnapshotTime: time.Now(),
++	}
++	require.NoError(t, newVCopier(vr).catchup(t.Context(), map[string]*sqltypes.Result{"t1": nil}))
++	dbClient.Wait()
++}
++
+ func TestNewCopyWorkerFactoryUsesMaxQuerySize(t *testing.T) {
+ 	stats := binlogplayer.NewStats()
+ 	dbClient := binlogplayer.NewMockDBClient(t)
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
+index cea9c25b34..c8b4d0384f 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer.go
+@@ -85,6 +85,10 @@ type vplayer struct {
+ 	unsavedEvent *binlogdatapb.VEvent
+ 	// timeLastSaved is set every time a GTID is saved.
+ 	timeLastSaved time.Time
++	// flushPosRequested is set when someone waits for a position (see
++	// Engine.WaitForPos): the position of the unsavedEvent is then saved
++	// without waiting for idleTimeout.
++	flushPosRequested atomic.Bool
+ 	// lastTimestampNs is the last timestamp seen so far.
+ 	lastTimestampNs int64
+ 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
+@@ -287,6 +291,20 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
+ 
+ 	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize, &vp.lastThrottledNano)
+ 
++	if flushRequests := vp.vr.posFlushRequests; flushRequests != nil {
++		go func() {
++			for {
++				select {
++				case <-ctx.Done():
++					return
++				case <-flushRequests:
++					vp.flushPosRequested.Store(true)
++					relay.interruptFetch()
++				}
++			}
++		}()
++	}
++
+ 	streamErr := make(chan error, 1)
+ 	go func() {
+ 		streamErr <- runWithRecover(vp.vr.WorkflowName, "vstream", func() error {
+@@ -582,7 +600,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+ 		// 2. We've been receiving empty events for longer than idleTimeout.
+ 		// In both cases, now > timeLastSaved. If so, the GTID of the last unsavedEvent
+ 		// must be saved.
+-		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
++		// It is also saved right away when someone waits for a position, so
++		// that a stream whose last source transactions were all filtered out
++		// reports the position it reached without an idleTimeout delay.
++		if vp.unsavedEvent != nil && (time.Since(vp.timeLastSaved) >= idleTimeout || vp.flushPosRequested.Swap(false)) {
+ 			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Timestamp)
+ 			if err != nil {
+ 				return err
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
+index 196097f29e..79bec772b0 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vplayer_flaky_test.go
+@@ -2439,6 +2439,59 @@ func TestPlayerIdleUpdate(t *testing.T) {
+ 	assert.GreaterOrEqualf(t, duration, idleTimeout, "duration: %v, must be at least %v", duration, idleTimeout)
+ }
+ 
++// TestPlayerWaitForPosSavesSkippedPosition checks that WaitForPos gets the
++// position of transactions that the stream skipped because they were empty
++// for it (here: a write to a table outside the filter) saved right away,
++// instead of after idleTimeout. Traffic switches and Online DDL cut-overs wait
++// for such positions while writes are blocked.
++func TestPlayerWaitForPosSavesSkippedPosition(t *testing.T) {
++	defer deleteTablet(addTablet(100))
++
++	// Without a position flush request, the skipped position would not be
++	// saved before WaitForPos times out.
++	savedIdleTimeout := idleTimeout
++	t.Cleanup(func() { idleTimeout = savedIdleTimeout })
++	idleTimeout = time.Hour
++
++	execStatements(t, []string{
++		"create table t1(id int, val varchar(128), primary key(id))",
++		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
++		"create table t2(id int, val varchar(128), primary key(id))",
++	})
++	defer execStatements(t, []string{
++		"drop table t1",
++		fmt.Sprintf("drop table %s.t1", vrepldb),
++		"drop table t2",
++	})
++
++	bls := &binlogdatapb.BinlogSource{
++		Keyspace: env.KeyspaceName,
++		Shard:    env.ShardName,
++		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1"}}},
++		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
++	}
++	cancel, id := startVReplication(t, bls, "")
++	defer cancel()
++
++	execStatements(t, []string{"insert into t1 values(1, 'aaa')"})
++	expectDBClientQueries(t, qh.Expect(
++		"begin",
++		"insert into t1(id,val) values (1,'aaa')",
++		"/update _vt.vreplication set pos=",
++		"commit",
++	))
++
++	// This transaction is empty for the stream.
++	execStatements(t, []string{"insert into t2 values(1, 'bbb')"})
++	pos := primaryPosition(t)
++	ctx, cancelWait := context.WithTimeout(t.Context(), 30*time.Second)
++	defer cancelWait()
++	require.NoError(t, playerEngine.WaitForPos(ctx, int32(id), pos))
++	expectDBClientQueries(t, qh.Expect(
++		"/update _vt.vreplication set pos=",
++	))
++}
++
+ func TestPlayerSplitTransaction(t *testing.T) {
+ 	defer deleteTablet(addTablet(100))
+ 	setFlag("vstream_packet_size", "10")
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
+index aaf32a6719..7049cd73d8 100644
+--- a/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
++++ b/go/vt/vttablet/tabletmanager/vreplication/vreplicator.go
+@@ -126,6 +126,16 @@ type vreplicator struct {
+ 
+ 	throttleUpdatesRateLimiter *timer.RateLimiter
+ 	workflowConfig             *vttablet.VReplicationConfig
++
++	// lastCopySnapshotTime is set when a copy phase cycle has fast-forwarded
++	// the stream to the GTID of its row snapshot. At that point the stream's
++	// position was at most as old as this time. It is kept in memory only, so
++	// a restarted stream always runs a full catchup.
++	lastCopySnapshotTime time.Time
++
++	// posFlushRequests receives the controller's requests to save the current
++	// position without waiting for idleTimeout. It may be nil.
++	posFlushRequests <-chan struct{}
+ }
+ 
+ // newVReplicator creates a new vreplicator. The valid fields from the source are:
+diff --git a/go/vt/vttablet/tabletserver/schema/engine.go b/go/vt/vttablet/tabletserver/schema/engine.go
+index 05b00d389c..fbd6ecb674 100644
+--- a/go/vt/vttablet/tabletserver/schema/engine.go
++++ b/go/vt/vttablet/tabletserver/schema/engine.go
+@@ -857,7 +857,19 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, er
+ 
+ // populatePrimaryKeys populates the PKColumns for the specified tables.
+ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Conn, tables map[string]*Table) error {
+-	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, mysql.FETCH_ALL_ROWS, false)
++	return se.populatePrimaryKeysWithQuery(ctx, conn, tables, mysql.BaseShowPrimary)
++}
++
++// populateTablePrimaryKeys populates the PKColumns of one table. It only reads that
++// table's primary key: the query of populatePrimaryKeys reads the primary keys of every
++// table in the schema, which is slow on schemas with thousands of tables.
++func (se *Engine) populateTablePrimaryKeys(ctx context.Context, conn *connpool.Conn, tableName string, table *Table) error {
++	query := fmt.Sprintf(mysql.ShowPrimaryForTable, sqltypes.EncodeStringSQL(tableName))
++	return se.populatePrimaryKeysWithQuery(ctx, conn, map[string]*Table{tableName: table}, query)
++}
++
++func (se *Engine) populatePrimaryKeysWithQuery(ctx context.Context, conn *connpool.Conn, tables map[string]*Table, query string) error {
++	pkData, err := conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
+ 	if err != nil {
+ 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
+ 	}
+@@ -932,7 +944,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
+ 		}
+ 		// Update the PK columns for the table as well as they may have changed.
+ 		cst.PKColumns = nil // We're going to repopulate the PK columns
+-		if err := se.populatePrimaryKeys(ctx, conn.Conn, map[string]*Table{tableNameStr: &cst}); err != nil {
++		if err := se.populateTablePrimaryKeys(ctx, conn.Conn, tableNameStr, &cst); err != nil {
+ 			return nil, err
+ 		}
+ 		se.tables[tableNameStr] = &cst
+diff --git a/go/vt/vttablet/tabletserver/schema/engine_test.go b/go/vt/vttablet/tabletserver/schema/engine_test.go
+index a7862fea0b..8fa6eb45b1 100644
+--- a/go/vt/vttablet/tabletserver/schema/engine_test.go
++++ b/go/vt/vttablet/tabletserver/schema/engine_test.go
+@@ -1837,7 +1837,9 @@ func TestGetTableForPosLegacy(t *testing.T) {
+ 				// We only reload the column and PK info for the table in our cache. A new column
+ 				// called col2 has been added to the table schema and it is the new PK.
+ 				newTableSchema := fmt.Sprintf("create table %s (%s varchar(50), col2 varchar(50), primary key(col2))", table.String(), column)
+-				db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
++				// Only this table's primary key is read, not those of the whole schema
++				// (mysql.BaseShowPrimary is not registered, so it would fail).
++				db.AddQuery(fmt.Sprintf(mysql.ShowPrimaryForTable, sqltypes.EncodeStringSQL(table.String())), &sqltypes.Result{
+ 					Fields: mysql.ShowPrimaryFields,
+ 					Rows: [][]sqltypes.Value{
+ 						mysql.ShowPrimaryRow(table.String(), "col2"),
+@@ -2034,7 +2036,9 @@ func TestGetTableForPos(t *testing.T) {
+ 				// We only reload the column and PK info for the table in our cache. A new column
+ 				// called col2 has been added to the table schema and it is the new PK.
+ 				newTableSchema := fmt.Sprintf("create table %s (%s varchar(50), col2 varchar(50), primary key(col2))", table.String(), column)
+-				db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
++				// Only this table's primary key is read, not those of the whole schema
++				// (mysql.BaseShowPrimary is not registered, so it would fail).
++				db.AddQuery(fmt.Sprintf(mysql.ShowPrimaryForTable, sqltypes.EncodeStringSQL(table.String())), &sqltypes.Result{
+ 					Fields: mysql.ShowPrimaryFields,
+ 					Rows: [][]sqltypes.Value{
+ 						mysql.ShowPrimaryRow(table.String(), "col2"),
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/coalesce_test.go b/go/vt/vttablet/tabletserver/vstreamer/coalesce_test.go
+new file mode 100644
+index 0000000000..01606b5638
+--- /dev/null
++++ b/go/vt/vttablet/tabletserver/vstreamer/coalesce_test.go
+@@ -0,0 +1,187 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vstreamer
++
++import (
++	"context"
++	"fmt"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/replication"
++	vttablet "vitess.io/vitess/go/vt/vttablet/common"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++)
++
++// TestVStreamCoalescesEmptyTransactions streams a backlog of transactions that are empty for
++// the stream's filter around one that is not. With coalescing enabled, the stream must send
++// fewer GTIDs than there are transactions, still end at the latest position, and send the
++// position of the empty transaction right before the non-empty one ahead of it, so that a
++// consumer that stops at that position does not apply the next transaction.
++func TestVStreamCoalescesEmptyTransactions(t *testing.T) {
++	execStatements(t, []string{
++		"create table coalesce_in(id int, val varbinary(128), primary key(id))",
++		"create table coalesce_out(id int, val varbinary(128), primary key(id))",
++	})
++	t.Cleanup(func() {
++		execStatements(t, []string{
++			"drop table coalesce_in",
++			"drop table coalesce_out",
++		})
++	})
++
++	old := vttablet.VStreamerCoalesceEmptyTransactions
++	vttablet.VStreamerCoalesceEmptyTransactions = true
++	t.Cleanup(func() { vttablet.VStreamerCoalesceEmptyTransactions = old })
++
++	startPos := primaryPosition(t)
++	const before, after = 60, 20
++	for i := range before {
++		execStatement(t, fmt.Sprintf("insert into coalesce_out values (%d, 'x')", i))
++	}
++	posBeforeIn := primaryPosition(t)
++	execStatement(t, "insert into coalesce_in values (1, 'in')")
++	for i := range after {
++		execStatement(t, fmt.Sprintf("insert into coalesce_out values (%d, 'y')", before+i))
++	}
++	endPos, err := replication.DecodePosition(primaryPosition(t))
++	require.NoError(t, err)
++	wantBeforeIn, err := replication.DecodePosition(posBeforeIn)
++	require.NoError(t, err)
++
++	coalesced0 := engine.vstreamerEmptyTransactionsCoalesced.Get()
++	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "coalesce_in", Filter: "select * from coalesce_in"}}}
++	ctx, cancel := context.WithCancel(t.Context())
++	wg, ch := startStream(ctx, t, filter, startPos, nil)
++	defer wg.Wait()
++	defer cancel()
++
++	// Hold the first message for a moment, so that the binlog events queue up behind it.
++	var first []*binlogdatapb.VEvent
++	select {
++	case first = <-ch:
++	case <-time.After(30 * time.Second):
++		require.FailNow(t, "no events received")
++	}
++	time.Sleep(500 * time.Millisecond)
++
++	var (
++		gtids       int
++		lastPos     replication.Position
++		posAtRow    replication.Position
++		sawRow      bool
++		reachedEnd  bool
++		handleBatch = func(evs []*binlogdatapb.VEvent) {
++			for _, ev := range evs {
++				switch ev.Type {
++				case binlogdatapb.VEventType_GTID:
++					gtids++
++					pos, err := replication.DecodePosition(ev.Gtid)
++					require.NoError(t, err)
++					lastPos = pos
++					if pos.AtLeast(endPos) {
++						reachedEnd = true
++					}
++				case binlogdatapb.VEventType_ROW:
++					if ev.RowEvent.TableName == "coalesce_in" {
++						sawRow = true
++						posAtRow = lastPos
++					}
++				}
++			}
++		}
++	)
++	handleBatch(first)
++	for !reachedEnd {
++		select {
++		case evs, ok := <-ch:
++			require.True(t, ok, "stream ended before reaching the end position")
++			handleBatch(evs)
++		case <-time.After(30 * time.Second):
++			require.FailNow(t, "timed out waiting for the end position")
++		}
++	}
++
++	require.True(t, sawRow, "the row of coalesce_in was not streamed")
++	// The empty transaction right before the row's transaction must have been sent before the row.
++	assert.True(t, posAtRow.AtLeast(wantBeforeIn), "position before the row: got %v, want at least %v", posAtRow, wantBeforeIn)
++	assert.Less(t, gtids, before+1+after, "no transaction was coalesced")
++	assert.Greater(t, engine.vstreamerEmptyTransactionsCoalesced.Get(), coalesced0)
++}
++
++// TestVStreamCoalescesEmptyTransactionsWithinWindow checks that a stream that has caught up
++// with the binlog holds the transactions that are empty for its filter for up to
++// --vstream-coalesce-empty-transactions-window, and then sends the latest position once,
++// instead of sending every one of them as it arrives.
++func TestVStreamCoalescesEmptyTransactionsWithinWindow(t *testing.T) {
++	execStatements(t, []string{
++		"create table coalesce_win_in(id int, val varbinary(128), primary key(id))",
++		"create table coalesce_win_out(id int, val varbinary(128), primary key(id))",
++	})
++	t.Cleanup(func() {
++		execStatements(t, []string{
++			"drop table coalesce_win_in",
++			"drop table coalesce_win_out",
++		})
++	})
++
++	oldCoalesce, oldWindow := vttablet.VStreamerCoalesceEmptyTransactions, vttablet.VStreamerCoalesceEmptyTransactionsWindow
++	vttablet.VStreamerCoalesceEmptyTransactions = true
++	vttablet.VStreamerCoalesceEmptyTransactionsWindow = 2 * time.Second
++	t.Cleanup(func() {
++		vttablet.VStreamerCoalesceEmptyTransactions = oldCoalesce
++		vttablet.VStreamerCoalesceEmptyTransactionsWindow = oldWindow
++	})
++
++	startPos := primaryPosition(t)
++	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "coalesce_win_in", Filter: "select * from coalesce_win_in"}}}
++	ctx, cancel := context.WithCancel(t.Context())
++	wg, ch := startStream(ctx, t, filter, startPos, nil)
++	defer wg.Wait()
++	defer cancel()
++
++	const n = 10
++	for i := range n {
++		execStatement(t, fmt.Sprintf("insert into coalesce_win_out values (%d, 'x')", i))
++	}
++	endPos, err := replication.DecodePosition(primaryPosition(t))
++	require.NoError(t, err)
++
++	gtids := 0
++	for reachedEnd := false; !reachedEnd; {
++		select {
++		case evs, ok := <-ch:
++			require.True(t, ok, "stream ended before reaching the end position")
++			for _, ev := range evs {
++				if ev.Type != binlogdatapb.VEventType_GTID {
++					continue
++				}
++				gtids++
++				pos, err := replication.DecodePosition(ev.Gtid)
++				require.NoError(t, err)
++				reachedEnd = pos.AtLeast(endPos)
++			}
++		case <-time.After(30 * time.Second):
++			require.FailNow(t, "timed out waiting for the end position")
++		}
++	}
++	assert.Less(t, gtids, n, "the empty transactions were not coalesced")
++}
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/engine.go b/go/vt/vttablet/tabletserver/vstreamer/engine.go
+index 813342a5fb..d46c75223a 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/engine.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/engine.go
+@@ -90,6 +90,7 @@ type Engine struct {
+ 	vstreamerCount                         *stats.Gauge
+ 	vstreamerEventsStreamed                *stats.Counter
+ 	vstreamerCompressedTransactionsDecoded *stats.Counter
++	vstreamerEmptyTransactionsCoalesced    *stats.Counter
+ 	vstreamerPacketSize                    *stats.GaugeFunc
+ 	vstreamerNumPackets                    *stats.Counter
+ 	resultStreamerNumRows                  *stats.Counter
+@@ -134,6 +135,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
+ 		vstreamerCount:                         env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
+ 		vstreamerEventsStreamed:                env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
+ 		vstreamerCompressedTransactionsDecoded: env.Exporter().NewCounter("VStreamerCompressedTransactionsDecoded", "Count of compressed transactions (MySQL's binlog_transaction_compression=ON) decoded in the VStream API"),
++		vstreamerEmptyTransactionsCoalesced:    env.Exporter().NewCounter("VStreamerEmptyTransactionsCoalesced", "Count of transactions without events for the stream that were not sent because a later one subsumes them"),
+ 		vstreamerPacketSize:                    env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
+ 		vstreamerNumPackets:                    env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
+ 		resultStreamerNumPackets:               env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go b/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
+index a59ac71d9b..e39a048532 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/planbuilder.go
+@@ -320,11 +320,18 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
+ }
+ 
+ // mapValues maps the row values against the plan.
+-// The output of the filtering operation is stored in the 'result' argument because
+-// filtering cannot be performed in-place. The result argument must be a slice of
+-// length equal to ColExprs
+-func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
+-	result := make([]sqltypes.Value, len(plan.ColExprs))
++// Filtering cannot be performed in-place, so the output is stored in buf if it
++// has enough capacity, and in a newly allocated slice otherwise. The returned
++// slice is only valid until buf is passed to mapValues again: callers that reuse
++// buf across rows must copy the values out (e.g. with sqltypes.RowToProto3)
++// before mapping the next row.
++func (plan *Plan) mapValues(values []sqltypes.Value, buf []sqltypes.Value) ([]sqltypes.Value, error) {
++	var result []sqltypes.Value
++	if cap(buf) >= len(plan.ColExprs) {
++		result = buf[:len(plan.ColExprs)]
++	} else {
++		result = make([]sqltypes.Value, len(plan.ColExprs))
++	}
+ 
+ 	for i, colExpr := range plan.ColExprs {
+ 		if colExpr.ColNum == -1 {
+@@ -378,6 +385,28 @@ func (plan *Plan) mapBitmap(source *mysql.Bitmap) *binlogdatapb.RowChange_Bitmap
+ }
+ 
+ func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
++	// Fast path for functional single column vindexes (hash, xxhash, numeric,
++	// binary, unicode_loose_*, ...): for all of them Map is a per-value call
++	// to Hash, so call Hash directly and skip the allocations of the generic
++	// vindexes.Map path. This runs for every before and after image of every
++	// row event, and during a reshard every target shard's stream runs it for
++	// every row of the source shard.
++	// If Hash fails or returns an empty keyspace id, fall back to the generic
++	// path, which returns the same error as before.
++	if len(vindexColumns) == 1 {
++		if hasher, ok := vindex.(vindexes.Hashing); ok {
++			if _, multi := vindex.(vindexes.MultiColumn); !multi {
++				if ksid, err := hasher.Hash(values[vindexColumns[0]]); err == nil && len(ksid) > 0 {
++					return ksid, nil
++				}
++			}
++		}
++	}
++	return getKeyspaceIDSlow(values, vindex, vindexColumns)
++}
++
++// getKeyspaceIDSlow maps the row to a keyspace id using the generic vindexes.Map.
++func getKeyspaceIDSlow(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+ 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
+ 	for _, col := range vindexColumns {
+ 		vindexValues = append(vindexValues, values[col])
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go b/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
+index 439ae56e1b..7b57a215cf 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/planbuilder_test.go
+@@ -1044,3 +1044,85 @@ func TestPlanMapBitmap(t *testing.T) {
+ 		assert.Equal(t, w, got.Cols[i/8]&(1<<(i%8)) != 0, "bit %d", i)
+ 	}
+ }
++
++// TestGetKeyspaceIDHashingFastPath confirms that getKeyspaceID, which calls Hash
++// directly for single column vindexes that implement vindexes.Hashing, returns
++// the same keyspace ids and errors as the generic vindexes.Map path, including
++// for values the vindexes cannot map.
++func TestGetKeyspaceIDHashingFastPath(t *testing.T) {
++	values := []sqltypes.Value{
++		sqltypes.NULL,
++		sqltypes.NewInt64(0),
++		sqltypes.NewInt64(1),
++		sqltypes.NewInt64(-1),
++		sqltypes.NewInt64(9223372036854775807),
++		sqltypes.NewUint64(18446744073709551615),
++		sqltypes.NewInt32(-42),
++		sqltypes.NewFloat64(1.5),
++		sqltypes.NewDecimal("12.00"),
++		sqltypes.NewVarChar(""),
++		sqltypes.NewVarChar("abc"),
++		sqltypes.NewVarChar("ABC  "),
++		sqltypes.NewVarChar("123"),
++		sqltypes.NewVarChar("\xff\xfe"),
++		sqltypes.NewVarBinary("\x00\x01\x02"),
++	}
++	for _, vindexType := range []string{
++		"hash", "xxhash", "numeric", "binary", "binary_md5", "reverse_bits",
++		"unicode_loose_md5", "unicode_loose_xxhash",
++	} {
++		vindex, err := vindexes.CreateVindex(vindexType, vindexType, nil)
++		require.NoError(t, err)
++		_, isHashing := vindex.(vindexes.Hashing)
++		require.True(t, isHashing, "%s must implement vindexes.Hashing to exercise the fast path", vindexType)
++		for _, value := range values {
++			// Put the vindex column in the middle of the row.
++			row := []sqltypes.Value{sqltypes.NewInt64(7), value, sqltypes.NewVarChar("x")}
++			want, wantErr := getKeyspaceIDSlow(row, vindex, []int{1})
++			got, gotErr := getKeyspaceID(row, vindex, []int{1}, nil)
++			if wantErr != nil {
++				assert.EqualError(t, gotErr, wantErr.Error(), "%s(%v)", vindexType, value)
++				continue
++			}
++			require.NoError(t, gotErr, "%s(%v)", vindexType, value)
++			assert.Equal(t, want, got, "%s(%v)", vindexType, value)
++		}
++	}
++}
++
++// TestMapValuesReusesBuffer confirms that mapValues writes every output column
++// when it reuses the caller's buffer, so no value of a previous row leaks into
++// the next one.
++func TestMapValuesReusesBuffer(t *testing.T) {
++	hash, err := vindexes.CreateVindex("hash", "hash", nil)
++	require.NoError(t, err)
++	plan := &Plan{
++		Table: &Table{Name: "t1"},
++		ColExprs: []ColExpr{
++			{ColNum: 1},
++			{ColNum: -1, FixedValue: sqltypes.NewInt64(5)},
++			{ColNum: 0, Vindex: hash, VindexColumns: []int{0}},
++			{ColNum: 0},
++		},
++	}
++	stale := sqltypes.NewVarChar("stale")
++	buf := []sqltypes.Value{stale, stale, stale, stale, stale}
++	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NULL}
++
++	got, err := plan.mapValues(row, buf)
++	require.NoError(t, err)
++	assert.Equal(t, []sqltypes.Value{
++		sqltypes.NULL,
++		sqltypes.NewInt64(5),
++		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x16k@\xb4J\xbaK\xd6")),
++		sqltypes.NewInt64(1),
++	}, got)
++	// The buffer is large enough, so it is reused.
++	assert.Same(t, &buf[0], &got[0])
++
++	// A buffer that is too small is not used.
++	got, err = plan.mapValues(row, buf[:1:1])
++	require.NoError(t, err)
++	assert.Len(t, got, 4)
++	assert.NotSame(t, &buf[0], &got[0])
++}
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
+index 4f0715aa4b..a27ce36017 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/rowstreamer.go
+@@ -391,6 +391,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse)
+ 		}
+ 	}
+ 
++	// mapped is reused to map all the rows: RowToProto3Inplace copies the values
++	// out of it before the next row is mapped.
++	var mapped []sqltypes.Value
+ 	charsets := make([]collations.ID, len(rs.plan.Table.Fields))
+ 	for i, fld := range rs.plan.Table.Fields {
+ 		charsets[i] = collations.ID(fld.Charset)
+@@ -470,14 +473,14 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse)
+ 			return err
+ 		}
+ 		if ok {
+-			filtered, err := rs.plan.mapValues(mysqlrow)
++			mapped, err = rs.plan.mapValues(mysqlrow, mapped)
+ 			if err != nil {
+ 				return err
+ 			}
+ 			if rowCount >= len(rows) {
+ 				rows = append(rows, &querypb.Row{})
+ 			}
+-			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
++			byteCount += sqltypes.RowToProto3Inplace(mapped, rows[rowCount])
+ 			rowCount++
+ 		}
+ 
+diff --git a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+index 0c35885efe..391ab3d229 100644
+--- a/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
++++ b/go/vt/vttablet/tabletserver/vstreamer/vstreamer.go
+@@ -96,6 +96,9 @@ type vstreamer struct {
+ 	commitParent   int64
+ 	sequenceNumber int64
+ 	eventGTID      replication.GTID
++	// eventGTIDStr caches eventGTID.String(). It is computed at most once per GTID,
++	// and only when an event of that transaction is emitted.
++	eventGTIDStr string
+ 
+ 	phase   string
+ 	vse     *Engine
+@@ -115,6 +118,60 @@ type vstreamer struct {
+ type streamerPlan struct {
+ 	*Plan
+ 	TableMap *mysql.TableMap
++
++	// filterColsInit and filterCols cache the columns that the plan's Filters read, when
++	// rows can be filtered by decoding only those columns (see filterColumns).
++	filterColsInit bool
++	filterCols     []int
++}
++
++// filterColumns returns the sorted column numbers that the plan's Filters read, or nil if
++// the filters cannot be evaluated on a partially decoded image: there are no filters, the
++// filters read most columns anyway, or a filter column needs a conversion (ENUM, SET, JSON)
++// that only the full decode in getValues performs.
++func (plan *streamerPlan) filterColumns() []int {
++	if plan.filterColsInit {
++		return plan.filterCols
++	}
++	plan.filterColsInit = true
++	if len(plan.Filters) == 0 {
++		return nil
++	}
++	seen := make(map[int]bool)
++	for _, filter := range plan.Filters {
++		cols := filter.VindexColumns
++		if filter.Opcode != VindexMatch {
++			cols = []int{filter.ColNum}
++		}
++		for _, col := range cols {
++			if col < 0 || col >= len(plan.Table.Fields) || col >= len(plan.TableMap.Types) {
++				return nil
++			}
++			field := plan.Table.Fields[col]
++			switch field.Type {
++			case querypb.Type_ENUM, querypb.Type_SET, querypb.Type_JSON:
++				return nil
++			}
++			if sqltypes.IsQuoted(field.Type) {
++				switch plan.TableMap.Metadata[col] >> 8 {
++				case mysqlbinlog.TypeEnum, mysqlbinlog.TypeSet:
++					return nil
++				}
++			}
++			seen[col] = true
++		}
++	}
++	if 2*len(seen) > len(plan.Table.Fields) {
++		// Skipping would save little.
++		return nil
++	}
++	cols := make([]int, 0, len(seen))
++	for col := range seen {
++		cols = append(cols, col)
++	}
++	slices.Sort(cols)
++	plan.filterCols = cols
++	return cols
+ }
+ 
+ // newVStreamer creates a new vstreamer.
+@@ -279,6 +336,31 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 	// If a new row event causes the packet size to be exceeded,
+ 	// all existing rows are sent without the new row.
+ 	// If a single row exceeds the packet size, it will be in its own packet.
++	// pendingEmpty holds the latest transaction that is empty for this stream ([BEGIN, GTID,
++	// COMMIT] only) while more binlog events are already queued. Its GTID event carries the
++	// full position, which subsumes the positions of the empty transactions before it, so
++	// those need not be sent at all. It is sent ahead of the next events that are sent, or on
++	// its own as soon as the stream has caught up with the binlog (see flushPendingEmpty), so
++	// a consumer that waits for a position or stops at one still sees it, and never sees a
++	// later transaction without seeing it first.
++	var pendingEmpty []*binlogdatapb.VEvent
++	coalesceEmpty := vs.coalesceEmptyTransactions()
++	send := func(vevents []*binlogdatapb.VEvent) error {
++		if pendingEmpty != nil {
++			vevents = append(pendingEmpty, vevents...)
++			pendingEmpty = nil
++		}
++		return vs.send(vevents)
++	}
++	flushPendingEmpty := func() error {
++		if pendingEmpty == nil {
++			return nil
++		}
++		vevents := pendingEmpty
++		pendingEmpty = nil
++		return vs.send(vevents)
++	}
++
+ 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
+ 		vevent.Keyspace = vs.vse.keyspace
+ 		vevent.Shard = vs.vse.shard
+@@ -326,7 +408,14 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 			if len(vevents) == 0 {
+ 				return nil
+ 			}
+-			return vs.send(vevents)
++			if coalesceEmpty && vevent.Type == binlogdatapb.VEventType_COMMIT && isEmptyTransaction(vevents) {
++				if pendingEmpty != nil {
++					vs.vse.vstreamerEmptyTransactionsCoalesced.Add(1)
++				}
++				pendingEmpty = vevents
++				return nil
++			}
++			return send(vevents)
+ 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
+ 			if !shouldBuffer(vevent) {
+ 				return nil
+@@ -337,7 +426,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vevents := bufferedEvents
+ 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+ 				curSize = newSize
+-				return vs.send(vevents)
++				return send(vevents)
+ 			}
+ 			curSize += newSize
+ 			bufferedEvents = append(bufferedEvents, vevent)
+@@ -361,7 +450,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vevents := bufferedEvents
+ 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+ 				curSize = newSize
+-				return vs.send(vevents)
++				return send(vevents)
+ 			}
+ 			curSize += newSize
+ 			bufferedEvents = append(bufferedEvents, vevent)
+@@ -428,9 +517,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 			select {
+ 			case ev, ok := <-events:
+ 				if ok {
+-					select {
+-					case throttledEvents <- ev:
+-					case <-ctx.Done():
++					if !binlog.SendEvent(ctx, throttledEvents, ev) {
+ 						return
+ 					}
+ 				} else {
+@@ -445,19 +532,29 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 	// throttledEvents can be read just like you would read from events
+ 	// throttledEvents pulls data from events, but throttles pulling data,
+ 	// which in turn blocks the BinlogConnection from pushing events to the channel
+-	throttledEvents := make(chan mysql.BinlogEvent)
++	throttledEvents := make(chan mysql.BinlogEvent, binlog.EventQueueSize)
+ 	go throttleEvents(throttledEvents)
+ 
++	// A heartbeat is sent after HeartbeatTime without anything else to do.
++	// Resetting hbTimer for every binlog event is costly at high event rates,
++	// so we only remember when the loop was last busy: when hbTimer fires
++	// early, it is re-armed for the remaining idle time.
++	lastBusy := time.Now()
++	// With a coalescing window, a caught-up stream holds an empty transaction until
++	// coalesceTimer fires (coalesceC is nil while it is not armed). Any send before that
++	// includes it, and a later empty transaction replaces it.
++	var coalesceWindow time.Duration
++	if coalesceEmpty {
++		coalesceWindow = vttablet.VStreamerCoalesceEmptyTransactionsWindow
++	}
++	coalesceTimer := time.NewTimer(time.Hour)
++	coalesceTimer.Stop()
++	defer coalesceTimer.Stop()
++	var coalesceC <-chan time.Time
+ 	for {
+-		hbTimer.Reset(HeartbeatTime)
+-		// Drain event if timer fired before reset.
+-		select {
+-		case <-hbTimer.C:
+-		default:
+-		}
+-
+ 		select {
+ 		case ev, ok := <-throttledEvents:
++			lastBusy = time.Now()
+ 			if !ok {
+ 				select {
+ 				case err := <-errs:
+@@ -482,7 +579,26 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 					return vterrors.Wrapf(err, "error sending event: %+v", vevent)
+ 				}
+ 			}
++			if pendingEmpty != nil && len(throttledEvents) == 0 {
++				// Caught up: nothing is known to follow the empty transaction. Send it now, or
++				// when the coalescing window ends if one is set.
++				if coalesceWindow > 0 {
++					if coalesceC == nil {
++						coalesceTimer.Reset(coalesceWindow)
++						coalesceC = coalesceTimer.C
++					}
++					continue
++				}
++				if err := flushPendingEmpty(); err != nil {
++					if err == io.EOF {
++						return nil
++					}
++					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
++					return vterrors.Wrapf(err, "error sending empty transaction")
++				}
++			}
+ 		case vs.vschema = <-vs.vevents:
++			lastBusy = time.Now()
+ 			select {
+ 			case err := <-errs:
+ 				return err
+@@ -500,7 +616,20 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 			return throttlerErr
+ 		case <-ctx.Done():
+ 			return nil
++		case <-coalesceC:
++			coalesceC = nil
++			if err := flushPendingEmpty(); err != nil {
++				if err == io.EOF {
++					return nil
++				}
++				vs.vse.errorCounts.Add("BufferAndTransmit", 1)
++				return vterrors.Wrapf(err, "error sending empty transaction")
++			}
+ 		case <-hbTimer.C:
++			if idle := time.Since(lastBusy); idle < HeartbeatTime {
++				hbTimer.Reset(HeartbeatTime - idle)
++				continue
++			}
+ 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
+ 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
+ 				if err == io.EOF {
+@@ -509,8 +638,34 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
+ 				vs.vse.errorCounts.Add("Send", 1)
+ 				return vterrors.Wrapf(err, "failed to send heartbeat event")
+ 			}
++			lastBusy = time.Now()
++			hbTimer.Reset(HeartbeatTime)
++		}
++	}
++}
++
++// coalesceEmptyTransactions tells whether transactions that are empty for this stream may be
++// coalesced while the stream is behind the binlog (see pendingEmpty in parseEvents).
++func (vs *vstreamer) coalesceEmptyTransactions() bool {
++	if !vttablet.VStreamerCoalesceEmptyTransactions {
++		return false
++	}
++	// Only when every event type is streamed: a consumer that asked for a subset of the
++	// event types gets them exactly as before.
++	return vs.eventTypesToStream == nil
++}
++
++// isEmptyTransaction tells whether vevents is a whole transaction without any content
++// for this stream: only BEGIN, GTID and COMMIT events.
++func isEmptyTransaction(vevents []*binlogdatapb.VEvent) bool {
++	for _, vevent := range vevents {
++		switch vevent.Type {
++		case binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_COMMIT:
++		default:
++			return false
+ 		}
+ 	}
++	return true
+ }
+ 
+ // parseEvent parses an event from the binlog and converts it to a list of VEvents.
+@@ -590,6 +745,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 		vs.commitParent = commitParent
+ 		vs.sequenceNumber = sequenceNumber
+ 		vs.eventGTID = gtid
++		vs.eventGTIDStr = ""
+ 	case ev.IsXID():
+ 		if shouldSend(binlogdatapb.VEventType_GTID) {
+ 			vevents = append(vevents, &binlogdatapb.VEvent{
+@@ -885,9 +1041,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 		}
+ 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
+ 	}
+-	vsEventGTIDString := ""
+-	if vs.eventGTID != nil {
+-		vsEventGTIDString = vs.eventGTID.String()
++	if len(vevents) == 0 {
++		// Most binlog events of a transaction (TABLE_MAP, rows filtered out, ...) produce no
++		// vevents: don't format the GTID for them.
++		return vevents, nil
++	}
++	if vs.eventGTID != nil && vs.eventGTIDStr == "" {
++		vs.eventGTIDStr = vs.eventGTID.String()
+ 	}
+ 	for _, vevent := range vevents {
+ 		vevent.Timestamp = int64(ev.Timestamp())
+@@ -895,7 +1055,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
+ 		vevent.SequenceNumber = vs.sequenceNumber
+ 		vevent.CommitParent = vs.commitParent
+ 		if vs.eventGTID != nil {
+-			vevent.EventGtid = vsEventGTIDString
++			vevent.EventGtid = vs.eventGTIDStr
+ 		}
+ 	}
+ 	return vevents, nil
+@@ -1209,7 +1369,22 @@ nextrow:
+ //   - if the target is not sharded, pass both images if either after or before passes
+ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+ 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
++	// mapped is reused to map the images of all the rows: RowToProto3 copies the
++	// values out of it before the next image is mapped.
++	var mapped []sqltypes.Value
++	filterCols := plan.filterColumns()
+ 	for _, row := range rows.Rows {
++		if filterCols != nil {
++			// Evaluate the filters on the filter columns only, so that the rows that are
++			// filtered out (most of them in a reshard to many shards) are never fully decoded.
++			pass, decided, err := vs.prefilterRow(plan, filterCols, rows, &row)
++			if err != nil {
++				return nil, err
++			}
++			if decided && !pass {
++				continue
++			}
++		}
+ 		// The BEFORE image does not have partial JSON values so we pass an empty bitmap.
+ 		// It can however be a partial row image when binlog_row_image=NOBLOB is used, as
+ 		// MySQL then omits BLOB/TEXT columns that are not part of the primary key.
+@@ -1249,11 +1424,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
+ 		rowChange := &binlogdatapb.RowChange{}
+ 		if beforeOK {
+ 			if len(beforeRawValues) > 0 {
+-				beforeValues, err := plan.mapValues(beforeRawValues)
++				beforeValues, err := plan.mapValues(beforeRawValues, mapped)
+ 				if err != nil {
+ 					return nil, err
+ 				}
+ 				rowChange.Before = sqltypes.RowToProto3(beforeValues)
++				mapped = beforeValues
+ 				if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && beforePartial {
+ 					// The bitmap describes the columns as emitted, so project it
+ 					// through the plan the same way the values were.
+@@ -1263,11 +1439,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
+ 		}
+ 		if afterOK {
+ 			if len(afterRawValues) > 0 {
+-				afterValues, err := plan.mapValues(afterRawValues)
++				afterValues, err := plan.mapValues(afterRawValues, mapped)
+ 				if err != nil {
+ 					return nil, err
+ 				}
+ 				rowChange.After = sqltypes.RowToProto3(afterValues)
++				mapped = afterValues
+ 				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
+ 					(row.JSONPartialValues.Count() > 0) {
+ 					// DataColumns is intentionally left in the source table's column
+@@ -1327,6 +1504,84 @@ func (vs *vstreamer) rebuildPlans() error {
+ 	return nil
+ }
+ 
++// prefilterRow evaluates the plan's filters on both images of a row by decoding only the
++// filter columns. It returns decided=false if it cannot tell (e.g. a partial row image), in
++// which case the caller must decode the full images and filter them as usual. When
++// decided is true, pass tells whether either image passes the filters.
++func (vs *vstreamer) prefilterRow(plan *streamerPlan, filterCols []int, rows mysql.Rows, row *mysql.Row) (pass, decided bool, err error) {
++	for i := range 2 {
++		data, dataColumns, nullColumns := row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns
++		if i == 1 {
++			data, dataColumns, nullColumns = row.Data, rows.DataColumns, row.NullColumns
++		}
++		if len(data) == 0 {
++			continue
++		}
++		values, charsets, ok, err := vs.getFilterValues(plan, filterCols, data, dataColumns, nullColumns)
++		if err != nil || !ok {
++			return false, false, err
++		}
++		imageOK, _, err := plan.shouldFilter(values, charsets)
++		if err != nil {
++			return false, false, err
++		}
++		if imageOK {
++			return true, true, nil
++		}
++	}
++	return false, true, nil
++}
++
++// getFilterValues decodes only the columns in filterCols (sorted) of a row image, skipping
++// over the other columns. The returned slices are indexed by column number like the ones
++// from getValues; the columns that are not in filterCols are left NULL. ok is false if the
++// image cannot be handled here (a column is missing from the image).
++func (vs *vstreamer) getFilterValues(plan *streamerPlan, filterCols []int, data []byte,
++	dataColumns, nullColumns mysql.Bitmap,
++) (values []sqltypes.Value, charsets []collations.ID, ok bool, err error) {
++	count := dataColumns.Count()
++	last := filterCols[len(filterCols)-1]
++	if last >= count {
++		return nil, nil, false, nil
++	}
++	values = make([]sqltypes.Value, count)
++	charsets = make([]collations.ID, count)
++	next := 0 // index in filterCols of the next column to decode
++	valueIndex := 0
++	pos := 0
++	for colNum := 0; colNum <= last; colNum++ {
++		if !dataColumns.Bit(colNum) {
++			return nil, nil, false, nil
++		}
++		wanted := filterCols[next] == colNum
++		if wanted {
++			next++
++		}
++		if nullColumns.Bit(valueIndex) {
++			valueIndex++
++			continue
++		}
++		valueIndex++
++		if !wanted {
++			l, err := mysqlbinlog.CellLength(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum])
++			if err != nil {
++				return nil, nil, false, err
++			}
++			pos += l
++			continue
++		}
++		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], false)
++		if err != nil {
++			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
++				plan.Table.Fields[colNum].Name)
++		}
++		pos += l
++		values[colNum] = value
++		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
++	}
++	return values, charsets, true, nil
++}
++
+ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
+ 	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap,
+ ) ([]sqltypes.Value, []collations.ID, bool, error) {

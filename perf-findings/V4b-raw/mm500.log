@@ -1,0 +1,96 @@
+mm500-ref-r1 tables=500 create=5.723351947s dur=28.784825252s per-table=.057s load: 2.01, 3.08, 4.07
+  src mysqld: Connections=524 Questions=5078  -> Connections=3553 Questions=23163 
+  tgt mysqld: Com_insert=102 Com_select=1337 Com_update=77 Connections=519 Questions=2560  -> Com_insert=3112 Com_select=22012 Com_update=85 Connections=2102 Questions=38369 
+  vtgate            0.08 s     0.2 ms/table
+  vtctld            0.38 s     0.8 ms/table
+  vttablet_100      0.28 s     0.6 ms/table
+  mysqld_100        0.13 s     0.3 ms/table
+  vttablet_101      0.27 s     0.5 ms/table
+  mysqld_101        0.26 s     0.5 ms/table
+  vttablet_102      0.26 s     0.5 ms/table
+  mysqld_102        0.26 s     0.5 ms/table
+  vttablet_103      2.93 s     5.9 ms/table
+  mysqld_103        6.16 s    12.3 ms/table
+  vttablet_104      6.06 s    12.1 ms/table
+  mysqld_104       18.05 s    36.1 ms/table
+  cancel=7.150737637s
+mm500-new-r1 tables=500 create=5.399214305s dur=26.912725614s per-table=.053s load: 4.82, 3.64, 4.20
+  src mysqld: Connections=3578 Questions=24275  -> Connections=6606 Questions=42347 
+  tgt mysqld: Com_insert=3616 Com_select=26564 Com_update=90 Connections=2629 Questions=48502  -> Com_insert=6626 Com_select=47233 Com_update=98 Connections=4209 Questions=84302 
+  vtgate            0.06 s     0.1 ms/table
+  vtctld            0.40 s     0.8 ms/table
+  vttablet_100      0.22 s     0.4 ms/table
+  mysqld_100        0.12 s     0.2 ms/table
+  vttablet_101      0.24 s     0.5 ms/table
+  mysqld_101        0.24 s     0.5 ms/table
+  vttablet_102      0.19 s     0.4 ms/table
+  mysqld_102        0.24 s     0.5 ms/table
+  vttablet_103      2.92 s     5.8 ms/table
+  mysqld_103        5.86 s    11.7 ms/table
+  vttablet_104      4.85 s     9.7 ms/table
+  mysqld_104       17.81 s    35.6 ms/table
+  cancel=7.007631787s
+mm500-new3-r1 tables=500 create=5.117357914s dur=27.216077125s per-table=.054s load: 3.72, 3.52, 4.13
+  src mysqld: Connections=6629 Questions=43443  -> Connections=9658 Questions=61528 
+  tgt mysqld: Com_insert=7145 Com_select=51813 Com_update=103 Connections=4736 Questions=94493  -> Com_insert=10155 Com_select=72484 Com_update=111 Connections=6317 Questions=130296 
+  vtgate            0.07 s     0.1 ms/table
+  vtctld            0.40 s     0.8 ms/table
+  vttablet_100      0.21 s     0.4 ms/table
+  mysqld_100        0.13 s     0.3 ms/table
+  vttablet_101      0.24 s     0.5 ms/table
+  mysqld_101        0.25 s     0.5 ms/table
+  vttablet_102      0.22 s     0.4 ms/table
+  mysqld_102        0.24 s     0.5 ms/table
+  vttablet_103      2.98 s     6.0 ms/table
+  mysqld_103        4.34 s     8.7 ms/table
+  vttablet_104      5.17 s    10.3 ms/table
+  mysqld_104       19.02 s    38.0 ms/table
+  cancel=7.300089030s
+mm500-ref-r2 tables=500 create=4.966993794s dur=27.552021843s per-table=.055s load: 3.76, 3.60, 4.13
+  src mysqld: Connections=9681 Questions=62624  -> Connections=12710 Questions=80709 
+  tgt mysqld: Com_insert=10668 Com_select=77052 Com_update=116 Connections=6843 Questions=140462  -> Com_insert=13678 Com_select=97725 Com_update=124 Connections=8425 Questions=176268 
+  vtgate            0.07 s     0.1 ms/table
+  vtctld            0.36 s     0.7 ms/table
+  vttablet_100      0.23 s     0.5 ms/table
+  mysqld_100        0.11 s     0.2 ms/table
+  vttablet_101      0.22 s     0.4 ms/table
+  mysqld_101        0.23 s     0.5 ms/table
+  vttablet_102      0.23 s     0.5 ms/table
+  mysqld_102        0.22 s     0.4 ms/table
+  vttablet_103      2.79 s     5.6 ms/table
+  mysqld_103        5.81 s    11.6 ms/table
+  vttablet_104      5.87 s    11.7 ms/table
+  mysqld_104       17.84 s    35.7 ms/table
+  cancel=7.015801727s
+mm500-new-r2 tables=500 create=6.226779156s dur=28.351914353s per-table=.056s load: 5.53, 3.98, 4.22
+  src mysqld: Connections=12733 Questions=81805  -> Connections=15762 Questions=99890 
+  tgt mysqld: Com_insert=14182 Com_select=102275 Com_update=129 Connections=8952 Questions=186399  -> Com_insert=17192 Com_select=122946 Com_update=137 Connections=10533 Questions=222202 
+  vtgate            0.08 s     0.2 ms/table
+  vtctld            0.35 s     0.7 ms/table
+  vttablet_100      0.21 s     0.4 ms/table
+  mysqld_100        0.13 s     0.3 ms/table
+  vttablet_101      0.20 s     0.4 ms/table
+  mysqld_101        0.25 s     0.5 ms/table
+  vttablet_102      0.20 s     0.4 ms/table
+  mysqld_102        0.24 s     0.5 ms/table
+  vttablet_103      2.71 s     5.4 ms/table
+  mysqld_103        5.59 s    11.2 ms/table
+  vttablet_104      4.56 s     9.1 ms/table
+  mysqld_104       17.65 s    35.3 ms/table
+  cancel=7.690739380s
+mm500-new3-r2 tables=500 create=5.585412880s dur=25.598223747s per-table=.051s load: 5.88, 4.37, 4.34
+  src mysqld: Connections=15786 Questions=100999  -> Connections=18814 Questions=119071 
+  tgt mysqld: Com_insert=17697 Com_select=127496 Com_update=142 Connections=11060 Questions=232334  -> Com_insert=20706 Com_select=148159 Com_update=150 Connections=12637 Questions=268124 
+  vtgate            0.07 s     0.1 ms/table
+  vtctld            0.38 s     0.8 ms/table
+  vttablet_100      0.20 s     0.4 ms/table
+  mysqld_100        0.11 s     0.2 ms/table
+  vttablet_101      0.20 s     0.4 ms/table
+  mysqld_101        0.21 s     0.4 ms/table
+  vttablet_102      0.20 s     0.4 ms/table
+  mysqld_102        0.21 s     0.4 ms/table
+  vttablet_103      2.71 s     5.4 ms/table
+  mysqld_103        3.97 s     7.9 ms/table
+  vttablet_104      4.58 s     9.2 ms/table
+  mysqld_104       17.21 s    34.4 ms/table
+  cancel=7.211821194s

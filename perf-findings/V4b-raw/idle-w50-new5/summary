@@ -1,0 +1,22 @@
+w50-new5 streams=50 dur=60s load: 1.87, 2.41, 2.76
+  vtgate          0.001 cores
+  vtctld          0.001 cores
+  vttablet_100    0.010 cores
+  mysqld_100      0.004 cores
+  vttablet_101    0.009 cores
+  mysqld_101      0.009 cores
+  vttablet_102    0.011 cores
+  mysqld_102      0.009 cores
+  vttablet_103    0.014 cores
+  mysqld_103      0.006 cores
+  vttablet_104    0.025 cores
+  mysqld_104      0.029 cores
+  src: Bytes_sent=464544758 Com_commit=0 Com_insert=217 Com_select=560178 Com_update=12121 Questions=1103940 Threads_connected=78 
+    -> Bytes_sent=464551990 Com_commit=0 Com_insert=217 Com_select=560191 Com_update=12122 Questions=1103970 Threads_connected=78 
+  tgt: Bytes_sent=2227488909 Com_commit=71276 Com_insert=153237 Com_select=1188223 Com_update=25178 Questions=2221919 Threads_connected=79 
+    -> Bytes_sent=2227666813 Com_commit=71276 Com_insert=153237 Com_select=1188238 Com_update=28479 Questions=2225242 Threads_connected=79 
+  src mysqld per s: Bytes_sent=120.5 Com_commit=0.0 Com_insert=0.0 Com_select=0.2 Com_update=0.0 Questions=0.5  Threads_connected=78
+  tgt mysqld per s: Bytes_sent=2965.1 Com_commit=0.0 Com_insert=0.0 Com_select=0.2 Com_update=55.0 Questions=55.4  Threads_connected=79
+  vttablet_103 RSS=110316kB goroutines=409 tcp_to_mysql=132
+  vttablet_104 RSS=115316kB goroutines=884 tcp_to_mysql=141
+  target binlog growth: 53444 B/s (183 MB/h)

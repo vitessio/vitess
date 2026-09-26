@@ -1,0 +1,3 @@
+WRITE: n=3827 ok=3827 err=0 p50=2.516532ms p99=6.490705ms max=464.909651ms (at 14:53:21.082)
+WRITE: max gap between successful completions=428.68647ms starting 14:53:21.080
+WRITE: slow(>100ms)=4

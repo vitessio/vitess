@@ -1,0 +1,99 @@
+2026-09-26 15:06:55.579 UTC INF workflow/server.go:2360 Migration ID for workflow wf_dst2: 7461737699565409388
+2026-09-26 15:06:55.586 UTC INF topo/locks.go:167 Locking named dst2/wf_dst2 for action WorkflowSwitchTraffic with options: {lockType:2 ttl:0}
+2026-09-26 15:06:55.611 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard src/0
+2026-09-26 15:06:55.611 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard dst2/-80
+2026-09-26 15:06:55.614 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000100 with a timeout of 29.996814014s
+2026-09-26 15:06:55.616 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000101 with a timeout of 29.995080874s
+2026-09-26 15:06:55.625 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard dst2/80-
+2026-09-26 15:06:55.629 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000102 with a timeout of 29.981314007s
+2026-09-26 15:06:55.635 UTC INF workflow/server.go:2984 Switching reads: dst2.wf_dst2 tablet types: replica,rdonly, cells: , workflow state: Reads Not Switched. Writes Not Switched
+2026-09-26 15:06:55.638 UTC INF topo/locks.go:167 Locking keyspace src for action SwitchReads with options: {lockType:0 ttl:30000000000}
+2026-09-26 15:06:55.641 UTC INF topo/locks.go:167 Locking keyspace dst2 for action SwitchReads with options: {lockType:0 ttl:30000000000}
+2026-09-26 15:06:55.648 UTC INF workflow/traffic_switcher.go:662 switchTableReads: workflow: wf_dst2, direction: forward, cells: [], tablet types: [REPLICA RDONLY]
+2026-09-26 15:06:55.650 UTC INF topotools/routing_rules.go:59 Saving routing rules map[dst2.sbtest1:[src.sbtest1] dst2.sbtest1@rdonly:[dst2.sbtest1] dst2.sbtest1@replica:[dst2.sbtest1] dst2.sbtest2:[src.sbtest2] dst2.sbtest2@rdonly:[dst2.sbtest2] dst2.sbtest2@replica:[dst2.sbtest2] sbtest1:[src.sbtest1] sbtest1@rdonly:[dst2.sbtest1] sbtest1@replica:[dst2.sbtest1] sbtest2:[src.sbtest2] sbtest2@rdonly:[dst2.sbtest2] sbtest2@replica:[dst2.sbtest2] src.sbtest1@rdonly:[dst2.sbtest1] src.sbtest1@replica:[dst2.sbtest1] src.sbtest2@rdonly:[dst2.sbtest2] src.sbtest2@replica:[dst2.sbtest2]]
+
+2026-09-26 15:06:55.652 UTC INF topo/locks.go:219 Unlocking keyspace dst2 for successful action SwitchReads
+2026-09-26 15:06:55.653 UTC INF topo/locks.go:219 Unlocking keyspace src for successful action SwitchReads
+2026-09-26 15:06:55.657 UTC INF workflow/server.go:2901 Switch Reads done for workflow dst2.wf_dst2
+2026-09-26 15:06:55.670 UTC INF topo/locks.go:167 Locking keyspace src for action SwitchWrites with options: {lockType:0 ttl:120000000000}
+2026-09-26 15:06:55.673 UTC INF topo/locks.go:167 Locking keyspace dst2 for action SwitchWrites with options: {lockType:0 ttl:120000000000}
+2026-09-26 15:06:55.681 UTC INF workflow/server.go:3264 No previous journals were found. Proceeding normally.
+2026-09-26 15:06:55.681 UTC INF workflow/server.go:3283 Stopping source writes
+2026-09-26 15:06:55.686 UTC INF syslogger/syslogger.go:133 src/0 [shard] updated value: primary_alias:{cell:"zone1" uid:100} primary_term_start_time:{seconds:1790434318 nanoseconds:555166856} tablet_controls:{tablet_type:PRIMARY denied_tables:"sbtest1" denied_tables:"sbtest2"} is_primary_serving:true
+2026-09-26 15:06:55.686 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard src/0
+2026-09-26 15:06:55.686 UTC INF syslogger/syslogger.go:133 dst2/-80 [shard] updated value: primary_alias:{cell:"zone1" uid:101} primary_term_start_time:{seconds:1790434318 nanoseconds:808880737} key_range:{end:"\x80"} is_primary_serving:true
+2026-09-26 15:06:55.686 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard dst2/-80
+2026-09-26 15:06:55.687 UTC INF syslogger/syslogger.go:133 dst2/80- [shard] updated value: primary_alias:{cell:"zone1" uid:102} primary_term_start_time:{seconds:1790434319 nanoseconds:44186274} key_range:{start:"\x80"} is_primary_serving:true
+2026-09-26 15:06:55.687 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard dst2/80-
+2026-09-26 15:06:55.691 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000100 with a timeout of 29.995053555s
+2026-09-26 15:06:55.692 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000101 with a timeout of 29.994797935s
+2026-09-26 15:06:55.693 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000102 with a timeout of 29.995747587s
+2026-09-26 15:06:55.709 UTC INF workflow/server.go:3291 Stopping streams
+2026-09-26 15:06:55.709 UTC INF workflow/server.go:3312 Executing LOCK TABLES on source tables 2 times
+2026-09-26 15:06:55.709 UTC INF workflow/traffic_switcher.go:1473 Locking (and then immediately unlocking) the following tables on source keyspace src: [sbtest1 sbtest2]
+2026-09-26 15:06:55.821 UTC INF workflow/traffic_switcher.go:1473 Locking (and then immediately unlocking) the following tables on source keyspace src: [sbtest1 sbtest2]
+2026-09-26 15:06:55.930 UTC INF workflow/traffic_switcher.go:1537 Position on migration source zone1-0000000100 after having stopped writes: MySQL56/cea9456f-b9b9-11f1-9103-02fc00000001:1-71788
+2026-09-26 15:06:55.931 UTC INF workflow/server.go:3337 Waiting for streams to catchup
+2026-09-26 15:06:55.931 UTC INF workflow/traffic_switcher.go:1044 Before Catchup: uid: 23, target primary zone1-0000000102, target position , shard primary_alias:{cell:"zone1" uid:102} primary_term_start_time:{seconds:1790434319 nanoseconds:44186274} key_range:{start:"\x80"} tablet_controls:{tablet_type:PRIMARY denied_tables:"sbtest1" denied_tables:"sbtest2"} is_primary_serving:true
+2026-09-26 15:06:55.931 UTC INF workflow/traffic_switcher.go:1048 Before Catchup: waiting for keyspace:shard: dst2:80- to reach source position MySQL56/cea9456f-b9b9-11f1-9103-02fc00000001:1-71788, uid 23
+2026-09-26 15:06:55.931 UTC INF workflow/traffic_switcher.go:1044 Before Catchup: uid: 23, target primary zone1-0000000101, target position , shard primary_alias:{cell:"zone1" uid:101} primary_term_start_time:{seconds:1790434318 nanoseconds:808880737} key_range:{end:"\x80"} tablet_controls:{tablet_type:PRIMARY denied_tables:"sbtest1" denied_tables:"sbtest2"} is_primary_serving:true
+2026-09-26 15:06:55.931 UTC INF workflow/traffic_switcher.go:1048 Before Catchup: waiting for keyspace:shard: dst2:-80 to reach source position MySQL56/cea9456f-b9b9-11f1-9103-02fc00000001:1-71788, uid 23
+2026-09-26 15:06:55.934 UTC INF workflow/traffic_switcher.go:1053 After catchup: target keyspace:shard: dst2:-80, source position MySQL56/cea9456f-b9b9-11f1-9103-02fc00000001:1-71788, uid 23
+2026-09-26 15:06:55.934 UTC INF workflow/traffic_switcher.go:1055 After catchup: position for keyspace:shard: dst2:-80 reached, uid 23
+2026-09-26 15:06:55.937 UTC INF workflow/traffic_switcher.go:1053 After catchup: target keyspace:shard: dst2:80-, source position MySQL56/cea9456f-b9b9-11f1-9103-02fc00000001:1-71788, uid 23
+2026-09-26 15:06:55.937 UTC INF workflow/traffic_switcher.go:1055 After catchup: position for keyspace:shard: dst2:80- reached, uid 23
+2026-09-26 15:06:55.946 UTC INF workflow/traffic_switcher.go:1069 After catchup, position for target primary zone1-0000000102, MySQL56/cead245f-b9b9-11f1-a737-02fc00000001:1-34124
+2026-09-26 15:06:55.946 UTC INF workflow/traffic_switcher.go:1069 After catchup, position for target primary zone1-0000000101, MySQL56/ceaa057f-b9b9-11f1-a22f-02fc00000001:1-34900
+2026-09-26 15:06:55.947 UTC INF workflow/server.go:3348 Migrating streams
+2026-09-26 15:06:55.947 UTC INF workflow/server.go:3359 Resetting sequences
+2026-09-26 15:06:55.949 UTC INF workflow/server.go:3370 Creating reverse streams
+2026-09-26 15:06:55.954 UTC INF grpctmclient/client.go:1339 VDiff for tablet cell:"zone1" uid:100, request keyspace:"src" workflow:"wf_dst2_reverse" action:"delete" action_arg:"all"
+2026-09-26 15:06:55.958 UTC INF workflow/traffic_switcher.go:977 Creating reverse workflow vreplication stream on tablet cell:"zone1" uid:100: workflow wf_dst2_reverse, startPos MySQL56/cead245f-b9b9-11f1-a737-02fc00000001:1-34124
+2026-09-26 15:06:55.958 UTC INF workflow/traffic_switcher.go:977 Creating reverse workflow vreplication stream on tablet cell:"zone1" uid:100: workflow wf_dst2_reverse, startPos MySQL56/ceaa057f-b9b9-11f1-a22f-02fc00000001:1-34900
+2026-09-26 15:06:55.965 UTC INF workflow/traffic_switcher.go:994 Updating vreplication stream entry on cell:"zone1" uid:100 with: update _vt.vreplication set cell = 'zone1', tablet_types = 'replica,primary', options = '{"sharded_auto_increment_handling":1}' where workflow = 'wf_dst2_reverse' and db_name = 'vt_src'
+2026-09-26 15:06:55.968 UTC INF workflow/traffic_switcher.go:994 Updating vreplication stream entry on cell:"zone1" uid:100 with: update _vt.vreplication set cell = 'zone1', tablet_types = 'replica,primary', options = '{"sharded_auto_increment_handling":1}' where workflow = 'wf_dst2_reverse' and db_name = 'vt_src'
+2026-09-26 15:06:55.978 UTC INF workflow/server.go:3420 Creating journals for workflow dst2.wf_dst2
+2026-09-26 15:06:55.978 UTC INF workflow/traffic_switcher.go:712 In createJournals for source workflows []
+2026-09-26 15:06:55.979 UTC INF workflow/traffic_switcher.go:748 Creating journal: id:7461737699565409388 tables:"sbtest1" tables:"sbtest2" local_position:"MySQL56/cea9456f-b9b9-11f1-9103-02fc00000001:1-71788" shard_gtids:{keyspace:"dst2" shard:"-80" gtid:"MySQL56/ceaa057f-b9b9-11f1-a22f-02fc00000001:1-34900"} shard_gtids:{keyspace:"dst2" shard:"80-" gtid:"MySQL56/cead245f-b9b9-11f1-a737-02fc00000001:1-34124"} participants:{keyspace:"src" shard:"0"}
+2026-09-26 15:06:55.981 UTC INF workflow/server.go:3424 Created journals for workflow dst2.wf_dst2
+2026-09-26 15:06:55.981 UTC INF workflow/server.go:3426 Allowing writes on target for workflow dst2.wf_dst2
+2026-09-26 15:06:55.982 UTC WRN topo/shard.go:444 Trying to remove TabletControl.DeniedTables for missing type PRIMARY in shard dst2/80-
+2026-09-26 15:06:55.983 UTC WRN topo/shard.go:444 Trying to remove TabletControl.DeniedTables for missing type PRIMARY in shard dst2/-80
+2026-09-26 15:06:55.984 UTC WRN topo/shard.go:517 one or more tables were already present in the denylist:sbtest1,sbtest2
+2026-09-26 15:06:55.985 UTC INF syslogger/syslogger.go:133 src/0 [shard] updated value: primary_alias:{cell:"zone1" uid:100} primary_term_start_time:{seconds:1790434318 nanoseconds:555166856} tablet_controls:{tablet_type:PRIMARY denied_tables:"sbtest1" denied_tables:"sbtest2"} is_primary_serving:true
+2026-09-26 15:06:55.985 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard src/0
+2026-09-26 15:06:55.985 UTC INF syslogger/syslogger.go:133 dst2/80- [shard] updated value: primary_alias:{cell:"zone1" uid:102} primary_term_start_time:{seconds:1790434319 nanoseconds:44186274} key_range:{start:"\x80"} is_primary_serving:true
+2026-09-26 15:06:55.985 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard dst2/80-
+2026-09-26 15:06:55.985 UTC INF syslogger/syslogger.go:133 dst2/-80 [shard] updated value: primary_alias:{cell:"zone1" uid:101} primary_term_start_time:{seconds:1790434318 nanoseconds:808880737} key_range:{end:"\x80"} is_primary_serving:true
+2026-09-26 15:06:55.985 UTC INF topotools/keyspace.go:45 RefreshTabletsByShard called on shard dst2/-80
+2026-09-26 15:06:55.990 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000101 with a timeout of 29.987800386s
+2026-09-26 15:06:55.990 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000100 with a timeout of 29.987667454s
+2026-09-26 15:06:55.990 UTC INF topotools/keyspace.go:89 Calling RefreshState on tablet zone1-0000000102 with a timeout of 29.987587321s
+2026-09-26 15:06:55.997 UTC INF workflow/server.go:3430 Allowed writes on target for workflow dst2.wf_dst2
+2026-09-26 15:06:55.997 UTC INF workflow/server.go:3432 Updating routing rules for workflow dst2.wf_dst2
+2026-09-26 15:06:55.998 UTC INF workflow/traffic_switcher.go:812 Deleted routing: dst2.sbtest1
+2026-09-26 15:06:55.998 UTC INF workflow/traffic_switcher.go:815 Added routing: sbtest1 src.sbtest1
+2026-09-26 15:06:55.998 UTC INF workflow/traffic_switcher.go:812 Deleted routing: dst2.sbtest2
+2026-09-26 15:06:55.998 UTC INF workflow/traffic_switcher.go:815 Added routing: sbtest2 src.sbtest2
+2026-09-26 15:06:55.998 UTC INF topotools/routing_rules.go:59 Saving routing rules map[dst2.sbtest1@rdonly:[dst2.sbtest1] dst2.sbtest1@replica:[dst2.sbtest1] dst2.sbtest2@rdonly:[dst2.sbtest2] dst2.sbtest2@replica:[dst2.sbtest2] sbtest1:[dst2.sbtest1] sbtest1@rdonly:[dst2.sbtest1] sbtest1@replica:[dst2.sbtest1] sbtest2:[dst2.sbtest2] sbtest2@rdonly:[dst2.sbtest2] sbtest2@replica:[dst2.sbtest2] src.sbtest1:[dst2.sbtest1] src.sbtest1@rdonly:[dst2.sbtest1] src.sbtest1@replica:[dst2.sbtest1] src.sbtest2:[dst2.sbtest2] src.sbtest2@rdonly:[dst2.sbtest2] src.sbtest2@replica:[dst2.sbtest2]]
+
+2026-09-26 15:06:56.005 UTC INF workflow/server.go:3436 Updated routing rules for workflow dst2.wf_dst2
+2026-09-26 15:06:56.005 UTC INF workflow/server.go:3438 Finalizing stream migrations for workflow dst2.wf_dst2
+2026-09-26 15:06:56.005 UTC INF workflow/server.go:3442 Finalized stream migrations for workflow dst2.wf_dst2
+2026-09-26 15:06:56.005 UTC INF workflow/server.go:3445 Starting reverse workflow wf_dst2_reverse on keyspace src
+2026-09-26 15:06:56.011 UTC INF workflow/server.go:3449 Started reverse workflow wf_dst2_reverse on keyspace src
+2026-09-26 15:06:56.011 UTC INF workflow/server.go:3455 Marking workflow frozen dst2.wf_dst2
+2026-09-26 15:06:56.011 UTC INF workflow/traffic_switcher.go:1222 Marking target streams frozen for workflow wf_dst2 db_name vt_dst2
+2026-09-26 15:06:56.011 UTC INF workflow/traffic_switcher.go:1222 Marking target streams frozen for workflow wf_dst2 db_name vt_dst2
+2026-09-26 15:06:56.022 UTC INF workflow/server.go:3459 Marked workflow frozen dst2.wf_dst2
+2026-09-26 15:06:56.022 UTC INF workflow/server.go:3461 Switch writes completed for workflow dst2.wf_dst2
+2026-09-26 15:06:56.022 UTC INF topo/locks.go:219 Unlocking keyspace dst2 for successful action SwitchWrites
+2026-09-26 15:06:56.026 UTC INF topo/locks.go:219 Unlocking keyspace src for successful action SwitchWrites
+2026-09-26 15:06:56.028 UTC INF workflow/server.go:2911 Switch Writes done for workflow dst2.wf_dst2
+2026-09-26 15:06:56.028 UTC INF workflow/server.go:2926 SwitchTraffic done for workflow dst2.wf_dst2
+2026-09-26 15:06:56.028 UTC INF workflow/server.go:2933 SwitchTraffic done for workflow dst2.wf_dst2
+2026-09-26 15:06:56.028 UTC INF workflow/server.go:2938 Before reloading workflow state after switching traffic: Reads Not Switched. Writes Not Switched
+
+2026-09-26 15:06:56.042 UTC INF workflow/server.go:2360 Migration ID for workflow wf_dst2: 7461737699565409388
+2026-09-26 15:06:56.052 UTC INF workflow/server.go:2954 SwitchTraffic done for workflow dst2.wf_dst2, returning response summary:"SwitchTraffic was successful for workflow dst2.wf_dst2" start_state:"Reads Not Switched. Writes Not Switched" current_state:"All Reads Switched. Writes Switched"
+2026-09-26 15:06:56.052 UTC INF topo/locks.go:219 Unlocking named dst2/wf_dst2 for successful action WorkflowSwitchTraffic

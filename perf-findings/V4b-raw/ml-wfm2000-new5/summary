@@ -1,0 +1,6 @@
+wfm2000-new5 streams=1 trx=3950 rate=200 behind_at_end=0 load: 2.22, 3.22, 3.46
+  vttablet_103      3.18 s    805.1 us/trx
+  mysqld_103        7.78 s   1969.6 us/trx
+  vttablet_104      2.16 s    546.8 us/trx
+  mysqld_104        5.23 s   1324.1 us/trx
+  binlog bytes per source trx: source 349 target 174022

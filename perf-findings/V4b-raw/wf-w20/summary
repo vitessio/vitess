@@ -1,0 +1,10 @@
+w20 W=20 TPER=2 create_all=9.108675333s (per wf: avg 0.45s max 0.57s) all_running=9.627095360s load: 5.67, 2.79, 2.93
+  vtgate            0.06 s
+  vtctld            1.11 s
+  vttablet_100      0.08 s
+  vttablet_101      0.06 s
+  vttablet_102      0.05 s
+  vttablet_103      2.78 s
+  mysqld_103        7.99 s
+  vttablet_104      1.56 s
+  mysqld_104        3.85 s

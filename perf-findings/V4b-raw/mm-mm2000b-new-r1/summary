@@ -1,0 +1,15 @@
+mm2000b-new-r1 tables=2000 create=23.305775854s dur=163.801752697s per-table=.081s load: 1.82, 3.42, 3.76
+  src mysqld: Connections=52353 Questions=351433  -> Connections=64429 Questions=423579 
+  tgt mysqld: Com_insert=55841 Com_select=412906 Com_update=287 Connections=39310 Questions=770803  -> Com_insert=67850 Com_select=495563 Com_update=297 Connections=45669 Questions=913871 
+  vtgate            0.39 s     0.2 ms/table
+  vtctld            1.39 s     0.7 ms/table
+  vttablet_100      1.73 s     0.9 ms/table
+  mysqld_100        0.69 s     0.3 ms/table
+  vttablet_101      1.45 s     0.7 ms/table
+  mysqld_101        1.40 s     0.7 ms/table
+  vttablet_102      1.63 s     0.8 ms/table
+  mysqld_102        1.38 s     0.7 ms/table
+  vttablet_103     14.46 s     7.2 ms/table
+  mysqld_103       56.14 s    28.1 ms/table
+  vttablet_104     28.94 s    14.5 ms/table
+  mysqld_104      100.83 s    50.4 ms/table

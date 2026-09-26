@@ -1,0 +1,14 @@
+mm500nodefer-new3-r1 tables=500 create=5.200108342s dur=13.431064188s per-table=.026s load: 2.24, 2.97, 3.75
+  src mysqld: Connections=21924 Questions=138340  -> Connections=24951 Questions=156411 
+  tgt mysqld: Com_insert=24726 Com_select=177931 Com_update=222 Connections=15303 Questions=324258  -> Com_insert=26234 Com_select=191035 Com_update=229 Connections=16355 Questions=345962 
+  vtctld            0.41 s     0.8 ms/table
+  vttablet_100      0.14 s     0.3 ms/table
+  mysqld_100        0.07 s     0.1 ms/table
+  vttablet_101      0.08 s     0.2 ms/table
+  mysqld_101        0.11 s     0.2 ms/table
+  vttablet_102      0.11 s     0.2 ms/table
+  mysqld_102        0.13 s     0.3 ms/table
+  vttablet_103      2.53 s     5.1 ms/table
+  mysqld_103        3.77 s     7.5 ms/table
+  vttablet_104      3.00 s     6.0 ms/table
+  mysqld_104        7.91 s    15.8 ms/table

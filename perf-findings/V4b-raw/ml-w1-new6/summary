@@ -1,0 +1,6 @@
+w1-new6 streams=1 trx=5922 rate=200 behind_at_end=0 load: 2.08, 4.73, 4.69
+  vttablet_103      2.42 s    408.6 us/trx
+  mysqld_103        3.94 s    665.3 us/trx
+  vttablet_104      3.07 s    518.4 us/trx
+  mysqld_104        4.66 s    786.9 us/trx
+  binlog bytes per source trx: source 349 target 1211

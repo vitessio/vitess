@@ -1,0 +1,8 @@
+cluster c40000 (VTDATAROOT=/home/vt/perf/c40000), keyspaces [src:0 dst2:-80,80- many:0 mdst:0]
+  vtgate mysql: mysql -h 127.0.0.1 -P 40003 -u root ; vtctldclient --server localhost:40021
+  tablet 0 uid 100 src/0 web 40100 sock /home/vt/perf/c40000/vt_0000000100/mysql.sock
+  tablet 1 uid 101 dst2/-80 web 40101 sock /home/vt/perf/c40000/vt_0000000101/mysql.sock
+  tablet 2 uid 102 dst2/80- web 40102 sock /home/vt/perf/c40000/vt_0000000102/mysql.sock
+  tablet 3 uid 103 many/0 web 40103 sock /home/vt/perf/c40000/vt_0000000103/mysql.sock
+  tablet 4 uid 104 mdst/0 web 40104 sock /home/vt/perf/c40000/vt_0000000104/mysql.sock
+rc=0

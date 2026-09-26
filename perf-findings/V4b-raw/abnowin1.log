@@ -1,0 +1,6 @@
+abnowin1-new6-r1-p1 switchtraffic rc=0 cmd=.371114793s gap=160.497977ms err=0 load=1.73 | gap= 160ms gap_start=  +21 gap_end_after_routed=  +7 | stopw=  19 locks= 107(n2) catch=  14 rev=  22 journ=   2 allow=   0 route=   7
+abnowin1-new6-r1-p1 reversetraffic rc=0 cmd=.506029445s gap=174.01519ms err=0 load=2.11 | gap= 174ms gap_start=  +41 gap_end_after_routed=  +4 | stopw=  42 locks= 114(n2) catch=  14 rev=  26 journ=   3 allow=   0 route=   9
+abnowin1-new6-r1-p2 switchtraffic rc=0 cmd=.354613910s gap=169.262408ms err=0 load=2.02 | gap= 169ms gap_start=  +17 gap_end_after_routed= +12 | stopw=  21 locks= 107(n2) catch=  14 rev=  21 journ=   2 allow=   0 route=   6
+abnowin1-new6-r1-p2 reversetraffic rc=0 cmd=.371267258s gap=163.189045ms err=0 load=1.57 | gap= 163ms gap_start=  +23 gap_end_after_routed= +10 | stopw=  22 locks= 107(n2) catch=  11 rev=  21 journ=   3 allow=   0 route=  11
+abnowin1-new6-r1-p3 switchtraffic rc=0 cmd=.333663183s gap=170.866237ms err=0 load=1.86 | gap= 171ms gap_start=  +11 gap_end_after_routed= +15 | stopw=  14 locks= 105(n2) catch=  14 rev=  22 journ=   2 allow=   0 route=   7
+abnowin1-new6-r1-p3 reversetraffic rc=0 cmd=.429892813s gap=159.48975ms err=0 load=2.42 | gap= 159ms gap_start=  +24 gap_end_after_routed=  +8 | stopw=  23 locks= 106(n2) catch=  13 rev=  21 journ=   3 allow=   0 route=   7

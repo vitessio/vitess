@@ -1,0 +1,6 @@
+w50-new6w20-r2 streams=50 trx=5924 rate=200 behind_at_end=49 load: 5.78, 5.47, 4.20
+  vttablet_103     12.70 s   2143.8 us/trx
+  mysqld_103       12.21 s   2061.1 us/trx
+  vttablet_104      6.08 s   1026.3 us/trx
+  mysqld_104        5.20 s    877.8 us/trx
+  binlog bytes per source trx: source 349 target 1257

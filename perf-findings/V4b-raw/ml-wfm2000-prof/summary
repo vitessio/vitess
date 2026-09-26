@@ -1,0 +1,5 @@
+wfm2000-prof streams=1 trx=3979 rate=200 behind_at_end=0 load: 1.71, 2.79, 3.29
+  vttablet_103      1.75 s    439.8 us/trx
+  mysqld_103        3.56 s    894.7 us/trx
+  vttablet_104      2.13 s    535.3 us/trx
+  mysqld_104        5.01 s   1259.1 us/trx

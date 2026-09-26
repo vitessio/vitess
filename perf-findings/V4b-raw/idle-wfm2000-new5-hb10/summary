@@ -1,0 +1,21 @@
+wfm2000-new5-hb10 streams=1 dur=30s load: 0.31, 1.44, 2.60
+  vtgate          0.001 cores
+  vttablet_100    0.008 cores
+  mysqld_100      0.004 cores
+  vttablet_101    0.010 cores
+  mysqld_101      0.006 cores
+  vttablet_102    0.008 cores
+  mysqld_102      0.006 cores
+  vttablet_103    0.008 cores
+  mysqld_103      0.005 cores
+  vttablet_104    0.010 cores
+  mysqld_104      0.007 cores
+  src: Bytes_sent=447145679 Com_commit=0 Com_insert=211 Com_select=474605 Com_update=12114 Questions=994164 Threads_connected=9 
+    -> Bytes_sent=447150863 Com_commit=0 Com_insert=211 Com_select=474617 Com_update=12115 Questions=994182 Threads_connected=9 
+  tgt: Bytes_sent=2208259692 Com_commit=70974 Com_insert=151968 Com_select=1115758 Com_update=22936 Questions=2114617 Threads_connected=29 
+    -> Bytes_sent=2208267616 Com_commit=70974 Com_insert=151968 Com_select=1115772 Com_update=22940 Questions=2114661 Threads_connected=29 
+  src mysqld per s: Bytes_sent=172.8 Com_commit=0.0 Com_insert=0.0 Com_select=0.4 Com_update=0.0 Questions=0.6  Threads_connected=9
+  tgt mysqld per s: Bytes_sent=264.1 Com_commit=0.0 Com_insert=0.0 Com_select=0.5 Com_update=0.1 Questions=1.5  Threads_connected=29
+  vttablet_103 RSS=107604kB goroutines=? tcp_to_mysql=14
+  vttablet_104 RSS=98816kB goroutines=? tcp_to_mysql=34
+  target binlog growth: 20488 B/s

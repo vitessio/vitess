@@ -1,0 +1,36 @@
+mm2000-ref-r1 tables=2000 create=22.917071781s dur=181.849934014s per-table=.090s load: 2.31, 2.80, 3.49
+  src mysqld: Connections=28015 Questions=184627  -> Connections=40092 Questions=256775 
+  tgt mysqld: Com_insert=27805 Com_select=211339 Com_update=245 Connections=18448 Questions=384100  -> Com_insert=39814 Com_select=294069 Com_update=255 Connections=24844 Questions=527278 
+  vtgate            0.40 s     0.2 ms/table
+  vtctld            1.34 s     0.7 ms/table
+  vttablet_100      1.61 s     0.8 ms/table
+  mysqld_100        0.76 s     0.4 ms/table
+  vttablet_101      1.58 s     0.8 ms/table
+  mysqld_101        1.59 s     0.8 ms/table
+  vttablet_102      1.71 s     0.9 ms/table
+  mysqld_102        1.58 s     0.8 ms/table
+  vttablet_103     13.98 s     7.0 ms/table
+  mysqld_103       55.37 s    27.7 ms/table
+  vttablet_104     53.77 s    26.9 ms/table
+  mysqld_104       98.71 s    49.4 ms/table
+cancel failed
+  cancel=45.810385984s
+{"time":"2026-09-26T15:33:40.513188414Z","level":"ERROR","source":{"function":"main.main","file":"/home/user/vitess/go/cmd/vtctldclient/main.go","line":63},"msg":"rpc error: code = Unknown desc = workflow wfm already exists in keyspace mdst on tablet zone1-0000000104"}
+  cancel=4.688176218s
+mm2000-new3-r1 tables=2000 create=21.842585431s dur=130.741364904s per-table=.065s load: 3.63, 3.18, 3.47
+  src mysqld: Connections=40181 Questions=275067  -> Connections=52255 Questions=347199 
+  tgt mysqld: Com_insert=41827 Com_select=312235 Com_update=267 Connections=28919 Questions=577626  -> Com_insert=53836 Com_select=394757 Com_update=276 Connections=35196 Questions=720476 
+  vtgate            0.30 s     0.1 ms/table
+  vtctld            1.36 s     0.7 ms/table
+  vttablet_100      1.18 s     0.6 ms/table
+  mysqld_100        0.53 s     0.3 ms/table
+  vttablet_101      1.02 s     0.5 ms/table
+  mysqld_101        1.14 s     0.6 ms/table
+  vttablet_102      1.08 s     0.5 ms/table
+  mysqld_102        1.09 s     0.5 ms/table
+  vttablet_103     11.55 s     5.8 ms/table
+  mysqld_103       21.34 s    10.7 ms/table
+  vttablet_104     27.35 s    13.7 ms/table
+  mysqld_104       97.66 s    48.8 ms/table
+cancel failed
+  cancel=56.576884131s

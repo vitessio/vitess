@@ -1,0 +1,6 @@
+arm ref bin=/home/vt/bin-V4bref ready after 17s (not ready: 0)
+arm new bin=/home/vt/bin-V4c ready after 17s (not ready: 0)
+arm new3 bin=/home/vt/bin-V4e ready after 17s (not ready: 0)
+arm ref bin=/home/vt/bin-V4bref ready after 18s (not ready: 0)
+arm new bin=/home/vt/bin-V4c ready after 16s (not ready: 0)
+arm new3 bin=/home/vt/bin-V4e ready after 18s (not ready: 0)

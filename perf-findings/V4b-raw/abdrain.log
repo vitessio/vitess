@@ -1,0 +1,12 @@
+v4-wo-dst2-r1 dur=3.822464140s trx/s=7848 vttablet_100=85.0 mysqld_100=10.7  tgtvtt=91 tgtmy=195.3 load=6.24
+v4-upd-dst2-r1 dur=2.362277145s trx/s=25399 vttablet_100=39.3 mysqld_100=5.5  tgtvtt=32.1 tgtmy=45.8 load=6.25
+v4c-wo-dst2-r1 dur=3.817657831s trx/s=7858 vttablet_100=84.3 mysqld_100=11.7  tgtvtt=92.7 tgtmy=196 load=5.30
+v4c-upd-dst2-r1 dur=2.116794659s trx/s=28344 vttablet_100=36.8 mysqld_100=3.7  tgtvtt=28.5 tgtmy=41.3 load=6.22
+v4cw-wo-dst2-r1 dur=3.862293340s trx/s=7767 vttablet_100=85.7 mysqld_100=11.0  tgtvtt=90.7 tgtmy=192.3 load=6.32
+v4cw-upd-dst2-r1 dur=2.144890921s trx/s=27973 vttablet_100=35.2 mysqld_100=4.8  tgtvtt=26.7 tgtmy=42.5 load=6.38
+v4-wo-dst2-r2 dur=4.009563188s trx/s=7482 vttablet_100=87.3 mysqld_100=11.7  tgtvtt=96 tgtmy=196 load=6.83
+v4-upd-dst2-r2 dur=2.249925180s trx/s=26667 vttablet_100=36.3 mysqld_100=4.8  tgtvtt=29.6 tgtmy=42.5 load=7.32
+v4c-wo-dst2-r2 dur=4.378585758s trx/s=6851 vttablet_100=88.3 mysqld_100=13.0  tgtvtt=101.6 tgtmy=219.6 load=7.18
+v4c-upd-dst2-r2 dur=2.238326296s trx/s=26805 vttablet_100=36.0 mysqld_100=5.0  tgtvtt=29 tgtmy=44.6 load=6.92
+v4cw-wo-dst2-r2 dur=3.666037996s trx/s=8183 vttablet_100=80.7 mysqld_100=11.7  tgtvtt=83.3 tgtmy=189 load=7.00
+v4cw-upd-dst2-r2 dur=2.308890000s trx/s=25986 vttablet_100=38.0 mysqld_100=4.8  tgtvtt=30 tgtmy=43.3 load=7.04
