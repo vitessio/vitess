@@ -52,6 +52,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type testcase struct {
@@ -159,6 +160,10 @@ func TestNoBlob(t *testing.T) {
 					Count: 4,
 					Cols:  []byte{0x0b}, // The blob column is also absent from the before image, which is signaled the same way
 				},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // The projected after image bitmap is the same as DataColumns for a "select *" filter
+				},
 			}}}},
 		}},
 		{"commit", nil},
@@ -182,10 +187,11 @@ func TestNoBlob(t *testing.T) {
 	}}
 	ts.Run()
 
-	// The BeforeDataColumns bitmap describes the columns as emitted by the stream,
-	// so when the filter reorders or drops columns it is projected along with the
-	// values. The existing DataColumns bitmap is intentionally left in the source
-	// table's column order for compatibility with existing consumers.
+	// The BeforeDataColumns and AfterDataColumns bitmaps describe the columns as
+	// emitted by the stream, so when the filter reorders or drops columns they are
+	// projected along with the values. The existing DataColumns bitmap is
+	// intentionally left in the source table's column order for compatibility
+	// with existing consumers.
 	// t5 reorders the columns and keeps the blob; t6 drops the blob altogether.
 	tsp := &TestSpec{
 		t: t,
@@ -224,11 +230,11 @@ func TestNoBlob(t *testing.T) {
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
 	}
-	// The after image bitmap is in the source table's (id, blb, val) order for both
-	// tables: only the blob is absent, i.e. 00000101.
+	// The legacy after image bitmap is in the source table's (id, blb, val) order
+	// for both tables: only the blob is absent, i.e. 00000101.
 	afterBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x05}}
-	// The before image bitmap is projected. In the emitted (blb, id, val) order only
-	// the blob is absent: 00000110.
+	// The before and projected after image bitmaps follow the emitted columns. In
+	// the emitted (blb, id, val) order only the blob is absent: 00000110.
 	reorderedBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x06}}
 	// The omitted blob is not part of the emitted (val, id) columns, so both bits are set.
 	subsetBitmap := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}}
@@ -245,6 +251,7 @@ func TestNoBlob(t *testing.T) {
 				afterRaw:             &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
 				dataColumnsRaw:       afterBitmap,
 				beforeDataColumnsRaw: reorderedBitmap,
+				afterDataColumnsRaw:  reorderedBitmap,
 			}}}},
 		}},
 		{"delete from t5 where id = 1", []TestRowEvent{
@@ -266,6 +273,7 @@ func TestNoBlob(t *testing.T) {
 				after:                []string{"bbb", "1"},
 				dataColumnsRaw:       afterBitmap,
 				beforeDataColumnsRaw: subsetBitmap,
+				afterDataColumnsRaw:  subsetBitmap,
 			}}}},
 		}},
 		{"delete from t6 where id = 1", []TestRowEvent{
@@ -277,6 +285,81 @@ func TestNoBlob(t *testing.T) {
 		{"commit", nil},
 	}}
 	tsp.Run()
+
+	// An UPDATE whose row moves into the target key range is delivered with
+	// only its after image, which the consumer applies as an INSERT. Under
+	// NOBLOB that image omits the unchanged blob and, unlike a real INSERT
+	// where an omitted column took its default, the target has no row to keep
+	// the value from. The stream fails closed. When the blob changed too the
+	// image is full and the row is delivered.
+	// 1, 2, 3 and 5 hash into -80; 4 and 6 into 80-.
+	execStatements(t, []string{
+		"create table t7(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+	})
+	defer execStatements(t, []string{"drop table t7"})
+	keyrangeFilter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t7",
+			Filter: "select id1, blb, val from t7 where in_keyrange(id1, 'hash', '-80')",
+		}},
+	}
+
+	pos := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into t7 values (4, 1, 'blob1', 'aaa')", // 80-, filtered out
+		"update t7 set id1 = 3 where id1 = 4",          // moves into -80, blob unchanged and omitted
+	})
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	// Without the check the stream would simply deliver the event and keep
+	// running; bound it so a regression fails instead of hanging.
+	streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := vstream(streamCtx, t, pos, nil, keyrangeFilter, ch, false)
+	close(ch)
+	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image")
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+	movedFE := &TestFieldEvent{
+		table: "t8",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsm := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t8(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t8",
+					Filter: "select id1, blb, val from t8 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsm.Close()
+	tsm.Init()
+	tsm.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t8 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t8 set id1 = 5, blb = 'blob2' where id1 = 6", []TestRowEvent{ // moves into -80 with a full image
+			{event: movedFE.String()},
+			{spec: &TestRowEventSpec{table: "t8", changes: []TestRowChange{{after: []string{"5", "blob2", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsm.Run()
 }
 
 // TestSetAndEnum confirms that the events for set and enum columns are correct.

@@ -1238,6 +1238,19 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			// both before and after images are filtered out
 			continue
 		}
+		if hasVindex && !beforeOK && afterOK && len(beforeRawValues) > 0 && partial {
+			// An UPDATE whose row moves into the target key range is sent with
+			// only its after image, which the consumer has to apply as an
+			// INSERT. Under binlog_row_image=NOBLOB that image omits the
+			// unchanged BLOB/TEXT columns, and unlike a real INSERT (where an
+			// omitted column simply took its default) there is no existing
+			// target row to keep their values from: the row cannot be
+			// reproduced. Fail closed here, where we still know this was an
+			// UPDATE, rather than let the target insert defaults or NULLs.
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"table %s: a row moving into the target key range has a partial after image (binlog_row_image=NOBLOB omitted unchanged BLOB/TEXT columns) and cannot be inserted on the target; you will need to use binlog_row_image=FULL",
+				plan.Table.Name)
+		}
 
 		// at least one image passes the filter and is not a sharded filter
 		if !hasVindex {
@@ -1273,11 +1286,15 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 					// DataColumns is intentionally left in the source table's column
 					// order: existing vplayers (and possibly other consumers) depend
 					// on that layout, and changing it would break replication between
-					// mixed-version tablets. See #21075 for a projected variant.
+					// mixed-version tablets.
 					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 						Count: int64(rows.DataColumns.Count()),
 						Cols:  rows.DataColumns.Bits(),
 					}
+					// AfterDataColumns describes the columns as emitted, so project
+					// it through the plan the same way the values were. Consumers
+					// that know about it prefer it over DataColumns.
+					rowChange.AfterDataColumns = plan.mapBitmap(&rows.DataColumns)
 				}
 				if row.JSONPartialValues.Count() > 0 {
 					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
@@ -1515,7 +1532,9 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
+		// Wrap rather than reformat so that the error's code survives: the
+		// vplayer only treats FAILED_PRECONDITION stream errors as terminal.
+		err = vterrors.Wrapf(err, "stream (at source tablet) error @ (including the GTID we failed to process) %v", stopPos)
 		log.Error(fmt.Sprint(err))
 		return err
 	}
