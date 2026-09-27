@@ -30,6 +30,7 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -569,12 +570,14 @@ type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	}
 	stopReplicationAndGetStatusDelays map[string]time.Duration
 
-	// executeFetchAsDbaErrs and replicationStatusResults serve the stop of a receiver that an
-	// older VTTablet left running; executeFetchAsDbaQueries records the queries per tablet.
-	mu                       sync.Mutex
-	executeFetchAsDbaErrs    map[string]error
-	executeFetchAsDbaQueries map[string][]string
-	replicationStatusResults map[string]*replicationdatapb.Status
+	// executeFetchAsDbaErrs (per tablet), executeFetchAsDbaQueryErrs (per query) and
+	// replicationStatusResults serve the stop of a receiver that an older VTTablet left running;
+	// executeFetchAsDbaQueries records the queries per tablet.
+	mu                         sync.Mutex
+	executeFetchAsDbaErrs      map[string]error
+	executeFetchAsDbaQueryErrs map[string]error
+	executeFetchAsDbaQueries   map[string][]string
+	replicationStatusResults   map[string]*replicationdatapb.Status
 }
 
 func (fake *stopReplicationAndBuildStatusMapsTestTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
@@ -586,6 +589,9 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) ExecuteFetchAsDba(ctx
 	}
 	fake.executeFetchAsDbaQueries[key] = append(fake.executeFetchAsDbaQueries[key], string(req.Query))
 	if err := fake.executeFetchAsDbaErrs[key]; err != nil {
+		return nil, err
+	}
+	if err := fake.executeFetchAsDbaQueryErrs[string(req.Query)]; err != nil {
 		return nil, err
 	}
 	return &querypb.QueryResult{}, nil
@@ -2669,5 +2675,72 @@ func Test_stopReplicationAndBuildStatusMapsStopsReceiverLeftRunning(t *testing.T
 		_, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
 		require.ErrorContains(t, err, "failed to stop the replication receiver of zone1-0000000100")
 		require.ErrorContains(t, err, "could not reach sufficient tablets to guarantee safety")
+	})
+
+	// A MySQL error as the tablet manager client returns it: sent by VTTablet over gRPC.
+	grpcSQLError := func(num sqlerror.ErrorCode, state, msg string) error {
+		return vterrors.FromGRPC(vterrors.ToGRPC(sqlerror.NewSQLError(num, state, msg)))
+	}
+
+	t.Run("MySQL before 8.0.22", func(t *testing.T) {
+		// MySQL before 8.0.22 knows only STOP SLAVE IO_THREAD.
+		tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+			stopReplicationAndGetStatusResults: map[string]*struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Err        error
+			}{
+				"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
+			},
+			executeFetchAsDbaQueryErrs: map[string]error{
+				"STOP REPLICA IO_THREAD": grpcSQLError(sqlerror.ERParseError, sqlerror.SSClientError,
+					"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'REPLICA IO_THREAD' at line 1"),
+			},
+			replicationStatusResults: map[string]*replicationdatapb.Status{"zone1-0000000100": stopped},
+		}
+		tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": newTablet(100)}
+
+		res, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
+		require.NoError(t, err)
+		assert.Equal(t, map[string][]string{"zone1-0000000100": {"STOP REPLICA IO_THREAD", "STOP SLAVE IO_THREAD"}}, tmc.executeFetchAsDbaQueries)
+		require.Contains(t, res.statusMap, "zone1-0000000100")
+		assert.Equal(t, int32(replication.ReplicationStateStopped), res.statusMap["zone1-0000000100"].After.IoState)
+	})
+
+	t.Run("other MySQL error", func(t *testing.T) {
+		// Only a syntax error makes ERS retry with STOP SLAVE IO_THREAD.
+		tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+			stopReplicationAndGetStatusResults: map[string]*struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Err        error
+			}{
+				"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
+			},
+			executeFetchAsDbaQueryErrs: map[string]error{
+				"STOP REPLICA IO_THREAD": grpcSQLError(sqlerror.ERSpecifiedAccessDenied, sqlerror.SSAccessDeniedError,
+					"Access denied; you need (at least one of) the SUPER or REPLICATION_SLAVE_ADMIN privilege(s) for this operation"),
+			},
+		}
+		tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": newTablet(100)}
+
+		_, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
+		require.ErrorContains(t, err, "failed to run STOP REPLICA IO_THREAD")
+		require.ErrorContains(t, err, "Access denied")
+		assert.Equal(t, map[string][]string{"zone1-0000000100": {"STOP REPLICA IO_THREAD"}}, tmc.executeFetchAsDbaQueries)
+	})
+
+	t.Run("still runs after the stop", func(t *testing.T) {
+		tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+			stopReplicationAndGetStatusResults: map[string]*struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Err        error
+			}{
+				"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
+			},
+			replicationStatusResults: map[string]*replicationdatapb.Status{"zone1-0000000100": retrying},
+		}
+		tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": newTablet(100)}
+
+		_, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
+		require.ErrorContains(t, err, "the replication receiver still runs after STOP REPLICA IO_THREAD (Replica_IO_Running: Connecting)")
 	})
 }

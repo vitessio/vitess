@@ -403,32 +403,60 @@ func receiverLeftRunning(stopStatus *replicationdatapb.StopReplicationStatus) bo
 // return from StopReplicationAndGetStatus without stopping it. The receiver still runs: once it
 // reconnects to the old primary, it receives its writes and acknowledges them, although ERS
 // counts the tablet as one whose replication it stopped. And when the primary becomes
-// unreachable, every replica's receiver retries. ERS therefore sends the STOP REPLICA IO_THREAD
-// that such a VTTablet skipped itself, through ExecuteFetchAsDba, which every supported
-// VTTablet provides, and reads the replication status again, as the receiver may have received
-// more before it stopped. Only the receiver is stopped: the applier keeps applying the relay
-// log, which ERS waits on. VTTablets from v25 on stop such a receiver themselves, so ERS never
-// gets here with them.
+// unreachable, every replica's receiver retries. ERS therefore stops the receiver that such a
+// VTTablet skipped itself, through ExecuteFetchAsDba, which every supported VTTablet provides,
+// and reads the replication status again, as the receiver may have received more before it
+// stopped. The statement depends on the MySQL version, which such a VTTablet does not report
+// in its stop status: MySQL 8.0.22 and later accept STOP REPLICA IO_THREAD (MySQL 8.4 accepts
+// only that), earlier versions only STOP SLAVE IO_THREAD, so it falls back to the latter when
+// MySQL rejects the former as a syntax error. Only the receiver is stopped: the applier keeps
+// applying the relay log, which ERS waits on. VTTablets from v25 on stop such a receiver
+// themselves, so ERS never gets here with them.
 //
 // TODO: Remove in v26, once v25 has shipped: every VTTablet that a v26 vtctld supports stops
 // such a receiver itself (https://github.com/vitessio/vitess/issues/21245).
 func stopReceiverLeftRunning(ctx context.Context, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet, stopStatus *replicationdatapb.StopReplicationStatus) (*replicationdatapb.StopReplicationStatus, error) {
-	if _, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query: []byte("STOP REPLICA IO_THREAD"),
-	}); err != nil {
-		return nil, err
+	stopReceiver := func(query string) error {
+		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{Query: []byte(query)})
+		return err
+	}
+	query := "STOP REPLICA IO_THREAD"
+	err := stopReceiver(query)
+	if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERParseError {
+		// MySQL before 8.0.22.
+		query = "STOP SLAVE IO_THREAD"
+		err = stopReceiver(query)
+	}
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to run %s", query)
 	}
 	after, err := tmc.ReplicationStatus(ctx, tablet)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to read the replication status after stopping the replication receiver")
 	}
 	if status := replication.ProtoToReplicationStatus(after); status.IORunning() {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "the replication receiver still runs after STOP REPLICA IO_THREAD (IO state %v)", status.IOState)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "the replication receiver still runs after %s (Replica_IO_Running: %s)", query, receiverRunningState(status.IOState))
 	}
 	// The replication status does not carry what StopReplicationAndGetStatus adds to it.
 	after.ServerVersion = stopStatus.After.ServerVersion
 	after.BackupRunning = stopStatus.After.BackupRunning
 	return &replicationdatapb.StopReplicationStatus{Before: stopStatus.Before, After: after}, nil
+}
+
+// receiverRunningState returns the Replica_IO_Running value that MySQL reports for state.
+//
+// TODO: Remove in v26, once v25 has shipped, with stopReceiverLeftRunning.
+func receiverRunningState(state replication.ReplicationState) string {
+	switch state {
+	case replication.ReplicationStateRunning:
+		return "Yes"
+	case replication.ReplicationStateConnecting:
+		return "Connecting"
+	case replication.ReplicationStateStopped:
+		return "No"
+	default:
+		return "unknown"
+	}
 }
 
 // replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
