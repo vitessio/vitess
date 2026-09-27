@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -195,4 +196,102 @@ func TestMysql9SetReplicationSourceCommandSSL(t *testing.T) {
 	conn := &Conn{flavor: mysqlFlavor9{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+}
+
+// TestSetReplicationSourceReceiverCommand checks that the MySQL 8.0+ flavors change only the
+// receiver options: the same options as the full command, without SOURCE_AUTO_POSITION, which
+// MySQL refuses while the applier is running (ERROR 3081).
+func TestSetReplicationSourceReceiverCommand(t *testing.T) {
+	params := &ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	sslParams := &ConnParams{
+		Uname:     "username",
+		Pass:      "password",
+		SslCa:     "ssl-ca",
+		SslCaPath: "ssl-ca-path",
+		SslCert:   "ssl-cert",
+		SslKey:    "ssl-key",
+	}
+	sslParams.EnableSSL()
+
+	testCases := []struct {
+		name              string
+		params            *ConnParams
+		heartbeatInterval float64
+		want              string
+	}{
+		{
+			name:   "no heartbeat",
+			params: params,
+			want: `CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = 'localhost',
+  SOURCE_PORT = 123,
+  SOURCE_USER = 'username',
+  SOURCE_PASSWORD = 'password',
+  SOURCE_CONNECT_RETRY = 1234,
+  GET_SOURCE_PUBLIC_KEY = 1`,
+		},
+		{
+			name:              "heartbeat",
+			params:            params,
+			heartbeatInterval: 5.4,
+			want: `CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = 'localhost',
+  SOURCE_PORT = 123,
+  SOURCE_USER = 'username',
+  SOURCE_PASSWORD = 'password',
+  SOURCE_CONNECT_RETRY = 1234,
+  GET_SOURCE_PUBLIC_KEY = 1,
+  SOURCE_HEARTBEAT_PERIOD = 5.4`,
+		},
+		{
+			name:   "ssl",
+			params: sslParams,
+			want: `CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = 'localhost',
+  SOURCE_PORT = 123,
+  SOURCE_USER = 'username',
+  SOURCE_PASSWORD = 'password',
+  SOURCE_CONNECT_RETRY = 1234,
+  SOURCE_SSL = 1,
+  SOURCE_SSL_CA = 'ssl-ca',
+  SOURCE_SSL_CAPATH = 'ssl-ca-path',
+  SOURCE_SSL_CERT = 'ssl-cert',
+  SOURCE_SSL_KEY = 'ssl-key'`,
+		},
+	}
+
+	for _, f := range []flavor{mysqlFlavor8{}, mysqlFlavor82{}, mysqlFlavor9{}} {
+		conn := &Conn{flavor: f}
+		assert.True(t, conn.SupportsReplicationSourceReceiverChange(), "%T", f)
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%T/%s", f, tc.name), func(t *testing.T) {
+				got := conn.SetReplicationSourceReceiverCommand(tc.params, "localhost", 123, tc.heartbeatInterval, 1234)
+				assert.Equal(t, tc.want, got)
+				// The full command configures the same receiver options, plus auto-positioning.
+				full := conn.SetReplicationSourceCommand(tc.params, "localhost", 123, tc.heartbeatInterval, 1234)
+				assert.Equal(t, tc.want+",\n  SOURCE_AUTO_POSITION = 1", full)
+			})
+		}
+	}
+}
+
+// TestSetReplicationSourceReceiverCommandUnsupported checks that the flavors that keep
+// reconfiguring replication with the full command do not offer the receiver-only command.
+func TestSetReplicationSourceReceiverCommandUnsupported(t *testing.T) {
+	for _, f := range []flavor{
+		mysqlFlavor57{},
+		mysqlFlavor8Legacy{},
+		mariadbFlavor101{},
+		mariadbFlavor102{},
+		newFilePosFlavor(""),
+		newMysqlGRFlavor(""),
+	} {
+		conn := &Conn{flavor: f}
+		assert.False(t, conn.SupportsReplicationSourceReceiverChange(), "%T", f)
+		cmd := conn.SetReplicationSourceReceiverCommand(&ConnParams{}, "localhost", 123, 0, 1234)
+		assert.Contains(t, []string{"", UnsupportedCommand}, cmd, "%T", f)
+	}
 }

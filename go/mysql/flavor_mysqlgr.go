@@ -99,6 +99,11 @@ func (mysqlGRFlavor) startIOThreadCommand() string {
 	return ""
 }
 
+// setReplicationSourceReceiverCommand is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) setReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return ""
+}
+
 // resetReplicationCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{}

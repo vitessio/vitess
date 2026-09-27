@@ -553,7 +553,10 @@ func (mysqlFlavor) baseShowIndexCardinalities() string {
 	return ShowIndexCardinalities
 }
 
-func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+// replicationSourceReceiverOptions returns the CHANGE REPLICATION SOURCE TO options that
+// configure the replication receiver (I/O thread): the source address, the credentials, TLS
+// and the heartbeat. MySQL allows changing all of them while the applier is running.
+func replicationSourceReceiverOptions(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) []string {
 	args := []string{
 		fmt.Sprintf("SOURCE_HOST = '%s'", host),
 		fmt.Sprintf("SOURCE_PORT = %d", port),
@@ -581,7 +584,21 @@ func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, 
 	if heartbeatInterval != 0 {
 		args = append(args, fmt.Sprintf("SOURCE_HEARTBEAT_PERIOD = %v", heartbeatInterval))
 	}
+	return args
+}
+
+func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	args := replicationSourceReceiverOptions(params, host, port, heartbeatInterval, connectRetry)
 	args = append(args, "SOURCE_AUTO_POSITION = 1")
+	return "CHANGE REPLICATION SOURCE TO\n  " + strings.Join(args, ",\n  ")
+}
+
+// setReplicationSourceReceiverCommand is part of the Flavor interface. It omits
+// SOURCE_AUTO_POSITION: the setting persists, and MySQL refuses the statement with it while the
+// applier is running (ERROR 3081), which would force stopping the applier and thereby discarding
+// the relay log.
+func (mysqlFlavor) setReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	args := replicationSourceReceiverOptions(params, host, port, heartbeatInterval, connectRetry)
 	return "CHANGE REPLICATION SOURCE TO\n  " + strings.Join(args, ",\n  ")
 }
 
