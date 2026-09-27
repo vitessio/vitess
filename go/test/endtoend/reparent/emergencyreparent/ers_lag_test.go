@@ -390,10 +390,13 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	res := utils.RunSQL(t.Context(), t, `select @@global.read_only, @@global.super_read_only`, tablets[2])
 	require.Equal(t, `[[INT64(1) INT64(1)]]`, fmt.Sprintf("%v", res.Rows))
 
-	// Unblock the applier, restart the acker's applier, and the same ERS succeeds. The failed
-	// attempt's STOP REPLICA was killed at its deadline; after that, MySQL can keep refusing
-	// CHANGE REPLICATION SOURCE (ERROR 3081) while the replication status reports both
-	// threads stopped, and the repoint does not stop replication that reports stopped.
+	// Unblock the applier, stop the acker's replication and start its applier again, and the
+	// same ERS succeeds. The failed attempt's STOP REPLICA was killed at its deadline, and
+	// stops the applier once its event group completes, but the acker's receiver keeps retrying
+	// the dead primary (Replica_IO_Running: Connecting, with a connection error). The repoint
+	// with --replication-preserve-relay-logs=false treats such a receiver as stopped, so it
+	// runs CHANGE REPLICATION SOURCE without STOP REPLICA, which MySQL refuses (ERROR 3081)
+	// while the receiver runs. The applier must run for ERS to wait on the relay log.
 	_, err = lockConn.ExecuteFetch("unlock tables", 1000, true)
 	require.NoError(t, err)
 	utils.RunSQLs(t.Context(), t, []string{`STOP REPLICA`, `START REPLICA SQL_THREAD`}, tablets[1])
