@@ -413,6 +413,8 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 // apply.
 func TestERSRepointsAckerWithBlockedApplier(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	// Older vtctlds wait on every candidate's relay log, including the blocked acker's.
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
 
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
