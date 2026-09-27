@@ -202,9 +202,9 @@ func (tm *TabletManager) checkRelayLogDiscardBefore(ctx context.Context, source 
 // FAILED_PRECONDITION otherwise), for other flavors, without auto-positioning, and when the
 // applier is stopped and cannot be started.
 //
-// It refuses with FAILED_PRECONDITION when the relay log holds transactions of other servers
+// It refuses with FAILED_PRECONDITION when the replica received transactions of other servers
 // that the new source lacks: applying them would introduce errant GTIDs, and discarding them would
-// lose them. It stops the applier in that case, so they stay unapplied. SetReplicationSource's own
+// lose them. It stops the applier in that case, so the unapplied ones stay unapplied. SetReplicationSource's own
 // errant GTID check covers the relay log and refuses most of those before it gets here; this check
 // also covers what the receiver wrote until it stopped, and tablet startup, which checks only the
 // executed GTIDs.
@@ -238,16 +238,19 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 		return vterrors.Wrapf(err, "failed to read the replication status after stopping the replication receiver")
 	}
 	unapplied, _ := unappliedRelayLogGTIDs(status)
-	if errant := source.lacks(unapplied); !errant.Empty() {
+	// Check everything the replica received, not only what is still unapplied: the applier
+	// may have applied some of what arrived while the receiver was stopping.
+	received, _ := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet)
+	if errant := source.lacks(received); !errant.Empty() {
 		if status.SQLHealthy() {
-			// Keep them unapplied.
+			// Keep the unapplied ones unapplied.
 			if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 				log.Warn("failed to stop the replication applier", slog.Any("error", err))
 			}
 		}
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"refusing to change the replication source: the relay log holds received but unapplied transactions %s that the new replication source (executed %s) lacks; "+
-				"applying them would introduce errant GTIDs, and discarding them would lose them", errant, source.position)
+			"refusing to change the replication source: the replica received transactions %s that the new replication source (executed %s) lacks; "+
+				"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them", errant, source.position)
 	}
 
 	const operation = "change the replication source"

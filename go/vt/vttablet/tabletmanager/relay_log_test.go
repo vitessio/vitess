@@ -257,7 +257,8 @@ func TestRepointWithStoppedApplierDiscardsSourcesUncommittedTransactions(t *test
 // TestRepointRefusesTransactionsReceivedWhileStoppingReceiver checks that the relay log is
 // checked once the receiver has stopped: transactions of the old primary that the new primary
 // lacks, written to the relay log while the receiver was being stopped, are refused, and left
-// unapplied, whether the applier keeps running, stops, or cannot be started.
+// unapplied, whether the applier keeps running, stops, or cannot be started; and refused as well
+// when the applier already applied them.
 func TestRepointRefusesTransactionsReceivedWhileStoppingReceiver(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -287,6 +288,15 @@ func TestRepointRefusesTransactionsReceivedWhileStoppingReceiver(t *testing.T) {
 			},
 			onStop:   func(env *relayLogTestEnv) {},
 			expected: []string{"STOP REPLICA IO_THREAD"},
+		},
+		{
+			// The applier applies them before the status is read.
+			name:  "applier applies them",
+			setup: func(env *relayLogTestEnv) {},
+			onStop: func(env *relayLogTestEnv) {
+				env.mysqld.CurrentPrimaryPosition = mustParseMysql56Position(t, relayLogTestServerUUID+":1-200,"+relayLogTestOtherServerTransactions)
+			},
+			expected: []string{"STOP REPLICA IO_THREAD", "STOP REPLICA"},
 		},
 	}
 	for _, tc := range testCases {
