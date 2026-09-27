@@ -639,9 +639,23 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if startReplicationAfter {
 		cmds = append(cmds, "START REPLICA")
 	}
+	// Like MySQL, the change discards the relay log when both replication threads are stopped
+	// (CurrentRelayLogPosition falls back to CurrentPrimaryPosition). Tests that do not set a
+	// relay log position keep none.
+	fmd.mu.Lock()
+	discardsRelayLog := (stopReplicationBefore || !fmd.Replicating) && !fmd.CurrentRelayLogPosition.IsZero()
+	fmd.mu.Unlock()
 	fmd.CurrentSourceHost = host
 	fmd.CurrentSourcePort = port
-	return fmd.ExecuteSuperQueryList(ctx, cmds)
+	if err := fmd.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return err
+	}
+	if discardsRelayLog {
+		fmd.mu.Lock()
+		fmd.CurrentRelayLogPosition = fmd.CurrentPrimaryPosition
+		fmd.mu.Unlock()
+	}
+	return nil
 }
 
 // SupportsReplicationSourceReceiverChange is part of the MysqlDaemon interface.
