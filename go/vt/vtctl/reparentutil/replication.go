@@ -502,6 +502,16 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
+			// Older VTTablets leave a receiver that retries its connection running. It still
+			// counts as stopped: refusing it would fail every ERS while the primary is
+			// unreachable (then every replica's receiver retries) until VTTablet is upgraded.
+			if stopReplicationStatus.After != nil {
+				if after := replication.ProtoToReplicationStatus(stopReplicationStatus.After); after.IORunning() {
+					logger.Warningf("the replication receiver of %v still runs after it was stopped (IO state %v), as older VTTablets leave a receiver that retries its connection running; "+
+						"if it reconnects to the old primary, it can acknowledge its writes", alias, after.IOState)
+				}
+			}
+
 			isTakingBackup := false
 
 			// Prefer the most up-to-date information regarding whether the tablet is taking a backup from the After

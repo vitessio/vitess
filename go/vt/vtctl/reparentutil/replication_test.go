@@ -2569,3 +2569,33 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 		})
 	}
 }
+
+// Test_stopReplicationAndBuildStatusMapsWarnsAboutRunningReceiver checks that ERS warns about a
+// tablet whose receiver still runs after it was stopped, as with older VTTablets, which do not
+// stop a receiver that retries its connection. The tablet still counts as reached.
+func Test_stopReplicationAndBuildStatusMapsWarnsAboutRunningReceiver(t *testing.T) {
+	retrying := &replicationdatapb.Status{
+		Position:    "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5",
+		IoState:     int32(replication.ReplicationStateConnecting),
+		LastIoError: "error connecting to source",
+		SqlState:    int32(replication.ReplicationStateRunning),
+	}
+	tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+		stopReplicationAndGetStatusResults: map[string]*struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Err        error
+		}{
+			"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
+		},
+	}
+	tablet := &topodatapb.Tablet{Type: topodatapb.TabletType_REPLICA, Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": {Tablet: tablet}}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	logger := logutil.NewMemoryLogger()
+
+	res, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logger)
+	require.NoError(t, err)
+	assert.Len(t, res.reachableTablets, 1)
+	assert.Contains(t, logger.String(), "the replication receiver of zone1-0000000100 still runs after it was stopped")
+}
