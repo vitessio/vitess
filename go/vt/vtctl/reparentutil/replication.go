@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -380,6 +381,56 @@ func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.
 	return replicas
 }
 
+// receiverLeftRunning reports whether the replication receiver (IO thread) of a tablet still runs
+// after StopReplicationAndGetStatus stopped it, which only VTTablets before v25 do; see
+// stopReceiverLeftRunning.
+//
+// TODO: Remove in v26, once v25 has shipped (https://github.com/vitessio/vitess/issues/21245).
+func receiverLeftRunning(stopStatus *replicationdatapb.StopReplicationStatus) bool {
+	if stopStatus == nil || stopStatus.After == nil {
+		return false
+	}
+	after := replication.ProtoToReplicationStatus(stopStatus.After)
+	return after.IORunning()
+}
+
+// stopReceiverLeftRunning stops the replication receiver (IO thread) of a tablet whose
+// StopReplicationAndGetStatus left it running, and returns the tablet's stop status with the
+// replication status read afterwards.
+//
+// VTTablets before v25 do not stop a receiver that retries its connection after an error
+// (Replica_IO_Running: Connecting, with a connection error): they report it as not healthy, and
+// return from StopReplicationAndGetStatus without stopping it. The receiver still runs: once it
+// reconnects to the old primary, it receives its writes and acknowledges them, although ERS
+// counts the tablet as one whose replication it stopped. And when the primary becomes
+// unreachable, every replica's receiver retries. ERS therefore sends the STOP REPLICA IO_THREAD
+// that such a VTTablet skipped itself, through ExecuteFetchAsDba, which every supported
+// VTTablet provides, and reads the replication status again, as the receiver may have received
+// more before it stopped. Only the receiver is stopped: the applier keeps applying the relay
+// log, which ERS waits on. VTTablets from v25 on stop such a receiver themselves, so ERS never
+// gets here with them.
+//
+// TODO: Remove in v26, once v25 has shipped: every VTTablet that a v26 vtctld supports stops
+// such a receiver itself (https://github.com/vitessio/vitess/issues/21245).
+func stopReceiverLeftRunning(ctx context.Context, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet, stopStatus *replicationdatapb.StopReplicationStatus) (*replicationdatapb.StopReplicationStatus, error) {
+	if _, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query: []byte("STOP REPLICA IO_THREAD"),
+	}); err != nil {
+		return nil, err
+	}
+	after, err := tmc.ReplicationStatus(ctx, tablet)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to read the replication status after stopping the replication receiver")
+	}
+	if status := replication.ProtoToReplicationStatus(after); status.IORunning() {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "the replication receiver still runs after STOP REPLICA IO_THREAD (IO state %v)", status.IOState)
+	}
+	// The replication status does not carry what StopReplicationAndGetStatus adds to it.
+	after.ServerVersion = stopStatus.After.ServerVersion
+	after.BackupRunning = stopStatus.After.BackupRunning
+	return &replicationdatapb.StopReplicationStatus{Before: stopStatus.Before, After: after}, nil
+}
+
 // replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
 // that ERS stopped a running IO thread, including one that was retrying its
 // connection, which should restart during cleanup.
@@ -502,13 +553,16 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
-			// Older VTTablets leave a receiver that retries its connection running. It still
-			// counts as stopped: refusing it would fail every ERS while the primary is
-			// unreachable (then every replica's receiver retries) until VTTablet is upgraded.
-			if stopReplicationStatus.After != nil {
-				if after := replication.ProtoToReplicationStatus(stopReplicationStatus.After); after.IORunning() {
-					logger.Warningf("the replication receiver of %v still runs after it was stopped (IO state %v), as older VTTablets leave a receiver that retries its connection running; "+
-						"if it reconnects to the old primary, it can acknowledge its writes", alias, after.IOState)
+			// VTTablets before v25 leave a receiver that retries its connection running; see
+			// stopReceiverLeftRunning.
+			// TODO: Remove in v26, once v25 has shipped (https://github.com/vitessio/vitess/issues/21245).
+			if receiverLeftRunning(stopReplicationStatus) {
+				logger.Warningf("the replication receiver of %v still runs after it was stopped, as VTTablets before v25 do not stop a receiver that retries its connection; stopping it", alias)
+				stopReplicationStatus, err = stopReceiverLeftRunning(groupCtx, tmc, tabletInfo.Tablet, stopReplicationStatus)
+				if err != nil {
+					err = vterrors.Wrapf(err, "failed to stop the replication receiver of %v", alias)
+					logger.Warningf("%v", err)
+					return
 				}
 			}
 

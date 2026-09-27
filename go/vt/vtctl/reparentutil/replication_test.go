@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,7 +40,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -565,6 +568,34 @@ type stopReplicationAndBuildStatusMapsTestTMClient struct {
 		Err        error
 	}
 	stopReplicationAndGetStatusDelays map[string]time.Duration
+
+	// executeFetchAsDbaErrs and replicationStatusResults serve the stop of a receiver that an
+	// older VTTablet left running; executeFetchAsDbaQueries records the queries per tablet.
+	mu                       sync.Mutex
+	executeFetchAsDbaErrs    map[string]error
+	executeFetchAsDbaQueries map[string][]string
+	replicationStatusResults map[string]*replicationdatapb.Status
+}
+
+func (fake *stopReplicationAndBuildStatusMapsTestTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if fake.executeFetchAsDbaQueries == nil {
+		fake.executeFetchAsDbaQueries = map[string][]string{}
+	}
+	fake.executeFetchAsDbaQueries[key] = append(fake.executeFetchAsDbaQueries[key], string(req.Query))
+	if err := fake.executeFetchAsDbaErrs[key]; err != nil {
+		return nil, err
+	}
+	return &querypb.QueryResult{}, nil
+}
+
+func (fake *stopReplicationAndBuildStatusMapsTestTMClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+	if status, ok := fake.replicationStatusResults[topoproto.TabletAliasString(tablet.Alias)]; ok {
+		return status, nil
+	}
+	return nil, assert.AnError
 }
 
 func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
@@ -2570,32 +2601,73 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 	}
 }
 
-// Test_stopReplicationAndBuildStatusMapsWarnsAboutRunningReceiver checks that ERS warns about a
-// tablet whose receiver still runs after it was stopped, as with older VTTablets, which do not
-// stop a receiver that retries its connection. The tablet still counts as reached.
-func Test_stopReplicationAndBuildStatusMapsWarnsAboutRunningReceiver(t *testing.T) {
+// Test_stopReplicationAndBuildStatusMapsStopsReceiverLeftRunning checks the stop of a replication
+// receiver that retries its connection, which VTTablets before v25 leave running: ERS stops it
+// itself and reads the replication status again. A VTTablet that stopped the receiver gets no
+// further calls, and a tablet whose receiver ERS cannot stop fails the stop like a tablet that
+// cannot be reached.
+//
+// TODO: Remove in v26, once v25 has shipped, with stopReceiverLeftRunning.
+func Test_stopReplicationAndBuildStatusMapsStopsReceiverLeftRunning(t *testing.T) {
 	retrying := &replicationdatapb.Status{
-		Position:    "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5",
-		IoState:     int32(replication.ReplicationStateConnecting),
-		LastIoError: "error connecting to source",
-		SqlState:    int32(replication.ReplicationStateRunning),
+		Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5",
+		IoState:       int32(replication.ReplicationStateConnecting),
+		LastIoError:   "error connecting to source",
+		SqlState:      int32(replication.ReplicationStateRunning),
+		ServerVersion: "8.0.46",
 	}
-	tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
-		stopReplicationAndGetStatusResults: map[string]*struct {
-			StopStatus *replicationdatapb.StopReplicationStatus
-			Err        error
-		}{
-			"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
-		},
+	stopped := &replicationdatapb.Status{
+		Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-6",
+		IoState:  int32(replication.ReplicationStateStopped),
+		SqlState: int32(replication.ReplicationStateRunning),
 	}
-	tablet := &topodatapb.Tablet{Type: topodatapb.TabletType_REPLICA, Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
-	tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": {Tablet: tablet}}
+	newTablet := func(uid uint32) *topo.TabletInfo {
+		return &topo.TabletInfo{Tablet: &topodatapb.Tablet{Type: topodatapb.TabletType_REPLICA, Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}}}
+	}
 	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
-	logger := logutil.NewMemoryLogger()
 
-	res, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logger)
-	require.NoError(t, err)
-	assert.Len(t, res.reachableTablets, 1)
-	assert.Contains(t, logger.String(), "the replication receiver of zone1-0000000100 still runs after it was stopped")
+	t.Run("stopped", func(t *testing.T) {
+		// zone1-0000000100 is an older VTTablet that left the receiver running,
+		// zone1-0000000101 stopped it.
+		tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+			stopReplicationAndGetStatusResults: map[string]*struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Err        error
+			}{
+				"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
+				"zone1-0000000101": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: stopped}},
+			},
+			replicationStatusResults: map[string]*replicationdatapb.Status{"zone1-0000000100": stopped},
+		}
+		tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": newTablet(100), "zone1-0000000101": newTablet(101)}
+
+		res, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
+		require.NoError(t, err)
+		assert.Equal(t, map[string][]string{"zone1-0000000100": {"STOP REPLICA IO_THREAD"}}, tmc.executeFetchAsDbaQueries)
+		assert.Len(t, res.reachableTablets, 2)
+		require.Contains(t, res.statusMap, "zone1-0000000100")
+		after := res.statusMap["zone1-0000000100"].After
+		assert.Equal(t, int32(replication.ReplicationStateStopped), after.IoState)
+		assert.Equal(t, stopped.Position, after.Position, "the status must be read again after the stop")
+		assert.Equal(t, "8.0.46", after.ServerVersion)
+		assert.Equal(t, retrying, res.statusMap["zone1-0000000100"].Before)
+	})
+
+	t.Run("cannot be stopped", func(t *testing.T) {
+		tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+			stopReplicationAndGetStatusResults: map[string]*struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Err        error
+			}{
+				"zone1-0000000100": {StopStatus: &replicationdatapb.StopReplicationStatus{Before: retrying, After: retrying}},
+			},
+			executeFetchAsDbaErrs: map[string]error{"zone1-0000000100": assert.AnError},
+		}
+		tabletMap := map[string]*topo.TabletInfo{"zone1-0000000100": newTablet(100)}
+
+		_, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
+		require.ErrorContains(t, err, "failed to stop the replication receiver of zone1-0000000100")
+		require.ErrorContains(t, err, "could not reach sufficient tablets to guarantee safety")
+	})
 }
