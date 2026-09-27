@@ -1695,6 +1695,24 @@ func TestStopReplicationAndGetStatusStopsRetryingReceiver(t *testing.T) {
 	}
 }
 
+// TestStopReplicationAndGetStatusStopsRunningReceiverWithStoppedApplier checks that
+// StopReplicationAndGetStatus(IOANDSQLTHREAD) stops a running receiver when the applier is already
+// stopped: it stops replication if either thread runs, not only if both do.
+func TestStopReplicationAndGetStatusStopsRunningReceiverWithStoppedApplier(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.SQLThreadStopped = true
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+	resp, err := tm.StopReplicationAndGetStatus(t.Context(), replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList(), "the running receiver must be stopped")
+	assert.Equal(t, int32(replication.ReplicationStateRunning), resp.Status.Before.IoState)
+	assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.Before.SqlState)
+	assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
+}
+
 // TestSetReplicationSourceStopsRetryingReceiver checks that repointing a replica whose applier is
 // stopped and whose receiver keeps retrying its old source stops replication before changing the
 // source, which MySQL refuses while the receiver runs (ERROR 3081), and starts replication

@@ -91,6 +91,11 @@ type FakeMysqlDaemon struct {
 	// we want to test error handling during SetReplicationSource.
 	IOThreadRunning bool
 
+	// SQLThreadStopped, when set, makes ReplicationStatus report the SQL thread
+	// as stopped while the IO thread runs, until replication is started or
+	// stopped.
+	SQLThreadStopped bool
+
 	// IOThreadConnectingError, when set, makes ReplicationStatus report the IO
 	// thread as connecting and retrying after this connection error, until
 	// replication or the IO thread is stopped. Like MySQL, SetReplicationSource
@@ -388,7 +393,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		// Implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false.
 		IOState:    replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && fmd.IOThreadRunning)),
-		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
+		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && !fmd.SQLThreadStopped)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
 	}
@@ -714,8 +719,10 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 		switch query {
 		case "START REPLICA":
 			fmd.Replicating = true
+			fmd.SQLThreadStopped = false
 		case "STOP REPLICA":
 			fmd.Replicating = false
+			fmd.SQLThreadStopped = false
 			fmd.IOThreadConnectingError = ""
 		case "STOP REPLICA IO_THREAD":
 			fmd.IOThreadConnectingError = ""

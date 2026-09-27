@@ -2028,6 +2028,17 @@ func TestReplicaWasRunning(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "io thread connecting",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateConnecting),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected:  true,
+			shouldErr: false,
+		},
+		{
 			name: "no replication threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
