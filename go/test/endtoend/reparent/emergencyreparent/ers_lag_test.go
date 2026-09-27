@@ -390,17 +390,15 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	res := utils.RunSQL(t.Context(), t, `select @@global.read_only, @@global.super_read_only`, tablets[2])
 	require.Equal(t, `[[INT64(1) INT64(1)]]`, fmt.Sprintf("%v", res.Rows))
 
-	// Unblock the applier and the same ERS succeeds. The failed attempt's STOP REPLICA was
-	// killed at its deadline, so the acker's applier stops once its event group completes.
-	// Until MySQL has fully stopped it, the acker's CHANGE REPLICATION SOURCE can be refused
-	// (ERROR 3081) even though its replication status already reports the applier stopped,
-	// so retry ERS until the acker can be repointed.
+	// Unblock the applier, restart the acker's applier, and the same ERS succeeds. The failed
+	// attempt's STOP REPLICA was killed at its deadline; after that, MySQL can keep refusing
+	// CHANGE REPLICATION SOURCE (ERROR 3081) while the replication status reports both
+	// threads stopped, and the repoint does not stop replication that reports stopped.
 	_, err = lockConn.ExecuteFetch("unlock tables", 1000, true)
 	require.NoError(t, err)
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
-		assert.NoError(c, err, out)
-	}, 3*time.Minute, time.Second)
+	utils.RunSQLs(t.Context(), t, []string{`STOP REPLICA`, `START REPLICA SQL_THREAD`}, tablets[1])
+	out, err = utils.Ers(clusterInstance, nil, "120s", "30s")
+	require.NoError(t, err, out)
 
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	utils.ConfirmReplication(t, newPrimary, nil)
