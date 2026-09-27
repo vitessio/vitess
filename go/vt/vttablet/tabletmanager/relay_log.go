@@ -205,7 +205,7 @@ func (tm *TabletManager) checkRelayLogDiscardBefore(ctx context.Context, source 
 // GTIDs (the relay log contents are unknown), when the kill switch is off, and, after making sure
 // the new source can send every unapplied relay log transaction again (refusing with
 // FAILED_PRECONDITION otherwise), for other flavors, without auto-positioning, and when the
-// applier is stopped and cannot be started.
+// applier is stopped and cannot be started, or stopped on an error.
 //
 // It refuses with FAILED_PRECONDITION when the replica received transactions of other servers
 // that the new source lacks: applying them would introduce errant GTIDs, and discarding them would
@@ -279,7 +279,10 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 			// Nothing to lose: take the regular path, which also resets the applier.
 			return fullReconfiguration(true)
 		}
-		if startReplicationAfter {
+		// An applier that stopped on an error is not started: it stops again on the same
+		// transaction within milliseconds, and if it does so before the change, MySQL discards
+		// the relay log without the checks of the discard below.
+		if startReplicationAfter && status.LastSQLError == "" {
 			// Replication is going to run anyway: start the applier first, so the relay log
 			// survives the change. If it fails to start, the relay log will be discarded.
 			if err := tm.MysqlDaemon.StartSQLThread(ctx); err != nil {

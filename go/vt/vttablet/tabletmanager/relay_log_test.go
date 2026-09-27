@@ -219,6 +219,56 @@ func TestRepointStartsStoppedApplierToPreserveRelayLog(t *testing.T) {
 	env.assertRelayLogKept(t)
 }
 
+// TestRepointDoesNotStartApplierStoppedOnError checks that an applier that stopped on an error is
+// not started before the change: it would stop again on the same transaction right away, and if
+// it did so before the change, MySQL would discard the relay log without the discard's checks.
+// The relay log goes through the checked discard instead.
+func TestRepointDoesNotStartApplierStoppedOnError(t *testing.T) {
+	t.Run("source has them", func(t *testing.T) {
+		env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
+		env.mysqld.Replicating = false
+		env.mysqld.LastSQLError = "Error 'Duplicate entry' on query"
+		env.mysqld.ExpectedExecuteSuperQueryList = []string{
+			"STOP REPLICA IO_THREAD",
+			"STOP REPLICA",
+			"FAKE SET SOURCE",
+			"START REPLICA",
+		}
+
+		require.NoError(t, env.setReplicationSource(t, 0))
+		require.NoError(t, env.mysqld.CheckSuperQueryList())
+		assert.Equal(t, relayLogTestPrimaryHost, env.mysqld.CurrentSourceHost)
+	})
+	t.Run("source purged them", func(t *testing.T) {
+		env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
+		env.tmc.purged = relayLogTestServerUUID + ":1-205"
+		env.mysqld.Replicating = false
+		env.mysqld.LastSQLError = "Error 'Duplicate entry' on query"
+		// Were the applier started, it would stop again on its error before the receiver-only
+		// change (the third statement), which would then discard the relay log.
+		env.mysqld.ExpectedExecuteSuperQueryList = []string{
+			"STOP REPLICA IO_THREAD",
+			"START REPLICA SQL_THREAD",
+			"FAKE SET SOURCE RECEIVER",
+			"START REPLICA",
+		}
+		calls := 0
+		env.mysqld.ExecuteSuperQueryListCallback = func() {
+			calls++
+			if calls == 3 {
+				env.mysqld.Replicating = false
+			}
+		}
+
+		err := env.setReplicationSource(t, 0)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "has purged the binary logs")
+		assert.Equal(t, 1, env.mysqld.ExpectedExecuteSuperQueryCurrent, "only the receiver may be stopped; the applier must not be started")
+		env.assertRelayLogKept(t)
+	})
+}
+
 // TestRepointWithStoppedApplierDiscardsRelayLogWhenLossless checks that when the applier cannot
 // be started, the relay log is discarded (by the full reconfiguration) only because the new
 // primary has every unapplied transaction.

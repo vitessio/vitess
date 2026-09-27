@@ -96,6 +96,10 @@ type FakeMysqlDaemon struct {
 	// replication is configured with GTID auto-positioning.
 	AutoPosition bool
 
+	// LastSQLError is returned by ReplicationStatus, as the error the
+	// applier stopped on.
+	LastSQLError string
+
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
@@ -403,6 +407,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		SourceHost:   fmd.CurrentSourceHost,
 		SourcePort:   fmd.CurrentSourcePort,
 		AutoPosition: fmd.AutoPosition,
+		LastSQLError: fmd.LastSQLError,
 	}, nil
 }
 
