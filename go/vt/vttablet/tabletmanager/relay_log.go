@@ -58,6 +58,14 @@ func init() {
 	servenv.OnParseFor("vttablet", registerReplicationRelayLogFlags)
 }
 
+// relayLogLossRemedy ends a refusal to lose relay log transactions that the new replication
+// source lacks, with the ways to proceed.
+const relayLogLossRemedy = "; to proceed, restore the replica from a backup, or run VTTablet with --replication-preserve-relay-logs=false to discard them"
+
+// relayLogPurgedRemedy ends a refusal to discard relay log transactions whose binary logs the new
+// replication source has purged, with the ways to proceed.
+const relayLogPurgedRemedy = "; to proceed, let the replica apply them first, or restore it from a backup"
+
 // unappliedRelayLogGTIDs returns the GTIDs the replica has received into its relay log but not
 // applied yet. ok is false when the positions are not MySQL GTID sets, in which case the relay
 // log contents cannot be determined.
@@ -153,7 +161,7 @@ func (tm *TabletManager) checkRelayLogDiscard(ctx context.Context, status replic
 	}
 	if lost := source.lacks(unapplied); !lost.Empty() {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"refusing to %s: it discards the relay log, and the new replication source (executed %s) lacks these received but unapplied transactions, which would be lost: %s",
+			"refusing to %s: it discards the relay log, and the new replication source (executed %s) lacks these received but unapplied transactions, which would be lost: %s"+relayLogLossRemedy,
 			operation, source.position, lost)
 	}
 	purged, err := tm.sourceGTIDPurged(ctx, source)
@@ -163,7 +171,7 @@ func (tm *TabletManager) checkRelayLogDiscard(ctx context.Context, status replic
 	}
 	if unsendable := unapplied.Difference(unapplied.Difference(purged)); !unsendable.Empty() {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"refusing to %s: it discards the relay log, and the new replication source has purged the binary logs holding these received but unapplied transactions, so it cannot send them again: %s",
+			"refusing to %s: it discards the relay log, and the new replication source has purged the binary logs holding these received but unapplied transactions, so it cannot send them again: %s"+relayLogPurgedRemedy,
 			operation, unsendable)
 	}
 	log.Info(fmt.Sprintf("%s discards the relay log; its unapplied transactions %s will be fetched again from the replication source, which has them", operation, unapplied))
@@ -248,7 +256,7 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 	received, _ := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet)
 	if errant := source.lacks(received); !errant.Empty() {
 		refusal := fmt.Sprintf("refusing to change the replication source: the replica received transactions %s that the new replication source (executed %s) lacks; "+
-			"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them", errant, source.position)
+			"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them"+relayLogLossRemedy, errant, source.position)
 		if status.SQLHealthy() {
 			// Keep the unapplied ones unapplied. A stop that fails (e.g. times out on a
 			// blocked applier) may still take effect later, after the applier applied more.

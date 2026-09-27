@@ -439,6 +439,7 @@ func TestRepointRefusesDiscardOfPurgedTransactions(t *testing.T) {
 			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 			require.ErrorContains(t, err, "has purged the binary logs")
 			require.ErrorContains(t, err, relayLogTestServerUUID+":201-205")
+			require.ErrorContains(t, err, "let the replica apply them first, or restore it from a backup")
 			require.NoError(t, env.mysqld.CheckSuperQueryList(), "the relay log must not be discarded")
 			env.assertRelayLogKept(t)
 		})
@@ -590,6 +591,7 @@ func TestTabletStartupRefusesRelayLogTransactionsTheSourceLacks(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	require.ErrorContains(t, err, relayLogTestOtherServerTransactions)
+	require.ErrorContains(t, err, "restore the replica from a backup, or run VTTablet with --replication-preserve-relay-logs=false")
 	require.NoError(t, env.mysqld.CheckSuperQueryList(), "only the receiver and the applier may be stopped")
 	assert.Equal(t, "mysql-old-primary", env.mysqld.CurrentSourceHost)
 	assert.Equal(t, relayLogTestServerUUID+":1-210,"+relayLogTestOtherServerTransactions, env.mysqld.CurrentRelayLogPosition.GTIDSet.String(), "the relay log must be kept")
@@ -607,6 +609,7 @@ func TestResetReplicationSelfHealRefusesLossyDiscard(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		require.ErrorContains(t, err, relayLogTestOtherServerTransactions)
+		require.ErrorContains(t, err, "--replication-preserve-relay-logs=false")
 		require.NoError(t, env.mysqld.CheckSuperQueryList(), "RESET REPLICA must not run")
 	})
 	t.Run("lossless", func(t *testing.T) {
