@@ -51,6 +51,7 @@
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
+        - [Repointing a replica keeps its relay log](#vttablet-replication-preserve-relay-logs)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
@@ -533,6 +534,16 @@ A new VTTablet flag, `--demote-primary-lock-wait-timeout` (default `0`, disabled
 When disabled (the default), demotion behavior is unchanged and the wait is unbounded.
 
 See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
+
+#### <a id="vttablet-replication-preserve-relay-logs"/>Repointing a replica keeps its relay log</a>
+
+A semi-sync replica acknowledges a transaction once it is in its relay log, before applying it, and `EmergencyReparentShard` elects the new primary by received position. VTTablet used to repoint replication (`SetReplicationSource`, as used by reparents, VTOrc's replica repairs and tablet startup) with `STOP REPLICA` followed by a full `CHANGE REPLICATION SOURCE TO`, which makes MySQL discard the relay log. If the replica could not fetch those transactions again before the primary died, acknowledged writes were silently lost and ERS promoted a tablet without them.
+
+For MySQL 8.0 and later replicas that already replicate with GTID auto-positioning, VTTablet now stops only the replication receiver (`STOP REPLICA IO_THREAD`) and changes only the receiver options (`CHANGE REPLICATION SOURCE TO` without `SOURCE_AUTO_POSITION`, which persists), while the applier keeps running. MySQL keeps the relay log as long as one replication thread runs. A stopped applier is started first when replication is to run afterwards. As the applier is no longer stopped, a replica whose applier is blocked (for example on a lock) can now be repointed, where `STOP REPLICA` used to wait on it; ERS can then count it as a semi-sync acker of the new primary. When the relay log has to be discarded anyway (the applier cannot run, or the `RESET REPLICA` self-healing of broken replication metadata), VTTablet proceeds only if the new source has every discarded transaction, and otherwise fails the operation with `FAILED_PRECONDITION`, naming the transactions that would be lost. Tablet startup now also refuses to repoint a replica whose relay log holds another server's transactions that the primary lacks (for example those of a former primary, received before a reparent the replica missed), as `SetReplicationSource` already did, and VTTablet fails to start as it does for errant GTIDs in the executed set; it used to discard them. First-time replication setup, MariaDB, MySQL 5.7 and file-position replication keep the previous behavior.
+
+A new VTTablet flag, `--replication-preserve-relay-logs` (default `true`), restores the previous behavior when set to `false`.
+
+This does not cover a replica whose mysqld restarts with `relay_log_recovery=1` (the setting in the shipped `my.cnf` files), which discards the relay log on startup.
 
 #### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
 

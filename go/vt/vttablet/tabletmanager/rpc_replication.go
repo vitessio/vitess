@@ -318,7 +318,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
-	return tm.startReplicationRecoverable(ctx)
+	return tm.startReplicationRecoverable(ctx, replicationSource{})
 }
 
 // RestartReplication will stop replication and then start it again
@@ -358,7 +358,7 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 	}
 
 	// Start replication
-	return tm.startReplicationRecoverable(postStopCtx)
+	return tm.startReplicationRecoverable(postStopCtx, replicationSource{})
 }
 
 // StartReplicationUntilAfter will start the replication and let it catch up
@@ -548,7 +548,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
+	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, replicationSource{}, false, true); err != nil {
 		return err
 	}
 
@@ -999,34 +999,34 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
 	}
 	// Errant GTID detection.
-	{
-		// Find the executed GTID set of the tablet that we are reparenting to.
-		// We will then compare our own position against it to verify that we don't
-		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
-		// we will not enter the replication graph and instead fail replication.
-		primaryStatus, err := tm.tmc.PrimaryStatus(ctx, parent.Tablet)
-		if err != nil {
-			return err
-		}
-		primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
-		if err != nil {
-			return err
-		}
-		primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
-		if err != nil {
-			return err
-		}
-		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition, primarySid)
-		if err != nil {
-			return err
-		}
-		if errantGtid != "" {
-			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
-		}
+	// Find the executed GTID set of the tablet that we are reparenting to.
+	// We will then compare our own position against it to verify that we don't
+	// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
+	// we will not enter the replication graph and instead fail replication.
+	// The primary position is also used to decide whether the relay log may be discarded.
+	primaryStatus, err := tm.tmc.PrimaryStatus(ctx, parent.Tablet)
+	if err != nil {
+		return err
 	}
+	primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
+	if err != nil {
+		return err
+	}
+	primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
+	if err != nil {
+		return err
+	}
+	errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition, primarySid)
+	if err != nil {
+		return err
+	}
+	if errantGtid != "" {
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
+	}
+	source := replicationSource{position: primaryPosition, uuid: primarySid}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
-		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.repointReplication(ctx, host, port, heartbeatInterval, source, wasReplicating, shouldbeReplicating); err != nil {
 			return err
 		}
 	} else if shouldbeReplicating {
@@ -1037,7 +1037,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}
-		if err := tm.startReplicationRecoverable(ctx); err != nil {
+		if err := tm.startReplicationRecoverable(ctx, source); err != nil {
 			return err
 		}
 	}
@@ -1309,21 +1309,23 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return vterrors.Wrap(err, "failed to StopReplication")
 	}
-	if err := tm.startReplicationRecoverable(ctx); err != nil {
+	if err := tm.startReplicationRecoverable(ctx, replicationSource{}); err != nil {
 		return vterrors.Wrap(err, "failed to StartReplication")
 	}
 	return nil
 }
 
 // startReplicationRecoverable starts replication and handles recoverable errors by resetting replication.
-func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error {
+// source is the replication source, if known, which the reset checks against the relay log it
+// discards.
+func (tm *TabletManager) startReplicationRecoverable(ctx context.Context, source replicationSource) error {
 	err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
 	if err == nil {
 		return nil
 	}
 
 	// Try to recover from the error.
-	if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+	if err := tm.handleRecoverableReplicationInitError(ctx, err, source); err != nil {
 		return err
 	}
 
@@ -1332,8 +1334,9 @@ func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error 
 
 // setReplicationSourceRecoverable configures the requested replication source and optionally starts
 // replication afterward. When possible, certain errors are recovered by reinitializing replication
-// metadata.
-func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, host string, port int32, heartbeatInterval float64, wasReplicating bool, shouldStartReplication bool) error {
+// metadata. source is the new replication source, if known, which the reinitialization checks
+// against the relay log it discards.
+func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, host string, port int32, heartbeatInterval float64, source replicationSource, wasReplicating bool, shouldStartReplication bool) error {
 	// Let's first try to apply the requested source without starting replication afterwards. If the
 	// replica was replicating before, we stop replication first.
 	err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, false)
@@ -1343,7 +1346,7 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 			return nil
 		}
 
-		return tm.startReplicationRecoverable(ctx)
+		return tm.startReplicationRecoverable(ctx, source)
 	}
 
 	// We hit an error. If the error is not one of the recoverable ones, we can't recover and should return it.
@@ -1368,7 +1371,10 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 	}
 
 	// Recover from the error by reinitializing replication metadata through
-	// `RESET REPLICA ALL`.
+	// `RESET REPLICA ALL`, which discards the relay log.
+	if err := tm.checkRelayLogDiscardBefore(ctx, source, "reset the replication metadata"); err != nil {
+		return err
+	}
 	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
 		return err
 	}
@@ -1380,7 +1386,7 @@ func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, ho
 
 	// The replication source has finally been set. Let's also start replication if it was requested.
 	if shouldStartReplication {
-		return tm.startReplicationRecoverable(ctx)
+		return tm.startReplicationRecoverable(ctx, source)
 	}
 
 	return nil
@@ -1410,8 +1416,9 @@ func isRecoverableReplicationInitializationError(err error) bool {
 }
 
 // handleRecoverableReplicationInitError repairs recoverable replication initialization
-// failures by restarting replication.
-func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Context, err error) error {
+// failures by restarting replication. The restart resets replication, which discards the relay
+// log; source is the replication source, if known, which must have every discarded transaction.
+func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Context, err error, source replicationSource) error {
 	// Attempt to self-heal by restarting replication when initialization fails.
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
@@ -1421,6 +1428,9 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 			slog.Any("error", err),
 		)
 
+		if checkErr := tm.checkRelayLogDiscardBefore(ctx, source, "reset replication"); checkErr != nil {
+			return vterrors.Wrapf(checkErr, "cannot recover from replication initialization error %v", err)
+		}
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}
