@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -95,6 +96,11 @@ func (source replicationSource) known() bool {
 	return source.tablet != nil
 }
 
+// logAttr returns the source's tablet alias as a log attribute.
+func (source replicationSource) logAttr() slog.Attr {
+	return slog.String("source_tablet", topoproto.TabletAliasString(source.tablet.GetAlias()))
+}
+
 // lacks returns the GTIDs in gtids that the source does not have.
 //
 // The source has its own transactions even when its executed position lacks them: a
@@ -155,8 +161,8 @@ func (tm *TabletManager) checkRelayLogDiscard(ctx context.Context, status replic
 		return nil
 	}
 	if !source.known() {
-		log.Warn(fmt.Sprintf("%s discards the relay log, which holds received but unapplied transactions %s. "+
-			"The replication source must send them again; any it no longer has are lost.", operation, unapplied))
+		log.Warn("discarding the relay log with received but unapplied transactions. The replication source must send them again; any it no longer has are lost.",
+			slog.String("operation", operation), slog.String("unapplied", unapplied.String()))
 		return nil
 	}
 	if lost := source.lacks(unapplied); !lost.Empty() {
@@ -174,7 +180,8 @@ func (tm *TabletManager) checkRelayLogDiscard(ctx context.Context, status replic
 			"refusing to %s: it discards the relay log, and the new replication source has purged the binary logs holding these received but unapplied transactions, so it cannot send them again: %s"+relayLogPurgedRemedy,
 			operation, unsendable)
 	}
-	log.Info(fmt.Sprintf("%s discards the relay log; its unapplied transactions %s will be fetched again from the replication source, which has them", operation, unapplied))
+	log.Info("discarding the relay log; its unapplied transactions will be fetched again from the replication source, which has them",
+		slog.String("operation", operation), slog.String("unapplied", unapplied.String()), source.logAttr())
 	return nil
 }
 
@@ -193,7 +200,8 @@ func (tm *TabletManager) checkRelayLogDiscardBefore(ctx context.Context, source 
 		if source.known() {
 			return vterrors.Wrapf(err, "refusing to %s: it discards the relay log, and the replication status cannot be read to check what it holds", operation)
 		}
-		log.Warn(fmt.Sprintf("cannot read the replication status to check what %s discards from the relay log", operation), slog.Any("error", err))
+		log.Warn("cannot read the replication status to check what the operation discards from the relay log",
+			slog.String("operation", operation), slog.Any("error", err))
 		return nil
 	}
 	return tm.checkRelayLogDiscard(ctx, status, source, operation)
@@ -352,15 +360,17 @@ func (tm *TabletManager) verifyRelayLogKept(ctx context.Context, unappliedBefore
 	}
 	purged, err := tm.sourceGTIDPurged(ctx, source)
 	if err != nil {
-		log.Error(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log, and the new replication source's "+
-			"purged GTIDs cannot be read to check that it can send them again", missing), slog.Any("error", err))
+		log.Error("changing the replication source discarded received but unapplied transactions from the relay log, and the new replication source's "+
+			"purged GTIDs cannot be read to check that it can send them again",
+			slog.String("discarded", missing.String()), source.logAttr(), slog.Any("error", err))
 		return
 	}
 	if unsendable := missing.Difference(missing.Difference(purged)); !unsendable.Empty() {
-		log.Error(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log, and the new replication source "+
-			"has purged the binary logs holding %s, so it cannot send them again. The replica cannot continue replicating without them.", missing, unsendable))
+		log.Error("changing the replication source discarded received but unapplied transactions from the relay log, and the new replication source "+
+			"has purged the binary logs holding some of them, so it cannot send them again. The replica cannot continue replicating without them.",
+			slog.String("discarded", missing.String()), slog.String("purged", unsendable.String()), source.logAttr())
 		return
 	}
-	log.Warn(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log; "+
-		"the new replication source has them and will send them again", missing))
+	log.Warn("changing the replication source discarded received but unapplied transactions from the relay log; the new replication source has them and will send them again",
+		slog.String("discarded", missing.String()), source.logAttr())
 }
