@@ -59,11 +59,16 @@ type primaryStatusTMClient struct {
 	position      string
 	purged        string
 	fullStatusErr error
+	// diskStalled makes FullStatus report a stalled disk, as a tablet does, without any MySQL data.
+	diskStalled bool
 }
 
 func (c *primaryStatusTMClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	if c.fullStatusErr != nil {
 		return nil, c.fullStatusErr
+	}
+	if c.diskStalled {
+		return &replicationdatapb.FullStatus{DiskStalled: true}, nil
 	}
 	return &replicationdatapb.FullStatus{GtidPurged: "MySQL56/" + c.purged}, nil
 }
@@ -391,18 +396,42 @@ func TestRepointRefusesDiscardOfPurgedTransactions(t *testing.T) {
 }
 
 // TestRepointRefusesDiscardWhenSourcePurgedGTIDsUnknown checks that the relay log is not
-// discarded when the new primary's purged GTIDs cannot be read.
+// discarded when the new primary's purged GTIDs cannot be read: its FullStatus fails, or its disk
+// is stalled, in which case FullStatus succeeds without reporting them.
 func TestRepointRefusesDiscardWhenSourcePurgedGTIDsUnknown(t *testing.T) {
-	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
-	env.tmc.fullStatusErr = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "primary unreachable")
-	env.mysqld.AutoPosition = false
-	env.mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+	testCases := []struct {
+		name     string
+		setup    func(env *relayLogTestEnv)
+		expected string
+	}{
+		{
+			name: "full status fails",
+			setup: func(env *relayLogTestEnv) {
+				env.tmc.fullStatusErr = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "primary unreachable")
+			},
+			expected: "primary unreachable",
+		},
+		{
+			name:     "disk stalled",
+			setup:    func(env *relayLogTestEnv) { env.tmc.diskStalled = true },
+			expected: "disk is stalled",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
+			tc.setup(env)
+			env.mysqld.AutoPosition = false
+			env.mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
 
-	err := env.setReplicationSource(t, 0)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "purged GTIDs cannot be read")
-	require.NoError(t, env.mysqld.CheckSuperQueryList(), "the relay log must not be discarded")
-	env.assertRelayLogKept(t)
+			err := env.setReplicationSource(t, 0)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "purged GTIDs cannot be read")
+			require.ErrorContains(t, err, tc.expected)
+			require.NoError(t, env.mysqld.CheckSuperQueryList(), "the relay log must not be discarded")
+			env.assertRelayLogKept(t)
+		})
+	}
 }
 
 // TestRepointReconfiguresRecoverableReceiverChangeError checks that a recoverable replication

@@ -113,12 +113,17 @@ func (tm *TabletManager) sourceGTIDPurged(ctx context.Context, source replicatio
 	if err != nil {
 		return nil, err
 	}
+	// A tablet whose disk is stalled returns a status without any MySQL data. A MySQL source
+	// that collected its status always reports its purged GTIDs, even when it purged nothing.
+	if status.DiskStalled {
+		return nil, vterrors.New(vtrpc.Code_UNAVAILABLE, "the replication source's disk is stalled")
+	}
+	if status.GtidPurged == "" {
+		return nil, vterrors.New(vtrpc.Code_UNAVAILABLE, "the replication source did not report its purged GTIDs")
+	}
 	purged, err := replication.DecodePosition(status.GtidPurged)
 	if err != nil {
 		return nil, err
-	}
-	if purged.GTIDSet == nil {
-		return nil, nil
 	}
 	gtids, ok := purged.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
