@@ -414,7 +414,7 @@ func TestERSRepointsAckerWithBlockedApplier(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
