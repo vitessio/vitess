@@ -242,15 +242,16 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 	// may have applied some of what arrived while the receiver was stopping.
 	received, _ := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet)
 	if errant := source.lacks(received); !errant.Empty() {
+		refusal := fmt.Sprintf("refusing to change the replication source: the replica received transactions %s that the new replication source (executed %s) lacks; "+
+			"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them", errant, source.position)
 		if status.SQLHealthy() {
-			// Keep the unapplied ones unapplied.
+			// Keep the unapplied ones unapplied. A stop that fails (e.g. times out on a
+			// blocked applier) may still take effect later, after the applier applied more.
 			if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-				log.Warn("failed to stop the replication applier", slog.Any("error", err))
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "%s; stopping the replication applier to keep the unapplied ones unapplied failed: %s", refusal, err.Error())
 			}
 		}
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"refusing to change the replication source: the replica received transactions %s that the new replication source (executed %s) lacks; "+
-				"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them", errant, source.position)
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, refusal)
 	}
 
 	const operation = "change the replication source"

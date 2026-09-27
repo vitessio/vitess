@@ -326,6 +326,28 @@ func TestRepointRefusesTransactionsReceivedWhileStoppingReceiver(t *testing.T) {
 	}
 }
 
+// TestRepointReportsFailedApplierStopOnRefusal checks that a refused repoint reports it when the
+// applier, which could still apply the transactions the new source lacks, cannot be stopped.
+func TestRepointReportsFailedApplierStopOnRefusal(t *testing.T) {
+	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
+	env.mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+	env.mysqld.StopReplicationError = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "stop timed out")
+	stopped := false
+	env.mysqld.ExecuteSuperQueryListCallback = func() {
+		if !stopped {
+			stopped = true
+			env.receiveOtherServerTransactions(t)
+		}
+	}
+
+	err := env.setReplicationSource(t, 0)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, relayLogTestOtherServerTransactions)
+	require.ErrorContains(t, err, "stopping the replication applier to keep the unapplied ones unapplied failed: stop timed out")
+	require.NoError(t, env.mysqld.CheckSuperQueryList())
+}
+
 // TestRepointRefusesDiscardOfPurgedTransactions checks that the relay log is discarded only if
 // the new primary can send its unapplied transactions again: the primary has executed them, but
 // purged the binary logs that hold 201-205.
