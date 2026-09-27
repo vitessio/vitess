@@ -305,9 +305,11 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 }
 
 // verifyRelayLogKept logs an error if the replica no longer has transactions that were in its
-// relay log before a receiver-only change. That happens if the applier stopped right before the
-// change. A transaction that was only partially received is expected to be dropped (it is
-// fetched again, and was never acknowledged).
+// relay log before a receiver-only change, and the new source cannot send them again (it lacks
+// them, or purged their binary logs). That happens if the applier stopped right before the
+// change; no check before the change can prevent it, as keeping the relay log is the only way
+// not to lose transactions the source cannot send again. A transaction that was only partially
+// received is expected to be dropped (it is fetched again, and was never acknowledged).
 func (tm *TabletManager) verifyRelayLogKept(ctx context.Context, unappliedBefore replication.Mysql56GTIDSet, source replicationSource) {
 	if unappliedBefore.Empty() {
 		return
@@ -330,11 +332,22 @@ func (tm *TabletManager) verifyRelayLogKept(ctx context.Context, unappliedBefore
 		return
 	}
 	lost := source.lacks(missing)
-	if lost.Empty() {
-		log.Warn(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log; "+
-			"the new replication source has them and will send them again", missing))
+	if !lost.Empty() {
+		log.Error(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log, and the new replication source "+
+			"(executed %s) lacks %s. Unless that is a partially received transaction, acknowledged transactions may have been lost.", missing, source.position, lost))
 		return
 	}
-	log.Error(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log, and the new replication source "+
-		"(executed %s) lacks %s. Unless that is a partially received transaction, acknowledged transactions may have been lost.", missing, source.position, lost))
+	purged, err := tm.sourceGTIDPurged(ctx, source)
+	if err != nil {
+		log.Error(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log, and the new replication source's "+
+			"purged GTIDs cannot be read to check that it can send them again", missing), slog.Any("error", err))
+		return
+	}
+	if unsendable := missing.Difference(missing.Difference(purged)); !unsendable.Empty() {
+		log.Error(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log, and the new replication source "+
+			"has purged the binary logs holding %s, so it cannot send them again. The replica cannot continue replicating without them.", missing, unsendable))
+		return
+	}
+	log.Warn(fmt.Sprintf("changing the replication source discarded received but unapplied transactions %s from the relay log; "+
+		"the new replication source has them and will send them again", missing))
 }
