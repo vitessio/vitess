@@ -502,6 +502,21 @@ func TestRepointReconfiguresRecoverableReceiverChangeError(t *testing.T) {
 	require.NoError(t, env.mysqld.CheckSuperQueryList())
 }
 
+// TestRepointReportsReceiverChangeError checks that a failed receiver-only change that the full
+// reconfiguration cannot repair is returned with its context: the receiver is stopped.
+func TestRepointReportsReceiverChangeError(t *testing.T) {
+	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
+	env.mysqld.SetReplicationSourceReceiverError = vterrors.New(vtrpcpb.Code_UNKNOWN, "access denied")
+	env.mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+
+	err := env.setReplicationSource(t, 0)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err))
+	require.ErrorContains(t, err, "failed to change the replication receiver; the replication receiver is stopped: access denied")
+	require.NoError(t, env.mysqld.CheckSuperQueryList())
+	env.assertRelayLogKept(t)
+}
+
 // TestRepointFirstTimeSetupUsesFullReconfiguration checks that a tablet without replication
 // configured (e.g. a demoted primary) is set up with the full command: there is no relay log.
 func TestRepointFirstTimeSetupUsesFullReconfiguration(t *testing.T) {

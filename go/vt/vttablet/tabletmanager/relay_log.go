@@ -235,7 +235,7 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 		return fullReconfiguration(wasReplicating)
 	}
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to read the replication status before changing the replication source")
 	}
 	if _, ok := unappliedRelayLogGTIDs(status); !ok {
 		// Without MySQL GTIDs, what the relay log holds cannot be checked.
@@ -276,7 +276,7 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 	}
 	supported, err := tm.MysqlDaemon.SupportsReplicationSourceReceiverChange(ctx)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to check whether the replication receiver can be changed alone; the replication receiver is stopped")
 	}
 	if !supported || !status.AutoPosition {
 		// Only the full reconfiguration can change the source.
@@ -296,7 +296,7 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 			if err := tm.MysqlDaemon.StartSQLThread(ctx); err != nil {
 				log.Warn("failed to start the replication applier to preserve the relay log", slog.Any("error", err))
 			} else if status, err = tm.MysqlDaemon.ReplicationStatus(ctx); err != nil {
-				return err
+				return vterrors.Wrapf(err, "failed to read the replication status after starting the replication applier; the replication receiver is stopped")
 			}
 		}
 		if !status.SQLHealthy() {
@@ -306,7 +306,7 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 
 	if err := tm.MysqlDaemon.SetReplicationSourceReceiver(ctx, host, port, heartbeatInterval); err != nil {
 		if !isRecoverableReplicationInitializationError(err) {
-			return err
+			return vterrors.Wrapf(err, "failed to change the replication receiver; the replication receiver is stopped")
 		}
 		// The replication metadata is broken; the full reconfiguration resets it.
 		log.Warn("Encountered recoverable replication initialization error while changing the replication receiver, reconfiguring replication",
