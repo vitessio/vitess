@@ -964,7 +964,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Abort on any other non-nil error.
 		return err
 	}
-	if status.IOHealthy() || status.SQLHealthy() {
+	if status.IORunning() || status.SQLHealthy() {
 		wasReplicating = true
 		shouldbeReplicating = true
 	}
@@ -1114,7 +1114,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
-		if !rs.IOHealthy() {
+		if !rs.IORunning() {
 			before.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
@@ -1131,7 +1131,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			}, vterrors.Wrap(err, "stop io thread failed")
 		}
 	} else {
-		if !rs.Healthy() {
+		if !rs.IORunning() && !rs.SQLHealthy() {
 			// no replication is running, just return what we got
 			before.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 			return StopReplicationAndGetStatusResponse{

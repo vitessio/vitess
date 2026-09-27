@@ -91,6 +91,12 @@ type FakeMysqlDaemon struct {
 	// we want to test error handling during SetReplicationSource.
 	IOThreadRunning bool
 
+	// IOThreadConnectingError, when set, makes ReplicationStatus report the IO
+	// thread as connecting and retrying after this connection error, until
+	// replication or the IO thread is stopped. Like MySQL, SetReplicationSource
+	// then fails unless it stops replication first.
+	IOThreadConnectingError string
+
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
@@ -373,7 +379,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 	}
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
-	return replication.ReplicationStatus{
+	status := replication.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
 		FilePosition:                           fmd.CurrentSourceFilePosition,
 		RelayLogPosition:                       fmd.CurrentRelayLogPosition,
@@ -385,7 +391,12 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
-	}, nil
+	}
+	if fmd.IOThreadConnectingError != "" {
+		status.IOState = replication.ReplicationStateConnecting
+		status.LastIOError = fmd.IOThreadConnectingError
+	}
+	return status, nil
 }
 
 // PrimaryStatus is part of the MysqlDaemon interface.
@@ -603,6 +614,9 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if fmd.SetReplicationSourceError != nil {
 		return fmd.SetReplicationSourceError
 	}
+	if fmd.IOThreadConnectingError != "" && !stopReplicationBefore {
+		return errors.New("This operation cannot be performed with running replication threads; run STOP REPLICA FOR CHANNEL '' first (errno 3081)")
+	}
 	cmds := []string{}
 	if stopReplicationBefore {
 		cmds = append(cmds, "STOP REPLICA")
@@ -702,6 +716,9 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 			fmd.Replicating = true
 		case "STOP REPLICA":
 			fmd.Replicating = false
+			fmd.IOThreadConnectingError = ""
+		case "STOP REPLICA IO_THREAD":
+			fmd.IOThreadConnectingError = ""
 		}
 	}
 	return nil

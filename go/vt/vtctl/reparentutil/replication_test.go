@@ -1979,6 +1979,18 @@ func TestReplicaWasRunning(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "io thread retrying its connection",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "dial tcp 127.0.0.1:3306: connect: connection refused",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected:  true,
+			shouldErr: false,
+		},
+		{
 			name: "no replication threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
@@ -2053,6 +2065,7 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 			expected: true,
 		},
 		{
+			// ERS stops an IO thread that retries its connection, so it restarts it too.
 			name: "io thread connecting with an io error",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
@@ -2061,7 +2074,7 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 					SqlState:    int32(replication.ReplicationStateStopped),
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			name: "only sql thread running",
