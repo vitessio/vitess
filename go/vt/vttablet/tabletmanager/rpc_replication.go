@@ -1023,7 +1023,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if errantGtid != "" {
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 	}
-	source := replicationSource{position: primaryPosition, uuid: primarySid}
+	source := replicationSource{tablet: parent.Tablet, position: primaryPosition, uuid: primarySid}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
 		if err := tm.repointReplication(ctx, host, port, heartbeatInterval, source, wasReplicating, shouldbeReplicating); err != nil {
