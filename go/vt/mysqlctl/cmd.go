@@ -21,6 +21,7 @@ This file contains common functions for cmd/mysqlctl and cmd/mysqlctld.
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -30,6 +31,11 @@ import (
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
 func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
+	return CreateMysqldAndMycnfWithContext(context.Background(), tabletUID, mysqlSocket, mysqlPort, collationEnv)
+}
+
+// CreateMysqldAndMycnfWithContext creates the Mysqld with context-aware version detection.
+func CreateMysqldAndMycnfWithContext(ctx context.Context, tabletUID uint32, mysqlSocket string, mysqlPort int, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
 	mycnf := NewMycnf(tabletUID, mysqlPort)
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
@@ -48,13 +54,22 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int, c
 	}
 
 	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile, collationEnv)
-	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
+	mysqld, err := newMysqld(ctx, &dbconfigs.GlobalDBConfigs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mysqld, mycnf, nil
 }
 
 // OpenMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that already exists. The Mycnf will be built based on the my.cnf file
 // of the MySQL instance.
 func OpenMysqldAndMycnf(tabletUID uint32, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
+	return OpenMysqldAndMycnfWithContext(context.Background(), tabletUID, collationEnv)
+}
+
+// OpenMysqldAndMycnfWithContext opens the Mysqld with context-aware version detection.
+func OpenMysqldAndMycnfWithContext(ctx context.Context, tabletUID uint32, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
 	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0), 0)
 	if err != nil {
@@ -62,5 +77,9 @@ func OpenMysqldAndMycnf(tabletUID uint32, collationEnv *collations.Environment) 
 	}
 
 	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile, collationEnv)
-	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
+	mysqld, err := newMysqld(ctx, &dbconfigs.GlobalDBConfigs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mysqld, mycnf, nil
 }

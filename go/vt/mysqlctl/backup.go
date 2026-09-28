@@ -454,6 +454,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if err != nil {
 		return backupManifest, err
 	}
+	detachedCtx := context.WithoutCancel(ctx)
 
 	if re.ShouldStartMySQLAfterRestore() { // all engines except mysqlshell since MySQL is always running there
 		// mysqld needs to be running in order for mysql_upgrade to work.
@@ -465,7 +466,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// of those who can connect.
 		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
 		// Note Start will use dba user for waiting, this is fine, it will be allowed.
-		if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
+		if err := params.Mysqld.Start(detachedCtx, params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
 			return backupManifest, err
 		}
 	}
@@ -478,10 +479,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
+	if err := params.Mysqld.Shutdown(detachedCtx, params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
 		return backupManifest, err
 	}
-	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
+	if err := params.Mysqld.Start(detachedCtx, params.Cnf); err != nil {
 		return backupManifest, err
 	}
 	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {

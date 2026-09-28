@@ -2530,7 +2530,11 @@ func (c *Cluster) Debug() map[string]any {
 
 // Equal compares the vtctld and vtgate addresses of the clusters for equality
 func (c *Cluster) Equal(otherCluster *Cluster) (bool, error) {
-	ctx := context.Background()
+	return c.EqualContext(context.Background(), otherCluster)
+}
+
+// EqualContext allows discovery to be cancelled while comparing cluster addresses.
+func (c *Cluster) EqualContext(ctx context.Context, otherCluster *Cluster) (bool, error) {
 	vtgateAddresses, err := c.Discovery.DiscoverVTGateAddrs(ctx, []string{})
 	if err != nil {
 		return false, err

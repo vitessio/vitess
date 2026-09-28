@@ -166,7 +166,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.Conn.ID()
 		log.Info(fmt.Sprintf("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, redactPassword(query)))
-		if killErr := mysqld.killConnection(connID); killErr != nil {
+		if killErr := mysqld.killConnection(ctx, connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
 			log.Warn(fmt.Sprintf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr))
 		}
@@ -222,7 +222,7 @@ func (mysqld *Mysqld) executeFetchDirectContext(ctx context.Context, conn *dbcon
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.ID()
 		log.Info(fmt.Sprintf("Mysqld.executeFetchDirectContext(): killing connID %v due to timeout of query: %v", connID, query))
-		if killErr := mysqld.killConnection(connID); killErr != nil {
+		if killErr := mysqld.killConnection(ctx, connID); killErr != nil {
 			log.Warn(fmt.Sprintf("Mysqld.executeFetchDirectContext(): failed to kill connID %v: %v", connID, killErr))
 		}
 		// Close the connection before waiting: if the server cannot service
@@ -263,14 +263,14 @@ const killConnectionTimeout = 10 * time.Second
 // could hang on a wedged server and strand a pool slot -- and it bounds its
 // own I/O, so that killing a connection on a wedged server cannot hang its
 // caller either.
-func (mysqld *Mysqld) killConnection(connID int64) error {
-	return mysqld.killConnectionWithTimeout(connID, killConnectionTimeout)
+func (mysqld *Mysqld) killConnection(ctx context.Context, connID int64) error {
+	return mysqld.killConnectionWithTimeout(ctx, connID, killConnectionTimeout)
 }
 
-func (mysqld *Mysqld) killConnectionWithTimeout(connID int64, timeout time.Duration) error {
-	// Use a fresh context because the caller's context is likely expired,
-	// which is the reason we're being asked to kill the connection.
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (mysqld *Mysqld) killConnectionWithTimeout(ctx context.Context, connID int64, timeout time.Duration) error {
+	// The caller's context is probably expired, but preserving its values keeps
+	// this bounded cleanup attached to the operation that triggered it.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
 	killConn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
