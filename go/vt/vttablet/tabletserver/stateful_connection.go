@@ -72,10 +72,10 @@ type StatefulConnection struct {
 	// settingStale is set once the connection's MySQL session changed after its
 	// settings were applied, and cleared once they are applied again (see
 	// MarkSettingStale). sessionDiverged is set at the same time, and when a
-	// different setting is applied on a connection that already carries one, and
-	// stays set: applying a setting restores its own variables only, so the
-	// connection must not return to the pool under any setting once its session
-	// carries state a setting does not describe.
+	// setting is applied on a connection that already carries one that assigns a
+	// variable the new one does not, and stays set: applying a setting restores
+	// its own variables only, so the connection must not return to the pool under
+	// any setting once its session carries state a setting does not describe.
 	settingStale    bool
 	sessionDiverged bool
 
@@ -328,7 +328,7 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
 		// The MySQL session carries state the settings the pool files the
 		// connection under do not describe, from a SET that ran on it or from a
-		// setting applied over another, and applying those settings again
+		// setting applied over one it does not cover, and applying those settings again
 		// restores their own variables only. The pool would hand it to the next
 		// request that brings those settings as if nothing else had changed:
 		// discard it instead, and the pool opens a replacement and counts the
@@ -488,9 +488,13 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 	if current == setting && !sc.settingStale {
 		return false, nil
 	}
-	if current != nil && current != setting {
-		// the new setting is applied on top of the old one's variables, which
-		// stay in effect on the session without the new setting describing them
+	if current != nil && current != setting && !setting.Covers(current) {
+		// the new setting is applied on top of the old one's variables, and those
+		// it does not assign stay in effect on the session without the new
+		// setting describing them; one that assigns them all leaves the session
+		// as it describes it. VTGate's settings for a session only ever grow, so
+		// a session whose queries carry its settings and that changes a variable
+		// mid-transaction switches to a setting that covers the old one.
 		sc.sessionDiverged = true
 	}
 	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {

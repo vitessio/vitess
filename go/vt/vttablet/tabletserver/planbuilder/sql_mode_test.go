@@ -128,15 +128,15 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
-			query, resetQuery, parseMode, _, err := BuildSettingQuery(tc.settings, parser, false)
+			sq, err := BuildSettingQuery(tc.settings, parser, false)
 			if tc.expectedErr != "" {
 				require.EqualError(t, err, tc.expectedErr)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tc.expectedQuery, query)
-			assert.Equal(t, tc.expectedMode, parseMode)
-			assert.NotEmpty(t, resetQuery)
+			assert.Equal(t, tc.expectedQuery, sq.Apply)
+			assert.Equal(t, tc.expectedMode, sq.ParseMode)
+			assert.NotEmpty(t, sq.Reset)
 		})
 	}
 }
@@ -145,15 +145,25 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 // applied to keeps the mode its session is already in.
 func TestBuildSettingQuerySetsSQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
-	_, _, parseMode, setsSQLMode, err := BuildSettingQuery([]string{"set sql_safe_updates = 1"}, parser, false)
+	sq, err := BuildSettingQuery([]string{"set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
-	assert.False(t, setsSQLMode)
-	assert.Equal(t, sqlmode.Mode(0), parseMode)
+	assert.False(t, sq.SetsSQLMode)
+	assert.Equal(t, sqlmode.Mode(0), sq.ParseMode)
 
-	_, _, parseMode, setsSQLMode, err = BuildSettingQuery([]string{"set sql_mode = ''"}, parser, false)
+	sq, err = BuildSettingQuery([]string{"set sql_mode = ''"}, parser, false)
 	require.NoError(t, err)
-	assert.True(t, setsSQLMode, "an assignment of the empty mode still assigns it")
-	assert.Equal(t, sqlmode.Mode(0), parseMode)
+	assert.True(t, sq.SetsSQLMode, "an assignment of the empty mode still assigns it")
+	assert.Equal(t, sqlmode.Mode(0), sq.ParseMode)
+}
+
+// The settings name the session variables they assign, lowered and however the
+// assignment spells the variable, so that the pool can tell whether a setting
+// applied over another leaves any of the other's variables unassigned.
+func TestBuildSettingQueryVariables(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+	sq, err := BuildSettingQuery([]string{"set sql_safe_updates = 1, @@SESSION.Sql_Select_Limit = 10", "set @@sql_mode = ''"}, parser, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"sql_safe_updates", "sql_select_limit", "sql_mode"}, sq.Variables)
 }
 
 // ValidateReservedSettings judges the settings a true reservation executes directly on
@@ -246,13 +256,13 @@ func TestValidateReservedSettings(t *testing.T) {
 func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	query, resetQuery, parseMode, setsSQLMode, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser, false)
+	sq, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
-	assert.True(t, setsSQLMode)
-	assert.Equal(t, sqlmode.Mode(0), parseMode)
-	assert.Contains(t, query, "sql_mode = 'STRICT_TRANS_TABLES'")
-	assert.Contains(t, resetQuery, "sql_mode = replace(replace(replace(replace(replace(replace(replace(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')")
-	assert.Contains(t, resetQuery, "sql_safe_updates = default")
+	assert.True(t, sq.SetsSQLMode)
+	assert.Equal(t, sqlmode.Mode(0), sq.ParseMode)
+	assert.Contains(t, sq.Apply, "sql_mode = 'STRICT_TRANS_TABLES'")
+	assert.Contains(t, sq.Reset, "sql_mode = replace(replace(replace(replace(replace(replace(replace(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')")
+	assert.Contains(t, sq.Reset, "sql_safe_updates = default")
 }
 
 // Every setting other than sql_mode, foreign_key_checks and unique_checks is reset with
@@ -262,9 +272,9 @@ func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	_, resetQuery, _, _, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser, false)
+	sq, err := BuildSettingQuery([]string{"set sql_safe_updates = 1", "set @@session.sql_select_limit = 10"}, parser, false)
 	require.NoError(t, err)
-	assert.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", resetQuery)
+	assert.Equal(t, "set sql_safe_updates = default, @@sql_select_limit = default", sq.Reset)
 }
 
 // MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` and the same for
@@ -274,9 +284,9 @@ func TestBuildSettingQueryResetUsesDefaultKeyword(t *testing.T) {
 func TestBuildSettingQueryResetRestoresGlobalForeignKeyAndUniqueChecks(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	_, resetQuery, _, _, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser, false)
+	sq, err := BuildSettingQuery([]string{"set @@foreign_key_checks = 0, @@session.unique_checks = 0", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
-	assert.Equal(t, "set @@foreign_key_checks = @@global.foreign_key_checks, @@unique_checks = @@global.unique_checks, sql_safe_updates = default", resetQuery)
+	assert.Equal(t, "set @@foreign_key_checks = @@global.foreign_key_checks, @@unique_checks = @@global.unique_checks, sql_safe_updates = default", sq.Reset)
 }
 
 func TestSetPlanSQLMode(t *testing.T) {
@@ -503,13 +513,13 @@ func TestSettingsRejectSubqueries(t *testing.T) {
 				expectedErr := "connection setting must not contain a subquery: " + tc.setting
 				rejected := tc.subquery && strictTableACL
 
-				query, resetQuery, _, _, err := BuildSettingQuery(settings, parser, strictTableACL)
+				sq, err := BuildSettingQuery(settings, parser, strictTableACL)
 				if rejected {
 					require.EqualError(t, err, expectedErr)
 				} else {
 					require.NoError(t, err)
-					assert.NotEmpty(t, query)
-					assert.NotEmpty(t, resetQuery)
+					assert.NotEmpty(t, sq.Apply)
+					assert.NotEmpty(t, sq.Reset)
 				}
 
 				_, _, err = ValidateReservedSettings(settings, parser, strictTableACL)

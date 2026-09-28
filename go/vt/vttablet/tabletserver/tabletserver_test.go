@@ -2980,8 +2980,8 @@ func TestInBandSetClosesTheConnectionOnRelease(t *testing.T) {
 	}
 }
 
-// A setting applied on a connection that already carries another one leaves the
-// old one's variables in effect without the new one describing them, so the
+// A setting applied on a connection that already carries another one it does not
+// cover leaves the old one's variables in effect without the new one describing them, so the
 // connection is closed when it is released rather than recycled under the new
 // setting: the next transaction with the new setting gets a fresh connection.
 func TestSettingSwitchClosesTheConnectionOnRelease(t *testing.T) {
@@ -3017,6 +3017,47 @@ func TestSettingSwitchClosesTheConnectionOnRelease(t *testing.T) {
 	beginState, _, err = tsv.ReserveBeginExecute(ctx, nil, &target, otherSettings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, db.QueryLog(), "sql_safe_updates = 1", "the setting must be applied on a fresh connection")
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+}
+
+// A setting applied over one it covers, assigning every variable the old one
+// assigned, leaves the session exactly as it describes it: the connection goes
+// back to the pool under the new setting when the transaction ends. VTGate's
+// settings switch that way when a session whose queries carry its settings
+// changes a variable mid-transaction that a SET_VAR hint can carry: VTGate sends
+// no SET for it, and the session's settings only ever grow.
+func TestSettingSwitchToACoveringSettingKeepsTheConnection(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	const (
+		applyOld = "set sql_safe_updates = 1"
+		applyNew = "set sql_safe_updates = 0, sql_select_limit = 10"
+	)
+	db.AddQuery(applyOld, &sqltypes.Result{})
+	db.AddQuery(applyNew, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, []string{applyOld}, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, []string{applyNew}, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	txConns := db.QueryConnIDs(applyNew)
+	require.Len(t, txConns, 1)
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+	assert.Zero(t, tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "a connection whose session its setting describes must not be discarded")
+
+	// the next transaction with the new setting is handed the same connection,
+	// with the setting already applied
+	beginState, _, err = tsv.ReserveBeginExecute(ctx, nil, &target, []string{applyNew}, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, db.GetQueryCalledNum(applyNew), "the setting must not be applied again")
+	assert.True(t, db.IsConnectionOpen(txConns[0]))
 	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
 	require.NoError(t, err)
 }
