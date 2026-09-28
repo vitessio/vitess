@@ -19,7 +19,6 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
-	"errors"
 	"log/slog"
 	"testing"
 	"time"
@@ -97,12 +96,11 @@ func TestExecuteSuperQueryListMulti(t *testing.T) {
 
 		err = testMysqld.executeWithContext(ctx, conn, comSetOption, func() error {
 			close(running)
-			// Stand in for a read the server never answers: it comes back when
-			// the connection is closed, and not before.
-			for !conn.Conn.IsClosed() {
-				time.Sleep(time.Millisecond)
-			}
-			return errors.New("connection closed underneath the exchange")
+			// The fake server never sends anything unasked, so this is a read the
+			// server never answers: it comes back when the connection is closed,
+			// and not before.
+			_, err := conn.Conn.ReadPacket()
+			return err
 		})
 		require.ErrorIs(t, err, context.Canceled)
 		require.True(t, conn.Conn.IsClosed(), "the connection has to be closed to interrupt the exchange")
