@@ -225,6 +225,21 @@ func verifyPeerChain(roots *x509.CertPool, cs tls.ConnectionState) ([][]*x509.Ce
 	return cs.PeerCertificates[0].Verify(opts)
 }
 
+// ServerTLSEnabled reports whether a server is configured for TLS,
+// that is, whether both its certificate and its key are set. A CRL
+// set without them is refused: it could not apply to a server that
+// does not do TLS, and would otherwise be silently ignored, leaving
+// the server in plaintext while the operator configured revocation.
+func ServerTLSEnabled(cert, key, crl string) (bool, error) {
+	if cert != "" && key != "" {
+		return true, nil
+	}
+	if crl != "" {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "a CRL is configured without a certificate and a key: the server is not configured for TLS, so the CRL could not apply")
+	}
+	return false, nil
+}
+
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
 func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
