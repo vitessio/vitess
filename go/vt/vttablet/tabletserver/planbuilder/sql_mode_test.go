@@ -61,6 +61,24 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 		expectedQuery: "set sql_mode = 2",
 		expectedMode:  sqlmode.PipesAsConcat,
 	}, {
+		// MySQL reads a setting under the mode the settings before it put the session
+		// in: the `||` after the mode is concatenation, as on a reserved connection
+		// that runs the settings one by one, where it gives sql_select_limit = 10
+		settings:      []string{"set sql_mode = 'PIPES_AS_CONCAT'", "set @@sql_select_limit = 1 || 0"},
+		expectedQuery: "set sql_mode = 'PIPES_AS_CONCAT', @@sql_select_limit = concat(1, 0)",
+		expectedMode:  sqlmode.PipesAsConcat,
+	}, {
+		// MySQL reads one statement under the mode the session is in before it runs,
+		// so an assignment after the mode's own in the same SET still reads `||` as
+		// OR; only the settings after it read `||` as concatenation
+		settings:      []string{"set sql_mode = PIPES_AS_CONCAT, @@sql_select_limit = 1 || 0", "set @@max_join_size = 1 || 0"},
+		expectedQuery: "set sql_mode = PIPES_AS_CONCAT, @@sql_select_limit = 1 or 0, @@max_join_size = concat(1, 0)",
+		expectedMode:  sqlmode.PipesAsConcat,
+	}, {
+		// and a setting after the mode is cleared again reads `||` as OR
+		settings:      []string{"set sql_mode = 'PIPES_AS_CONCAT'", "set sql_mode = ''", "set @@sql_select_limit = 1 || 0"},
+		expectedQuery: "set sql_mode = 'PIPES_AS_CONCAT', sql_mode = '', @@sql_select_limit = 1 or 0",
+	}, {
 		settings:    []string{"set sql_mode = 'ANSI'"},
 		expectedErr: "setting the ANSI sql_mode is unsupported",
 	}, {

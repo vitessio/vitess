@@ -57,8 +57,11 @@ import (
 // the settings are applied with no verification afterwards and a value that cannot be
 // judged upfront could put the MySQL session in a mode it must not run under.
 func ValidateReservedSettings(settings []string, parser *sqlparser.Parser, strictTableACL bool) (parseMode sqlmode.Mode, setsSQLMode bool, err error) {
+	// each setting is read under the lexer modes of the sql_mode the settings before
+	// it put the session in, the way MySQL reads them, see BuildSettingQuery
+	settingParser := parser
 	for _, setting := range settings {
-		stmt, err := parser.Parse(setting)
+		stmt, err := settingParser.Parse(setting)
 		if err != nil {
 			return 0, false, vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
 		}
@@ -81,6 +84,7 @@ func ValidateReservedSettings(settings []string, parser *sqlparser.Parser, stric
 		if sawConstant {
 			parseMode = mode
 			setsSQLMode = true
+			settingParser = parser.WithSQLMode(mode)
 		}
 	}
 	return parseMode, setsSQLMode, nil

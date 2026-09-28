@@ -430,8 +430,11 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
 	defaultValue := &sqlparser.Default{}
+	// MySQL reads each setting under the sql_mode the settings before it put the
+	// session in, so each is parsed under the lexer modes that mode carries
+	settingParser := parser
 	for _, setting := range settings {
-		stmt, err := parser.Parse(setting)
+		stmt, err := settingParser.Parse(setting)
 		if err != nil {
 			return "", "", 0, false, vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
 		}
@@ -457,6 +460,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 		if sawConstant {
 			parseMode = mode
 			setsSQLMode = true
+			settingParser = parser.WithSQLMode(mode)
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
