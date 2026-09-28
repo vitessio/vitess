@@ -1283,12 +1283,26 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 				tsv := newServer(t, enableStrictTableACL)
 				tsv.qe.enableTableACLDryRun = true
 				qre := newTestQueryExecutor(ctx, tsv, tc.query, connID(t, tsv))
+				// dual is always allowed under strict table ACL, so a dry run,
+				// which reports what strict table ACL would deny, must not
+				// report it either
+				dualPseudoDenied := func() int64 {
+					var n int64
+					for key, count := range tsv.stats.TableaclPseudoDenied.Counts() {
+						if strings.HasPrefix(key, "dual.") {
+							n += count
+						}
+					}
+					return n
+				}
 				pseudoBefore := tsv.stats.TableaclPseudoDenied.Counts()[statsKey]
+				dualBefore := dualPseudoDenied()
 				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err := qre.Execute()
 				require.NoError(t, err, "a dry run must not enforce the ACL")
 				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 				assert.Equal(t, pseudoBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[statsKey], "a dry run must count the denial under the right label")
+				assert.Equal(t, dualBefore, dualPseudoDenied(), "a dry run must not report dual, which strict table ACL always allows")
 			})
 
 			t.Run("strict table ACL off runs", func(t *testing.T) {

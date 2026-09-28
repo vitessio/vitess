@@ -630,13 +630,15 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		qre.recordACLStats(statsKey, aclState)
 	}()
 	if !authorized.IsMember(callerID) {
-		if qre.tsv.qe.enableTableACLDryRun {
-			aclState = acl.ACLPseudoDenied
+		// Skip ACL check for queries against the dummy dual table. This comes
+		// before the dry run, which reports what strict table ACL would deny,
+		// and strict table ACL always allows dual.
+		if tableName == "dual" {
 			return nil
 		}
 
-		// Skip ACL check for queries against the dummy dual table
-		if tableName == "dual" {
+		if qre.tsv.qe.enableTableACLDryRun {
+			aclState = acl.ACLPseudoDenied
 			return nil
 		}
 
