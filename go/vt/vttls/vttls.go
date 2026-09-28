@@ -105,7 +105,8 @@ var onceByKeys = sync.Map{}
 // ClientConfig returns the TLS config to use for a client to
 // connect to a server with the provided parameters. The certificate,
 // key and CA files are loaded once per path, and loaded again by
-// ReloadCachedFiles; the CRL is read on every call.
+// ReloadCachedFiles; the CRL is read on every call, see
+// clientCRLChecker.
 func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
 	config := &tls.Config{
 		MinVersion: minTLSVersion,
@@ -139,7 +140,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	var checker *crlChecker
 	if crl != "" {
 		var err error
-		checker, err = newCRLChecker(crl, ca)
+		checker, err = clientCRLChecker(crl, ca)
 		if err != nil {
 			return nil, err
 		}
