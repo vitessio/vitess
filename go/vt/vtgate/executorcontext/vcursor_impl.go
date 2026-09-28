@@ -1140,10 +1140,13 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		stmt = vexplain.Statement
 	}
 	switch stmt.(type) {
-	// If the statement supports optimizer hints or a transaction statement or a SET statement
-	// no reserved connection is needed
+	// A statement that supports optimizer hints, or a transaction statement, needs no
+	// settings on its connection. A SET does: whether an assignment changes a system
+	// variable is judged on a shard against the session's current value, and without
+	// the settings the shard holds the global value, so assigning the global value
+	// back would be judged no change and dropped.
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
-		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Show,
 		sqlparser.SupportOptimizerHint:
 	default:
 		vc.settingsForStatement = true

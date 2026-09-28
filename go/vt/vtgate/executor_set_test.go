@@ -703,6 +703,35 @@ func TestHintIncapableStatementCarriesTheSettingsForItself(t *testing.T) {
 	assert.Equal(t, reservedID, session.ShardSessions[0].ReservedId, "the query kept the reserved connection")
 }
 
+// Whether an assignment changes a system variable is judged on a shard, against the
+// session's current value: the judgment carries the session's settings. A session
+// that turned foreign_key_checks off and turns it back on assigns the global value,
+// which a connection without the settings would judge no change, dropping the SET.
+func TestSetSysVarIsJudgedAgainstTheSessionValue(t *testing.T) {
+	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
+	executor.config.Normalize = true
+	sbc.NoReservation = true
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		SystemVariables:      map[string]string{"foreign_key_checks": "0"},
+	})
+	sbc.SetResults([]*sqltypes.Result{
+		{}, // the session's settings
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"), // the judgment: a change
+	})
+
+	_, err := executorExecSession(ctx, executor, session, "set foreign_key_checks = on", nil)
+	require.NoError(t, err)
+	var sqls []string
+	for _, q := range sbc.Queries {
+		sqls = append(sqls, q.Sql)
+	}
+	assert.Equal(t, []string{"set foreign_key_checks = 0", "select 1 from dual where @@foreign_key_checks != 1"}, sqls)
+	assert.Equal(t, "1", session.SystemVariables["foreign_key_checks"])
+	assert.False(t, session.InReservedConn())
+}
+
 func TestSetVarShowVariables(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.config.Normalize = true
