@@ -551,11 +551,12 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
 		parser := qe.env.Environment().Parser()
-		rejectSubqueries := settingsRejectSubqueries(settings, parser, qe.strictTableACL, qe.enableTableACLDryRun, qe.env.Config().SanitizeLogMessages)
+		rejectSubqueries, dryRunSetting := settingsRejectSubqueries(settings, parser, qe.strictTableACL, qe.enableTableACLDryRun)
 		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, parser, rejectSubqueries)
 		if err != nil {
 			return nil, err
 		}
+		logDryRunSetting(dryRunSetting, qe.env.Config().SanitizeLogMessages, parser)
 		return smartconnpool.NewSetting(query, resetQuery), nil
 	})
 	return connSetting, err
@@ -566,16 +567,24 @@ var logSettingSubqueryDryRun = logutil.NewThrottledLogger("SettingSubqueryDryRun
 // settingsRejectSubqueries reports whether connection settings with a subquery
 // are refused. They are under strict table ACL, as a setting is applied with no
 // table ACL check (see planbuilder.SettingWithSubquery). A dry run lets them
-// through, as it does any request the table ACL would deny, and logs the
-// setting that the ACL would refuse without it, redacted when sanitize is set.
-func settingsRejectSubqueries(settings []string, parser *sqlparser.Parser, strictTableACL, dryRun, sanitize bool) bool {
+// through, as it does any request the table ACL would deny, and returns the
+// setting that the ACL would refuse without it, for the caller to log with
+// logDryRunSetting once the rest of the settings validation has passed.
+func settingsRejectSubqueries(settings []string, parser *sqlparser.Parser, strictTableACL, dryRun bool) (reject bool, dryRunSetting string) {
 	if !dryRun {
-		return strictTableACL
+		return strictTableACL, ""
 	}
-	if setting := planbuilder.SettingWithSubquery(settings, parser); setting != "" {
-		logSettingSubqueryDryRun.Warningf("table ACL dry run: allowing a connection setting with a subquery, which strict table ACL rejects: %s", settingForLog(setting, sanitize, parser))
+	return false, planbuilder.SettingWithSubquery(settings, parser)
+}
+
+// logDryRunSetting logs a connection setting with a subquery that a table ACL
+// dry run let through, redacted when sanitize is set. It does nothing when
+// setting is empty.
+func logDryRunSetting(setting string, sanitize bool, parser *sqlparser.Parser) {
+	if setting == "" {
+		return
 	}
-	return false
+	logSettingSubqueryDryRun.Warningf("table ACL dry run: allowing a connection setting with a subquery, which strict table ACL rejects: %s", settingForLog(setting, sanitize, parser))
 }
 
 // settingForLog returns a connection setting as it may be logged. With

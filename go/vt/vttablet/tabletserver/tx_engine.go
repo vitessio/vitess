@@ -629,8 +629,12 @@ func (te *TxEngine) stopTransactionWatcher() {
 func (te *TxEngine) validateSettings(preQueries []string) error {
 	parser := te.env.Environment().Parser()
 	cfg := te.env.Config()
-	rejectSubqueries := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun, cfg.SanitizeLogMessages)
-	return planbuilder.ValidateSettingsSQLMode(preQueries, parser, rejectSubqueries)
+	rejectSubqueries, dryRunSetting := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun)
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, parser, rejectSubqueries); err != nil {
+		return err
+	}
+	logDryRunSetting(dryRunSetting, cfg.SanitizeLogMessages, parser)
+	return nil
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction

@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -2699,6 +2700,55 @@ func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+
+	// the dry run logs a setting with a subquery only once the rest of the
+	// settings validation has passed, so a setting rejected for another reason
+	// is never logged as allowed
+	t.Run("the dry run logs only a setting it applies", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+		ctx := t.Context()
+		tsv := newTestTabletServer(ctx, enableStrictTableACL|enableTableACLDryRun, db)
+		defer tsv.StopService()
+		db.AddQuery(subquerySetting, &sqltypes.Result{})
+
+		origLogger := logSettingSubqueryDryRun
+		t.Cleanup(func() { logSettingSubqueryDryRun = origLogger })
+		resetLog := func() {
+			logSettingSubqueryDryRun = logutil.NewThrottledLogger("SettingSubqueryDryRun", time.Minute)
+		}
+		logged := func() bool { return !logSettingSubqueryDryRun.GetLastLogTime().IsZero() }
+
+		sqlModeSetting := "set @@sql_mode = (select 'ANSI' from dual)"
+		sqlModeErr := "non-constant sql_mode value in connection settings"
+		resetLog()
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{sqlModeSetting})
+		require.ErrorContains(t, err, sqlModeErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{sqlModeSetting})
+		require.ErrorContains(t, err, sqlModeErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{sqlModeSetting})
+		require.ErrorContains(t, err, sqlModeErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{"set @@global.max_connections = (select 1)"})
+		require.ErrorContains(t, err, "session scope expected")
+		assert.False(t, logged(), "a setting rejected by the rest of the validation must not be logged as allowed")
+
+		resetLog()
+		connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
+		require.NoError(t, err)
+		require.NoError(t, tsv.te.Release(ctx, connID))
+		assert.True(t, logged(), "ReserveBegin must log the setting it lets through")
+
+		resetLog()
+		connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
+		require.NoError(t, err)
+		require.NoError(t, tsv.te.Release(ctx, connID))
+		assert.True(t, logged(), "Reserve must log the setting it lets through")
+
+		resetLog()
+		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
+		require.NoError(t, err)
+		assert.True(t, logged(), "GetConnSetting must log the setting it lets through")
+	})
 
 	// the dry run logs the setting it lets through, and with
 	// --sanitize-log-messages only the variables it sets, never its values
