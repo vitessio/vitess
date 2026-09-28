@@ -152,7 +152,7 @@ Flags:
       --tablet-refresh-interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
-      --tls-reload-interval duration                                     how often to check the gRPC and MySQL servers' TLS certificate, key, CA and CRL files for changes and reload them, 0 to disable; SIGHUP always reloads them
+      --tls-reload-interval duration                                     how often to check the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients for changes and reload them, 0 to disable; SIGHUP always reloads them
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.

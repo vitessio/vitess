@@ -65,6 +65,6 @@ Flags:
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
-      --tls-reload-interval duration                                     how often to check the gRPC and MySQL servers' TLS certificate, key, CA and CRL files for changes and reload them, 0 to disable; SIGHUP always reloads them
+      --tls-reload-interval duration                                     how often to check the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients for changes and reload them, 0 to disable; SIGHUP always reloads them
   -v, --version                                                          print binary version
       --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
