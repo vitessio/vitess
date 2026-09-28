@@ -66,17 +66,149 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "set a=1",
 		output: nil,
 	}, {
+		// A SET forwards its expressions to MySQL, which evaluates any
+		// subquery in them, so those reads are checked.
+		input: "set @v = (select v from secret limit 1)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "set @a = 1, @b = (select count(*) from secret), @@sql_select_limit = (select n from other limit 1)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "other",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		input:  "show variable like 'a%'",
 		output: nil,
 	}, {
-		input:  "describe select * from t",
+		// A WHERE with no subquery reads nothing.
+		input:  "show variables where Variable_name like 'a%'",
 		output: nil,
 	}, {
+		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
+		// subquery in it, so those reads are checked. The SHOW's own subject
+		// (the table of SHOW COLUMNS FROM t) stays unchecked as before.
+		input: "show tables where Tables_in_d = (select name from secret limit 1)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "show columns from t where Field in (select c from secret)",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "show status where Variable_name = (select v from secret where id = (select max(id) from other))",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "other",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A plain EXPLAIN, in any format, and DESCRIBE carry the explained
+		// statement's permissions: MySQL reads const tables and evaluates
+		// uncorrelated subqueries while it optimizes, and the plan shows the
+		// outcome ("Impossible WHERE"), so an EXPLAIN answers a yes/no
+		// question about the data. This is also the shape VEXPLAIN MYSQLPLAN
+		// issues against every resolved shard.
+		input: "describe select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain format = json select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain format = tree select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain select 1 from dual where (select v from secret where id = 1) = 'guess'",
+		output: []Permission{{
+			TableName: "dual",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain update t set a = 1 where id in (select id from s)",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "s",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// EXPLAIN ANALYZE executes the statement it explains, so it carries
+		// that statement's permissions, the top-level split between READER
+		// and WRITER included.
+		input: "explain analyze select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain analyze update t set a = 1 where id in (select id from s)",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "s",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain analyze insert into t select * from s",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}, {
+			TableName: "s",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "explain analyze delete from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.WRITER,
+		}},
+	}, {
+		// A VALUES statement is explainable too; it reads only through the
+		// subqueries in its rows.
+		input:  "explain analyze values row(1, 2)",
+		output: nil,
+	}, {
+		input: "explain analyze values row((select a from t))",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A bare CREATE TABLE is a partial parse (the grammar keeps only the
+		// prefix), indistinguishable from `create table t (select ...)`, so it
+		// is flagged; MySQL rejects the bare form anyway.
 		input: "create table t",
 		output: []Permission{{
 			TableName: "t",
 			Role:      tableacl.ADMIN,
 		}},
+		undetermined: true,
 	}, {
 		input: "rename table t1 to t2",
 		output: []Permission{{
@@ -643,6 +775,120 @@ func TestBuildPermissions(t *testing.T) {
 	}, {
 		input:        "load data infile 'x' into table t",
 		undetermined: true,
+	}, {
+		// CREATE TABLE ... AS SELECT copies the selected rows at creation:
+		// ADMIN on the new table is not enough, the source is read.
+		input: "create table ct as select id from secret",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// The SELECT is walked with full CTE scoping: a CTE name is not a
+		// table, the base table it reads is.
+		input: "create table ct as with t as (select id from secret) select id from t",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "create table ct as select a.id from a join secret b on a.id = b.id",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "a",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "create table ct as (select id from secret) union (select id from other)",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "other",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A CREATE TABLE the parser could not fully parse is forwarded to
+		// MySQL as the client's raw text, so its source tables are unknown:
+		// it must be flagged like any other opaque statement, not derived from
+		// the prefix the parser kept. MySQL accepts each of these and copies
+		// the rows.
+		input:        "create table ct (select id from secret)",
+		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
+		undetermined: true,
+	}, {
+		input:        "create table ct as table secret",
+		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
+		undetermined: true,
+	}, {
+		// The parser keeps a truncated SELECT here (the first arm only), which
+		// would derive READER on secret and miss other; flagged instead.
+		input:        "create table ct as select id from secret except select id from other",
+		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
+		undetermined: true,
+	}, {
+		// A valid CREATE TABLE in syntax the grammar lacks (MySQL 8.0.21's
+		// START TRANSACTION clause) is the same prefix-only parse, so it is
+		// flagged too: the tablet cannot tell it from a row-copying form. The
+		// exempt ACL is the way to run it under strict table ACL.
+		input:        "create table t (id int) start transaction",
+		output:       []Permission{{TableName: "t", Role: tableacl.ADMIN}},
+		undetermined: true,
+	}, {
+		// A partially parsed DDL other than CREATE TABLE stays as it was.
+		input: "alter table t bogus",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.ADMIN,
+		}},
+	}, {
+		// CREATE VIEW reads nothing at creation time, but the view reads its
+		// source tables as the tablet's MySQL user whenever it is queried,
+		// and the ACL then sees only the view's name, so the source is
+		// checked when the view is defined, as MySQL requires SELECT on it.
+		input: "create view v as select id from secret",
+		output: []Permission{{
+			TableName: "v",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "create or replace view v as select a.id from a join secret b on a.id = b.id",
+		output: []Permission{{
+			TableName: "v",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "a",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "alter view v as select id from secret",
+		output: []Permission{{
+			TableName: "v",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {
