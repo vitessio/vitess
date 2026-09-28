@@ -1,0 +1,90 @@
+[
+  {
+    "comment": "vexplain json",
+    "query": "vexplain plan select * from user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "vexplain plan select * from user",
+      "Instructions": {
+        "OperatorType": "Rows",
+        "Fields": {
+          "JSON": "VARCHAR"
+        },
+        "RowCount": 1
+      }
+    }
+  },
+  {
+    "comment": "vexplain queries",
+    "query": "vexplain QUERIES select * from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "EXPLAIN",
+      "Original": "vexplain QUERIES select * from user",
+      "Instructions": {
+        "OperatorType": "VEXPLAIN",
+        "Type": "queries",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "vexplain table",
+    "query": "vexplain ALL select * from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "EXPLAIN",
+      "Original": "vexplain ALL select * from user",
+      "Instructions": {
+        "OperatorType": "VEXPLAIN",
+        "Type": "all",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "vexplain keys",
+    "query": "vexplain keys select * from user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "vexplain keys select * from user",
+      "Instructions": {
+        "OperatorType": "Rows",
+        "Fields": {
+          "ColumnUsage": "VARCHAR"
+        },
+        "RowCount": 1
+      }
+    }
+  }
+]

@@ -1,0 +1,126 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package aggregation
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestDistinct(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into t3(id5,id6,id7) values(1,3,3), (2,3,4), (3,3,6), (4,5,7), (5,5,6)")
+	mcmp.Exec("insert into t7_xxhash(uid,phone) values('1',4), ('2',4), ('3',3), ('4',1), ('5',1)")
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
+	mcmp.AssertMatches("select distinct val2, count(*) from aggr_test group by val2", `[[NULL INT64(2)] [INT64(1) INT64(4)] [INT64(3) INT64(1)] [INT64(4) INT64(1)]]`)
+	mcmp.AssertMatches("select distinct id6 from t3 join t7_xxhash on t3.id5 = t7_xxhash.phone", `[[INT64(3)] [INT64(5)]]`)
+}
+
+func TestDistinctIt(t *testing.T) {
+	// tests more variations of DISTINCT
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
+
+	mcmp.AssertMatchesNoOrder("select distinct val1 from aggr_test", `[[VARCHAR("c")] [VARCHAR("d")] [VARCHAR("e")] [VARCHAR("a")] [VARCHAR("b")]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val2 from aggr_test", `[[INT64(1)] [INT64(4)] [INT64(3)] [NULL]]`)
+	mcmp.AssertMatchesNoOrder("select distinct id from aggr_test", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]`)
+
+	// Ensure DISTINCT on enum columns across shards works correctly.
+	mcmp.Exec("insert into example(id, foo) values (1, 'a'), (2, 'b')")
+	mcmp.AssertMatchesNoOrder("select distinct foo from example", `[[ENUM("a")] [ENUM("b")]]`)
+
+	// Exercise fallback hashing for unknown enum values. The vschema for the
+	// example_enum_unknown table deliberately omits the "c" enum member so that
+	// vtgate will treat it as unknown.
+	mcmp.Exec("insert into example_enum_unknown(id, foo) values (1, 'a'), (2, 'c')")
+	mcmp.AssertMatchesNoOrder("select distinct foo from example_enum_unknown", `[[ENUM("a")] [ENUM("c")]]`)
+
+	// Exercise fallback hashing for unknown set values. The vschema for the
+	// example_set_unknown table deliberately omits the "c" set member so that
+	// vtgate will treat it as unknown.
+	mcmp.Exec("insert into example_set_unknown(id, foo) values (1, 'a'), (2, 'c')")
+	mcmp.AssertMatchesNoOrder("select distinct foo from example_set_unknown", `[[SET("a")] [SET("c")]]`)
+
+	mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val1, count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val1+val2 from aggr_test", `[[NULL] [FLOAT64(1)] [FLOAT64(3)] [FLOAT64(4)]]`)
+	mcmp.AssertMatchesNoOrder("select distinct count(*) from aggr_test group by val1", `[[INT64(2)] [INT64(1)]]`)
+}
+
+func TestWindowFunctionWithGroupByError(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	_, err := mcmp.ExecAllowError(
+		`SELECT FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv, deptno FROM emp GROUP BY fv, deptno`,
+	)
+	require.ErrorContains(t, err, "(errno 3593) (sqlstate HY000)")
+}
+
+func TestDistinctWindowLimitShardTruncation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`INSERT INTO emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES
+		(101, 'A1', 'Analyst', NULL, '2024-01-01', 1000, NULL, 10),
+		(102, 'A2', 'Analyst', NULL, '2024-01-02', 1000, NULL, 10),
+		(103, 'A3', 'Analyst', NULL, '2024-01-03', 1000, NULL, 10),
+		(201, 'B1', 'Clerk',   NULL, '2024-02-01', 2000, NULL, 20),
+		(202, 'B2', 'Clerk',   NULL, '2024-02-02', 2000, NULL, 20),
+		(203, 'B3', 'Clerk',   NULL, '2024-02-03', 2000, NULL, 20),
+		(501, 'C1', 'Manager', NULL, '2024-03-01', 3000, NULL, 5),
+		(502, 'C2', 'Manager', NULL, '2024-03-02', 3000, NULL, 5),
+		(503, 'C3', 'Manager', NULL, '2024-03-03', 3000, NULL, 5)`)
+
+	mcmp.AssertMatches(`SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3`,
+		`[[INT64(503) DATE("2024-03-03") INT64(5)] [INT64(103) DATE("2024-01-03") INT64(10)] [INT64(203) DATE("2024-02-03") INT64(20)]]`)
+
+	mcmp.AssertMatches(`SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate ASC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3 OFFSET 0
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3 OFFSET 1`,
+		`[[INT64(101) DATE("2024-01-01") INT64(10)] [INT64(201) DATE("2024-02-01") INT64(20)]]`)
+}

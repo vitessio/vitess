@@ -1,0 +1,8 @@
+zkctld is a daemon that starts or initializes ZooKeeper with Vitess-specific configuration. It will stay running as long as the underlying ZooKeeper server, and will pass along SIGTERM.
+
+Usage:
+  zkctld [flags]
+
+Flags:
+  -h, --help      help for zkctld
+  -v, --version   version for zkctld

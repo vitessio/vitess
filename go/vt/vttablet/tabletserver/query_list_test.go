@@ -1,0 +1,117 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package tabletserver
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+type testConn struct {
+	id     int64
+	query  string
+	killed bool
+}
+
+func (tc *testConn) Current() string { return tc.query }
+
+func (tc *testConn) ID() int64 { return tc.id }
+
+func (tc *testConn) Kill(string, time.Duration) error {
+	tc.killed = true
+	return nil
+}
+
+func (tc *testConn) IsKilled() bool {
+	return tc.killed
+}
+
+func TestQueryList(t *testing.T) {
+	ql := NewQueryList("test", sqlparser.NewTestParser())
+	connID := int64(1)
+	qd := NewQueryDetail(t.Context(), &testConn{id: connID})
+	err := ql.Add(qd)
+	require.NoError(t, err)
+
+	if qd1, ok := ql.queryDetails[connID]; !ok || qd1[0].connID != connID {
+		assert.Fail(t, "failed to add to QueryList")
+	}
+
+	conn2ID := int64(2)
+	qd2 := NewQueryDetail(t.Context(), &testConn{id: conn2ID})
+	err = ql.Add(qd2)
+	require.NoError(t, err)
+
+	rows := ql.AppendQueryzRows(nil)
+	if len(rows) != 2 || rows[0].ConnID != 1 || rows[1].ConnID != 2 {
+		assert.Failf(t, "wrong rows returned", "wrong rows returned %v", rows)
+	}
+
+	ql.Remove(qd)
+	if _, ok := ql.queryDetails[connID]; ok {
+		assert.Fail(t, "failed to remove from QueryList")
+	}
+}
+
+func TestQueryListChangeConnIDInMiddle(t *testing.T) {
+	ql := NewQueryList("test", sqlparser.NewTestParser())
+	connID := int64(1)
+	qd1 := NewQueryDetail(t.Context(), &testConn{id: connID})
+	err := ql.Add(qd1)
+	require.NoError(t, err)
+
+	conn := &testConn{id: connID}
+	qd2 := NewQueryDetail(t.Context(), conn)
+	err = ql.Add(qd2)
+	require.NoError(t, err)
+
+	require.Len(t, ql.queryDetails[1], 2)
+
+	// change the connID in the middle
+	conn.id = 2
+
+	// remove the same object.
+	ql.Remove(qd2)
+
+	require.Len(t, ql.queryDetails[1], 1)
+	require.Equal(t, qd1, ql.queryDetails[1][0])
+	require.NotEqual(t, qd2, ql.queryDetails[1][0])
+}
+
+func TestClusterAction(t *testing.T) {
+	ql := NewQueryList("test", sqlparser.NewTestParser())
+	connID := int64(1)
+	qd1 := NewQueryDetail(t.Context(), &testConn{id: connID})
+
+	ql.SetClusterAction(ClusterActionInProgress)
+	ql.SetClusterAction(ClusterActionNoQueries)
+	err := ql.Add(qd1)
+	require.ErrorContains(t, err, "operation not allowed in state SHUTTING_DOWN")
+
+	ql.SetClusterAction(ClusterActionNotInProgress)
+	err = ql.Add(qd1)
+	require.NoError(t, err)
+	// If the current state is not in progress, then setting no queries, shouldn't change anything.
+	ql.SetClusterAction(ClusterActionNoQueries)
+	err = ql.Add(qd1)
+	require.NoError(t, err)
+}

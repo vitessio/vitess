@@ -1,0 +1,5259 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package reparentutil
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+
+	"vitess.io/vitess/go/test/utils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vttime"
+)
+
+func TestNewPlannedReparenter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		logger logutil.Logger
+	}{
+		{
+			name:   "default case",
+			logger: logutil.NewMemoryLogger(),
+		},
+		{
+			name:   "overrides nil logger with no-op",
+			logger: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			er := NewPlannedReparenter(nil, nil, tt.logger)
+			assert.NotNil(t, er.logger, "NewPlannedReparenter should never result in a nil logger instance on the EmergencyReparenter")
+		})
+	}
+}
+
+func TestPlannedReparenter_ReparentShard(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		tmc                 tmclient.TabletManagerClient
+		tablets             []*topodatapb.Tablet
+		lockShardBeforeTest bool
+
+		keyspace string
+		shard    string
+		opts     PlannedReparentOptions
+
+		expectedEvent *events.Reparent
+		shouldErr     bool
+	}{
+		{
+			name: "success",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "success - new primary not provided",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Position: &replicationdatapb.Status{
+							Position: "",
+						},
+					},
+				},
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// value of Position doesn't strictly matter for
+							// this test case, as long as it matches the inner
+							// key of the WaitForPositionResults map for the
+							// primary-elect.
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "successful reparent journal position",
+						Error:  nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts:     PlannedReparentOptions{},
+
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				OldPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "already locked shard",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			lockShardBeforeTest: true,
+
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			// The simplest setup required to make an overall ReparentShard call
+			// fail is to set NewPrimaryAlias = AvoidPrimaryAlias, which will
+			// fail the preflight checks. Other functions are unit-tested
+			// thoroughly to cover all the cases.
+			name: "reparent fails",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					IsPrimaryServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+				}, nil),
+			},
+			shouldErr: true,
+		},
+	}
+
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+				SkipShardCreation:   false,
+			}, tt.tablets...)
+
+			if tt.lockShardBeforeTest {
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for test")
+				require.NoError(t, err, "could not lock %s/%s for test case", tt.keyspace, tt.shard)
+
+				defer func() {
+					unlock(&err)
+					require.NoError(t, err, "could not unlock %s/%s after test case", tt.keyspace, tt.shard)
+				}()
+
+				ctx = lctx
+			}
+
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
+			ev, err := pr.ReparentShard(ctx, tt.keyspace, tt.shard, tt.opts)
+			if tt.shouldErr {
+				require.Error(t, err)
+				AssertReparentEventsEqual(t, tt.expectedEvent, ev)
+
+				if ev != nil {
+					assert.Contains(t, ev.Status, "failed PlannedReparentShard", "expected event status to indicate failed PRS")
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			AssertReparentEventsEqual(t, tt.expectedEvent, ev)
+			assert.Contains(t, ev.Status, "finished PlannedReparentShard", "expected event status to indicate successful PRS")
+		})
+	}
+}
+
+func TestPlannedReparenter_getLockAction(t *testing.T) {
+	t.Parallel()
+
+	pr := &PlannedReparenter{}
+	tests := []struct {
+		name     string
+		opts     PlannedReparentOptions
+		expected string
+	}{
+		{
+			name:     "no options",
+			opts:     PlannedReparentOptions{},
+			expected: "PlannedReparentShard(<nil>, AvoidPrimary = <nil>)",
+		},
+		{
+			name: "desired primary only",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected: "PlannedReparentShard(zone1-0000000100, AvoidPrimary = <nil>)",
+		},
+		{
+			name: "avoid-primary only",
+			opts: PlannedReparentOptions{
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+			},
+			expected: "PlannedReparentShard(<nil>, AvoidPrimary = zone1-0000000500)",
+		},
+		{
+			name: "all options specified",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+			},
+			expected: "PlannedReparentShard(zone1-0000000100, AvoidPrimary = zone1-0000000500)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := pr.getLockAction(tt.opts)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func getDurabilityPolicy(policyName string) policy.Durabler {
+	p, _ := policy.GetDurabilityPolicy(policyName)
+	return p
+}
+
+func TestPlannedReparenter_preflightChecks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+
+		tmc     tmclient.TabletManagerClient
+		tablets []*topodatapb.Tablet
+
+		ev                   *events.Reparent
+		keyspace             string
+		shard                string
+		tabletMap            map[string]*topo.TabletInfo
+		innodbBufferPoolData map[string]int
+		opts                 *PlannedReparentOptions
+
+		expectedIsNoop bool
+		expectedEvent  *events.Reparent
+		expectedOpts   *PlannedReparentOptions
+		shouldErr      bool
+	}{
+		{
+			name: "invariants hold",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "new primary provided - replication lag is tolerable",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							ReplicationLagSeconds: 2,
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TolerableReplLag: 10 * time.Second,
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "new primary provided - replication lag is not tolerable",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							ReplicationLagSeconds: 25,
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TolerableReplLag: 10 * time.Second,
+			},
+			expectedIsNoop: true,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			shouldErr: true,
+		},
+		{
+			name: "invariants hold with primary selection",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+					},
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						},
+					},
+				},
+			},
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000500": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  500,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				// Avoid the current primary.
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			expectedOpts: &PlannedReparentOptions{
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				// NewPrimaryAlias gets populated by the preflightCheck code
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				durability: getDurabilityPolicy(policy.DurabilityNone),
+			},
+			shouldErr: false,
+		},
+		{
+			name: "primary selection based on buffer pool",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+					},
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{
+				"zone1-0000000100": 100,
+				"zone1-0000000101": 200,
+			},
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000500": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  500,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				// Avoid the current primary.
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			expectedOpts: &PlannedReparentOptions{
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				// NewPrimaryAlias gets populated by the preflightCheck code
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				durability: getDurabilityPolicy(policy.DurabilityNone),
+			},
+			shouldErr: false,
+		},
+		{
+			name: "new-primary and avoid-primary match",
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedIsNoop: true,
+			shouldErr:      true,
+		},
+		{
+			name: "current shard primary is not avoid-primary",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				}, nil),
+			},
+			opts: &PlannedReparentOptions{
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			expectedIsNoop: true, // nothing to do, but not an error!
+			shouldErr:      false,
+		},
+		{
+			// this doesn't cause an actual error from ElectNewPrimary, because
+			// there is no way to do that other than something going horribly wrong
+			// in go runtime, however we do check that we
+			// get a non-nil result from ElectNewPrimary in preflightChecks and
+			// bail out if we don't, so we're forcing that case here.
+			name: "cannot choose new primary-elect",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedIsNoop: true,
+			shouldErr:      true,
+		},
+		{
+			name: "primary-elect is not in tablet map",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+			}, tabletMap: map[string]*topo.TabletInfo{},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedIsNoop: true,
+			shouldErr:      true,
+		},
+		{
+			name: "shard has no current primary",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "shard has no current primary and new primary not provided - initialisation test",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Error: mysql.ErrNotReplica,
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			opts:           &PlannedReparentOptions{},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "primary elect can't make forward progress",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+					},
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						},
+					},
+				},
+			},
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000500": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  500,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				// Avoid the current primary.
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				durability: getDurabilityPolicy(policy.DurabilityCrossCell),
+			},
+			expectedIsNoop: true,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			shouldErr: true,
+		},
+	}
+
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			defer func() {
+				if tt.expectedEvent != nil {
+					AssertReparentEventsEqualWithMessage(t, tt.expectedEvent, tt.ev, "expected preflightChecks to mutate the passed-in event")
+				}
+
+				if tt.expectedOpts != nil {
+					utils.MustMatch(t, tt.expectedOpts, tt.opts, "expected preflightChecks to mutate the passed in PlannedReparentOptions")
+				}
+			}()
+
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
+			if tt.opts.durability == nil {
+				durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+				require.NoError(t, err)
+				tt.opts.durability = durability
+			}
+			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.tabletMap, tt.innodbBufferPoolData, tt.opts)
+			if tt.shouldErr {
+				require.Error(t, err)
+				assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
+		})
+	}
+}
+
+func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		tmc        tmclient.TabletManagerClient
+		unlockTopo bool
+		ctxTimeout time.Duration
+
+		ev             *events.Reparent
+		keyspace       string
+		shard          string
+		currentPrimary *topo.TabletInfo
+		primaryElect   *topodatapb.Tablet
+		opts           PlannedReparentOptions
+
+		expectedEvent *events.Reparent
+		shouldErr     bool
+		// Optional function to run some additional post-test assertions. Will
+		// be run in the main test body before the common assertions are run,
+		// regardless of the value of tt.shouldErr for that test case.
+		extraAssertions func(t *testing.T, err error)
+	}{
+		{
+			name: "successful promotion",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// value of Position doesn't strictly matter for
+							// this test case, as long as it matches the inner
+							// key of the WaitForPositionResults map for the
+							// primary-elect.
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": nil,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: false,
+		},
+		{
+			name: "cannot get snapshot of current primary",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+		},
+		{
+			name: "primary-elect fails to catch up to current primary snapshot position",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": assert.AnError,
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+		},
+		{
+			name: "primary-elect times out catching up to current primary snapshot position",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceDelays: map[string]time.Duration{
+					"zone1-0000000200": time.Millisecond * 100,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts: PlannedReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 10,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "lost topology lock",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+			},
+			unlockTopo: true,
+			ev:         &events.Reparent{},
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+		},
+		{
+			name: "failed to demote current primary",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+		},
+		{
+			name: "primary-elect fails to catch up to current primary demotion position",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// value of Position doesn't strictly matter for
+							// this test case, as long as it matches the inner
+							// key of the WaitForPositionResults map for the
+							// primary-elect.
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": assert.AnError,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+		},
+		{
+			name: "primary-elect times out catching up to current primary demotion position",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// value of Position doesn't strictly matter for
+							// this test case, as long as it matches the inner
+							// key of the WaitForPositionResults map for the
+							// primary-elect.
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000200": time.Millisecond * 100,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": nil,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts: PlannedReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 10,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "demotion succeeds but parent context times out",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionPostDelays: map[string]time.Duration{
+					"zone1-0000000200": time.Second * 1,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": nil,
+					},
+				},
+			},
+			ctxTimeout: time.Millisecond * 4, // WaitForPosition won't return error, but will timeout the parent context
+			ev:         &events.Reparent{},
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+		},
+		{
+			name: "rollback fails",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// value of Position doesn't strictly matter for
+							// this test case, as long as it matches the inner
+							// key of the WaitForPositionResults map for the
+							// primary-elect.
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": assert.AnError,
+					},
+				},
+				UndoDemotePrimaryResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+			extraAssertions: func(t *testing.T, err error) {
+				assert.Contains(t, err.Error(), "UndoDemotePrimary", "expected error to include information about failed demotion rollback")
+			},
+		},
+		{
+			name: "rollback succeeds",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// value of Position doesn't strictly matter for
+							// this test case, as long as it matches the inner
+							// key of the WaitForPositionResults map for the
+							// primary-elect.
+							Position: "position1",
+						},
+						Error: nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"position1": assert.AnError,
+					},
+				},
+				UndoDemotePrimaryResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			currentPrimary: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			opts:      PlannedReparentOptions{},
+			shouldErr: true,
+			extraAssertions: func(t *testing.T, err error) {
+				assert.NotContains(t, err.Error(), "UndoDemotePrimary", "expected error to not include information about failed demotion rollback")
+			},
+		},
+	}
+
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+				Keyspace: tt.keyspace,
+				Name:     tt.shard,
+			})
+
+			if !tt.unlockTopo {
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+				require.NoError(t, err, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
+
+				defer func() {
+					unlock(&err)
+					require.NoError(t, err, "could not unlock %s/%s during testing", tt.keyspace, tt.shard)
+				}()
+
+				ctx = lctx
+			}
+
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
+
+			if tt.ctxTimeout > 0 {
+				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
+				defer cancel()
+
+				ctx = _ctx
+			}
+
+			durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+			require.NoError(t, err)
+			tt.opts.durability = durability
+
+			err = pr.performGracefulPromotion(
+				ctx,
+				tt.ev,
+				tt.keyspace,
+				tt.shard,
+				tt.currentPrimary,
+				tt.primaryElect,
+				tt.opts,
+			)
+
+			if tt.extraAssertions != nil {
+				tt.extraAssertions(t, err)
+			}
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		tmc        tmclient.TabletManagerClient
+		ctxTimeout time.Duration
+
+		ev           *events.Reparent
+		keyspace     string
+		shard        string
+		primaryElect *topodatapb.Tablet
+		tabletMap    map[string]*topo.TabletInfo
+
+		expectedPos string
+		shouldErr   bool
+		expectedErr string
+	}{
+		{
+			name: "successful promotion",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "successful reparent journal position",
+						Error:  nil,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
+			expectedPos: "successful reparent journal position",
+			shouldErr:   false,
+		},
+		{
+			// A peer holds transactions the version-preferred primary-elect does not,
+			// so the dominance guard must reject the promotion rather than let
+			// InitPrimary discard them.
+			name: "primary-elect behind a peer is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached", Error: nil},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// The elect's received position (Combined 1-10) is ahead of the peer's
+			// (1-8), but its executed position (1-3) is behind. InitPrimary does not
+			// apply the relay log, so the elect's received-but-unapplied 1-4..1-10 are
+			// discarded at promotion and only 1-3 survives — losing the peer's 1-4..1-8.
+			// The guard must compare the elect's executed position against the peer's
+			// received position and reject, rather than credit the elect with
+			// transactions InitPrimary is about to drop.
+			name: "primary-elect received-ahead but executed-behind is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-8"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached", Error: nil},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// A uniform MariaDB shard. MariaDB reports its executed position in
+			// Position but leaves RelayLogPosition empty (ParseMariadbReplicationStatus),
+			// so keying the peer on RelayLogPosition alone would decode to a zero
+			// position that any elect trivially dominates. The peer's executed position
+			// (seq 100) is ahead of the elect's (seq 50), so the guard must fall back to
+			// the peer's executed position and reject rather than let InitPrimary discard
+			// the peer's transactions.
+			name: "mariadb peer ahead on executed is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MariaDB/1-1-50", RelayLogPosition: "MariaDB/1-1-50"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{Position: "MariaDB/1-1-100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// A peer's position fetch fails during the concurrent scan. The error
+			// must be aggregated across the goroutines and abort the promotion — we
+			// can't prove the elect dominates a tablet we couldn't reach. Uses three
+			// tablets so the fan-out and error aggregation are exercised, not just a
+			// single pair.
+			name: "peer position fetch failure aborts promotion",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000202": {Error: assert.AnError},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+				"zone1-0000000202": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202}}},
+			},
+			shouldErr:   true,
+			expectedErr: "cannot get replication status of tablet",
+		},
+		{
+			// The peer's position is incomparable with the elect's (disjoint GTID
+			// histories — different source UUIDs, neither a superset of the other).
+			// AtLeast is false in both directions, so the dominance guard must reject
+			// the promotion rather than silently pick a side of the divergence.
+			name: "incomparable peer position is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/A1B2C3D4-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// PrimaryPosition on a file-position tablet returns that tablet's own
+			// binlog coordinates, which are not comparable across tablets. Here the
+			// elect's coordinates (higher file/offset by string+numeric compare) would
+			// make AtLeast wrongly report it as containing the peer, waving through a
+			// lossy promotion — so the guard must fail closed on file-position rather
+			// than trust that comparison.
+			name: "file-position candidate fails closed",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000009:5000", RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "file-position replication position",
+		},
+		{
+			name: "primary-elect fails to promote",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
+			shouldErr:   true,
+			expectedErr: "failed to be promoted to primary",
+		},
+		{
+			name: "promotion succeeds but parent context times out",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
+				InitPrimaryPostDelays: map[string]time.Duration{
+					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: nil,
+					},
+				},
+			},
+			ctxTimeout: time.Millisecond * 10,
+			ev:         &events.Reparent{},
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
+			shouldErr:   true,
+			expectedErr: "timed out",
+		},
+	}
+
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+				Keyspace: tt.keyspace,
+				Name:     tt.shard,
+			})
+
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
+
+			// performInitialPromotion re-checks the shard lock before promoting, so
+			// hold it for the duration of the call.
+			lockCtx, unlock, lockErr := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock for performInitialPromotion")
+			require.NoError(t, lockErr)
+			defer unlock(&lockErr)
+			ctx = lockCtx
+
+			if tt.ctxTimeout > 0 {
+				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
+				defer cancel()
+
+				ctx = _ctx
+			}
+
+			durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+			require.NoError(t, err)
+			pos, err := pr.performInitialPromotion(
+				ctx,
+				tt.keyspace,
+				tt.shard,
+				tt.primaryElect,
+				tt.tabletMap,
+				false, /* primaryElectExplicit */
+				PlannedReparentOptions{durability: durability},
+			)
+
+			if tt.shouldErr {
+				require.Error(t, err)
+				if tt.expectedErr != "" {
+					require.ErrorContains(t, err, tt.expectedErr)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedPos, pos)
+		})
+	}
+}
+
+// TestPlannedReparenter_performInitialPromotion_lostLock verifies that if the
+// shard lock is not held when performInitialPromotion runs, it aborts before
+// calling InitPrimary rather than promoting after the lock was lost during the
+// position scan.
+func TestPlannedReparenter_performInitialPromotion_lostLock(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{Keyspace: "testkeyspace", Name: "-"})
+
+	// InitPrimary would return an error if it were reached; the lock check must
+	// fire first, so the promotion is never attempted.
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+		},
+		InitPrimaryResults: map[string]struct {
+			Result string
+			Error  error
+		}{
+			"zone1-0000000200": {Result: "should not be reached"},
+		},
+	}
+
+	pr := NewPlannedReparenter(ts, tmc, logutil.NewMemoryLogger())
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+	}
+
+	// Note: ctx does not hold the shard lock.
+	_, err = pr.performInitialPromotion(ctx, "testkeyspace", "-", primaryElect, tabletMap, false /* primaryElectExplicit */, PlannedReparentOptions{durability: durability})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, lostTopologyLockMsg)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary verifies the
+// escape hatch: on a file-position shard, where cross-tablet positions can't be
+// compared, an operator who explicitly requested the primary (--new-primary) is
+// allowed to proceed. Without an explicit request the same input fails closed.
+//
+// Crucially, the elect's binlog filename sorts *below* the peer's
+// (000002 < 000009). File positions are not comparable across tablets, so this
+// ordering is arbitrary — the escape hatch must exclude file positions from the
+// dominance comparison entirely, not merely skip the dedicated rejection. If the
+// AtLeast comparison still ran on these positions, the explicit case would
+// wrongly fail on "contains transactions not found in primary-elect".
+func TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			// Elect sorts below the peer by binlog filename, the unfavorable ordering.
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000002:100", RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// Auto-election: file-position positions can't be compared across tablets, so
+	// fail closed.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "file-position replication position")
+
+	// Explicit --new-primary: honor the operator's choice. This must pass despite
+	// the elect's file position sorting below the peer's, because file positions are
+	// excluded from the comparison, not compared with an arbitrary verdict.
+	err = pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.NoError(t, err)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate verifies that a
+// lone file-position candidate can auto-initialize: with no peers, there are no
+// cross-tablet coordinates to compare, so the elect's own file position must not
+// trip the file-position rejection even without an explicit primary. This is the
+// initial-bootstrap / no-clear-primary single-tablet case.
+func TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000002:100", RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+	}
+
+	// Auto-election, single candidate: no peers to compare against, so the sole
+	// file-position elect is safe to initialize and must not be rejected.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.NoError(t, err)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_MixedPositionFlavors verifies that a
+// shard mixing GTID-based and file-position tablets is rejected, even when the
+// operator explicitly named the primary. The file-position escape hatch is only
+// valid on a uniformly file-position shard: a GTID elect's transactions cannot be
+// compared against a file-position peer's, so skipping that peer would let the
+// promotion silently discard the peer's history. Both directions (GTID elect with a
+// file-position peer, and a file-position elect with a GTID peer) must fail closed.
+func TestCheckPrimaryElectContainsAllPositions_MixedPositionFlavors(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	// GTID elect (200), file-position peer (201).
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// Auto-election fails closed on the mixed shard.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+
+	// Explicit --new-primary must NOT bypass the mixed-shard rejection: the escape
+	// hatch only applies to a uniformly file-position shard.
+	err = pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+
+	// The mirror case (file-position elect, GTID peer) is likewise rejected.
+	tmcMirror := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000002:100", RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}},
+		},
+	}
+	prMirror := NewPlannedReparenter(nil, tmcMirror, logutil.NewMemoryLogger())
+
+	err = prMirror.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+}
+
+// TestCheckPrimaryElectContainsAllPositions_EmptyVsTypedEmpty pins the distinction
+// the mixed-flavor check turns on: only a position with no GTIDSet at all is
+// flavor-less, and a typed-but-empty GTID position is still GTID-based.
+//
+//   - A genuinely empty peer position ("", nil GTIDSet) is a fresh, never-initialized
+//     tablet: it counts as neither GTID nor file-position, so it must not trip the
+//     mixed-flavor rejection against a GTID elect. The fresh-init path stays unaffected.
+//   - A typed-but-empty GTID elect ("MySQL56/", empty gtid_executed on a provisioned
+//     tablet) has a non-nil GTIDSet and IS GTID-based, so a shard pairing it with a
+//     file-position peer must be rejected as mixed — even with an explicit primary.
+//     Skipping it (as testing pos.IsZero() would) lets the empty elect wave through and
+//     silently discard the file-position peer's history.
+func TestCheckPrimaryElectContainsAllPositions_EmptyVsTypedEmpty(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	// A fresh peer with no transactions yet ("") does not make the shard mixed.
+	tmcFresh := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			// GTID elect that contains the (empty) peer.
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}},
+			// Fresh peer with no transactions yet: empty position, no GTIDSet.
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: ""}},
+		},
+	}
+	prFresh := NewPlannedReparenter(nil, tmcFresh, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// An empty peer is neither GTID nor file-position, so no mixed-flavor rejection,
+	// and the GTID elect contains the empty peer, so the check passes.
+	err := prFresh.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.NoError(t, err)
+
+	// A typed-but-empty GTID elect ("MySQL56/") is still GTID-based, so a file-position
+	// peer makes the shard mixed and must be rejected even with an explicit primary.
+	tmcTypedEmpty := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/", RelayLogPosition: "MySQL56/"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+		},
+	}
+	prTypedEmpty := NewPlannedReparenter(nil, tmcTypedEmpty, logutil.NewMemoryLogger())
+
+	err = prTypedEmpty.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+}
+
+func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		tmc          tmclient.TabletManagerClient
+		timeout      time.Duration
+		primaryElect *topodatapb.Tablet
+		expectedPos  string
+		shouldErr    bool
+	}{
+		{
+			name: "successful recovery",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedPos: "position1",
+			shouldErr:   false,
+		},
+		{
+			name: "failed to SetReadWrite",
+			tmc: &testutil.TabletManagerClient{
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "SetReadWrite timed out",
+			tmc: &testutil.TabletManagerClient{
+				SetReadWriteDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Millisecond * 50,
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			timeout: time.Millisecond * 10,
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "failed to get PrimaryPosition from refreshed primary",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "",
+						Error:    assert.AnError,
+					},
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "PrimaryPosition timed out",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Millisecond * 50,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			timeout: time.Millisecond * 10,
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := ctx
+			pr := NewPlannedReparenter(nil, tt.tmc, logger)
+
+			if tt.timeout > 0 {
+				_ctx, cancel := context.WithTimeout(ctx, tt.timeout)
+				defer cancel()
+
+				ctx = _ctx
+			}
+
+			rp, err := pr.performPartialPromotionRecovery(ctx, tt.primaryElect)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedPos, rp, "performPartialPromotionRecovery gave unexpected reparent journal position")
+		})
+	}
+}
+
+func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		tmc        tmclient.TabletManagerClient
+		timeout    time.Duration
+		unlockTopo bool
+
+		keyspace             string
+		shard                string
+		primaryElect         *topodatapb.Tablet
+		tabletMap            map[string]*topo.TabletInfo
+		primaryElectExplicit bool
+
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000102": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "failed to DemotePrimary on a tablet",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: nil,
+						Error:  assert.AnError,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "timed out during DemotePrimary on a tablet",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Millisecond * 50,
+				},
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+				},
+			},
+			timeout:    time.Millisecond * 10,
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "failed to DecodePosition on a tablet's demote position",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/this-is-nonsense",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name:       "primary-elect not in tablet map",
+			tmc:        &testutil.TabletManagerClient{},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{},
+			shouldErr: true,
+		},
+		{
+			name: "primary-elect not most at most advanced position",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000102": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10000",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			// DemotePrimary on a file-position tablet returns that tablet's own binlog
+			// coordinates, which are not comparable across tablets. The elect's
+			// coordinates (higher file/offset) would make AtLeast falsely report it as
+			// dominant, so the dominance check must fail closed rather than promote and
+			// risk discarding a peer's transactions.
+			name: "file-position candidate fails closed",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "FilePos/vt-bin.000009:5000",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "FilePos/vt-bin.000002:100",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "lost topology lock",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000102": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: true,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "success - RESTORE tablets are skipped",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000201": {
+						Status: nil,
+						Error:  assert.AnError, // proves RESTORE is skipped
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			// File-position shard, no explicit primary: cross-tablet coordinates
+			// aren't comparable, so fail closed.
+			name: "file-position auto-election fails closed",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000002:100"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000009:5000"}},
+				},
+			},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			shouldErr: true,
+		},
+		{
+			// Same file-position shard, but the operator explicitly chose the primary.
+			// The elect sorts below the peer by binlog filename; file positions must be
+			// excluded from the comparison entirely, so the explicit choice is honored.
+			name: "file-position explicit primary is honored",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000002:100"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000009:5000"}},
+				},
+			},
+			keyspace:             "testkeyspace",
+			shard:                "-",
+			primaryElectExplicit: true,
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			shouldErr: false,
+		},
+	}
+
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			pr := NewPlannedReparenter(nil, tt.tmc, logger)
+
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+				Keyspace: tt.keyspace,
+				Name:     tt.shard,
+			})
+
+			if !tt.unlockTopo {
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+				require.NoError(t, err, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
+
+				defer func() {
+					unlock(&err)
+					require.NoError(t, err, "could not unlock %s/%s during testing", tt.keyspace, tt.shard)
+				}()
+
+				ctx = lctx
+			}
+
+			if tt.timeout > 0 {
+				_ctx, cancel := context.WithTimeout(ctx, tt.timeout)
+				defer cancel()
+
+				ctx = _ctx
+			}
+
+			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, tt.primaryElectExplicit)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		tmc        tmclient.TabletManagerClient
+		tablets    []*topodatapb.Tablet
+		shards     []*vtctldatapb.Shard
+		unlockTopo bool
+
+		ev       *events.Reparent
+		keyspace string
+		shard    string
+		opts     PlannedReparentOptions
+
+		shouldErr        bool
+		errShouldContain string
+		expectedEvent    *events.Reparent
+	}{
+		{
+			name: "success: current primary cannot be determined", // "Case (1)"
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil, // zone1-200 gets promoted
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "reparent journal position",
+						Error:  nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil, // zone1-100 gets reparented under zone1-200
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds:     1000,
+						Nanoseconds: 500,
+					},
+					Hostname: "primary1", // claims to be PRIMARY with same term as primary2
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds:     1000,
+						Nanoseconds: 500,
+					},
+					Hostname: "primary2", // claims to be PRIMARY with same term as primary1
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{ // We want primary2 to be the true primary.
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+
+			shouldErr: false,
+		},
+		{
+			name: "success: current primary is desired primary", // "Case (2)"
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "success: graceful promotion", // "Case (3)"
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							// a few more transactions happen after waiting for replication
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+						Error: nil,
+					},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-8",
+						Error:    nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "reparent journal position",
+						Error:  nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil, // called during reparentTablets to make oldPrimary a replica of newPrimary
+					"zone1-0000000200": nil, // called during performGracefulPromotion to ensure newPrimary is caught up
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10": nil,
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds:     1000,
+						Nanoseconds: 500,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+
+			shouldErr: false,
+		},
+		{
+			name:       "shard not found",
+			tmc:        nil,
+			tablets:    nil,
+			unlockTopo: true,
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts:     PlannedReparentOptions{},
+
+			shouldErr:     true,
+			expectedEvent: &events.Reparent{},
+		},
+		{
+			name: "shard initialization",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					// Elect (200) is at least as advanced as the peer (100), so the
+					// initial-promotion dominance guard passes.
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000100": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "reparent journal position",
+						Error:  nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				// Shard has no current primary in the beginning.
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "shard initialization with no new primary provided",
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "reparent journal position",
+						Error:  nil,
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					// Elect (200, at 1-2) dominates the not-replicating peer (100),
+					// so the initial-promotion dominance guard passes.
+					"zone1-0000000200": {
+						Position: &replicationdatapb.Status{
+							Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+						},
+					},
+					// Peer (100) is not replicating; the check falls back to its
+					// PrimaryStatus, which reports an empty position.
+					"zone1-0000000100": {
+						Error: mysql.ErrNotReplica,
+					},
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{Position: ""},
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				// Shard has no current primary in the beginning.
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:        &events.Reparent{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      PlannedReparentOptions{},
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "preflight checks determine PRS is no-op",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				// This is not the shard primary, so nothing to do.
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+			},
+		},
+		{
+			name: "promotion step fails",
+			tmc: &testutil.TabletManagerClient{
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			shouldErr: true,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "lost topology lock",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			unlockTopo: true,
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				// This is not the shard primary, so nothing to do.
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			shouldErr: true,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "failed to reparent tablets",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+
+			shouldErr: true,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "expected primary mismatch",
+			tmc:  &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				// This is not the shard primary, so it should cause an error.
+				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			shouldErr:        true,
+			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000200",
+			expectedEvent:    nil,
+		},
+	}
+
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true, // Some of our test cases count on having multiple primaries, so let the last one "win".
+				SkipShardCreation:    len(tt.shards) > 0,
+			}, tt.tablets...)
+
+			if len(tt.shards) > 0 {
+				testutil.AddShards(ctx, t, ts, tt.shards...)
+			}
+
+			if !tt.unlockTopo {
+				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for testing")
+				require.NoError(t, err, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
+
+				defer func() {
+					unlock(&err)
+					require.NoError(t, err, "error while unlocking %s/%s after test case", tt.keyspace, tt.shard)
+				}()
+
+				ctx = lctx
+			}
+
+			if tt.expectedEvent != nil {
+				defer func() {
+					AssertReparentEventsEqualWithMessage(t, tt.expectedEvent, tt.ev, "expected reparentShardLocked to mutate the passed-in event")
+				}()
+			}
+
+			pr := NewPlannedReparenter(ts, tt.tmc, logger)
+
+			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
+			if tt.shouldErr {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.errShouldContain)
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestPlannedReparenter_reparentTablets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tmc  tmclient.TabletManagerClient
+
+		durability              string
+		ev                      *events.Reparent
+		reparentJournalPosition string
+		promoteReplicaRequired  bool
+		tabletMap               map[string]*topo.TabletInfo
+		opts                    PlannedReparentOptions
+
+		shouldErr bool
+		wantErr   string
+	}{
+		{
+			name:       "success - durability = none",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": false,
+					"zone1-0000000201": false,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:       "success - durability = semi_sync",
+			durability: policy.DurabilitySemiSync,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": true,
+					"zone1-0000000201": true,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:                   "success - promote replica required",
+			durability:             policy.DurabilitySemiSync,
+			promoteReplicaRequired: true,
+			tmc: &testutil.TabletManagerClient{
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Result: "successful reparent journal position",
+						Error:  nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": true,
+					"zone1-0000000201": true,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:                   "Promote replica failed",
+			durability:             policy.DurabilitySemiSync,
+			promoteReplicaRequired: true,
+			tmc: &testutil.TabletManagerClient{
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Error: errors.New("failed promote replica"),
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": true,
+					"zone1-0000000201": true,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			shouldErr: true,
+			wantErr:   "failed PromoteReplica(primary=zone1-0000000100,",
+		},
+		{
+			name: "SetReplicationSource failed on replica",
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": assert.AnError,
+					"zone1-0000000202": nil,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			shouldErr: true,
+			wantErr:   "retry failed replicas: tablet zone1-0000000201 failed to SetReplicationSource(zone1-0000000100): assert.AnError general error for testing",
+		},
+		{
+			name: "SetReplicationSource timed out on replica",
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceDelays: map[string]time.Duration{
+					"zone1-0000000201": time.Millisecond * 50,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			opts: PlannedReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 10,
+			},
+			shouldErr: true,
+			wantErr:   "retry failed replicas: tablet zone1-0000000201 failed to SetReplicationSource(zone1-0000000100): context deadline exceeded",
+		},
+		{
+			name: "PopulateReparentJournal failed out on new primary",
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			shouldErr: true,
+			wantErr:   "failed PopulateReparentJournal(primary=zone1-0000000100",
+		},
+		{
+			name: "PopulateReparentJournal timed out on new primary",
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Millisecond * 50,
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			opts: PlannedReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 10,
+			},
+			shouldErr: true,
+			wantErr:   "failed PopulateReparentJournal(primary=zone1-0000000100",
+		},
+		{
+			name:       "success - RESTORE tablets are skipped",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": assert.AnError, // proves RESTORE is skipped
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+	}
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			pr := NewPlannedReparenter(nil, tt.tmc, logger)
+			durabilityPolicy := policy.DurabilityNone
+			if tt.durability != "" {
+				durabilityPolicy = tt.durability
+			}
+			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
+			require.NoError(t, err)
+			tt.opts.durability = durability
+			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.promoteReplicaRequired, tt.tabletMap, tt.opts)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				if tt.wantErr != "" {
+					require.ErrorContains(t, err, tt.wantErr)
+				}
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// (TODO:@ajm88) when unifying all the mock TMClient implementations (which will
+// most likely end up in go/vt/vtctl/testutil), move these to the same testutil
+// package.
+func AssertReparentEventsEqualWithMessage(t *testing.T, expected *events.Reparent, actual *events.Reparent, msg string) {
+	t.Helper()
+
+	if msg != "" && !strings.HasSuffix(msg, " ") {
+		msg = msg + ": "
+	}
+
+	if expected == nil {
+		assert.Nil(t, actual, "%sexpected nil Reparent event", msg)
+		return
+	}
+
+	if actual == nil {
+		// Note: the reason we don't use require.NotNil here is because it would
+		// fail the entire test, rather than just this one helper, which is
+		// intended to be an atomic assertion. However, we also don't want to
+		// have to add a bunch of nil-guards below, as it would complicate the
+		// code, so we're going to duplicate the nil check to force a failure
+		// and bail early.
+		assert.NotNil(t, actual, "%sexpected non-nil Reparent event", msg)
+		return
+	}
+
+	removeVersion := func(si *topo.ShardInfo) *topo.ShardInfo {
+		return topo.NewShardInfo(si.Keyspace(), si.ShardName(), si.Shard, nil)
+	}
+
+	utils.MustMatch(t, removeVersion(&expected.ShardInfo), removeVersion(&actual.ShardInfo), msg+"Reparent.ShardInfo mismatch")
+	utils.MustMatch(t, &expected.NewPrimary, &actual.NewPrimary, msg+"Reparent.NewPrimary mismatch")
+	utils.MustMatch(t, &expected.OldPrimary, &actual.OldPrimary, msg+"Reparent.OldPrimary mismatch")
+}
+
+func AssertReparentEventsEqual(t *testing.T, expected *events.Reparent, actual *events.Reparent) {
+	t.Helper()
+
+	AssertReparentEventsEqualWithMessage(t, expected, actual, "")
+}
+
+// TestPlannedReparenter_verifyAllTabletsReachable tests the functionality of verifyAllTabletsReachable.
+func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
+	tests := []struct {
+		name                string
+		tmc                 tmclient.TabletManagerClient
+		tabletMap           map[string]*topo.TabletInfo
+		remoteOpTime        time.Duration
+		wantErr             string
+		wantBufferPoolsData map[string]int
+	}{
+		{
+			name: "Success",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000201": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1234",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000200": 123,
+				"zone1-0000000201": 1234,
+				"zone1-0000000100": 1231,
+			},
+		}, {
+			name: "Failure",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Error: errors.New("primary status failed"),
+					},
+					"zone1-0000000201": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1234",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantErr: "primary status failed",
+		}, {
+			name: "Timeout",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsDelays: map[string]time.Duration{
+					"zone1-0000000100": 20 * time.Second,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000201": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1234",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+				},
+			},
+			remoteOpTime: 100 * time.Millisecond,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			wantErr: "context deadline exceeded",
+		}, {
+			// Mixed status-variable shapes that the buffer-pool tiebreaking
+			// fallback must omit from the returned map:
+			//   - missing key (e.g. MariaDB doesn't expose this status variable)
+			//   - present but empty string (variant returns the row with no value)
+			//   - present but non-numeric (logged as a warning, then omitted)
+			//   - present and numeric (kept)
+			// Each omitted tablet still participates in PRS — only its
+			// buffer-pool warmth score is dropped so the sorter's all-or-nothing
+			// gate falls back to durability ordering instead of treating the
+			// missing tablet as a legitimate zero.
+			name: "Missing, empty, and non-numeric values are omitted",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+					"zone1-0000000200": {
+						// Missing key: variant doesn't expose the status variable.
+						Statuses: map[string]string{},
+					},
+					"zone1-0000000201": {
+						// Present but empty.
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "",
+						},
+					},
+					"zone1-0000000202": {
+						// Present but non-numeric.
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "not-a-number",
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			// Only the numeric value survives. The other three are reachable
+			// (no RPC error) so the function still returns nil — verifyAllTabletsReachable
+			// is about reachability, not about populating every tablet's score.
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000100": 1231,
+			},
+		}, {
+			name: "Restore tablet skipped before RPC",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsDelays: map[string]time.Duration{
+					"zone1-0000000300": 20 * time.Second,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000300": {
+						Error: errors.New("should never be called"),
+					},
+				},
+			},
+			remoteOpTime: 100 * time.Millisecond,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000300": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  300,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000100": 1231,
+				"zone1-0000000200": 123,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			defer ts.Close()
+
+			pr := &PlannedReparenter{
+				ts:     ts,
+				tmc:    tt.tmc,
+				logger: logutil.NewMemoryLogger(),
+			}
+			if tt.remoteOpTime != 0 {
+				oldTime := topo.RemoteOperationTimeout
+				topo.RemoteOperationTimeout = tt.remoteOpTime
+				defer func() {
+					topo.RemoteOperationTimeout = oldTime
+				}()
+			}
+			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(t.Context(), tt.tabletMap)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				require.Len(t, innodbBufferPoolsData, len(tt.wantBufferPoolsData))
+				for str, val := range tt.wantBufferPoolsData {
+					require.Equal(t, val, innodbBufferPoolsData[str])
+				}
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestPlannedReparenterStats(t *testing.T) {
+	prsCounter.ResetAll()
+	reparentShardOpTimings.Reset()
+
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000100": {
+				Position: "position1",
+				Error:    nil,
+			},
+		},
+		PopulateReparentJournalResults: map[string]error{
+			"zone1-0000000100": nil,
+		},
+		SetReplicationSourceResults: map[string]error{
+			"zone1-0000000101": nil,
+		},
+		SetReadWriteResults: map[string]error{
+			"zone1-0000000100": nil,
+		},
+		GetGlobalStatusVarsResults: map[string]struct {
+			Statuses map[string]string
+			Error    error
+		}{
+			"zone1-0000000101": {
+				Statuses: map[string]string{
+					InnodbBufferPoolsDataVar: "123",
+				},
+			},
+			"zone1-0000000100": {
+				Statuses: map[string]string{
+					InnodbBufferPoolsDataVar: "123",
+				},
+			},
+		},
+	}
+	shards := []*vtctldatapb.Shard{
+		{
+			Keyspace: "testkeyspace",
+			Name:     "-",
+		},
+	}
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Type:     topodatapb.TabletType_PRIMARY,
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		},
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Type:     topodatapb.TabletType_REPLICA,
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		},
+	}
+	plannedReparentOps := PlannedReparentOptions{
+		NewPrimaryAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}
+	keyspace := "testkeyspace"
+	shard := "-"
+	ts := memorytopo.NewServer(t.Context(), "zone1")
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+
+	testutil.AddShards(ctx, t, ts, shards...)
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary: true,
+		SkipShardCreation:   false,
+	}, tablets...)
+
+	prp := NewPlannedReparenter(ts, tmc, logger)
+	// run a successful prs
+	_, err := prp.ReparentShard(ctx, keyspace, shard, plannedReparentOps)
+	require.NoError(t, err)
+
+	// check the counter values
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
+
+	// set plannedReparentOps to request a non existent tablet
+	plannedReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
+		Cell: "bogus",
+		Uid:  100,
+	}
+
+	// run a failing prs
+	_, err = prp.ReparentShard(ctx, keyspace, shard, plannedReparentOps)
+	require.Error(t, err)
+
+	// check the counter values
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
+}

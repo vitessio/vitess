@@ -1,0 +1,132 @@
+name: local_example
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'local_example')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BOOTSTRAP_VERSION: "ci"
+  BOOTSTRAP_FLAVOR: "mysql84"
+
+jobs:
+
+  # Path filtering runs once here, on a GitHub-hosted runner, so that the
+  # job below (on a large runner) is not started at all when nothing relevant
+  # changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      examples: ${{ steps.changes.outputs.examples }}
+    steps:
+    - name: Check out code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+      id: changes
+      with:
+        token: ''
+        filters: |
+          examples:
+            - 'test/config.json'
+            - 'go/**/!(*_test).go'
+            - 'go/**/*.s'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - 'examples/**'
+            - '.github/workflows/local_example.yml'
+
+  build:
+    needs: changes
+    # Matrix jobs skipped at the job level report a single un-expanded check
+    # name, which would leave the per-topo required status checks pending.
+    if: ${{ !cancelled() }}
+    name: Local example using ${{ matrix.topo }} on Ubuntu
+    # When nothing relevant changed the legs still run (so their required
+    # status checks are reported), but on a GitHub-hosted runner with every
+    # step below skipped. The 'Skip CI' label also gets the small runner, since
+    # the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || 'ubuntu-24.04' }}
+    strategy:
+      matrix:
+        topo: [etcd, zk2]
+
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Check out code
+      if: needs.changes.outputs.examples == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
+    - name: Build bootstrap images
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 15
+      uses: $/.github/actions/build-bootstrap
+
+    - name: Set up Go
+      if: needs.changes.outputs.examples == 'true'
+      uses: $/.github/actions/setup-go
+
+    - name: Tune the OS
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+
+    - name: Run make minimaltools
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 5
+      run: |
+        make minimaltools
+
+    - name: Build
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 10
+      run: |
+        make build
+
+    - name: local_example
+      if: needs.changes.outputs.examples == 'true'
+      timeout-minutes: 30
+      run: |
+        export TOPO=${{matrix.topo}}
+        go run test.go -print-log -follow -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} local_example

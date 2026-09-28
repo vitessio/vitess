@@ -1,0 +1,377 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"strconv"
+	"time"
+
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+/*
+This file is similar to vcopier.go: it handles the copy phase for the AtomicCopy where all tables
+are streamed in a single phase.
+*/
+
+type copyAllState struct {
+	vc               *vcopier
+	plan             *ReplicatorPlan
+	currentTableName string
+	tables           map[string]bool
+}
+
+// newCopyAllState creates the required table plans and sets up the copy state for all tables in the source.
+func newCopyAllState(vc *vcopier) (*copyAllState, error) {
+	state := &copyAllState{
+		vc: vc,
+	}
+	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	state.plan = plan
+	state.tables = make(map[string]bool, len(plan.TargetTables))
+	for _, table := range plan.TargetTables {
+		state.tables[table.TargetName] = false
+	}
+	return state, nil
+}
+
+// copyAll copies all tables from the source to the target sequentially, finishing one table first and then moving to the next..
+func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings) error {
+	var err error
+
+	log.Info("Starting copyAll for " + settings.WorkflowName)
+	defer log.Info("Returning from copyAll for " + settings.WorkflowName)
+	defer vc.vr.dbClient.Rollback()
+
+	state, err := newCopyAllState(vc)
+	if err != nil {
+		return err
+	}
+
+	// Save the controller-level context before applying the copy phase
+	// duration timeout to it. Its cancellation means that the controller
+	// is stopping -- because the workflow is being stopped or deleted, or
+	// the engine is closing -- and any in-flight post copy action must
+	// then be interrupted, whereas an elapsed copy phase duration must
+	// not interrupt it.
+	stopCtx := ctx
+	ctx, cancel := context.WithTimeout(ctx, vc.vr.workflowConfig.CopyPhaseDuration)
+	defer cancel()
+
+	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
+	defer rowsCopiedTicker.Stop()
+
+	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
+	maxQuerySize := vc.vr.maxQuerySize(vc.vr.dbClient)
+	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, maxQuerySize)
+	var copyWorkQueue *vcopierCopyWorkQueue
+
+	// Allocate a result channel to collect results from tasks. To not block fast workers, we allocate a buffer of
+	// MaxResultsInFlight results per worker.
+	const MaxResultsInFlight = 4
+	resultCh := make(chan *vcopierCopyTaskResult, parallelism*MaxResultsInFlight)
+	defer close(resultCh)
+
+	var lastpk *querypb.Row
+	var pkfields []*querypb.Field
+	var lastpkbv map[string]*querypb.BindVariable
+	// Use this for task sequencing.
+	var prevCh <-chan *vcopierCopyTaskResult
+	var gtid string
+
+	// Errors observed inside the VStreamTables callback. The callback returns
+	// io.EOF on the first Fail; drainAndAggregateErrors reports them
+	// alongside any concurrent insert workers that race in afterwards.
+	var preTerrs []error
+
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+	}
+	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
+		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
+		defer vc.vr.stats.CopyLoopCount.Add(1)
+		log.Info(fmt.Sprintf("VStreamTablesResponse: received table %s, #fields %d, #rows %d, gtid %s, lastpk %+v", resp.TableName, len(resp.Fields), len(resp.Rows), resp.Gtid, resp.Lastpk))
+		tableName := resp.TableName
+		gtid = resp.Gtid
+		updateRowsCopied := func() error {
+			updateRowsQuery := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
+			_, err := vc.vr.dbClient.Execute(updateRowsQuery)
+			return err
+		}
+
+		if err := updateRowsCopied(); err != nil {
+			return err
+		}
+		select {
+		case <-rowsCopiedTicker.C:
+			if err := updateRowsCopied(); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return io.EOF
+		default:
+		}
+		if tableName != state.currentTableName {
+			if copyWorkQueue != nil {
+				copyWorkQueue.close()
+			}
+			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
+			if state.currentTableName != "" {
+				log.Info(fmt.Sprintf("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv))
+				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
+					return err
+				}
+			} else {
+				log.Info("starting copy phase with table " + tableName)
+			}
+
+			state.currentTableName = tableName
+		}
+
+		// A new copy queue is created for each table. The queue is closed when the table is done.
+		if !copyWorkQueue.isOpen {
+			if len(resp.Fields) == 0 {
+				return fmt.Errorf("expecting field event first, got: %v", resp)
+			}
+
+			lastpk = nil
+			// pkfields are only used for logging, so that we can monitor progress.
+			pkfields = make([]*querypb.Field, 0, len(resp.Pkfields))
+			for _, f := range resp.Pkfields {
+				pkfields = append(pkfields, f.CloneVT())
+			}
+
+			fieldEvent := &binlogdatapb.FieldEvent{
+				TableName: tableName,
+			}
+			for _, f := range resp.Fields {
+				fieldEvent.Fields = append(fieldEvent.Fields, f.CloneVT())
+			}
+			tablePlan, err := state.plan.buildExecutionPlan(fieldEvent)
+			if err != nil {
+				return err
+			}
+
+			buf := sqlparser.NewTrackedBuffer(nil)
+			buf.Myprintf(
+				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
+				strconv.Itoa(int(vc.vr.id)),
+				encodeString(tableName),
+			)
+			addLatestCopyState := buf.ParsedQuery()
+			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
+		}
+		// When rowstreamer has finished streaming all rows, we get a callback with empty rows.
+		if len(resp.Rows) == 0 {
+			return nil
+		}
+		// Get the last committed pk into a loggable form.
+		lastpkbuf, merr := prototext.Marshal(&querypb.QueryResult{
+			Fields: pkfields,
+			Rows:   []*querypb.Row{lastpk},
+		})
+
+		if merr != nil {
+			return fmt.Errorf("failed to marshal pk fields and value into query result: %s", merr.Error())
+		}
+		lastpkbv = map[string]*querypb.BindVariable{
+			"lastpk": {
+				Type:  sqltypes.VarBinary,
+				Value: lastpkbuf,
+			},
+		}
+		log.Info(fmt.Sprintf("copying table %s with lastpk %v", tableName, lastpkbv))
+		// Prepare a vcopierCopyTask for the current batch of work.
+		currCh := make(chan *vcopierCopyTaskResult, 1)
+
+		if parallelism > 1 {
+			resp = resp.CloneVT()
+		}
+		currT := newVCopierCopyTask(newVCopierCopyTaskArgs(resp.Rows, resp.Lastpk))
+
+		// Send result to the global resultCh and currCh. resultCh is used by
+		// the loop to return results to VStreamRows. currCh will be used to
+		// sequence the start of the nextT.
+		currT.lifecycle.onResult().sendTo(currCh)
+		currT.lifecycle.onResult().sendTo(resultCh)
+
+		// Use prevCh to Sequence the prevT with the currT so that:
+		// * The prevT is completed before we begin updating
+		//   _vt.copy_state for currT.
+		// * If prevT fails or is canceled, the current task is
+		//   canceled.
+		// prevCh is nil only for the first task in the vcopier run.
+		if prevCh != nil {
+			// prevT publishes to prevCh, and currT is the only thing that can
+			// consume from prevCh. If prevT is already done, then prevCh will
+			// have a value in it. If prevT isn't yet done, then prevCh will
+			// have a value later. Either way, AwaitCompletion should
+			// eventually get a value, unless there is a context expiry.
+			currT.lifecycle.before(vcopierCopyTaskInsertCopyState).awaitCompletion(prevCh)
+		}
+
+		// Store currCh in prevCh. The nextT will use this for sequencing.
+		prevCh = currCh
+
+		// Update stats after task is done.
+		currT.lifecycle.onResult().do(func(_ context.Context, result *vcopierCopyTaskResult) {
+			if result.state == vcopierCopyTaskFail {
+				vc.vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
+			}
+			if result.state == vcopierCopyTaskComplete {
+				vc.vr.stats.CopyRowCount.Add(int64(len(result.args.rows)))
+				vc.vr.stats.QueryCount.Add("copy", 1)
+				vc.vr.stats.TableCopyRowCounts.Add(tableName, int64(len(result.args.rows)))
+				vc.vr.stats.TableCopyTimings.Add(tableName, time.Since(result.startedAt))
+			}
+		})
+
+		if err := copyWorkQueue.enqueue(ctx, currT); err != nil {
+			log.Warn(fmt.Sprintf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error()))
+			return err
+		}
+
+		// When async execution is not enabled, a done task will be available
+		// in the resultCh after each Enqueue, unless there was a queue state
+		// error (e.g. couldn't obtain a worker from pool).
+		//
+		// When async execution is enabled, results will show up in the channel
+		// eventually, possibly in a subsequent VStreamRows loop. It's still
+		// a good idea to check this channel on every pass so that:
+		//
+		// * resultCh doesn't fill up. If it does fill up then tasks won't be
+		//   able to add their results to the channel, and progress in this
+		//   goroutine will be blocked.
+		// * We keep lastpk up-to-date.
+		select {
+		case result := <-resultCh:
+			if result == nil {
+				return io.EOF
+			}
+			switch result.state {
+			case vcopierCopyTaskCancel:
+				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				return io.EOF
+			case vcopierCopyTaskFail:
+				// Defer the report to drainAndAggregateErrors so concurrent
+				// insert workers that race in after this read are included.
+				if result.err != nil {
+					preTerrs = append(preTerrs, result.err)
+				}
+				return io.EOF
+			case vcopierCopyTaskComplete:
+				// Collect lastpk. Needed for logging at the end.
+				lastpk = result.args.lastpk
+			}
+		default:
+		}
+		return nil
+	}, vstreamOptions)
+
+	if copyWorkQueue != nil {
+		copyWorkQueue.close()
+	}
+
+	// Drain late-arriving task results and aggregate.
+	if terr := drainAndAggregateErrors(resultCh, serr, preTerrs); terr != nil {
+		log.Warn(fmt.Sprintf("task errors in workflow %s: %v", vc.vr.WorkflowName, terr))
+		return terr
+	}
+
+	// A context expiration was probably caused by a PlannedReparentShard or an
+	// elapsed copy phase duration. CopyAll is not resilient to these events.
+	select {
+	case <-ctx.Done():
+		log.Info(fmt.Sprintf("Copy of %v stopped", state.currentTableName))
+		return errors.New("CopyAll was interrupted due to context expiration")
+	default:
+		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
+			return err
+		}
+		if err := vc.updatePos(ctx, gtid); err != nil {
+			return err
+		}
+		log.Info("Completed copy of all tables")
+	}
+	return nil
+}
+
+// runPostCopyActionsAndDeleteCopyState runs post copy actions and deletes the
+// copy state entry for a table, signifying that the copy phase is complete for
+// that table.
+func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Context, tableName string) error {
+	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
+		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
+	}
+	log.Info("Deleting copy state and post copy actions for table " + tableName)
+	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
+	delQueryBuf.Myprintf(
+		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
+		copyStateTableName, postCopyActionTableName,
+		vc.vr.id, encodeString(tableName),
+	)
+	if _, err := vc.vr.dbClient.Execute(delQueryBuf.String()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// drainAndAggregateErrors combines preTerrs (errors stashed by the caller's
+// VStreamTables callback), any late-arriving Fail results on resultCh, and
+// an optional vstream error into a single aggregated workflow error.
+// formatTaskError surfaces the root cause and collapses dependent-batch
+// failures to a count (issue #20316).
+func drainAndAggregateErrors(resultCh <-chan *vcopierCopyTaskResult, vstreamErr error, preTerrs []error) error {
+	terrs := preTerrs
+	for {
+		select {
+		case result := <-resultCh:
+			if result == nil {
+				continue
+			}
+			if result.state == vcopierCopyTaskFail && result.err != nil {
+				terrs = append(terrs, result.err)
+			}
+		default:
+			goto done
+		}
+	}
+done:
+	// Skip vstreamErr if it is the synthetic io.EOF the callback returned
+	// after observing a task Fail — it would just noise the real root
+	// cause.
+	if vstreamErr != nil && !(errors.Is(vstreamErr, io.EOF) && len(terrs) > 0) {
+		terrs = append(terrs, vstreamErr)
+	}
+	return formatTaskError(terrs)
+}

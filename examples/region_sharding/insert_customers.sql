@@ -1,0 +1,16 @@
+insert into customer(id, fullname, nationalid, country) values (1, 'Philip Roth', '123-456-789', 'United States');
+insert into customer(id, fullname, nationalid, country) values (2, 'Gary Shteyngart', '234-567-891', 'United States');
+insert into customer(id, fullname, nationalid, country) values (3, 'Margaret Atwood', '345-678-912', 'Canada');
+insert into customer(id, fullname, nationalid, country) values (4, 'Alice Munro', '456-789-123', 'Canada');
+insert into customer(id, fullname, nationalid, country) values (5, 'Albert Camus', '912-345-678', 'France');
+insert into customer(id, fullname, nationalid, country) values (6, 'Colette', '102-345-678', 'France');
+insert into customer(id, fullname, nationalid, country) values (7, 'Hermann Hesse', '304-567-891', 'Germany');
+insert into customer(id, fullname, nationalid, country) values (8, 'Cornelia Funke', '203-456-789', 'Germany');
+insert into customer(id, fullname, nationalid, country) values (9, 'Cixin Liu', '789-123-456', 'China');
+insert into customer(id, fullname, nationalid, country) values (10, 'Jian Ma', '891-234-567', 'China');
+insert into customer(id, fullname, nationalid, country) values (11, 'Haruki Murakami', '405-678-912', 'Japan');
+insert into customer(id, fullname, nationalid, country) values (12, 'Banana Yoshimoto', '506-789-123', 'Japan');
+insert into customer(id, fullname, nationalid, country) values (13, 'Arundhati Roy', '567-891-234', 'India');
+insert into customer(id, fullname, nationalid, country) values (14, 'Shashi Tharoor', '678-912-345', 'India');
+insert into customer(id, fullname, nationalid, country) values (15, 'Andrea Hirata', '607-891-234', 'Indonesia');
+insert into customer(id, fullname, nationalid, country) values (16, 'Ayu Utami', '708-912-345', 'Indonesia');

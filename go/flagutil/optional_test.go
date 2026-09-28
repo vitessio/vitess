@@ -1,0 +1,139 @@
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package flagutil
+
+import (
+	"strconv"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewOptionalFloat64(t *testing.T) {
+	fl := NewOptionalFloat64(4.187)
+	require.NotEmpty(t, fl)
+	require.False(t, fl.IsSet())
+
+	require.Equal(t, "4.187", fl.String())
+	require.Equal(t, "float64", fl.Type())
+
+	err := fl.Set("invalid value")
+	require.ErrorContains(t, err, "parse error")
+
+	err = fl.Set("7.77")
+	require.NoError(t, err)
+	require.Equal(t, 7.77, fl.Get())
+	require.True(t, fl.IsSet())
+
+	err = fl.Set("1e1000")
+	require.ErrorContains(t, err, "value out of range")
+}
+
+func TestNewOptionalString(t *testing.T) {
+	optStr := NewOptionalString("4.187")
+	require.NotEmpty(t, optStr)
+	require.False(t, optStr.IsSet())
+
+	require.Equal(t, "4.187", optStr.String())
+	require.Equal(t, "string", optStr.Type())
+
+	err := optStr.Set("value")
+	require.NoError(t, err)
+
+	require.Equal(t, "value", optStr.Get())
+	require.True(t, optStr.IsSet())
+}
+
+func TestNewOptionalFlag_Generic(t *testing.T) {
+	flag, err := NewOptionalFlag(
+		42,
+		"int",
+		func(s string) (int, error) { return strconv.Atoi(s) },
+		func(v int) string { return strconv.Itoa(v) },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, flag)
+	require.False(t, flag.IsSet())
+	require.Equal(t, "42", flag.String())
+	require.Equal(t, "int", flag.Type())
+	require.Equal(t, 42, flag.Get())
+
+	err = flag.Set("100")
+	require.NoError(t, err)
+	require.Equal(t, 100, flag.Get())
+	require.True(t, flag.IsSet())
+
+	err = flag.Set("not-a-number")
+	require.Error(t, err)
+}
+
+func TestOptionalFlag_Compatibility(t *testing.T) {
+	// OptionalFlag interface is satisfied by both concrete types.
+	var iface OptionalFlag
+
+	iface = NewOptionalFloat64(3.14)
+	require.NotNil(t, iface)
+	require.False(t, iface.IsSet())
+
+	iface = NewOptionalString("hello")
+	require.NotNil(t, iface)
+	require.False(t, iface.IsSet())
+
+	// Old type names compile and work as before.
+	f64 := NewOptionalFloat64(1.0)
+	require.NotNil(t, f64)
+
+	str := NewOptionalString("world")
+	require.NotNil(t, str)
+
+	// Zero-value concrete types must work without a constructor (the original
+	// behavior that type aliases broke).
+	var zeroStr OptionalString
+	require.Equal(t, "string", zeroStr.Type())
+	require.Empty(t, zeroStr.String())
+	require.False(t, zeroStr.IsSet())
+	require.NoError(t, zeroStr.Set("x"))
+	require.Equal(t, "x", zeroStr.Get())
+	require.True(t, zeroStr.IsSet())
+
+	var zeroF64 OptionalFloat64
+	require.Equal(t, "float64", zeroF64.Type())
+	require.Equal(t, "0", zeroF64.String())
+	require.False(t, zeroF64.IsSet())
+	require.NoError(t, zeroF64.Set("3.14"))
+	require.Equal(t, 3.14, zeroF64.Get())
+	require.True(t, zeroF64.IsSet())
+}
+
+func TestNewOptionalFlag_NilParseReturnsError(t *testing.T) {
+	_, err := NewOptionalFlag(0, "int", nil, func(v int) string { return strconv.Itoa(v) })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "non-nil parse function")
+}
+
+func TestOptionalFlagValue_ZeroValue(t *testing.T) {
+	// A zero-value struct must not panic.
+	var f OptionalFlagValue[int]
+
+	// String() falls back to fmt.Sprintf, not panic.
+	require.Equal(t, "0", f.String())
+
+	// Set() returns an error, not panic.
+	err := f.Set("42")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no parse function")
+}

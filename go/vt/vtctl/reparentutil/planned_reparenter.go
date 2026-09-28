@@ -1,0 +1,1038 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package reparentutil
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"sync"
+	"time"
+
+	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+)
+
+// counters for Planned Reparent Shard
+var (
+	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	InnodbBufferPoolsDataVar = "Innodb_buffer_pool_pages_data"
+)
+
+// PlannedReparenter performs PlannedReparentShard operations.
+type PlannedReparenter struct {
+	ts     *topo.Server
+	tmc    tmclient.TabletManagerClient
+	logger logutil.Logger
+}
+
+// PlannedReparentOptions provides optional parameters to PlannedReparentShard
+// operations. Options are passed by value, so it is safe for callers to mutate
+// resue options structs for multiple calls.
+type PlannedReparentOptions struct {
+	NewPrimaryAlias         *topodatapb.TabletAlias
+	AvoidPrimaryAlias       *topodatapb.TabletAlias
+	ExpectedPrimaryAlias    *topodatapb.TabletAlias
+	WaitReplicasTimeout     time.Duration
+	TolerableReplLag        time.Duration
+	AllowCrossCellPromotion bool
+
+	// Private options managed internally. We use value-passing semantics to
+	// set these options inside a PlannedReparent without leaking these details
+	// back out to the caller.
+
+	lockAction string
+	durability policy.Durabler
+}
+
+// NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
+// PlannedReparentShard operations using the given topo.Server,
+// TabletManagerClient, and logger.
+//
+// Providing a nil logger instance is allowed.
+func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger) *PlannedReparenter {
+	pr := PlannedReparenter{
+		ts:     ts,
+		tmc:    tmc,
+		logger: logger,
+	}
+
+	if pr.logger == nil {
+		// Create a no-op logger so we can call functions on pr.logger without
+		// needing to constantly check it for non-nil first.
+		pr.logger = logutil.NewCallbackLogger(func(e *logutilpb.Event) {})
+	}
+
+	return &pr
+}
+
+// ReparentShard performs a PlannedReparentShard operation on the given keyspace
+// and shard. It will make the provided tablet the primary for the shard, when
+// both the current and desired primary are reachable and in a good state.
+func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts PlannedReparentOptions) (*events.Reparent, error) {
+	var err error
+	statsLabels := []string{keyspace, shard}
+
+	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		var unlock func(*error)
+		opts.lockAction = pr.getLockAction(opts)
+		ctx, unlock, err = pr.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
+		if err != nil {
+			prsCounter.Add(append(statsLabels, failureResult), 1)
+			return nil, err
+		}
+		defer unlock(&err)
+	}
+
+	if opts.NewPrimaryAlias == nil && opts.AvoidPrimaryAlias == nil {
+		shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			prsCounter.Add(append(statsLabels, failureResult), 1)
+			return nil, err
+		}
+
+		opts.AvoidPrimaryAlias = shardInfo.PrimaryAlias
+	}
+
+	startTime := time.Now()
+	ev := &events.Reparent{}
+	defer func() {
+		reparentShardOpTimings.Add("PlannedReparentShard", time.Since(startTime))
+		switch err {
+		case nil:
+			prsCounter.Add(append(statsLabels, successResult), 1)
+			event.DispatchUpdate(ev, "finished PlannedReparentShard")
+		default:
+			prsCounter.Add(append(statsLabels, failureResult), 1)
+			event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
+		}
+	}()
+
+	err = pr.reparentShardLocked(ctx, ev, keyspace, shard, opts)
+
+	return ev, err
+}
+
+func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
+	return fmt.Sprintf(
+		"PlannedReparentShard(%v, AvoidPrimary = %v)",
+		topoproto.TabletAliasString(opts.NewPrimaryAlias),
+		topoproto.TabletAliasString(opts.AvoidPrimaryAlias),
+	)
+}
+
+// preflightChecks checks some invariants that pr.reparentShardLocked() depends
+// on. It returns a boolean to indicate if the reparent is a no-op (which
+// happens iff the caller specified an AvoidPrimaryAlias and it's not the shard
+// primary), as well as an error.
+//
+// It will also set the NewPrimaryAlias option if the caller did not specify
+// one, provided it can choose a new primary candidate. See ElectNewPrimary()
+// for details on primary candidate selection.
+func (pr *PlannedReparenter) preflightChecks(
+	ctx context.Context,
+	ev *events.Reparent,
+	tabletMap map[string]*topo.TabletInfo,
+	innodbBufferPoolData map[string]int,
+	opts *PlannedReparentOptions, // we take a pointer here to set NewPrimaryAlias
+) (isNoop bool, err error) {
+	// We don't want to fail when both NewPrimaryAlias and AvoidPrimaryAlias are nil.
+	// But when they are both nil, we assign AvoidPrimaryAlias to be ShardInfo.PrimaryAlias.
+	// In the case, where we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
+	// all the three will be nil.
+	if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, opts.AvoidPrimaryAlias) {
+		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+	}
+
+	if opts.NewPrimaryAlias == nil {
+		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
+		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
+		if ev.ShardInfo.PrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.PrimaryAlias) {
+			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
+			return true, nil
+		}
+	}
+
+	event.DispatchUpdate(ev, "electing a primary candidate")
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
+	if err != nil {
+		return true, err
+	}
+
+	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+	event.DispatchUpdate(ev, "elected new primary candidate")
+
+	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
+
+	newPrimaryTabletInfo, ok := tabletMap[primaryElectAliasStr]
+	if !ok {
+		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not in the shard", primaryElectAliasStr)
+	}
+
+	// PRS is only meant to be called when all the tablets are healthy.
+	// So we assume that all the tablets are reachable and check if the primary elect will be able
+	// to make progress if it is promoted. This is needed because sometimes users may ask to promote
+	// a tablet which can never make progress. For example, let's say the user has a durability policy
+	// where they require 2 semi-sync acks but from cross-cell replicas.
+	// Let's say they have 3 replicas A in zone 1 and B and C in zone 2. In this case, A is the only
+	// eligible primary elect. Both B and C won't be able to make forward progress if they are promoted.
+	var tabletsReachable []*topodatapb.Tablet
+	for _, info := range tabletMap {
+		tabletsReachable = append(tabletsReachable, info.Tablet)
+	}
+	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
+		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
+	}
+	ev.NewPrimary = newPrimaryTabletInfo.CloneVT()
+	return false, nil
+}
+
+func (pr *PlannedReparenter) performGracefulPromotion(
+	ctx context.Context,
+	ev *events.Reparent,
+	keyspace string,
+	shard string,
+	currentPrimary *topo.TabletInfo,
+	primaryElect *topodatapb.Tablet,
+	opts PlannedReparentOptions,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+	ev.OldPrimary = currentPrimary.CloneVT()
+
+	// Before demoting the old primary, we're going to ensure that replication
+	// is working from the old primary to the primary-elect. If replication is
+	// not working, a PlannedReparent is not safe to do, because the candidate
+	// won't catch up and we'll potentially miss transactions.
+	pr.logger.Infof("checking replication on primary-elect %v", primaryElectAliasStr)
+
+	// First, we find the position of the current primary. Note that this is
+	// just a snapshot of the position, since we let it keep accepting writes
+	// until we're sure we want to proceed with the promotion.
+	snapshotCtx, snapshotCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer snapshotCancel()
+
+	snapshotPos, err := pr.tmc.PrimaryPosition(snapshotCtx, currentPrimary.Tablet)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot get replication position on current primary %v; current primary must be healthy to perform PlannedReparent", currentPrimary.AliasString())
+	}
+
+	// Next, we wait for the primary-elect to catch up to that snapshot point.
+	// If it can catch up within WaitReplicasTimeout, we can be fairly
+	// confident that it will catch up on everything else that happens between
+	// the snapshot point we grabbed above and when we demote the old primary
+	// below.
+	//
+	// We do this as an idempotent SetReplicationSource to make sure the replica knows who
+	// the current primary is.
+	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer setSourceCancel()
+
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, policy.IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect), 0); err != nil {
+		return vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
+	}
+
+	// Verify we still have the topology lock before doing the demotion.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+
+	// Next up, demote the current primary and get its replication position.
+	// It's fine if the current primary was already demoted, since DemotePrimary
+	// is idempotent.
+	pr.logger.Infof("demoting current primary: %v", currentPrimary.AliasString())
+	event.DispatchUpdate(ev, "demoting old primary")
+
+	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer demoteCancel()
+
+	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet, false)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
+	}
+
+	// Wait for the primary-elect to catch up to the position we demoted the
+	// current primary at. If it fails to catch up within WaitReplicasTimeout,
+	// we will try to roll back to the original primary before aborting.
+	waitCtx, waitCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer waitCancel()
+
+	waitErr := pr.tmc.WaitForPosition(waitCtx, primaryElect, primaryStatus.Position)
+
+	// Do some wrapping of errors to get the right codes and callstacks.
+	var finalWaitErr error
+	switch {
+	case waitErr != nil:
+		finalWaitErr = vterrors.Wrapf(waitErr, "primary-elect tablet %v failed to catch up with replication %v", primaryElectAliasStr, primaryStatus.Position)
+	case ctx.Err() == context.DeadlineExceeded:
+		finalWaitErr = vterrors.New(vtrpc.Code_DEADLINE_EXCEEDED, "PlannedReparent timed out; please try again")
+	}
+
+	if finalWaitErr != nil {
+		// It's possible that we've used up the calling context's timeout, or
+		// that not enough time is left on the it to finish the rollback.
+		// We create a new background context to avoid a partial rollback, which
+		// could leave the cluster in a worse state than when we started.
+		undoCtx, undoCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer undoCancel()
+
+		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, policy.SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {
+			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
+			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
+		}
+
+		return finalWaitErr
+	}
+
+	return nil
+}
+
+func (pr *PlannedReparenter) performInitialPromotion(
+	ctx context.Context,
+	keyspace string,
+	shard string,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
+	opts PlannedReparentOptions,
+) (string, error) {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	// Unlike the other PRS paths, initial promotion calls InitPrimary directly and
+	// never catches the primary-elect up to another tablet's position — there is no
+	// current primary to catch up to. The election may have preferred this candidate
+	// on a tiebreaker (e.g. MySQL version) even though a peer is more advanced, so we
+	// must confirm the elect contains every reachable tablet's transactions before
+	// promoting it; otherwise InitPrimary would silently discard the transactions only
+	// the peer holds. This mirrors the dominance check performPotentialPromotion runs
+	// on the no-clear-primary path. Position.AtLeast also rejects incomparable GTID
+	// sets, so a divergent peer fails the check rather than being silently dropped.
+	if err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, primaryElectExplicit); err != nil {
+		return "", err
+	}
+
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return "", vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+
+	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer promoteCancel()
+
+	// During the initialization phase we have to use InitPrimary instead of PromoteReplica
+	// This is because the two operations while being largely similar have a very subtle difference
+	// InitPrimary first sets the MySQL instance to read-write and creates the database (if it does not exist)
+	// before it fixes the semi sync.
+	// PromoteReplica on the other hand, first fixes semi-sync before setting the MySQL instance to read-write.
+	// This is done to guarantee safety, in the sense that the semi-sync is on before we start accepting writes.
+	// However, during initialization, it is likely that the database would not be created in the MySQL instance.
+	// Therefore, we have to first set read-write mode, create the database and then fix semi-sync, otherwise we get blocked.
+	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, policy.SemiSyncAckers(opts.durability, primaryElect) > 0)
+	if err != nil {
+		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
+	}
+
+	if ctx.Err() == context.DeadlineExceeded {
+		// InitPrimary succeeded, but we ran out of time. PRS needs to be
+		// re-run to complete fully.
+		return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "PLannedReparent timed out after successfully promoting primary-elect %v; please re-run to fix up the replicas", primaryElectAliasStr)
+	}
+
+	return rp, nil
+}
+
+// checkPrimaryElectContainsAllPositions verifies that the primary-elect's
+// replication position is at least as advanced as every other reachable tablet's,
+// so that promoting it (via InitPrimary, with no catch-up) cannot discard
+// transactions another tablet holds. It returns an error if any tablet has a
+// position the elect does not contain, including a position that is incomparable
+// with the elect's (divergent GTID history). It also fails closed on file-position
+// (non-GTID) tablets, whose per-tablet binlog coordinates cannot be compared across
+// tablets to establish containment.
+func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
+	ctx context.Context,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	// Fetch every tablet's position concurrently under one shared timeout. The
+	// calls run in parallel, so each RPC gets the full RemoteOperationTimeout to
+	// respond rather than draining a single budget sequentially — a slow-but-healthy
+	// tablet, or a shard with many tablets, must not make later lookups inherit an
+	// already-expired deadline. Unlike performPotentialPromotion, this reads the
+	// position without demoting: on this path no primary has ever existed, so
+	// nothing is accepting writes and there is no "stop the world" to perform.
+	posCtx, posCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer posCancel()
+
+	var (
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		positions = make(map[string]replication.Position, len(tabletMap))
+	)
+
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
+		wg.Add(1)
+		go func(alias string, tablet *topodatapb.Tablet) {
+			defer wg.Done()
+
+			status, err := pr.tmc.ReplicationStatus(posCtx, tablet)
+			if err != nil {
+				// A tablet that is not replicating (the common case on a
+				// never-initialized shard, where every candidate hits this path) has
+				// no relay log and so no received position to lose. Recover its
+				// executed position from PrimaryStatus and use that as its received
+				// position, so the dominance check still sees a real position instead
+				// of failing closed on a legitimately fresh tablet.
+				sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+				if !isSQLErr || sqlErr == nil || sqlErr.Number() != sqlerror.ERNotReplica {
+					rec.RecordError(vterrors.Wrapf(err, "cannot get replication status of tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
+					return
+				}
+
+				primaryStatus, psErr := pr.tmc.PrimaryStatus(posCtx, tablet)
+				if psErr != nil {
+					rec.RecordError(vterrors.Wrapf(psErr, "cannot get primary status of non-replicating tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
+					return
+				}
+				pos, decErr := replication.DecodePosition(primaryStatus.Position)
+				if decErr != nil {
+					rec.RecordError(vterrors.Wrapf(decErr, "cannot decode replication position (%v) for tablet %v", primaryStatus.Position, alias))
+					return
+				}
+
+				mu.Lock()
+				positions[alias] = pos
+				mu.Unlock()
+				return
+			}
+
+			// The elect is promoted here via InitPrimary, which does NOT apply the
+			// relay log: any received-but-unapplied transactions the elect holds are
+			// discarded at promotion, so the history that actually survives is its
+			// executed position. Key the elect on Position (executed) and every peer
+			// on RelayLogPosition (Combined = received), so the dominance check proves
+			// what the elect will truly retain contains everything a peer could lose —
+			// elect.Executed >= peer.Combined — rather than crediting the elect with
+			// transactions InitPrimary is about to drop.
+			encoded := status.RelayLogPosition
+			if encoded == "" {
+				// MariaDB reports no relay-log GTID position (ParseMariadbReplicationStatus
+				// leaves RelayLogPosition empty while populating Position), so fall back to
+				// the executed position — the only cross-tablet-comparable position that
+				// flavor exposes. Without this the peer would decode to a zero position and
+				// the dominance check would trivially pass, letting InitPrimary discard the
+				// peer's executed transactions. For MySQL, RelayLogPosition is empty only
+				// when Position is too, so the fallback is a no-op there.
+				encoded = status.Position
+			}
+			if alias == primaryElectAliasStr {
+				encoded = status.Position
+			}
+			pos, err := replication.DecodePosition(encoded)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for tablet %v", encoded, alias))
+				return
+			}
+
+			mu.Lock()
+			positions[alias] = pos
+			mu.Unlock()
+		}(alias, tabletInfo.Tablet)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return rec.Error()
+	}
+
+	return verifyPrimaryElectDominates(primaryElectAliasStr, positions, primaryElectExplicit)
+}
+
+// verifyPrimaryElectDominates returns an error unless the primary-elect's
+// position is at least as advanced as every other position in positions, so that
+// promoting it cannot discard transactions another tablet holds. A position that
+// is incomparable with the elect's (divergent GTID history) also fails, since
+// AtLeast is false for it. positions must include the primary-elect's own alias.
+// Shared by the initial-promotion and potential-promotion paths, both of which
+// promote without catching the elect up to a source first.
+//
+// It fails closed on file-position (non-GTID) positions: these are each tablet's
+// own SHOW BINARY LOG STATUS coordinates, whose file names and offsets are local
+// to a tablet and not comparable across tablets. Feeding them to AtLeast would
+// produce a meaningless verdict that could wave through a promotion discarding a
+// peer's transactions. An empty position (a genuinely fresh tablet on a
+// never-initialized shard) carries no FilePosGTID and is still safe to compare, so
+// GTID and fresh-init promotions are unaffected.
+//
+// primaryElectExplicit reports whether the operator named this primary via
+// --new-primary. Because these paths can't compare file positions across tablets,
+// the file-position rejection is the operator's escape hatch: when they explicitly
+// chose the primary, we honor that choice and skip it (the standard PRS contract
+// for promoting a non-GTID shard). It does not relax the GTID dominance check,
+// which remains a real data-loss safeguard the explicit alias must still pass.
+//
+// The escape hatch is only valid on a *uniformly* file-position shard. A shard
+// that mixes GTID-based and file-position tablets is rejected outright (before the
+// escape hatch), because a GTID elect's transactions cannot be compared against a
+// file-position peer's and skipping that peer could silently discard its history —
+// and vice versa. This mirrors the ERS rule that a mixed GTID/non-GTID shard is
+// unsafe to reparent.
+func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[string]replication.Position, primaryElectExplicit bool) error {
+	electPos, ok := positions[primaryElectAliasStr]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v not found in tablet map", primaryElectAliasStr)
+	}
+
+	// A shard must not mix GTID-based and file-position replication: their position
+	// semantics differ and the two are not comparable across tablets, so we cannot
+	// prove the elect contains a peer's transactions. Reject such a shard before the
+	// per-peer loop, so the explicit-primary escape hatch below cannot let a GTID
+	// elect wave through an incomparable file-position peer (or vice versa).
+	if err := rejectMixedPositionFlavors(positions); err != nil {
+		return err
+	}
+
+	for alias, pos := range positions {
+		// The elect's own position is never compared against itself. Skip it first, so
+		// a single-candidate non-GTID shard (only the elect) is not rejected by the
+		// file-position check below — that check is about cross-tablet incomparability,
+		// and there are no peers to compare against here.
+		if alias == primaryElectAliasStr {
+			continue
+		}
+
+		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
+			// File positions are each tablet's own binlog coordinates, not comparable
+			// across tablets, so a dominance verdict on them is meaningless. Without an
+			// explicit primary we fail closed; with one, the operator has taken
+			// responsibility for the choice, so we skip this tablet entirely — both the
+			// rejection and the (equally meaningless) AtLeast comparison below.
+			if primaryElectExplicit {
+				continue
+			}
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot verify primary-elect %v contains all transactions: tablet %v reports a file-position replication position (%v), which is not comparable across tablets; specify an explicit primary to promote", primaryElectAliasStr, alias, replication.EncodePosition(pos))
+		}
+
+		// GTID positions are globally comparable: even with an explicit primary the
+		// elect must still contain every peer's transactions (the design doc forbids
+		// NewPrimaryAlias from bypassing this data-loss safeguard).
+		if !electPos.AtLeast(pos) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v (position: %v) contains transactions not found in primary-elect %v (position: %v)", alias, pos, primaryElectAliasStr, electPos)
+		}
+	}
+
+	return nil
+}
+
+// rejectMixedPositionFlavors returns an error if positions contains both a
+// file-position (non-GTID) tablet and a GTID-based one. Such a shard cannot be
+// safely reparented on the no-catch-up paths: file positions are local per-tablet
+// binlog coordinates that are not comparable against a GTID position, so there is
+// no way to prove the elect contains a peer's transactions across the two modes.
+//
+// Only a position with no GTIDSet at all (a fresh tablet on a never-initialized
+// shard, encoded as "") is skipped: it carries no flavor and so does not count
+// toward either group, leaving the fresh-init path unaffected. A typed-but-empty
+// GTID position such as "MySQL56/" (empty gtid_executed on a provisioned tablet)
+// has a non-nil GTIDSet and IS GTID-based, so it must count toward the GTID group —
+// testing pos.IsZero() here would wrongly skip it and let a "MySQL56/" elect wave
+// through an incomparable file-position peer.
+func rejectMixedPositionFlavors(positions map[string]replication.Position) error {
+	var filePosAlias, gtidAlias string
+	for alias, pos := range positions {
+		if pos.GTIDSet == nil {
+			continue
+		}
+		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
+			filePosAlias = alias
+		} else {
+			gtidAlias = alias
+		}
+	}
+
+	if filePosAlias != "" && gtidAlias != "" {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard mixes GTID-based and file-position replication (tablet %v is file-position, tablet %v is GTID-based), which cannot be safely reparented; positions are not comparable across the two modes", filePosAlias, gtidAlias)
+	}
+
+	return nil
+}
+
+func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context, primaryElect *topodatapb.Tablet) (string, error) {
+	// It's possible that a previous attempt to reparent failed to SetReadWrite,
+	// so call it here to make sure the underlying MySQL is read-write on the
+	// candidate primary.
+	setReadWriteCtx, setReadWriteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer setReadWriteCancel()
+
+	if err := pr.tmc.SetReadWrite(setReadWriteCtx, primaryElect); err != nil {
+		return "", vterrors.Wrapf(err, "failed to SetReadWrite on current primary %v", topoproto.TabletAliasString(primaryElect.Alias))
+	}
+
+	// The primary is already the one we want according to its tablet record.
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer refreshCancel()
+
+	// Get the replication position so we can try to fix the replicas (back in
+	// reparentShardLocked())
+	reparentJournalPosition, err := pr.tmc.PrimaryPosition(refreshCtx, primaryElect)
+	if err != nil {
+		return "", vterrors.Wrapf(err, "failed to get replication position of current primary %v", topoproto.TabletAliasString(primaryElect.Alias))
+	}
+
+	return reparentJournalPosition, nil
+}
+
+func (pr *PlannedReparenter) performPotentialPromotion(
+	ctx context.Context,
+	keyspace string,
+	shard string,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	pr.logger.Infof("no clear winner found for current primary term; checking if it's safe to recover by electing %v", primaryElectAliasStr)
+
+	type tabletPos struct {
+		alias  string
+		tablet *topodatapb.Tablet
+		pos    replication.Position
+	}
+
+	positions := make(chan tabletPos, len(tabletMap))
+
+	// First, stop the world, to ensure no writes are happening anywhere. We
+	// don't trust that we know which tablets might be acting as primaries, so
+	// we simply demote everyone.
+	//
+	// Unlike the normal, single-primary case, we don't try to undo this if we
+	// fail. If we've made it here, it means there is no clear primary, so we
+	// don't know who it's safe to roll back to. Leaving everything read-only is
+	// probably safer, or at least no worse, than whatever weird state we were
+	// in before.
+	//
+	// If any tablets are unreachable, we can't be sure it's safe either,
+	// because one of the unreachable tablets might have a replication position
+	// further ahead than the candidate primary.
+
+	var (
+		stopAllWg sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+	)
+
+	stopAllCtx, stopAllCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer stopAllCancel()
+
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
+		stopAllWg.Add(1)
+
+		go func(alias string, tablet *topodatapb.Tablet) {
+			defer stopAllWg.Done()
+
+			// Regardless of what type this tablet thinks it is, we will always
+			// call DemotePrimary to ensure the underlying MySQL server is in
+			// read-only, and to check its replication position. DemotePrimary is
+			// idempotent, so it's fine to call it on a replica (or other
+			// tablet type), that's already in read-only.
+			pr.logger.Infof("demoting tablet %v", alias)
+
+			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet, false)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "DemotePrimary(%v) failed on contested primary", alias))
+
+				return
+			}
+
+			pos, err := replication.DecodePosition(primaryStatus.Position)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for demoted tablet %v", primaryStatus.Position, alias))
+
+				return
+			}
+
+			positions <- tabletPos{
+				alias:  alias,
+				tablet: tablet,
+				pos:    pos,
+			}
+		}(alias, tabletInfo.Tablet)
+	}
+
+	stopAllWg.Wait()
+	close(positions)
+
+	if rec.HasErrors() {
+		return vterrors.Wrap(rec.Error(), "failed to demote all tablets")
+	}
+
+	// Construct a mapping of alias to tablet position.
+	//
+	// Note that we still allow replication to run during this time, but we
+	// assume that no new high water mark can appear because we just demoted all
+	// tablets to read-only, so there should be no new transactions.
+	//
+	// TODO: consider temporarily replicating from another tablet to catch up,
+	// if the candidate primary is behind that tablet.
+	positionMap := make(map[string]replication.Position, len(tabletMap))
+	for tp := range positions {
+		positionMap[tp.alias] = tp.pos
+	}
+
+	// Make sure no tablet has a more advanced position than the candidate
+	// primary. It's up to the caller to choose a suitable candidate, and to
+	// choose another if this check fails.
+	if err := verifyPrimaryElectDominates(primaryElectAliasStr, positionMap, primaryElectExplicit); err != nil {
+		return err
+	}
+
+	// Check that we still have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+	return nil
+}
+
+func (pr *PlannedReparenter) reparentShardLocked(
+	ctx context.Context,
+	ev *events.Reparent,
+	keyspace string,
+	shard string,
+	opts PlannedReparentOptions,
+) error {
+	shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
+			topoproto.TabletAliasString(shardInfo.PrimaryAlias),
+			topoproto.TabletAliasString(opts.ExpectedPrimaryAlias),
+		)
+	}
+
+	keyspaceDurability, err := pr.ts.GetKeyspaceDurability(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	pr.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
+	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	if err != nil {
+		return err
+	}
+
+	ev.ShardInfo = *shardInfo
+
+	event.DispatchUpdate(ev, "reading tablet map")
+
+	tabletMap, err := pr.ts.GetTabletMapForShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	innodbBufferPoolData, err := pr.verifyAllTabletsReachable(ctx, tabletMap)
+	if err != nil {
+		return err
+	}
+
+	// Capture whether the operator explicitly requested a specific primary before
+	// preflightChecks overwrites opts.NewPrimaryAlias with the elected candidate.
+	// An explicit request is the operator's informed choice and is allowed to
+	// bypass the file-position "can't compare across tablets" fail-closed check
+	// below (it is not allowed to bypass real GTID dominance safety).
+	primaryElectExplicit := opts.NewPrimaryAlias != nil
+
+	// Check invariants that PlannedReparentShard depends on.
+	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, innodbBufferPoolData, &opts); err != nil {
+		return err
+	} else if isNoop {
+		return nil
+	}
+
+	// Before we run any RPCs that change the cluster configuration, we should ensure we still hold the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+
+	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
+	reparentJournalPos := ""
+	// promoteReplicaRequired is a boolean that is used to store whether we need to call
+	// `PromoteReplica` when we reparent the tablets. This is required to be done when we are doing
+	// a potential or a graceful promotion.
+	// InitialPromotion calls `InitPrimary` and for partial promotion, the tablet is already a primary.
+	promoteReplicaRequired := false
+	// needsRefresh is used to keep track of whether we need to refresh the state
+	// of the new primary tablet. The only case that we need to reload the state
+	// is when we are initializing the new primary. The reason is that the first
+	// time we try to setup all the components like vreplication.Engine, they fail
+	// since the database isn't created until we setServing.
+	// A call to Refresh state fixes all the components. This isn't strictly necessary
+	// in the sense that all the components will retry initialization anyways after some
+	// time, so even without a call to RefreshState, they all converge correctly.
+	needsRefresh := false
+
+	// Depending on whether we can find a current primary, and what the caller
+	// specified as the candidate primary, we will do one of four kinds of
+	// promotions:
+	// 1) There is no current primary and the shard info also does not have
+	// anything stored. This happens when none of the tablets have ever been promoted.
+	// So we can promote the primary-elect without any issues. After that all we need
+	// to do is to reparent all the tablets to that primary which is accomplished in the
+	// common code path.
+	//
+	// 2) There is no clear current primary. In this case we will try to
+	// determine if it's safe to promote the candidate specified by the caller.
+	// If it's not -- including if any tablet in the shard is unreachable -- we
+	// bail. We also don't attempt to rollback a failed demotion in this case.
+	//
+	// 3) The current primary is the same as the candidate primary specified by
+	// the caller. In this case, we assume there was a previous PRS for this
+	// primary, and the caller is re-issuing the call to fix-up any replicas. We
+	// also idempotently set the desired primary as read-write, just in case.
+	//
+	// 4) The current primary and the desired primary differ. In this case, we
+	// perform a graceful promotion, in which we validate the desired primary is
+	// sufficiently up-to-date, demote the current primary, wait for the desired
+	// primary to catch up to that position, and set the desired primary
+	// read-write. We will attempt to rollback a failed demotion in this case,
+	// unlike in case (1), because we have a known good state to rollback to.
+	//
+	// In all cases, we will retrieve the reparent journal position that was
+	// inserted in the new primary's journal, so we can use it below to check
+	// that all the replicas have attached to new primary successfully.
+	switch {
+	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
+		// Case (1): no primary has been elected ever. Initialize
+		// the primary-elect tablet
+		reparentJournalPos, err = pr.performInitialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit, opts)
+		needsRefresh = true
+	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
+		// Case (2): no clear current primary. Try to find a safe promotion
+		// candidate, and promote to it.
+		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit)
+		// We need to call `PromoteReplica` when we reparent the tablets.
+		promoteReplicaRequired = true
+	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
+		// Case (3): desired new primary is the current primary. Attempt to fix
+		// up replicas to recover from a previous partial promotion.
+		reparentJournalPos, err = pr.performPartialPromotionRecovery(ctx, ev.NewPrimary)
+	default:
+		// Case (4): desired primary and current primary differ. Do a graceful
+		// demotion-then-promotion.
+		err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, opts)
+		// We need to call `PromoteReplica` when we reparent the tablets.
+		promoteReplicaRequired = true
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+
+	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, opts); err != nil {
+		return err
+	}
+
+	if needsRefresh {
+		// Refresh the state to force the tabletserver to reconnect after db has been created.
+		// This is best-effort — internal components retry initialization on their own, and
+		// returning an error here would report a functionally-successful reparent as failed.
+		if err := pr.tmc.RefreshState(ctx, ev.NewPrimary); err != nil {
+			pr.logger.Warningf("RefreshState failed on new primary %v: %v", topoproto.TabletAliasString(ev.NewPrimary.Alias), err)
+		}
+	}
+	return nil
+}
+
+func (pr *PlannedReparenter) reparentTablets(
+	ctx context.Context,
+	ev *events.Reparent,
+	reparentJournalPosition string,
+	promoteReplicaRequired bool,
+	tabletMap map[string]*topo.TabletInfo,
+	opts PlannedReparentOptions,
+) error {
+	// Create a cancellable context for the entire set of reparent operations.
+	// If any error conditions happen, we can cancel all outgoing RPCs.
+	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer replCancel()
+
+	// Go through all the tablets.
+	// - New primary: populate the reparent journal.
+	// - Everybody else: reparent to the new primary; wait for the reparent
+	//	 journal row.
+	event.DispatchUpdate(ev, "reparenting all tablets")
+
+	// We add a (hopefully) unique record to the reparent journal table on the
+	// new primary, so we can check if replicas got it through replication.
+	reparentJournalTimestamp := time.Now().UnixNano()
+	primaryElectAliasStr := topoproto.TabletAliasString(ev.NewPrimary.Alias)
+	replicasWg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+
+	// Point all replicas at the new primary and check that they receive the
+	// reparent journal entry, proving that they are replicating from the new
+	// primary. We do this concurrently with adding the journal entry (after
+	// this loop), because if semi-sync is enabled, the update to the journal
+	// table will block until at least one replica is successfully attached to
+	// the new primary.
+	for alias, tabletInfo := range tabletMap {
+		if alias == primaryElectAliasStr {
+			continue
+		}
+
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
+		replicasWg.Add(1)
+
+		go func(alias string, tablet *topodatapb.Tablet) {
+			defer replicasWg.Done()
+			pr.logger.Infof("setting new primary on replica %v", alias)
+
+			// Note: we used to force replication to start on the old primary,
+			// but now that we support "resuming" a previously-failed PRS
+			// attempt, we can no longer assume that we know who the former
+			// primary was. Instead, we rely on the former primary to remember
+			// that it needs to start replication after transitioning from
+			// PRIMARY => REPLICA.
+			forceStartReplication := false
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, policy.IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
+			}
+		}(alias, tabletInfo.Tablet)
+	}
+
+	// If `PromoteReplica` call is required, we should call it and use the position that it returns.
+	if promoteReplicaRequired {
+		// Promote the candidate primary to type:PRIMARY.
+		primaryPosition, err := pr.tmc.PromoteReplica(replCtx, ev.NewPrimary, policy.SemiSyncAckers(opts.durability, ev.NewPrimary) > 0)
+		if err != nil {
+			pr.logger.Warningf("primary %v failed to PromoteReplica; cancelling replica reparent attempts", primaryElectAliasStr)
+			replCancel()
+			replicasWg.Wait()
+
+			return vterrors.Wrapf(err, "failed PromoteReplica(primary=%v, ts=%v): %v", primaryElectAliasStr, reparentJournalTimestamp, err)
+		}
+		reparentJournalPosition = primaryPosition
+	}
+
+	// Add a reparent journal entry on the new primary. If semi-sync is enabled,
+	// this blocks until at least one replica is reparented (above) and
+	// successfully replicating from the new primary.
+	//
+	// If we fail to populate the reparent journal, there's no way the replicas
+	// will work, so we cancel the ongoing reparent RPCs and bail out.
+	pr.logger.Infof("populating reparent journal on new primary %v", primaryElectAliasStr)
+	if err := pr.tmc.PopulateReparentJournal(replCtx, ev.NewPrimary, reparentJournalTimestamp, "PlannedReparentShard", ev.NewPrimary.Alias, reparentJournalPosition); err != nil {
+		pr.logger.Warningf("primary failed to PopulateReparentJournal (position: %v); cancelling replica reparent attempts", reparentJournalPosition)
+		replCancel()
+		replicasWg.Wait()
+
+		return vterrors.Wrapf(err, "failed PopulateReparentJournal(primary=%v, ts=%v, pos=%v): %v", primaryElectAliasStr, reparentJournalTimestamp, reparentJournalPosition, err)
+	}
+
+	// Reparent journal has been populated on the new primary. We just need to
+	// wait for all the replicas to receive it.
+	replicasWg.Wait()
+
+	if err := rec.Error(); err != nil {
+		msg := "some replicas failed to reparent; retry PlannedReparentShard with the same new primary alias (%v) to retry failed replicas"
+		pr.logger.Errorf2(err, msg, primaryElectAliasStr)
+		return vterrors.Wrapf(err, msg, primaryElectAliasStr)
+	}
+
+	return nil
+}
+
+// verifyAllTabletsReachable verifies that all the tablets are reachable when running PRS.
+func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) (map[string]int, error) {
+	// Create a cancellable context for the entire set of RPCs to verify reachability.
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer verifyCancel()
+
+	innodbBufferPoolsData := make(map[string]int)
+	var mu sync.Mutex
+	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
+	for tblStr, info := range tabletMap {
+		tablet := info.Tablet
+		if tablet.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+		errorGroup.Go(func() error {
+			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
+			if err != nil {
+				return err
+			}
+			// Some MySQL variants like MariaDB don't expose this status variable. Omit those
+			// tablets from the map so a missing or unparseable value can't be confused with a
+			// legitimate zero when tiebreaking primary election by buffer-pool warmth. We treat
+			// an empty string the same as a missing key to avoid log spam on variants that
+			// return the row but with no value.
+			rawVal, ok := statusValues[InnodbBufferPoolsDataVar]
+			if !ok || rawVal == "" {
+				return nil
+			}
+			val, err := strconv.Atoi(rawVal)
+			if err != nil {
+				pr.logger.Warningf("could not parse %s=%q for tablet %v as int: %v",
+					InnodbBufferPoolsDataVar, rawVal, tblStr, err)
+				return nil
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			innodbBufferPoolsData[tblStr] = val
+			return nil
+		})
+	}
+	err := errorGroup.Wait()
+	return innodbBufferPoolsData, err
+}

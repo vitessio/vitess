@@ -1,0 +1,14 @@
+[
+    {
+        "Query": "SELECT 12.0 * (1 / 12)",
+        "Value": "DECIMAL(1.00000)"
+    },
+    {
+        "Query": "SELECT 12.0 * 0",
+        "Value": "DECIMAL(0.0)"
+    },
+    {
+        "Query": "SELECT 12.0 * 12.0",
+        "Value": "DECIMAL(144.00)"
+    }
+]

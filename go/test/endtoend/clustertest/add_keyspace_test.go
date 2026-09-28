@@ -1,0 +1,87 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+This adds sharded keyspace dynamically in this test only and test sql insert, select
+*/
+
+package clustertest
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
+)
+
+var testKeyspace = &cluster.Keyspace{
+	Name: "kstest",
+	SchemaSQL: `create table vt_user (
+id bigint,
+name varchar(64),
+primary key (id)
+) Engine=InnoDB`,
+	VSchema: `{
+ "sharded": true,
+ "vindexes": {
+   "hash_index": {
+     "type": "hash"
+   }
+ },
+ "tables": {
+   "vt_user": {
+     "column_vindexes": [
+       {
+         "column": "id",
+         "name": "hash_index"
+       }
+     ]
+   }
+ }
+}`,
+}
+
+func TestAddKeyspace(t *testing.T) {
+	cell := clusterInstance.Cell
+	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
+		log.Error(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
+		require.NoError(t, err)
+	}
+	// Restart vtgate process
+	_ = clusterInstance.VtgateProcess.TearDown()
+	_ = clusterInstance.VtgateProcess.Setup()
+	clusterInstance.WaitForTabletsToHealthyInVtgate()
+
+	ctx := t.Context()
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")
+
+	qr := utils.Exec(t, conn, "select id, name from vt_user")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("name1")]]`; got != want {
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
+	}
+}

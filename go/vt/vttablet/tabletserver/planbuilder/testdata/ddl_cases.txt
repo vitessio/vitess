@@ -1,0 +1,340 @@
+"create table a(abcd bigint)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create table a (\n\tabcd bigint\n)"
+}
+
+"drop  table b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop table b"
+}
+
+"drop table b.c"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop table b.c"
+}
+
+"alter table c add column foo bigint"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table c add column foo bigint"
+}
+
+"alter table c comment 'aa'"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table c comment 'aa'"
+}
+
+"alter table b.c comment 'aa'"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b.c comment 'aa'"
+}
+
+"drop index a on b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b drop key a"
+}
+
+"drop index a on b.c"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b.c drop key a"
+}
+
+"drop index a on b lock=none"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b drop key a, lock none"
+}
+
+"rename table a to b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "rename table a to b"
+}
+
+"rename table c.a to c.b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "rename table c.a to c.b"
+}
+
+
+"alter table a rename b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a rename b"
+}
+
+"alter table a rename to b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a rename b"
+}
+
+
+"alter table c.a rename to c.b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table c.a rename c.b"
+}
+
+"create view a as select * from asdasd"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "asdasd",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "create view a as select * from asdasd"
+}
+
+# syntax error
+"alter view c as foo"
+"syntax error at position 20 near 'foo'"
+
+"drop  view b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop view b"
+}
+
+"alter table a reorganize partition b into (partition c values less than (1000), partition d values less than (maxvalue))"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a reorganize partition b into (partition c values less than (1000), partition d values less than maxvalue)"
+}
+
+"alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a \npartition by range (id)\n(partition p0 values less than (10),\n partition p1 values less than maxvalue)"
+}
+
+# truncate
+"truncate a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
+}
+
+# truncate
+"truncate table a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
+}
+
+# create a temporary table
+"create temporary table a(id bigint primary key)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create temporary table a (\n\tid bigint primary key\n)",
+  "NeedsReservedConn": true
+}
+
+# dropping a temporary table needs no reserved connection: a session that
+# holds one is routed to it by vtgate, and a session without one has no
+# temporary table to drop, so the statement is MySQL's no-op (IF EXISTS) or
+# unknown-table error on any connection
+"drop temporary table if exists a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop temporary table if exists a"
+}
+
+# temporary table with ddl statement only partially parsed: the grammar kept
+# only the prefix, so the body is unknown and may read a source table; the
+# table set is flagged undetermined
+"create temporary table x"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "x",
+      "Role": 2
+    }
+  ],
+  "NeedsReservedConn": true,
+  "TablesUndetermined": true
+}

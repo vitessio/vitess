@@ -1,0 +1,51 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// gRPC RPC interface for the internal resharding throttler (go/vt/throttler)
+// which is used by vreplication.
+
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/throttlerservice";
+
+package throttlerservice;
+
+import "throttlerdata.proto";
+
+// Throttler defines the throttler RPC calls.
+service Throttler {
+  // MaxRates returns the current max rate for each throttler of the process.
+  rpc MaxRates (throttlerdata.MaxRatesRequest) returns (throttlerdata.MaxRatesResponse) {};
+
+  // SetMaxRate allows to change the current max rate for all throttlers
+  // of the process.
+  rpc SetMaxRate (throttlerdata.SetMaxRateRequest) returns (throttlerdata.SetMaxRateResponse) {};
+
+  // GetConfiguration returns the configuration of the MaxReplicationlag module
+  // for the given throttler or all throttlers if "throttler_name" is empty.
+  rpc GetConfiguration (throttlerdata.GetConfigurationRequest) returns (throttlerdata.GetConfigurationResponse) {};
+
+  // UpdateConfiguration (partially) updates the configuration of the
+  // MaxReplicationlag module for the given throttler or all throttlers if
+  // "throttler_name" is empty.
+  // If "copy_zero_values" is true, fields with zero values will be copied
+  // as well.
+  rpc UpdateConfiguration (throttlerdata.UpdateConfigurationRequest) returns (throttlerdata.UpdateConfigurationResponse) {};
+
+  // ResetConfiguration resets the configuration of the MaxReplicationlag module
+  // to the initial configuration for the given throttler or all throttlers if
+  // "throttler_name" is empty.
+  rpc ResetConfiguration (throttlerdata.ResetConfigurationRequest) returns (throttlerdata.ResetConfigurationResponse) {};
+}

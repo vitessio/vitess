@@ -1,0 +1,92 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package testlib
+
+import (
+	"os"
+	"path"
+	"strings"
+	"testing"
+
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want string) {
+	got, err := vp.RunAndOutput(args)
+	require.NoErrorf(t, err, "testVtctlTopoCommand(%v) failed: %v", args, err)
+
+	// Remove the variable version numbers.
+	lines := strings.Split(got, "\n")
+	for i, line := range lines {
+		if vi := strings.Index(line, "version="); vi != -1 {
+			lines[i] = line[:vi+8] + "V"
+		}
+	}
+	got = strings.Join(lines, "\n")
+	assert.Equalf(t, want, got, "testVtctlTopoCommand(%v) failed: got:\n%vwant:\n%v", args, got, want)
+}
+
+// TestVtctlTopoCommands tests all vtctl commands from the
+// "Topo" group.
+func TestVtctlTopoCommands(t *testing.T) {
+	ctx := t.Context()
+
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
+	if err := ts.CreateKeyspace(t.Context(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
+		require.NoError(t, err)
+	}
+	if err := ts.CreateKeyspace(t.Context(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
+		require.NoError(t, err)
+	}
+	vp := NewVtctlPipe(ctx, t, ts)
+	defer vp.Close()
+
+	tmp := t.TempDir()
+
+	// Test TopoCat.
+	testVtctlTopoCommand(t, vp, []string{"TopoCat", "--long", "--decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
+path=/keyspaces/ks2/Keyspace version=V
+keyspace_type:SNAPSHOT
+`)
+
+	// Test TopoCp from topo to disk.
+	ksFile := path.Join(tmp, "Keyspace")
+	_, err := vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
+	require.NoError(t, err)
+	contents, err := os.ReadFile(ksFile)
+	require.NoError(t, err)
+	expected := &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}
+	got := &topodatapb.Keyspace{}
+	if err = got.UnmarshalVT(contents); err != nil {
+		require.NoError(t, err)
+	}
+	require.True(t, proto.Equal(got, expected), "bad proto data: Got %v expected %v", got, expected)
+
+	// Test TopoCp from disk to topo.
+	_, err = vp.RunAndOutput([]string{"TopoCp", "--to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
+	require.NoError(t, err)
+	ks3, err := ts.GetKeyspace(t.Context(), "ks3")
+	require.NoError(t, err)
+	require.True(t, proto.Equal(ks3.Keyspace, expected), "copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
+}

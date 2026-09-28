@@ -1,0 +1,275 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vstreamer
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+)
+
+var (
+	shardedVSchema = `{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}`
+
+	multicolumnVSchema = `{
+  "sharded": true,
+  "vindexes": {
+    "region_vdx": {
+      "type": "region_experimental",
+			"params": {
+				"region_bytes": "1"
+			}
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "columns": [
+						"region",
+						"id"
+					],
+          "name": "region_vdx"
+        }
+      ]
+    }
+  }
+}`
+)
+
+func TestUpdateVSchema(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	defer env.SetVSchema("{}")
+
+	// We have to start at least one stream to start the vschema watcher.
+	ctx := t.Context()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+	// Stream should terminate immediately due to invalid pos.
+	_ = engine.Stream(ctx, "invalid", nil, filter, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		return nil
+	}, nil)
+
+	startCount := expectUpdateCount(t, 1)
+
+	require.NoError(t, env.SetVSchema(shardedVSchema))
+	expectUpdateCount(t, startCount+1)
+
+	want := `{
+  "mirror_rules": {},
+  "routing_rules": {},
+  "view_routing_rules": {},
+  "keyspaces": {
+    "vttest": {
+      "sharded": true,
+      "foreignKeyMode": "unmanaged",
+      "tables": {
+        "t1": {
+          "name": "t1",
+          "column_vindexes": [
+            {
+              "columns": [
+                "id1"
+              ],
+              "type": "hash",
+              "name": "hash",
+              "vindex": {}
+            }
+          ],
+          "ordered": [
+            {
+              "columns": [
+                "id1"
+              ],
+              "type": "hash",
+              "name": "hash",
+              "vindex": {}
+            }
+          ]
+        }
+      },
+      "vindexes": {
+        "hash": {}
+      }
+    }
+  },
+  "shard_routing_rules": null,
+  "keyspace_routing_rules": null
+}`
+	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
+	require.NoError(t, err)
+	got := string(b)
+	require.Equal(t, want, got)
+}
+
+func expectUpdateCount(t *testing.T, wantCount int64) int64 {
+	for i := range 10 {
+		gotCount := engine.vschemaUpdates.Get()
+		if gotCount >= wantCount {
+			return gotCount
+		}
+		if i == 9 {
+			require.Failf(t, "update count mismatch", "update count: %d, want %d", gotCount, wantCount)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	panic("unreachable")
+}
+
+// TestVStreamerWaitForMySQL tests the wait for MySQL to catch-up
+// logic that is used by vstreamer when starting a copy phase cycle.
+// This logic today supports waiting for MySQL replication lag
+// and/or InnoDB MVCC history to be below a certain threshold before
+// starting the next copy phase.
+func TestVStreamerWaitForMySQL(t *testing.T) {
+	tableName := "test"
+	expectedWaits := int64(0)
+	testDB := fakesqldb.New(t)
+	defer testDB.Close()
+	hostres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"hostname|port",
+		"varchar|int64"),
+		"localhost|3306",
+	)
+	thlres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"history_len",
+		"int64"),
+		"1000",
+	)
+	sbmres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Seconds_Behind_Source",
+		"int64"),
+		"10",
+	)
+	sbmlegacyres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Seconds_Behind_Master",
+		"int64"),
+		"10",
+	)
+	type fields struct {
+		vse                   *Engine
+		cp                    dbconfigs.Connector
+		se                    *schema.Engine
+		ReplicationLagSeconds int64
+		maxInnoDBTrxHistLen   int64
+		maxMySQLReplLagSecs   int64
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		shouldWait bool
+		wantErr    bool
+	}{
+		{
+			name: "Small InnoDB MVCC impact limit",
+			fields: fields{
+				vse:                 engine,
+				se:                  engine.se,
+				maxInnoDBTrxHistLen: 100, // Should wait on this
+				maxMySQLReplLagSecs: 5000,
+			},
+			shouldWait: true,
+			wantErr:    true,
+		},
+		{
+			name: "Small Repl Lag impact limit",
+			fields: fields{
+				vse:                 engine,
+				se:                  engine.se,
+				maxInnoDBTrxHistLen: 10000,
+				maxMySQLReplLagSecs: 5, // Should wait on this
+			},
+			shouldWait: true,
+			wantErr:    true,
+		},
+		{
+			name: "Large impact limits",
+			fields: fields{
+				vse:                 engine,
+				se:                  engine.se,
+				maxInnoDBTrxHistLen: 10000,
+				maxMySQLReplLagSecs: 200,
+			},
+			wantErr: false,
+		},
+	}
+
+	testDB.AddQuery(hostQuery, hostres)
+	testDB.AddQuery(trxHistoryLenQuery, thlres)
+	testDB.AddQuery(replicaLagQuery, sbmres)
+	testDB.AddQuery(legacyLagQuery, sbmlegacyres)
+
+	for _, tt := range tests {
+		tt.fields.cp = dbconfigs.New(testDB.ConnParams())
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		t.Run(tt.name, func(t *testing.T) {
+			uvs := &uvstreamer{
+				ctx:                   ctx,
+				cancel:                cancel,
+				vse:                   tt.fields.vse,
+				cp:                    tt.fields.cp,
+				se:                    tt.fields.se,
+				ReplicationLagSeconds: tt.fields.ReplicationLagSeconds,
+			}
+			env.TabletEnv.Config().RowStreamer.MaxInnoDBTrxHistLen = tt.fields.maxInnoDBTrxHistLen
+			env.TabletEnv.Config().RowStreamer.MaxMySQLReplLagSecs = tt.fields.maxMySQLReplLagSecs
+			err := uvs.vse.waitForMySQL(ctx, uvs.cp, tableName)
+			assert.Equalf(t, tt.wantErr, err != nil, "vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.shouldWait {
+				expectedWaits++
+			}
+		})
+	}
+
+	require.Equal(t, expectedWaits, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"])
+	require.Equal(t, expectedWaits, engine.vstreamerPhaseTimings.Counts()["VStreamerTest."+tableName+":waitForMySQL"])
+}

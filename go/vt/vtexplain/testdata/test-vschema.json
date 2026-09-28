@@ -1,0 +1,262 @@
+{
+	"ks_unsharded": {
+		"sharded": false,
+		"tables": {
+			"t1": {},
+			"t2": {},
+			"table_not_in_schema": {}
+		}
+	},
+	"ks_sharded": {
+		"sharded": true,
+		"vindexes": {
+			"orders_id_vdx": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup",
+					"from": "id",
+					"to": "keyspace_id"
+				},
+				"owner": "orders"
+			},
+			"orders_id_vdx_exclusive_read_lock": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_exclusive_read_lock",
+					"from": "id",
+					"to": "keyspace_id",
+					"read_lock": "exclusive"
+				},
+				"owner": "orders"
+			},
+			"orders_id_vdx_shared_read_lock": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_shared_read_lock",
+					"from": "id",
+					"to": "keyspace_id",
+					"read_lock": "shared"
+				},
+				"owner": "orders"
+			},
+			"orders_id_vdx_no_read_lock": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_no_read_lock",
+					"from": "id",
+					"to": "keyspace_id",
+					"read_lock": "none"
+				},
+				"owner": "orders"
+			},
+			"orders_id_vdx_no_verify": {
+				"type": "lookup_unique",
+				"params": {
+					"table": "orders_id_lookup_no_verify",
+					"from": "id",
+					"to": "keyspace_id",
+                                        "no_verify": "true"
+				},
+				"owner": "orders"
+			},
+			"music_user_map": {
+				"type": "lookup_hash_unique",
+				"owner": "music",
+				"params": {
+					"table": "music_user_map",
+					"from": "music_id",
+					"to": "user_id"
+				}
+			},
+			"name_user_map": {
+				"type": "lookup_hash_unique",
+				"owner": "user",
+				"params": {
+					"table": "name_user_map",
+					"from": "name",
+					"to": "user_id"
+				}
+			},
+			"email_customer_map": {
+				"type": "lookup_hash_unique",
+				"owner": "customer",
+				"params": {
+					"table": "email_customer_map",
+					"from": "email",
+					"to": "user_id",
+					"batch_lookup": "true"
+				}
+			},
+			"hash": {
+				"type": "hash"
+			},
+			"md5": {
+				"type": "unicode_loose_md5"
+			},
+			"multicol_vdx": {
+				"type": "multicol",
+				"params": {
+					"column_count": "2",
+					"column_bytes": "1,7",
+					"column_vindex": "numeric,xxhash"
+				}
+			},
+			"lkp_msac_vdx": {
+				"type": "lookup_hash_unique",
+				"params": {
+					"table": "lkp_idx",
+					"from": "lkp",
+					"to": "id",
+					"multi_shard_autocommit": "true",
+					"batch_lookup": "true"
+				},
+				"owner": "member"
+			}
+		},
+		"tables": {
+			"user": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "name",
+						"name": "name_user_map"
+					}
+				]
+			},
+			"music": {
+				"column_vindexes": [
+					{
+						"column": "user_id",
+						"name": "hash"
+					},
+					{
+						"column": "id",
+						"name": "music_user_map"
+					}
+				]
+			},
+			"music_extra": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"name_user_map": {
+				"column_vindexes": [
+					{
+						"column": "name",
+						"name": "md5"
+					}
+				]
+			},
+			"name_info": {
+				"column_vindexes": [
+					{
+						"column": "name",
+						"name": "md5"
+					}
+				],
+				"columns": [
+						{
+							"name": "name",
+							"type": "VARCHAR"
+						},
+						{
+							"name": "info",
+							"type": "VARCHAR"
+						}
+				],
+					"column_list_authoritative": true
+			},
+			"customer": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "email",
+						"name": "email_customer_map"
+					}
+				]
+			},
+			"orders": {
+				"column_vindexes": [
+					{
+						"column": "customer_id",
+						"name": "hash"
+					},
+					{
+						"column": "id",
+						"name": "orders_id_vdx"
+					}
+				]
+			},
+			"orders_id_lookup": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"orders_id_lookup_no_read_lock": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"orders_id_lookup_no_verify": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					}
+				]
+			},
+			"email_customer_map": {
+				"column_vindexes": [
+					{
+						"column": "email",
+						"name": "md5"
+					}
+				]
+			},
+			"user_region": {
+				"column_vindexes": [
+					{
+						"columns": ["regionId","userId"],
+						"name": "multicol_vdx"
+					}
+				]
+			},
+			"member": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "lkp",
+						"name": "lkp_msac_vdx"
+					}
+				]
+			},
+			"lkp_idx": {
+				"column_vindexes": [
+					{
+						"column": "lkp",
+						"name": "md5"
+					}
+				]
+			}
+		}
+	}
+}

@@ -1,0 +1,432 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package statsd
+
+import (
+	"expvar"
+	"net"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/stats"
+)
+
+func getBackend(t *testing.T) (StatsBackend, *net.UDPConn) {
+	addr := "localhost:1201"
+	udpAddr, _ := net.ResolveUDPAddr("udp", addr)
+	server, _ := net.ListenUDP("udp", udpAddr)
+	bufferLength := 9
+	client, _ := statsd.New(addr, statsd.WithMaxMessagesPerPayload(bufferLength), statsd.WithNamespace("test"), statsd.WithoutOriginDetection())
+	var sb StatsBackend
+	sb.namespace = "foo"
+	sb.sampleRate = 1
+	sb.statsdClient = client
+	stats.RegisterTimerHook(func(stats, name string, value int64, timings *stats.Timings) {
+		tags := makeLabels(strings.Split(timings.Label(), "."), name)
+		client.TimeInMilliseconds(stats, float64(value), tags, sb.sampleRate)
+	})
+	stats.RegisterHistogramHook(func(name string, val int64) {
+		client.Histogram(name, float64(val), []string{}, sb.sampleRate)
+	})
+	return sb, server
+}
+
+func TestStatsdCounter(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "counter_name"
+	c := stats.NewCounter(name, "counter description")
+	c.Add(1)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		found = true
+		if kv.Key == name {
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+
+			result := string(bytes[:n])
+			expected := "test.counter_name:1|c\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdGauge(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauge_name"
+	s := stats.NewGauge(name, "help")
+	s.Set(10)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+
+			result := string(bytes[:n])
+			expected := "test.gauge_name:10|g\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdGaugeFloat64(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauge_name_f64"
+	s := stats.NewGaugeFloat64(name, "help")
+	s.Set(3.14)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+
+			result := string(bytes[:n])
+			expected := "test.gauge_name_f64:3.14|g\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdGaugeFunc(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauge_func_name"
+	stats.NewGaugeFunc(name, "help", func() int64 {
+		return 2
+	})
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+
+			result := string(bytes[:n])
+			expected := "test.gauge_func_name:2|g\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdCounterDuration(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "counter_duration_name"
+	s := stats.NewCounterDuration(name, "help")
+	s.Add(1 * time.Millisecond)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := string(bytes[:n])
+			expected := "test.counter_duration_name:1.000000|ms\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdCountersWithSingleLabel(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "counter_with_single_label_name"
+	s := stats.NewCountersWithSingleLabel(name, "help", "label", "tag1", "tag2")
+	s.Add("tag1", 2)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := strings.Split(string(bytes[:n]), "\n")
+			sort.Strings(result)
+			expected := []string{
+				"",
+				"test.counter_with_single_label_name:0|c|#label:tag2",
+				"test.counter_with_single_label_name:2|c|#label:tag1",
+			}
+			for i, res := range result {
+				assert.Equal(t, expected[i], res)
+			}
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdCountersWithMultiLabels(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "counter_with_multiple_label_name"
+	s := stats.NewCountersWithMultiLabels(name, "help", []string{"label1", "label2"})
+	s.Add([]string{"foo", "bar"}, 1)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+
+			result := string(bytes[:n])
+			expected := "test.counter_with_multiple_label_name:1|c|#label1:foo,label2:bar\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdCountersFuncWithMultiLabels(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "counter_func_with_multiple_labels_name"
+	stats.NewCountersFuncWithMultiLabels(name, "help", []string{"label1", "label2"}, func() map[string]int64 {
+		m := make(map[string]int64)
+		m["foo.bar"] = 1
+		m["bar.baz"] = 2
+		return m
+	})
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := strings.Split(string(bytes[:n]), "\n")
+			sort.Strings(result)
+			expected := []string{
+				"",
+				"test.counter_func_with_multiple_labels_name:1|c|#label1:foo,label2:bar",
+				"test.counter_func_with_multiple_labels_name:2|c|#label1:bar,label2:baz",
+			}
+			for i, res := range result {
+				assert.Equal(t, expected[i], res)
+			}
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdGaugesWithMultiLabels(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauges_with_multiple_label_name"
+	s := stats.NewGaugesWithMultiLabels(name, "help", []string{"label1", "label2"})
+	s.Add([]string{"foo", "bar"}, 3)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := string(bytes[:n])
+			expected := "test.gauges_with_multiple_label_name:3|g|#label1:foo,label2:bar\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauges_func_with_multiple_labels_name"
+	stats.NewGaugesFuncWithMultiLabels(name, "help", []string{"label1", "label2"}, func() map[string]int64 {
+		m := make(map[string]int64)
+		m["foo.bar"] = 1
+		m["bar.baz"] = 2
+		return m
+	})
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := strings.Split(string(bytes[:n]), "\n")
+			sort.Strings(result)
+			expected := []string{
+				"",
+				"test.gauges_func_with_multiple_labels_name:1|g|#label1:foo,label2:bar",
+				"test.gauges_func_with_multiple_labels_name:2|g|#label1:bar,label2:baz",
+			}
+			for i, res := range result {
+				assert.Equal(t, expected[i], res)
+			}
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdGaugesWithSingleLabel(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauges_with_single_label_name"
+	s := stats.NewGaugesWithSingleLabel(name, "help", "label1")
+	s.Add("bar", 1)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := string(bytes[:n])
+			expected := "test.gauges_with_single_label_name:1|g|#label1:bar\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdMultiTimings(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "multi_timings_name"
+	s := stats.NewMultiTimings(name, "help", []string{"label1", "label2"})
+	s.Add([]string{"foo", "bar"}, 10*time.Millisecond)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 49152)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := string(bytes[:n])
+			expected := "test.multi_timings_name:10.000000|ms|#label1:foo,label2:bar\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdTimings(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "timings_name"
+	s := stats.NewTimings(name, "help", "label1")
+	s.Add("foo", 2*time.Millisecond)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 49152)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+			result := string(bytes[:n])
+			expected := "test.timings_name:2.000000|ms|#label1:foo\n"
+			assert.Equal(t, expected, result)
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestStatsdHistogram(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "histogram_name"
+	s := stats.NewHistogram(name, "help", []int64{1, 5, 10})
+	s.Add(2)
+	s.Add(3)
+	s.Add(6)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			require.NoError(t, err)
+
+			result := string(bytes[:n])
+			expected := []string{
+				"test.histogram_name:2|h",
+				"test.histogram_name:3|h",
+				"test.histogram_name:6|h",
+				"",
+			}
+			for i, res := range strings.Split(result, "\n") {
+				assert.Equal(t, expected[i], res)
+			}
+		}
+	})
+	assert.True(t, found, "Stat %s not found", name)
+}
+
+func TestMakeCommonTags(t *testing.T) {
+	res1 := makeCommonTags(map[string]string{})
+	assert.Empty(t, res1)
+	expected2 := []string{"a:b", "c:d"}
+	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
+	assert.ElementsMatch(t, expected2, res2)
+}

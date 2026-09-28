@@ -1,0 +1,806 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package rules
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+func TestQueryRules(t *testing.T) {
+	qrs := New()
+	qr1 := NewQueryRule("rule 1", "r1", QRFail)
+	qr2 := NewQueryRule("rule 2", "r2", QRFail)
+	qrs.Add(qr1)
+	qrs.Add(qr2)
+
+	qrf := qrs.Find("r1")
+	assert.Equal(t, qr1, qrf)
+
+	qrf = qrs.Find("r2")
+	assert.Equal(t, qr2, qrf)
+
+	qrf = qrs.Find("unknown_rule")
+	require.Nil(t, qrf, "rule: unknown_rule does not exist, should get nil")
+
+	assert.Equal(t, qr1, qrs.rules[0])
+
+	qrf = qrs.Delete("r1")
+	assert.Equal(t, qr1, qrf)
+
+	assert.Len(t, qrs.rules, 1)
+
+	assert.Equal(t, qr2, qrs.rules[0])
+
+	qrf = qrs.Delete("unknown_rule")
+	require.Nil(t, qrf, "delete an unknown_rule, should return nil")
+}
+
+// TestCopy tests for deep copy
+func TestCopy(t *testing.T) {
+	qrs1 := New()
+	qr1 := NewQueryRule("rule 1", "r1", QRFail)
+	qr1.AddPlanCond(planbuilder.PlanSelect)
+	qr1.AddTableCond("aa")
+	qr1.AddBindVarCond("a", true, false, QRNoOp, nil)
+
+	qr2 := NewQueryRule("rule 2", "r2", QRFail)
+	qrs1.Add(qr1)
+	qrs1.Add(qr2)
+
+	qrs2 := qrs1.Copy()
+	assert.Truef(t, reflect.DeepEqual(qrs2, qrs1), "qrs1: %+v, not equal to %+v", qrs2, qrs1)
+
+	qrs1 = New()
+	qrs2 = qrs1.Copy()
+	assert.Truef(t, reflect.DeepEqual(qrs2, qrs1), "qrs1: %+v, not equal to %+v", qrs2, qrs1)
+}
+
+func TestFilterByPlan(t *testing.T) {
+	qrs := New()
+
+	qr1 := NewQueryRule("rule 1", "r1", QRFail)
+	qr1.SetIPCond("123")
+	qr1.SetQueryCond("select")
+	qr1.AddPlanCond(planbuilder.PlanSelect)
+	qr1.AddBindVarCond("a", true, false, QRNoOp, nil)
+
+	qr2 := NewQueryRule("rule 2", "r2", QRFail)
+	qr2.AddPlanCond(planbuilder.PlanSelect)
+	qr2.AddPlanCond(planbuilder.PlanSelect)
+	qr2.AddBindVarCond("a", true, false, QRNoOp, nil)
+
+	qr3 := NewQueryRule("rule 3", "r3", QRFail)
+	qr3.SetQueryCond("sele.*")
+	qr3.AddBindVarCond("a", true, false, QRNoOp, nil)
+
+	qr4 := NewQueryRule("rule 4", "r4", QRFail)
+	qr4.AddTableCond("b")
+	qr4.AddTableCond("c")
+
+	qrs.Add(qr1)
+	qrs.Add(qr2)
+	qrs.Add(qr3)
+	qrs.Add(qr4)
+
+	qrs1 := qrs.FilterByPlan("select", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	want := compacted(`[{
+		"Description":"rule 1",
+		"Name":"r1",
+		"RequestIP":"123",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	},{
+		"Description":"rule 2",
+		"Name":"r2",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	},{
+		"Description":"rule 3",
+		"Name":"r3",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	}]`)
+	got := marshalled(qrs1)
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+
+	qrs1 = qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	want = compacted(`[{
+		"Description":"rule 2",
+		"Name":"r2",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+	{
+		// test multiple tables:
+		qrs1 := qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a", "other_table")
+		want := compacted(`[{
+			"Description":"rule 2",
+			"Name":"r2",
+			"BindVarConds":[{
+				"Name":"a",
+				"OnAbsent":true,
+				"Operator":""
+			}],
+			"Action":"FAIL"
+		}]`)
+		got = marshalled(qrs1)
+		assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+	}
+	{
+		// test multiple tables:
+		qrs1 := qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "other_table", "a")
+		want := compacted(`[{
+			"Description":"rule 2",
+			"Name":"r2",
+			"BindVarConds":[{
+				"Name":"a",
+				"OnAbsent":true,
+				"Operator":""
+			}],
+			"Action":"FAIL"
+		}]`)
+		got = marshalled(qrs1)
+		assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+	}
+
+	qrs1 = qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	got = marshalled(qrs1)
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+
+	qrs1 = qrs.FilterByPlan("select", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
+	want = compacted(`[{
+		"Description":"rule 3",
+		"Name":"r3",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+
+	qrs1 = qrs.FilterByPlan("sel", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
+	assert.Nil(t, qrs1.rules)
+
+	qrs1 = qrs.FilterByPlan("table", []planbuilder.PlanType{planbuilder.PlanInsert}, "b")
+	want = compacted(`[{
+		"Description":"rule 4",
+		"Name":"r4",
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+
+	qr5 := NewQueryRule("rule 5", "r5", QRFail)
+	qrs.Add(qr5)
+
+	qrs1 = qrs.FilterByPlan("sel", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
+	want = compacted(`[{
+		"Description":"rule 5",
+		"Name":"r5",
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
+
+	qrsnil1 := New()
+	qrsnil2 := qrsnil1.FilterByPlan("", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	assert.Nil(t, qrsnil2.rules)
+}
+
+// TestPlanMatchesExclusively covers the ANALYZE compatibility case: ANALYZE
+// plans as PlanSelect but matched rules keyed on PlanOtherRead before v25. A
+// rule is exclusive to the legacy plan type only when it matches through
+// PlanOtherRead but not through PlanSelect.
+func TestPlanMatchesExclusively(t *testing.T) {
+	base := []planbuilder.PlanType{planbuilder.PlanSelect}
+	const legacy = planbuilder.PlanOtherRead
+
+	otherReadOnly := NewQueryRule("legacy", "legacy", QRFail)
+	otherReadOnly.AddPlanCond(legacy)
+
+	selectOnly := NewQueryRule("real", "real", QRFail)
+	selectOnly.AddPlanCond(planbuilder.PlanSelect)
+
+	both := NewQueryRule("both", "both", QRFail)
+	both.AddPlanCond(planbuilder.PlanSelect)
+	both.AddPlanCond(legacy)
+
+	matchAll := NewQueryRule("all", "all", QRFail)
+
+	otherReadOnlyQuery := NewQueryRule("legacy-query", "legacy-query", QRFail)
+	otherReadOnlyQuery.AddPlanCond(legacy)
+	otherReadOnlyQuery.SetQueryCond("analyze.*")
+
+	otherReadOnlyTable := NewQueryRule("legacy-table", "legacy-table", QRFail)
+	otherReadOnlyTable.AddPlanCond(legacy)
+	otherReadOnlyTable.AddTableCond("t1")
+
+	testcases := []struct {
+		name  string
+		rule  *Rule
+		query string
+		table string
+		want  bool
+	}{
+		{"legacy plan only", otherReadOnly, "analyze table t1", "t1", true},
+		{"real plan only", selectOnly, "analyze table t1", "t1", false},
+		{"both plans", both, "analyze table t1", "t1", false},
+		{"no plan condition", matchAll, "analyze table t1", "t1", false},
+		{"legacy plan, query matches", otherReadOnlyQuery, "analyze table t1", "t1", true},
+		{"legacy plan, query does not match", otherReadOnlyQuery, "select 1", "t1", false},
+		{"legacy plan, table matches", otherReadOnlyTable, "analyze table t1", "t1", true},
+		{"legacy plan, table does not match", otherReadOnlyTable, "analyze table t2", "t2", false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			qrs := New()
+			qrs.Add(tc.rule)
+			assert.Equal(t, tc.want, qrs.PlanMatchesExclusively(tc.query, base, legacy, tc.table))
+		})
+	}
+
+	// Across many sources that each match only through the real plan type, no
+	// source is exclusive to the legacy type — regardless of map-iteration
+	// order. A single legacy-only source flips the result.
+	t.Run("multiple sources without legacy match", func(t *testing.T) {
+		m := NewMap()
+		for _, name := range []string{"s1", "s2", "s3"} {
+			m.RegisterSource(name)
+			qrs := New()
+			qrs.Add(selectOnly.Copy())
+			require.NoError(t, m.SetRules(name, qrs))
+		}
+		assert.False(t, m.PlanMatchesExclusively("analyze table t1", base, legacy, "t1"))
+
+		m.RegisterSource("legacy-source")
+		qrs := New()
+		qrs.Add(otherReadOnly.Copy())
+		require.NoError(t, m.SetRules("legacy-source", qrs))
+		assert.True(t, m.PlanMatchesExclusively("analyze table t1", base, legacy, "t1"))
+	})
+}
+
+func TestQueryRule(t *testing.T) {
+	qr := NewQueryRule("rule 1", "r1", QRFail)
+	err := qr.SetIPCond("123")
+	require.NoError(t, err)
+	assert.True(t, qr.requestIP.MatchString("123"), "want match")
+	assert.False(t, qr.requestIP.MatchString("1234"), "want no match")
+	assert.False(t, qr.requestIP.MatchString("12"), "want no match")
+	err = qr.SetIPCond("[")
+	require.Error(t, err, "want error")
+
+	qr.AddPlanCond(planbuilder.PlanSelect)
+	qr.AddPlanCond(planbuilder.PlanInsert)
+
+	assert.Equalf(t, planbuilder.PlanSelect, qr.plans[0], "want PASS_SELECT, got %s", qr.plans[0].String())
+	assert.Equalf(t, planbuilder.PlanInsert, qr.plans[1], "want INSERT_PK, got %s", qr.plans[1].String())
+
+	qr.AddTableCond("a")
+	assert.Equalf(t, "a", qr.tableNames[0], "want a, got %s", qr.tableNames[0])
+}
+
+func TestBindVarStruct(t *testing.T) {
+	qr := NewQueryRule("rule 1", "r1", QRFail)
+
+	err := qr.AddBindVarCond("b", false, true, QRNoOp, nil)
+	require.NoError(t, err)
+	err = qr.AddBindVarCond("a", true, false, QRNoOp, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "a", qr.bindVarConds[1].name)
+	assert.True(t, qr.bindVarConds[1].onAbsent)
+	assert.False(t, qr.bindVarConds[1].onMismatch)
+	assert.Equalf(t, QRNoOp, qr.bindVarConds[1].op, "expecting no-op, got %v", qr.bindVarConds[1])
+	assert.Nilf(t, qr.bindVarConds[1].value, "want nil, got %#v", qr.bindVarConds[1].value)
+}
+
+type BVCreation struct {
+	name       string
+	onAbsent   bool
+	onMismatch bool
+	op         Operator
+	value      any
+	expecterr  bool
+}
+
+var creationCases = []BVCreation{
+	{"a", true, true, QREqual, uint64(1), false},
+	{"a", true, true, QRNotEqual, uint64(1), false},
+	{"a", true, true, QRLessThan, uint64(1), false},
+	{"a", true, true, QRGreaterEqual, uint64(1), false},
+	{"a", true, true, QRGreaterThan, uint64(1), false},
+	{"a", true, true, QRLessEqual, uint64(1), false},
+
+	{"a", true, true, QREqual, int64(1), false},
+	{"a", true, true, QRNotEqual, int64(1), false},
+	{"a", true, true, QRLessThan, int64(1), false},
+	{"a", true, true, QRGreaterEqual, int64(1), false},
+	{"a", true, true, QRGreaterThan, int64(1), false},
+	{"a", true, true, QRLessEqual, int64(1), false},
+
+	{"a", true, true, QREqual, "a", false},
+	{"a", true, true, QRNotEqual, "a", false},
+	{"a", true, true, QRLessThan, "a", false},
+	{"a", true, true, QRGreaterEqual, "a", false},
+	{"a", true, true, QRGreaterThan, "a", false},
+	{"a", true, true, QRLessEqual, "a", false},
+	{"a", true, true, QRMatch, "a", false},
+	{"a", true, true, QRNoMatch, "a", false},
+
+	{"a", true, true, QRMatch, int64(1), true},
+	{"a", true, true, QRNoMatch, int64(1), true},
+	{"a", true, true, QRMatch, "[", true},
+	{"a", true, true, QRNoMatch, "[", true},
+}
+
+func TestBVCreation(t *testing.T) {
+	qr := NewQueryRule("rule 1", "r1", QRFail)
+	for i, tcase := range creationCases {
+		err := qr.AddBindVarCond(tcase.name, tcase.onAbsent, tcase.onMismatch, tcase.op, tcase.value)
+		haserr := (err != nil)
+		assert.Equalf(t, tcase.expecterr, haserr, "test %d: got %v for %#v", i, haserr, tcase)
+	}
+}
+
+type BindVarTestCase struct {
+	bvc      BindVarCond
+	bvval    *querypb.BindVariable
+	expected bool
+}
+
+var bvtestcases = []BindVarTestCase{
+	{BindVarCond{"b", true, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"b", false, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", false, true, QRNoOp, nil}, sqltypes.Int64BindVariable(1), true},
+
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Uint64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.Uint64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, sqltypes.StringBindVariable("abc"), false},
+
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), true},
+
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), true},
+
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), false},
+
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), false},
+
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, sqltypes.Int64BindVariable(-1), true},
+
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.Uint64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, sqltypes.StringBindVariable("abc"), false},
+
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), true},
+
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), false},
+
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), true},
+
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVariable(1), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVariable(10), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Int64BindVariable(11), true},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), true},
+
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVariable(1), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVariable(10), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Int64BindVariable(11), false},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, sqltypes.Uint64BindVariable(0xFFFFFFFFFFFFFFFF), false},
+
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), true},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVariable([]byte("a")), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVariable([]byte("b")), true},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.BytesBindVariable([]byte("c")), false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, sqltypes.Int64BindVariable(1), false},
+
+	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), false},
+	{BindVarCond{"a", true, true, QRNotEqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), true},
+
+	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVariable("b"), false},
+	{BindVarCond{"a", true, true, QRLessThan, bvcstring("b")}, sqltypes.StringBindVariable("c"), false},
+
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), true},
+	{BindVarCond{"a", true, true, QRGreaterEqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), true},
+
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVariable("b"), false},
+	{BindVarCond{"a", true, true, QRGreaterThan, bvcstring("b")}, sqltypes.StringBindVariable("c"), true},
+
+	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVariable("b"), true},
+	{BindVarCond{"a", true, true, QRLessEqual, bvcstring("b")}, sqltypes.StringBindVariable("c"), false},
+
+	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.StringBindVariable("c"), false},
+	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.StringBindVariable("a"), true},
+	{BindVarCond{"a", true, true, QRMatch, makere("a.*")}, sqltypes.Int64BindVariable(1), false},
+
+	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.StringBindVariable("c"), true},
+	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.StringBindVariable("a"), false},
+	{BindVarCond{"a", true, true, QRNoMatch, makere("a.*")}, sqltypes.Int64BindVariable(1), true},
+}
+
+func makere(s string) bvcre {
+	re, _ := regexp.Compile(s)
+	return bvcre{re}
+}
+
+func TestBVConditions(t *testing.T) {
+	bv := make(map[string]*querypb.BindVariable)
+	for _, tcase := range bvtestcases {
+		bv["a"] = tcase.bvval
+		assert.Equalf(t, tcase.expected, bvMatch(tcase.bvc, bv), "bvmatch(%+v, %v)", tcase.bvc, tcase.bvval)
+	}
+}
+
+func TestAction(t *testing.T) {
+	qrs := New()
+
+	qr1 := NewQueryRule("rule 1", "r1", QRFail)
+	qr1.SetIPCond("123")
+
+	qr2 := NewQueryRule("rule 2", "r2", QRFailRetry)
+	qr2.SetUserCond("user")
+
+	qr3 := NewQueryRule("rule 3", "r3", QRFail)
+	qr3.AddBindVarCond("a", true, true, QREqual, uint64(1))
+
+	qrs.Add(qr1)
+	qrs.Add(qr2)
+	qrs.Add(qr3)
+
+	bv := make(map[string]*querypb.BindVariable)
+	bv["a"] = sqltypes.Uint64BindVariable(0)
+
+	mc := sqlparser.MarginComments{
+		Leading:  "some comments leading the query",
+		Trailing: "other trailing comments",
+	}
+
+	action, cancelCtx, timeout, desc := qrs.GetAction("123", "user1", bv, mc)
+	assert.Equalf(t, QRFail, action, "expected fail, got %v", action)
+	assert.Equalf(t, timeout, time.Duration(0), "expected zero timeout")
+	assert.Equalf(t, "rule 1", desc, "want rule 1, got %s", desc)
+	assert.Nil(t, cancelCtx)
+
+	action, cancelCtx, timeout, desc = qrs.GetAction("1234", "user", bv, mc)
+	assert.Equalf(t, QRFailRetry, action, "want fail_retry, got: %s", action)
+	assert.Equalf(t, timeout, time.Duration(0), "expected zero timeout")
+	assert.Equalf(t, "rule 2", desc, "want rule 2, got %s", desc)
+	assert.Nil(t, cancelCtx)
+
+	action, _, _, _ = qrs.GetAction("1234", "user1", bv, mc)
+	assert.Equalf(t, QRContinue, action, "want continue, got %s", action)
+
+	bv["a"] = sqltypes.Uint64BindVariable(1)
+	action, _, _, desc = qrs.GetAction("1234", "user1", bv, mc)
+	assert.Equalf(t, QRFail, action, "want fail, got %s", action)
+	assert.Equalf(t, "rule 3", desc, "want rule 3, got %s", desc)
+
+	// reset bound variable 'a' to 0 so it doesn't match rule 3
+	bv["a"] = sqltypes.Uint64BindVariable(0)
+
+	qr4 := NewQueryRule("rule 4", "r4", QRFail)
+	qr4.SetTrailingCommentCond(".*trailing.*")
+
+	newQrs := qrs.Copy()
+	newQrs.Add(qr4)
+
+	action, _, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	assert.Equalf(t, QRFail, action, "want fail, got %s", action)
+	assert.Equalf(t, "rule 4", desc, "want rule 4, got %s", desc)
+
+	qr5 := NewQueryRule("rule 5", "r4", QRFail)
+	qr5.SetLeadingCommentCond(".*leading.*")
+
+	newQrs = qrs.Copy()
+	newQrs.Add(qr5)
+	action, _, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	assert.Equalf(t, QRFail, action, "want fail, got %s", action)
+	assert.Equalf(t, "rule 5", desc, "want rule 5, got %s", desc)
+}
+
+func TestImport(t *testing.T) {
+	qrs := New()
+	jsondata := `[{
+		"Description": "desc1",
+		"Name": "name1",
+		"RequestIP": "123.123.123",
+		"User": "user",
+		"Query": "query",
+		"Plans": ["Select", "Insert"],
+		"TableNames":["a", "b"],
+		"BindVarConds": [{
+			"Name": "bvname1",
+			"OnAbsent": true,
+			"Operator": ""
+		},{
+			"Name": "bvname2",
+			"OnAbsent": true,
+			"OnMismatch": true,
+			"Operator": "==",
+			"Value": 123
+		}],
+		"Action": "FAIL_RETRY"
+	},{
+		"Description": "desc2",
+		"Name": "name2",
+		"Action": "FAIL"
+	}]`
+	err := qrs.UnmarshalJSON([]byte(jsondata))
+	require.NoError(t, err)
+	got := marshalled(qrs)
+	want := compacted(jsondata)
+	assert.Equalf(t, want, got, "qrs:\n%s, want\n%s", got, want)
+}
+
+// A rules file using the deprecated SelectStream plan name must keep loading,
+// and the rule must match a plan only when PlanSelectStream is passed as one
+// of the filter ids — which the query engine does only for streaming-path
+// plans — never through a plan's real id alone.
+func TestSelectStreamPlanNameCompat(t *testing.T) {
+	qrs := New()
+	jsondata := `[{
+		"Description": "legacy stream rule",
+		"Name": "block_streamed_select",
+		"Query": "select.*",
+		"Plans": ["SelectStream"],
+		"Action": "FAIL"
+	}]`
+	require.NoError(t, qrs.UnmarshalJSON([]byte(jsondata)))
+	require.Len(t, qrs.rules, 1)
+	require.Equal(t, []planbuilder.PlanType{planbuilder.PlanSelectStream}, qrs.rules[0].plans)
+
+	filtered := qrs.FilterByPlan("select * from a", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	require.Empty(t, filtered.rules,
+		"a SelectStream rule must not match a plan filtered by its real plan id alone")
+
+	filtered = qrs.FilterByPlan("select * from a", []planbuilder.PlanType{planbuilder.PlanSelect, planbuilder.PlanSelectStream}, "a")
+	require.Len(t, filtered.rules, 1)
+	require.Equal(t, "block_streamed_select", filtered.rules[0].Name)
+}
+
+type ValidJSONCase struct {
+	input string
+	op    Operator
+	typ   int
+}
+
+const (
+	UINT = iota
+	INT
+	STR
+	REGEXP
+)
+
+var validjsons = []ValidJSONCase{
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "==", "Value": 18446744073709551615}]}]`, QREqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "!=", "Value": 18446744073709551615}]}]`, QRNotEqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<", "Value": 18446744073709551615}]}]`, QRLessThan, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">=", "Value": 18446744073709551615}]}]`, QRGreaterEqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">", "Value": 18446744073709551615}]}]`, QRGreaterThan, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<=", "Value": 18446744073709551615}]}]`, QRLessEqual, UINT},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "==", "Value": -123}]}]`, QREqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "!=", "Value": -123}]}]`, QRNotEqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<", "Value": -123}]}]`, QRLessThan, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">=", "Value": -123}]}]`, QRGreaterEqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">", "Value": -123}]}]`, QRGreaterThan, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<=", "Value": -123}]}]`, QRLessEqual, INT},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "==", "Value": "123"}]}]`, QREqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "!=", "Value": "123"}]}]`, QRNotEqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<", "Value": "123"}]}]`, QRLessThan, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">=", "Value": "123"}]}]`, QRGreaterEqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">", "Value": "123"}]}]`, QRGreaterThan, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<=", "Value": "123"}]}]`, QRLessEqual, STR},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "123"}]}]`, QRMatch, REGEXP},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "123"}]}]`, QRNoMatch, REGEXP},
+}
+
+func TestValidJSON(t *testing.T) {
+	for i, tcase := range validjsons {
+		qrs := New()
+		err := qrs.UnmarshalJSON([]byte(tcase.input))
+		require.NoErrorf(t, err, "Unexpected error for case %d", i)
+		bvc := qrs.rules[0].bindVarConds[0]
+		assert.Equal(t, tcase.op, bvc.op)
+		switch tcase.typ {
+		case UINT:
+			assert.Equal(t, bvcuint64(18446744073709551615), bvc.value.(bvcuint64))
+		case INT:
+			assert.Equal(t, bvcint64(-123), bvc.value.(bvcint64))
+		case STR:
+			assert.Equal(t, bvcstring("123"), bvc.value.(bvcstring))
+		case REGEXP:
+			assert.NotNil(t, bvc.value.(bvcre).re)
+		}
+	}
+}
+
+type InvalidJSONCase struct {
+	input, err string
+}
+
+var invalidjsons = []InvalidJSONCase{
+	{`[{"Name": 1 }]`, "want string for Name"},
+	{`[{"Description": 1 }]`, "want string for Description"},
+	{`[{"RequestIP": 1 }]`, "want string for RequestIP"},
+	{`[{"User": 1 }]`, "want string for User"},
+	{`[{"Query": 1 }]`, "want string for Query"},
+	{`[{"Plans": 1 }]`, "want list for Plans"},
+	{`[{"TableNames": 1 }]`, "want list for TableNames"},
+	{`[{"BindVarConds": 1 }]`, "want list for BindVarConds"},
+	{`[{"RequestIP": "[" }]`, "could not set IP condition: ["},
+	{`[{"User": "[" }]`, "could not set User condition: ["},
+	{`[{"Query": "[" }]`, "could not set Query condition: ["},
+	{`[{"Plans": [1] }]`, "want string for Plans"},
+	{`[{"Plans": ["invalid"] }]`, "invalid plan name: invalid"},
+	{`[{"TableNames": [1] }]`, "want string for TableNames"},
+	{`[{"BindVarConds": [1] }]`, "want json object for bind var conditions"},
+	{`[{"BindVarConds": [{}] }]`, "Name missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": 1}] }]`, "want string for Name in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a"}] }]`, "OnAbsent missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": 1}] }]`, "want bool for OnAbsent"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true}]}]`, "Operator missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "a"}]}]`, "invalid Operator a"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "=="}]}]`, "Value missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "==", "Value": 1.2}]}]`, "want int64/uint64: 1.2"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "==", "Value": {}}]}]`, "want string or number: map[]"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "MATCH", "Value": 1}]}]`, "want string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "NOMATCH", "Value": 1}]}]`, "want string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": 123, "Value": "1"}]}]`, "want string for Operator"},
+	{`[{"Unknown": [{"Name": "a"}]}]`, "unrecognized tag Unknown"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "<=", "Value": "1"}]}]`, "OnMismatch missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
+	{`[{"Action": 1 }]`, "want string for Action"},
+	{`[{"Action": "foo" }]`, "invalid Action foo"},
+}
+
+func TestInvalidJSON(t *testing.T) {
+	for _, tcase := range invalidjsons {
+		qrs := New()
+		err := qrs.UnmarshalJSON([]byte(tcase.input))
+		require.Errorf(t, err, "want error for case %q", tcase.input)
+		recvd := strings.Replace(err.Error(), "fatal: ", "", 1)
+		assert.Equalf(t, tcase.err, recvd, "invalid json: %s", tcase.input)
+	}
+	qrs := New()
+	err := qrs.UnmarshalJSON([]byte(`{`))
+	assert.Equalf(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "qrs.UnmarshalJSON")
+}
+
+func TestBuildQueryRuleActionFail(t *testing.T) {
+	var ruleInfo map[string]any
+	err := json.Unmarshal([]byte(`{"Action": "FAIL" }`), &ruleInfo)
+	require.NoError(t, err)
+	qr, err := BuildQueryRule(ruleInfo)
+	require.NoError(t, err, "build query rule should succeed")
+	require.Equal(t, QRFail, qr.act, "action should fail")
+}
+
+func TestBadAddBindVarCond(t *testing.T) {
+	qr1 := NewQueryRule("rule 1", "r1", QRFail)
+	err := qr1.AddBindVarCond("a", true, false, QRMatch, uint64(1))
+	require.Error(t, err, "invalid op: QRMatch for value type: uint64")
+}
+
+func TestOpNames(t *testing.T) {
+	want := []string{
+		"",
+		"==",
+		"!=",
+		"<",
+		">=",
+		">",
+		"<=",
+		"MATCH",
+		"NOMATCH",
+	}
+	assert.Truef(t, reflect.DeepEqual(opnames, want), "opnames: \n%v, want \n%v", opnames, want)
+}
+
+func compacted(in string) string {
+	dst := bytes.NewBuffer(nil)
+	err := json.Compact(dst, []byte(in))
+	if err != nil {
+		panic(err)
+	}
+	return dst.String()
+}
+
+func marshalled(in any) string {
+	b, err := json.Marshal(in)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}

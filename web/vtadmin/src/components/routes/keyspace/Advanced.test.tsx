@@ -1,0 +1,114 @@
+/**
+ * Copyright 2022 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Advanced } from './Advanced';
+import { vtadmin } from '../../../proto/vtadmin';
+import { describe, it, expect, vi } from 'vitest';
+import { Response } from 'cross-fetch';
+
+const ORIGINAL_PROCESS_ENV = import.meta.env;
+const TEST_PROCESS_ENV = {
+    ...import.meta.env,
+    VITE_VTADMIN_API_ADDRESS: '',
+};
+
+describe('Advanced keyspace actions', () => {
+    const keyspace: vtadmin.IKeyspace = {
+        cluster: { id: 'some-cluster', name: 'some-cluster' },
+        keyspace: {
+            name: 'some-keyspace',
+        },
+    };
+
+    const server = setupServer(
+        http.get('/api/keyspace/:clusterID/:keyspace', (info) => {
+            return HttpResponse.json({ ok: true, result: keyspace });
+        }),
+        http.put('/api/schemas/reload', (info) => {
+            return HttpResponse.json({ ok: true });
+        })
+    );
+
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+
+    beforeAll(() => {
+        Object.assign(import.meta.env, TEST_PROCESS_ENV);
+        server.listen();
+    });
+
+    beforeEach(() => {
+        Object.assign(import.meta.env, TEST_PROCESS_ENV);
+        vi.clearAllMocks();
+    });
+
+    afterAll(() => {
+        Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
+        server.close();
+    });
+
+    describe('Reload Schema', () => {
+        it('reloads the schema', async () => {
+            const response: Promise<Response> = new Promise((resolve) =>
+                resolve(new Response('{"ok": "true", "result": {}}', { status: 200 }))
+            );
+            vi.spyOn(global, 'fetch').mockReturnValue(response);
+
+            render(
+                <QueryClientProvider client={queryClient}>
+                    <Advanced clusterID="some-cluster" name="some-keyspace" />
+                </QueryClientProvider>
+            );
+
+            expect(screen.getByText('Loading...')).not.toBeNull();
+
+            await waitFor(async () => {
+                expect(screen.queryByText('Loading...')).toBeNull();
+            });
+
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            expect(global.fetch).toHaveBeenCalledWith(`/api/keyspace/some-cluster/some-keyspace`, {
+                credentials: undefined,
+            });
+
+            vi.clearAllMocks();
+
+            const container = screen.getByTitle('Reload Schema');
+            const button = within(container).getByRole('button');
+            expect(button).not.toHaveAttribute('disabled');
+
+            const user = userEvent.setup();
+            await user.click(button);
+            await waitFor(() => {
+                expect(global.fetch).toHaveBeenCalledTimes(1);
+            });
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                `/api/schemas/reload?cluster=some-cluster&keyspace=some-keyspace`,
+                {
+                    credentials: undefined,
+                    method: 'put',
+                }
+            );
+        });
+    });
+});

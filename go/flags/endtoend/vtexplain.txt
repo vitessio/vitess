@@ -1,0 +1,79 @@
+vtexplain is a command line tool which provides information on how Vitess plans to execute a particular query.
+		
+It can be used to validate queries for compatibility with Vitess.
+
+For a user guide that describes how to use the vtexplain tool to explain how Vitess executes a particular SQL statement, see Analyzing a SQL statement.
+
+## Limitations
+
+### The VSchema must use a keyspace name.
+
+VTExplain requires a keyspace name for each keyspace in an input VSchema:
+```
+"keyspace_name": {
+    "_comment": "Keyspace definition goes here."
+}
+```
+
+If no keyspace name is present, VTExplain will return the following error:
+```
+ERROR: initVtgateExecutor: json: cannot unmarshal bool into Go value of type map[string]json.RawMessage
+```
+
+Usage:
+  vtexplain [flags]
+
+Examples:
+Explain how Vitess will execute the query `SELECT * FROM users` using the VSchema contained in `vschemas.json` and the database schema `schema.sql`:
+
+```
+vtexplain --vschema-file vschema.json --schema-file schema.sql --sql "SELECT * FROM users"
+```
+
+Explain how the example will execute on 128 shards using Row-based replication:
+
+```
+vtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --replication-mode "ROW" --output-mode text --sql "INSERT INTO users (user_id, name) VALUES(1, 'john')"
+```
+
+
+Flags:
+      --batch-interval duration                                     Interval between logical time slots. (default 10ms)
+      --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                          Config file type (omit to infer config type from file extension).
+      --dbname string                                               Optional database target to override normal routing
+      --default-tablet-type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --execution-mode string                                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
+  -h, --help                                                        help for vtexplain
+      --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
+      --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
+      --ks-shard-map string                                         JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
+      --ks-shard-map-file string                                    File containing json blob of keyspace name -> shard name -> ShardReference object
+      --log-err-stacks                                              log stack traces for errors
+      --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
+      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --log-structured                                              enable structured JSON logging (default true)
+      --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
+      --normalize                                                   Whether to enable vtgate normalization
+      --output-mode string                                          Output in human-friendly text or json (default "text")
+      --planner-version string                                      Sets the default planner to use. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
+      --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints
+      --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
+      --replication-mode string                                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
+      --schema string                                               The SQL table schema
+      --schema-file string                                          Identifies the file that contains the SQL table schema
+      --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --shards int                                                  Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
+      --sql string                                                  A list of semicolon-delimited SQL commands to analyze
+      --sql-file string                                             Identifies the file that contains the SQL commands to analyze
+      --sql-max-length-errors int                                   truncate queries in error logs to the given length (default unlimited)
+      --sql-max-length-ui int                                       truncate queries in debug UIs to the given length (default 512) (default 512)
+  -v, --version                                                     print binary version
+      --vschema string                                              Identifies the VTGate routing schema
+      --vschema-file string                                         Identifies the VTGate routing schema file

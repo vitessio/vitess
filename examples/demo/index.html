@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+
+<html data-ng-app="">
+<link rel="stylesheet"
+  href="https://stackpath.bootstrapcdn.com/bootswatch/4.3.1/minty/bootstrap.min.css">
+<head>
+<meta charset="US-ASCII">
+<title>Vitess VSchema demo</title>
+</head>
+<body data-ng-controller="DemoController">
+  <div class="container-fluid text-dark">
+    <div class="row">
+      <h4 class="col-md-9">Vitess VSchema demo</h4>
+    </div>
+    <div class="row">
+      <div class="col-md-8">
+        <div class="card mt-3 mb-3">
+          <div class="card-heading">
+            <h4 class="text-center">customer</h4>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.customer0" data-ng-repeat="curResult in [result.customer0]"
+                data-ng-include="'result.html'"></div>
+            </div>
+            <div class="col-md-6">
+              <div data-ng-show="result.customer1" data-ng-repeat="curResult in [result.customer1]"
+                data-ng-include="'result.html'"></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.corder0" data-ng-repeat="curResult in [result.corder0]"
+                data-ng-include="'result.html'"></div>
+            </div>
+            <div class="col-md-6">
+              <div data-ng-show="result.corder1" data-ng-repeat="curResult in [result.corder1]"
+                data-ng-include="'result.html'"></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.corder_event0" data-ng-repeat="curResult in [result.corder_event0]"
+                data-ng-include="'result.html'"></div>
+            </div>
+            <div class="col-md-6">
+              <div data-ng-show="result.corder_event1" data-ng-repeat="curResult in [result.corder_event1]"
+                data-ng-include="'result.html'"></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.oname_keyspace_idx0" data-ng-repeat="curResult in [result.oname_keyspace_idx0]"
+                data-ng-include="'result.html'"></div>
+            </div>
+            <div class="col-md-6">
+              <div data-ng-show="result.oname_keyspace_idx1" data-ng-repeat="curResult in [result.oname_keyspace_idx1]"
+                data-ng-include="'result.html'"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card mt-3 mb-3">
+          <div class="card-heading">
+            <h4 class="text-center">product</h4>
+          </div>
+          <div class="row">
+            <div class="col-md-12">
+              <div data-ng-show="result.product" data-ng-repeat="curResult in [result.product]"
+                data-ng-include="'result.html'"></div>
+              <div data-ng-show="result.customer_seq" data-ng-repeat="curResult in [result.customer_seq]"
+                data-ng-include="'result.html'"></div>
+              <div data-ng-show="result.corder_keyspace_idx" data-ng-repeat="curResult in [result.corder_keyspace_idx]"
+                data-ng-include="'result.html'"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-9">
+        <div class="card">
+          <form class="input-group" data-ng-submit="submitQuery()">
+            <div class="input-group-btn">
+              <button class="btn dropdown-toggle text-dark" type="button"
+                data-toggle="dropdown">
+                Samples <span class="caret"></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li data-ng-class="{'divider': !sample}"
+                  data-ng-repeat="sample in samples track by $index"
+                  data-ng-click="setQuery(sample)"><a data-ng-show="sample"
+                  href="#">{{sample}}</a></li>
+              </ul>
+            </div>
+            <input type="text" class="form-control" placeholder="Query"
+              data-ng-model="query" id="query_input">
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-4 mt-3">
+        <div class="col-md-12">
+          <div data-ng-repeat="curResult in [result.result]"
+            data-ng-include="'result.html'"></div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="card bg-primary mt-3 ml-1 mr-1" data-ng-show="result.queries">
+          <h5 class="card-title">Executed Queries
+          </h5>
+          <div data-ng-repeat="queryInfo in result.queries track by $index">
+            {{queryInfo}}<br>
+          </div>
+        </div>
+      </div>
+  </div>
+  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.0/angular.js" type="text/javascript"></script>
+  <script src="index.js" type="text/javascript"></script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+[
+  {
+    "comment": "Explain statement",
+    "query": "explain select * from user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "explain select * from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select * from `user`",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Analyze statement",
+    "query": "analyze table main.t1",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "ANALYZE",
+      "Original": "analyze table main.t1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "analyze table t1"
+      },
+      "TablesUsed": [
+        "t1"
+      ]
+    }
+  },
+  {
+    "comment": "Describe statement",
+    "query": "describe select * from user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "describe select * from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select * from `user`",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Desc statement",
+    "query": "desc select * from user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "desc select * from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select * from `user`",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "explain - routed table with same name",
+    "query": "explain select 1, second_user.user.id from second_user.user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "explain select 1, second_user.user.id from second_user.user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select 1, `user`.id from `user`",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "explain - routed table with different name",
+    "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "explain select 1, second_user.foo.id, foo.col from second_user.foo",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select 1, foo.id, foo.col from `user` as foo",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.foo"
+      ]
+    }
+  },
+  {
+    "comment": "explain - routed table with join on different table on routed keyspace",
+    "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join user.music",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join user.music",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select 1, foo.id, foo.col from `user` as foo join `user` join music",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.foo",
+        "user.user",
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "describe info_schema table",
+    "query": "describe information_schema.administrable_role_authorizations",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "describe information_schema.administrable_role_authorizations",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain information_schema.administrable_role_authorizations",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "main.administrable_role_authorizations"
+      ]
+    }
+  },
+  {
+    "comment": "describe table without qualifier",
+    "query": "describe user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "EXPLAIN",
+      "Original": "describe user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain `user`",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "describe table does not exists",
+    "query": "describe unknown_table",
+    "plan": "table unknown_table not found"
+  }
+]

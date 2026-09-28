@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Runs any hooks in misc/git/commit-msg.*, and exits if any of them fail.
+set -e
+
+# Find the repo root. Since this script may be symlinked from the hooks directory, we resolve
+# the symlink first to get the actual script location in misc/git/, then go up two levels.
+SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+if [ -L "$SCRIPT_PATH" ]; then
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+fi
+REPO_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
+
+for hook in "$REPO_ROOT"/misc/git/commit-msg.*; do
+  [ -x "$hook" ] && "$hook" "$@"
+done

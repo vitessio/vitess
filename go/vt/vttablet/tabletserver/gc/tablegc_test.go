@@ -1,0 +1,554 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package gc
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+)
+
+// newFakeDBTableGC builds a TableGC wired to a fake MySQL, sufficient for exercising purge/dropTable.
+func newFakeDBTableGC(t *testing.T, db *fakesqldb.DB) *TableGC {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TableGCTest")
+
+	collector := &TableGC{
+		env:             env,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.TableGCName, base.UndefinedScope),
+		purgingTables:   map[string]bool{},
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+	return collector
+}
+
+// TestDropTableDisablesForeignKeyChecks verifies that dropTable disables foreign key checks before
+// issuing the DROP (and restores them afterwards). This lets the GC drop a table that is still
+// referenced by another (also-doomed) table's foreign key, regardless of the order in which held
+// tables are reclaimed.
+func TestDropTableDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+
+	err := collector.dropTable(t.Context(), "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", true)
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	dropIdx := strings.Index(queryLog, "drop table if exists")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, dropIdx, 0, "table must be dropped; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before the drop, and restored after it.
+	assert.Less(t, disableIdx, dropIdx, "foreign_key_checks must be disabled before the drop")
+	assert.Less(t, dropIdx, restoreIdx, "foreign_key_checks must be restored after the drop")
+}
+
+// TestPurgeDisablesForeignKeyChecks verifies that purge disables foreign key checks before deleting
+// rows. This lets the GC purge a doomed parent table's rows even while a doomed child still
+// references them under ON DELETE RESTRICT, without wedging.
+func TestPurgeDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+	require.True(t, collector.addPurgingTable("_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"))
+
+	_, err := collector.purge(t.Context())
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	deleteIdx := strings.Index(queryLog, "delete from")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, deleteIdx, 0, "rows must be purged; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before purging rows, and restored afterwards.
+	assert.Less(t, disableIdx, deleteIdx, "foreign_key_checks must be disabled before purging rows")
+	assert.Less(t, deleteIdx, restoreIdx, "foreign_key_checks must be restored after purging")
+}
+
+func TestNextTableToPurge(t *testing.T) {
+	tt := []struct {
+		name   string
+		tables []string
+		next   string
+		ok     bool
+	}{
+		{
+			name:   "empty",
+			tables: []string{},
+			ok:     false,
+		},
+		{
+			name: "first, new format",
+			tables: []string{
+				"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_prg_2ace8bcef73211ea87e9f875a4d24e90_20200915120411_",
+				"_vt_prg_3ace8bcef73211ea87e9f875a4d24e90_20200915120412_",
+				"_vt_prg_4ace8bcef73211ea87e9f875a4d24e90_20200915120413_",
+			},
+			next: "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			ok:   true,
+		},
+		{
+			name: "mid, new format",
+			tables: []string{
+				"_vt_prg_2ace8bcef73211ea87e9f875a4d24e90_20200915120411_",
+				"_vt_prg_3ace8bcef73211ea87e9f875a4d24e90_20200915120412_",
+				"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_prg_4ace8bcef73211ea87e9f875a4d24e90_20200915120413_",
+			},
+			next: "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			ok:   true,
+		},
+		{
+			name: "none, new format",
+			tables: []string{
+				"_vt_hld_2ace8bcef73211ea87e9f875a4d24e90_20200915120411_",
+				"_vt_evc_3ace8bcef73211ea87e9f875a4d24e90_20200915120412_",
+				"_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_drp_4ace8bcef73211ea87e9f875a4d24e90_20200915120413_",
+				"_vt_prg_4ace8bcef73211ea87e9f875a4d24e90_20200915999999_",
+			},
+			next: "",
+			ok:   false,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			collector := &TableGC{
+				purgingTables:    make(map[string]bool),
+				checkRequestChan: make(chan bool),
+			}
+			var err error
+			collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+			require.NoError(t, err)
+			for _, table := range ts.tables {
+				collector.addPurgingTable(table)
+			}
+
+			next, ok := collector.nextTableToPurge()
+			assert.Equal(t, ts.ok, ok)
+			if ok {
+				assert.Equal(t, ts.next, next)
+			}
+		})
+	}
+}
+
+func TestNextState(t *testing.T) {
+	tt := []struct {
+		lifecycle string
+		state     schema.TableGCState
+		next      schema.TableGCState
+	}{
+		{
+			lifecycle: "hold,purge,evac,drop",
+			state:     schema.HoldTableGCState,
+			next:      schema.PurgeTableGCState,
+		},
+		{
+			lifecycle: "hold,purge,evac,drop",
+			state:     schema.PurgeTableGCState,
+			next:      schema.EvacTableGCState,
+		},
+		{
+			lifecycle: "hold,purge,evac,drop",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "hold,purge,evac",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "hold,purge",
+			state:     schema.HoldTableGCState,
+			next:      schema.PurgeTableGCState,
+		},
+		{
+			lifecycle: "hold,purge",
+			state:     schema.PurgeTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "hold",
+			state:     schema.HoldTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "evac,drop",
+			state:     schema.HoldTableGCState,
+			next:      schema.EvacTableGCState,
+		},
+		{
+			lifecycle: "evac,drop",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "drop",
+			state:     schema.HoldTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "drop",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "",
+			state:     schema.HoldTableGCState,
+			next:      schema.DropTableGCState,
+		},
+	}
+	for _, ts := range tt {
+		collector := &TableGC{}
+		var err error
+		collector.lifecycleStates, err = schema.ParseGCLifecycle(ts.lifecycle)
+		require.NoError(t, err)
+		next := collector.nextState(ts.state)
+		assert.NotNil(t, next)
+		assert.Equal(t, ts.next, *next)
+
+		postDrop := collector.nextState(schema.DropTableGCState)
+		assert.Nil(t, postDrop)
+	}
+}
+
+func TestShouldTransitionTable(t *testing.T) {
+	tt := []struct {
+		name             string
+		table            string
+		state            schema.TableGCState
+		handledStates    string
+		uuid             string
+		shouldTransition bool
+		isError          bool
+	}{
+		{
+			name:             "purge, old timestamp",
+			table:            "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			state:            schema.PurgeTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			shouldTransition: true,
+		},
+		{
+			name:             "no purge, future timestamp",
+			table:            "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
+			state:            schema.PurgeTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			shouldTransition: false,
+		},
+		{
+			name:             "no purge, PURGE not handled state",
+			table:            "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
+			state:            schema.PurgeTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			handledStates:    "hold,evac", // no PURGE
+			shouldTransition: true,
+		},
+		{
+			name:             "no drop, future timestamp",
+			table:            "_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
+			state:            schema.DropTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			shouldTransition: false,
+		},
+		{
+			name:             "drop, old timestamp",
+			table:            "_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20090915120410_",
+			state:            schema.DropTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			shouldTransition: true,
+		},
+		{
+			name:             "no evac, future timestamp",
+			table:            "_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
+			state:            schema.EvacTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			shouldTransition: false,
+		},
+		{
+			name:             "no hold, HOLD not handled state",
+			table:            "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
+			state:            schema.HoldTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			shouldTransition: true,
+		},
+		{
+			name:             "hold, future timestamp",
+			table:            "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_29990915120410_",
+			state:            schema.HoldTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			handledStates:    "hold,purge,evac,drop",
+			shouldTransition: false,
+		},
+		{
+			name:             "not a GC table",
+			table:            "_vt_SOMETHING_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            "",
+			uuid:             "",
+			shouldTransition: false,
+		},
+		{
+			name:             "invalid new format",
+			table:            "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_29990915999999_",
+			state:            "",
+			uuid:             "",
+			shouldTransition: false,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			if ts.handledStates == "" {
+				ts.handledStates = "purge,evac,drop"
+			}
+			lifecycleStates, err := schema.ParseGCLifecycle(ts.handledStates)
+			require.NoError(t, err)
+			collector := &TableGC{
+				lifecycleStates: lifecycleStates,
+			}
+
+			shouldTransition, state, uuid, err := collector.shouldTransitionTable(ts.table)
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, ts.shouldTransition, shouldTransition)
+				assert.Equal(t, ts.state, state)
+				assert.Equal(t, ts.uuid, uuid)
+			}
+		})
+	}
+}
+
+func TestCheckTables(t *testing.T) {
+	collector := &TableGC{
+		isOpen:           0,
+		purgingTables:    map[string]bool{},
+		checkRequestChan: make(chan bool),
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+
+	gcTables := []*gcTable{
+		{
+			tableName:   "_vt_something_that_isnt_a_gc_table",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_29990915999999_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_hld_11111111111111111111111111111111_20990920093324_", // 2099 is in the far future
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_hld_11111111111111111111111111111111_20990920093324_", // 2099 is in the far future
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_hld_22222222222222222222222222222222_20200920093324_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_hld_22222222222222222222222222222222_20200920093324_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_drp_33333333333333333333333333333333_20200919083451_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_drp_33333333333333333333333333333333_20200919083451_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_drp_44444444444444444444444444444444_20200919083451_",
+			isBaseTable: false,
+		},
+		{
+			tableName:   "_vt_drp_44444444444444444444444444444444_20200919083451_",
+			isBaseTable: false,
+		},
+	}
+	expectResponses := len(gcTables)
+	// one gcTable above is irrelevant: it does not have a GC table name
+	expectResponses = expectResponses - 1
+	// one will not transition: its date is 2099
+	expectResponses = expectResponses - 1
+	// one gcTable above is irrelevant: it has an invalid new format timestamp
+	expectResponses = expectResponses - 1
+	// one will not transition: its date is 2099 in new format
+	expectResponses = expectResponses - 1
+
+	expectDropTables := []*gcTable{
+		{
+			tableName:   "_vt_drp_33333333333333333333333333333333_20200919083451_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_drp_33333333333333333333333333333333_20200919083451_",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_drp_44444444444444444444444444444444_20200919083451_",
+			isBaseTable: false,
+		},
+		{
+			tableName:   "_vt_drp_44444444444444444444444444444444_20200919083451_",
+			isBaseTable: false,
+		},
+	}
+	expectTransitionRequests := []*transitionRequest{
+		{
+			fromTableName: "_vt_hld_22222222222222222222222222222222_20200920093324_",
+			isBaseTable:   true,
+			toGCState:     schema.PurgeTableGCState,
+			uuid:          "22222222222222222222222222222222",
+		},
+		{
+			fromTableName: "_vt_hld_22222222222222222222222222222222_20200920093324_",
+			isBaseTable:   true,
+			toGCState:     schema.PurgeTableGCState,
+			uuid:          "22222222222222222222222222222222",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
+	defer cancel()
+	dropTablesChan := make(chan *gcTable)
+	transitionRequestsChan := make(chan *transitionRequest)
+
+	err = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
+	require.NoError(t, err)
+
+	var responses int
+	var foundDropTables []*gcTable
+	var foundTransitionRequests []*transitionRequest
+	for responses != expectResponses {
+		select {
+		case <-ctx.Done():
+			assert.FailNow(t, "timeout")
+			return
+		case gcTable := <-dropTablesChan:
+			responses++
+			foundDropTables = append(foundDropTables, gcTable)
+		case request := <-transitionRequestsChan:
+			responses++
+			foundTransitionRequests = append(foundTransitionRequests, request)
+		}
+	}
+	assert.ElementsMatch(t, expectDropTables, foundDropTables)
+	assert.ElementsMatch(t, expectTransitionRequests, foundTransitionRequests)
+}
+
+type fakeGCConn struct {
+	query  string
+	result *sqltypes.Result
+	err    error
+}
+
+func (c *fakeGCConn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	c.query = query
+	if c.err != nil {
+		return nil, c.err
+	}
+	if c.result != nil {
+		return c.result, nil
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (c *fakeGCConn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return true, nil
+}
+
+func (c *fakeGCConn) Close() {}
+
+func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
+	type testCase struct {
+		name            string
+		ahiSetting      string
+		expectPurgeEvac bool
+	}
+	testCases := []testCase{
+		{
+			name:            "AHI OFF",
+			ahiSetting:      "OFF",
+			expectPurgeEvac: false,
+		},
+		{
+			name:            "AHI ON",
+			ahiSetting:      "ON",
+			expectPurgeEvac: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := &TableGC{}
+			collector.lifecycleStates = map[schema.TableGCState]bool{
+				schema.HoldTableGCState:  true,
+				schema.PurgeTableGCState: true,
+				schema.EvacTableGCState:  true,
+				schema.DropTableGCState:  true,
+			}
+			conn := &fakeGCConn{
+				result: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("variable_value", "varchar"),
+					tc.ahiSetting,
+				),
+			}
+			states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectPurgeEvac, states[schema.PurgeTableGCState])
+			require.Equal(t, tc.expectPurgeEvac, states[schema.EvacTableGCState])
+			require.True(t, states[schema.DropTableGCState])
+		})
+	}
+}

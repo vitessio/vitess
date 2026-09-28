@@ -1,0 +1,121 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/tidwall/gjson"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+)
+
+func TestMultipleConcurrentVDiffs(t *testing.T) {
+	cellName := "zone1"
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+
+	sourceKeyspace := defaultSourceKs
+	shardName := "0"
+
+	cell := vc.Cells[cellName]
+	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, 100, defaultSourceKsOpts)
+
+	verifyClusterHealth(t, vc)
+	insertInitialData(t)
+	targetTabletId := 200
+	targetKeyspace := defaultTargetKs
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, targetTabletId, defaultSourceKsOpts)
+
+	index := 1000
+	var loadCtx context.Context
+	var loadCancel context.CancelFunc
+	loadCtx, loadCancel = context.WithCancel(t.Context())
+	load := func(tableName string) {
+		query := "insert into %s(cid, name) values(%d, 'customer-%d')"
+		for {
+			select {
+			case <-loadCtx.Done():
+				log.Info("load cancelled")
+				return
+			default:
+				index += 1
+				vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+				q := fmt.Sprintf(query, tableName, index, index)
+				vtgateConn.ExecuteFetch(q, 1000, false)
+				vtgateConn.Close()
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	targetTab := vc.Cells[cellName].Keyspaces[targetKeyspace].Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
+	require.NotNil(t, targetTab)
+
+	time.Sleep(15 * time.Second) // wait for some rows to be inserted.
+
+	createWorkflow := func(workflowName, tables string) {
+		mt := newMoveTables(vc, &moveTablesWorkflow{
+			workflowInfo: &workflowInfo{
+				vc:             vc,
+				workflowName:   workflowName,
+				targetKeyspace: targetKeyspace,
+				tabletTypes:    "primary",
+			},
+			sourceKeyspace: sourceKeyspace,
+			tables:         tables,
+		}, workflowFlavorVtctld)
+		mt.Create()
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+		catchup(t, targetTab, workflowName, "MoveTables")
+	}
+
+	createWorkflow("wf1", "customer")
+	createWorkflow("wf2", "customer2")
+
+	go load("customer")
+	go load("customer2")
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	doVdiff := func(workflowName, table string) {
+		defer wg.Done()
+		vdiff(t, targetKeyspace, workflowName, cellName, nil)
+	}
+	go doVdiff("wf1", "customer")
+	go doVdiff("wf2", "customer2")
+	wg.Wait()
+	loadCancel()
+
+	// confirm that show all shows the correct workflow and only that workflow.
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--format", "json", "--workflow", "wf1", "--target-keyspace", defaultTargetKs, "show", "all")
+	require.NoError(t, err)
+	log.Info("VDiff output: " + output)
+	count := gjson.Get(output, "..#").Int()
+	wf := gjson.Get(output, "0.Workflow").String()
+	ksName := gjson.Get(output, "0.Keyspace").String()
+	require.Equal(t, int64(1), count)
+	require.Equal(t, "wf1", wf)
+	require.Equal(t, defaultTargetKs, ksName)
+}

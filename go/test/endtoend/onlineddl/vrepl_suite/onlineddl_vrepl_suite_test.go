@@ -1,0 +1,411 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplsuite
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
+)
+
+var (
+	clusterInstance         *cluster.LocalProcessCluster
+	vtParams                mysql.ConnParams
+	evaluatedMysqlParams    *mysql.ConnParams
+	ddlStrategy             = "vitess -vreplication-test-suite"
+	waitForMigrationTimeout = 20 * time.Second
+
+	hostname              = "localhost"
+	keyspaceName          = "ks"
+	cell                  = "zone1"
+	schemaChangeDirectory = ""
+	tableName             = `onlineddl_test`
+	beforeTableName       = `onlineddl_test_before`
+	afterTableName        = `onlineddl_test_after`
+	eventName             = `onlineddl_test`
+
+	testsFilter = ""
+)
+
+const (
+	testDataPath     = "testdata"
+	testFilterEnvVar = "ONLINEDDL_SUITE_TEST_FILTER"
+)
+
+// Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	testsFilter = os.Getenv(testFilterEnvVar)
+
+	exitcode, err := func() (int, error) {
+		clusterInstance = cluster.NewCluster(cell, hostname)
+		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
+		defer os.RemoveAll(schemaChangeDirectory)
+		defer clusterInstance.Teardown()
+
+		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
+		}
+
+		clusterInstance.VtctldExtraArgs = []string{
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		}
+
+		clusterInstance.VtTabletExtraArgs = []string{
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+		}
+
+		if err := clusterInstance.StartTopo(); err != nil {
+			return 1, err
+		}
+
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name: keyspaceName,
+		}
+
+		// No need for replicas in this stress test
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
+			return 1, err
+		}
+
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		// Start vtgate
+		if err := vtgateInstance.Setup(); err != nil {
+			return 1, err
+		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+
+		return m.Run(), nil
+	}()
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		os.Exit(1)
+	} else {
+		os.Exit(exitcode)
+	}
+}
+
+func TestVreplSuiteSchemaChanges(t *testing.T) {
+	shards := clusterInstance.Keyspaces[0].Shards
+	require.Len(t, shards, 1)
+
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+
+	fkOnlineDDLPossible := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		fkOnlineDDLPossible = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
+	})
+
+	files, err := os.ReadDir(testDataPath)
+	require.NoError(t, err)
+	for _, f := range files {
+		if !f.IsDir() {
+			continue
+		}
+		// this is a test!
+		t.Run(f.Name(), func(t *testing.T) {
+			testSingle(t, f.Name(), fkOnlineDDLPossible)
+		})
+	}
+}
+
+func readTestFile(t *testing.T, testName string, fileName string) (content string, exists bool) {
+	filePath := path.Join(testDataPath, testName, fileName)
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		return "", false
+	}
+	require.NoError(t, err)
+	b, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	return strings.TrimSpace(string(b)), true
+}
+
+// testSingle is the main testing function for a single test in the suite.
+// It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
+func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
+	if !strings.Contains(testName, testsFilter) {
+		t.Skipf("Skipping test %s due to filter: %s=%s", testName, testFilterEnvVar, testsFilter)
+		return
+	}
+	if _, exists := readTestFile(t, testName, "require_rename_table_preserve_foreign_key"); exists {
+		if !fkOnlineDDLPossible {
+			t.Skipf("Skipping test due to require_rename_table_preserve_foreign_key")
+			return
+		}
+	}
+
+	if ignoreVersions, exists := readTestFile(t, testName, "ignore_versions"); exists {
+		// ignoreVersions is a regexp
+		re, err := regexp.Compile(ignoreVersions)
+		require.NoError(t, err)
+
+		rs := mysqlExec(t, "select @@version as ver", "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		mysqlVersion := row["ver"].ToString()
+
+		if re.MatchString(mysqlVersion) {
+			t.Skipf("Skipping test due to ignore_versions=%s", ignoreVersions)
+			return
+		}
+	}
+
+	sqlMode := config.DefaultSQLMode
+	if overrideSQLMode, exists := readTestFile(t, testName, "sql_mode"); exists {
+		sqlMode = overrideSQLMode
+	}
+	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", sqlMode)
+	_ = mysqlExec(t, sqlModeQuery, "")
+	_ = mysqlExec(t, "set @@global.event_scheduler=1", "")
+
+	_ = mysqlExec(t, fmt.Sprintf("drop table if exists %s_child, %s, %s_parent, %s, %s;", tableName, tableName, tableName, beforeTableName, afterTableName), "")
+	_ = mysqlExec(t, "drop event if exists "+eventName, "")
+
+	{
+		// create
+		f := "create.sql"
+		_, exists := readTestFile(t, testName, f)
+		require.True(t, exists)
+		onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
+		// ensure test table has been created:
+		getCreateTableStatement(t, tableName)
+	}
+	defer func() {
+		// destroy
+		f := "destroy.sql"
+		if _, exists := readTestFile(t, testName, f); exists {
+			onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
+		}
+	}()
+
+	var expectQueryFailure string
+	if content, exists := readTestFile(t, testName, "expect_query_failure"); exists {
+		// VTGate failure is expected!
+		expectQueryFailure = content
+	}
+
+	singleDDLStrategy := ddlStrategy
+	if extra, exists := readTestFile(t, testName, "ddl_strategy"); exists {
+		singleDDLStrategy = fmt.Sprintf("%s %s", singleDDLStrategy, extra)
+	}
+
+	var migrationMessage string
+	var migrationStatus string
+	// Run test
+	alterClause := "engine=innodb"
+	if content, exists := readTestFile(t, testName, "alter"); exists {
+		alterClause = content
+	}
+	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
+	// Run the DDL!
+	uuid := testOnlineDDLStatement(t, alterStatement, singleDDLStrategy, expectQueryFailure)
+
+	if expectQueryFailure != "" {
+		// Nothing further to do. Migration isn't actually running
+		return
+	}
+	assert.NotEmpty(t, uuid)
+
+	defer func() {
+		query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+			sqltypes.StringBindVariable(uuid),
+		)
+		require.NoError(t, err)
+		_, err = onlineddl.VtgateExecQuery(t.Context(), &vtParams, query)
+		require.NoError(t, err)
+	}()
+	row := waitForMigration(t, uuid, waitForMigrationTimeout)
+	// migration is complete
+	{
+		migrationStatus = row["migration_status"].ToString()
+		migrationMessage = row["message"].ToString()
+	}
+
+	if expectedErrorMessage, exists := readTestFile(t, testName, "expect_failure"); exists {
+		// Failure is expected!
+		assert.Contains(t, []string{string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}, migrationStatus)
+		require.Contains(t, migrationMessage, expectedErrorMessage, "expected error message (%s) to contain (%s)", migrationMessage, expectedErrorMessage)
+		// no need to proceed to checksum or anything further
+		return
+	}
+	// We do not expect failure.
+	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus, migrationMessage)
+
+	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
+		createStatement := getCreateTableStatement(t, afterTableName)
+		assert.Regexpf(t, content, createStatement, "expected SHOW CREATE TABLE to match text in 'expect_table_structure' file")
+	}
+
+	{
+		// checksum
+		beforeColumns := "*"
+		if content, exists := readTestFile(t, testName, "before_columns"); exists {
+			beforeColumns = content
+		}
+		afterColumns := "*"
+		if content, exists := readTestFile(t, testName, "after_columns"); exists {
+			afterColumns = content
+		}
+		orderBy := ""
+		if content, exists := readTestFile(t, testName, "order_by"); exists {
+			orderBy = "order by " + content
+		}
+		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
+		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
+
+		selectBeforeFile := onlineddl.CreateTempScript(t, selectBefore)
+		defer os.Remove(selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectBeforeFile)
+
+		selectAfterFile := onlineddl.CreateTempScript(t, selectAfter)
+		defer os.Remove(selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectAfterFile)
+
+		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBefore, selectAfter)
+	}
+}
+
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, expectError string) (uuid string) {
+	qr := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, expectError)
+	if qr != nil {
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		uuid = row.AsString("uuid", "")
+	}
+	uuid = strings.TrimSpace(uuid)
+	return uuid
+}
+
+func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
+	rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+	require.NoError(t, err)
+	require.NotNil(t, rs)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	return row
+}
+
+func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes.RowNamedValues {
+	var status string
+	sleepDuration := time.Second
+	for timeout > 0 {
+		row := readMigration(t, uuid)
+		status = row["migration_status"].ToString()
+		switch status {
+		case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled):
+			// migration is complete, either successful or not
+			return row
+		}
+		time.Sleep(sleepDuration)
+		timeout = timeout - sleepDuration
+	}
+	require.NoError(t, fmt.Errorf("timeout in waitForMigration(%s). status is: %s", uuid, status))
+	return nil
+}
+
+func getTablet() *cluster.Vttablet {
+	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+}
+
+func mysqlParams() *mysql.ConnParams {
+	if evaluatedMysqlParams != nil {
+		return evaluatedMysqlParams
+	}
+	evaluatedMysqlParams = &mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
+		DbName:     "vt_" + keyspaceName,
+	}
+	return evaluatedMysqlParams
+}
+
+// VtgateExecDDL executes a DDL query with given strategy
+func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
+	t.Helper()
+
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, mysqlParams())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(sql, 100000, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		require.Contains(t, err.Error(), expectError, "Unexpected error")
+	}
+	return qr
+}
+
+// getCreateTableStatement returns the CREATE TABLE statement for a given table
+func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
+	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
+	require.NoError(t, err)
+
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
+	statement = queryResult.Rows[0][1].ToString()
+	return statement
+}

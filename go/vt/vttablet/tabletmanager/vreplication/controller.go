@@ -1,0 +1,466 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+const (
+	// How many times to retry tablet selection before we
+	// give up and return an error message that the user
+	// can see and act upon if needed.
+	tabletPickerRetries = 5
+
+	// TerminalErrorIndicator prefixes the message of a stream that stopped
+	// retrying and went into the Error state. The Online DDL executor matches
+	// it as a message prefix, including in _vt.vreplication_log.
+	TerminalErrorIndicator = "terminal error"
+	// UnrecoverableErrorIndicator marks a terminal error that retrying
+	// cannot fix (e.g. bad data or schema mismatch; see
+	// isUnrecoverableError): the stream cannot be resumed.
+	UnrecoverableErrorIndicator = TerminalErrorIndicator + ": unrecoverable"
+	// RetriesExhaustedIndicator marks a recoverable-class error whose retry
+	// window (--vreplication-max-time-to-retry-on-error) expired; the stream
+	// is resumable by setting it back to Running. It deliberately does not
+	// extend TerminalErrorIndicator: the message is operator-visible, and a
+	// resumable condition must not be labeled a terminal error. Older
+	// executors still see the park: their history scan selects any
+	// state='Error' row regardless of message.
+	RetriesExhaustedIndicator = "retries exhausted"
+)
+
+// controller is created by Engine. Members are initialized upfront.
+// There is no mutex within a controller because its members are
+// either read-only or self-synchronized.
+type controller struct {
+	vre             *Engine
+	dbClientFactory func() binlogplayer.DBClient
+	mysqld          mysqlctl.MysqlDaemon
+	blpStats        *binlogplayer.Stats
+
+	id           int32
+	workflow     string
+	workflowType int32
+	source       *binlogdatapb.BinlogSource
+	stopPos      string
+
+	cancel context.CancelFunc
+	done   chan struct{}
+
+	// The following fields are updated after start. So, they need synchronization.
+	sourceTablet atomic.Value
+
+	lastWorkflowError *vterrors.LastError
+	WorkflowConfig    *vttablet.VReplicationConfig
+
+	// Used to ignore tablets with non-transient errors.
+	ignoreTablets []*topodatapb.TabletAlias
+
+	// Stores the last picked tablet so that it can be ignored if a non-transient error occurs.
+	lastPickedTablet *topodatapb.TabletAlias
+
+	// Tablet picker parameters used when creating a tablet picker with ignoreTablets.
+	tpTs             *topo.Server
+	tpCells          []string
+	tpTabletTypesStr string
+	tpOptions        discovery.TabletPickerOptions
+}
+
+// workflowTypeName returns the human-readable name for the workflow type
+// (e.g. "OnlineDDL", "Reshard", "MoveTables").
+func (ct *controller) workflowTypeName() string {
+	return binlogdatapb.VReplicationWorkflowType(ct.workflowType).String()
+}
+
+func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
+	options, ok := params["options"]
+	if !ok {
+		options = "{}"
+	}
+	var workflowOptions vtctldata.WorkflowOptions
+	if err := json.Unmarshal([]byte(options), &workflowOptions); err != nil {
+		return nil, fmt.Errorf("failed to parse options column: %v", err)
+	}
+	workflowConfig, err := vttablet.NewVReplicationConfig(workflowOptions.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process config options: %v", err)
+	}
+	return workflowConfig, nil
+}
+
+// newController creates a new controller. Unless a stream is explicitly 'Stopped',
+// this function launches a goroutine to perform continuous vreplication.
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
+	if blpStats == nil {
+		blpStats = binlogplayer.NewStats()
+	}
+	workflowConfig, err := processWorkflowOptions(params)
+	if err != nil {
+		return nil, err
+	}
+	tabletTypesStr := workflowConfig.TabletTypesStr
+	ct := &controller{
+		vre:             vre,
+		dbClientFactory: dbClientFactory,
+		mysqld:          mysqld,
+		blpStats:        blpStats,
+		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
+		WorkflowConfig:  workflowConfig,
+	}
+	blpStats.WorkflowConfig = workflowConfig.String()
+	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
+
+	id, err := strconv.ParseInt(params["id"], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	ct.id = int32(id)
+	ct.workflow = params["workflow"]
+	wfType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
+	ct.workflowType = int32(wfType)
+	log.Info(fmt.Sprintf("%s creating controller, cell: %v, tabletTypes: %v", ct.logPrefix(), cell, tabletTypesStr))
+
+	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
+
+	state := params["state"]
+	blpStats.State.Store(state)
+	if err := prototext.Unmarshal([]byte(params["source"]), ct.source); err != nil {
+		return nil, err
+	}
+
+	// Nothing to do if replication is stopped or is known to have an unrecoverable error.
+	if state == binlogdatapb.VReplicationWorkflowState_Stopped.String() || state == binlogdatapb.VReplicationWorkflowState_Error.String() {
+		ct.cancel = func() {}
+		close(ct.done)
+		return ct, nil
+	}
+
+	ct.stopPos = params["stop_pos"]
+
+	if ct.source.GetExternalMysql() == "" {
+		if v := params["cell"]; v != "" {
+			cell = v
+		}
+		if v := params["tablet_types"]; v != "" {
+			tabletTypesStr = v
+		}
+		log.Info(fmt.Sprintf("creating tablet picker for source keyspace/shard %v/%v with cell: %v and tabletTypes: %v", ct.source.Keyspace, ct.source.Shard, cell, tabletTypesStr))
+		cells := strings.Split(cell, ",")
+
+		sourceTopo := ts
+		if ct.source.ExternalCluster != "" {
+			sourceTopo, err = sourceTopo.OpenExternalVitessClusterServer(ctx, ct.source.ExternalCluster)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Store tablet picker params so we can create a picker with ignoreTablets in pickSourceTablet.
+		ct.tpTs = sourceTopo
+		ct.tpCells = cells
+		ct.tpTabletTypesStr = tabletTypesStr
+		ct.tpOptions = tpo
+	}
+
+	ctx, ct.cancel = context.WithCancel(ctx)
+
+	go ct.run(ctx)
+
+	return ct, nil
+}
+
+// Returns the shared prefix for log messages in the controller, includes workflow and stream ID.
+func (ct *controller) logPrefix() string {
+	return fmt.Sprintf("workflow %s, stream %d:", ct.workflow, ct.id)
+}
+
+func (ct *controller) run(ctx context.Context) {
+	defer func() {
+		log.Info(ct.logPrefix() + " stopped")
+		close(ct.done)
+	}()
+
+	for {
+		err := ct.runBlp(ctx)
+		if err == nil {
+			return
+		}
+
+		// Sometimes, canceled contexts get wrapped as errors.
+		select {
+		case <-ctx.Done():
+			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
+			return
+		default:
+		}
+
+		// Check if we should ignore this tablet and try another one.
+		action := discovery.ShouldRetryTabletError(err)
+		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
+			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
+			log.Info(fmt.Sprintf("%s adding tablet %s to ignore list due to error: %v",
+				ct.logPrefix(), topoproto.TabletAliasString(ct.lastPickedTablet), err))
+		} else if action == discovery.TabletErrorActionFail {
+			// Retry for unrecoverable errors since some other process may change the state leading to this error.
+			log.Warn(fmt.Sprintf("%s potentially unrecoverable error, will retry: %v", ct.logPrefix(), err))
+		}
+
+		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
+		binlogplayer.LogError(fmt.Sprintf("%s error, will retry after %v", ct.logPrefix(), ct.WorkflowConfig.RetryDelay), err)
+		timer := time.NewTimer(ct.WorkflowConfig.RetryDelay)
+		select {
+		case <-ctx.Done():
+			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttablet.VReplicationConfig) error {
+	if workflowConfig == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vreplication controller: workflowConfig is nil")
+	}
+	const maxRows = 10000
+	// Timestamp fields from binlogs are always sent as UTC.
+	// So, we should set the timezone to be UTC for those values to be correctly inserted.
+	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", maxRows); err != nil {
+		return err
+	}
+	// Tables may have varying character sets. To ship the bits without interpreting them
+	// we set the character set to be binary.
+	if _, err := dbClient.ExecuteFetch("set names 'binary'", maxRows); err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v",
+		workflowConfig.NetReadTimeout), maxRows); err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v",
+		workflowConfig.NetWriteTimeout), maxRows); err != nil {
+		return err
+	}
+	// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is
+	// not recommended in AUTO_INCREMENT, and yet is valid.
+	if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')",
+		maxRows); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ct *controller) runBlp(ctx context.Context) (err error) {
+	defer func() {
+		ct.sourceTablet.Store(&topodatapb.TabletAlias{})
+		if x := recover(); x != nil {
+			log.Error(fmt.Sprintf("%s caught panic: %v\n%s", ct.logPrefix(), x, tb.Stack(4)))
+			err = fmt.Errorf("panic: %v", x)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	dbClient := ct.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		return vterrors.Wrap(err, "can't connect to database")
+	}
+	defer dbClient.Close()
+
+	tablet, err := ct.pickSourceTablet(ctx, dbClient)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case len(ct.source.Tables) > 0:
+		// Table names can have search patterns. Resolve them against the schema.
+		tables, err := mysqlctl.ResolveTables(ctx, ct.mysqld, dbClient.DBName(), ct.source.Tables)
+		if err != nil {
+			ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
+			return vterrors.Wrap(err, "failed to resolve table names")
+		}
+
+		player := binlogplayer.NewBinlogPlayerTables(dbClient, tablet, tables, ct.id, ct.blpStats)
+		return player.ApplyBinlogEvents(ctx)
+	case ct.source.KeyRange != nil:
+		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
+		return player.ApplyBinlogEvents(ctx)
+	case ct.source.Filter != nil:
+		if err := setDBClientSettings(dbClient, ct.WorkflowConfig); err != nil {
+			return err
+		}
+		var vsClient VStreamerClient
+		var err error
+		if name := ct.source.GetExternalMysql(); name != "" {
+			vsClient, err = ct.vre.ec.Get(name)
+			if err != nil {
+				return err
+			}
+		} else {
+			vsClient = newTabletConnector(tablet)
+		}
+		if err := vsClient.Open(ctx); err != nil {
+			return err
+		}
+		defer vsClient.Close(ctx)
+
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
+		err = vr.Replicate(ctx)
+		ct.lastWorkflowError.Record(err)
+
+		// If this is a MySQL error that we know needs manual intervention or
+		// it's a FAILED_PRECONDITION vterror, OR we cannot identify this as
+		// non-recoverable BUT it has persisted beyond the retry limit
+		// (maxTimeToRetryError). In addition, we cannot restart a workflow
+		// started with AtomicCopy which has _any_ error during copy phase.
+		unrecoverable := (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) && vr.state == binlogdatapb.VReplicationWorkflowState_Copying) ||
+			isUnrecoverableError(err)
+		if unrecoverable || !ct.lastWorkflowError.ShouldRetry() {
+			err = terminalVReplicationError(err, unrecoverable, ct.WorkflowConfig.MaxTimeToRetryError)
+			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
+				log.Error(fmt.Sprintf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err))
+				return err // yes, err and not errSetState.
+			}
+			log.Error(fmt.Sprintf("%s going into error state due to %+v", ct.logPrefix(), err))
+			return nil // this will cause vreplicate to quit the workflow
+		}
+		return err
+	}
+	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
+	return errors.New("missing source")
+}
+
+// terminalVReplicationError wraps err as a terminal error, saying why: it is
+// unrecoverable, or its retry window expired — in which case the message
+// names the flag bounding the window and its effective value, so operators
+// (and the Online DDL executor) can tell the stream is resumable.
+func terminalVReplicationError(err error, unrecoverable bool, maxTimeToRetry time.Duration) error {
+	if unrecoverable {
+		return vterrors.Wrap(err, UnrecoverableErrorIndicator)
+	}
+	return vterrors.Wrapf(err, "%s: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (%v)",
+		RetriesExhaustedIndicator, maxTimeToRetry)
+}
+
+func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
+	ct.blpStats.History.Add(&binlogplayer.StatsHistoryRecord{
+		Time:    time.Now(),
+		Message: message,
+	})
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set message: %v: %v", query, err)
+	}
+	return nil
+}
+
+// pickSourceTablet picks a healthy serving tablet to source for
+// the vreplication stream. If the source is marked as external, it
+// returns nil.
+func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplayer.DBClient) (*topodatapb.Tablet, error) {
+	if ct.source.GetExternalMysql() != "" {
+		return nil, nil
+	}
+	if ct.tpTs == nil {
+		return nil, fmt.Errorf("no tablet picker configured for %s/%s", ct.source.Keyspace, ct.source.Shard)
+	}
+	log.Info(fmt.Sprintf("%s trying to find an eligible source tablet in %s/%s", ct.logPrefix(), ct.source.Keyspace, ct.source.Shard))
+
+	tablet, err := ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
+	// If we failed to find any tablet and we specified an ignore list, then clear the ignore list so that
+	// we can try tablets that were previously ignored(since some state may have changed since the last attempt).
+	if err != nil && len(ct.ignoreTablets) > 0 {
+		log.Info(fmt.Sprintf("%s clearing ignore list of %d tablets and retrying tablet picker",
+			ct.logPrefix(), len(ct.ignoreTablets)))
+		ct.ignoreTablets = nil
+		tablet, err = ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
+	}
+	if err != nil {
+		return tablet, err
+	}
+	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
+	log.Info(fmt.Sprintf("%s found eligible source tablet %s", ct.logPrefix(), tablet.Alias.String()))
+	ct.sourceTablet.Store(tablet.Alias)
+	ct.lastPickedTablet = tablet.Alias
+	return tablet, err
+}
+
+func (ct *controller) pickSourceTabletWithIgnoreList(ctx context.Context, dbClient binlogplayer.DBClient) (*topodatapb.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ctx, ct.tpTs, ct.tpCells, ct.vre.cell,
+		ct.source.Keyspace, ct.source.Shard, ct.tpTabletTypesStr, ct.tpOptions, ct.ignoreTablets...)
+	if err != nil {
+		ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+		ct.setMessage(dbClient, "Error creating tablet picker: "+err.Error())
+		return nil, err
+	}
+
+	tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
+	defer tpCancel()
+	tablet, err := tp.PickForStreaming(tpCtx)
+	if err != nil {
+		select {
+		case <-ctx.Done():
+		default:
+			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+			ct.setMessage(dbClient, "Error picking tablet: "+err.Error())
+		}
+		return nil, err
+	}
+	return tablet, nil
+}
+
+// Stop stops the controller and optionally stops its stats. The stats
+// should only be stopped if they will never be re-used as the timeseries
+// stats (Rates and Gauges) will be cleared and cannot be restarted.
+func (ct *controller) Stop(stopStats bool) {
+	ct.cancel()
+	if stopStats {
+		ct.blpStats.Stop()
+	}
+	<-ct.done
+}

@@ -1,0 +1,1428 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+var (
+	playerEngine             *Engine
+	streamerEngine           *vstreamer.Engine
+	env                      *testenv.Env
+	envMu                    sync.Mutex
+	globalFBC                = &fakeBinlogClient{}
+	vrepldb                  = "vrepl"
+	globalDBQueries          = make(chan string, 1000)
+	lastMultiExecQuery       = ""
+	lastMultiExecQueryMu     sync.Mutex
+	testForeignKeyQueries    = false
+	testSetForeignKeyQueries = false
+	doNotLogDBQueries        = false
+	recvTimeout              = 5 * time.Second
+)
+
+var testParser = sqlparser.NewTestParser()
+
+type mockColumn struct {
+	name    string
+	colType *sqlparser.ColumnType
+}
+
+type mockTable struct {
+	db        string
+	name      string
+	columns   []mockColumn
+	pkColumns []string
+}
+
+var (
+	mockSchemaMu sync.Mutex
+	mockSchema   = make(map[string]*mockTable)
+)
+
+var heartbeatRe *regexp.Regexp
+
+// setFlag() sets a flag for a test in a non-racy way:
+//   - it registers the flag using a different flagset scope
+//   - clears other flags by passing a dummy os.Args() while parsing this flagset
+//   - sets the specific flag, if it has not already been defined
+//   - resets the os.Args() so that the remaining flagsets can be parsed correctly
+func setFlag(flagName, flagValue string) {
+	flagSetName := "vreplication-unit-test"
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{flagSetName}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(flagSetName, func(fs *pflag.FlagSet) {
+		if fs.Lookup(flagName) != nil {
+			fmt.Printf("found %s: %+v", flagName, fs.Lookup(flagName).Value)
+			return
+		}
+	})
+	servenv.ParseFlags(flagSetName)
+
+	if err := pflag.Set(flagName, flagValue); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Error(fmt.Sprintf(msg, flagName, flagValue, err))
+	}
+}
+
+func init() {
+	tabletconn.RegisterDialer("test", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		return &fakeTabletConn{
+			QueryService: fakes.ErrorQueryService,
+			tablet:       tablet,
+		}, nil
+	})
+	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
+
+	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
+	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
+}
+
+func cleanup() {
+	playerEngine.Close()
+	streamerEngine.Close()
+	env.Close()
+	envMu.Unlock()
+}
+
+func setup(ctx context.Context) (func(), int) {
+	var err error
+	env, err = testenv.Init(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		return nil, 1
+	}
+	envMu.Lock()
+	globalDBQueries = make(chan string, 1000)
+	resetBinlogClient()
+	resetMockSchema()
+
+	vttablet.InitVReplicationConfigDefaults()
+	replaceSchemaEngineForTests(ctx)
+
+	// Engines cannot be initialized in testenv because it introduces circular dependencies.
+	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
+	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
+	streamerEngine.Open()
+
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, "create database "+vrepldb); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		return nil, 1
+	}
+
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, "set @@global.innodb_lock_wait_timeout=1"); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		return nil, 1
+	}
+	externalConfig := map[string]*dbconfigs.DBConfigs{
+		"exta": env.Dbcfgs,
+		"extb": env.Dbcfgs,
+	}
+	mysqld := &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
+	playerEngine.Open(ctx)
+
+	return cleanup, 0
+}
+
+var (
+	// We run unit tests twice, first with binlog_row_image=FULL, then with NOBLOB.
+	runNoBlobTest = false
+	// When using MySQL 8.0 or later, we set binlog_row_value_options=PARTIAL_JSON.
+	runPartialJSONTest = false
+)
+
+// We use this tempDir for creating the external cnfs, since we create the test cluster afterwards.
+const tempDir = "/tmp"
+
+func TestMain(m *testing.M) {
+	binlogplayer.SetProtocol("vreplication_test_framework", "test")
+	_flag.ParseFlagsForTest()
+	exitCode := func() int {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		// binlog-row-value-options=PARTIAL_JSON is only supported in MySQL 8.0 and later.
+		// We still run unit tests with MySQL 5.7, so we cannot add it to the cnf file
+		// when using 5.7 or mysqld will fail to start.
+		runPartialJSONTest = utils.CIDBPlatformIsMySQL8orLater()
+		if err := utils.SetBinlogRowImageOptions("full", runPartialJSONTest, tempDir); err != nil {
+			panic(err)
+		}
+		defer utils.SetBinlogRowImageOptions("", false, tempDir)
+		cancel, ret := setup(ctx)
+		if ret > 0 {
+			return ret
+		}
+		ret = m.Run()
+		if ret > 0 {
+			return ret
+		}
+		cancel()
+
+		runNoBlobTest = true
+		if err := utils.SetBinlogRowImageOptions("noblob", runPartialJSONTest, tempDir); err != nil {
+			panic(err)
+		}
+		defer utils.SetBinlogRowImageOptions("", false, tempDir)
+		cancel, ret = setup(ctx)
+		if ret > 0 {
+			return ret
+		}
+		defer cancel()
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}
+
+func resetBinlogClient() {
+	globalFBC = &fakeBinlogClient{}
+}
+
+func primaryPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
+	return replication.EncodePosition(pos)
+}
+
+func primaryPositionParsed(t *testing.T) replication.Position {
+	t.Helper()
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
+	return pos
+}
+
+func execStatements(t *testing.T, queries []string) {
+	t.Helper()
+	if err := env.Mysqld.ExecuteSuperQueryList(t.Context(), queries); err != nil {
+		log.Error("Error executing query: " + err.Error())
+		assert.NoError(t, err)
+	}
+	for _, query := range queries {
+		updateMockSchemaForQuery(query)
+	}
+}
+
+func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []string) {
+	t.Helper()
+	for _, query := range queries {
+		_, err := conn.ExecuteFetch(query, 10000, false)
+		require.NoErrorf(t, err, "ExecuteFetch(%v) failed: %v", query, err)
+	}
+}
+
+// --------------------------------------
+// Topos and tablets
+
+func addTablet(id int) *topodatapb.Tablet {
+	return addTabletWithCell(id, env.Cells[0])
+}
+
+func addTabletWithCell(id int, cell string) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  uint32(id),
+		},
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"test": int32(id),
+		},
+	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func addOtherTablet(id int, keyspace, shard string) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: env.Cells[0],
+			Uid:  uint32(id),
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"test": int32(id),
+		},
+	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func deleteTablet(tablet *topodatapb.Tablet) {
+	env.TopoServ.DeleteTablet(context.Background(), tablet.Alias)
+	// This is not automatically removed from shard replication, which results in log spam.
+	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, tablet)
+}
+
+// fakeTabletConn implement TabletConn interface. We only care about the
+// health check part. The state reported by the tablet will depend
+// on the Tag values "serving" and "healthy".
+type fakeTabletConn struct {
+	queryservice.QueryService
+	tablet *topodatapb.Tablet
+}
+
+// StreamHealth is part of queryservice.QueryService.
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	return callback(&querypb.StreamHealthResponse{
+		Serving: true,
+		Target: &querypb.Target{
+			Keyspace:   ftc.tablet.Keyspace,
+			Shard:      ftc.tablet.Shard,
+			TabletType: ftc.tablet.Type,
+		},
+		RealtimeStats: &querypb.RealtimeStats{},
+	})
+}
+
+// vstreamHook allows you to do work just before calling VStream.
+var vstreamHook func(ctx context.Context)
+
+// vstreamErrorsByTablet allows injecting errors per tablet UID.
+var vstreamErrorsByTablet map[uint32]error
+
+// VStream directly calls into the pre-initialized engine.
+func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	if request.Target.Keyspace != "vttest" {
+		<-ctx.Done()
+		return io.EOF
+	}
+	if vstreamHook != nil {
+		vstreamHook(ctx)
+	}
+	if vstreamErrorsByTablet != nil {
+		if err, ok := vstreamErrorsByTablet[ftc.tablet.Alias.Uid]; ok {
+			return err
+		}
+	}
+	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
+}
+
+// vstreamRowsHook allows you to do work just before calling VStreamRows.
+var vstreamRowsHook func(ctx context.Context)
+
+// vstreamRowsSendHook allows you to do work just before VStreamRows calls send.
+var vstreamRowsSendHook func(ctx context.Context)
+
+// VStreamRows directly calls into the pre-initialized engine.
+func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	if vstreamRowsHook != nil {
+		vstreamRowsHook(ctx)
+	}
+	var row []sqltypes.Value
+	if request.Lastpk != nil {
+		r := sqltypes.Proto3ToResult(request.Lastpk)
+		if len(r.Rows) != 1 {
+			return fmt.Errorf("unexpected lastpk input: %v", request.Lastpk)
+		}
+		row = r.Rows[0]
+	}
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
+	}
+	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if vstreamRowsSendHook != nil {
+			vstreamRowsSendHook(ctx)
+		}
+		return send(rows)
+	}, vstreamOptions)
+}
+
+// --------------------------------------
+// Binlog Client to TabletManager
+
+// fakeBinlogClient satisfies binlogplayer.Client.
+// Not to be used concurrently.
+type fakeBinlogClient struct {
+	lastTablet   *topodatapb.Tablet
+	lastPos      string
+	lastTables   []string
+	lastKeyRange *topodatapb.KeyRange
+	lastCharset  *binlogdatapb.Charset
+}
+
+// fakeBinlogClientErrorsByTablet allows injecting a fixed error per tablet UID.
+// This error is returned forever until the map is cleared. If not set, then tablet will not return any errors.
+var fakeBinlogClientErrorsByTablet map[uint32]error
+
+// fakeBinlogClientErrorQueuesByTablet allows injecting a queue of errors per tablet UID.
+// Each call dequeues and returns the next error. When empty, it falls back to fakeBinlogClientErrorsByTablet.
+var fakeBinlogClientErrorQueuesByTablet map[uint32][]error
+
+// fakeBinlogClientCallback is called when a tablet is dialed.
+var fakeBinlogClientCallback func(tablet *topodatapb.Tablet)
+
+func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
+	fbc.lastTablet = tablet
+	if fakeBinlogClientCallback != nil {
+		fakeBinlogClientCallback(tablet)
+	}
+	return nil
+}
+
+func (fbc *fakeBinlogClient) Close() {
+}
+
+func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
+	fbc.lastPos = position
+	fbc.lastTables = tables
+	fbc.lastCharset = charset
+	if fakeBinlogClientErrorQueuesByTablet != nil {
+		if errs, ok := fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid]; ok && len(errs) > 0 {
+			err := errs[0]
+			fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid] = errs[1:]
+			if err != nil {
+				return nil, err
+			}
+			return &btStream{ctx: ctx}, nil
+		}
+	}
+	if fakeBinlogClientErrorsByTablet != nil {
+		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
+			return nil, err
+		}
+	}
+	return &btStream{ctx: ctx}, nil
+}
+
+func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (binlogplayer.BinlogTransactionStream, error) {
+	fbc.lastPos = position
+	fbc.lastKeyRange = keyRange
+	fbc.lastCharset = charset
+	if fakeBinlogClientErrorQueuesByTablet != nil {
+		if errs, ok := fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid]; ok && len(errs) > 0 {
+			err := errs[0]
+			fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid] = errs[1:]
+			if err != nil {
+				return nil, err
+			}
+			return &btStream{ctx: ctx}, nil
+		}
+	}
+	if fakeBinlogClientErrorsByTablet != nil {
+		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
+			return nil, err
+		}
+	}
+	return &btStream{ctx: ctx}, nil
+}
+
+// btStream satisfies binlogplayer.BinlogTransactionStream
+type btStream struct {
+	ctx  context.Context
+	sent bool
+}
+
+func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	if !bts.sent {
+		bts.sent = true
+		return &binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+					Sql:      []byte("insert into t values(1)"),
+				},
+			},
+			EventToken: &querypb.EventToken{
+				Timestamp: 72,
+				Position:  "MariaDB/0-1-1235",
+			},
+		}, nil
+	}
+	<-bts.ctx.Done()
+	return nil, bts.ctx.Err()
+}
+
+func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
+	t.Helper()
+	assert.True(t, proto.Equal(tablet, globalFBC.lastTablet), "Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
+	assert.Equalf(t, pos, globalFBC.lastPos, "Request pos: %v, want %v", globalFBC.lastPos, pos)
+	assert.Equalf(t, tables, globalFBC.lastTables, "Request tables: %v, want %v", globalFBC.lastTables, tables)
+	assert.True(t, proto.Equal(kr, globalFBC.lastKeyRange), "Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
+}
+
+// --------------------------------------
+// DBCLient wrapper
+
+func realDBClientFactory() binlogplayer.DBClient {
+	return &realDBClient{}
+}
+
+type realDBClient struct {
+	conn  *mysql.Conn
+	nolog bool
+}
+
+func (dbc *realDBClient) DBName() string {
+	return vrepldb
+}
+
+func (dbc *realDBClient) Connect() error {
+	app, err := env.Dbcfgs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
+	app.DbName = vrepldb
+	conn, err := mysql.Connect(context.Background(), app)
+	if err != nil {
+		return err
+	}
+	dbc.conn = conn
+	return nil
+}
+
+func (dbc *realDBClient) Begin() error {
+	_, err := dbc.ExecuteFetch("begin", 10000)
+	return err
+}
+
+func (dbc *realDBClient) Commit() error {
+	_, err := dbc.ExecuteFetch("commit", 10000)
+	return err
+}
+
+func (dbc *realDBClient) Rollback() error {
+	_, err := dbc.ExecuteFetch("rollback", 10000)
+	return err
+}
+
+func (dbc *realDBClient) Close() {
+	dbc.conn.Close()
+}
+
+func (dbc *realDBClient) IsClosed() bool {
+	return dbc.conn.IsClosed()
+}
+
+func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	// Use Clone() because the contents of memory region referenced by
+	// string can change when clients (e.g. vcopier) use unsafe string methods.
+	query = strings.Clone(query)
+	if qr, ok := mockInfoSchemaResult(query); ok {
+		return qr, nil
+	}
+	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
+	if doNotLogDBQueries {
+		return qr, err
+	}
+	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
+		globalDBQueries <- query
+	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
+		globalDBQueries <- query
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { // allow select/set for foreign_key_checks
+		globalDBQueries <- query
+	}
+	return qr, err
+}
+
+func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dbc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	lastMultiExecQueryMu.Lock()
+	lastMultiExecQuery = query
+	lastMultiExecQueryMu.Unlock()
+	return results, nil
+}
+
+func getLastMultiExecQuery() string {
+	lastMultiExecQueryMu.Lock()
+	defer lastMultiExecQueryMu.Unlock()
+	return lastMultiExecQuery
+}
+
+func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return dbc.conn.SupportsCapability(capability)
+}
+
+type infoSchemaMysqld struct {
+	mysqlctl.MysqlDaemon
+}
+
+func (imd *infoSchemaMysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	if qr, ok := mockInfoSchemaResult(query); ok {
+		return qr, nil
+	}
+	return imd.MysqlDaemon.FetchSuperQuery(ctx, query)
+}
+
+func resetMockSchema() {
+	mockSchemaMu.Lock()
+	defer mockSchemaMu.Unlock()
+	mockSchema = make(map[string]*mockTable)
+}
+
+func replaceSchemaEngineForTests(ctx context.Context) {
+	se := schema.NewEngine(env.TabletEnv)
+	se.SkipMetaCheck = true
+	se.InitDBConfig(env.Dbcfgs.DbaWithDB())
+	if err := se.Open(); err != nil {
+		panic(err)
+	}
+	se.SetTableForTests(schema.NewTable("dual", schema.NoType))
+	env.SchemaEngine = se
+}
+
+func updateMockSchemaForQuery(query string) {
+	stmt, err := testParser.Parse(query)
+	if err != nil {
+		return
+	}
+	switch ddl := stmt.(type) {
+	case *sqlparser.CreateTable:
+		applyCreateTable(ddl)
+	case *sqlparser.AlterTable:
+		applyAlterTable(ddl)
+	case *sqlparser.DropTable:
+		applyDropTable(ddl)
+	}
+}
+
+func applyCreateTable(ddl *sqlparser.CreateTable) {
+	if ddl.TableSpec == nil {
+		return
+	}
+	dbName, tableName, ok := normalizeDDLTableName(ddl.Table)
+	if !ok {
+		return
+	}
+	columns := make([]mockColumn, 0, len(ddl.TableSpec.Columns))
+	for _, col := range ddl.TableSpec.Columns {
+		if col == nil || col.Type == nil {
+			continue
+		}
+		columns = append(columns, mockColumn{
+			name:    col.Name.String(),
+			colType: col.Type,
+		})
+	}
+	pkColumns := extractPKColumns(ddl.TableSpec)
+	setMockTable(dbName, tableName, columns, pkColumns)
+}
+
+func applyAlterTable(ddl *sqlparser.AlterTable) {
+	dbName, tableName, ok := normalizeDDLTableName(ddl.Table)
+	if !ok {
+		return
+	}
+	mt := getMockTable(dbName, tableName)
+	if mt == nil {
+		return
+	}
+	mockSchemaMu.Lock()
+	for _, opt := range ddl.AlterOptions {
+		switch alter := opt.(type) {
+		case *sqlparser.AddColumns:
+			mt.columns = applyAddColumns(mt.columns, alter)
+			mt.pkColumns = appendPKColumns(mt.pkColumns, alter.Columns)
+		case *sqlparser.DropColumn:
+			mt.columns = dropColumn(mt.columns, alter.Name.Name.String())
+			mt.pkColumns = dropPKColumn(mt.pkColumns, alter.Name.Name.String())
+		case *sqlparser.ModifyColumn:
+			mt.columns = modifyColumn(mt.columns, alter.NewColDefinition)
+			mt.pkColumns = appendPKColumns(mt.pkColumns, []*sqlparser.ColumnDefinition{alter.NewColDefinition})
+		case *sqlparser.ChangeColumn:
+			mt.columns = changeColumn(mt.columns, alter.OldColumn.Name.String(), alter.NewColDefinition)
+			mt.pkColumns = appendPKColumns(mt.pkColumns, []*sqlparser.ColumnDefinition{alter.NewColDefinition})
+		case *sqlparser.AddIndexDefinition:
+			mt.pkColumns = mergePKColumns(mt.pkColumns, alter.IndexDefinition)
+		}
+	}
+	mockSchemaMu.Unlock()
+	setMockTable(dbName, tableName, mt.columns, mt.pkColumns)
+}
+
+func applyDropTable(ddl *sqlparser.DropTable) {
+	for _, table := range ddl.FromTables {
+		dbName, tableName, ok := normalizeDDLTableName(table)
+		if !ok {
+			continue
+		}
+		deleteMockTable(dbName, tableName)
+	}
+}
+
+func normalizeDDLTableName(table sqlparser.TableName) (string, string, bool) {
+	name := table.Name.String()
+	if name == "" {
+		return "", "", false
+	}
+	qualifier := table.Qualifier.String()
+	if qualifier == "" {
+		qualifier = env.KeyspaceName
+	}
+	return qualifier, name, true
+}
+
+func extractPKColumns(spec *sqlparser.TableSpec) []string {
+	var pkColumns []string
+	for _, col := range spec.Columns {
+		if col == nil || col.Type == nil || col.Type.Options == nil {
+			continue
+		}
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+			pkColumns = append(pkColumns, col.Name.String())
+		}
+	}
+	for _, idx := range spec.Indexes {
+		if idx == nil || idx.Info == nil {
+			continue
+		}
+		if idx.Info.Type != sqlparser.IndexTypePrimary {
+			continue
+		}
+		for _, col := range idx.Columns {
+			if col == nil {
+				continue
+			}
+			pkColumns = append(pkColumns, col.Column.String())
+		}
+	}
+	return pkColumns
+}
+
+func appendPKColumns(pkColumns []string, cols []*sqlparser.ColumnDefinition) []string {
+	for _, col := range cols {
+		if col == nil || col.Type == nil || col.Type.Options == nil {
+			continue
+		}
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+			pkColumns = append(pkColumns, col.Name.String())
+		}
+	}
+	return pkColumns
+}
+
+func mergePKColumns(pkColumns []string, idx *sqlparser.IndexDefinition) []string {
+	if idx == nil || idx.Info == nil || idx.Info.Type != sqlparser.IndexTypePrimary {
+		return pkColumns
+	}
+	for _, col := range idx.Columns {
+		if col == nil {
+			continue
+		}
+		pkColumns = append(pkColumns, col.Column.String())
+	}
+	return pkColumns
+}
+
+func applyAddColumns(columns []mockColumn, add *sqlparser.AddColumns) []mockColumn {
+	if add == nil || len(add.Columns) == 0 {
+		return columns
+	}
+	insertAt := len(columns)
+	if add.First {
+		insertAt = 0
+	} else if add.After != nil {
+		for i, col := range columns {
+			if strings.EqualFold(col.name, add.After.Name.String()) {
+				insertAt = i + 1
+				break
+			}
+		}
+	}
+	newCols := make([]mockColumn, 0, len(columns)+len(add.Columns))
+	newCols = append(newCols, columns[:insertAt]...)
+	for _, col := range add.Columns {
+		if col == nil || col.Type == nil {
+			continue
+		}
+		newCols = append(newCols, mockColumn{name: col.Name.String(), colType: col.Type})
+	}
+	newCols = append(newCols, columns[insertAt:]...)
+	return newCols
+}
+
+func dropColumn(columns []mockColumn, name string) []mockColumn {
+	if name == "" {
+		return columns
+	}
+	filtered := columns[:0]
+	for _, col := range columns {
+		if strings.EqualFold(col.name, name) {
+			continue
+		}
+		filtered = append(filtered, col)
+	}
+	return filtered
+}
+
+func dropPKColumn(pkColumns []string, name string) []string {
+	filtered := pkColumns[:0]
+	for _, col := range pkColumns {
+		if strings.EqualFold(col, name) {
+			continue
+		}
+		filtered = append(filtered, col)
+	}
+	return filtered
+}
+
+func modifyColumn(columns []mockColumn, def *sqlparser.ColumnDefinition) []mockColumn {
+	if def == nil || def.Type == nil {
+		return columns
+	}
+	for i := range columns {
+		if strings.EqualFold(columns[i].name, def.Name.String()) {
+			columns[i].name = def.Name.String()
+			columns[i].colType = def.Type
+			return columns
+		}
+	}
+	return columns
+}
+
+func changeColumn(columns []mockColumn, oldName string, def *sqlparser.ColumnDefinition) []mockColumn {
+	if def == nil || def.Type == nil {
+		return columns
+	}
+	for i := range columns {
+		if strings.EqualFold(columns[i].name, oldName) {
+			columns[i].name = def.Name.String()
+			columns[i].colType = def.Type
+			return columns
+		}
+	}
+	return columns
+}
+
+func setMockTable(dbName, tableName string, columns []mockColumn, pkColumns []string) {
+	mt := &mockTable{
+		db:        dbName,
+		name:      tableName,
+		columns:   columns,
+		pkColumns: pkColumns,
+	}
+	mockSchemaMu.Lock()
+	mockSchema[mockSchemaKey(dbName, tableName)] = mt
+	mockSchemaMu.Unlock()
+	updateSchemaEngineTable(mt)
+}
+
+func deleteMockTable(dbName, tableName string) {
+	mockSchemaMu.Lock()
+	delete(mockSchema, mockSchemaKey(dbName, tableName))
+	mockSchemaMu.Unlock()
+}
+
+func getMockTable(dbName, tableName string) *mockTable {
+	mockSchemaMu.Lock()
+	defer mockSchemaMu.Unlock()
+	return mockSchema[mockSchemaKey(dbName, tableName)]
+}
+
+func mockSchemaKey(dbName, tableName string) string {
+	return strings.ToLower(dbName) + "." + strings.ToLower(tableName)
+}
+
+func updateSchemaEngineTable(mt *mockTable) {
+	if mt == nil || mt.db != env.KeyspaceName {
+		return
+	}
+	fields := make([]*querypb.Field, 0, len(mt.columns))
+	for _, col := range mt.columns {
+		if col.colType == nil {
+			continue
+		}
+		fields = append(fields, &querypb.Field{
+			Name: col.name,
+			Type: col.colType.SQLType(),
+		})
+	}
+	pkColumns := make([]int, 0, len(mt.pkColumns))
+	for _, pk := range mt.pkColumns {
+		for i, field := range fields {
+			if strings.EqualFold(field.Name, pk) {
+				pkColumns = append(pkColumns, i)
+				break
+			}
+		}
+	}
+	table := schema.NewTable(mt.name, schema.NoType)
+	table.Fields = fields
+	table.PKColumns = pkColumns
+	env.SchemaEngine.SetTableForTests(table)
+}
+
+func mockInfoSchemaResult(query string) (*sqltypes.Result, bool) {
+	lower := strings.ToLower(query)
+	mt, ok := extractMockTableFromQuery(query, lower)
+	if !ok {
+		return nil, false
+	}
+	if strings.Contains(lower, "information_schema.statistics") {
+		return mockStatisticsResult(mt), true
+	}
+	if strings.Contains(lower, "select column_name") {
+		return mockColumnNamesResult(mt), true
+	}
+	return mockColumnInfoResult(mt), true
+}
+
+func extractMockTableFromQuery(query, lower string) (*mockTable, bool) {
+	if strings.Contains(lower, "information_schema.statistics") {
+		if mt, ok := extractMockTableFromStatistics(query); ok {
+			return mt, true
+		}
+	}
+	if strings.Contains(lower, "information_schema.columns") {
+		if mt, ok := extractMockTableFromColumns(query); ok {
+			return mt, true
+		}
+	}
+	return nil, false
+}
+
+func extractMockTableFromColumns(query string) (*mockTable, bool) {
+	dbName, tableName, ok := extractSchemaAndTable(query)
+	if !ok {
+		return nil, false
+	}
+	mt := getMockTable(dbName, tableName)
+	if mt == nil || len(mt.columns) == 0 {
+		return nil, false
+	}
+	return mt, true
+}
+
+func extractMockTableFromStatistics(query string) (*mockTable, bool) {
+	dbName, tableName, ok := extractSchemaAndTableFromStatistics(query)
+	if !ok {
+		return nil, false
+	}
+	mt := getMockTable(dbName, tableName)
+	if mt == nil {
+		return nil, false
+	}
+	return mt, true
+}
+
+func extractSchemaAndTable(query string) (string, string, bool) {
+	infoSchemaColumnsRe := regexp.MustCompile(`(?is)table_schema\s*=\s*([^\s]+)\s+and\s+table_name\s*=\s*([^\s;]+)`)
+	matches := infoSchemaColumnsRe.FindStringSubmatch(query)
+	if len(matches) != 3 {
+		return "", "", false
+	}
+	dbName, ok := decodeSQLValue(matches[1])
+	if !ok {
+		return "", "", false
+	}
+	tableName, ok := decodeSQLValue(matches[2])
+	if !ok {
+		return "", "", false
+	}
+	return dbName, tableName, true
+}
+
+func extractSchemaAndTableFromStatistics(query string) (string, string, bool) {
+	infoSchemaStatsRe := regexp.MustCompile(`(?is)(?:stats|index_cols)\.table_schema\s*=\s*([^\s]+)\s+and\s+(?:stats|index_cols)\.table_name\s*=\s*([^\s;]+)`)
+	matches := infoSchemaStatsRe.FindStringSubmatch(query)
+	if len(matches) == 3 {
+		dbName, ok := decodeSQLValue(matches[1])
+		if !ok {
+			return "", "", false
+		}
+		tableName, ok := decodeSQLValue(matches[2])
+		if !ok {
+			return "", "", false
+		}
+		return dbName, tableName, true
+	}
+
+	infoSchemaStatsFallback := regexp.MustCompile(`(?is)table_schema\s*=\s*([^\s]+)\s+and\s+table_name\s*=\s*([^\s;]+)`)
+	matches = infoSchemaStatsFallback.FindStringSubmatch(query)
+	if len(matches) != 3 {
+		return "", "", false
+	}
+	dbName, ok := decodeSQLValue(matches[1])
+	if !ok {
+		return "", "", false
+	}
+	tableName, ok := decodeSQLValue(matches[2])
+	if !ok {
+		return "", "", false
+	}
+	return dbName, tableName, true
+}
+
+func decodeSQLValue(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	value = strings.TrimRight(value, ";")
+	if value == "" {
+		return "", false
+	}
+	if strings.EqualFold(value, "database()") {
+		return env.KeyspaceName, true
+	}
+	if strings.HasPrefix(value, "'") {
+		decoded, err := sqltypes.DecodeStringSQL(value)
+		if err != nil {
+			return "", false
+		}
+		return decoded, true
+	}
+	return strings.Trim(value, "`"), true
+}
+
+func mockColumnNamesResult(mt *mockTable) *sqltypes.Result {
+	fields := sqltypes.MakeTestFields("column_name", "varchar")
+	rows := make([][]sqltypes.Value, 0, len(mt.columns))
+	for _, col := range mt.columns {
+		rows = append(rows, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarChar, []byte(col.name))})
+	}
+	return &sqltypes.Result{Fields: fields, Rows: rows}
+}
+
+func mockColumnInfoResult(mt *mockTable) *sqltypes.Result {
+	fields := sqltypes.MakeTestFields("character_set_name|collation_name|column_name|data_type|column_type|extra", "varchar|varchar|varchar|varchar|varchar|varchar")
+	rows := make([][]sqltypes.Value, 0, len(mt.columns))
+	charsetName := testenv.CollationEnv.LookupCharsetName(testenv.DefaultCollationID)
+	collationName := testenv.CollationEnv.LookupName(testenv.DefaultCollationID)
+	for _, col := range mt.columns {
+		if col.colType == nil {
+			continue
+		}
+		dataType := strings.ToLower(col.colType.Type)
+		columnType := buildColumnType(col.colType)
+		extra := ""
+		if col.colType.Options != nil && col.colType.Options.As != nil {
+			switch col.colType.Options.Storage {
+			case sqlparser.StoredStorage:
+				extra = "stored generated"
+			default:
+				extra = "virtual generated"
+			}
+		}
+		charSet := ""
+		collation := ""
+		if sqltypes.IsText(col.colType.SQLType()) {
+			charSet = charsetName
+			collation = collationName
+		}
+		rows = append(rows, []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(charSet)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(collation)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(col.name)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(dataType)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(columnType)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(extra)),
+		})
+	}
+	return &sqltypes.Result{Fields: fields, Rows: rows}
+}
+
+func mockStatisticsResult(mt *mockTable) *sqltypes.Result {
+	fields := sqltypes.MakeTestFields("column_name|index_name", "varchar|varchar")
+	cols := pkEquivalentColumns(mt)
+	rows := make([][]sqltypes.Value, 0, len(cols))
+	indexName := pkEquivalentIndexName(mt)
+	for _, col := range cols {
+		rows = append(rows, []sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(col)),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte(indexName)),
+		})
+	}
+	return &sqltypes.Result{Fields: fields, Rows: rows}
+}
+
+func pkEquivalentColumns(mt *mockTable) []string {
+	if len(mt.pkColumns) > 0 {
+		return mt.pkColumns
+	}
+	for _, col := range mt.columns {
+		if col.colType == nil || col.colType.Options == nil {
+			continue
+		}
+		if col.colType.Options.KeyOpt == sqlparser.ColKeyUnique || col.colType.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
+			return []string{col.name}
+		}
+	}
+	return nil
+}
+
+func pkEquivalentIndexName(mt *mockTable) string {
+	if len(mt.pkColumns) > 0 {
+		return "PRIMARY"
+	}
+	for _, col := range mt.columns {
+		if col.colType == nil || col.colType.Options == nil {
+			continue
+		}
+		if col.colType.Options.KeyOpt == sqlparser.ColKeyUnique || col.colType.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
+			return col.name
+		}
+	}
+	return ""
+}
+
+func buildColumnType(colType *sqlparser.ColumnType) string {
+	if colType == nil {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(strings.ToLower(colType.Type))
+	if colType.Length != nil {
+		builder.WriteString("(")
+		builder.WriteString(strconv.Itoa(*colType.Length))
+		if colType.Scale != nil {
+			builder.WriteString(",")
+			builder.WriteString(strconv.Itoa(*colType.Scale))
+		}
+		builder.WriteString(")")
+	}
+	if colType.Unsigned {
+		builder.WriteString(" unsigned")
+	}
+	if colType.Zerofill {
+		builder.WriteString(" zerofill")
+	}
+	if colType.Charset.Name != "" {
+		builder.WriteString(" character set ")
+		builder.WriteString(colType.Charset.Name)
+	}
+	if colType.Charset.Binary {
+		builder.WriteString(" binary")
+	}
+	if colType.Options != nil {
+		if colType.Options.Collate != "" {
+			builder.WriteString(" collate ")
+			builder.WriteString(colType.Options.Collate)
+		}
+	}
+	return builder.String()
+}
+
+func expectDeleteQueries(t *testing.T) {
+	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
+	expectNontxQueries(t, qh.Expect(
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
+	), recvTimeout)
+}
+
+func deleteAllVReplicationStreams(t *testing.T) {
+	t.Helper()
+	res, err := playerEngine.Exec("select id from _vt.vreplication")
+	require.NoError(t, err, "could not select ids from _vt.vreplication: %v", err)
+	ids := make([]string, len(res.Rows))
+	for i, row := range res.Rows {
+		id := row[0].ToString()
+		ids[i] = id
+	}
+	_, err = playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id in (%s)", strings.Join(ids, ",")))
+	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
+}
+
+func shouldIgnoreQuery(query string) bool {
+	queriesToIgnore := []string{
+		"_vt.vreplication_log",   // ignore all selects, updates and inserts into this table
+		"@@session.sql_mode",     // ignore all selects, and sets of this variable
+		", time_heartbeat=",      // update of last heartbeat time, can happen out-of-band, so can't test for it
+		", time_throttled=",      // update of last throttle time, can happen out-of-band, so can't test for it
+		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
+		"context cancel",
+		"SELECT rows_copied FROM _vt.vreplication WHERE id=",
+		// This is only executed if the table has no defined Primary Key, which we don't know in the lower level
+		// code.
+		"SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS",
+	}
+	if sidecardb.MatchesInitQuery(query) {
+		return true
+	}
+	for _, q := range queriesToIgnore {
+		if strings.Contains(query, q) {
+			return true
+		}
+	}
+	return heartbeatRe.MatchString(query)
+}
+
+func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, skippableOnce ...string) {
+	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
+	failed := false
+	skippedOnce := false
+	if doNotLogDBQueries {
+		return
+	}
+	validator := qh.NewVerifier(expectations)
+
+	for len(validator.Pending()) > 0 {
+		if failed {
+			assert.Fail(t, "no query received")
+			continue
+		}
+		var got string
+	retry:
+		select {
+		case got = <-globalDBQueries:
+			// We rule out heartbeat time update queries because otherwise our query list
+			// is indeterminable and varies with each test execution.
+			if shouldIgnoreQuery(got) {
+				goto retry
+			}
+
+			result := validator.AcceptQuery(got)
+
+			if !result.Accepted {
+				if !skippedOnce {
+					// let's see if "got" is a skippable query
+					for _, skippable := range skippableOnce {
+						if ok, _ := qh.MatchQueries(skippable, got); ok {
+							skippedOnce = true
+							goto retry
+						}
+					}
+				}
+				require.True(t, result.Accepted, "query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s", got, result.Message, result.Expectation, result.Matched, result.Error, validator.History())
+			}
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "no query received")
+			failed = true
+		}
+	}
+	for {
+		select {
+		case got := <-globalDBQueries:
+			if shouldIgnoreQuery(got) {
+				continue
+			}
+			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
+		default:
+			// Assert there are no pending expectations.
+			require.Empty(t, validator.Pending())
+			return
+		}
+	}
+}
+
+// expectNontxQueries disregards transactional statements like begin and commit.
+// It also disregards updates to _vt.vreplication.
+func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvTimeout time.Duration) {
+	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
+	failed := false
+
+	validator := qh.NewVerifier(expectations)
+
+	for len(validator.Pending()) > 0 {
+		if failed {
+			assert.Fail(t, "no query received")
+			continue
+		}
+		var got string
+	retry:
+		select {
+		case got = <-globalDBQueries:
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || shouldIgnoreQuery(got) {
+				goto retry
+			}
+
+			result := validator.AcceptQuery(got)
+			require.NotNil(t, result)
+			require.True(t, result.Accepted, "query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s", got, result.Message, result.Expectation, result.Matched, result.Error, validator.History())
+		case <-time.After(recvTimeout):
+			require.FailNowf(t, "no query received", "pending expectations: %s", validator.Pending())
+			failed = true
+		}
+	}
+	for {
+		select {
+		case got := <-globalDBQueries:
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "_vt.vreplication") {
+				continue
+			}
+			if shouldIgnoreQuery(got) {
+				continue
+			}
+			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
+		default:
+			// Assert there are no pending expectations.
+			require.Empty(t, validator.Pending())
+			return
+		}
+	}
+}
+
+func expectData(t *testing.T, table string, values [][]string) {
+	t.Helper()
+	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)
+}
+
+func expectQueryResult(t *testing.T, query string, values [][]string) {
+	t.Helper()
+	err := compareQueryResults(t, query, values, env.Mysqld.FetchSuperQuery)
+	if err != nil {
+		require.FailNow(t, "data mismatch", err)
+	}
+}
+
+func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
+	t.Helper()
+
+	const timeout = 30 * time.Second
+	const tick = 100 * time.Millisecond
+
+	var query string
+	if len(strings.Split(table, ".")) == 1 {
+		query = fmt.Sprintf("select * from %s.%s", vrepldb, table)
+	} else {
+		query = "select * from " + table
+	}
+
+	// without the sleep and retry there is a flakiness where rows inserted by vreplication are not immediately visible
+	// on the target for tests where we do not expect queries but just directly check the vreplicated data after inserting
+	// into the source.
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+	var err error
+	for {
+		select {
+		case <-tmr.C:
+			if err != nil {
+				require.FailNow(t, "target has incorrect data", err)
+			}
+		default:
+			err = compareQueryResults(t, query, values, exec)
+			if err == nil {
+				return
+			}
+			log.Error(fmt.Sprintf("data mismatch: %v, retrying", err))
+			time.Sleep(tick)
+		}
+	}
+}
+
+func compareQueryResults(t *testing.T, query string, values [][]string,
+	exec func(ctx context.Context, query string) (*sqltypes.Result, error),
+) error {
+	t.Helper()
+	qr, err := exec(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	if len(values) != len(qr.Rows) {
+		return fmt.Errorf("row counts don't match: %v, want %v", qr.Rows, values)
+	}
+	for i, row := range values {
+		if len(row) != len(qr.Rows[i]) {
+			return fmt.Errorf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
+		}
+		for j, val := range row {
+			if got := qr.Rows[i][j].ToString(); got != val {
+				return fmt.Errorf("mismatch at (%d, %d): got '%s', want '%s'", i, j, qr.Rows[i][j].ToString(), val)
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateQueryCountStat(t *testing.T, phase string, want int64) {
+	var count int64
+	for _, ct := range globalStats.status().Controllers {
+		for ph, cnt := range ct.QueryCounts {
+			if ph == phase {
+				count += cnt
+			}
+		}
+	}
+	require.Equal(t, want, count, "QueryCount stat is incorrect")
+}
+
+func validateCopyRowCountStat(t *testing.T, want int64) {
+	var count int64
+	for _, ct := range globalStats.status().Controllers {
+		count += ct.CopyRowCount
+	}
+	require.Equal(t, want, count, "CopyRowCount stat is incorrect")
+}

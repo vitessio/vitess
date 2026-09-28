@@ -1,0 +1,809 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package buffer
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+const (
+	keyspace = "ks1"
+	shard    = "0"
+	// shard2 is only used for tests with two concurrent failovers.
+	shard2 = "-80"
+)
+
+var (
+	failoverErr = vterrors.New(vtrpcpb.Code_CLUSTER_EVENT,
+		"vttablet: rpc error: code = 17 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN")
+	nonFailoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
+		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover")
+
+	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
+
+	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopFailoverEndDetected)
+
+	statsKeyJoinedWindowExceeded = statsKeyJoined + "." + string(evictedWindowExceeded)
+
+	statsKeyJoinedLastReparentTooRecent = statsKeyJoined + "." + string(skippedLastReparentTooRecent)
+	statsKeyJoinedLastFailoverTooRecent = statsKeyJoined + "." + string(skippedLastFailoverTooRecent)
+
+	oldPrimary = &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+		Keyspace: keyspace,
+		Shard:    shard,
+		Type:     topodatapb.TabletType_PRIMARY,
+		PortMap:  map[string]int32{"vt": int32(100)},
+	}
+	newPrimary = &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 101},
+		Keyspace: keyspace,
+		Shard:    shard,
+		Type:     topodatapb.TabletType_PRIMARY,
+		PortMap:  map[string]int32{"vt": int32(101)},
+	}
+)
+
+func TestIsErrorDueToReparenting(t *testing.T) {
+	testcases := []struct {
+		err  error
+		want bool
+	}{
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, ClusterEventReshardingInProgress),
+			want: false,
+		},
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, ClusterEventReparentInProgress),
+			want: true,
+		},
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "The MySQL server is running with the --super-read-only option"),
+			want: true,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.err.Error(), func(t *testing.T) {
+			got := isErrorDueToReparenting(tt.err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestBuffering(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		testBuffering1WithOptions(t, fail, 1)
+	})
+}
+
+func TestBufferingConcurrent(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		testBuffering1WithOptions(t, fail, 2)
+	})
+}
+
+func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
+	resetVariables()
+	defer checkVariables(t)
+
+	// Create the buffer.
+	now := time.Now()
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	// Dry-run mode will apply to other keyspaces and shards. Not tested here.
+	cfg.DryRun = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard): true,
+	}
+	cfg.now = func() time.Time { return now }
+	cfg.DrainConcurrency = concurrency
+
+	b := New(cfg)
+
+	// Simulate that the current primary reports its ExternallyReparentedTimestamp.
+	// vtgate sees this at startup. Additional periodic updates will be sent out
+	// after this. If the TabletExternallyReparented RPC is called regularly by
+	// an external failover tool, the timestamp will be increased (even though
+	// the primary did not change.)
+	fail(b, oldPrimary, keyspace, shard, now)
+
+	// First request with failover error starts buffering.
+	stopped := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+	// Start counter must have been increased.
+	got, want := starts.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
+
+	// Subsequent requests with errors not related to the failover are not buffered.
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
+
+	// Subsequent requests are buffered (if their error is nil or caused by the failover).
+	stopped2 := issueRequest(t.Context(), t, b, nil)
+	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 3))
+
+	// Mimic the failover end.
+	now = now.Add(1 * time.Second)
+	fail(b, newPrimary, keyspace, shard, now)
+
+	// Check that the drain is successful.
+	if err := <-stopped; err != nil {
+		require.NoError(t, err)
+	}
+	if err := <-stopped2; err != nil {
+		require.NoError(t, err)
+	}
+	if err := <-stopped3; err != nil {
+		require.NoError(t, err)
+	}
+	// Failover time should have been be published.
+	durations := failoverDurationSumMs.Counts()
+	_, ok := durations[statsKeyJoined]
+	require.Truef(t, ok, "a failover time must have been recorded: %v", durations)
+	// Recorded max buffer usage should be 3 now.
+	got, want = lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(3)
+	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
+	// Stop counter should have been increased.
+	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1)
+	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
+	// Utilization in percentage has increased.
+	got, want = utilizationSum.Counts()[statsKeyJoined], int64(30)
+	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
+	// Drain will reset the state to "idle" eventually.
+	require.NoError(t, waitForState(b, stateIdle))
+
+	// Second failover: Buffering is skipped because last failover is too recent.
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "subsequent failovers must be skipped due to -buffer-min-time-between-failovers setting. err: %v retryDone: %v", err, retryDone)
+	got, want = requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1)
+	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
+
+	// Second failover is buffered if enough time has passed.
+	now = now.Add(cfg.MinTimeBetweenFailovers)
+	stopped4 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+	// Recorded max buffer usage should be 1 for the second failover.
+	got, want = lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
+	// Start counter must have been increased for the second failover.
+	got, want = starts.Counts()[statsKeyJoined], int64(2)
+	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
+	// Stop buffering.
+	fail(b, oldPrimary, keyspace, shard, now)
+
+	if err := <-stopped4; err != nil {
+		require.NoError(t, err)
+	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+
+	// Stop counter must have been increased for the second failover.
+	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2)
+	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
+	// Utilization in percentage has increased.
+	got, want = utilizationSum.Counts()[statsKeyJoined], int64(40)
+	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
+}
+
+// TestDryRun tests the case when only the dry-run mode is enabled globally.
+func TestDryRun(t *testing.T) {
+	testAllImplementations(t, testDryRun1)
+}
+
+func testDryRun1(t *testing.T, fail failover) {
+	resetVariables()
+
+	cfg := NewDefaultConfig()
+	cfg.DryRun = true
+
+	b := New(cfg)
+
+	// Request does not get buffered.
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
+	// But the internal state changes though.
+	require.NoError(t, waitForState(b, stateBuffering))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+	got, want := starts.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
+	got, want = lastRequestsDryRunMax.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "dry-run request count did not increase: got = %v, want = %v", got, want)
+
+	// End of failover is tracked as well.
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
+
+	require.NoError(t, waitForState(b, stateIdle))
+	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1)
+	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
+	got, want = utilizationDryRunSum.Counts()[statsKeyJoined], int64(10)
+	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
+}
+
+// TestPassthrough tests the case when no failover is in progress and
+// requests have no failover related error.
+func TestPassthrough(t *testing.T) {
+	testAllImplementations(t, testPassthrough1)
+}
+
+func testPassthrough1(t *testing.T, fail failover) {
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard): true,
+	}
+
+	b := New(cfg)
+
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil)
+	require.Truef(t, err == nil && retryDone == nil, "requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
+
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+}
+
+// TestLastReparentTooRecentBufferingSkipped tests that buffering is skipped if
+// we see the reparent (end) *before* any request failures due to it.
+// We must not start buffering because we already observed the trigger for
+// stopping buffering (the reparent) and may not see it again.
+func TestLastReparentTooRecentBufferingSkipped(t *testing.T) {
+	testAllImplementations(t, testLastReparentTooRecentBufferingSkipped1)
+}
+
+func testLastReparentTooRecentBufferingSkipped1(t *testing.T, fail failover) {
+	resetVariables()
+
+	now := time.Now()
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.now = func() time.Time { return now }
+	b := New(cfg)
+
+	// Simulate that the old primary notified us about its reparented timestamp
+	// very recently (time.Now()).
+	// vtgate should see this immediately after the start.
+	fail(b, oldPrimary, keyspace, shard, now)
+
+	// Failover to new primary. Its end is detected faster than the beginning.
+	// Do not start buffering.
+	now = now.Add(1 * time.Second)
+	fail(b, newPrimary, keyspace, shard, now)
+
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+	got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1)
+	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
+	got, want = requestsBuffered.Counts()[statsKeyJoined], int64(0)
+	require.Equalf(t, want, got, "no request should have been tracked as buffered: got = %v, want = %v", got, want)
+}
+
+// TestLastReparentTooRecentBuffering explicitly tests that the "too recent"
+// skipping of the buffering does NOT get triggered because enough time has
+// elapsed since the last seen reparent.
+func TestLastReparentTooRecentBuffering(t *testing.T) {
+	testAllImplementations(t, testLastReparentTooRecentBuffering1)
+}
+
+func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
+	resetVariables()
+
+	now := time.Now()
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.now = func() time.Time { return now }
+	b := New(cfg)
+
+	// Simulate that the old primary notified us about its reparented timestamp
+	// very recently (time.Now()).
+	// vtgate should see this immediately after the start.
+	fail(b, oldPrimary, keyspace, shard, now)
+
+	// Failover to new primary. Do not issue any requests before or after i.e.
+	// there was 0 QPS traffic and no buffering was started.
+	now = now.Add(1 * time.Second)
+	fail(b, newPrimary, keyspace, shard, now)
+
+	// After we're past the --buffer-min-time-between-failovers threshold, go
+	// through a failover with non-zero QPS.
+	now = now.Add(cfg.MinTimeBetweenFailovers)
+	// We're seeing errors first.
+	stopped := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+	// And then the failover end.
+	fail(b, newPrimary, keyspace, shard, now)
+
+	// Check that the drain is successful.
+	if err := <-stopped; err != nil {
+		require.NoError(t, err)
+	}
+	// Drain will reset the state to "idle" eventually.
+	require.NoError(t, waitForState(b, stateIdle))
+
+	got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(0)
+	require.Equalf(t, want, got, "request should not have been skipped: got = %v, want = %v", got, want)
+	got, want = requestsBuffered.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "request should have been tracked as buffered: got = %v, want = %v", got, want)
+}
+
+// TestPassthroughDuringDrain tests the behavior of requests while the buffer is
+// in the drain phase: They should not be buffered and passed through instead.
+func TestPassthroughDuringDrain(t *testing.T) {
+	testAllImplementations(t, testPassthroughDuringDrain1)
+}
+
+func testPassthroughDuringDrain1(t *testing.T, fail failover) {
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard): true,
+	}
+	b := New(cfg)
+
+	// Buffer one request.
+	markRetryDone := make(chan struct{})
+	stopped := issueRequestAndBlockRetry(t.Context(), t, b, failoverErr, markRetryDone)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+
+	// Stop buffering and trigger drain.
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
+
+	gotState, wantState := b.getOrCreateBuffer(keyspace, shard).testGetState(), stateDraining
+	require.Equalf(t, wantState, gotState, "wrong expected state. got = %v, want = %v", gotState, wantState)
+
+	// Requests during the drain will be passed through and not buffered.
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil)
+	require.Truef(t, err == nil && retryDone == nil, "requests with no error must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests with failover errors must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
+
+	// Finish draining by telling the buffer that the retry is done.
+	close(markRetryDone)
+	<-stopped
+
+	// Wait for the drain to complete to avoid races with other tests.
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+}
+
+// TestPassthroughIgnoredKeyspaceOrShard tests that the explicit whitelisting
+// of keyspaces (and optionally shards) ignores entries which are not listed.
+func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
+	testAllImplementations(t, testPassthroughIgnoredKeyspaceOrShard1)
+}
+
+func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard): true,
+	}
+	b := New(cfg)
+
+	ignoredKeyspace := "ignored_ks"
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), ignoredKeyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
+	statsKeyJoined := strings.Join([]string{ignoredKeyspace, shard, skippedDisabled}, ".")
+	got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "request was not skipped as disabled: got = %v, want = %v", got, want)
+
+	ignoredShard := "ff-"
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, ignoredShard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+	statsKeyJoined = strings.Join([]string{keyspace, ignoredShard, skippedDisabled}, ".")
+	got, want = requestsSkipped.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "request was not skipped as disabled: got = %v, want = %v", got, want)
+}
+
+// TestRequestCanceled_ExplicitEnd stops the buffering because the we see the
+// new primary.
+func TestRequestCanceled_ExplicitEnd(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		t.Helper()
+		testRequestCanceled(t, true, fail)
+	})
+}
+
+// TestRequestCanceled_MaxDurationEnd stops the buffering because the max
+// failover duration is reached.
+func TestRequestCanceled_MaxDurationEnd(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		t.Helper()
+		testRequestCanceled(t, false, fail)
+	})
+}
+
+// testRequestCanceled tests the case when a buffered request is canceled
+// (more precisively its context) before the failover/buffering ends.
+func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
+	resetVariables()
+	defer checkVariables(t)
+
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Keyspaces = map[string]bool{keyspace: true}
+
+	if !explicitEnd {
+		cfg.Window = 100 * time.Millisecond
+		cfg.MaxFailoverDuration = 100 * time.Millisecond
+	}
+
+	b := New(cfg)
+
+	// Buffer 2 requests. The second will be canceled and the first will be drained.
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+	ctx2, cancel2 := context.WithCancel(t.Context())
+	stopped2 := issueRequest(ctx2, t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 2))
+
+	// Cancel second request before buffering stops.
+	cancel2()
+	// Canceled request will see an error from the buffer.
+	require.NoError(t, isCanceledError(<-stopped2))
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+	// Recorded max buffer usage stay at 2 although the second request was canceled.
+	got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(2)
+	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
+
+	if explicitEnd {
+		fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
+	}
+
+	// Failover will end eventually.
+	require.NoError(t, waitForState(b, stateIdle))
+	// First request must have been drained without an error.
+	if err := <-stopped1; err != nil {
+		require.NoError(t, err)
+	}
+
+	// If buffering stopped implicitly, the explicit signal will still happen
+	// shortly after. In that case, the buffer should ignore it.
+	if !explicitEnd {
+		fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
+	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+}
+
+func TestEviction(t *testing.T) {
+	testAllImplementations(t, testEviction1)
+}
+
+func testEviction1(t *testing.T, fail failover) {
+	resetVariables()
+	defer checkVariables(t)
+
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard): true,
+	}
+	cfg.Size = 2
+	b := New(cfg)
+
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
+	// This wait is important because each request gets inserted asynchronously
+	// in the buffer. Usually, they end up in the correct order (1, 2), but there
+	// is a chance that it's reversed (2, 1). This wait ensures that 1 goes into
+	// the buffer first.
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+	stopped2 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 2))
+
+	// Third request will evict the oldest.
+	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
+
+	// Evicted request will see an error from the buffer.
+	require.NoError(t, isEvictedError(<-stopped1))
+
+	// End of failover. Stop buffering.
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
+
+	if err := <-stopped2; err != nil {
+		require.NoError(t, err)
+	}
+	if err := <-stopped3; err != nil {
+		require.NoError(t, err)
+	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, 2))
+}
+
+// TestEvictionNotPossible tests the case that the buffer is a) fully in use
+// by two failovers and b) the second failover doesn't use any slot in the
+// buffer and therefore cannot evict older entries.
+func TestEvictionNotPossible(t *testing.T) {
+	testAllImplementations(t, testEvictionNotPossible1)
+}
+
+func testEvictionNotPossible1(t *testing.T, fail failover) {
+	resetVariables()
+	defer checkVariables(t)
+
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard):  true,
+		topoproto.KeyspaceShardString(keyspace, shard2): true,
+	}
+	cfg.Size = 1
+
+	b := New(cfg)
+
+	// Make the buffer full (applies to all failovers).
+	// Also triggers buffering for the first shard.
+	stoppedFirstFailover := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+
+	// Newer requests of the second failover cannot evict anything because
+	// they have no entries buffered.
+	retryDone, bufferErr := b.WaitForFailoverEnd(t.Context(), keyspace, shard2, nil, failoverErr)
+	require.Truef(t, bufferErr != nil && retryDone == nil, "buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
+	gotCode, wantCode := vterrors.Code(bufferErr), vtrpcpb.Code_UNAVAILABLE
+	require.Equalf(t, wantCode, gotCode, "wrong error code for evicted buffered request. got = %v, want = %v", gotCode, wantCode)
+	gotMsg, wantMsg := bufferErr.Error(), bufferFullError.Error()
+	require.Containsf(t, gotMsg, wantMsg, "evicted buffered request should return a different error message. got = %v, want substring = %v", gotMsg, wantMsg)
+
+	// End of failover. Stop buffering.
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
+
+	if err := <-stoppedFirstFailover; err != nil {
+		require.NoError(t, err)
+	}
+	// Wait for the failover end to avoid races.
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, 1))
+	statsKeyJoined := strings.Join([]string{keyspace, shard2, string(skippedBufferFull)}, ".")
+	got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
+}
+
+func TestWindow(t *testing.T) {
+	testAllImplementations(t, testWindow1)
+}
+
+func testWindow1(t *testing.T, fail failover) {
+	resetVariables()
+	defer checkVariables(t)
+
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Shards = map[string]bool{
+		topoproto.KeyspaceShardString(keyspace, shard):  true,
+		topoproto.KeyspaceShardString(keyspace, shard2): true,
+	}
+	cfg.Size = 1
+	cfg.Window = 1 * time.Millisecond
+
+	b := New(cfg)
+
+	// Buffer one request.
+	t.Logf("first request exceeds its window")
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
+
+	// Let it go out of the buffering window and expire.
+	if err := <-stopped1; err != nil {
+		require.NoError(t, err)
+	}
+	// Verify that the window was actually exceeded.
+	require.NoError(t, waitForRequestsExceededWindow(1))
+
+	// Increase the window and buffer a request again
+	// (queue becomes not empty a second time).
+	cfg.Window = 10 * time.Minute
+
+	// This is a hack. The buffering semaphore gets released asynchronously.
+	// Sometimes the next issueRequest tries to acquire before that release
+	// and ends up failing. Waiting for the previous goroutines to exit ensures
+	// that the sema will get released.
+	b.waitForShutdown()
+
+	// This time the request does not go out of window and gets evicted by a third
+	// request instead.
+	t.Logf("second request does not exceed its window")
+	stopped2 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+
+	// Third request will evict the second one.
+	t.Logf("third request evicts the second request")
+	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
+
+	// Evicted request will see an error from the buffer.
+	require.NoError(t, isEvictedError(<-stopped2))
+	// Block until the third request is buffered. Avoids data race with *window.
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+
+	// Verify that the window was not exceeded.
+	got, want := requestsEvicted.Counts()[statsKeyJoinedWindowExceeded], int64(1)
+	require.Equalf(t, want, got, "second or third request should not have exceed its buffering window. got = %v, want = %v", got, want)
+
+	// Reduce the window again.
+	cfg.Window = 100 * time.Millisecond
+
+	// Fourth request evicts the third
+	t.Logf("fourth request exceeds its window (and evicts the third)")
+	stopped4 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, isEvictedError(<-stopped3))
+
+	// Fourth request will exceed its window and finish early.
+	if err := <-stopped4; err != nil {
+		require.NoError(t, err)
+	}
+	// Verify that the window was actually exceeded.
+	require.NoError(t, waitForRequestsExceededWindow(2))
+
+	// At this point the buffer is empty but buffering is still active.
+	// Simulate that the buffering stops because the max duration (10m) was reached.
+	b.getOrCreateBuffer(keyspace, shard).stopBufferingDueToMaxDuration()
+	// Wait for the failover end to avoid races.
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, 1))
+}
+
+// TestShutdown tests that Buffer.Shutdown() unblocks any pending bufferings
+// immediately.
+func TestShutdown(t *testing.T) {
+	testAllImplementations(t, testShutdown1)
+}
+
+func testShutdown1(t *testing.T, fail failover) {
+	resetVariables()
+	defer checkVariables(t)
+
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	b := New(cfg)
+
+	// Buffer one request.
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, waitForRequestsInFlight(b, 1))
+
+	// Shutdown buffer and unblock buffered request immediately.
+	b.Shutdown()
+
+	// Request must have been drained without an error.
+	if err := <-stopped1; err != nil {
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
+}
+
+func TestShutdown_WaitForFailoverEndAfterShutdownIsNoop(t *testing.T) {
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.MaxFailoverDuration = 500 * time.Millisecond
+	b := New(cfg)
+
+	sb := b.getOrCreateBuffer(keyspace, shard)
+	require.NotNil(t, sb)
+	require.Equal(t, stateIdle, sb.testGetState())
+
+	b.Shutdown()
+
+	type result struct {
+		retryDone RetryDoneFunc
+		err       error
+	}
+	resCh := make(chan result, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	go func() {
+		rd, err := sb.waitForFailoverEnd(ctx, keyspace, shard, nil, failoverErr)
+		resCh <- result{rd, err}
+	}()
+
+	var r result
+	require.Eventually(t, func() bool {
+		select {
+		case r = <-resCh:
+			if r.retryDone != nil {
+				r.retryDone()
+			}
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	assert.Equal(t, stateIdle, sb.testGetState(),
+		"sb transitioned out of stateIdle after Buffer.Shutdown returned")
+	assert.Nil(t, r.retryDone, "waitForFailoverEnd should return nil RetryDoneFunc after Buffer.Shutdown")
+	assert.NoError(t, r.err, "waitForFailoverEnd should return nil error after Buffer.Shutdown")
+}
+
+func TestParallelRangeIndex(t *testing.T) {
+	suite := []struct {
+		max         int
+		concurrency int
+		calls       []int
+	}{
+		{
+			max:         0,
+			concurrency: 0,
+			calls:       []int{},
+		},
+		{
+			max:         100,
+			concurrency: 0,
+			calls:       []int{},
+		},
+		{
+			max:         9,
+			concurrency: 3,
+			calls:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+		{
+			max:         0,
+			concurrency: 10,
+			calls:       []int{0},
+		},
+		{
+			max:         9,
+			concurrency: 9,
+			calls:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+	}
+
+	for idx, tc := range suite {
+		name := fmt.Sprintf("%d_max%d_concurrency%d", idx, tc.max, tc.concurrency)
+		t.Run(name, func(t *testing.T) {
+			var mu sync.Mutex
+			var wg sync.WaitGroup
+			var counter atomic.Int64
+
+			wg.Add(tc.concurrency)
+			var got []int
+			for i := 0; i < tc.concurrency; i++ {
+				go func() {
+					defer wg.Done()
+					for {
+						idx, ok := parallelRangeIndex(&counter, tc.max)
+						if !ok {
+							break
+						}
+
+						mu.Lock()
+						got = append(got, idx)
+						mu.Unlock()
+					}
+				}()
+			}
+			wg.Wait()
+			assert.ElementsMatch(t, got, tc.calls, "must call passed function with matching indexes")
+		})
+	}
+}

@@ -1,0 +1,5 @@
+rules:
+  - resource: "*"
+    actions: ["*"]
+    subjects: ["*"]
+    clusters: ["*"]

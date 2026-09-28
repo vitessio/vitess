@@ -1,0 +1,185 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Data structures for the throttler RPC interface.
+
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/throttlerdata";
+
+package throttlerdata;
+
+// MaxRatesRequest is the payload for the MaxRates RPC.
+message MaxRatesRequest {
+}
+
+// MaxRatesResponse is returned by the MaxRates RPC.
+message MaxRatesResponse {
+  // max_rates returns the max rate for each throttler. It's keyed by the
+  // throttler name.
+  map<string, int64> rates = 1;
+}
+
+// SetMaxRateRequest is the payload for the SetMaxRate RPC.
+message SetMaxRateRequest {
+  int64 rate = 1;
+}
+
+// SetMaxRateResponse is returned by the SetMaxRate RPC.
+message SetMaxRateResponse {
+  // names is the list of throttler names which were updated.
+  repeated string names = 1;
+}
+
+// Configuration holds the configuration parameters for the
+// MaxReplicationLagModule which adaptively adjusts the throttling rate based on
+// the observed replication lag across all replicas.
+message Configuration {
+  // target_replication_lag_sec is the replication lag (in seconds) the
+  // MaxReplicationLagModule tries to aim for.
+  // If it is within the target, it tries to increase the throttler
+  // rate, otherwise it will lower it based on an educated guess of the
+  // replica's throughput.
+  int64 target_replication_lag_sec = 1;
+
+  // max_replication_lag_sec is meant as a last resort.
+  // By default, the module tries to find out the system maximum capacity while
+  // trying to keep the replication lag around "target_replication_lag_sec".
+  // Usually, we'll wait min_duration_between_(increases|decreases)_sec to see
+  // the effect of a throttler rate change on the replication lag.
+  // But if the lag goes above this field's value we will go into an "emergency"
+  // state and throttle more aggressively (see "emergency_decrease" below).
+  // This is the only way to ensure that the system will recover.
+  int64 max_replication_lag_sec = 2;
+
+  // initial_rate is the rate at which the module will start.
+  int64 initial_rate = 3;
+
+  // max_increase defines by how much we will increase the rate
+  // e.g. 0.05 increases the rate by 5% while 1.0 by 100%.
+  // Note that any increase will let the system wait for at least
+  // (1 / MaxIncrease) seconds. If we wait for shorter periods of time, we
+  // won't notice if the rate increase also increases the replication lag.
+  // (If the system was already at its maximum capacity (e.g. 1k QPS) and we
+  // increase the rate by e.g. 5% to 1050 QPS, it will take 20 seconds until
+  // 1000 extra queries are buffered and the lag increases by 1 second.)
+  double max_increase = 4;
+
+  // emergency_decrease defines by how much we will decrease the current rate
+  // if the observed replication lag is above "max_replication_lag_sec".
+  // E.g. 0.50 decreases the current rate by 50%.
+  double emergency_decrease = 5;
+
+  // min_duration_between_increases_sec specifies how long we'll wait at least
+  // for the last rate increase to have an effect on the system.
+  int64 min_duration_between_increases_sec = 6;
+
+  // max_duration_between_increases_sec specifies how long we'll wait at most
+  // for the last rate increase to have an effect on the system.
+  int64 max_duration_between_increases_sec = 7;
+
+  // min_duration_between_decreases_sec specifies how long we'll wait at least
+  // for the last rate decrease to have an effect on the system.
+  int64 min_duration_between_decreases_sec = 8;
+
+  // spread_backlog_across_sec is used when we set the throttler rate after
+  // we guessed the rate of a replica and determined its backlog.
+  // For example, at a guessed rate of 100 QPS and a lag of 10s, the replica has
+  // a backlog of 1000 queries.
+  // When we set the new, decreased throttler rate, we factor in how long it
+  // will take the replica to go through the backlog (in addition to new
+  // requests). This field specifies over which timespan we plan to spread this.
+  // For example, for a backlog of 1000 queries spread over 5s means that we
+  // have to further reduce the rate by 200 QPS or the backlog will not be
+  // processed within the 5 seconds.
+  int64 spread_backlog_across_sec = 9;
+
+  // ignore_n_slowest_replicas will ignore replication lag updates from the
+  // N slowest REPLICA tablets. Under certain circumstances, replicas are still
+  // considered e.g. a) if the lag is at most max_replication_lag_sec, b) there
+  // are less than N+1 replicas or c) the lag increased on each replica such
+  // that all replicas were ignored in a row.
+  int32 ignore_n_slowest_replicas = 10;
+
+  // ignore_n_slowest_rdonlys does the same thing as ignore_n_slowest_replicas
+  // but for RDONLY tablets. Note that these two settings are independent.
+  int32 ignore_n_slowest_rdonlys = 11;
+
+  // age_bad_rate_after_sec is the duration after which an unchanged bad rate
+  // will "age out" and increase by "bad_rate_increase".
+  // Bad rates are tracked by the code in memory.go and serve as an upper bound
+  // for future rate changes. This ensures that the adaptive throttler does not
+  // try known too high (bad) rates over and over again.
+  // To avoid that temporary degradations permanently reduce the maximum rate,
+  // a stable bad rate "ages out" after "age_bad_rate_after_sec".
+  int64 age_bad_rate_after_sec = 12;
+
+  // bad_rate_increase defines the percentage by which a bad rate will be
+  // increased when it's aging out.
+  double bad_rate_increase = 13;
+
+  // max_rate_approach_threshold is the fraction of the current rate limit that the actual
+  // rate must exceed for the throttler to increase the limit when the replication lag
+  // is below target_replication_lag_sec. For example, assuming the actual replication lag
+  // is below target_replication_lag_sec, if the current rate limit is 100, then the actual
+  // rate must exceed 100*max_rate_approach_threshold for the throttler to increase the current
+  // limit.
+  double max_rate_approach_threshold = 14;
+}
+
+// GetConfigurationRequest is the payload for the GetConfiguration RPC.
+message GetConfigurationRequest {
+  // throttler_name specifies which throttler to select. If empty, all active
+  // throttlers will be selected.
+  string throttler_name = 1;
+}
+
+// GetConfigurationResponse is returned by the GetConfiguration RPC.
+message GetConfigurationResponse {
+  // max_rates returns the configurations for each throttler.
+  // It's keyed by the throttler name.
+  map<string, Configuration> configurations = 1;
+}
+
+// UpdateConfigurationRequest is the payload for the UpdateConfiguration RPC.
+message UpdateConfigurationRequest {
+  // throttler_name specifies which throttler to update. If empty, all active
+  // throttlers will be updated.
+  string throttler_name = 1;
+  // configuration is the new (partial) configuration.
+  Configuration configuration = 2;
+  // copy_zero_values specifies whether fields with zero values should be copied
+  // as well.
+  bool copy_zero_values = 3;
+}
+
+// UpdateConfigurationResponse is returned by the UpdateConfiguration RPC.
+message UpdateConfigurationResponse {
+  // names is the list of throttler names which were updated.
+  repeated string names = 1;
+}
+
+// ResetConfigurationRequest is the payload for the ResetConfiguration RPC.
+message ResetConfigurationRequest {
+  // throttler_name specifies which throttler to reset. If empty, all active
+  // throttlers will be reset.
+  string throttler_name = 1;
+}
+
+// ResetConfigurationResponse is returned by the ResetConfiguration RPC.
+message ResetConfigurationResponse {
+  // names is the list of throttler names which were updated.
+  repeated string names = 1;
+}

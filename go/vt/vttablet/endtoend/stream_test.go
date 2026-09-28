@@ -1,0 +1,282 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package endtoend
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+)
+
+func TestStreamUnion(t *testing.T) {
+	qr, err := framework.NewClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1)
+}
+
+func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent string) error {
+	err := client.Begin(false)
+	if err != nil {
+		return err
+	}
+	defer client.Rollback()
+
+	for i := range rowCount {
+		query := fmt.Sprintf("insert into vitess_stress values (%d, '%s')", i, strings.Repeat(rowContent, 2048/len(rowContent)))
+		_, err := client.Execute(query, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return client.Commit()
+}
+
+func BenchmarkStreamQuery(b *testing.B) {
+	const RowCount = 1100
+	const RowContent = "abcdefghijklmnopqrstuvwxyz"
+
+	client := framework.NewClient()
+	err := populateStressQuery(client, RowCount, RowContent)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_stress", nil)
+
+	for b.Loop() {
+		err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+			return nil
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestStreamConsolidation(t *testing.T) {
+	const Workers = 50
+	const RowCount = 1100
+	const RowContent = "abcdefghijklmnopqrstuvwxyz"
+
+	client := framework.NewClient()
+	err := populateStressQuery(client, RowCount, RowContent)
+	require.NoError(t, err)
+	defer client.Execute("delete from vitess_stress", nil)
+
+	defaultPoolSize := framework.Server.StreamPoolSize()
+
+	err = framework.Server.SetStreamPoolSize(t.Context(), 4)
+	require.NoError(t, err)
+
+	framework.Server.SetStreamConsolidationBlocking(true)
+
+	defer func() {
+		_ = framework.Server.SetStreamPoolSize(t.Context(), defaultPoolSize)
+		framework.Server.SetStreamConsolidationBlocking(false)
+	}()
+
+	start := make(chan struct{})
+	var finish sync.WaitGroup
+	// require.* is unsafe on a worker goroutine, so record per-worker results and assert after finish.Wait().
+	errs := make([]error, Workers)
+	rowCounts := make([]int, Workers)
+
+	// Spawn N workers at the same time to stress test the stream consolidator
+	for i := range Workers {
+		finish.Go(func() {
+			// block all the workers so they all perform their queries at the same time
+			<-start
+
+			rowCount := 0
+			errs[i] = client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+				for _, r := range result.Rows {
+					rowCount += len(r)
+				}
+				return nil
+			})
+			rowCounts[i] = rowCount
+		})
+	}
+
+	// wait until all the goroutines have spawned and are blocked before we unblock them at once
+	time.Sleep(500 * time.Millisecond)
+	close(start)
+	finish.Wait()
+	for i := range Workers {
+		require.NoError(t, errs[i])
+		require.Equal(t, 2200, rowCounts[i])
+	}
+}
+
+func TestStreamBigData(t *testing.T) {
+	client := framework.NewClient()
+	err := populateBigData(client)
+	require.NoError(t, err)
+	defer client.Execute("delete from vitess_big", nil)
+
+	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
+	require.NoError(t, err)
+	row10 := framework.RowsToStrings(qr)[10]
+	want := []string{
+		"0",
+		"AAAAAAAAAAAAAAAAAA 0",
+		"BBBBBBBBBBBBBBBBBB 0",
+		"C",
+		"DDDDDDDDDDDDDDDDDD 0",
+		"EEEEEEEEEEEEEEEEEE 0",
+		"FF 0",
+		"GGGGGGGGGGGGGGGGGG 0",
+		"0",
+		"0",
+		"0",
+		"0",
+		"10",
+		"AAAAAAAAAAAAAAAAAA 10",
+		"BBBBBBBBBBBBBBBBBB 10",
+		"C",
+		"DDDDDDDDDDDDDDDDDD 10",
+		"EEEEEEEEEEEEEEEEEE 10",
+		"FF 10",
+		"GGGGGGGGGGGGGGGGGG 10",
+		"10",
+		"10",
+		"10",
+		"10",
+	}
+	assert.Equalf(t, want, row10, "Row10: \n%#v, want \n%#v", row10, want)
+}
+
+func TestStreamBigDataInTx(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Release()
+	err := populateBigData(client)
+	require.NoError(t, err)
+	defer func() {
+		framework.NewClient().Execute("delete from vitess_big", nil)
+	}()
+
+	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
+	require.NoError(t, err)
+	row10 := framework.RowsToStrings(qr)[10]
+	want := []string{
+		"0",
+		"AAAAAAAAAAAAAAAAAA 0",
+		"BBBBBBBBBBBBBBBBBB 0",
+		"C",
+		"DDDDDDDDDDDDDDDDDD 0",
+		"EEEEEEEEEEEEEEEEEE 0",
+		"FF 0",
+		"GGGGGGGGGGGGGGGGGG 0",
+		"0",
+		"0",
+		"0",
+		"0",
+		"10",
+		"AAAAAAAAAAAAAAAAAA 10",
+		"BBBBBBBBBBBBBBBBBB 10",
+		"C",
+		"DDDDDDDDDDDDDDDDDD 10",
+		"EEEEEEEEEEEEEEEEEE 10",
+		"FF 10",
+		"GGGGGGGGGGGGGGGGGG 10",
+		"10",
+		"10",
+		"10",
+		"10",
+	}
+	assert.Equalf(t, want, row10, "Row10: \n%#v, want \n%#v", row10, want)
+}
+
+func TestStreamTerminate(t *testing.T) {
+	client := framework.NewClient()
+	err := populateBigData(client)
+	require.NoError(t, err)
+	defer client.Execute("delete from vitess_big", nil)
+
+	called := false
+	err = client.Stream(
+		"select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id",
+		nil,
+		func(*sqltypes.Result) error {
+			if !called {
+				queries := framework.LiveQueryz()
+				if l := len(queries); l != 1 {
+					assert.Failf(t, "unexpected queries length", "len(queries): %d, want 1", l)
+					return errors.New("no queries from LiveQueryz")
+				}
+				err := framework.StreamTerminate(queries[0].ConnID)
+				if err != nil {
+					return err
+				}
+				called = true
+			}
+			time.Sleep(10 * time.Millisecond)
+			return nil
+		},
+	)
+	code := vterrors.Code(err)
+	assert.Equalf(t, vtrpcpb.Code_CANCELED, code, "Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
+}
+
+func populateBigData(client *framework.QueryClient) error {
+	err := client.Begin(false)
+	if err != nil {
+		return err
+	}
+
+	for i := range 100 {
+		stri := strconv.Itoa(i)
+		query := "insert into vitess_big values " +
+			"(" + stri + ", " +
+			"'AAAAAAAAAAAAAAAAAA " + stri + "', " +
+			"'BBBBBBBBBBBBBBBBBB " + stri + "', " +
+			"'C', " +
+			"'DDDDDDDDDDDDDDDDDD " + stri + "', " +
+			"'EEEEEEEEEEEEEEEEEE " + stri + "', " +
+			"'FF " + stri + "', " +
+			"'GGGGGGGGGGGGGGGGGG " + stri + "', " +
+			stri + ", " +
+			stri + ", " +
+			stri + ", " +
+			stri + ")"
+		_, err := client.Execute(query, nil)
+		if err != nil {
+			client.Rollback()
+			return err
+		}
+	}
+	return client.Commit()
+}
+
+func TestStreamError(t *testing.T) {
+	_, err := framework.NewClient().StreamExecute("select count(abcd) from vitess_big", nil)
+	want := "Unknown column"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		assert.Failf(t, "unexpected error", "Error: %v, must start with %s", err, want)
+	}
+}

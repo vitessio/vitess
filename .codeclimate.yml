@@ -1,0 +1,44 @@
+engines:
+  gofmt:
+    enabled: true
+  golint:
+    enabled: true
+  govet:
+    enabled: true
+  shellcheck:
+    enabled: true
+  duplication:
+    enabled: false
+
+ratings:
+  paths:
+    - "**.go"
+    - "**.sh"
+
+checks:
+  argument-count:
+    enabled: false
+  complex-logic:
+    enabled: false
+  file-lines:
+    enabled: false
+  method-complexity:
+    enabled: false
+  method-count:
+    enabled: false
+  method-lines:
+    enabled: false
+  nested-control-flow:
+    enabled: false
+  return-statements:
+    enabled: false
+  similar-code:
+    enabled: false
+  identical-code:
+    enabled: false
+
+# Ignore generated code.
+exclude_paths:
+- "go/vt/proto/"
+- "go/vt/sqlparser/sql.go"
+- "py/util/grpc_with_metadata.py"

@@ -1,0 +1,283 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package testenv supplies test functions for testing vstreamer.
+package testenv
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttest"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+)
+
+const (
+	DBName               = "vttest"
+	DefaultCollationName = "utf8mb4_0900_ai_ci"
+	DefaultShard         = "0"
+)
+
+var (
+	// These are exported to coordinate on version specific
+	// behavior between the testenv and its users.
+	CollationEnv       *collations.Environment
+	DefaultCollationID collations.ID
+	MySQLVersion       string
+)
+
+func init() {
+	vs, err := mysqlctl.GetVersionString()
+	if err != nil {
+		panic("could not get MySQL version: " + err.Error())
+	}
+	_, mv, err := mysqlctl.ParseVersionString(vs)
+	if err != nil {
+		panic("could not parse MySQL version: " + err.Error())
+	}
+	MySQLVersion = fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
+	log.Info("MySQL version: " + MySQLVersion)
+	CollationEnv = collations.NewEnvironment(MySQLVersion)
+	// utf8mb4_general_ci is the default for MySQL 5.7 and
+	// utf8mb4_0900_ai_ci is the default for MySQL 8.0.
+	DefaultCollationID = CollationEnv.DefaultConnectionCharset()
+	log.Info(fmt.Sprintf("Default collation ID: %d", DefaultCollationID))
+}
+
+// Env contains all the env vars for a test against a mysql instance.
+type Env struct {
+	cluster *vttest.LocalCluster
+
+	KeyspaceName string
+	ShardName    string
+	Cells        []string
+
+	TabletEnv    tabletenv.Env
+	TopoServ     *topo.Server
+	topoFactory  *memorytopo.Factory
+	SrvTopo      srvtopo.Server
+	Dbcfgs       *dbconfigs.DBConfigs
+	Mysqld       *mysqlctl.Mysqld
+	SchemaEngine *schema.Engine
+	// MySQL and Percona are considered equivalent here and both called mysql
+	DBType         string
+	DBMajorVersion int
+	DBMinorVersion int
+	DBPatchVersion int
+}
+
+// Init initializes an Env.
+func Init(ctx context.Context) (*Env, error) {
+	te := &Env{
+		KeyspaceName: DBName,
+		ShardName:    "0",
+		Cells:        []string{"cell1"},
+	}
+
+	te.TopoServ, te.topoFactory = memorytopo.NewServerAndFactory(ctx, te.Cells...)
+	if err := te.TopoServ.CreateKeyspace(ctx, te.KeyspaceName, &topodatapb.Keyspace{}); err != nil {
+		return nil, err
+	}
+	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
+		panic(err)
+	}
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, counts)
+
+	cfg := vttest.Config{
+		Topology: &vttestpb.VTTestTopology{
+			Keyspaces: []*vttestpb.Keyspace{
+				{
+					Name: te.KeyspaceName,
+					Shards: []*vttestpb.Shard{
+						{
+							Name:           "0",
+							DbNameOverride: DBName,
+						},
+					},
+				},
+			},
+		},
+		OnlyMySQL:  true,
+		Charset:    CollationEnv.LookupName(DefaultCollationID),
+		ExtraMyCnf: strings.Split(os.Getenv("EXTRA_MY_CNF"), ":"),
+	}
+	te.cluster = &vttest.LocalCluster{
+		Config: cfg,
+	}
+	if err := te.cluster.Setup(); err != nil {
+		os.RemoveAll(te.cluster.SchemaDir)
+		return nil, fmt.Errorf("could not launch mysql: %v", err)
+	}
+	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
+	conf := tabletenv.NewDefaultConfig()
+	conf.DB = te.Dbcfgs
+	vtenvCfg := vtenv.Options{
+		MySQLServerVersion: MySQLVersion,
+	}
+	vtenv, err := vtenv.New(vtenvCfg)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize new vtenv: %v", err)
+	}
+	te.TabletEnv = tabletenv.NewEnv(vtenv, conf, "VStreamerTest")
+	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
+	pos, _ := te.Mysqld.PrimaryPosition(ctx)
+	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {
+		te.DBType = string(mysqlctl.FlavorMariaDB)
+	} else {
+		// MySQL and Percona are equivalent for the tests
+		te.DBType = string(mysqlctl.FlavorMySQL)
+	}
+	dbVersionStr, err := te.Mysqld.GetVersionString(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("could not get server version: %w", err)
+	}
+	if !strings.Contains(dbVersionStr, MySQLVersion) {
+		return nil, fmt.Errorf("MySQL version mismatch between mysqlctl %s and mysqld %s", MySQLVersion, dbVersionStr)
+	}
+	_, version, err := mysqlctl.ParseVersionString(dbVersionStr)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse server version %q: %w", dbVersionStr, err)
+	}
+
+	te.DBMajorVersion = version.Major
+	te.DBMinorVersion = version.Minor
+	te.DBPatchVersion = version.Patch
+
+	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
+	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
+	if err := te.SchemaEngine.Open(); err != nil {
+		return nil, err
+	}
+
+	// The first vschema should not be empty. Leads to Node not found error.
+	// TODO(sougou): need to fix the bug.
+	if err := te.SetVSchema(`{"sharded": true}`); err != nil {
+		te.Close()
+		return nil, err
+	}
+
+	return te, nil
+}
+
+// Close tears down TestEnv.
+func (te *Env) Close() {
+	te.SchemaEngine.Close()
+	te.Mysqld.Close()
+	te.cluster.TearDown()
+	os.RemoveAll(te.cluster.SchemaDir)
+}
+
+// SetVSchema sets the vschema for the test keyspace.
+func (te *Env) SetVSchema(vs string) error {
+	ctx := context.Background()
+	var kspb vschemapb.Keyspace
+	if err := json2.UnmarshalPB([]byte(vs), &kspb); err != nil {
+		return err
+	}
+	ksvs := &topo.KeyspaceVSchemaInfo{
+		Name:     te.KeyspaceName,
+		Keyspace: &kspb,
+	}
+	if err := te.TopoServ.SaveVSchema(ctx, ksvs); err != nil {
+		return err
+	}
+	te.SchemaEngine.Reload(ctx)
+	return te.TopoServ.RebuildSrvVSchema(ctx, te.Cells)
+}
+
+// In MySQL 8.0 and later information_schema no longer contains the display width for integer types and
+// as of 8.0.19 for year types as this was an unnecessary headache because it can only serve to confuse
+// if the display width is less than the type width (8.0 no longer supports the 2 digit YEAR). So if the
+// test is running against MySQL 8.0 or later then you should use this function to replace e.g.
+// `int([0-9]*)` with `int` in the expected results string that we define in the test.
+func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
+	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
+		return orig
+	}
+	var adjusted string
+	baseIntType := "int"
+	intRE := regexp.MustCompile(`(?i)int\(([0-9]*)?\)`)
+	adjusted = intRE.ReplaceAllString(orig, baseIntType)
+	if (te.DBMajorVersion > 8 || te.DBMinorVersion > 0) || te.DBPatchVersion >= 19 {
+		baseYearType := "year"
+		yearRE := regexp.MustCompile(`(?i)year\(([0-9]*)?\)`)
+		adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
+	}
+	return adjusted
+}
+
+// ServerCapability is used to define capabilities for which we want to optionally run tests
+// if the underlying mysql server supports them.
+type ServerCapability int32
+
+const (
+	ServerCapabilityInvisibleColumn              ServerCapability = 1
+	ServerCapabilityGeneratedInvisiblePrimaryKey ServerCapability = 2
+)
+
+// HasCapability returns true if the server has the given capability.
+// Used to skip tests that require a certain version of MySQL.
+func (te *Env) HasCapability(cap ServerCapability) bool {
+	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
+		return false
+	}
+	switch cap {
+	case ServerCapabilityInvisibleColumn:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 23
+	case ServerCapabilityGeneratedInvisiblePrimaryKey:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 30
+	}
+	return false
+}
+
+// AddCell adds a new cell to the test environment. It checks whether
+// the cell already exists, if not, it creates it.
+func (te *Env) AddCell(ctx context.Context, cell string) error {
+	// Check if cell already exists
+	_, err := te.TopoServ.GetCellInfo(ctx, cell, false)
+	if err == nil {
+		return nil
+	}
+	if !topo.IsErrType(err, topo.NoNode) {
+		return err
+	}
+
+	te.topoFactory.AddCell(cell)
+	if err := te.TopoServ.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
+		return err
+	}
+	te.Cells = append(te.Cells, cell)
+	return nil
+}

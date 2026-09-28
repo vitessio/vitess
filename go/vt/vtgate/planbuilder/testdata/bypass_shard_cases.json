@@ -1,0 +1,369 @@
+[
+  {
+    "comment": "select bypass",
+    "query": "select count(*), col from unsharded",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from unsharded",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select count(*), col from unsharded"
+      }
+    }
+  },
+  {
+    "comment": "update bypass",
+    "query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1"
+      }
+    }
+  },
+  {
+    "comment": "delete bypass",
+    "query": "DELETE FROM USER WHERE ID = 42",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM USER WHERE ID = 42",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "delete from `USER` where ID = 42"
+      }
+    }
+  },
+  {
+    "comment": "insert bypass",
+    "query": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "insert into `USER`(ID, `NAME`) values (42, 'ms X')"
+      }
+    }
+  },
+  {
+    "comment": "insert bypass with sequence: sequences ignored",
+    "query": "insert into user(nonid) values (2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "INSERT",
+      "Original": "insert into user(nonid) values (2)",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "insert into `user`(nonid) values (2)"
+      }
+    }
+  },
+  {
+    "comment": "bypass query for into outfile s3",
+    "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select count(*), col from unsharded into outfile s3 'x.txt'"
+      }
+    }
+  },
+  {
+    "comment": "Select outfile",
+    "query": "select * from user into outfile S3 'x.txt'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from user into outfile S3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select * from `user` into outfile s3 'x.txt'"
+      }
+    }
+  },
+  {
+    "comment": "load data from s3 'x.txt' into table x",
+    "query": "load data from s3 'x.txt' into table x",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "OTHER",
+      "Original": "load data from s3 'x.txt' into table x",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "load data from s3 'x.txt' into table x",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "load data from s3 'x.txt'",
+    "query": "load data from s3 'x.txt'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "OTHER",
+      "Original": "load data from s3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "load data from s3 'x.txt'",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "create table",
+    "query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "DDL",
+      "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+      }
+    }
+  },
+  {
+    "comment": "create temporary table must reserve the connection and mark the session, not pass through",
+    "query": "create temporary table temp_t(id bigint, primary key(id))",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create temporary table temp_t(id bigint, primary key(id))",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create temporary table temp_t(id bigint, primary key(id))",
+        "TempTable": true
+      }
+    }
+  },
+  {
+    "comment": "drop temporary table must route through the DDL primitive (no implicit commit), without reserving or marking",
+    "query": "drop temporary table if exists temp_t",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop temporary table if exists temp_t",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop temporary table if exists temp_t",
+        "TempTable": true
+      }
+    }
+  },
+  {
+    "comment": "select bypass with query timeout hint",
+    "query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from `user`",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "update bypass with query timeout hint",
+    "query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ user set val = 1 where id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=100 */ user set val = 1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ `user` set val = 1 where id = 1",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "delete bypass with query timeout hint",
+    "query": "DELETE /*vt+ QUERY_TIMEOUT_MS=100 */ FROM USER WHERE ID = 42",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "DELETE",
+      "Original": "DELETE /*vt+ QUERY_TIMEOUT_MS=100 */ FROM USER WHERE ID = 42",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=100 */ from `USER` where ID = 42",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "insert bypass with query timeout hint",
+    "query": "INSERT /*vt+ QUERY_TIMEOUT_MS=100 */ INTO USER (ID, NAME) VALUES (42, 'ms X')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "INSERT",
+      "Original": "INSERT /*vt+ QUERY_TIMEOUT_MS=100 */ INTO USER (ID, NAME) VALUES (42, 'ms X')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=100 */ into `USER`(ID, `NAME`) values (42, 'ms X')",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "remove the matching keyspace from shard targeted query",
+    "query": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
+      }
+    }
+  },
+  {
+    "comment": "show variables on a targeted session substitutes the variables VTGate owns",
+    "query": "show variables",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SHOW",
+      "Original": "show variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "Shard(-80)",
+            "Query": "show variables"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show global variables on a targeted session substitutes the server identity",
+    "query": "show global variables",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SHOW",
+      "Original": "show global variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "Shard(-80)",
+            "Query": "show global variables"
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,28 @@
+[
+  {
+    "comment": "EXISTS subquery",
+    "query": "select exists(select * from user where id = 5)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select exists(select * from user where id = 5)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
+        "Query": "select exists (select 1 from `user` where id = 5) from dual",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  }
+]

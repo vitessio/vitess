@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# This script is run during "git commit" after the commit message was entered.
+#
+# If it does not find a Signed-off-by: line in this commit,
+# it prints a message about using the -s flag and a link
+# to an explanation of the DCO.
+#
+# If it detects an interactive session, it prompts the user
+# to acknowledge signoff now, and adds the line if so.
+
+msg_file="$1"
+
+git_email="$(git config --get user.email)"
+git_name="$(git config --get user.name)"
+signoff="Signed-off-by: ${git_name} <${git_email}>"
+
+if git interpret-trailers --parse $msg_file | grep -q -F "$signoff"; then
+  exit 0
+fi
+
+# No signoff found, or the email doesn't match. Print some instructions.
+echo
+echo "==================================================================="
+echo "No 'Signed-off-by:' line was found, or it didn't match the"
+echo "expected author: ${git_name} <${git_email}>"
+echo
+echo "This project uses a Developer Certificate of Origin"
+echo "instead of a Contributor License Agreement."
+echo "For more information, see: https://wiki.linuxfoundation.org/dco"
+echo
+echo "Please certify each contribution meets the requirements in the"
+echo "'DCO' file in the root of this repository by committing with"
+echo "the --signoff flag (or the short form: -s):"
+echo
+echo "    git commit --signoff"
+
+# git doesn't give us access to user input, so let's steal it.
+exec < /dev/tty
+if [[ $? -ne 0 ]]; then
+  # non-interactive shell (e.g. called from Eclipse). Give up here.
+  exit 1
+fi
+
+# Offer to add the signoff line.
+echo
+echo "Alternatively, you can acknowledge your signoff and continue below:"
+echo
+echo "    ${signoff}"
+echo
+echo -n "Do you want to add the above signoff and continue? [y/N] "
+read reply
+
+if [[ "${reply}" != "y" ]]; then
+  exit 1
+fi
+
+git interpret-trailers --trailer "$signoff" --in-place "$msg_file"

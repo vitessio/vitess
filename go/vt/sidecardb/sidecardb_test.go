@@ -1,0 +1,414 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package sidecardb
+
+import (
+	"context"
+	"errors"
+	"expvar"
+	"sort"
+	"strings"
+	"testing"
+
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/stats"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+)
+
+// TestInitErrors validates that the schema init error stats are being correctly set
+func TestInitErrors(t *testing.T) {
+	ctx := t.Context()
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	env := vtenv.NewTestEnv()
+	AddSchemaInitQueries(db, false, env.Parser())
+
+	ddlErrorCount.Set(0)
+	ddlCount.Set(0)
+
+	cp := dbconfigs.New(db.ConnParams())
+	conn, err := cp.Connect(ctx)
+	require.NoError(t, err)
+
+	type schemaError struct {
+		tableName  string
+		errorValue string
+	}
+
+	// simulate two errors during table creation to validate error stats
+	schemaErrors := []schemaError{
+		{"vreplication_log", "vreplication_log error"},
+		{"copy_state", "copy_state error"},
+	}
+
+	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if _, err := conn.ExecuteFetch("use "+sidecar.GetIdentifier(), maxRows, true); err != nil {
+				return nil, err
+			}
+		}
+
+		// simulate errors for the table creation DDLs applied for tables specified in schemaErrors
+		stmt, err := env.Parser().Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		createTable, ok := stmt.(*sqlparser.CreateTable)
+		if ok {
+			for _, e := range schemaErrors {
+				if strings.EqualFold(e.tableName, createTable.Table.Name.String()) {
+					return nil, errors.New(e.errorValue)
+				}
+			}
+		}
+		return conn.ExecuteFetch(query, maxRows, true)
+	}
+
+	require.Equal(t, int64(0), getDDLCount())
+	err = Init(ctx, env, exec)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), getDDLCount())
+	require.Equal(t, int64(len(schemaErrors)), getDDLErrorCount())
+
+	var want []string
+	for _, e := range schemaErrors {
+		want = append(want, e.errorValue)
+	}
+	// sort expected and reported errors for easy comparison
+	sort.Strings(want)
+	got := getDDLErrorHistory()
+	sort.Slice(got, func(i, j int) bool {
+		return got[i].tableName < got[j].tableName
+	})
+	var gotErrors string
+	stats.Register(func(name string, v expvar.Var) {
+		if name == StatsKeyErrors {
+			gotErrors = v.String()
+		}
+	})
+
+	// for DDL errors, validate both the internal data structure and the stats endpoint
+	for i := range want {
+		if !strings.Contains(got[i].err.Error(), want[i]) {
+			require.FailNowf(t, "incorrect schema error", "got %s, want %s", got[i], want[i])
+		}
+		if !strings.Contains(gotErrors, want[i]) {
+			require.FailNowf(t, "schema error not published", "got %s, want %s", gotErrors, want[i])
+		}
+	}
+}
+
+// Tests various non-error code paths in sidecardb
+func TestMiscSidecarDB(t *testing.T) {
+	ctx := t.Context()
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	env := vtenv.NewTestEnv()
+	AddSchemaInitQueries(db, false, env.Parser())
+	db.AddQuery("use dbname", &sqltypes.Result{})
+	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
+
+	cp := dbconfigs.New(db.ConnParams())
+	conn, err := cp.Connect(ctx)
+	require.NoError(t, err)
+	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if _, err := conn.ExecuteFetch("use "+sidecar.GetIdentifier(), maxRows, true); err != nil {
+				return nil, err
+			}
+		}
+		return conn.ExecuteFetch(query, maxRows, true)
+	}
+
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"dbexists",
+		"int64"),
+		sidecar.GetName(),
+	)
+	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(sidecar.GetName()))
+	require.NoError(t, err)
+	db.AddQuery(dbeq, result)
+	db.AddQuery(sidecar.GetCreateQuery(), &sqltypes.Result{})
+	AddSchemaInitQueries(db, false, env.Parser())
+
+	// tests init on empty db
+	ddlErrorCount.Set(0)
+	ddlCount.Set(0)
+	require.Equal(t, int64(0), getDDLCount())
+	err = Init(ctx, env, exec)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
+
+	// Include the table DDLs in the expected queries.
+	// This causes them to NOT be created again.
+	AddSchemaInitQueries(db, true, env.Parser())
+
+	// tests init on already inited db
+	err = Init(ctx, env, exec)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
+
+	// tests misc paths not covered above
+	si := &schemaInit{
+		ctx:  ctx,
+		exec: exec,
+		env:  env,
+	}
+
+	err = si.setCurrentDatabase(sidecar.GetIdentifier())
+	require.NoError(t, err)
+
+	require.False(t, MatchesInitQuery("abc"))
+	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
+}
+
+// test the logic that confirms that the user defined schema's table name and qualifier are valid
+func TestValidateSchema(t *testing.T) {
+	type testCase struct {
+		testName  string
+		name      string
+		schema    string
+		mustError bool
+	}
+	testCases := []testCase{
+		{"valid", "t1", "create table if not exists t1(i int)", false},
+		{"no if not exists", "t1", "create table t1(i int)", true},
+		{"invalid table name", "t2", "create table if not exists t1(i int)", true},
+		{"invalid table name", "t1", "create table if not exists t2(i int)", true},
+		{"qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
+	}
+	parser := sqlparser.NewTestParser()
+	for _, tc := range testCases {
+		t.Run(tc.testName, func(t *testing.T) {
+			_, err := validateSchemaDefinition(tc.name, tc.schema, parser)
+			if tc.mustError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestAlterTableAlgorithm confirms that ALTER TABLE statements use
+// ALGORITHM=COPY on MySQL < 8.0.32 (to work around a MySQL bug in the
+// INSTANT DDL redo log format) and omit the clause on MySQL >= 8.0.32.
+func TestAlterTableAlgorithm(t *testing.T) {
+	type testCase struct {
+		testName      string
+		tableName     string
+		currentSchema string
+		desiredSchema string
+	}
+	testCases := []testCase{
+		{"add column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t1(i int, i1 int)"},
+		{"modify column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t(i float)"},
+	}
+
+	copyAlgo := sqlparser.AlgorithmValue("COPY")
+
+	newSchemaInit := func(t *testing.T, envVersion, serverVersion string) *schemaInit {
+		t.Helper()
+
+		env, err := vtenv.New(vtenv.Options{MySQLServerVersion: envVersion})
+		require.NoError(t, err)
+
+		versionResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"@@version",
+			"varchar"),
+			serverVersion,
+		)
+
+		exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+			if strings.EqualFold(query, sidecarVersionQuery) {
+				return versionResult, nil
+			}
+			return nil, errors.New("unexpected query: " + query)
+		}
+
+		return &schemaInit{
+			env:  env,
+			exec: exec,
+		}
+	}
+
+	t.Run("omitted on MySQL >= 8.0.32", func(t *testing.T) {
+		si := newSchemaInit(t, "8.0.31", "8.0.32")
+
+		for _, tc := range testCases {
+			t.Run(tc.testName, func(t *testing.T) {
+				diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
+				require.NoError(t, err)
+
+				stmt, err := si.env.Parser().Parse(diff)
+				require.NoError(t, err)
+
+				alterTable, ok := stmt.(*sqlparser.AlterTable)
+				require.True(t, ok)
+				require.NotNil(t, alterTable)
+
+				for _, opt := range alterTable.AlterOptions {
+					_, isAlgo := opt.(sqlparser.AlgorithmValue)
+					require.False(t, isAlgo, "expected no ALGORITHM hint on MySQL >= 8.0.32")
+				}
+			})
+		}
+	})
+
+	t.Run("COPY on MySQL < 8.0.32", func(t *testing.T) {
+		si := newSchemaInit(t, "8.4.6", "8.0.31")
+
+		for _, tc := range testCases {
+			t.Run(tc.testName, func(t *testing.T) {
+				diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
+				require.NoError(t, err)
+
+				stmt, err := si.env.Parser().Parse(diff)
+				require.NoError(t, err)
+
+				alterTable, ok := stmt.(*sqlparser.AlterTable)
+				require.True(t, ok)
+				require.NotNil(t, alterTable)
+				var found sqlparser.AlterOption
+				for _, opt := range alterTable.AlterOptions {
+					if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+						found = opt
+					}
+				}
+				require.Equal(t, copyAlgo, found, "expected ALGORITHM=COPY on MySQL < 8.0.32")
+			})
+		}
+	})
+}
+
+// TestTableSchemaDiff ensures that the diff produced by schemaInit.findTableSchemaDiff
+// is resulting in the expected alter table statements in a variety of scenarios.
+func TestTableSchemaDiff(t *testing.T) {
+	si := &schemaInit{
+		env: vtenv.NewTestEnv(),
+	}
+
+	type testCase struct {
+		name          string
+		table         string
+		oldSchema     string
+		newSchema     string
+		expectNoDiff  bool
+		expectedAlter string
+	}
+	testCases := []testCase{
+		{
+			name:          "modify table charset",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(i int) charset=utf8mb4",
+			newSchema:     "create table if not exists _vt.t(i int) charset=utf8mb3",
+			expectedAlter: "alter table _vt.t1 charset utf8mb3",
+		},
+		{
+			name:         "empty charset",
+			table:        "t1",
+			oldSchema:    "create table if not exists _vt.t1(i int) charset=utf8mb4",
+			newSchema:    "create table if not exists _vt.t(i int)",
+			expectNoDiff: true, // We're not specifying an explicit charset in the new schema, so we shouldn't see a diff.
+		},
+		{
+			name:          "modify table engine",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(i int) engine=myisam",
+			newSchema:     "create table if not exists _vt.t(i int) engine=innodb",
+			expectedAlter: "alter table _vt.t1 engine innodb",
+		},
+		{
+			name:          "add, modify, transfer PK",
+			table:         "t1",
+			oldSchema:     "create table _vt.t1 (i int primary key, i1 varchar(10)) charset utf8mb4",
+			newSchema:     "create table _vt.t1 (i int, i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, i2 int, primary key (i2)) charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 drop primary key, modify column i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, add column i2 int, add primary key (i2)",
+		},
+		{
+			name:          "modify visibility and add comment",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100)) charset utf8mb4",
+			newSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100) invisible comment 'hoping to drop') charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 modify column c3 varchar(100) comment 'hoping to drop' invisible",
+		},
+		{
+			name:          "add PK and remove index",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100), key (c2)) charset utf8mb4",
+			newSchema:     "create table if not exists _vt.t1(c1 int primary key, c2 int, c3 varchar(100)) charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 drop key c2, add primary key (c1)",
+		},
+		{
+			name:          "add generated col",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(c1 int primary key) charset utf8mb4",
+			newSchema:     "create table if not exists _vt.t1(c1 int primary key, c2 varchar(10) generated always as ('hello')) charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 add column c2 varchar(10) as ('hello') virtual",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			diff, err := si.findTableSchemaDiff(tc.table, tc.oldSchema, tc.newSchema)
+			require.NoError(t, err)
+			if tc.expectNoDiff {
+				require.Empty(t, diff)
+				return
+			}
+			stmt, err := si.env.Parser().Parse(diff)
+			require.NoError(t, err)
+			alter, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+			require.NotNil(t, alter)
+			t.Logf("alter: %s", sqlparser.String(alter))
+			require.Equal(t, strings.ToLower(tc.expectedAlter), strings.ToLower(sqlparser.String(alter)))
+		})
+	}
+}
+
+// TestVDiffTableLastPKIsBlob asserts vdiff_table.lastpk is a blob type (not a
+// fixed-length varbinary) so large serialized VDiff checkpoints are not truncated (see #20900).
+func TestVDiffTableLastPKIsBlob(t *testing.T) {
+	schema, err := schemaLocation.ReadFile("schema/vdiff/vdiff_table.sql")
+	require.NoError(t, err)
+	stmt, err := sqlparser.NewTestParser().ParseStrictDDL(string(schema))
+	require.NoError(t, err)
+	ct, ok := stmt.(*sqlparser.CreateTable)
+	require.True(t, ok)
+
+	var lastpk *sqlparser.ColumnDefinition
+	for _, col := range ct.TableSpec.Columns {
+		if col.Name.EqualString("lastpk") {
+			lastpk = col
+			break
+		}
+	}
+	require.NotNil(t, lastpk, "lastpk column not found in vdiff_table schema")
+	require.Equal(t, "mediumblob", strings.ToLower(lastpk.Type.Type),
+		"vdiff_table.lastpk must be a blob type matching copy_state.lastpk; a fixed-length varbinary truncates large checkpoints")
+}

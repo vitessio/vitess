@@ -1,0 +1,91 @@
+diff --git a/flags/14.0/vtaclcheck.txt b/flags/15.0/vtaclcheck.txt
+index e7c9720..6e2c57d 100644
+--- a/flags/14.0/vtaclcheck.txt
++++ b/flags/15.0/vtaclcheck.txt
+.0/vtaclcheck.txt
+@@ -1,67 +1,19 @@
+ Usage of vtaclcheck:
+-      --acl_file string                                                  The path of the JSON ACL file to check
+-      --alsologtostderr                                                  log to standard error as well as files
+-      --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
+-      --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
+-      --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
+-      --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+-      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
+-      --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
+-      --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
+-      --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+-      --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
+-      --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
+-      --grpc_crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
+-      --grpc_enable_optional_tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
+-      --grpc_enable_tracing                                              Enable GRPC tracing
+-      --grpc_key string                                                  server private key to use for gRPC connections, requires grpc_cert, enables TLS
+-      --grpc_max_connection_age duration                                 Maximum age of a client connection before GoAway is sent. (default 2562047h47m16.854775807s)
+-      --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
+-      --grpc_max_message_size int                                        Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+-      --grpc_port int                                                    Port to listen on for gRPC calls
+-      --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus
+-      --grpc_server_ca string                                            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
+-      --grpc_server_initial_conn_window_size int                         gRPC server initial connection window size
+-      --grpc_server_initial_window_size int                              gRPC server initial window size
+-      --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
+-      --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+-      --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
+-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+-      --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+-      --log_backtrace_at value                                           when logging hits line file:N, emit a stack trace
+-      --log_dir string                                                   If non-empty, write log files in this directory
+-      --log_err_stacks                                                   log stack traces for errors
+-      --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+-      --logtostderr                                                      log to standard error instead of files
+-      --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
+-      --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
+-      --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
+-      --mysql_auth_server_static_string string                           JSON representation of the users/passwords config.
+-      --mysql_auth_static_reload_interval duration                       Ticker to reload credentials
+-      --mysql_clientcert_auth_method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default mysql_clear_password)
+-      --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
+-      --mysql_server_version string                                      MySQL server version to advertise.
+-      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
+-      --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
+-      --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
+-      --pprof string                                                     enable profiling
+-      --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
+-      --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+-      --service_map value                                                comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-vtworker
+-      --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
+-      --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
+-      --static_auth_file string                                          The path of the auth_server_static JSON file to check
+-      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
+-      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
+-      --stats_common_tags string                                         Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+-      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
+-      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
+-      --stderrthreshold value                                            logs at or above this threshold go to stderr (default 1)
+-      --tracer string                                                    tracing service to use (default noop)
+-      --tracing-enable-logging                                           whether to enable logging in the tracing service
+-      --tracing-sampling-rate value                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+-      --tracing-sampling-type value                                      sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default const)
+-      --v value                                                          log level for V logs
+-      --version                                                          print binary version
+-      --vmodule value                                                    comma-separated list of pattern=N settings for file-filtered logging
++      --acl-file string                  The path of the JSON ACL file to check
++      --alsologtostderr                  log to standard error as well as files
++  -h, --help                             display usage and exit
++      --keep_logs duration               keep logs for this long (using ctime) (zero to keep forever)
++      --keep_logs_by_mtime duration      keep logs for this long (using mtime) (zero to keep forever)
++      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
++      --log_dir string                   If non-empty, write log files in this directory
++      --log_err_stacks                   log stack traces for errors
++      --log_rotate_max_size uint         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
++      --logtostderr                      log to standard error instead of files
++      --pprof strings                    enable profiling
++      --purge_logs_interval duration     how often try to remove old logs (default 1h0m0s)
++      --security_policy string           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
++      --static-auth-file string          The path of the auth_server_static JSON file to check
++      --stderrthreshold severity         logs at or above this threshold go to stderr (default 1)
++      --v Level                          log level for V logs
++  -v, --version                          print binary version
++      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging

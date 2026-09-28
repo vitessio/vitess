@@ -1,0 +1,433 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package endtoend
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+)
+
+// TestKill opens a connection, issues a command that
+// will sleep for a few seconds, waits a bit for MySQL to start
+// executing it, then kills the connection (using another
+// connection). We make sure we get the right error code.
+func TestKill(t *testing.T) {
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+
+	// Create the kill connection first. It sometimes takes longer
+	// than 10s
+	killConn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer killConn.Close()
+
+	errChan := make(chan error)
+	go func() {
+		_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
+		errChan <- err
+		close(errChan)
+	}()
+
+	// Give extra time for the query to start executing.
+	time.Sleep(2 * time.Second)
+	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
+		require.Failf(t, "Kill failed", "Kill(%v) failed: %v", conn.ConnectionID, err)
+	}
+
+	// The error text will depend on what ExecuteFetch in the go
+	// routine managed to do. Two cases:
+	// 1. the connection was closed before the go routine's ExecuteFetch
+	//   entered the ReadFull call. Then we get an error with
+	//   'connection reset by peer' in it.
+	// 2. the connection was closed while the go routine's ExecuteFetch
+	//   was stuck on the read. Then we get io.EOF.
+	// The code and sqlState needs to be right in any case, the text
+	// will differ.
+	err = <-errChan
+	if strings.Contains(err.Error(), "EOF") {
+		assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "EOF", "select sleep(10) from dual")
+	} else {
+		assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "", "connection reset by peer")
+	}
+}
+
+// TestKill2006 opens a connection, kills the
+// connection from the server side, then waits a bit, and tries to
+// execute a command. We make sure we get the right error code.
+func TestKill2006(t *testing.T) {
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+
+	// Kill the connection from the server side.
+	killConn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer killConn.Close()
+
+	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
+		require.Failf(t, "Kill failed", "Kill(%v) failed: %v", conn.ConnectionID, err)
+	}
+
+	// Now we should get a CRServerGone.  Since we are using a
+	// unix socket, we will get a broken pipe when the server
+	// closes the connection and we are trying to write the command.
+	_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
+	assertSQLError(t, err, sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "broken pipe", "select sleep(10) from dual")
+}
+
+// TestDupEntry tests a duplicate key is properly raised.
+func TestDupEntry(t *testing.T) {
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("create table dup_entry(id int, name int, primary key(id), unique index(name))", 0, false); err != nil {
+		require.NoError(t, err)
+	}
+	if _, err := conn.ExecuteFetch("insert into dup_entry(id, name) values(1, 10)", 0, false); err != nil {
+		require.NoError(t, err)
+	}
+	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
+	assertSQLError(t, err, sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
+}
+
+// TestClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.
+func TestClientFoundRows(t *testing.T) {
+	params := connParams
+	params.EnableClientFoundRows()
+
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("create table found_rows(id int, val int, primary key(id))", 0, false); err != nil {
+		require.NoError(t, err)
+	}
+	if _, err := conn.ExecuteFetch("insert into found_rows(id, val) values(1, 10)", 0, false); err != nil {
+		require.NoError(t, err)
+	}
+	qr, err := conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, qr.RowsAffected, "RowsAffected")
+
+	qr, err = conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, qr.RowsAffected, "RowsAffected")
+}
+
+func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
+	ctx := t.Context()
+	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
+
+	conn, err := mysql.Connect(ctx, &connParams)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
+	assert.Len(t, qr.Rows, 1)
+
+	qr, more, _, err = conn.ReadQueryResult(10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(1)", more, true)
+	assert.Empty(t, qr.Rows)
+
+	qr, more, _, err = conn.ReadQueryResult(10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(2)", more, false)
+	assert.Len(t, qr.Rows, 1)
+
+	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
+	assert.Len(t, qr.Rows, 1)
+
+	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
+	assert.Empty(t, qr.Rows)
+
+	// The ClientDeprecateEOF protocol change has a subtle twist in which an EOF or OK
+	// packet happens to have the status flags in the same position if the affected_rows
+	// and last_insert_id are both one byte long:
+	//
+	// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
+	// https://dev.mysql.com/doc/internals/en/packet-OK_Packet.html
+	//
+	// It turns out that there are no actual cases in which clients end up needing to make
+	// this distinction. If either affected_rows or last_insert_id are non-zero, the protocol
+	// sends an OK packet unilaterally which is properly parsed. If not, then regardless of the
+	// negotiated version, it can properly send the status flags.
+	//
+	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
+	require.NoError(t, err)
+	assert.Zero(t, result.RowsAffected, "create table RowsAffected ")
+
+	for i := range 255 {
+		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, result.RowsAffected, "insert into returned RowsAffected")
+	}
+
+	// Verify that a ExecuteFetchMultiDrain leaves the connection/packet in valid state.
+	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 1'); select * from a; select count(*) from a")
+	expectNoError(t, err)
+	// If the previous command leaves packet in invalid state, this will fail.
+	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ', fetch multi'); select * from a; select count(*) from a", 300, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
+	assert.EqualValues(t, 255, qr.RowsAffected)
+
+	qr, more, _, err = conn.ReadQueryResult(300, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(1)", more, true)
+	assert.Len(t, qr.Rows, 255, "ReadQueryResult(1)")
+
+	qr, more, _, err = conn.ReadQueryResult(300, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(2)", more, false)
+	assert.Len(t, qr.Rows, 1, "ReadQueryResult(1)")
+
+	// Verify that a ExecuteFetchMultiDrain is happy to operate again after all the above.
+	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 2'); select * from a; select count(*) from a")
+	expectNoError(t, err)
+
+	err = conn.ExecuteFetchMultiDrain("update b set name = concat(name, ' nonexistent table'); select * from a; select count(*) from a")
+	require.Error(t, err)
+
+	_, err = conn.ExecuteFetch("drop table a", 10, true)
+	require.NoError(t, err)
+}
+
+func TestMultiResultDeprecateEOF(t *testing.T) {
+	doTestMultiResult(t, false)
+}
+
+func TestMultiResultNoDeprecateEOF(t *testing.T) {
+	doTestMultiResult(t, true)
+}
+
+func expectNoError(t *testing.T, err error) {
+	t.Helper()
+	require.NoError(t, err)
+}
+
+func expectFlag(t *testing.T, msg string, flag, want bool) {
+	t.Helper()
+	require.Equal(t, want, flag, "%s: %v, want: %v", msg, flag, want)
+}
+
+// TestTLS tests our client can connect via SSL.
+func TestTLS(t *testing.T) {
+	params := connParams
+	params.EnableSSL()
+
+	// First make sure the official 'mysql' client can connect.
+	output, ok := runMysql(t, &params, "status")
+	require.True(t, ok, "'mysql -e status' failed: %v", output)
+	require.Contains(t, output, "Cipher in use is", "cannot connect via SSL: %v", output)
+
+	// Now connect with our client.
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("SHOW STATUS LIKE 'Ssl_cipher'", 10, true)
+	require.NoError(t, err, "SHOW STATUS LIKE 'Ssl_cipher' failed: %v", err)
+
+	if len(result.Rows) != 1 || result.Rows[0][0].ToString() != "Ssl_cipher" ||
+		result.Rows[0][1].ToString() == "" {
+		require.Failf(t, "unexpected result", "SHOW STATUS LIKE 'Ssl_cipher' returned unexpected result: %v", result)
+	}
+}
+
+func TestReplicationStatus(t *testing.T) {
+	params := connParams
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	status, err := conn.ShowReplicationStatus()
+	assert.Equal(t, mysql.ErrNotReplica, err, "Got unexpected result for ShowReplicationStatus: %v %v", status, err)
+}
+
+func TestSessionTrackGTIDs(t *testing.T) {
+	ctx := t.Context()
+	params := connParams
+	params.Flags |= mysql.CapabilityClientSessionTrack
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+
+	qr, err := conn.ExecuteFetch(`set session session_track_gtids='own_gtid'`, 1000, false)
+	require.NoError(t, err)
+	require.Empty(t, qr.SessionStateChanges)
+
+	qr, err = conn.ExecuteFetch(`create table vttest.t1(id bigint primary key)`, 1000, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, qr.SessionStateChanges)
+
+	qr, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, qr.SessionStateChanges)
+}
+
+func TestCachingSha2Password(t *testing.T) {
+	ctx := t.Context()
+
+	// connect as an existing user to create a user account with caching_sha2_password
+	params := connParams
+	conn, err := mysql.Connect(ctx, &params)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
+	require.NoError(t, err, "select true from information_schema.PLUGINS failed: %v", err)
+
+	if len(qr.Rows) != 1 {
+		t.Skip("Server does not support caching_sha2_password plugin")
+	}
+
+	// create a user using caching_sha2_password password
+	if _, err = conn.ExecuteFetch(`create user 'sha2user'@'localhost' identified with caching_sha2_password by 'password';`, 0, false); err != nil {
+		require.NoError(t, err)
+	}
+	conn.Close()
+
+	// connect as sha2user
+	params.Uname = "sha2user"
+	params.Pass = "password"
+	params.DbName = "information_schema"
+	conn, err = mysql.Connect(ctx, &params)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	if qr, err = conn.ExecuteFetch(`select user()`, 1, true); err != nil {
+		require.NoError(t, err)
+	}
+
+	if len(qr.Rows) != 1 || qr.Rows[0][0].ToString() != "sha2user@localhost" {
+		assert.Fail(t, "Logged in user is not sha2user")
+	}
+}
+
+func TestClientInfo(t *testing.T) {
+	const infoPrepared = "Statement prepared"
+
+	ctx := t.Context()
+	params := connParams
+	params.EnableQueryInfo = true
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+
+	defer conn.Close()
+
+	// This is the simplest query that would return some textual data in the 'info' field
+	result, err := conn.ExecuteFetch(`PREPARE stmt1 FROM 'SELECT 1 = 1'`, -1, true)
+	require.NoError(t, err, "select failed: %v", err)
+	require.Equal(t, infoPrepared, result.Info, "expected result.Info=%q, got=%q", infoPrepared, result.Info)
+}
+
+func TestBaseShowTables(t *testing.T) {
+	params := connParams
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sql := conn.BaseShowTables()
+	// An improved test would make assertions about the results. This test just
+	// makes sure there aren't any errors.
+	_, err = conn.ExecuteFetch(sql, -1, true)
+	require.NoError(t, err)
+}
+
+func TestBaseShowTablesFilePos(t *testing.T) {
+	params := connParams
+	params.Flavor = "FilePos"
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sql := conn.BaseShowTables()
+	// An improved test would make assertions about the results. This test just
+	// makes sure there aren't any errors.
+	_, err = conn.ExecuteFetch(sql, -1, true)
+	require.NoError(t, err)
+}
+
+// TestMaxRows tests the maxRows parameter of ExecuteFetch.
+func TestMaxRows(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcases := []struct {
+		name    string
+		maxRows int
+		expRows int
+		expErr  string
+	}{
+		{
+			name:    "no rows",
+			maxRows: mysql.FETCH_NO_ROWS,
+			expRows: 0,
+		},
+		{
+			name:    "all rows",
+			maxRows: mysql.FETCH_ALL_ROWS,
+			expRows: 5,
+		},
+		{
+			name:    "exceed max rows",
+			maxRows: 2,
+			expErr:  "Row count exceeded 2",
+		},
+		{
+			name:    "exact rows count",
+			maxRows: 5,
+			expRows: 5,
+		},
+	}
+
+	sql := "select table_schema, count(*) as table_count from information_schema.tables where table_schema != '_vt' group by table_schema"
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			qr, err := conn.ExecuteFetch(sql, tcase.maxRows, true)
+			if tcase.expErr != "" {
+				require.ErrorContains(t, err, tcase.expErr)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, qr.Rows, tcase.expRows)
+			}
+		})
+	}
+}

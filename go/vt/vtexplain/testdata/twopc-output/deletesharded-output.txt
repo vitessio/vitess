@@ -1,0 +1,77 @@
+----------------------------------------------------------------------
+delete from music_extra where id=1
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: delete from music_extra where id = 1 limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+2 ks_sharded/-40: commit
+
+----------------------------------------------------------------------
+delete from music_extra where id=1 and extra='abc'
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: delete from music_extra where id = 1 and extra = 'abc' limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+2 ks_sharded/-40: commit
+
+----------------------------------------------------------------------
+delete from user where id=1
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: select name from user where id = 1 limit 10001 for update
+2 ks_sharded/80-c0: begin
+2 ks_sharded/80-c0: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001 /* vtgate:: keyspace_id:73004f940e97faf0a1b54ec5586a090e */
+3 ks_sharded/-40: delete from user where id = 1 limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+4 ks_sharded/-40: begin
+4 ks_sharded/-40: insert into `_vt`.dt_state(dtid, state, time_created) values ('ks_sharded:-40:1515392388787015722', 1, 1515392388898391433)
+4 ks_sharded/-40: insert into `_vt`.dt_participant(dtid, id, keyspace, shard) values ('ks_sharded:-40:1515392388787015722', 1, 'ks_sharded', '80-c0')
+4 ks_sharded/-40: commit
+5 ks_sharded/80-c0: begin
+5 ks_sharded/80-c0: insert into `_vt`.redo_state(dtid, state, time_created) values ('ks_sharded:-40:1515392388787015722', 1, 1515392388909259045)
+5 ks_sharded/80-c0: insert into `_vt`.redo_statement(dtid, id, statement) values ('ks_sharded:-40:1515392388787015722', 1, 'delete from name_user_map where (name = \'name_val_1\' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */')
+5 ks_sharded/80-c0: commit
+6 ks_sharded/-40: update `_vt`.dt_state set state = 2 where dtid = 'ks_sharded:-40:1515392388787015722' and state = 1
+6 ks_sharded/-40: commit
+7 ks_sharded/80-c0: delete from `_vt`.redo_state where dtid = 'ks_sharded:-40:1515392388787015722'
+7 ks_sharded/80-c0: delete from `_vt`.redo_statement where dtid = 'ks_sharded:-40:1515392388787015722'
+7 ks_sharded/80-c0: commit
+8 ks_sharded/-40: begin
+8 ks_sharded/-40: delete from `_vt`.dt_state where dtid = 'ks_sharded:-40:1515392388787015722'
+8 ks_sharded/-40: delete from `_vt`.dt_participant where dtid = 'ks_sharded:-40:1515392388787015722'
+8 ks_sharded/-40: commit
+
+----------------------------------------------------------------------
+delete from user where name='billy'
+
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: select name, user_id from name_user_map where name in ('billy') limit 10001
+2 ks_sharded/-40: begin
+2 ks_sharded/-40: select name from user where name = 'billy' limit 10001 for update
+3 ks_sharded/80-c0: begin
+3 ks_sharded/80-c0: delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
+4 ks_sharded/-40: select id from user where name = 'billy' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+4 ks_sharded/-40: delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+5 ks_sharded/c0-: begin
+5 ks_sharded/c0-: insert into `_vt`.dt_state(dtid, state, time_created) values ('ks_sharded:c0-:1515392388798209886', 1, 1515392389009197532)
+5 ks_sharded/c0-: insert into `_vt`.dt_participant(dtid, id, keyspace, shard) values ('ks_sharded:c0-:1515392388798209886', 1, 'ks_sharded', '-40'), ('ks_sharded:c0-:1515392388798209886', 2, 'ks_sharded', '80-c0')
+5 ks_sharded/c0-: commit
+6 ks_sharded/-40: begin
+6 ks_sharded/-40: insert into `_vt`.redo_state(dtid, state, time_created) values ('ks_sharded:c0-:1515392388798209886', 1, 1515392389021902468)
+6 ks_sharded/-40: insert into `_vt`.redo_statement(dtid, id, statement) values ('ks_sharded:c0-:1515392388798209886', 1, 'delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */')
+6 ks_sharded/-40: commit
+6 ks_sharded/80-c0: begin
+6 ks_sharded/80-c0: insert into `_vt`.redo_state(dtid, state, time_created) values ('ks_sharded:c0-:1515392388798209886', 1, 1515392389021902697)
+6 ks_sharded/80-c0: insert into `_vt`.redo_statement(dtid, id, statement) values ('ks_sharded:c0-:1515392388798209886', 1, 'delete from name_user_map where (name = \'name_val_1\' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */')
+6 ks_sharded/80-c0: commit
+7 ks_sharded/c0-: update `_vt`.dt_state set state = 2 where dtid = 'ks_sharded:c0-:1515392388798209886' and state = 1
+7 ks_sharded/c0-: commit
+8 ks_sharded/-40: delete from `_vt`.redo_state where dtid = 'ks_sharded:c0-:1515392388798209886'
+8 ks_sharded/-40: delete from `_vt`.redo_statement where dtid = 'ks_sharded:c0-:1515392388798209886'
+8 ks_sharded/-40: commit
+8 ks_sharded/80-c0: delete from `_vt`.redo_state where dtid = 'ks_sharded:c0-:1515392388798209886'
+8 ks_sharded/80-c0: delete from `_vt`.redo_statement where dtid = 'ks_sharded:c0-:1515392388798209886'
+8 ks_sharded/80-c0: commit
+9 ks_sharded/c0-: begin
+9 ks_sharded/c0-: delete from `_vt`.dt_state where dtid = 'ks_sharded:c0-:1515392388798209886'
+9 ks_sharded/c0-: delete from `_vt`.dt_participant where dtid = 'ks_sharded:c0-:1515392388798209886'
+9 ks_sharded/c0-: commit
+
+----------------------------------------------------------------------

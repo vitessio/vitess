@@ -1,0 +1,1143 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"sort"
+	"strings"
+
+	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
+	vjson "vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+// ReplicatorPlan is the execution plan for the replicator. It contains
+// plans for all the tables it's replicating. Every phase of vreplication
+// builds its own instance of the ReplicatorPlan. This is because the plan
+// depends on copyState, which changes on every iteration.
+// The table plans within ReplicatorPlan will not be fully populated because
+// all the information is not available initially.
+// For simplicity, the ReplicatorPlan is immutable.
+// Once we get the field info for a table from the stream response,
+// we'll have all the necessary info to build the final plan.
+// At that time, buildExecutionPlan is invoked, which will make a copy
+// of the TablePlan from ReplicatorPlan, and fill the rest
+// of the members, leaving the original plan unchanged.
+// The constructor is buildReplicatorPlan in table_plan_builder.go
+type ReplicatorPlan struct {
+	VStreamFilter  *binlogdatapb.Filter
+	TargetTables   map[string]*TablePlan
+	TablePlans     map[string]*TablePlan
+	ColInfoMap     map[string][]*ColumnInfo
+	stats          *binlogplayer.Stats
+	Source         *binlogdatapb.BinlogSource
+	collationEnv   *collations.Environment
+	workflowConfig *vttablet.VReplicationConfig
+}
+
+// buildExecution plan uses the field info as input and the partially built
+// TablePlan for that table to build a full plan.
+func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
+	prelim := rp.TablePlans[fieldEvent.TableName]
+	if prelim == nil {
+		// Unreachable code.
+		return nil, fmt.Errorf("plan not found for %s", fieldEvent.TableName)
+	}
+	// If Insert is initialized, then it means that we knew the column
+	// names and have already built most of the plan.
+	if prelim.Insert != nil {
+		tplanv := *prelim
+		// We know that we sent only column names, but they may be backticked.
+		// If so, we have to strip them out to allow them to match the expected
+		// bind var names.
+		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
+		for _, fld := range fieldEvent.Fields {
+			trimmed := fld.CloneVT()
+			trimmed.Name = strings.Trim(trimmed.Name, "`")
+			tplanv.Fields = append(tplanv.Fields, trimmed)
+		}
+		return &tplanv, nil
+	}
+	// select * construct was used. We need to use the field names.
+	tplan, err := rp.buildFromFields(prelim.TargetName, prelim.Lastpk, fieldEvent.Fields)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
+	}
+	tplan.Fields = fieldEvent.Fields
+	return tplan, nil
+}
+
+// buildFromFields builds a full TablePlan, but uses the field info as the
+// full column list. This happens when the query used was a 'select *', which
+// requires us to wait for the field info sent by the source.
+func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
+	tpb := &tablePlanBuilder{
+		name:           sqlparser.NewIdentifierCS(tableName),
+		lastpk:         lastpk,
+		colInfos:       rp.ColInfoMap[tableName],
+		stats:          rp.stats,
+		source:         rp.Source,
+		collationEnv:   rp.collationEnv,
+		workflowConfig: rp.workflowConfig,
+	}
+	for _, field := range fields {
+		colName := sqlparser.NewIdentifierCI(field.Name)
+		generated := false
+		// We have to loop over the columns in the plan as the columns between the
+		// source and target are not always 1 to 1.
+		for _, colInfo := range tpb.colInfos {
+			if !strings.EqualFold(colInfo.Name, field.Name) {
+				continue
+			}
+			if colInfo.IsGenerated {
+				generated = true
+			}
+			break
+		}
+		cexpr := &colExpr{
+			colName: colName,
+			colType: field.Type,
+			expr: &sqlparser.ColName{
+				Name: colName,
+			},
+			references: map[string]bool{
+				field.Name: true,
+			},
+			isGenerated: generated,
+		}
+		tpb.colExprs = append(tpb.colExprs, cexpr)
+	}
+	// The following actions are a subset of buildTablePlan.
+	if err := tpb.analyzePK(rp.ColInfoMap[tableName]); err != nil {
+		return nil, err
+	}
+	return tpb.generate(), nil
+}
+
+// MarshalJSON performs a custom JSON Marshalling.
+func (rp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
+	var targets []string
+	if len(rp.TargetTables) > 0 {
+		targets = make([]string, 0, len(rp.TargetTables))
+	}
+	for k := range rp.TargetTables {
+		targets = append(targets, k)
+	}
+	sort.Strings(targets)
+	v := struct {
+		VStreamFilter *binlogdatapb.Filter
+		TargetTables  []string
+		TablePlans    map[string]*TablePlan
+	}{
+		VStreamFilter: rp.VStreamFilter,
+		TargetTables:  targets,
+		TablePlans:    rp.TablePlans,
+	}
+	return json.Marshal(&v)
+}
+
+// TablePlan is the execution plan for a table within a replicator.
+// If the column names are not known at the time of plan building (like
+// select *), then only TargetName, SendRule and Lastpk are initialized.
+// When the stream returns the field info, those are used as column
+// names to build the final plan.
+// Lastpk comes from copyState. If it's set, then the generated plans
+// are significantly different because any events that fall beyond
+// Lastpk must be excluded.
+// If column names were known upfront, then all fields of TablePlan
+// are built except for Fields. This member is populated only after
+// the field info is received from the stream.
+// The ParsedQuery objects assume that a map of before and after values
+// will be built based on the streaming rows. Before image values will
+// be prefixed with a "b_", and after image values will be prefixed
+// with a "a_". The TablePlan structure is used during all the phases
+// of vreplication: catchup, copy, fastforward, or regular replication.
+type TablePlan struct {
+	// TargetName, SendRule will always be initialized.
+	TargetName string
+	SendRule   *binlogdatapb.Rule
+	// Lastpk will be initialized if it was specified, and
+	// will be used for building the final plan after field info
+	// is received.
+	Lastpk *sqltypes.Result
+	// BulkInsertFront, BulkInsertValues and BulkInsertOnDup are used
+	// by vcopier. These three parts are combined to build bulk insert
+	// statements. This is functionally equivalent to generating
+	// multiple statements using the "Insert" construct, but much more
+	// efficient for the copy phase.
+	BulkInsertFront  *sqlparser.ParsedQuery
+	BulkInsertValues *sqlparser.ParsedQuery
+	BulkInsertOnDup  *sqlparser.ParsedQuery
+	// Insert, Update and Delete are used by vplayer.
+	// If the plan is an insertIgnore type, then Insert
+	// and Update contain 'insert ignore' statements and
+	// Delete is nil.
+	Insert           *sqlparser.ParsedQuery
+	Update           *sqlparser.ParsedQuery
+	Delete           *sqlparser.ParsedQuery
+	MultiDelete      *sqlparser.ParsedQuery
+	Fields           []*querypb.Field
+	ConvertIntToEnum map[string]bool
+	// PKReferences is used to check if an event changed
+	// a primary key column (row move).
+	PKReferences []string
+	// PKIndices is an array, length = #columns, true if column is part of the PK
+	PKIndices               []bool
+	Stats                   *binlogplayer.Stats
+	FieldsToSkip            map[string]bool
+	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns bool
+
+	TablePlanBuilder *tablePlanBuilder
+	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.
+	// This is when we use a binlog_row_image which is not "full". The key is a serialized bitmap of data columns
+	// which are sent as part of the RowEvent.
+	PartialInserts map[string]*sqlparser.ParsedQuery
+	// PartialUpdates are same as PartialInserts, but for update statements
+	PartialUpdates map[string]*sqlparser.ParsedQuery
+
+	CollationEnv   *collations.Environment
+	WorkflowConfig *vttablet.VReplicationConfig
+}
+
+// MarshalJSON performs a custom JSON Marshalling.
+func (tp *TablePlan) MarshalJSON() ([]byte, error) {
+	v := struct {
+		TargetName   string
+		SendRule     string
+		InsertFront  *sqlparser.ParsedQuery `json:",omitempty"`
+		InsertValues *sqlparser.ParsedQuery `json:",omitempty"`
+		InsertOnDup  *sqlparser.ParsedQuery `json:",omitempty"`
+		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
+		Update       *sqlparser.ParsedQuery `json:",omitempty"`
+		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
+		PKReferences []string               `json:",omitempty"`
+	}{
+		TargetName:   tp.TargetName,
+		SendRule:     tp.SendRule.Match,
+		InsertFront:  tp.BulkInsertFront,
+		InsertValues: tp.BulkInsertValues,
+		InsertOnDup:  tp.BulkInsertOnDup,
+		Insert:       tp.Insert,
+		Update:       tp.Update,
+		Delete:       tp.Delete,
+		PKReferences: tp.PKReferences,
+	}
+	return json.Marshal(&v)
+}
+
+func (tp *TablePlan) checkJSONFieldSizes(limit int64, addJSONFieldSizes func(add func(field *querypb.Field, size int64))) error {
+	if limit <= 0 {
+		return nil
+	}
+
+	var total int64
+	var largestName string
+	var largestSize int64
+	addJSONFieldSizes(func(field *querypb.Field, size int64) {
+		if field == nil || size < 0 {
+			return
+		}
+		total += size
+		if size > largestSize {
+			largestSize = size
+			largestName = field.Name
+		}
+	})
+
+	if total > limit {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vreplication: row JSON payload %d bytes exceeds vreplication-max-row-json-bytes=%d (table=%s, largest_json_column=%s @ %d bytes)",
+			total, limit, tp.TargetName, largestName, largestSize)
+	}
+	return nil
+}
+
+// checkJSONRowSize sums the byte lengths of all JSON-typed columns in row and
+// returns an error if the sum exceeds limit. When limit <= 0 the check is a
+// no-op. It reads column sizes directly from row.Lengths so it can run in
+// hot loops without materializing []sqltypes.Value. Indices beyond
+// len(row.Lengths) are silently skipped. NULL columns (Lengths[i] < 0) are
+// treated as zero-size.
+func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
+	if row == nil {
+		return nil
+	}
+
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		for i, field := range tp.Fields {
+			if i >= len(row.Lengths) {
+				break
+			}
+			if field.Type != querypb.Type_JSON {
+				continue
+			}
+			add(field, row.Lengths[i])
+		}
+	})
+}
+
+func jsonRowChangeSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, fieldIndex, jsonIndex int) int64 {
+	if fieldIndex >= len(afterRow.Lengths) {
+		return 0
+	}
+	afterLen := afterRow.Lengths[fieldIndex]
+	if afterLen < 0 {
+		return 0
+	}
+	if partialJSONColumns == nil || beforeRow == nil || !isBitSet(partialJSONColumns.Cols, jsonIndex) {
+		return afterLen
+	}
+	if afterLen == 0 {
+		if fieldIndex >= len(beforeRow.Lengths) || beforeRow.Lengths[fieldIndex] < 0 {
+			return 0
+		}
+		return beforeRow.Lengths[fieldIndex]
+	}
+	beforeLen := int64(0)
+	if fieldIndex < len(beforeRow.Lengths) && beforeRow.Lengths[fieldIndex] > 0 {
+		beforeLen = beforeRow.Lengths[fieldIndex]
+	}
+	return beforeLen + afterLen
+}
+
+func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if afterRow == nil {
+		return nil
+	}
+
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		if tp.BulkInsertValues != nil && len(tp.BulkInsertValues.BindLocations()) > 0 {
+			fieldsIndex := 0
+			jsonIndex := 0
+			for range tp.BulkInsertValues.BindLocations() {
+				for fieldsIndex < len(tp.Fields) {
+					field := tp.Fields[fieldsIndex]
+					fieldIndex := fieldsIndex
+					fieldJSONIndex := jsonIndex
+					fieldsIndex++
+					if field.Type == querypb.Type_JSON {
+						jsonIndex++
+					}
+					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+						continue
+					}
+					if field.Type == querypb.Type_JSON {
+						add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, fieldIndex, fieldJSONIndex))
+					}
+					break
+				}
+			}
+			return
+		}
+
+		jsonIndex := 0
+		for i, field := range tp.Fields {
+			if i >= len(afterRow.Lengths) {
+				break
+			}
+			fieldJSONIndex := jsonIndex
+			if field.Type == querypb.Type_JSON {
+				jsonIndex++
+			}
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			if field.Type == querypb.Type_JSON {
+				add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, i, fieldJSONIndex))
+			}
+		}
+	})
+}
+
+func (tp *TablePlan) checkUpdateJSONRowSize(afterRow, beforeRow *querypb.Row, dataColumns, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if afterRow == nil {
+		return nil
+	}
+
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		jsonIndex := 0
+		for i, field := range tp.Fields {
+			if i >= len(afterRow.Lengths) {
+				break
+			}
+			if field.Type != querypb.Type_JSON {
+				continue
+			}
+			fieldJSONIndex := jsonIndex
+			jsonIndex++
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			if dataColumns != nil && dataColumns.Count > 0 && !isBitSet(dataColumns.Cols, i) {
+				continue
+			}
+			add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, i, fieldJSONIndex))
+		}
+	})
+}
+
+func (tp *TablePlan) maxRowJSONBytes() int64 {
+	if tp.WorkflowConfig == nil {
+		return 0
+	}
+	return tp.WorkflowConfig.MaxRowJSONBytes
+}
+
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	insertPrefix := tp.BulkInsertFront.Query + " values "
+	insertSuffixLen := 0
+	if tp.BulkInsertOnDup != nil {
+		insertSuffixLen = len(tp.BulkInsertOnDup.Query)
+	}
+
+	flush := func(final bool) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		if final {
+			// Last flush: safe to use StringUnsafe since we won't reuse the buffer.
+			return executor(sqlbuffer.StringUnsafe())
+		}
+		// Mid-batch flush: must copy because we'll reuse the buffer for the next batch.
+		return executor(sqlbuffer.String())
+	}
+
+	sqlbuffer.Reset()
+	sqlbuffer.WriteString(insertPrefix)
+
+	var lastResult *sqltypes.Result
+	limit := tp.maxRowJSONBytes()
+	rowCount := 0
+	for _, row := range rows {
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(row, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
+		beforeLen := sqlbuffer.Len()
+		if rowCount > 0 {
+			sqlbuffer.WriteString(", ")
+		}
+		if err := tp.appendFromRow(sqlbuffer, row); err != nil {
+			return nil, err
+		}
+		rowCount++
+
+		// If the buffer exceeds maxQuerySize and we have more than one
+		// row, flush everything before this row and start a new statement.
+		if maxQuerySize > 0 && int64(sqlbuffer.Len()+insertSuffixLen) > maxQuerySize && rowCount > 1 {
+			// Roll back to before this row was appended.
+			sqlbuffer.Truncate(beforeLen)
+			result, err := flush(false)
+			if err != nil {
+				return nil, err
+			}
+			if lastResult == nil {
+				lastResult = result
+			} else {
+				lastResult.RowsAffected += result.RowsAffected
+			}
+
+			// Start a new INSERT with this row.
+			sqlbuffer.Reset()
+			sqlbuffer.WriteString(insertPrefix)
+			if err := tp.appendFromRow(sqlbuffer, row); err != nil {
+				return nil, err
+			}
+			rowCount = 1
+		}
+	}
+
+	result, err := flush(true)
+	if err != nil {
+		return nil, err
+	}
+	if lastResult != nil {
+		lastResult.RowsAffected += result.RowsAffected
+		return lastResult, nil
+	}
+	return result, nil
+}
+
+// During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
+// rows whose PK has already been copied. Ideally we should compare the PKs before applying the change and never send
+// such rows to the target mysql server. However reliably comparing primary keys in a manner compatible to MySQL will require a lot of
+// coding: consider composite PKs, character sets, collations ... So we send these rows to the mysql server which then does the comparison
+// in sql, through where clauses like "pk_val <= last_seen_pk".
+//
+// But this does generate a lot of unnecessary load of, effectively, no-ops since the where
+// clauses are always false. This can create a significant cpu load on the target for high qps servers resulting in a
+// much lower copy bandwidth (or provisioning more powerful servers).
+// isOutsidePKRange currently checks for rows with single primary keys which are currently comparable in Vitess:
+// (see NullsafeCompare() for types supported). It returns true if pk is not to be applied
+//
+// At this time we have decided to only perform this for Insert statements. Insert statements form a significant majority of
+// the generated noop load during catchup and are easier to test for. Update and Delete statements are very difficult to
+// unit test reliably and without flakiness with our current test framework. So as a pragmatic decision we support Insert
+// now and punt on the others.
+func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
+	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
+	if tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts == 0 {
+		return false
+	}
+	// Ensure there is one and only one value in lastpk and pkrefs.
+	if tp.Lastpk != nil && len(tp.Lastpk.Fields) == 1 && len(tp.Lastpk.Rows) == 1 && len(tp.Lastpk.Rows[0]) == 1 && len(tp.PKReferences) == 1 {
+		// check again that this is an insert
+		var bindvar *querypb.BindVariable
+		switch {
+		case !before && after:
+			bindvar = bindvars["a_"+tp.PKReferences[0]]
+		}
+		if bindvar == nil { // should never happen
+			return false
+		}
+
+		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
+		// TODO(king-11) make collation aware
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], tp.CollationEnv, collations.Unknown, nil)
+		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
+		if err == nil && result > 0 {
+			tp.Stats.NoopQueryCount.Add(stmtType, 1)
+			return true
+		}
+	}
+	return false
+}
+
+// convertStringCharset does a charset conversion given raw data and an applicable conversion rule.
+// In case of a conversion error, it returns an equivalent of MySQL error 1366, which is what you'd
+// get in a failed `CONVERT()` function, e.g.:
+//
+//	> create table tascii(v varchar(100) charset ascii);
+//	> insert into tascii values ('€');
+//	ERROR 1366 (HY000): Incorrect string value: '\xE2\x82\xAC' for column 'v' at row 1
+func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.CharsetConversion, fieldName string) ([]byte, error) {
+	fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
+	if fromCollation == collations.Unknown {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, fieldName)
+	}
+	toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
+	if toCollation == collations.Unknown {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, fieldName)
+	}
+
+	out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), raw, colldata.Lookup(fromCollation).Charset())
+	if err != nil {
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+	}
+	return out, nil
+}
+
+// bindFieldVal returns a bind variable based on given field and value.
+// Most values will just bind directly. But some values may need manipulation:
+// - text values with charset conversion
+// - enum values converted to text via Online DDL
+// - ...any other future possible values
+func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+		// Non-null string value, for which we have a charset conversion instruction
+		out, err := tp.convertStringCharset(val.Raw(), conversion, field.Name)
+		if err != nil {
+			return nil, err
+		}
+		return sqltypes.StringBindVariable(string(out)), nil
+	}
+	if tp.ConvertIntToEnum[field.Name] && !val.IsNull() {
+		// An integer converted to an enum. We must write the textual value of the int. i.e. 0 turns to '0'
+		return sqltypes.StringBindVariable(val.ToString()), nil
+	}
+	return sqltypes.ValueBindVariable(*val), nil
+}
+
+func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value) {
+	if rowChange.JsonPartialValues == nil || rowChange.DataColumns == nil {
+		return
+	}
+
+	jsonIndex := 0
+	for i, field := range tp.Fields {
+		if field.Type != querypb.Type_JSON {
+			continue
+		}
+		if i >= len(afterVals) {
+			break
+		}
+		if !afterVals[i].IsNull() &&
+			isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
+			!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes) &&
+			len(afterVals[i].Raw()) == 0 {
+			// If the JSON column was NOT updated then the JSON column is marked as
+			// partial and the diff is empty as a way to exclude it from the AFTER image.
+			// It still has the data bit set, however, even though it's not really
+			// present. So we have to account for this by unsetting the data bit so
+			// that the column's current JSON value is not lost.
+			setBit(rowChange.DataColumns.Cols, i, false)
+		}
+		jsonIndex++
+	}
+}
+
+func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value, bindvars map[string]*querypb.BindVariable) error {
+	jsonIndex := 0
+	for i, field := range tp.Fields {
+		if field.Type != querypb.Type_JSON {
+			continue
+		}
+		if i >= len(afterVals) {
+			break
+		}
+		// FieldsToSkip columns (e.g. target-side generated columns) are never
+		// referenced by the generated SQL, so there is no bindvar to populate.
+		// jsonIndex must still advance: JsonPartialValues bits are indexed by
+		// the source's JSON-column ordering, so a skipped JSON column still
+		// consumes a bit position.
+		if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			jsonIndex++
+			continue
+		}
+
+		var (
+			bindVar *querypb.BindVariable
+			newVal  *sqltypes.Value
+			err     error
+		)
+		switch {
+		case afterVals[i].IsNull(): // An SQL NULL and not an actual JSON value
+			newVal = &sqltypes.NULL
+		case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
+			!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes):
+			// An SQL expression that can be converted to a JSON value such as JSON_INSERT().
+			// This occurs when using partial JSON values as a result of mysqld using
+			// binlog-row-value-options=PARTIAL_JSON.
+			if len(afterVals[i].Raw()) == 0 {
+				tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
+			} else {
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+					fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
+			}
+		default: // A JSON value (which may be a JSON null literal value)
+			newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
+			if err != nil {
+				return err
+			}
+		}
+		bindVar, err = tp.bindFieldVal(field, newVal)
+		if err != nil {
+			return err
+		}
+		bindvars["a_"+field.Name] = bindVar
+		jsonIndex++
+	}
+	return nil
+}
+
+func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
+	var (
+		before, after bool
+		afterVals     []sqltypes.Value
+	)
+	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+	if rowChange.Before != nil {
+		before = true
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
+		for i, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["b_"+field.Name] = bindVar
+		}
+	}
+	if rowChange.After != nil {
+		after = true
+		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
+		for i, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
+		}
+		tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
+	}
+	limit := tp.maxRowJSONBytes()
+	switch {
+	case !before && after:
+		// Only apply inserts for rows whose primary keys are within the range of rows already copied.
+		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+			return nil, nil
+		}
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowChange.After, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
+		if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+			return nil, err
+		}
+		if tp.isPartial(rowChange) {
+			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
+			if err != nil {
+				return nil, err
+			}
+			tp.Stats.PartialQueryCount.Add([]string{"insert"}, 1)
+			return execParsedQuery(ins, bindvars, executor)
+		} else {
+			return execParsedQuery(tp.Insert, bindvars, executor)
+		}
+	case before && !after:
+		if tp.Delete == nil {
+			return nil, nil
+		}
+		return execParsedQuery(tp.Delete, bindvars, executor)
+	case before && after:
+		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
+			if limit > 0 {
+				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.Before, rowChange.DataColumns, rowChange.JsonPartialValues, limit); err != nil {
+					return nil, err
+				}
+			}
+			if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+				return nil, err
+			}
+			if tp.isPartial(rowChange) {
+				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
+				if err != nil {
+					return nil, err
+				}
+				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
+				return execParsedQuery(upd, bindvars, executor)
+			} else {
+				return execParsedQuery(tp.Update, bindvars, executor)
+			}
+		}
+		skipInsert := tp.isOutsidePKRange(bindvars, before, after, "insert")
+		if !skipInsert && limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowChange.After, rowChange.Before, rowChange.JsonPartialValues, limit); err != nil {
+				return nil, err
+			}
+		}
+		if !skipInsert {
+			if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+				return nil, err
+			}
+		}
+		if tp.Delete != nil {
+			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
+				return nil, err
+			}
+		}
+		if skipInsert {
+			return nil, nil
+		}
+		if tp.isPartial(rowChange) {
+			// We need to use a combination of the values in the BEFORE and AFTER image to generate the
+			// new row.
+			jsonIndex := 0
+			for i, field := range tp.Fields {
+				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
+					// Skipped JSON columns (e.g. target-side generated columns)
+					// are not referenced by the INSERT, so there is no bindvar
+					// to rewrite. jsonIndex must still advance so subsequent
+					// JSON columns read the correct JsonPartialValues bit.
+					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+						jsonIndex++
+						continue
+					}
+					switch {
+					case !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex):
+						// We use the full AFTER value which we already have.
+					case len(afterVals[i].Raw()) == 0:
+						// If the JSON column was NOT updated then the JSON column is marked as partial
+						// and the diff is empty as a way to exclude it from the AFTER image. So we
+						// want to use the BEFORE image value.
+						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
+						if err != nil {
+							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
+								tp.TargetName, field.Name)
+						}
+						bindvars["a_"+field.Name], err = tp.bindFieldVal(field, beforeVal)
+						if err != nil {
+							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
+								tp.TargetName, field.Name)
+						}
+					default:
+						// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used and the
+						// column is marked as partial, we need to wrap the JSON diff function(s)
+						// around the BEFORE value.
+						diff := afterVals[i].RawStr()
+						beforeVal := bindvars["b_"+field.Name].Value
+						buf := bytes.Buffer{}
+						buf.Grow(len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
+						buf.WriteString(sqlparser.Utf8mb4Str)
+						buf.WriteByte('\'')
+						buf.Write(beforeVal)
+						buf.WriteByte('\'')
+						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+							fmt.Appendf(nil, diff, buf.String()))
+						bv, err := tp.bindFieldVal(field, &newVal)
+						if err != nil {
+							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
+								tp.TargetName, field.Name)
+						}
+						bindvars["a_"+field.Name] = bv
+					}
+					jsonIndex++
+					continue
+				}
+				if !isBitSet(rowChange.DataColumns.Cols, i) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+						"binary log event missing a needed value for %s.%s due to not using binlog-row-image=FULL; you will need to re-run the workflow with binlog-row-image=FULL",
+						tp.TargetName, field.Name)
+				}
+			}
+		}
+		return execParsedQuery(tp.Insert, bindvars, executor)
+	}
+	// Unreachable.
+	return nil, nil
+}
+
+// applyBulkDeleteChanges applies a bulk DELETE statement from the row changes
+// to the target table -- which resulted from a DELETE statement executed on the
+// source that deleted N rows -- using an IN clause with the primary key values
+// of the rows to be deleted. This currently only supports tables with single
+// column primary keys. This limitation is in place for now as we know that case
+// will still be efficient. When using large multi-column IN or OR group clauses
+// in DELETES we could end up doing large (table) scans that actually make things
+// slower.
+// TODO: Add support for multi-column primary keys.
+func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowDeletes) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
+	}
+	if tp.MultiDelete == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
+	}
+
+	baseQuerySize := int64(len(tp.MultiDelete.Query))
+	querySize := baseQuerySize
+
+	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
+		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
+		if err != nil {
+			return nil, err
+		}
+		query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
+		if err != nil {
+			return nil, err
+		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
+		return executor(query)
+	}
+
+	// Derive pkIndex once from the plan, not from per-row vals. PKIndices is sized to
+	// the column count and is populated by the plan builder before this runs, so the
+	// index has no dependency on the shape of any individual row's Before image. The
+	// original per-row search ran the inner `range vals` on iteration 0; an empty
+	// first-row vals (see #20360) left pkIndex at -1 and the subsequent vals[-1]
+	// access panicked. Hoisting the search removes that data dependency. Other panic
+	// surfaces in this loop (e.g. vals[pkIndex] on a short later row) are caught by
+	// the defer/recover wrapper on vp.fetchAndApply's applyEvents goroutine.
+	pkIndex := -1
+	for i, isPK := range tp.PKIndices {
+		if isPK {
+			pkIndex = i
+			break
+		}
+	}
+	// Defensive: PKIndices and Fields are populated separately (the former from
+	// the plan builder's colExprs, the latter from the field event), so guard
+	// against any desync that would leave pkIndex out of range for tp.Fields.
+	if pkIndex < 0 || pkIndex >= len(tp.Fields) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"vreplication: bulk-delete plan for table %s has no valid primary key index (pkIndex=%d, len(Fields)=%d)",
+			tp.TargetName, pkIndex, len(tp.Fields))
+	}
+
+	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
+	for _, rowDelete := range rowDeletes {
+		// The caller must only route homogeneous delete-shaped events here: a
+		// nil Before image would panic in MakeRowTrusted, an empty one (the
+		// #20360 shape) would panic indexing vals[pkIndex], and a change with
+		// an After image (an insert or update) would be silently applied as a
+		// DELETE, discarding that image. The Get accessors also make a nil
+		// change in the slice error instead of panicking.
+		if len(rowDelete.GetBefore().GetLengths()) == 0 || rowDelete.GetAfter() != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
+				tp.TargetName)
+		}
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
+		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
+		if querySize+addedSize > maxQuerySize {
+			if _, err := execQuery(&pkVals); err != nil {
+				return nil, err
+			}
+			pkVals = nil
+			querySize = baseQuerySize
+		}
+		pkVals = append(pkVals, vals[pkIndex])
+		querySize += addedSize
+	}
+
+	return execQuery(&pkVals)
+}
+
+// applyBulkInsertChanges generates a multi-row INSERT statement from the row
+// changes generated from a multi-row INSERT statement executed on the source.
+func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowInserts) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if tp.BulkInsertFront == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk insert query")
+	}
+
+	prefix := &strings.Builder{}
+	prefix.WriteString(tp.BulkInsertFront.Query)
+	prefix.WriteString(" values ")
+	insertPrefix := prefix.String()
+	if tp.BulkInsertOnDup != nil {
+		maxQuerySize -= int64(len(tp.BulkInsertOnDup.Query))
+	}
+	maxQuerySize -= int64(len(insertPrefix))
+	values := &strings.Builder{}
+
+	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			vals.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
+		return executor(insertPrefix + vals.String())
+	}
+
+	limit := tp.maxRowJSONBytes()
+	newStmt := true
+	for _, rowInsert := range rowInserts {
+		// The caller must only route homogeneous insert-shaped events here: a
+		// nil After image would panic in MakeRowTrusted, an empty one would
+		// panic indexing the row in the field loop, and a change with a
+		// Before image (a delete or update) would be silently applied as an
+		// INSERT, discarding that image. The Get accessors also make a nil
+		// change in the slice error instead of panicking.
+		if len(rowInsert.GetAfter().GetLengths()) == 0 || rowInsert.GetBefore() != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: bulk-insert change for table %s is not insert-shaped (After image only); a mixed row event must be applied per-change",
+				tp.TargetName)
+		}
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
+		var (
+			err     error
+			bindVar *querypb.BindVariable
+		)
+		rowValues := &strings.Builder{}
+		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
+		for n, field := range tp.Fields {
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			if field.Type == querypb.Type_JSON {
+				var jsVal *sqltypes.Value
+				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
+					jsVal = &sqltypes.NULL
+				} else { // A JSON value (which may be a JSON null literal value)
+					jsVal, err = vjson.MarshalSQLValue(vals[n].Raw())
+					if err != nil {
+						return nil, err
+					}
+				}
+				bindVar, err = tp.bindFieldVal(field, jsVal)
+			} else {
+				bindVar, err = tp.bindFieldVal(field, &vals[n])
+			}
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
+		}
+		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
+			return nil, err
+		}
+		if !newStmt && int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+			if _, err := execQuery(values); err != nil {
+				return nil, err
+			}
+			values.Reset()
+			newStmt = true
+		}
+		if !newStmt {
+			values.WriteString(", ")
+		}
+		values.WriteString(rowValues.String())
+		newStmt = false
+	}
+
+	return execQuery(values)
+}
+
+func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
+	sql, err := pq.GenerateQuery(bindvars, nil)
+	if err != nil {
+		return "", err
+	}
+	return sql, nil
+}
+
+func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	query, err := getQuery(pq, bindvars)
+	if err != nil {
+		return nil, err
+	}
+	return executor(query)
+}
+
+func (tp *TablePlan) pkChanged(bindvars map[string]*querypb.BindVariable) bool {
+	for _, pkref := range tp.PKReferences {
+		v1, _ := sqltypes.BindVariableToValue(bindvars["b_"+pkref])
+		v2, _ := sqltypes.BindVariableToValue(bindvars["a_"+pkref])
+		if !valsEqual(v1, v2) {
+			return true
+		}
+	}
+	return false
+}
+
+func valsEqual(v1, v2 sqltypes.Value) bool {
+	if v1.IsNull() && v2.IsNull() {
+		return true
+	}
+	// If any one of them is null, something has changed.
+	if v1.IsNull() || v2.IsNull() {
+		return false
+	}
+	// Compare content only if none are null.
+	return v1.ToString() == v2.ToString()
+}
+
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that the
+// fields in the row are in the same order as the placeholders in this query. The fields
+// might include generated columns which are dropped before binding the variables note:
+// there can be more fields than bind locations since extra columns might be requested
+// from the source if not all primary keys columns are present in the target table, for
+// example. Also some values in the row may not correspond for values from the database
+// on the source: sum/count for aggregation queries, for example.
+func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+	bindLocations := tp.BulkInsertValues.BindLocations()
+	if len(tp.Fields) < len(bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations",
+			len(tp.Fields), len(bindLocations))
+	}
+	if len(row.Lengths) < len(tp.Fields) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of lengths: got %d lengths for %d fields",
+			len(row.Lengths), len(tp.Fields))
+	}
+
+	// Bind field values to locations.
+	var (
+		offset      int64
+		offsetQuery int
+		fieldsIndex int
+		field       *querypb.Field
+	)
+	for i, loc := range bindLocations {
+		field = tp.Fields[fieldsIndex]
+		length := row.Lengths[fieldsIndex]
+		for tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			if length > 0 {
+				offset += length
+			}
+			fieldsIndex++
+			field = tp.Fields[fieldsIndex]
+			length = row.Lengths[fieldsIndex]
+		}
+
+		buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:loc.Offset])
+		typ := field.Type
+
+		switch typ {
+		case querypb.Type_TUPLE:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		case querypb.Type_JSON:
+			if length < 0 { // An SQL NULL and not an actual JSON value
+				buf.WriteString(sqltypes.NullStr)
+			} else {
+				raw := row.Values[offset : offset+length]
+				if err := vjson.AppendMarshalSQL(buf, raw); err != nil {
+					return err
+				}
+			}
+		default:
+			if length < 0 {
+				// -1 means a null variable; serialize it directly
+				buf.WriteString(sqltypes.NullStr)
+			} else {
+				raw := row.Values[offset : offset+length]
+				var vv sqltypes.Value
+
+				if conversion, ok := tp.ConvertCharset[field.Name]; ok && length > 0 {
+					// Non-null string value, for which we have a charset conversion instruction
+					out, err := tp.convertStringCharset(raw, conversion, field.Name)
+					if err != nil {
+						return err
+					}
+					vv = sqltypes.MakeTrusted(typ, out)
+				} else {
+					vv = sqltypes.MakeTrusted(typ, raw)
+				}
+
+				vv.EncodeSQLBytes2(buf)
+			}
+		}
+		offsetQuery = loc.Offset + loc.Length
+		if length > 0 {
+			offset += length
+		}
+		fieldsIndex++
+	}
+	buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:])
+	return nil
+}

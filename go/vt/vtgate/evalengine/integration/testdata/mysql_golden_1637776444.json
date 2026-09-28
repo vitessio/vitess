@@ -1,0 +1,402 @@
+[
+  {
+    "Query": "SELECT \"fOo\" / 0",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT -1 IN (\"FOO\", 0, -1, (1, 0, -1, 0))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT -1 IN (\"FOO\", 0, -1, (1, 0, -1, 0))"
+  },
+  {
+    "Query": "SELECT 1 - \"fOo\"",
+    "Value": "FLOAT64(1)"
+  },
+  {
+    "Query": "SELECT \"fOo\" NOT IN (\"fOo\", -1, NULL, 1)",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT -1 LIKE (0 + NULL)",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT (-1 \u003c -1) = -1",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT \"foo\" IN (0, (\"foo\", -1, (((\"foo\", -1, \"fOo\", 1), ((NULL NOT LIKE (\"FOO\", NULL, NULL, (-1 \u003c= (\"FOO\", \"FOO\", 0, -1)))) NOT IN (\"FOO\", \"fOo\", \"FOO\", (\"foo\" \u003c=\u003e -1))), \"FOO\", -1), \"foo\", 0, 0), \"fOo\"), ((\"fOo\", (\"foo\" \u003e 1), 0, \"FOO\"), (((\"fOo\" \u003e= (NULL * \"fOo\")), \"fOo\", \"fOo\", \"FOO\") - ((\"fOo\", 1, (\"FOO\", NULL, \"fOo\", -1), 1) \u003c=\u003e \"fOo\")), 1, \"foo\"), \"fOo\")",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT \"foo\" IN (0, (\"foo\", -1, (((\"foo\", -1, \"fOo\", 1), ((NULL NOT LIKE (\"FOO\", NULL, NULL, (-1 \u003c= (\"FOO\", \"FOO\", 0, -1)))) NOT IN (\"FOO\", \"fOo\", \"FOO\", (\"foo\" \u003c=\u003e -1))), \"FOO\", -1), \"foo\", 0, 0), \"fOo\"), ((\"fOo\", (\"foo\" \u003e 1), 0, \"FOO\"), (((\"fOo\" \u003e= (NULL * \"fOo\")), \"fOo\", \"fOo\", \"FOO\") - ((\"fOo\", 1, (\"FOO\", NULL, \"fOo\", -1), 1) \u003c=\u003e \"fOo\")), 1, \"foo\"), \"fOo\")"
+  },
+  {
+    "Query": "SELECT 0 - (1, \"FOO\", \"fOo\", -1)",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT 0 - (1, \"FOO\", \"fOo\", -1)"
+  },
+  {
+    "Query": "SELECT (0 \u003c NULL) IN (\"fOo\", \"FOO\", \"foo\", (((\"foo\", (-1, (-1, (\"fOo\" \u003e= (\"FOO\", (0, (\"FOO\" IN ((1, 1, (\"fOo\", -1, \"fOo\", -1), NULL), \"fOo\", -1, \"FOO\")), \"FOO\", \"FOO\"), \"fOo\", 0)), 1, 1), \"FOO\", \"foo\"), (\"foo\", NULL, (\"foo\", 0, \"fOo\", (0, \"FOO\", \"FOO\", \"fOo\")), (-1, -1, (((NULL, NULL, 0, (NULL, 0, \"foo\", NULL)), -1, 0, NULL), NULL, \"FOO\", 1), (((\"FOO\" LIKE \"FOO\") \u003c ((\"fOo\", 1, NULL, \"fOo\") IN (\"FOO\", 1, NULL, 1))), \"fOo\", -1, ((\"FOO\" != NULL) NOT LIKE \"FOO\")))), \"FOO\"), \"FOO\", (((\"fOo\", 0, NULL, (1, (\"fOo\", \"fOo\", 1, \"foo\"), NULL, 0)) IN (\"fOo\", \"foo\", NULL, 0)) \u003c=\u003e \"foo\"), \"fOo\"), \"fOo\", 0, 0))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (0 \u003c NULL) IN (\"fOo\", \"FOO\", \"foo\", (((\"foo\", (-1, (-1, (\"fOo\" \u003e= (\"FOO\", (0, (\"FOO\" IN ((1, 1, (\"fOo\", -1, \"fOo\", -1), NULL), \"fOo\", -1, \"FOO\")), \"FOO\", \"FOO\"), \"fOo\", 0)), 1, 1), \"FOO\", \"foo\"), (\"foo\", NULL, (\"foo\", 0, \"fOo\", (0, \"FOO\", \"FOO\", \"fOo\")), (-1, -1, (((NULL, NULL, 0, (NULL, 0, \"foo\", NULL)), -1, 0, NULL), NULL, \"FOO\", 1), (((\"FOO\" LIKE \"FOO\") \u003c ((\"fOo\", 1, NULL, \"fOo\") IN (\"FOO\", 1, NULL, 1))), \"fOo\", -1, ((\"FOO\" != NULL) NOT LIKE \"FOO\")))), \"FOO\"), \"FOO\", (((\"fOo\", 0, NULL, (1, (\"fOo\", \"fOo\", 1, \"foo\"), NULL, 0)) IN (\"fOo\", \"foo\", NULL, 0)) \u003c=\u003e \"foo\"), \"fOo\"), \"fOo\", 0, 0))"
+  },
+  {
+    "Query": "SELECT 0 + (1, NULL, (1 \u003e \"foo\"), \"foo\")",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT 0 + (1, NULL, (1 \u003e \"foo\"), \"foo\")"
+  },
+  {
+    "Query": "SELECT NULL + \"foo\"",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT NULL / NULL",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT (1, NULL, \"fOo\", 1) != ((\"fOo\", (\"FOO\", (0 \u003c= ((-1, 0, \"fOo\", (1 / -1)) IN (NULL, (\"fOo\" \u003c=\u003e -1), -1, \"FOO\"))), NULL, 1), (0, \"FOO\", (\"FOO\", \"FOO\", \"fOo\", \"foo\"), \"fOo\"), 0) NOT IN ((0 != \"FOO\"), \"FOO\", \"fOo\", ((0 \u003e= NULL), 0, \"foo\", ((1, \"foo\", -1, 1), \"foo\", \"FOO\", 0))))",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (1, NULL, \"fOo\", 1) != ((\"fOo\", (\"FOO\", (0 \u003c= ((-1, 0, \"fOo\", (1 / -1)) IN (NULL, (\"fOo\" \u003c=\u003e -1), -1, \"FOO\"))), NULL, 1), (0, \"FOO\", (\"FOO\", \"FOO\", \"fOo\", \"foo\"), \"fOo\"), 0) NOT IN ((0 != \"FOO\"), \"FOO\", \"fOo\", ((0 \u003e= NULL), 0, \"foo\", ((1, \"foo\", -1, 1), \"foo\", \"FOO\", 0))))"
+  },
+  {
+    "Query": "SELECT 0 LIKE 0",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT \"FOO\" / (\"FOO\", NULL, NULL, 0)",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT \"FOO\" / (\"FOO\", NULL, NULL, 0)"
+  },
+  {
+    "Query": "SELECT (0 \u003c= \"fOo\") IN (\"fOo\", \"FOO\", 0, (\"FOO\" != \"fOo\"))",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT -1 != 1",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT 1 NOT IN (0, \"foo\", (\"foo\" - (NULL \u003c= 0)), -1)",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"foo\" LIKE (-1, \"fOo\", NULL, -1)",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT \"foo\" LIKE (-1, \"fOo\", NULL, -1)"
+  },
+  {
+    "Query": "SELECT 0 LIKE \"FOO\"",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT (1 * \"FOO\") \u003c=\u003e -1",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT NULL \u003c (\"FOO\", (0 != 1), \"fOo\", \"FOO\")",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT NULL \u003c (\"FOO\", (0 != 1), \"fOo\", \"FOO\")"
+  },
+  {
+    "Query": "SELECT (\"foo\", ((\"fOo\", \"foo\", \"FOO\", (-1, NULL, 1, 0)), \"foo\", \"FOO\", \"FOO\"), NULL, (NULL, \"fOo\", -1, 1)) = NULL",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"foo\", ((\"fOo\", \"foo\", \"FOO\", (-1, NULL, 1, 0)), \"foo\", \"FOO\", \"FOO\"), NULL, (NULL, \"fOo\", -1, 1)) = NULL"
+  },
+  {
+    "Query": "SELECT \"fOo\" LIKE \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT 1 \u003e= \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT (1 LIKE NULL) LIKE -1",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"fOo\" IN (\"FOO\", \"fOo\", \"fOo\", 1)",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT \"FOO\" * 0",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT 1 LIKE -1",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT -1 \u003c \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT (\"fOo\" * (\"fOo\", ((-1, \"FOO\", -1, \"foo\"), \"fOo\", 1, -1), \"FOO\", \"FOO\")) \u003c= 1",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"fOo\" * (\"fOo\", ((-1, \"FOO\", -1, \"foo\"), \"fOo\", 1, -1), \"FOO\", \"FOO\")) \u003c= 1"
+  },
+  {
+    "Query": "SELECT \"foo\" + \"fOo\"",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT (\"fOo\" + (NULL \u003e= -1)) \u003c \"fOo\"",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"fOo\" * (\"fOo\" LIKE \"foo\")",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT 1 NOT IN (\"FOO\", -1, -1, \"foo\")",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT (\"foo\", 1, NULL, NULL) LIKE 1",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"foo\", 1, NULL, NULL) LIKE 1"
+  },
+  {
+    "Query": "SELECT (-1, ((0, \"FOO\", \"fOo\", 0) \u003c=\u003e 0), 0, \"FOO\") NOT IN (\"foo\", \"FOO\", \"fOo\", \"FOO\")",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (-1, ((0, \"FOO\", \"fOo\", 0) \u003c=\u003e 0), 0, \"FOO\") NOT IN (\"foo\", \"FOO\", \"fOo\", \"FOO\")"
+  },
+  {
+    "Query": "SELECT 0 \u003e -1",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT 1 IN (((\"fOo\" / \"FOO\"), \"foo\", (-1 \u003c \"foo\"), \"fOo\"), \"fOo\", 1, (\"foo\", \"fOo\", -1, NULL))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT 1 IN (((\"fOo\" / \"FOO\"), \"foo\", (-1 \u003c \"foo\"), \"fOo\"), \"fOo\", 1, (\"foo\", \"fOo\", -1, NULL))"
+  },
+  {
+    "Query": "SELECT \"FOO\" / 0",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"fOo\" LIKE \"foo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT \"foo\" - \"foo\"",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT (-1, -1, 0, \"fOo\") * \"FOO\"",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (-1, -1, 0, \"fOo\") * \"FOO\""
+  },
+  {
+    "Query": "SELECT (\"fOo\" \u003e= 1) \u003c=\u003e -1",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT -1 \u003e= 0",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT (\"foo\" / NULL) \u003c 1",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT ((\"FOO\", \"foo\", -1, 1), \"foo\", 1, \"fOo\") / 1",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT ((\"FOO\", \"foo\", -1, 1), \"foo\", 1, \"fOo\") / 1"
+  },
+  {
+    "Query": "SELECT \"foo\" / 0",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT 1 \u003c= (((NULL, \"FOO\", ((NULL NOT IN ((((0 \u003c= -1) \u003c NULL) = \"fOo\"), (\"fOo\" * (1 != (\"fOo\" / 1))), \"FOO\", (-1, \"foo\", ((\"foo\", \"foo\", (\"FOO\", (\"foo\" NOT LIKE (\"foo\" \u003e 0)), \"fOo\", \"FOO\"), NULL), -1, (0, (\"foo\", NULL, \"foo\", -1), \"FOO\", \"fOo\"), \"foo\"), (NULL * \"FOO\")))), -1, \"fOo\", 1), \"fOo\") \u003c \"foo\"), \"FOO\", NULL, (((-1, (-1, (1, 0, (((\"fOo\" IN ((0, 0, \"foo\", -1), \"fOo\", \"FOO\", \"foo\")), (1 \u003c ((NULL, ((\"foo\", NULL, \"FOO\", 0) \u003c NULL), (-1, NULL, 0, (0, -1, 1, \"foo\")), 0) != (0, \"fOo\", (\"fOo\" NOT LIKE 0), \"fOo\"))), NULL, \"fOo\") / 1), (-1 != (1, \"foo\", \"FOO\", \"foo\"))), \"fOo\", \"fOo\"), NULL, -1), (\"foo\" = ((NULL = \"foo\") NOT LIKE \"foo\")), -1, (\"foo\", 0, -1, \"fOo\")) \u003c (\"FOO\" = 1)))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT 1 \u003c= (((NULL, \"FOO\", ((NULL NOT IN ((((0 \u003c= -1) \u003c NULL) = \"fOo\"), (\"fOo\" * (1 != (\"fOo\" / 1))), \"FOO\", (-1, \"foo\", ((\"foo\", \"foo\", (\"FOO\", (\"foo\" NOT LIKE (\"foo\" \u003e 0)), \"fOo\", \"FOO\"), NULL), -1, (0, (\"foo\", NULL, \"foo\", -1), \"FOO\", \"fOo\"), \"foo\"), (NULL * \"FOO\")))), -1, \"fOo\", 1), \"fOo\") \u003c \"foo\"), \"FOO\", NULL, (((-1, (-1, (1, 0, (((\"fOo\" IN ((0, 0, \"foo\", -1), \"fOo\", \"FOO\", \"foo\")), (1 \u003c ((NULL, ((\"foo\", NULL, \"FOO\", 0) \u003c NULL), (-1, NULL, 0, (0, -1, 1, \"foo\")), 0) != (0, \"fOo\", (\"fOo\" NOT LIKE 0), \"fOo\"))), NULL, \"fOo\") / 1), (-1 != (1, \"foo\", \"FOO\", \"foo\"))), \"fOo\", \"fOo\"), NULL, -1), (\"foo\" = ((NULL = \"foo\") NOT LIKE \"foo\")), -1, (\"foo\", 0, -1, \"fOo\")) \u003c (\"FOO\" = 1)))"
+  },
+  {
+    "Query": "SELECT \"foo\" + 1",
+    "Value": "FLOAT64(1)"
+  },
+  {
+    "Query": "SELECT (((NULL, \"FOO\", \"foo\", \"foo\") \u003c=\u003e NULL), -1, (-1 IN (-1, 0, (\"foo\" \u003c=\u003e -1), (\"foo\", 1, \"fOo\", \"fOo\"))), \"FOO\") \u003c=\u003e \"foo\"",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (((NULL, \"FOO\", \"foo\", \"foo\") \u003c=\u003e NULL), -1, (-1 IN (-1, 0, (\"foo\" \u003c=\u003e -1), (\"foo\", 1, \"fOo\", \"fOo\"))), \"FOO\") \u003c=\u003e \"foo\""
+  },
+  {
+    "Query": "SELECT ((0 * 0), -1, \"FOO\", NULL) = (\"FOO\", \"FOO\", NULL, NULL)",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT 0 / 0",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT 1 / -1",
+    "Value": "DECIMAL(-1.0000)"
+  },
+  {
+    "Query": "SELECT \"fOo\" NOT IN ((1 * 1), \"foo\", 0, \"fOo\")",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT 1 \u003e= (\"FOO\" \u003c=\u003e \"FOO\")",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT 1 NOT LIKE \"FOO\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT (\"fOo\", 1, (0 \u003c (\"foo\" - NULL)), 1) NOT IN (-1, (\"fOo\" \u003e= (\"fOo\" \u003c -1)), ((\"FOO\" NOT LIKE ((\"fOo\" \u003e -1) \u003c= 1)) / (1 * \"fOo\")), \"FOO\")",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"fOo\", 1, (0 \u003c (\"foo\" - NULL)), 1) NOT IN (-1, (\"fOo\" \u003e= (\"fOo\" \u003c -1)), ((\"FOO\" NOT LIKE ((\"fOo\" \u003e -1) \u003c= 1)) / (1 * \"fOo\")), \"FOO\")"
+  },
+  {
+    "Query": "SELECT 1 = \"FOO\"",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT 0 * \"foo\"",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT \"fOo\" = -1",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT 0 LIKE -1",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT -1 LIKE NULL",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT -1 NOT LIKE \"foo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT -1 \u003c=\u003e 0",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT \"fOo\" - (\"foo\" = \"fOo\")",
+    "Value": "FLOAT64(-1)"
+  },
+  {
+    "Query": "SELECT -1 / \"fOo\"",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"foo\" NOT IN (\"fOo\", (\"foo\" + \"foo\"), -1, ((\"fOo\" NOT LIKE ((1 \u003e 1), \"fOo\", 0, \"FOO\")), \"foo\", (1, (((NULL, 1, ((-1, 0, 1, \"fOo\") != (0 - \"fOo\")), \"FOO\"), NULL, (\"fOo\", 0, (\"foo\", (\"foo\" + -1), \"foo\", \"fOo\"), \"fOo\"), \"FOO\") \u003c= 1), \"foo\", \"FOO\"), -1))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT \"foo\" NOT IN (\"fOo\", (\"foo\" + \"foo\"), -1, ((\"fOo\" NOT LIKE ((1 \u003e 1), \"fOo\", 0, \"FOO\")), \"foo\", (1, (((NULL, 1, ((-1, 0, 1, \"fOo\") != (0 - \"fOo\")), \"FOO\"), NULL, (\"fOo\", 0, (\"foo\", (\"foo\" + -1), \"foo\", \"fOo\"), \"fOo\"), \"FOO\") \u003c= 1), \"foo\", \"FOO\"), -1))"
+  },
+  {
+    "Query": "SELECT \"FOO\" + ((1, (1 != -1), (\"FOO\", 1, \"fOo\", 0), (NULL, ((-1 \u003c=\u003e 1) * 0), 1, (\"FOO\" \u003c \"FOO\"))), -1, -1, \"FOO\")",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT \"FOO\" + ((1, (1 != -1), (\"FOO\", 1, \"fOo\", 0), (NULL, ((-1 \u003c=\u003e 1) * 0), 1, (\"FOO\" \u003c \"FOO\"))), -1, -1, \"FOO\")"
+  },
+  {
+    "Query": "SELECT \"fOo\" \u003e 0",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT 0 NOT IN (-1, 1, 1, \"fOo\")",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT \"fOo\" + NULL",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT 0 NOT LIKE \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT 0 = \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT \"FOO\" \u003c= (-1 - -1)",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT -1 IN ((0, -1, \"FOO\", \"fOo\"), (0 = NULL), (-1 / 0), (0 != -1))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT -1 IN ((0, -1, \"FOO\", \"fOo\"), (0 = NULL), (-1 / 0), (0 != -1))"
+  },
+  {
+    "Query": "SELECT \"foo\" / (\"FOO\", 0, 1, (NULL = 0))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT \"foo\" / (\"FOO\", 0, 1, (NULL = 0))"
+  },
+  {
+    "Query": "SELECT \"fOo\" \u003c=\u003e \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT (\"FOO\", 0, (\"fOo\", 0, 0, \"fOo\"), NULL) \u003c=\u003e (1, ((\"foo\", (1, 0, 0, \"FOO\"), \"fOo\", 0) * \"foo\"), NULL, NULL)",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"FOO\", 0, (\"fOo\", 0, 0, \"fOo\"), NULL) \u003c=\u003e (1, ((\"foo\", (1, 0, 0, \"FOO\"), \"fOo\", 0) * \"foo\"), NULL, NULL)"
+  },
+  {
+    "Query": "SELECT (\"foo\" / (((\"fOo\" NOT LIKE 1), (1 \u003e \"fOo\"), (1, NULL, 1, \"FOO\"), 1) \u003c= \"fOo\")) * -1",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"foo\" / (((\"fOo\" NOT LIKE 1), (1 \u003e \"fOo\"), (1, NULL, 1, \"FOO\"), 1) \u003c= \"fOo\")) * -1"
+  },
+  {
+    "Query": "SELECT 1 \u003e= -1",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT -1 != \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT \"foo\" * 0",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT \"FOO\" - 1",
+    "Value": "FLOAT64(-1)"
+  },
+  {
+    "Query": "SELECT \"FOO\" \u003c \"foo\"",
+    "Value": "INT64(0)"
+  },
+  {
+    "Query": "SELECT (-1, (\"foo\", 0, 0, (0 \u003c=\u003e NULL)), -1, \"FOO\") \u003c 1",
+    "Error": "Operand should contain 4 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (-1, (\"foo\", 0, 0, (0 \u003c=\u003e NULL)), -1, \"FOO\") \u003c 1"
+  },
+  {
+    "Query": "SELECT \"FOO\" / \"fOo\"",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT (\"fOo\" - NULL) \u003c \"fOo\"",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"FOO\" + \"foo\"",
+    "Value": "FLOAT64(0)"
+  },
+  {
+    "Query": "SELECT NULL - (NULL = 1)",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT -1 \u003e= (0 / NULL)",
+    "Value": "NULL"
+  },
+  {
+    "Query": "SELECT \"foo\" \u003c= \"foo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT ((NULL, \"FOO\", \"foo\", (\"FOO\" \u003c=\u003e -1)) + \"foo\") \u003c= NULL",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT ((NULL, \"FOO\", \"foo\", (\"FOO\" \u003c=\u003e -1)) + \"foo\") \u003c= NULL"
+  },
+  {
+    "Query": "SELECT \"foo\" \u003c=\u003e \"fOo\"",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT 0 \u003e= -1",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT (\"foo\", NULL, 1, (1, NULL, 0, \"foo\")) - \"fOo\"",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (\"foo\", NULL, 1, (1, NULL, 0, \"foo\")) - \"fOo\""
+  },
+  {
+    "Query": "SELECT (NULL, NULL, -1, -1) / (1, \"fOo\", \"FOO\", -1)",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT (NULL, NULL, -1, -1) / (1, \"fOo\", \"FOO\", -1)"
+  },
+  {
+    "Query": "SELECT NULL NOT IN (((\"foo\" NOT LIKE (\"FOO\", (NULL, \"fOo\", 1, \"foo\"), \"fOo\", \"foo\")), \"FOO\", 0, -1), -1, (1, (-1, (\"fOo\", 0, \"fOo\", -1), 1, \"foo\"), 1, 1), -1)",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT NULL NOT IN (((\"foo\" NOT LIKE (\"FOO\", (NULL, \"fOo\", 1, \"foo\"), \"fOo\", \"foo\")), \"FOO\", 0, -1), -1, (1, (-1, (\"fOo\", 0, \"fOo\", -1), 1, \"foo\"), 1, 1), -1)"
+  },
+  {
+    "Query": "SELECT -1 * (\"FOO\", \"FOO\", NULL, (\"fOo\", 0, 0, NULL))",
+    "Error": "Operand should contain 1 column(s) (errno 1241) (sqlstate 21000) during query: SELECT -1 * (\"FOO\", \"FOO\", NULL, (\"fOo\", 0, 0, NULL))"
+  },
+  {
+    "Query": "SELECT (\"fOo\" NOT IN (0, \"foo\", \"FOO\", \"foo\")) \u003e= -1",
+    "Value": "INT64(1)"
+  }
+]

@@ -1,0 +1,1442 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package discovery
+
+import (
+	"context"
+	"encoding/hex"
+	"slices"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/faketopo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "cell"
+	keyspace := "testks"
+	factory := faketopo.NewFakeTopoFactory()
+	factory.AddCell(cell)
+	ts := faketopo.NewFakeTopoServer(ctx, factory)
+	ts2 := &fakeTopoServer{}
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "", nil)
+	defer hc.Close()
+	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
+	kss := &keyspaceState{
+		kew:      kew,
+		keyspace: keyspace,
+		shards:   make(map[string]*shardState),
+	}
+	kss.lastKeyspace = &topodatapb.SrvKeyspace{}
+	require.True(t, kss.onSrvKeyspace(nil, nil))
+}
+
+// TestKeyspaceEventConcurrency confirms that the keyspace event watcher
+// does not fail to broadcast received keyspace events to subscribers.
+// This verifies that no events are lost when there's a high number of
+// concurrent keyspace events.
+func TestKeyspaceEventConcurrency(t *testing.T) {
+	cell := "cell1"
+	factory := faketopo.NewFakeTopoFactory()
+	factory.AddCell(cell)
+	sts := &fakeTopoServer{}
+	hc := NewFakeHealthCheck(make(chan *TabletHealth))
+	defer hc.Close()
+	kew := &KeyspaceEventWatcher{
+		hc:        hc,
+		ts:        sts,
+		localCell: cell,
+		keyspaces: make(map[string]*keyspaceState),
+		subs:      make(map[chan *KeyspaceEvent]struct{}),
+	}
+
+	// Subscribe to the watcher's broadcasted keyspace events.
+	receiver := kew.Subscribe()
+
+	updates := atomic.Uint32{}
+	updates.Store(0)
+	wg := sync.WaitGroup{}
+	concurrency := 100
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-receiver:
+				updates.Add(1)
+			}
+		}
+	}()
+	// Start up concurent go-routines that will broadcast keyspace events.
+	for i := 1; i <= concurrency; i++ {
+		wg.Go(func() {
+			kew.broadcast(&KeyspaceEvent{})
+		})
+	}
+	wg.Wait()
+	for {
+		select {
+		case <-ctx.Done():
+			require.Equal(t, concurrency, int(updates.Load()), "expected %d updates, got %d", concurrency, updates.Load())
+			return
+		default:
+			if int(updates.Load()) == concurrency { // Pass
+				cancel()
+				return
+			}
+		}
+	}
+}
+
+// TestKeyspaceEventTypes confirms that the keyspace event watcher determines
+// that the unavailability event is caused by the correct scenario. We should
+// consider it to be caused by a resharding operation when the following
+// conditions are present:
+// 1. The keyspace is inconsistent (in the middle of an availability event)
+// 2. The target tablet is a primary
+// 3. The keyspace has overlapping shards
+// 4. The overlapping shard's tablet is serving
+// And we should consider the cause to be a primary not serving when the
+// following conditions exist:
+// 1. The keyspace is inconsistent (in the middle of an availability event)
+// 2. The target tablet is a primary
+// 3. The target tablet is not serving
+// 4. The shard's externallyReparented time is not 0
+// 5. The shard's currentPrimary state is not nil
+// We should never consider both as a possible cause given the same
+// keyspace state.
+func TestKeyspaceEventTypes(t *testing.T) {
+	utils.EnsureNoLeaks(t)
+	ctx := t.Context()
+	cell := "cell"
+	keyspace := "testks"
+	factory := faketopo.NewFakeTopoFactory()
+	factory.AddCell(cell)
+	ts := faketopo.NewFakeTopoServer(ctx, factory)
+	ts2 := &fakeTopoServer{}
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "", nil)
+	defer hc.Close()
+	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
+
+	type testCase struct {
+		name               string
+		kss                *keyspaceState
+		shardToCheck       string
+		expectResharding   bool
+		expectShouldBuffer bool
+	}
+
+	testCases := []testCase{
+		{
+			name: "one to two resharding in progress",
+			kss: &keyspaceState{
+				kew:      kew,
+				keyspace: keyspace,
+				shards: map[string]*shardState{
+					"-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: false,
+					},
+					"-80": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-80",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+					"80-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "80-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: false,
+					},
+				},
+				consistent: false,
+			},
+			shardToCheck:       "-",
+			expectResharding:   true,
+			expectShouldBuffer: false,
+		},
+		{
+			name: "two to four resharding in progress",
+			kss: &keyspaceState{
+				kew:      kew,
+				keyspace: keyspace,
+				shards: map[string]*shardState{
+					"-80": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-80",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: false,
+					},
+					"80-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "80-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+					"-40": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-40",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+					"40-80": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "40-80",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+					"80-c0": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "80-c0",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: false,
+					},
+					"c0-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "c0-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: false,
+					},
+				},
+				consistent: false,
+			},
+			shardToCheck:       "-80",
+			expectResharding:   true,
+			expectShouldBuffer: false,
+		},
+		{
+			name: "unsharded primary not serving",
+			kss: &keyspaceState{
+				kew:      kew,
+				keyspace: keyspace,
+				shards: map[string]*shardState{
+					"-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving:              false,
+						externallyReparented: time.Now().UnixNano(),
+						currentPrimary: &topodatapb.TabletAlias{
+							Cell: cell,
+							Uid:  100,
+						},
+					},
+				},
+				consistent: false,
+			},
+			shardToCheck:       "-",
+			expectResharding:   false,
+			expectShouldBuffer: true,
+		},
+		{
+			name: "sharded primary not serving",
+			kss: &keyspaceState{
+				kew:      kew,
+				keyspace: keyspace,
+				shards: map[string]*shardState{
+					"-80": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "-80",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving:              false,
+						externallyReparented: time.Now().UnixNano(),
+						currentPrimary: &topodatapb.TabletAlias{
+							Cell: cell,
+							Uid:  100,
+						},
+					},
+					"80-": {
+						target: &querypb.Target{
+							Keyspace:   keyspace,
+							Shard:      "80-",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						serving: true,
+					},
+				},
+				consistent: false,
+			},
+			shardToCheck:       "-80",
+			expectResharding:   false,
+			expectShouldBuffer: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kew.mu.Lock()
+			kew.keyspaces[keyspace] = tc.kss
+			kew.mu.Unlock()
+
+			require.NotNil(t, tc.kss.shards[tc.shardToCheck], "the specified shardToCheck of %q does not exist in the shardState", tc.shardToCheck)
+
+			resharding := kew.TargetIsBeingResharded(ctx, tc.kss.shards[tc.shardToCheck].target)
+			require.Equal(t, resharding, tc.expectResharding, "TargetIsBeingResharded should return %t", tc.expectResharding)
+
+			_, shouldBuffer := kew.ShouldStartBufferingForTarget(ctx, tc.kss.shards[tc.shardToCheck].target)
+			require.Equal(t, shouldBuffer, tc.expectShouldBuffer, "ShouldStartBufferingForTarget should return %t", tc.expectShouldBuffer)
+		})
+	}
+}
+
+// TestWaitForConsistentKeyspaces tests the behaviour of WaitForConsistent for different scenarios.
+func TestWaitForConsistentKeyspaces(t *testing.T) {
+	testcases := []struct {
+		name        string
+		ksMap       map[string]*keyspaceState
+		ksList      []string
+		errExpected string
+	}{
+		{
+			name:   "Empty keyspace list",
+			ksList: nil,
+			ksMap: map[string]*keyspaceState{
+				"ks1": {},
+			},
+			errExpected: "",
+		},
+		{
+			name:   "All keyspaces consistent",
+			ksList: []string{"ks1", "ks2"},
+			ksMap: map[string]*keyspaceState{
+				"ks1": {
+					consistent: true,
+				},
+				"ks2": {
+					consistent: true,
+				},
+			},
+			errExpected: "",
+		},
+		{
+			name:   "One keyspace inconsistent",
+			ksList: []string{"ks1", "ks2"},
+			ksMap: map[string]*keyspaceState{
+				"ks1": {
+					consistent: true,
+				},
+				"ks2": {
+					consistent: false,
+				},
+			},
+			errExpected: "context canceled",
+		},
+		{
+			name:   "One deleted keyspace - consistent",
+			ksList: []string{"ks1", "ks2"},
+			ksMap: map[string]*keyspaceState{
+				"ks1": {
+					consistent: true,
+				},
+				"ks2": {
+					deleted: true,
+				},
+			},
+			errExpected: "",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			// We create a cancelable context and immediately cancel it.
+			// We don't want the unit tests to wait, so we only test the first
+			// iteration of whether the keyspace event watcher returns
+			// that the keyspaces are consistent or not.
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			kew := KeyspaceEventWatcher{
+				keyspaces:        tt.ksMap,
+				missingKeyspaces: make(map[string]time.Time),
+				mu:               sync.Mutex{},
+				ts:               &fakeTopoServer{},
+			}
+			err := kew.WaitForConsistentKeyspaces(ctx, tt.ksList)
+			if tt.errExpected != "" {
+				require.ErrorContains(t, err, tt.errExpected)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestOnHealthCheck(t *testing.T) {
+	testcases := []struct {
+		name                     string
+		ss                       *shardState
+		th                       *TabletHealth
+		wantServing              bool
+		wantWaitForReparent      bool
+		wantExternallyReparented int64
+		wantUID                  uint32
+	}{
+		{
+			name: "Non primary tablet health ignored",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_REPLICA,
+				},
+				Serving: true,
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		}, {
+			name: "Serving primary seen in non-serving shard",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 20,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  2,
+					},
+				},
+			},
+			wantServing:              true,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
+			name: "New serving primary seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 20,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  2,
+					},
+				},
+			},
+			wantServing:              true,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
+			name: "Old serving primary seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      true,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		}, {
+			name: "Old non-serving primary seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              false,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		}, {
+			name: "New serving primary while already serving",
+			ss: &shardState{
+				serving:              true,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 20,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  2,
+					},
+				},
+			},
+			wantServing:              true,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
+			name: "Primary goes non serving",
+			ss: &shardState{
+				serving:              true,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              false,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		},
+	}
+
+	ksName := "ks"
+	shard := "-80"
+	kss := &keyspaceState{
+		mu:       sync.Mutex{},
+		keyspace: ksName,
+		shards:   make(map[string]*shardState),
+	}
+	// Adding this so that we don't run any topo calls from ensureConsistentLocked.
+	kss.moveTablesState = &MoveTablesState{
+		Typ:   MoveTablesRegular,
+		State: MoveTablesSwitching,
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			kss.shards[shard] = tt.ss
+			tt.th.Target.Keyspace = ksName
+			tt.th.Target.Shard = shard
+			kss.onHealthCheck(tt.th)
+			require.Equal(t, tt.wantServing, tt.ss.serving)
+			require.Equal(t, tt.wantWaitForReparent, tt.ss.waitForReparent)
+			require.Equal(t, tt.wantExternallyReparented, tt.ss.externallyReparented)
+			require.Equal(t, tt.wantUID, tt.ss.currentPrimary.Uid)
+		})
+	}
+}
+
+// realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
+// (memorytopo) *topo.Server, so code under test can read global topo records
+// such as the Shard records getMoveTablesStatus fetches.
+type realTopoBackedServer struct {
+	fakeTopoServer
+	ts *topo.Server
+}
+
+func (f *realTopoBackedServer) GetTopoServer() (*topo.Server, error) {
+	return f.ts, nil
+}
+
+// TestGetMoveTablesStatusScopedToKeyspace verifies that getMoveTablesStatus
+// only reports a MoveTables workflow for a keyspace when the routing rules
+// actually reference that keyspace. Routing rules for unrelated keyspaces must
+// not produce a MoveTables state — nor trigger the shard-record scan behind
+// it. A single stray routing rule anywhere in the cluster used to make every
+// keyspaceState on every vtgate fetch every one of its keyspace's shard
+// records from the global topo server on each SrvVSchema update.
+func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	const keyspace = "source"
+	shards := []string{"-80", "80-"}
+
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+	for _, shard := range shards {
+		require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	}
+
+	// setDeniedTables marks table t1 as denied on the PRIMARY of the given
+	// shards, and clears the denial on all others.
+	setDeniedTables := func(t *testing.T, deniedShards ...string) {
+		t.Helper()
+		for _, shard := range shards {
+			_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+				si.TabletControls = nil
+				if slices.Contains(deniedShards, shard) {
+					si.TabletControls = []*topodatapb.Shard_TabletControl{{
+						TabletType:   topodatapb.TabletType_PRIMARY,
+						DeniedTables: []string{"t1"},
+					}}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+		}
+	}
+
+	kss := &keyspaceState{
+		kew:      &KeyspaceEventWatcher{ts: &realTopoBackedServer{ts: ts}},
+		keyspace: keyspace,
+		shards:   make(map[string]*shardState),
+	}
+	for _, shard := range shards {
+		kss.shards[shard] = &shardState{
+			target: &querypb.Target{Keyspace: keyspace, Shard: shard},
+		}
+	}
+
+	// unscannedKss is a keyspaceState for the same keyspace whose only shard
+	// was never created in the topo, so any attempt to read shard records
+	// fails. The cases that must exit the gate early run against it too: the
+	// point of the gate is avoiding the fleet-wide topo reads, so a gate that
+	// fell through has to surface here as an error rather than only as a
+	// different MoveTables state.
+	unscannedKss := &keyspaceState{
+		kew:      kss.kew,
+		keyspace: keyspace,
+		shards: map[string]*shardState{
+			"c0-": {target: &querypb.Target{Keyspace: keyspace, Shard: "c0-"}},
+		},
+	}
+
+	testCases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		// deniedShards is which of the keyspace's shards have denied tables
+		// set when getMoveTablesStatus runs.
+		deniedShards []string
+		wantType     MoveTablesType
+		wantState    MoveTablesStatus
+		// wantNoScan marks a case that must exit the gate before reading any
+		// shard record.
+		wantNoScan bool
+	}{
+		{
+			// Also the shape of a --no-routing-rules workflow between Create
+			// and its first traffic switch: setupInitialDeniedTables has
+			// denied the tables on the target shards, but no rule names the
+			// keyspace. It is deliberately not reported, and must not cost a
+			// scan; the case below pins that the switch itself is detected.
+			name:         "no routing rules",
+			vs:           &vschemapb.SrvVSchema{},
+			deniedShards: shards,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			name: "table routing rules referencing only unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "other.t1", ToTables: []string{"othertarget.t1"}},
+						{FromTable: "t1", ToTables: []string{"othertarget.t1"}},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			name: "shard routing rules referencing only unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			// The rule set MoveTables creates while writes still route to the
+			// source: unqualified and keyspace-qualified rules all point at
+			// the source keyspace.
+			name: "regular MoveTables before switching writes",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"source.t1"}},
+						{FromTable: "target.t1", ToTables: []string{"source.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"source.t1"}},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// After SwitchWrites the rules point at the target keyspace; the
+			// source keyspace is still referenced by the qualified from-table.
+			// This is also what bounds the --no-routing-rules window: that
+			// flag is create-time only and the traffic switcher never consults
+			// it, so a workflow created with it reaches exactly this rule
+			// shape at SwitchWrites and is reported from then on.
+			name: "regular MoveTables after switching writes",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The switched rule set again, with a primary keyspace routing rule
+			// an operator applied by hand that routes the source keyspace to
+			// itself. A self route changes no routing (findRoutedKeyspace returns
+			// the keyspace unchanged and the table rules still apply) and an
+			// ordinary SwitchWrites never touches it, so it must not stop the
+			// table rules from reporting the writes as switched.
+			name: "regular MoveTables after switching writes with a manual self-routing keyspace rule",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// A shard routing rule keyed by this keyspace exists for a denied
+			// shard (-80), so the keyspace is referenced, the scan runs, and
+			// getMoveTablesStatus reports Switching for that combination.
+			name: "shard-by-shard MoveTables with a rule for a denied shard",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesShardByShard,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// The only denied shard (-80) has no rule keyed by this keyspace —
+			// the remaining rule is for 80-, which is not denied — so
+			// getMoveTablesStatus reports Switched. That 80- rule is also what
+			// keeps the keyspace referenced: the gate sees any rule naming the
+			// keyspace, not just rules for its denied shards.
+			name: "shard-by-shard MoveTables with no rule for the denied shard",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target", Shard: "80-"},
+					},
+				},
+			},
+			deniedShards: []string{"-80"},
+			wantType:     MoveTablesShardByShard,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The create-time shape of a shard-by-shard migration
+			// (createDefaultShardRoutingRules): rules are keyed by the target
+			// keyspace and route back to the source, and setupInitialDeniedTables
+			// is skipped for a partial migration, so the source has no denied
+			// tables for a scan to find. It is referenced only as a rule's
+			// to-keyspace and must exit the gate without reading its shards.
+			name: "shard-by-shard MoveTables create-time reverse rules",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "target", ToKeyspace: "source", Shard: "-80"},
+						{FromKeyspace: "target", ToKeyspace: "source", Shard: "80-"},
+					},
+				},
+			},
+			deniedShards: nil,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+			wantNoScan:   true,
+		},
+		{
+			// A multi-tenant migration routes whole keyspaces and writes no
+			// table rule, but stopSourceWrites still denies the tables on the
+			// source shards. Once SwitchWrites points the source's primary
+			// rule at the target, writes are switched: without recognizing
+			// that rule the keyspace exits the gate as MoveTablesNone and
+			// vtgate keeps buffering until the failover timeout.
+			name: "multi-tenant MoveTables after switching writes",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// What setupInitialRoutingRules actually writes at Create: a self
+			// route for every tablet type. The denied tables are on the target
+			// at this point, so the scan finds none here and reports nothing.
+			name: "multi-tenant MoveTables at create",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+						{FromKeyspace: "source@replica", ToKeyspace: "source"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: nil,
+			wantType:     MoveTablesNone,
+			wantState:    MoveTablesUnknown,
+		},
+		{
+			// The window inside SwitchWrites: stopSourceWrites has denied the
+			// tables on the source, but changeWriteRoute has not repointed the
+			// rule yet, so it still routes the keyspace to itself. A
+			// SrvVSchema update landing here must report the migration as
+			// switching rather than concluding nothing is going on, or vtgate
+			// stops buffering while the source is already refusing writes.
+			name: "multi-tenant MoveTables while switching writes",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// The same in-flight shape with the rules listed the other way
+			// round, tablet-type routes first: buildKeyspaceRoutingRules emits
+			// the rules from a map, so nothing fixes their order, and
+			// primaryKeyspaceRoute takes the first rule whose source is the
+			// keyspace. That is only right because the workflow package keys
+			// the replica and rdonly routes as source@replica and source@rdonly
+			// (tabletTypeSuffixes), which never equal the keyspace; this pins
+			// the exact match so a prefix match or a split on "@" cannot pick
+			// up the target of a switched read route instead.
+			name: "multi-tenant MoveTables while switching writes with the tablet-type rules listed first",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+						{FromKeyspace: "source@rdonly", ToKeyspace: "target"},
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			// Stale shard routing rules of some other keyspace -- a completed
+			// shard-by-shard migration leaves its source's rules in place --
+			// must not capture a multi-tenant source mid-switch as
+			// shard-by-shard, which would report it switched while its writes
+			// are still denied. The classification is scoped to rules naming
+			// this keyspace, and the keyspace route decides first.
+			name: "multi-tenant MoveTables while switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitching,
+		},
+		{
+			name: "multi-tenant MoveTables after switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// A stale rule of this very keyspace, left by an earlier completed
+			// shard-by-shard migration of it, would otherwise hold a switched
+			// multi-tenant source at Switching indefinitely: the rule's key
+			// matches a denied shard. The keyspace route takes precedence.
+			name: "multi-tenant MoveTables after switching writes with stale shard rules of this keyspace",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "oldtarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The same scoping protects a regular MoveTables: another
+			// keyspace's stale shard rules used to turn it into ShardByShard
+			// and skip the table-rule check that reports it switched.
+			name: "regular MoveTables after switching writes with stale shard rules of another keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"target.t1"}},
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			deniedShards: shards,
+			wantType:     MoveTablesRegular,
+			wantState:    MoveTablesSwitched,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setDeniedTables(t, tc.deniedShards...)
+
+			state, err := kss.getMoveTablesStatus(tc.vs)
+			require.NoError(t, err)
+			require.NotNil(t, state)
+			require.Equal(t, tc.wantType, state.Typ, "unexpected MoveTables type %s", state)
+			require.Equal(t, tc.wantState, state.State, "unexpected MoveTables state %s", state)
+
+			if tc.wantNoScan {
+				// Reading a shard record here fails, so this only succeeds if
+				// the gate returned before the scan.
+				state, err := unscannedKss.getMoveTablesStatus(tc.vs)
+				require.NoError(t, err, "the gate read shard records for a keyspace no routing rule references")
+				require.NotNil(t, state)
+				require.Equal(t, MoveTablesNone, state.Typ, "unexpected MoveTables type %s", state)
+			}
+		})
+	}
+}
+
+func TestRulesReferenceKeyspace(t *testing.T) {
+	testCases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		want bool
+	}{
+		{
+			name: "empty vschema",
+			vs:   &vschemapb.SrvVSchema{},
+			want: false,
+		},
+		{
+			name: "keyspace referenced by a to-table",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "t1", ToTables: []string{"source.t1"}},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "keyspace referenced by a qualified from-table",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source.t1", ToTables: []string{"target.t1"}},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "keyspace referenced by a from-table with a tablet type suffix",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source.t1@replica", ToTables: []string{"target.t1"}},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "keyspace name is a prefix of the referenced keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source2.t1", ToTables: []string{"source2ndtarget.t1"}},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "unqualified table named like the keyspace",
+			vs: &vschemapb.SrvVSchema{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{FromTable: "source", ToTables: []string{"other.source"}},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "keyspace is the source of a shard routing rule",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target", Shard: "-80"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			// The keyspace a shard rule routes to never holds denied tables:
+			// at Create the partial migration has none, and after a switch
+			// they sit on the rule's source. Admitting it would only scan.
+			name: "keyspace is the target of a shard routing rule",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "source", Shard: "-80"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "shard routing rule between unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget", Shard: "-80"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			// The self route setupInitialRoutingRules writes at Create. It has
+			// to be admitted too: stopSourceWrites denies the source's tables
+			// before changeWriteRoute repoints this rule, so the window in
+			// between has denied tables while the rule still points here.
+			name: "keyspace is the source of a self-routing primary keyspace rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "source"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			// A multi-tenant SwitchWrites points the source keyspace's primary
+			// rule at the target, and the source keeps the denied tables that
+			// stopSourceWrites added, so the source must still be scanned.
+			name: "keyspace is the source of a primary keyspace routing rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source", ToKeyspace: "target"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			// The target of that rule has no denied tables of its own, so
+			// admitting it would reintroduce the scan this gate avoids.
+			name: "keyspace is the target of a primary keyspace routing rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "source"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			// Only the primary rule matters: the ones for the other tablet
+			// types carry a suffix in their from-keyspace.
+			name: "keyspace is the source of a replica keyspace routing rule",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "source@replica", ToKeyspace: "target"},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "keyspace routing rule between unrelated keyspaces",
+			vs: &vschemapb.SrvVSchema{
+				KeyspaceRoutingRules: &vschemapb.KeyspaceRoutingRules{
+					Rules: []*vschemapb.KeyspaceRoutingRule{
+						{FromKeyspace: "other", ToKeyspace: "othertarget"},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, rulesReferenceKeyspace(tc.vs, "source"))
+		})
+	}
+}
+
+type fakeTopoServer struct{}
+
+// GetTopoServer returns the full topo.Server instance.
+func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
+	return nil, nil
+}
+
+// GetSrvKeyspaceNames returns the list of keyspaces served in
+// the provided cell.
+func (f *fakeTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
+	return []string{"ks1"}, nil
+}
+
+// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
+func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	zeroHexBytes, _ := hex.DecodeString("")
+	eightyHexBytes, _ := hex.DecodeString("80")
+	ks := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{Name: "-80", KeyRange: &topodatapb.KeyRange{Start: zeroHexBytes, End: eightyHexBytes}},
+					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: eightyHexBytes, End: zeroHexBytes}},
+				},
+			},
+		},
+	}
+	return ks, nil
+}
+
+// GetSrvVSchema returns the SrvVSchema for a cell.
+func (f *fakeTopoServer) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	vs := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {
+				Sharded: true,
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{
+					FromTable: "db1.t1",
+					ToTables:  []string{"db1.t1"},
+				},
+			},
+		},
+	}
+	return vs, nil
+}
+
+func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	ks, err := f.GetSrvKeyspace(ctx, cell, keyspace)
+	callback(ks, err)
+}
+
+// WatchSrvVSchema starts watching the SrvVSchema object for
+// the provided cell.  It will call the callback when
+// a new value or an error occurs.
+func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
+	sv, err := f.GetSrvVSchema(ctx, cell)
+	callback(sv, err)
+}
+
+// fakeMissingKeyspaceTopoServer is a fakeTopoServer whose WatchSrvKeyspace
+// returns NoNode for keyspaces in the missing set, simulating a keyspace
+// that exists in the cluster but has no SrvKeyspace in the local cell.
+// It also counts how many times each Watch is invoked so tests can assert
+// the negative cache and the SrvVSchema-skip behavior in
+// KeyspaceEventWatcher.
+type fakeMissingKeyspaceTopoServer struct {
+	fakeTopoServer
+	missing               map[string]struct{}
+	watchSrvKeyspaceCalls atomic.Int64
+	watchSrvVSchemaCalls  atomic.Int64
+}
+
+func (f *fakeMissingKeyspaceTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	f.watchSrvKeyspaceCalls.Add(1)
+	if _, ok := f.missing[keyspace]; ok {
+		callback(nil, topo.NewError(topo.NoNode, keyspace))
+		return
+	}
+	f.fakeTopoServer.WatchSrvKeyspace(ctx, cell, keyspace, callback)
+}
+
+func (f *fakeMissingKeyspaceTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
+	f.watchSrvVSchemaCalls.Add(1)
+	f.fakeTopoServer.WatchSrvVSchema(ctx, cell, callback)
+}
+
+// TestKeyspaceEventWatcherMissingKeyspaceCache verifies that healthchecks for
+// a keyspace whose SrvKeyspace does not exist in the local cell don't allocate
+// a new keyspaceState (and don't register a SrvVSchema listener) on every
+// event. Without the negative cache and the SrvVSchema-skip, this path used
+// to fire on every healthcheck event and pin orphan keyspaceStates in the
+// SrvVSchema watcher's listeners slice (onSrvVSchema always returns true,
+// so the listener was never reaped).
+func TestKeyspaceEventWatcherMissingKeyspaceCache(t *testing.T) {
+	cell := "cell1"
+	missing := "missing-keyspace"
+
+	sts := &fakeMissingKeyspaceTopoServer{
+		missing: map[string]struct{}{missing: {}},
+	}
+	hc := NewFakeHealthCheck(make(chan *TabletHealth))
+	t.Cleanup(func() { hc.Close() })
+
+	kew := &KeyspaceEventWatcher{
+		hc:               hc,
+		ts:               sts,
+		localCell:        cell,
+		keyspaces:        make(map[string]*keyspaceState),
+		missingKeyspaces: make(map[string]time.Time),
+		subs:             make(map[chan *KeyspaceEvent]struct{}),
+	}
+
+	const lookups = 100
+	for range lookups {
+		require.Nil(t, kew.getKeyspaceStatus(t.Context(), missing),
+			"getKeyspaceStatus must return nil for a keyspace missing from localCell")
+	}
+
+	assert.Equal(t, int64(1), sts.watchSrvKeyspaceCalls.Load(),
+		"WatchSrvKeyspace should be called at most once within missingKeyspaceTTL — the negative cache should short-circuit subsequent lookups")
+	assert.Equal(t, int64(0), sts.watchSrvVSchemaCalls.Load(),
+		"WatchSrvVSchema must never be called when SrvKeyspace returns NoNode synchronously — otherwise onSrvVSchema (always returning true) pins an orphan keyspaceState in the listeners slice")
+
+	// Force expiry of the negative cache and confirm exactly one re-allocation.
+	kew.mu.Lock()
+	for k := range kew.missingKeyspaces {
+		kew.missingKeyspaces[k] = time.Now().Add(-2 * missingKeyspaceTTL)
+	}
+	kew.mu.Unlock()
+
+	require.Nil(t, kew.getKeyspaceStatus(t.Context(), missing))
+	assert.Equal(t, int64(2), sts.watchSrvKeyspaceCalls.Load(),
+		"after the negative-cache TTL elapses, the next lookup should re-probe SrvKeyspace exactly once")
+	assert.Equal(t, int64(0), sts.watchSrvVSchemaCalls.Load(),
+		"WatchSrvVSchema must still not be called after re-probing a missing keyspace")
+}
+
+// TestOnSrvVSchemaUnregistersAfterDelete covers the async-deletion path: a
+// keyspace exists in localCell when newKeyspaceState registers onSrvVSchema,
+// then later disappears. onSrvKeyspace marks the state deleted and returns
+// false (reaping itself), but onSrvVSchema must also return false on its next
+// invocation — for every payload shape, including the nil "server shutting
+// down" case. Otherwise the resilient SrvVSchema watcher keeps the closure
+// (and the orphan keyspaceState it captures) in its listeners slice forever
+// and re-runs the callback's work on every SrvVSchema update.
+func TestOnSrvVSchemaUnregistersAfterDelete(t *testing.T) {
+	cases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		err  error
+	}{
+		{"non-nil payload", &vschemapb.SrvVSchema{}, nil},
+		{"nil payload (server shutdown)", nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kss := &keyspaceState{
+				keyspace: "ks1",
+				shards:   make(map[string]*shardState),
+			}
+
+			// Simulate the async deletion: SrvKeyspace returns NoNode for localCell.
+			require.False(t, kss.onSrvKeyspace(nil, topo.NewError(topo.NoNode, "ks1")),
+				"onSrvKeyspace must return false on NoNode so the SrvKeyspace watcher reaps it")
+			require.True(t, kss.isDeleted())
+
+			// The next SrvVSchema update must reap the orphan listener
+			// regardless of payload shape.
+			require.False(t, kss.onSrvVSchema(tc.vs, tc.err),
+				"onSrvVSchema must return false once the keyspace is deleted, otherwise the listener pins an orphan keyspaceState")
+		})
+	}
+}

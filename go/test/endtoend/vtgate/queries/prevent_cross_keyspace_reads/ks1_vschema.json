@@ -1,0 +1,7 @@
+{
+  "sharded": false,
+  "tables": {
+    "t1": {}
+  },
+  "prevent_cross_keyspace_reads": true
+}

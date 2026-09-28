@@ -1,0 +1,627 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"fmt"
+	"strings"
+)
+
+// The product, customer, Lead, Lead-1 tables are used to exercise and test most Workflow variants.
+// We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
+// MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
+// permissive sql_mode now used in vreplication causes no unwanted side effects.
+// The customer table also tests several important things:
+//  1. Composite or multi-column primary keys
+//  2. PKs that contain an ENUM column
+//  3. That we properly handle tables with auto_increment columns (which are stripped by default when
+//     moving the table to a sharded keyspace)
+//
+// The Lead and Lead-1 tables also allows us to test several things:
+//  1. Mixed case identifiers
+//  2. Column and table names with special characters in them, namely a dash
+//  3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
+//
+// The internal table _vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_ should be ignored by vreplication
+// The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
+// The db_order_test table needs to use a collation that exists in all versions for cross version tests as we use the collation for the PK
+// based merge sort in VDiff. The table is using a non-default collation for any version with utf8mb4 as 5.7 does NOT show the default
+// collation in the SHOW CREATE TABLE output which means in the cross version tests the source and target will be using a different collation.
+// The vdiff_order table is used to test MySQL sort->VDiff merge sort ordering and ensure it aligns across Reshards. It must not use the
+// default collation as it has to work across versions and the 8.0 default does not exist in 5.7.
+var (
+	// All standard user tables should have a primary key and at least one secondary key.
+	customerTypes = []string{"'individual'", "'soho'", "'enterprise'"}
+	// We use utf8mb4_general_ci so that we can test with 5.7 and 8.0+.
+	customerTableTemplate = `create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_general_ci, meta json default null,
+  industryCategory varchar(100) generated always as (json_extract(meta, _utf8mb4'$.industry')) virtual, typ enum(%s),
+  sport set('football','cricket','baseball'), ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00',
+	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(%s), key(name)) CHARSET=utf8mb4`
+	customerTable = fmt.Sprintf(customerTableTemplate, strings.Join(customerTypes, ","), "cid,typ" /* PK columns */)
+	// customerTableModifiedPK has a PK on (cid) vs (cid,typ).
+	customerTableModifiedPK = fmt.Sprintf(customerTableTemplate, strings.Join(customerTypes, ","), "cid" /* PK columns */)
+
+	initialProductSchema = fmt.Sprintf(`
+create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid), key(date1,date2)) CHARSET=utf8mb4;
+%s;
+create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+create table merchant(mname varchar(128), category varchar(128), primary key(mname), key(category)) CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+create table orders(oid int, cid int, pid int, mname varchar(128), price int, qty int, total int as (qty * price), total2 int as (qty * price) stored, primary key(oid), key(pid), key(cid)) CHARSET=utf8;
+create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+create table customer2(cid int, name varchar(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid), key(ts)) CHARSET=utf8;
+create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+create table `+"`Lead`(`Lead-id`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead-id`"+`), key (date1));
+create table `+"`Lead-1`(`Lead`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead`"+`), key (date2));
+create table _vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_(id int, val varbinary(128), primary key(id), key(val));
+create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
+create table json_tbl (id int, j1 json, j2 json, j3 json not null, primary key(id));
+create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
+create table  `+"`blüb_tbl`"+` (id int, val1 varchar(20), `+"`blöb1`"+` blob, val2 varbinary(20), `+"`bl@b2`"+` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
+create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
+create table loadtest (id int, name varchar(256), primary key(id), key(name));
+create table nopk (name varchar(128), age int unsigned);
+create table ukTable (id1 int not null, id2 int not null, name varchar(20), unique key uk1(id1, id2), key uk2(id2));
+`, customerTable)
+
+	// These should always be ignored in vreplication
+	internalSchema = `
+ create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
+ create table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id int, val varbinary(128), primary key(id));
+ create table _vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ create table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id int, val varbinary(128), primary key(id));
+ `
+
+	initialProductVSchema = `
+{
+  "tables": {
+    "product": {},
+    "merchant": {},
+    "orders": {},
+    "loadtest": {},
+    "customer": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "customer2": {},
+    "customer_seq2": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    },
+    "Lead": {},
+    "Lead-1": {},
+    "db_order_test": {},
+    "vdiff_order": {},
+    "datze": {},
+    "nopk": {},
+    "reftable": {
+      "type": "reference"
+    },
+	"ukTable": {}
+  }
+}
+`
+
+	customerSchema  = ""
+	customerVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    },
+    "xxhash": {
+      "type": "xxhash"
+    },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    },
+    "bmd5": {
+      "type": "binary_md5"
+    }
+  },
+  "tables": {
+    "loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+  "ukTable": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    
+    "customer": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "reverse_bits"
+        }
+      ],
+      "auto_increment": {
+        "column": "cid",
+        "sequence": "` + "`customer_seq`" + `"
+      }
+    },
+    "customer_name": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "enterprise_customer": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "customer2": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "reverse_bits"
+        }
+      ],
+      "auto_increment": {
+        "column": "cid",
+        "sequence": "customer_seq2"
+      }
+    },
+    "Lead": {
+      "column_vindexes": [
+        {
+          "column": "Lead-id",
+          "name": "bmd5"
+        }
+      ]
+    },
+    "Lead-1": {
+      "column_vindexes": [
+        {
+          "column": "Lead",
+          "name": "bmd5"
+        }
+      ]
+    },
+    "db_order_test": {
+      "column_vindexes": [
+        {
+          "columns": ["c_uuid", "created_at"],
+          "name": "xxhash"
+        }
+      ]
+    },
+    "vdiff_order": {
+      "column_vindexes": [
+        {
+          "column": "order_id",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "blüb_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "datze": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "nopk": {
+      "column_vindexes": [
+        {
+          "columns": ["name"],
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "reftable": {
+      "type": "reference"
+    }
+  }
+}
+`
+	merchantVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "md5": {
+      "type": "unicode_loose_md5"
+    }
+  },
+  "tables": {
+    "merchant": {
+      "column_vindexes": [
+        {
+          "column": "mname",
+          "name": "md5"
+        }
+      ]
+    }
+  }
+}
+`
+	// ordersSchema = "create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';"
+	ordersVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+	"customer": {
+	      "column_vindexes": [
+	        {
+	          "column": "cid",
+	          "name": "reverse_bits"
+	        }
+	      ],
+	      "auto_increment": {
+	        "column": "cid",
+	        "sequence": "` + "`product`.`customer_seq`" + `"
+	      }
+	},
+    "orders": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "reverse_bits"
+        }
+      ],
+      "auto_increment": {
+        "column": "oid",
+        "sequence": "order_seq"
+      }
+    }
+  }
+}
+`
+	materializeProductVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    },
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+	"loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "customer": {
+	      "column_vindexes": [
+	        {
+	          "column": "cid",
+	          "name": "reverse_bits"
+	        }
+	      ],
+	      "auto_increment": {
+	        "column": "cid",
+	        "sequence": "` + "`customer_seq`" + `"
+	      }
+	},
+    "orders": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "reverse_bits"
+        }
+      ],
+      "auto_increment": {
+        "column": "oid",
+        "sequence": "order_seq"
+      }
+    },
+    "db_order_test": {
+      "column_vindexes": [
+        {
+          "columns": ["c_uuid", "created_at"],
+          "name": "xxhash"
+        }
+      ]
+    },
+    "vdiff_order": {
+      "column_vindexes": [
+        {
+          "column": "order_id",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "blüb_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "cproduct": {
+		"type": "reference"
+	},
+	"vproduct": {
+		"type": "reference"
+	},
+  "reftable": {
+    "type": "reference"
+  }
+  }
+}
+`
+	materializeProductSpec = fmt.Sprintf(`
+	{
+	"workflow": "cproduct",
+	"source_keyspace": "%s",
+	"target_keyspace": "%s",
+	"table_settings": [{
+		"target_table": "cproduct",
+		"source_expression": "select * from product",
+		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
+	}]
+}
+`, defaultSourceKs, defaultTargetKs)
+
+	materializeCustomerNameSpec = fmt.Sprintf(`
+{
+  "workflow": "customer_name",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
+  "table_settings": [{
+    "target_table": "customer_name",
+    "source_expression": "select cid, name from customer",
+    "create_ddl": "create table if not exists customer_name (cid bigint not null, name varchar(128), primary key(cid), key(name))"
+  }]
+}
+`, defaultTargetKs, defaultTargetKs)
+
+	materializeCustomerTypeSpec = fmt.Sprintf(`
+{
+  "workflow": "enterprise_customer",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
+  "table_settings": [{
+    "target_table": "enterprise_customer",
+    "source_expression": "select cid, name, typ from customer where typ = 'enterprise'",
+    "create_ddl": "create table if not exists enterprise_customer (cid bigint not null, name varchar(128), typ varchar(64), primary key(cid), key(typ))"
+  }]
+}
+`, defaultTargetKs, defaultTargetKs)
+
+	merchantOrdersVSchema = `
+{
+	  "sharded": true,
+	  "vindexes": {
+		"md5": {
+		  "type": "unicode_loose_md5"
+		}
+	  },
+	  "tables": {
+		"merchant": {
+		  "column_vindexes": [
+			{
+			  "column": "mname",
+			  "name": "md5"
+			}
+		  ]
+      	},
+	  	"morders": {
+		  "column_vindexes": [
+			{
+			  "column": "mname",
+			  "name": "md5"
+			}
+		  ],
+		  "auto_increment": {
+			"column": "oid",
+			"sequence": "order_seq"
+		  }
+	  	},
+	  	"msales": {
+		  "column_vindexes": [
+			{
+			  "column": "merchant_name",
+			  "name": "md5"
+			}
+		  ]
+	  	}
+      }
+}
+`
+
+	// the merchant-type keyspace allows us to test keyspace names with special characters in them (dash)
+	materializeMerchantOrdersSpec = fmt.Sprintf(`
+{
+  "workflow": "morders",
+  "source_keyspace": "%s",
+  "target_keyspace": "merchant-type",
+  "table_settings": [{
+    "target_table": "morders",
+    "source_expression": "select oid, cid, mname, pid, price, qty, total from orders",
+    "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid)) CHARSET=utf8"
+  }]
+}
+`, defaultTargetKs)
+
+	materializeMerchantSalesSpec = fmt.Sprintf(`
+{
+  "workflow": "msales",
+  "source_keyspace": "%s",
+  "target_keyspace": "merchant-type",
+  "table_settings": [{
+    "target_table": "msales",
+	"source_expression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",
+    "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name)) CHARSET=utf8"
+  }]
+}
+`, defaultTargetKs)
+
+	materializeSalesVSchema = `
+{
+  "tables": {
+    "product": {},
+    "sales": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    }
+  }
+}
+`
+	materializeSalesSpec = fmt.Sprintf(`
+{
+  "workflow": "sales",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
+  "table_settings": [{
+    "target_Table": "sales",
+    "source_expression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
+    "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid)) CHARSET=utf8"
+  }]
+}
+`, defaultTargetKs, defaultSourceKs)
+	materializeRollupSpec = fmt.Sprintf(`
+{
+  "workflow": "rollup",
+  "source_keyspace": "%s",
+  "target_keyspace": "%s",
+  "table_settings": [{
+    "target_table": "rollup",
+    "source_expression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
+    "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname)) CHARSET=utf8mb4"
+  }]
+}
+`, defaultSourceKs, defaultSourceKs)
+	initialExternalSchema = `
+create table review(rid int, pid int, review varbinary(128), primary key(rid));
+create table rating(gid int, pid int, rating int, primary key(gid));
+`
+	initialExternalVSchema = `
+{
+  "tables": {
+	"review": {},
+	"rating": {}
+  }
+}
+`
+
+	jsonValues = []string{
+		`"abc"`,
+		`123`,
+		`{"foo": 456}`,
+		`{"bar": "foo"}`,
+		`[1, "abc", 932409834098324908234092834092834, 234234234234234234234234.2342342342349]`,
+		`{"a":2947293482093480923840923840923, "cba":334234234234234234234234234.234234239090}`,
+		`[1, "abc", -1, 0.2342342342349, {"a":"b","c":"d","ab":"abc","bc":["x","y"]}]`,
+		`{"a":2947293482093480923840923840923, "cba":{"a":2947293482093480923840923840923, "cba":334234234234234234234234234.234234239090}}`,
+		`{"asdf":{"foo":123}}`,
+		`{"a":"b","c":"d","ab":"abc","bc":["x","y"]}`,
+		`["here",["I","am"],"!!!"]`,
+		`{"scopes":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAEAAAAAAEAAAAAA8AAABgAAAAAABAAAACAAAAAAAAA"}`,
+		`"scalar string"`,
+		`"scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"`,
+		`"first line\\r\\nsecond line\\rline with escapes\\\\ \\r\\n"`,
+		`true`,
+		`false`,
+		`""`,
+		`-1`,
+		`1`,
+		`32767`,
+		`32768`,
+		`-32768`,
+		`-32769`,
+		`2.147483647e+09`,
+		`1.8446744073709552e+19`,
+		`-9.223372036854776e+18`,
+		`{}`,
+		`[]`,
+		`"2015-01-15 23:24:25.000000"`,
+		`"23:24:25.000000"`,
+		`"23:24:25.120000"`,
+		`"2015-01-15"`,
+	}
+)

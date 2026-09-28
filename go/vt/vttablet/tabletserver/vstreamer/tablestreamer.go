@@ -1,0 +1,208 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vstreamer
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"sync/atomic"
+
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	schema2 "vitess.io/vitess/go/vt/schema"
+)
+
+/*
+	TableStreamer is a VStreamer that streams all tables in a keyspace. It iterates through all tables in a keyspace
+	and streams them one by one. It is not resilient: if there is any error that breaks the stream, for example,
+	reparenting or a network error, it will not recover and a new workflow will have to be created.
+*/
+
+// TableStreamer exposes an externally usable interface to tableStreamer.
+type TableStreamer interface {
+	Stream() error
+	Cancel()
+}
+
+type tableStreamer struct {
+	ctx    context.Context
+	cancel func()
+
+	cp      dbconfigs.Connector
+	se      *schema.Engine
+	send    func(*binlogdatapb.VStreamTablesResponse) error
+	vschema *localVSchema
+	vse     *Engine
+
+	snapshotConn *snapshotConn
+	tables       []string
+	gtid         string
+	options      *binlogdatapb.VStreamOptions
+	config       *vttablet.VReplicationConfig
+}
+
+func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
+	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions,
+) *tableStreamer {
+	config, err := GetVReplicationConfig(options)
+	if err != nil {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	return &tableStreamer{
+		ctx:     ctx,
+		cancel:  cancel,
+		cp:      cp,
+		se:      se,
+		send:    send,
+		vschema: vschema,
+		vse:     vse,
+		options: options,
+		config:  config,
+	}
+}
+
+func (ts *tableStreamer) Cancel() {
+	log.Info("TableStreamer Cancel() called")
+	ts.cancel()
+}
+
+func (ts *tableStreamer) Stream() error {
+	// Ensure that the schema engine is Open. If vttablet came up non_serving, it may not have been initialized.
+	var err error
+	if err = ts.se.Open(); err != nil {
+		return err
+	}
+
+	conn, err := snapshotConnect(ts.ctx, ts.cp)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ts.snapshotConn = conn
+
+	ts.gtid, err = conn.startSnapshotAllTables(ts.ctx)
+	if err != nil {
+		return err
+	}
+
+	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", ts.config.NetReadTimeout), 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
+		return err
+	}
+	log.Info(fmt.Sprintf("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v", ts.config.NetReadTimeout, ts.config.NetWriteTimeout))
+
+	rs, err := conn.ExecuteFetch("show full tables", -1, true)
+	if err != nil {
+		return err
+	}
+	for _, row := range rs.Rows {
+		tableName := row[0].ToString()
+		tableType := row[1].ToString()
+		if tableType != tmutils.TableBaseTable {
+			continue
+		}
+		if schema2.IsInternalOperationTableName(tableName) {
+			log.Info("Skipping internal table " + tableName)
+			continue
+		}
+		ts.tables = append(ts.tables, tableName)
+	}
+	log.Info(fmt.Sprintf("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", ")))
+	for _, tableName := range ts.tables {
+		log.Info("Streaming table " + tableName)
+		if err := ts.streamTable(ts.ctx, tableName); err != nil {
+			log.Error(fmt.Sprintf("Streaming table %s failed: %v", tableName, err))
+			return err
+		}
+		log.Info("Finished streaming table " + tableName)
+	}
+	log.Info(fmt.Sprintf("Finished streaming %d tables", len(ts.tables)))
+	return nil
+}
+
+func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastpk []sqltypes.Value,
+	send func(*binlogdatapb.VStreamRowsResponse) error,
+) (*rowStreamer, func(), error) {
+	vse := ts.vse
+	if atomic.LoadInt32(&vse.isOpen) == 0 {
+		return nil, nil, errors.New("VStreamer is not open")
+	}
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
+
+	rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
+		send, vse, RowStreamerModeAllTables, ts.snapshotConn, ts.options)
+
+	idx := vse.streamIdx
+	vse.rowStreamers[idx] = rowStreamer
+	vse.streamIdx++
+	// Now that we've added the stream, increment wg.
+	// This must be done before releasing the lock.
+	vse.wg.Add(1)
+
+	// Remove stream from map and decrement wg when it ends.
+	cancel := func() {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		delete(vse.rowStreamers, idx)
+		vse.wg.Done()
+	}
+	return rowStreamer, cancel, nil
+}
+
+func (ts *tableStreamer) streamTable(ctx context.Context, tableName string) error {
+	query := "select * from " + sqlescape.EscapeID(tableName)
+
+	send := func(response *binlogdatapb.VStreamRowsResponse) error {
+		return ts.send(&binlogdatapb.VStreamTablesResponse{
+			TableName: tableName,
+			Fields:    response.GetFields(),
+			Pkfields:  response.GetPkfields(),
+			Gtid:      ts.gtid,
+			Rows:      response.GetRows(),
+			Lastpk:    response.Lastpk,
+		})
+	}
+	rs, cancel, err := ts.newRowStreamer(ctx, query, nil, send)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	err = rs.Stream()
+	if err != nil {
+		return err
+	}
+	rs.vse.tableStreamerNumTables.Add(int64(1))
+
+	return nil
+}

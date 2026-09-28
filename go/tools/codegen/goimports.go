@@ -1,0 +1,98 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package codegen
+
+import (
+	"errors"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/dave/jennifer/jen"
+)
+
+// FormatJenFile writes the given *jen.File to a temporary file, applies
+// goimports and gofumpt, and returns the formatted contents.
+// The output matches the repository's import grouping and formatting rules.
+func FormatJenFile(file *jen.File) ([]byte, error) {
+	tempFile, err := os.CreateTemp("/tmp", "*.go")
+	if err != nil {
+		return nil, err
+	}
+
+	err = file.Save(tempFile.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	err = GoImports(tempFile.Name())
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(tempFile.Name())
+}
+
+// moduleRoot returns the root directory of the enclosing vitess module.
+// goimports and gofumpt live in their own modules under tools/, so their
+// modfiles must be addressed relative to the repository root, regardless of
+// the caller's working directory.
+var moduleRoot = sync.OnceValues(func() (string, error) {
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return "", err
+	}
+	gomod := strings.TrimSpace(string(out))
+	if gomod == "" || gomod == os.DevNull {
+		return "", errors.New("codegen must run inside the vitess module")
+	}
+	return filepath.Dir(gomod), nil
+})
+
+func GoImports(fullPath string) error {
+	root, err := moduleRoot()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "goimports", "go.mod"), "goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "gofumpt", "go.mod"), "gofumpt", "-w", fullPath)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SaveJenFile(fullPath string, file *jen.File) error {
+	if err := file.Save(fullPath); err != nil {
+		return err
+	}
+	if err := GoImports(fullPath); err != nil {
+		return err
+	}
+	log.Printf("saved '%s'", fullPath)
+	return nil
+}

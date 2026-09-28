@@ -1,0 +1,446 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/mysqlctl"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+)
+
+func TestEngineOpen(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
+	defer deleteTablet(addTablet(100))
+	resetBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+	require.False(t, vre.IsOpen())
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source|tablet_types|options",
+			"int64|varchar|varchar|varbinary|varchar",
+		),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|PRIMARY,REPLICA|{}`, env.KeyspaceName),
+	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+	vre.Open(t.Context())
+	defer vre.Close()
+	assert.True(t, vre.IsOpen())
+
+	// Verify stats
+	assert.Equal(t, globalStats.controllers, vre.controllers)
+
+	ct := vre.controllers[1]
+	assert.True(t, ct != nil && ct.id == 1)
+}
+
+func TestEngineOpenRetry(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
+	defer func(saved int64) { openRetryInterval.Store(saved) }(openRetryInterval.Load())
+	openRetryInterval.Store((10 * time.Millisecond).Nanoseconds())
+
+	defer deleteTablet(addTablet(100))
+	resetBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	// Fail twice to ensure the retry retries at least once.
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source|options",
+			"int64|varchar|varchar|varchar",
+		),
+	), nil)
+
+	isRetrying := func() bool {
+		vre.mu.Lock()
+		defer vre.mu.Unlock()
+		return vre.cancelRetry != nil
+	}
+
+	vre.Open(t.Context())
+
+	assert.True(t, isRetrying())
+	func() {
+		for range 10 {
+			time.Sleep(10 * time.Millisecond)
+			if !isRetrying() {
+				return
+			}
+		}
+		assert.Fail(t, "retrying did not become false")
+	}()
+
+	// Open is idempotent.
+	assert.True(t, vre.IsOpen())
+	vre.Open(t.Context())
+
+	vre.Close()
+	assert.False(t, vre.IsOpen())
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	vre.Open(t.Context())
+
+	// A second Open should cancel the existing retry and start a new one.
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	vre.Open(t.Context())
+
+	start := time.Now()
+	// Close should cause the retry to exit.
+	vre.Close()
+	elapsed := time.Since(start)
+	assert.Greater(t, openRetryInterval.Load(), elapsed.Nanoseconds())
+}
+
+func TestEngineExec(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
+	defer deleteTablet(addTablet(100))
+	resetBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	// Test Insert
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+	defer vre.Close()
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
+	dbClient.ExpectRequest("select @@session.auto_increment_increment", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source|tablet_types|options",
+			"int64|varchar|varchar|varbinary|varchar",
+		),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|PRIMARY,REPLICA|{}`, env.KeyspaceName),
+	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+
+	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
+	require.NoError(t, err)
+	wantqr := &sqltypes.Result{InsertID: 1}
+	assert.Truef(t, qr.Equal(wantqr), "Exec: %v, want %v", qr, wantqr)
+	dbClient.Wait()
+
+	ct := vre.controllers[1]
+	if ct == nil || ct.id != 1 {
+		assert.Failf(t, "controller mismatch", "ct: %v, id should be 1", ct)
+		return
+	}
+
+	// Verify stats
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
+
+	// Test Update
+
+	savedBlp := ct.blpStats
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id in (1)", testDMLResponse, nil)
+	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source|options",
+			"int64|varchar|varchar|varchar",
+		),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|{}`, env.KeyspaceName),
+	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+
+	qr, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1")
+	require.NoError(t, err)
+	wantqr = &sqltypes.Result{RowsAffected: 1}
+	assert.Truef(t, qr.Equal(wantqr), "Exec: %v, want %v", qr, wantqr)
+	dbClient.Wait()
+
+	ct = vre.controllers[1]
+
+	// Verify that the new controller has reused the previous blpStats.
+	assert.Samef(t, savedBlp, ct.blpStats, "BlpStats must be same")
+
+	// Verify stats
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
+
+	// Test no update
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+	_, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 2")
+	require.NoError(t, err)
+	dbClient.Wait()
+
+	// Test Delete
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", testDMLResponse, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.post_copy_action where vrepl_id in (1)", nil, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+
+	qr, err = vre.Exec("delete from _vt.vreplication where id = 1")
+	require.NoError(t, err)
+	wantqr = &sqltypes.Result{RowsAffected: 1}
+	assert.Truef(t, qr.Equal(wantqr), "Exec: %v, want %v", qr, wantqr)
+	dbClient.Wait()
+
+	ct = vre.controllers[1]
+	assert.Nilf(t, ct, "ct: %v, want nil", ct)
+
+	// Verify stats
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
+
+	// Test simple delete.
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 3", &sqltypes.Result{}, nil)
+	_, err = vre.Exec("delete from _vt.vreplication where id = 3")
+	require.NoError(t, err)
+	dbClient.Wait()
+
+	// Test unsafe writes of multiple rows, which we want to prevent.
+	unsafeQueries := []string{
+		"delete from _vt.vreplication",
+		"delete from _vt.vreplication where id > 1",
+		"delete from _vt.vreplication where message != 'FROZEN'",
+		"update _vt.vreplication set workflow = 'bad'",
+		"update _vt.vreplication set state = 'Stopped' where id > 1",
+		"update _vt.vreplication set message = '' where state == 'Running'",
+	}
+	for _, unsafeQuery := range unsafeQueries {
+		_, err = vre.Exec(unsafeQuery)
+		require.Error(t, err, "%s should fail", unsafeQuery)
+		dbClient.Wait()
+	}
+}
+
+func TestEngineBadInsert(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
+	defer deleteTablet(addTablet(100))
+	resetBinlogClient()
+
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+	defer vre.Close()
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, nil)
+	_, err := vre.Exec("insert into _vt.vreplication values(null)")
+	require.EqualError(t, err, "insert failed to generate an id", "vre.Exec")
+
+	// Verify stats
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
+}
+
+func TestEngineSelect(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+	resetBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+	defer vre.Close()
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	wantQuery := "select * from _vt.vreplication where workflow = 'x'"
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source|pos",
+			"int64|varchar|varchar|varchar",
+		),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|MariaDB/0-1-1083`, env.KeyspaceName),
+	)
+	dbClient.ExpectRequest(wantQuery, wantResult, nil)
+	qr, err := vre.Exec(wantQuery)
+	require.NoError(t, err)
+	assert.Truef(t, qr.Equal(wantResult), "Exec: %v, want %v", qr, wantResult)
+}
+
+func TestWaitForPos(t *testing.T) {
+	savedRetryTime := waitRetryTime
+	defer func() { waitRetryTime = savedRetryTime }()
+	waitRetryTime = 10 * time.Millisecond
+
+	dbClient := binlogplayer.NewMockDBClient(t)
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		sqltypes.NewVarBinary(""),
+	}}}, nil)
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1084"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		sqltypes.NewVarBinary(""),
+	}}}, nil)
+	start := time.Now()
+	require.NoError(t, vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084"))
+	duration := time.Since(start)
+	assert.GreaterOrEqualf(t, duration, 10*time.Microsecond, "duration: %v, want >= 10us", duration)
+}
+
+func TestWaitForPosError(t *testing.T) {
+	dbClient := binlogplayer.NewMockDBClient(t)
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	err := vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084")
+	require.EqualError(t, err, `vreplication engine is closed`, "WaitForPos")
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+
+	err = vre.WaitForPos(t.Context(), 1, "BadFlavor/0-1-1084")
+	require.EqualError(t, err, `parse error: unknown GTIDSet flavor "BadFlavor"`, "WaitForPos")
+
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
+	err = vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084")
+	require.EqualError(t, err, "vreplication stream received an unexpected number of columns, got 0 instead of 3", "WaitForPos")
+
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+	}, {
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+	}}}, nil)
+	err = vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084")
+	assert.EqualError(t, err, "vreplication stream received more rows than expected, got 2 instead of 1", "WaitForPos")
+}
+
+func TestWaitForPosCancel(t *testing.T) {
+	dbClient := binlogplayer.NewMockDBClient(t)
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		sqltypes.NewVarBinary(""),
+	}}}, nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
+	require.ErrorContains(t, err, "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled", "WaitForPos")
+	dbClient.Wait()
+
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		vre.Close()
+	}()
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		sqltypes.NewVarBinary(""),
+	}}}, nil)
+	err = vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084")
+	assert.EqualError(t, err, "vreplication is closing: context canceled", "WaitForPos")
+}
+
+func TestGetDBClient(t *testing.T) {
+	dbClientDba := binlogplayer.NewMockDbaClient(t)
+	dbClientFiltered := binlogplayer.NewMockDBClient(t)
+	dbClientFactoryDba := func() binlogplayer.DBClient { return dbClientDba }
+	dbClientFactoryFiltered := func() binlogplayer.DBClient { return dbClientFiltered }
+
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactoryFiltered, dbClientFactoryDba, dbClientDba.DBName(), nil)
+
+	shouldBeDbaClient := vre.getDBClient(true /*runAsAdmin*/)
+	assert.Equal(t, shouldBeDbaClient, dbClientDba)
+
+	shouldBeFilteredClient := vre.getDBClient(false /*runAsAdmin*/)
+	assert.Equal(t, shouldBeFilteredClient, dbClientFiltered)
+}

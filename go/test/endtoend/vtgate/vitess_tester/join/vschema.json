@@ -1,0 +1,46 @@
+{
+  "keyspaces": {
+    "joinks": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash"
+        }
+      },
+      "tables": {
+        "t1": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash"
+            }
+          ]
+        },
+        "t2": {
+          "column_vindexes": [
+            {
+              "column": "t1_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "t3": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash"
+            }
+          ]
+        },
+        "t4": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

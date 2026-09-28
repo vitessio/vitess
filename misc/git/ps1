@@ -1,0 +1,12 @@
+# Source this file in your shell to get the current git branch name in
+# the prompt.
+
+# parse_git_branch echoes the name of the current branch followed by a
+# space (if its not nil).
+function parse_git_branch {
+  branch=$(git branch --no-color 2> /dev/null |grep '*'|awk '{print $2}')
+  if [ ! -z $branch ]; then
+      echo " $branch"
+  fi
+}
+PS1='\A [\j] (\u \[\e[1;34m\]\h\[\e[m\]):\w\[\e[0;31m\]$(parse_git_branch)\[\e[m\]\$ '

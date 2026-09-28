@@ -1,0 +1,66 @@
+[
+  {
+    "comment": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
+    "query": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music, music_extra where 1 != 1",
+            "Query": "select 1 from music, music_extra where music.id = music_extra.music_id"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id from `user`, user_extra, user_metadata where 1 != 1",
+                "Query": "select `user`.id from `user`, user_extra, user_metadata where `user`.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where 1 != 1",
+                "Query": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where unsharded.x = unsharded_a.y"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a",
+        "main.unsharded_auto",
+        "main.unsharded_b",
+        "user.music",
+        "user.music_extra",
+        "user.user",
+        "user.user_extra",
+        "user.user_metadata"
+      ]
+    }
+  }
+]

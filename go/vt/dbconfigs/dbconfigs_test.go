@@ -1,0 +1,459 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package dbconfigs
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"os"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/yaml2"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+func TestInit(t *testing.T) {
+	dbConfigs := DBConfigs{
+		appParams: mysql.ConnParams{UnixSocket: "socket"},
+		dbaParams: mysql.ConnParams{Host: "host"},
+		Charset:   "utf8",
+	}
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: collations.CollationUtf8mb3ID}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: collations.CollationUtf8mb3ID}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: collations.CollationUtf8mb3ID}, dbConfigs.appdebugParams)
+
+	dbConfigs = DBConfigs{
+		Host:                       "a",
+		Port:                       1,
+		Socket:                     "b",
+		Charset:                    "utf8mb4",
+		Flags:                      2,
+		Flavor:                     "flavor",
+		SslCa:                      "d",
+		SslCaPath:                  "e",
+		SslCert:                    "f",
+		SslKey:                     "g",
+		ConnectTimeoutMilliseconds: 250,
+		App: UserConfig{
+			User:     "app",
+			Password: "apppass",
+		},
+		Appdebug: UserConfig{
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User:     "dba",
+			Password: "dbapass",
+			UseSSL:   true,
+		},
+		appParams: mysql.ConnParams{
+			UnixSocket: "socket",
+		},
+		dbaParams: mysql.ConnParams{
+			Host: "host",
+		},
+	}
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+
+	want := mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		Uname:            "app",
+		Pass:             "apppass",
+		UnixSocket:       "b",
+		Charset:          collations.CollationUtf8mb4ID,
+		Flags:            2,
+		Flavor:           "flavor",
+		ConnectTimeoutMs: 250,
+	}
+	assert.Equal(t, want, dbConfigs.appParams)
+
+	want = mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		UnixSocket:       "b",
+		Charset:          collations.CollationUtf8mb4ID,
+		Flags:            2,
+		Flavor:           "flavor",
+		SslCa:            "d",
+		SslCaPath:        "e",
+		SslCert:          "f",
+		SslKey:           "g",
+		ConnectTimeoutMs: 250,
+	}
+	assert.Equal(t, want, dbConfigs.appdebugParams)
+	want = mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		Uname:            "dba",
+		Pass:             "dbapass",
+		UnixSocket:       "b",
+		Charset:          collations.CollationUtf8mb4ID,
+		Flags:            2,
+		Flavor:           "flavor",
+		SslCa:            "d",
+		SslCaPath:        "e",
+		SslCert:          "f",
+		SslKey:           "g",
+		ConnectTimeoutMs: 250,
+	}
+	assert.Equal(t, want, dbConfigs.dbaParams)
+
+	// Test that baseConfig does not override Charset and Flag if they're
+	// not specified.
+	dbConfigs = DBConfigs{
+		Host:      "a",
+		Port:      1,
+		Socket:    "b",
+		SslCa:     "d",
+		SslCaPath: "e",
+		SslCert:   "f",
+		SslKey:    "g",
+		Charset:   "utf8",
+		App: UserConfig{
+			User:     "app",
+			Password: "apppass",
+		},
+		Appdebug: UserConfig{
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User:     "dba",
+			Password: "dbapass",
+			UseSSL:   true,
+		},
+		appParams: mysql.ConnParams{
+			UnixSocket: "socket",
+			Charset:    collations.CollationUtf8mb4ID,
+		},
+		dbaParams: mysql.ConnParams{
+			Host:  "host",
+			Flags: 2,
+		},
+	}
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "app",
+		Pass:       "apppass",
+		UnixSocket: "b",
+		Charset:    collations.CollationUtf8mb4ID,
+	}
+	assert.Equal(t, want, dbConfigs.appParams)
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		UnixSocket: "b",
+		SslCa:      "d",
+		SslCaPath:  "e",
+		SslCert:    "f",
+		SslKey:     "g",
+		Charset:    collations.CollationUtf8mb3ID,
+	}
+	assert.Equal(t, want, dbConfigs.appdebugParams)
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "dba",
+		Pass:       "dbapass",
+		UnixSocket: "b",
+		Flags:      2,
+		SslCa:      "d",
+		SslCaPath:  "e",
+		SslCert:    "f",
+		SslKey:     "g",
+		Charset:    collations.CollationUtf8mb3ID,
+	}
+	assert.Equal(t, want, dbConfigs.dbaParams)
+}
+
+func TestUseTCP(t *testing.T) {
+	dbConfigs := DBConfigs{
+		Host:   "a",
+		Port:   1,
+		Socket: "b",
+		App: UserConfig{
+			User:   "app",
+			UseTCP: true,
+		},
+		Dba: UserConfig{
+			User: "dba",
+		},
+		Charset: "utf8",
+	}
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+
+	want := mysql.ConnParams{
+		Host:    "a",
+		Port:    1,
+		Uname:   "app",
+		Charset: collations.CollationUtf8mb3ID,
+	}
+	assert.Equal(t, want, dbConfigs.appParams)
+
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "dba",
+		UnixSocket: "b",
+		Charset:    collations.CollationUtf8mb3ID,
+	}
+	assert.Equal(t, want, dbConfigs.dbaParams)
+}
+
+func TestAccessors(t *testing.T) {
+	dbc := &DBConfigs{
+		appParams:      mysql.ConnParams{},
+		appdebugParams: mysql.ConnParams{},
+		allprivsParams: mysql.ConnParams{},
+		dbaParams:      mysql.ConnParams{},
+		filteredParams: mysql.ConnParams{},
+		replParams:     mysql.ConnParams{},
+		DBName:         "db",
+		Charset:        "utf8",
+	}
+	assert.Equal(t, "db", dbc.AppWithDB().connParams.DbName, "dbc.AppWithDB().DbName")
+	assert.Empty(t, dbc.AllPrivsConnector().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
+	assert.Equal(t, "db", dbc.AllPrivsWithDB().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
+	assert.Equal(t, "db", dbc.AppDebugWithDB().connParams.DbName, "dbc.AppDebugWithDB().DbName")
+	assert.Empty(t, dbc.DbaConnector().connParams.DbName, "dbc.Dba().DbName")
+	assert.Equal(t, "db", dbc.DbaWithDB().connParams.DbName, "dbc.DbaWithDB().DbName")
+	assert.Equal(t, "db", dbc.FilteredWithDB().connParams.DbName, "dbc.FilteredWithDB().DbName")
+	assert.Empty(t, dbc.ReplConnector().connParams.DbName, "dbc.Repl().DbName")
+}
+
+func TestCredentialsFileHUP(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "credentials.json")
+	require.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	dbCredentialsFile = tmpFile.Name()
+	dbCredentialsServer = "file"
+	oldStr := "str1"
+	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", oldStr, oldStr)
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
+		require.NoError(t, err)
+	}
+	cs := GetCredentialsServer()
+	_, pass, _ := cs.GetUserAndPassword(oldStr)
+	require.Equalf(t, oldStr, pass, "%s's Password should still be '%s'", oldStr, oldStr)
+	hupTest(t, tmpFile, oldStr, "str2")
+	hupTest(t, tmpFile, "str2", "str3") // still handling the signal
+}
+
+func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
+	cs := GetCredentialsServer()
+	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", newStr, newStr)
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
+		require.NoError(t, err)
+	}
+	_, pass, _ := cs.GetUserAndPassword(oldStr)
+	require.Equalf(t, oldStr, pass, "%s's Password should still be '%s'", oldStr, oldStr)
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+	_, _, err := cs.GetUserAndPassword(oldStr)
+	require.Equalf(t, ErrUnknownUser, err, "Should not have old %s after config reload", oldStr)
+	_, pass, _ = cs.GetUserAndPassword(newStr)
+	require.Equalf(t, newStr, pass, "%s's Password should be '%s'", newStr, newStr)
+}
+
+func TestYaml(t *testing.T) {
+	db := DBConfigs{
+		Socket: "a",
+		Port:   1,
+		Flags:  20,
+		App: UserConfig{
+			User:   "vt_app",
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User: "vt_dba",
+		},
+	}
+	gotBytes, err := yaml2.Marshal(&db)
+	require.NoError(t, err)
+	wantBytes := `allprivs:
+  password: '****'
+app:
+  password: '****'
+  useSsl: true
+  user: vt_app
+appdebug:
+  password: '****'
+clone:
+  password: '****'
+dba:
+  password: '****'
+  user: vt_dba
+filtered:
+  password: '****'
+flags: 20
+port: 1
+repl:
+  password: '****'
+socket: a
+`
+	assert.Equal(t, wantBytes, string(gotBytes))
+
+	inBytes := []byte(`socket: a
+port: 1
+flags: 20
+app:
+  user: vt_app
+  useSsl: true
+  useTCP: false
+dba:
+  user: vt_dba
+`)
+	gotdb := DBConfigs{
+		Port:  1,
+		Flags: 20,
+		App: UserConfig{
+			UseTCP: true,
+		},
+		Dba: UserConfig{
+			User: "aaa",
+		},
+	}
+	err = yaml2.Unmarshal(inBytes, &gotdb)
+	require.NoError(t, err)
+	assert.Equal(t, &db, &gotdb)
+}
+
+// TestConnectorConnectNeutralizesSQLMode verifies the neutralization runs at the
+// connector layer — the single choke point every Vitess-created MySQL connection goes
+// through — so no caller can dial a connection that lexes Vitess-formatted SQL under
+// the server's global lexer modes.
+func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	connector := New(db.ConnParams())
+	conn, err := connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+}
+
+// stallingHandler completes the handshake but never answers a query until released,
+// standing in for a backend that stalls after the connection is established.
+type stallingHandler struct {
+	mysql.UnimplementedHandler
+	release chan struct{}
+	onQuery func()
+}
+
+func (h *stallingHandler) ComQuery(*mysql.Conn, string, func(*sqltypes.Result) error) error {
+	if h.onQuery != nil {
+		h.onQuery()
+	}
+	<-h.release
+	return nil
+}
+
+func (h *stallingHandler) ComQueryMulti(*mysql.Conn, string, func(sqltypes.QueryResponse, bool, bool) error) error {
+	<-h.release
+	return nil
+}
+
+func (h *stallingHandler) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, error) {
+	return nil, 0, nil
+}
+
+func (h *stallingHandler) ComStmtExecute(*mysql.Conn, *mysql.PrepareData, func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (h *stallingHandler) ComRegisterReplica(*mysql.Conn, string, uint16, string, string) error {
+	return nil
+}
+
+func (h *stallingHandler) ComBinlogDump(*mysql.Conn, string, uint32) error { return nil }
+
+func (h *stallingHandler) ComBinlogDumpGTID(*mysql.Conn, string, uint64, replication.GTIDSet, uint16) error {
+	return nil
+}
+
+func (h *stallingHandler) WarningCount(*mysql.Conn) uint16 { return 0 }
+
+func (h *stallingHandler) Env() *vtenv.Environment { return vtenv.NewTestEnv() }
+
+func newStallingServer(t *testing.T) (*stallingHandler, *mysql.ConnParams) {
+	t.Helper()
+	h := &stallingHandler{release: make(chan struct{})}
+	t.Cleanup(func() { close(h.release) })
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), h, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	t.Cleanup(listener.Close)
+	go listener.Accept()
+	addr := listener.Addr().(*net.TCPAddr)
+	return h, &mysql.ConnParams{Host: addr.IP.String(), Port: addr.Port, Uname: "user"}
+}
+
+// TestConnectorConnectSetupBoundedByContext verifies the connection setup query stays
+// bounded by the caller's context and by ConnectTimeoutMs: a backend that completes the
+// handshake and then stalls must not hang Connect.
+func TestConnectorConnectSetupBoundedByContext(t *testing.T) {
+	t.Run("context deadline", func(t *testing.T) {
+		_, params := newStallingServer(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		t.Cleanup(cancel)
+
+		connector := New(params)
+		conn, err := connector.Connect(ctx)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.Nil(t, conn)
+	})
+
+	t.Run("context canceled during the query", func(t *testing.T) {
+		h, params := newStallingServer(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		h.onQuery = cancel
+
+		connector := New(params)
+		conn, err := connector.Connect(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, conn)
+	})
+
+	t.Run("connect timeout", func(t *testing.T) {
+		_, params := newStallingServer(t)
+		params.ConnectTimeoutMs = 200
+
+		connector := New(params)
+		conn, err := connector.Connect(t.Context())
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.Nil(t, conn)
+	})
+}

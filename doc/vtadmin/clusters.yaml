@@ -1,0 +1,86 @@
+defaults:
+  # Configuration options here provide default options for all clusters.
+  # Specifying a different value for an individual cluster will override the
+  # default setting for that cluster.
+
+  # Discovery implementation to use by default.
+  discovery: "{consul|staticfile}"
+
+  # Each discovery implementation has its own options, which are named according
+  # to the regex:
+  #   ^discovery-(?P<impl>\w+)-(?P<flag>.+)$
+  # The full set of options for each discovery implementation is defined in that
+  # implementation's factory function, e.g. NewConsul in
+  # go/vt/vtadmin/cluster/discovery/discovery_consul.go and NewStaticFile in
+  # discovery_static_file.go in the same directory.
+
+  # Service name to use when discovering vtctlds from consul.
+  discovery-consul-vtctld-service-name: "vtctld"
+  # Path to json file containing vtctld and vtgate hostnames when using staticfile.
+  discovery-staticfile-path: "/path/to/static/discovery.json"
+
+  tablet-fqdn-tmpl: ""
+
+  # Similar to how discovery flags are forwarded to the particular discovery
+  # implementation, the vtctld and vtgate proxy components for a cluster are
+  # configurable, by the prefixes "vtctld-" (for vtctld proxy) and "vtsql-" (for vtgate proxy).
+  # These flags are defined in code in the (*Config).Parse functions in packages
+  # go/vt/vtadmin/{vtctldclient,vtsql}.
+
+  # Go template to produce a path to a json file containing Username and Password
+  # to make requests against vtctlds in this cluster.
+  vtctld-credentials-path-tmpl: "/path/to/vtctld/credentials/{{ .Cluster.Id }}.json"
+
+  # Same as vtctld-credentials-path-tmpl, except used to make requests against
+  # vtgates in the cluster.
+  vtsql-credentials-path-tmpl: "/path/to/vtgate/credentials/{{ .Cluster.Id }}.json"
+  # Optional comma-separated list of tags to pass to a discovery implementation
+  # when discovering a vtgate in the cluster to connect to. The semantics of
+  # the tags depend on the discovery implementation used.
+  vtsql-discovery-tags: "tag1,tag2"
+  # Username to send queries on behalf of. See package callerid.
+  vtsql-effective-user: "my-effective-user"
+  # Username used to make requests against vtgates in the cluster. Can be used with
+  # vtsql-credentials-password in place of vtsql-credentials-path-tmpl.
+  # If both vtsql-credentials-username and vtsql-credentials-path-tmpl are
+  # provided, vtsql-credentials-username takes precedent over username from vtsql-credentials-path-tmpl.
+  vtsql-credentials-username: "my-username"
+  # Password used to make requests against vtgates in the cluster. Used with
+  # vtsql-credentials-username in place of vtsql-credentials-path-tmpl.
+  # If both vtsql-credentials-password and vtsql-credentials-path-tmpl are
+  # provided, vtsql-credentials-password takes precedent over password from vtsql-credentials-path-tmpl.
+  vtsql-credentials-password: "my-password"
+  # VTAdmin also provides different RPC pools to gate the number of concurrent
+  # requests it will make against vtctlds/vtgates in a given cluster, to prevent
+  # overwhelming those components.
+
+  # The backup read pool is used to constrain the number of GetBackups calls
+  # made to a cluster simultaneously.
+  backup-read-pool-size: 10
+  backup-read-pool-timeout: 10ms
+
+  # Other pools have the same size/timeout options, and include:
+  # - schema-read-pool => for GetSchema, GetSchemas, and FindSchema api methods
+  # - topo-read-pool => for generic topo methods (e.g. GetKeyspace, FindAllShardsInKeyspace)
+  # - workflow-read-pool => for GetWorkflow/GetWorkflows api methods.
+
+  # How long to keep values in schema cache by default (duration passed to Add takes precedence).
+  # A value of "0m" means values will never be cached, a positive duration "1m" means items will be cached
+  # for that duration, and passing nothing will default to "NoExpiration".
+  schema-cache-default-expiration: 1m
+  # How many outstanding backfil requests to permit in schema cache.
+  # If the queue is full, calls backfill schemas will return false, and those requests will be discarded.
+  # A value of "0" means that the underlying channel will have a size of 0, 
+  # and every send to the backfill queue will block until the queue is "empty" again.
+  schema-cache-backfill-queue-size: 0
+  # How often expired values are removed from schema cache.
+  schema-cache-cleanup-interval: 5m
+  # How long a backfill request is considered valid.
+  # If the backfill goroutin encounters a request older than this, it is discarded.
+  schema-cache-backfill-request-ttl: 100ms
+  # How much time must pass before the backfill goroutine will re-backfill the same key.
+  # Used to prevent multiple callers from queueing up too many requests for the same key,
+  # when one backfill would satisfy all of them.
+  schema-cache-backfill-request-duplicate-interval: 1m
+  # How long to wait whe attempting to enqueue a backfill request before giving up.
+  schema-cache-backfill-enqueue-wait-time: 50ms

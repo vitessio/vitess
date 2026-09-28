@@ -1,0 +1,177 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vindexes
+
+import (
+	"encoding/hex"
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
+)
+
+var xxHash SingleColumn
+
+func init() {
+	hv, err := CreateVindex("xxhash", "xxhash_name", map[string]string{})
+	if err != nil {
+		panic(err)
+	}
+	xxHash = hv.(SingleColumn)
+}
+
+func xxhashCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "xxhash",
+		vindexName:   "xxhash",
+		vindexParams: vindexParams,
+
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "xxhash",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestXXHashCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		xxhashCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		xxhashCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		xxhashCreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"hello": "world",
+			},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
+}
+
+func TestXXHashMap(t *testing.T) {
+	tcases := []struct {
+		in  sqltypes.Value
+		out []byte
+	}{{
+		in:  sqltypes.NewVarChar("test1"),
+		out: []byte{0xd0, 0x1a, 0xb7, 0xe4, 0xd6, 0x97, 0x8f, 0xb},
+	}, {
+		in:  sqltypes.NewVarChar("test2"),
+		out: []byte{0x87, 0xeb, 0x11, 0x71, 0x4c, 0xa, 0xe, 0x89},
+	}, {
+		in:  sqltypes.NewVarChar("testaverylongvaluetomakesurethisworks"),
+		out: []byte{0x81, 0xd8, 0xc3, 0x8e, 0xd, 0x85, 0xe, 0x6a},
+	}, {
+		in:  sqltypes.NewInt64(1),
+		out: []byte{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7},
+	}, {
+		in:  sqltypes.NULL,
+		out: []byte{0x99, 0xe9, 0xd8, 0x51, 0x37, 0xdb, 0x46, 0xef},
+	}, {
+		in:  sqltypes.NewInt64(-1),
+		out: []byte{0xd8, 0xe2, 0xa6, 0xa7, 0xc8, 0xc7, 0x62, 0x3d},
+	}, {
+		in:  sqltypes.NewUint64(18446744073709551615),
+		out: []byte{0x47, 0x7c, 0xfa, 0x8d, 0x6d, 0x8f, 0x1f, 0x8d},
+	}, {
+		in:  sqltypes.NewInt64(9223372036854775807),
+		out: []byte{0xb3, 0x7e, 0xb0, 0x1f, 0x7b, 0xff, 0xaf, 0xd8},
+	}, {
+		in:  sqltypes.NewUint64(9223372036854775807),
+		out: []byte{0xb3, 0x7e, 0xb0, 0x1f, 0x7b, 0xff, 0xaf, 0xd8},
+	}, {
+		in:  sqltypes.NewInt64(-9223372036854775808),
+		out: []byte{0x10, 0x2c, 0x27, 0xdd, 0xb2, 0x6a, 0x60, 0x9e},
+	}}
+
+	for _, tcase := range tcases {
+		got, err := xxHash.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
+		require.NoError(t, err)
+		out := []byte(got[0].(key.DestinationKeyspaceID))
+		assert.Equalf(t, tcase.out, out, "Map(%#v)", tcase.in)
+	}
+}
+
+func TestXXHashVerify(t *testing.T) {
+	hexValStr := "9efa"
+	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
+	hexNumStrSQL := "0x" + hexValStr
+	hexBytes, _ := hex.DecodeString(hexValStr)
+	ids := []sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
+	ksids := [][]byte{{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, {0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, vXXHash(hexBytes), vXXHash(hexBytes)}
+	got, err := xxHash.Verify(t.Context(), nil, ids, ksids)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false, true, true}, got, "xxHash.Verify")
+}
+
+func BenchmarkXXHash(b *testing.B) {
+	for _, benchSize := range []struct {
+		name string
+		n    int
+	}{
+		{"8B", 8},
+		{"32B", 32},
+		{"64B", 64},
+		{"512B", 512},
+		{"1KB", 1e3},
+		{"4KB", 4e3},
+	} {
+		input := make([]byte, benchSize.n)
+		for i := range input {
+			input[i] = byte(i)
+		}
+
+		name := "xxHash,direct,bytes,n=" + benchSize.name
+		b.Run(name, func(b *testing.B) {
+			benchmarkXXHashBytes(b, input)
+		})
+	}
+}
+
+var sinkXXHash []byte
+
+func benchmarkXXHashBytes(b *testing.B, input []byte) {
+	b.SetBytes(int64(len(input)))
+	for i := 0; i < b.N; i++ {
+		sinkXXHash = vXXHash(input)
+	}
+}

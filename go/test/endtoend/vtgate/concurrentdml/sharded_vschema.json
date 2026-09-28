@@ -1,0 +1,107 @@
+ {
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    },
+    "lookup_c2": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "lookup_t1",
+        "from": "c2",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t1"
+    },
+    "lookup_c3": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "lookup_t2",
+        "from": "c3",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t1"
+    },
+    "lookup_c4": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "lookup_t3",
+        "from": "c4",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t1"
+    }
+  },
+  "tables": {
+    "t1": {
+      "columnVindexes": [
+        {
+          "column": "c1",
+          "name": "xxhash"
+        },
+        {
+          "column": "c2",
+          "name": "lookup_c2"
+        },
+        {
+          "column": "c3",
+          "name": "lookup_c3"
+        },
+        {
+          "column": "c4",
+          "name": "lookup_c4"
+        }
+      ],
+      "columns": [
+        {
+          "name": "c1",
+          "type": "INT64"
+        },
+        {
+          "name": "c2",
+          "type": "INT64"
+        },
+        {
+          "name": "c3",
+          "type": "INT64"
+        },
+        {
+          "name": "c4",
+          "type": "VARCHAR"
+        }
+      ],
+      "autoIncrement": {
+        "column": "c1",
+        "sequence": "commerce.t1_seq"
+      },
+      "columnListAuthoritative": true
+    },
+    "lookup_t1": {
+      "columnVindexes": [
+        {
+          "column": "c2",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "lookup_t2": {
+      "columnVindexes": [
+        {
+          "column": "c3",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "lookup_t3": {
+      "columnVindexes": [
+        {
+          "column": "c4",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}

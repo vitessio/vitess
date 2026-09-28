@@ -1,0 +1,364 @@
+/*
+   Copyright 2014 Outbrain Inc.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package logic
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/patrickmn/go-cache"
+	"github.com/sjmudd/stopwatch"
+	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
+	"vitess.io/vitess/go/vt/vtorc/util"
+)
+
+// discoveryQueue is a channel of deduplicated tablets that were
+// requested for discovery. It can be continuously updated
+// as discovery process progresses.
+var (
+	discoveryQueue                *DiscoveryQueue
+	snapshotDiscoveryAliases      chan *topodatapb.TabletAlias
+	snapshotDiscoveryAliasesMutex sync.Mutex
+	hasReceivedSIGTERM            atomic.Int32
+)
+
+var (
+	discoveriesCounter                 = stats.NewCounter("DiscoveriesAttempt", "Number of discoveries attempted")
+	failedDiscoveriesCounter           = stats.NewCounter("DiscoveriesFail", "Number of failed discoveries")
+	instancePollSecondsExceededCounter = stats.NewCounter("DiscoveriesInstancePollSecondsExceeded", "Number of instances that took longer than InstancePollSeconds to poll")
+	discoveryQueueLengthGauge          = stats.NewGauge("DiscoveriesQueueLength", "Length of the discovery queue")
+	discoveryRecentCountGauge          = stats.NewGauge("DiscoveriesRecentCount", "Number of recent discoveries")
+	discoveryWorkersGauge              = stats.NewGauge("DiscoveryWorkers", "Number of discovery workers")
+	discoveryWorkersActiveGauge        = stats.NewGauge("DiscoveryWorkersActive", "Number of discovery workers actively discovering tablets")
+
+	discoveryInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
+	discoveryInstanceTimings        = stats.NewTimings("DiscoveryInstanceTimings", "Timings for instance discovery actions", "Action", discoveryInstanceTimingsActions...)
+)
+
+var recentDiscoveryOperationKeys *cache.Cache
+
+func init() {
+	snapshotDiscoveryAliases = make(chan *topodatapb.TabletAlias, 10)
+
+	onMetricsTick(func() {
+		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
+	})
+	onMetricsTick(func() {
+		if recentDiscoveryOperationKeys == nil {
+			return
+		}
+		discoveryRecentCountGauge.Set(int64(recentDiscoveryOperationKeys.ItemCount()))
+	})
+}
+
+// closeVTOrc runs all the operations required to cleanly shutdown VTOrc
+func closeVTOrc() {
+	log.Info("Starting VTOrc shutdown")
+	hasReceivedSIGTERM.Store(1)
+	// Poke other go routines to stop cleanly here ...
+	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+	// wait for the locks to be released
+	waitForLocksRelease()
+	ts.Close()
+	log.Info("VTOrc closed")
+}
+
+// waitForLocksRelease is used to wait for release of locks
+func waitForLocksRelease() {
+	timeout := time.After(shutdownWaitTime)
+	for {
+		count := shardsLockCounter.Load()
+		if count == 0 {
+			break
+		}
+		select {
+		case <-timeout:
+			log.Info("wait for lock release timed out. Some locks might not have been released.")
+		default:
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		break
+	}
+}
+
+// handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
+// instance discovery per entry.
+func handleDiscoveryRequests() {
+	discoveryQueue = NewDiscoveryQueue()
+	// create a pool of discovery workers
+	for i := uint(0); i < config.GetDiscoveryWorkers(); i++ {
+		discoveryWorkersGauge.Add(1)
+		go func() {
+			for {
+				// .Consume() blocks until there is a new key to process.
+				// We are not "active" until we got a tablet alias.
+				tabletAlias := discoveryQueue.Consume()
+				func() {
+					discoveryWorkersActiveGauge.Add(1)
+					defer discoveryWorkersActiveGauge.Add(-1)
+
+					DiscoverInstance(tabletAlias, false /* forceDiscovery */)
+					discoveryQueue.Release(tabletAlias)
+				}()
+			}
+		}()
+	}
+}
+
+// DiscoverInstance will attempt to discover (poll) an instance (unless
+// it is already up-to-date) and will also ensure that its primary and
+// replicas (if any) are also checked.
+func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) {
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+	if inst.InstanceIsForgotten(tabletAlias) {
+		log.Info(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAliasString))
+		return
+	}
+
+	// create stopwatch entries
+	latency := stopwatch.NewNamedStopwatch()
+	_ = latency.AddMany([]string{
+		"backend",
+		"instance",
+		"total",
+	})
+	var (
+		instance *inst.Instance
+		found    bool
+		err      error
+	)
+	latency.Start("total") // start the total stopwatch (not changed anywhere else)
+	defer func() {
+		latency.Stop("total")
+		discoveryTime := latency.Elapsed("total")
+		if discoveryTime > config.GetInstancePollTime() {
+			instancePollSecondsExceededCounter.Add(1)
+			log.Warn(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAliasString, discoveryTime.Seconds()))
+			if instance != nil && instance.TabletType == topodatapb.TabletType_PRIMARY {
+				// Consider this a type of healthcheck failure.
+				inst.RecordPrimaryHealthCheck(tabletAlias, false)
+			}
+		} else {
+			// Consider this a type of healthcheck pass.
+			inst.RecordPrimaryHealthCheck(tabletAlias, true)
+		}
+	}()
+
+	if tabletAlias == nil {
+		return
+	}
+
+	// Calculate the expiry period each time as InstancePollSeconds
+	// _may_ change during the run of the process (via SIGHUP) and
+	// it is not possible to change the cache's default expiry..
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAliasString, true, config.GetInstancePollTime()); existsInCacheError != nil && !forceDiscovery {
+		// Just recently attempted
+		return
+	}
+
+	latency.Start("backend")
+	instance, found, _ = inst.ReadInstance(tabletAlias)
+	latency.Stop("backend")
+	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
+		// we've already discovered this one. Skip!
+		return
+	}
+
+	discoveriesCounter.Add(1)
+
+	// First we've ever heard of this instance. Continue investigation:
+	instance, err = inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
+	// panic can occur (IO stuff). Therefore it may happen
+	// that instance is nil. Check it, but first get the timing metrics.
+	totalLatency := latency.Elapsed("total")
+	backendLatency := latency.Elapsed("backend")
+	instanceLatency := latency.Elapsed("instance")
+	otherLatency := totalLatency - (backendLatency + instanceLatency)
+
+	discoveryInstanceTimings.Add("Backend", backendLatency)
+	discoveryInstanceTimings.Add("Instance", instanceLatency)
+	discoveryInstanceTimings.Add("Other", otherLatency)
+
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAliasString, forceDiscovery, err))
+	} else {
+		log.Info(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAliasString, forceDiscovery, instance))
+	}
+
+	if instance == nil {
+		failedDiscoveriesCounter.Add(1)
+		if util.ClearToLog("discoverInstance", tabletAliasString) {
+			log.Warn(fmt.Sprintf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
+				tabletAliasString,
+				totalLatency.Seconds(),
+				backendLatency.Seconds(),
+				instanceLatency.Seconds(),
+				err))
+		}
+		return
+	}
+}
+
+// onHealthTick handles the actions to take to discover/poll instances
+func onHealthTick() {
+	tabletAliases, err := inst.ReadOutdatedInstances()
+	if err != nil {
+		log.Error(err.Error())
+	}
+
+	func() {
+		// Normally onHealthTick() shouldn't run concurrently. It is kicked by a ticker.
+		// However it _is_ invoked inside a goroutine. I like to be safe here.
+		snapshotDiscoveryAliasesMutex.Lock()
+		defer snapshotDiscoveryAliasesMutex.Unlock()
+
+		countSnapshotAliases := len(snapshotDiscoveryAliases)
+		for range countSnapshotAliases {
+			tabletAliases = append(tabletAliases, <-snapshotDiscoveryAliases)
+		}
+	}()
+
+	for _, tabletAlias := range tabletAliases {
+		discoveryQueue.Push(tabletAlias)
+	}
+}
+
+// ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
+// periodically investigated and their status captured, and long since unseen instances are
+// purged and forgotten.
+func ContinuousDiscovery() {
+	log.Info("continuous discovery: setting up")
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+
+	if !config.GetAllowRecovery() {
+		log.Info("--allow-recovery is set to 'false', disabling recovery actions")
+		if err := DisableRecovery(); err != nil {
+			log.Error(fmt.Sprintf("failed to disable recoveries: %+v", err))
+			return
+		}
+	}
+
+	go handleDiscoveryRequests()
+
+	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
+	caretakingTick := time.Tick(time.Minute)
+	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
+	tabletTopoTick := OpenTabletDiscovery()
+	var recoveryEntrance atomic.Int64
+
+	go func() {
+		_ = initMetrics()
+	}()
+	// On termination of the server, we should close VTOrc cleanly
+	servenv.OnTermSync(closeVTOrc)
+
+	log.Info("continuous discovery: starting")
+	for {
+		select {
+		case <-healthTick:
+			go func() {
+				onHealthTick()
+			}()
+		case <-caretakingTick:
+			// Various periodic internal maintenance tasks
+			//nolint:errcheck
+			go func() {
+				go inst.ForgetLongUnseenInstances()
+				go inst.ExpireAudit()
+				go inst.ExpireStaleInstanceBinlogCoordinates()
+				go ExpireRecoveryDetectionHistory()
+				go ExpireTopologyRecoveryHistory()
+				go ExpireTopologyRecoveryStepsHistory()
+			}()
+		case <-recoveryTick:
+			go func() {
+				go inst.ExpireInstanceAnalysisChangelog() //nolint:errcheck
+
+				go func() {
+					// This function is non re-entrant (it can only be running once at any point in time)
+					if recoveryEntrance.CompareAndSwap(0, 1) {
+						defer recoveryEntrance.Store(0)
+					} else {
+						return
+					}
+					CheckAndRecover()
+				}()
+			}()
+		case <-tabletTopoTick:
+			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
+			if err := refreshAllInformation(ctx); err != nil {
+				log.Error(fmt.Sprintf("failed to refresh topo information: %+v", err))
+			}
+			cancel()
+		}
+	}
+}
+
+// refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
+func refreshAllInformation(ctx context.Context) error {
+	// Create an errgroup
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	// Refresh all keyspace information.
+	eg.Go(func() error {
+		return RefreshAllKeyspacesAndShards(egCtx)
+	})
+
+	// Refresh all tablets.
+	eg.Go(func() error {
+		return refreshAllTablets(egCtx)
+	})
+
+	// Wait for both the refreshes to complete
+	err := eg.Wait()
+	if err == nil {
+		process.FirstDiscoveryCycleComplete.Store(true)
+	}
+	// Retry --cells-no-recovery validation if startup validation was skipped because
+	// the topology was unreachable. The retry runs regardless of whether the refresh
+	// succeeded: the topo may be reachable for cell listing even when keyspace/tablet
+	// refresh had partial errors. Recovery remains blocked until validation succeeds.
+	if !cellsNoRecoveryValidated.Load() {
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer retryCancel()
+		if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
+			log.Error(fmt.Sprintf("--cells-no-recovery validation failed, shutting down: %v", retryErr))
+			// Run graceful shutdown directly (releases shard locks, closes topo)
+			// then exit nonzero so restart-on-failure policies detect the fatal
+			// configuration error. We call closeVTOrc ourselves instead of
+			// signalling ExitChan because servenv.Run consumes that signal and
+			// exits with status 0.
+			closeVTOrc()
+			os.Exit(1)
+		}
+	}
+	return err
+}

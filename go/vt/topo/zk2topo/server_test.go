@@ -1,0 +1,103 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package zk2topo
+
+import (
+	"fmt"
+	"os"
+	"path"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/test"
+	"vitess.io/vitess/go/vt/zkctl"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+func TestZk2Topo(t *testing.T) {
+	if testing.Short() || os.Getenv("CI") == "true" {
+		t.Skip("skipping integration test in short mode and in CI (it's too flaky).")
+	}
+
+	// Start a real single ZK daemon, and close it after all tests are done.
+	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
+	defer func() {
+		var lastErr error
+		for range 3 {
+			if lastErr = zkd.Teardown(); lastErr == nil {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if lastErr != nil {
+			t.Logf("zkd.Teardown failed after retries: %v", lastErr)
+		}
+	}()
+
+	// Run the test suite.
+	testIndex := 0
+	ctx := t.Context()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
+		// Each test will use its own sub-directories.
+		// The directories will be created when used the first time.
+		testRoot := fmt.Sprintf("/test-%v", testIndex)
+		testIndex++
+
+		globalRoot := path.Join(testRoot, topo.GlobalCell)
+		cellRoot := path.Join(testRoot, test.LocalCellName)
+
+		// Note we exercise the observer feature here by passing in
+		// the same server twice, with a "|" separator.
+		ts, err := topo.OpenServer("zk2", serverAddr+"|"+serverAddr, globalRoot)
+		require.NoError(t, err, "OpenServer() failed")
+		// We retry creating the cell info until we no longer get a connection error.
+		timeout := time.After(15 * time.Second)
+		for {
+			err = ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
+				ServerAddress: serverAddr,
+				Root:          cellRoot,
+			})
+			if err == nil {
+				break
+			}
+			select {
+			case <-timeout:
+				require.FailNowf(t, "timed out waiting for ZK to be ready", "last error: %v", err)
+				return nil
+			default:
+				require.ErrorContainsf(t, err, "could not connect to a server", "Received an error that isn't a connection error")
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		return ts
+	}, []string{})
+}
+
+func TestHasObservers(t *testing.T) {
+	s1, s2, ok := hasObservers("s1:p1,s2:p2")
+	assert.Falsef(t, ok, "hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
+
+	s1, s2, ok = hasObservers("s1:p1,s2:p2|o1:p1,o2:p2")
+	assert.True(t, ok && s1 == "s1:p1,s2:p2" && s2 == "o1:p1,o2:p2", "hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
+}

@@ -1,0 +1,185 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package mysqlctl
+
+import (
+	"context"
+	"errors"
+	"io"
+	"sync"
+
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
+)
+
+type FakeBackupHandle struct {
+	mu sync.Mutex
+
+	Dir      string
+	NameV    string
+	ReadOnly bool
+	mysqlctlerrors.PerFileErrorRecorder
+
+	AbortBackupCalls  []context.Context
+	AbortBackupReturn error
+	AddFileCalls      []FakeBackupHandleAddFileCall
+	AddFileReturn     FakeBackupHandleAddFileReturn
+	AddFileReturnF    func(filename string) FakeBackupHandleAddFileReturn
+	WaitCalls         int
+	EndBackupCalls    []context.Context
+	EndBackupReturn   error
+	ReadFileCalls     []FakeBackupHandleReadFileCall
+	ReadFileReturnF   func(ctx context.Context, filename string) (io.ReadCloser, error)
+}
+
+type FakeBackupHandleAddFileCall struct {
+	Ctx      context.Context
+	Filename string
+	Filesize int64
+}
+
+type FakeBackupHandleAddFileReturn struct {
+	WriteCloser io.WriteCloser
+	Err         error
+}
+
+type FakeBackupHandleReadFileCall struct {
+	Ctx      context.Context
+	Filename string
+}
+
+func (fbh *FakeBackupHandle) Directory() string {
+	return fbh.Dir
+}
+
+func (fbh *FakeBackupHandle) Name() string {
+	return fbh.NameV
+}
+
+func (fbh *FakeBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
+	fbh.mu.Lock()
+	fbh.AddFileCalls = append(fbh.AddFileCalls, FakeBackupHandleAddFileCall{ctx, filename, filesize})
+	// Capture return fields under the lock since AddFile is called from concurrent goroutines.
+	returnF := fbh.AddFileReturnF
+	returnVal := fbh.AddFileReturn
+	fbh.mu.Unlock()
+
+	if returnF != nil {
+		r := returnF(filename)
+		return r.WriteCloser, r.Err
+	}
+	return returnVal.WriteCloser, returnVal.Err
+}
+
+func (fbh *FakeBackupHandle) Wait() {
+	fbh.mu.Lock()
+	fbh.WaitCalls++
+	fbh.mu.Unlock()
+}
+
+func (fbh *FakeBackupHandle) EndBackup(ctx context.Context) error {
+	fbh.mu.Lock()
+	fbh.EndBackupCalls = append(fbh.EndBackupCalls, ctx)
+	fbh.mu.Unlock()
+	return fbh.EndBackupReturn
+}
+
+func (fbh *FakeBackupHandle) AbortBackup(ctx context.Context) error {
+	fbh.mu.Lock()
+	fbh.AbortBackupCalls = append(fbh.AbortBackupCalls, ctx)
+	fbh.mu.Unlock()
+	return fbh.AbortBackupReturn
+}
+
+func (fbh *FakeBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
+	fbh.mu.Lock()
+	fbh.ReadFileCalls = append(fbh.ReadFileCalls, FakeBackupHandleReadFileCall{ctx, filename})
+	// Capture return field under the lock since ReadFile may be called from concurrent goroutines.
+	readF := fbh.ReadFileReturnF
+	fbh.mu.Unlock()
+
+	if readF == nil {
+		return nil, errors.New("FakeBackupHandle has not defined a ReadFileReturnF")
+	}
+	return readF(ctx, filename)
+}
+
+type FakeBackupStorage struct {
+	CloseCalls          int
+	CloseReturn         error
+	ListBackupsCalls    []FakeBackupStorageListBackupsCall
+	ListBackupsReturn   FakeBackupStorageListBackupsReturn
+	RemoveBackupCalls   []FakeBackupStorageRemoveBackupCall
+	RemoveBackupReturn  error
+	RemoveBackupReturne error
+	StartBackupCalls    []FakeBackupStorageStartBackupCall
+	StartBackupReturn   FakeBackupStorageStartBackupReturn
+	WithParamsCalls     []backupstorage.Params
+	WithParamsReturn    backupstorage.BackupStorage
+}
+
+type FakeBackupStorageListBackupsCall struct {
+	Ctx context.Context
+	Dir string
+}
+
+type FakeBackupStorageListBackupsReturn struct {
+	BackupHandles []backupstorage.BackupHandle
+	Err           error
+}
+
+type FakeBackupStorageRemoveBackupCall struct {
+	Ctx  context.Context
+	Dir  string
+	Name string
+}
+
+type FakeBackupStorageStartBackupCall struct {
+	Ctx  context.Context
+	Dir  string
+	Name string
+}
+
+type FakeBackupStorageStartBackupReturn struct {
+	BackupHandle backupstorage.BackupHandle
+	Err          error
+}
+
+func (fbs *FakeBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
+	fbs.ListBackupsCalls = append(fbs.ListBackupsCalls, FakeBackupStorageListBackupsCall{ctx, dir})
+	return fbs.ListBackupsReturn.BackupHandles, fbs.ListBackupsReturn.Err
+}
+
+func (fbs *FakeBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
+	fbs.StartBackupCalls = append(fbs.StartBackupCalls, FakeBackupStorageStartBackupCall{ctx, dir, name})
+	return fbs.StartBackupReturn.BackupHandle, fbs.StartBackupReturn.Err
+}
+
+func (fbs *FakeBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
+	fbs.RemoveBackupCalls = append(fbs.RemoveBackupCalls, FakeBackupStorageRemoveBackupCall{ctx, dir, name})
+	return fbs.RemoveBackupReturn
+}
+
+func (fbs *FakeBackupStorage) Close() error {
+	fbs.CloseCalls = fbs.CloseCalls + 1
+	return fbs.CloseReturn
+}
+
+func (fbs *FakeBackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	fbs.WithParamsCalls = append(fbs.WithParamsCalls, params)
+	return fbs.WithParamsReturn
+}

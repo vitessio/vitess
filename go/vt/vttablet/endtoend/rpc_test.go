@@ -1,0 +1,313 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package endtoend
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/callerid"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+)
+
+// TestGetSchemaRPC will validate GetSchema RPC.
+func TestGetSchemaRPC(t *testing.T) {
+	testcases := []struct {
+		name               string
+		queries            []string
+		deferQueries       []string
+		getSchemaQueryType querypb.SchemaTableType
+		getSchemaTables    []string
+		mapToExpect        map[string]string
+	}{
+		{
+			name: "All views",
+			queries: []string{
+				"create view vitess_view1 as select id from vitess_a",
+				"create view vitess_view2 as select id from vitess_b",
+			},
+			deferQueries: []string{
+				"drop view vitess_view1",
+				"drop view vitess_view2",
+			},
+			mapToExpect: map[string]string{
+				"vitess_view1": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view1` AS select `vitess_a`.`id` AS `id` from `vitess_a`",
+				"vitess_view2": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view2` AS select `vitess_b`.`id` AS `id` from `vitess_b`",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_VIEWS,
+		}, {
+			name: "Views listed",
+			queries: []string{
+				"create view vitess_view1 as select eid from vitess_a",
+				"create view vitess_view2 as select eid from vitess_b",
+				"create view vitess_view3 as select eid from vitess_c",
+			},
+			deferQueries: []string{
+				"drop view vitess_view1",
+				"drop view vitess_view2",
+				"drop view vitess_view3",
+			},
+			mapToExpect: map[string]string{
+				"vitess_view3": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view3` AS select `vitess_c`.`eid` AS `eid` from `vitess_c`",
+				"vitess_view2": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view2` AS select `vitess_b`.`eid` AS `eid` from `vitess_b`",
+				// These shouldn't be part of the result so we verify it is empty.
+				"vitess_view1": "",
+				"unknown_view": "",
+			},
+			getSchemaTables:    []string{"vitess_view3", "vitess_view2", "unknown_view"},
+			getSchemaQueryType: querypb.SchemaTableType_VIEWS,
+		}, {
+			name: "All tables",
+			queries: []string{
+				"create table vitess_temp1 (id int);",
+				"create table vitess_temp2 (id int);",
+				"create table vitess_temp3 (id int);",
+			},
+			deferQueries: []string{
+				"drop table vitess_temp1",
+				"drop table vitess_temp2",
+				"drop table vitess_temp3",
+			},
+			mapToExpect: map[string]string{
+				"vitess_temp1": "CREATE TABLE `vitess_temp1` (\n  `id` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				"vitess_temp2": "CREATE TABLE `vitess_temp2` (\n  `id` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				"vitess_temp3": "CREATE TABLE `vitess_temp3` (\n  `id` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_TABLES,
+		}, {
+			name: "Tables listed",
+			queries: []string{
+				"create table vitess_temp1 (eid int);",
+				"create table vitess_temp2 (eid int);",
+				"create table vitess_temp3 (eid int);",
+			},
+			deferQueries: []string{
+				"drop table vitess_temp1",
+				"drop table vitess_temp2",
+				"drop table vitess_temp3",
+			},
+			mapToExpect: map[string]string{
+				"vitess_temp1": "CREATE TABLE `vitess_temp1` (\n  `eid` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				"vitess_temp3": "CREATE TABLE `vitess_temp3` (\n  `eid` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				// These shouldn't be part of the result so we verify it is empty.
+				"vitess_temp2":  "",
+				"unknown_table": "",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_TABLES,
+			getSchemaTables:    []string{"vitess_temp1", "vitess_temp3", "unknown_table"},
+		}, {
+			name: "All tables and views",
+			queries: []string{
+				"create table vitess_temp1 (id int);",
+				"create table vitess_temp2 (id int);",
+				"create table vitess_temp3 (id int);",
+				"create view vitess_view1 as select id from vitess_a",
+				"create view vitess_view2 as select id from vitess_b",
+			},
+			deferQueries: []string{
+				"drop table vitess_temp1",
+				"drop table vitess_temp2",
+				"drop table vitess_temp3",
+				"drop view vitess_view1",
+				"drop view vitess_view2",
+			},
+			mapToExpect: map[string]string{
+				"vitess_view1": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view1` AS select `vitess_a`.`id` AS `id` from `vitess_a`",
+				"vitess_view2": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view2` AS select `vitess_b`.`id` AS `id` from `vitess_b`",
+				"vitess_temp1": "CREATE TABLE `vitess_temp1` (\n  `id` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				"vitess_temp2": "CREATE TABLE `vitess_temp2` (\n  `id` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				"vitess_temp3": "CREATE TABLE `vitess_temp3` (\n  `id` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_ALL,
+		}, {
+			name: "Listed tables and views",
+			queries: []string{
+				"create table vitess_temp1 (eid int);",
+				"create table vitess_temp2 (eid int);",
+				"create table vitess_temp3 (eid int);",
+				"create view vitess_view1 as select eid from vitess_a",
+				"create view vitess_view2 as select eid from vitess_b",
+				"create view vitess_view3 as select eid from vitess_c",
+			},
+			deferQueries: []string{
+				"drop table vitess_temp1",
+				"drop table vitess_temp2",
+				"drop table vitess_temp3",
+				"drop view vitess_view1",
+				"drop view vitess_view2",
+				"drop view vitess_view3",
+			},
+			mapToExpect: map[string]string{
+				"vitess_view1": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view1` AS select `vitess_a`.`eid` AS `eid` from `vitess_a`",
+				"vitess_view3": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view3` AS select `vitess_c`.`eid` AS `eid` from `vitess_c`",
+				"vitess_temp1": "CREATE TABLE `vitess_temp1` (\n  `eid` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				"vitess_temp3": "CREATE TABLE `vitess_temp3` (\n  `eid` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				// These shouldn't be part of the result so we verify it is empty.
+				"vitess_temp2":  "",
+				"vitess_view2":  "",
+				"unknown_view":  "",
+				"unknown_table": "",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_ALL,
+			getSchemaTables:    []string{"vitess_temp1", "vitess_temp3", "unknown_table", "vitess_view3", "vitess_view1", "unknown_view"},
+		}, {
+			name: "Create some internal tables",
+			queries: []string{
+				"create table if not exists _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_(id bigint primary key);",
+				"create table vitess_temp1 (eid int);",
+				"create view vitess_view1 as select eid from vitess_a",
+			},
+			deferQueries: []string{
+				"drop table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"drop table vitess_temp1",
+				"drop view vitess_view1",
+			},
+			mapToExpect: map[string]string{
+				"vitess_view1": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view1` AS select `vitess_a`.`eid` AS `eid` from `vitess_a`",
+				"vitess_temp1": "CREATE TABLE `vitess_temp1` (\n  `eid` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				// These shouldn't be part of the result, so we verify it is empty.
+				"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_": "",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_ALL,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			client := framework.NewClient()
+			client.UpdateContext(callerid.NewContext(
+				t.Context(),
+				&vtrpcpb.CallerID{},
+				&querypb.VTGateCallerID{Username: "dev"}))
+
+			for _, query := range testcase.queries {
+				_, err := client.Execute(query, nil)
+				require.NoError(t, err)
+			}
+			defer func() {
+				for _, query := range testcase.deferQueries {
+					_, err := client.Execute(query, nil)
+					require.NoError(t, err)
+				}
+			}()
+
+			timeout := 1 * time.Minute
+			wait := time.After(timeout)
+			for {
+				select {
+				case <-wait:
+					assert.Fail(t, "Schema tracking hasn't caught up")
+					return
+				case <-time.After(1 * time.Second):
+					schemaDefs, udfs, err := client.GetSchema(testcase.getSchemaQueryType, testcase.getSchemaTables...)
+					require.NoError(t, err)
+					require.Empty(t, udfs)
+					success := true
+					for tableName, expectedCreateStatement := range testcase.mapToExpect {
+						if schemaDefs[tableName] != expectedCreateStatement {
+							success = false
+							break
+						}
+					}
+					if success {
+						return
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestGetSchemaRPCWithViewsDisabled tests GetSchemaDefinitions when EnableViews is false.
+// This test verifies that when views are disabled in the configuration:
+// 1. SchemaTableType_VIEWS returns empty results
+// 2. SchemaTableType_ALL returns only tables, excluding views
+// This ensures that view-related schema operations are safely skipped.
+func TestGetSchemaRPCWithViewsDisabled(t *testing.T) {
+	// Save the original EnableViews setting and temporarily disable it
+	originalEnableViews := framework.Server.Config().EnableViews
+	framework.Server.Config().EnableViews = false
+	defer func() {
+		framework.Server.Config().EnableViews = originalEnableViews
+	}()
+
+	client := framework.NewClient()
+	client.UpdateContext(callerid.NewContext(
+		t.Context(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	// Create a view for testing (using vitess_view which is already in ACL)
+	_, err := client.Execute("create view vitess_view as select id from vitess_a", nil)
+	require.NoError(t, err)
+	defer func() {
+		_, err := client.Execute("drop view vitess_view", nil)
+		require.NoError(t, err)
+	}()
+
+	// Test case 1: SchemaTableType_VIEWS should return empty when views disabled
+	schemaDefs, udfs, err := client.GetSchema(querypb.SchemaTableType_VIEWS)
+	require.NoError(t, err)
+	require.Empty(t, udfs)
+	require.Empty(t, schemaDefs) // Should be empty when views are disabled
+
+	// Test case 2: SchemaTableType_ALL should only return tables when views disabled
+	// Create a test table to ensure tables still work (using temp which is already in ACL)
+	_, err = client.Execute("create table temp (id int)", nil)
+	require.NoError(t, err)
+	defer func() {
+		_, err := client.Execute("drop table temp", nil)
+		require.NoError(t, err)
+	}()
+
+	// Wait for schema tracking to catch up
+	timeout := 30 * time.Second
+	wait := time.After(timeout)
+	for {
+		select {
+		case <-wait:
+			assert.Fail(t, "Schema tracking hasn't caught up")
+			return
+		case <-time.After(100 * time.Millisecond):
+			schemaDefs, udfs, err := client.GetSchema(querypb.SchemaTableType_ALL)
+			require.NoError(t, err)
+			require.Empty(t, udfs)
+
+			// Should contain the test table but not the view
+			tableFound := false
+			viewFound := false
+			for tableName := range schemaDefs {
+				if tableName == "temp" {
+					tableFound = true
+				}
+				if tableName == "vitess_view" {
+					viewFound = true
+				}
+			}
+
+			if tableFound && !viewFound {
+				// Success: table found, view not found (as expected when views disabled)
+				return
+			}
+		}
+	}
+}

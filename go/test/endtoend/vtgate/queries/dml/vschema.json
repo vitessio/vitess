@@ -1,0 +1,278 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "hash_varchar": {
+      "type": "unicode_loose_xxhash"
+    },
+    "num_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "num_vdx_tbl",
+        "from": "num",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "s_tbl"
+    },
+    "col_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "col_vdx_tbl",
+        "from": "col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "s_tbl"
+    },
+    "name_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "name_vdx_tbl",
+        "from": "name,id",
+        "to": "keyspace_id"
+      },
+      "owner": "name_tbl"
+    },
+    "oid_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "oid_vdx_tbl",
+        "from": "oid",
+        "to": "keyspace_id"
+      },
+      "owner": "order_tbl"
+    },
+    "unq_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "unq_idx",
+        "from": "unq_col",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "auto_tbl"
+    },
+    "nonunq_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "nonunq_idx",
+        "from": "nonunq_col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "auto_tbl"
+    },
+    "lkp_map_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "lkp_mixed_idx",
+        "from": "lkp_key",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "mixed_tbl"
+    }
+  },
+  "tables": {
+    "s_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "num",
+          "name": "num_vdx"
+        },
+        {
+          "columns": [
+            "col",
+            "id"
+          ],
+          "name": "col_vdx"
+        }
+      ]
+    },
+    "name_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "columns": [
+            "name",
+            "id"
+          ],
+          "name": "name_vdx"
+        }
+      ]
+    },
+    "num_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "num",
+          "name": "hash"
+        }
+      ]
+    },
+    "col_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "col",
+          "name": "hash"
+        }
+      ]
+    },
+    "name_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "name",
+          "name": "hash_varchar"
+        }
+      ]
+    },
+    "user_tbl": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "uks.user_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "region_id",
+          "name": "hash"
+        }
+      ]
+    },
+    "order_tbl": {
+      "column_vindexes": [
+        {
+          "column": "region_id",
+          "name": "hash"
+        },
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "oid_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "hash"
+        }
+      ]
+    },
+    "oevent_tbl": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "oextra_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "auto_tbl": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "uks.auto_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "unq_col",
+          "name": "unq_vdx"
+        },
+        {
+          "columns": [
+            "nonunq_col",
+            "id"
+          ],
+          "name": "nonunq_vdx"
+        }
+      ]
+    },
+    "unq_idx": {
+      "column_vindexes": [
+        {
+          "column": "unq_col",
+          "name": "hash"
+        }
+      ]
+    },
+    "nonunq_idx": {
+      "column_vindexes": [
+        {
+          "column": "nonunq_col",
+          "name": "hash"
+        }
+      ]
+    },
+    "mixed_tbl": {
+      "auto_increment": {
+        "column": "lkp_key",
+        "sequence": "uks.mixed_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "shard_key",
+          "name": "hash"
+        },
+        {
+          "column": "lkp_key",
+          "name": "lkp_map_vdx"
+        }
+      ]
+    },
+    "lkp_mixed_idx": {
+      "column_vindexes": [
+        {
+          "column": "lkp_key",
+          "name": "hash"
+        }
+      ]
+    },
+    "j_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,81 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package bytes2
+
+import "unsafe"
+
+// Buffer implements a subset of the write portion of
+// bytes.Buffer, but more efficiently. This is meant to
+// be used in very high QPS operations, especially for
+// WriteByte, and without abstracting it as a Writer.
+// Function signatures contain errors for compatibility,
+// but they do not return errors.
+type Buffer struct {
+	bytes []byte
+}
+
+// Write is equivalent to bytes.Buffer.Write.
+func (buf *Buffer) Write(b []byte) (int, error) {
+	buf.bytes = append(buf.bytes, b...)
+	return len(b), nil
+}
+
+// WriteString is equivalent to bytes.Buffer.WriteString.
+func (buf *Buffer) WriteString(s string) (int, error) {
+	buf.bytes = append(buf.bytes, s...)
+	return len(s), nil
+}
+
+// WriteByte is equivalent to bytes.Buffer.WriteByte.
+func (buf *Buffer) WriteByte(b byte) error {
+	buf.bytes = append(buf.bytes, b)
+	return nil
+}
+
+// Bytes is equivalent to bytes.Buffer.Bytes.
+func (buf *Buffer) Bytes() []byte {
+	return buf.bytes
+}
+
+// Strings is equivalent to bytes.Buffer.Strings.
+func (buf *Buffer) String() string {
+	return string(buf.bytes)
+}
+
+// StringUnsafe is equivalent to String, but the copy of the string that it returns
+// is _not_ allocated, so modifying this buffer after calling StringUnsafe will lead
+// to undefined behavior.
+func (buf *Buffer) StringUnsafe() string {
+	return unsafe.String(unsafe.SliceData(buf.bytes), len(buf.bytes))
+}
+
+// Reset is equivalent to bytes.Buffer.Reset.
+func (buf *Buffer) Reset() {
+	buf.bytes = buf.bytes[:0]
+}
+
+// Len is equivalent to bytes.Buffer.Len.
+func (buf *Buffer) Len() int {
+	return len(buf.bytes)
+}
+
+// Truncate discards all but the first n bytes from the buffer but
+// continues to use the same allocated storage.
+// It panics if n is negative or greater than the length of the buffer.
+func (buf *Buffer) Truncate(n int) {
+	buf.bytes = buf.bytes[:n]
+}

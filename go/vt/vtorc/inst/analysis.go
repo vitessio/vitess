@@ -1,0 +1,193 @@
+/*
+   Copyright 2015 Shlomi Noach, courtesy Booking.com
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package inst
+
+import (
+	"encoding/json"
+	"time"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
+)
+
+type AnalysisCode string
+
+const (
+	NoProblem                              AnalysisCode = "NoProblem"
+	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
+	IncapacitatedPrimary                   AnalysisCode = "IncapacitatedPrimary"
+	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
+	InvalidReplica                         AnalysisCode = "InvalidReplica"
+	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
+	DeadPrimary                            AnalysisCode = "DeadPrimary"
+	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
+	DeadPrimaryAndSomeReplicas             AnalysisCode = "DeadPrimaryAndSomeReplicas"
+	PrimaryHasPrimary                      AnalysisCode = "PrimaryHasPrimary"
+	PrimaryIsReadOnly                      AnalysisCode = "PrimaryIsReadOnly"
+	PrimaryCurrentTypeMismatch             AnalysisCode = "PrimaryCurrentTypeMismatch"
+	PrimarySemiSyncMustBeSet               AnalysisCode = "PrimarySemiSyncMustBeSet"
+	PrimarySemiSyncMustNotBeSet            AnalysisCode = "PrimarySemiSyncMustNotBeSet"
+	ReplicaIsWritable                      AnalysisCode = "ReplicaIsWritable"
+	NotConnectedToPrimary                  AnalysisCode = "NotConnectedToPrimary"
+	ConnectedToWrongPrimary                AnalysisCode = "ConnectedToWrongPrimary"
+	ReplicationStopped                     AnalysisCode = "ReplicationStopped"
+	ReplicaSemiSyncMustBeSet               AnalysisCode = "ReplicaSemiSyncMustBeSet"
+	ReplicaSemiSyncMustNotBeSet            AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
+	ReplicaMisconfigured                   AnalysisCode = "ReplicaMisconfigured"
+	UnreachablePrimaryWithLaggingReplicas  AnalysisCode = "UnreachablePrimaryWithLaggingReplicas"
+	UnreachablePrimary                     AnalysisCode = "UnreachablePrimary"
+	UnreachablePrimaryWithBrokenReplicas   AnalysisCode = "UnreachablePrimaryWithBrokenReplicas"
+	PrimarySingleReplicaNotReplicating     AnalysisCode = "PrimarySingleReplicaNotReplicating"
+	PrimarySingleReplicaDead               AnalysisCode = "PrimarySingleReplicaDead"
+	AllPrimaryReplicasNotReplicating       AnalysisCode = "AllPrimaryReplicasNotReplicating"
+	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
+	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
+	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
+	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
+	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
+
+	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
+	// has been elected. VTOrc should demote this primary to a replica.
+	StaleTopoPrimary AnalysisCode = "StaleTopoPrimary"
+)
+
+type StructureAnalysisCode string
+
+const (
+	StatementAndMixedLoggingReplicasStructureWarning     StructureAnalysisCode = "StatementAndMixedLoggingReplicasStructureWarning"
+	StatementAndRowLoggingReplicasStructureWarning       StructureAnalysisCode = "StatementAndRowLoggingReplicasStructureWarning"
+	MixedAndRowLoggingReplicasStructureWarning           StructureAnalysisCode = "MixedAndRowLoggingReplicasStructureWarning"
+	MultipleMajorVersionsLoggingReplicasStructureWarning StructureAnalysisCode = "MultipleMajorVersionsLoggingReplicasStructureWarning"
+	NoLoggingReplicasStructureWarning                    StructureAnalysisCode = "NoLoggingReplicasStructureWarning"
+	DifferentGTIDModesStructureWarning                   StructureAnalysisCode = "DifferentGTIDModesStructureWarning"
+	ErrantGTIDStructureWarning                           StructureAnalysisCode = "ErrantGTIDStructureWarning"
+	NoFailoverSupportStructureWarning                    StructureAnalysisCode = "NoFailoverSupportStructureWarning"
+	NoWriteablePrimaryStructureWarning                   StructureAnalysisCode = "NoWriteablePrimaryStructureWarning"
+	NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisCode = "NotEnoughValidSemiSyncReplicasStructureWarning"
+)
+
+// PeerAnalysisMap indicates the number of peers agreeing on an analysis.
+// Key of this map is a InstanceAnalysis.String()
+type PeerAnalysisMap map[string]int
+
+type DetectionAnalysisHints struct {
+	AuditAnalysis bool
+}
+
+// DetectionAnalysis represents an analysis of a detected problem.
+type DetectionAnalysis struct {
+	AnalyzedInstanceAlias        *topodatapb.TabletAlias
+	AnalyzedInstancePrimaryAlias *topodatapb.TabletAlias
+
+	// TabletType is the tablet's type as seen in the topology.
+	TabletType topodatapb.TabletType
+
+	// IsTabletShutdown is true when the analyzed tablet's record carries a TabletShutdownTime,
+	// i.e. its vttablet was gracefully shut down (an intentional operator action) rather than
+	// crashing. The quorum-confirmed ERS path fails closed when this is set so an intentionally
+	// shut down primary is never failed over.
+	IsTabletShutdown bool
+
+	// CurrentTabletType is the type this tablet is currently running as.
+	CurrentTabletType topodatapb.TabletType
+
+	PrimaryTimeStamp                          time.Time
+	AnalyzedKeyspace                          string
+	AnalyzedShard                             string
+	AnalyzedCell                              string
+	AnalyzedKeyspaceEmergencyReparentDisabled bool
+	AnalyzedShardEmergencyReparentDisabled    bool
+	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
+	ShardPrimaryTermTimestamp         time.Time
+	AnalyzedInstanceBinlogCoordinates BinlogCoordinates
+	IsPrimary                         bool
+	IsClusterPrimary                  bool
+	LastCheckValid                    bool
+	PrimaryHealthUnhealthy            bool
+	LastCheckPartialSuccess           bool
+	CountReplicas                     uint
+	// ShardEligibleObservers is the number of REPLICA/RDONLY tablets in the shard (from topo),
+	// i.e. the population eligible to vote in the shard-peer health quorum. It is the expected
+	// observer count fed to the quorum gate, derived independently of the primary's instance data
+	// so it is available even when VTOrc has never reached the primary (the cold-start case).
+	ShardEligibleObservers                    int
+	CountValidReplicas                        uint
+	CountValidReplicatingReplicas             uint
+	CountValidSemiSyncReplicatingReplicas     uint
+	ReplicationStopped                        bool
+	ErrantGTID                                string
+	ReplicaNetTimeout                         int32
+	HeartbeatInterval                         float64
+	Analysis                                  AnalysisCode
+	AnalysisMatchedProblems                   []*DetectionAnalysisProblemMeta
+	Description                               string
+	StructureAnalysis                         []StructureAnalysisCode
+	OracleGTIDImmediateTopology               bool
+	BinlogServerImmediateTopology             bool
+	SemiSyncPrimaryEnabled                    bool
+	SemiSyncPrimaryStatus                     bool
+	SemiSyncPrimaryWaitForReplicaCount        uint
+	SemiSyncPrimaryClients                    uint
+	SemiSyncReplicaEnabled                    bool
+	SemiSyncBlocked                           bool
+	CountSemiSyncReplicasEnabled              uint
+	CountLoggingReplicas                      uint
+	CountStatementBasedLoggingReplicas        uint
+	CountMixedBasedLoggingReplicas            uint
+	CountRowBasedLoggingReplicas              uint
+	CountDistinctMajorVersionsLoggingReplicas uint
+	CountDelayedReplicas                      uint
+	CountLaggingReplicas                      uint
+	IsActionableRecovery                      bool
+	RecoveryId                                int64
+	GTIDMode                                  string
+	MinReplicaGTIDMode                        string
+	MaxReplicaGTIDMode                        string
+	MaxReplicaGTIDErrant                      string
+	IsReadOnly                                bool
+	IsDiskStalled                             bool
+	QuorumDetail                              *QuorumResult `json:",omitempty"`
+}
+
+// hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
+// True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
+// a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
+func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, analysis *DetectionAnalysis) bool {
+	if durabler == nil || analysis == nil {
+		return false
+	}
+	return int(analysis.CountValidSemiSyncReplicatingReplicas) >= durabler.SemiSyncAckers(primary)
+}
+
+func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
+	i := struct {
+		DetectionAnalysis
+	}{
+		DetectionAnalysis: *detectionAnalysis,
+	}
+
+	return json.Marshal(i)
+}
+
+// ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time
+// between last_attempted_check to last_checked before we consider the instance as invalid.
+func ValidSecondsFromSeenToLastAttemptedCheck() uint {
+	return config.GetInstancePollSeconds()
+}

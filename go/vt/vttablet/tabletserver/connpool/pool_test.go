@@ -1,0 +1,377 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package connpool
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools/smartconnpool"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+)
+
+func TestConnPoolGet(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	dbConn, err := connPool.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn, "db conn should not be nil")
+	dbConn.Recycle()
+}
+
+func TestConnPoolTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	cfg := tabletenv.ConnPoolConfig{
+		Size:        1,
+		Timeout:     time.Second,
+		IdleTimeout: 10 * time.Second,
+	}
+	connPool := NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", cfg)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	dbConn, err := connPool.Get(t.Context(), nil)
+	require.NoError(t, err)
+	defer dbConn.Recycle()
+	_, err = connPool.Get(t.Context(), nil)
+	assert.EqualError(t, err, "connection pool timed out")
+}
+
+func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
+	db := fakesqldb.New(t)
+	debugConn := dbconfigs.New(db.ConnParamsWithUname(""))
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, debugConn)
+	im := callerid.NewImmediateCallerID("")
+	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
+	ctx := t.Context()
+	ctx = callerid.NewContext(ctx, ecid, im)
+	defer connPool.Close()
+	dbConn, err := connPool.Get(ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn, "db conn should not be nil")
+	dbConn.Recycle()
+}
+
+func TestConnPoolGetAppDebug(t *testing.T) {
+	db := fakesqldb.New(t)
+	debugConn := dbconfigs.New(db.ConnParamsWithUname("debugUsername"))
+	ctx := t.Context()
+	im := callerid.NewImmediateCallerID("debugUsername")
+	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
+	ctx = callerid.NewContext(ctx, ecid, im)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, debugConn)
+	defer connPool.Close()
+	dbConn, err := connPool.Get(ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn, "db conn should not be nil")
+	dbConn.Recycle()
+	require.True(t, dbConn.Conn.IsClosed(), "db conn should be closed after recycle")
+}
+
+func TestConnPoolSetCapacity(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	assert.Panics(t, func() {
+		_ = connPool.SetCapacity(t.Context(), -10)
+	})
+	err := connPool.SetCapacity(t.Context(), 10)
+	require.NoError(t, err)
+	require.EqualValuesf(t, 10, connPool.Capacity(), "capacity should be 10")
+}
+
+// TestConnPoolMaxIdleCount tests the max idle count for the pool.
+// The pool should close the idle connections if the idle count is more than the allowed idle count.
+// Changing the pool capacity will affect the idle count allowed for that pool.
+func TestConnPoolMaxIdleCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	cfg := tabletenv.ConnPoolConfig{
+		Size:         5,
+		MaxIdleCount: 2,
+	}
+	connPool := NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", cfg)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	assert.EqualValues(t, 5, connPool.Capacity(), "pool capacity should be 5")
+	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
+
+	var conns []*PooledConn
+	for range 3 {
+		conn, err := connPool.Get(t.Context(), nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	// after recycle - 1 idle connection
+	conns[0].Recycle()
+	assert.Zero(t, connPool.Metrics.IdleClosed(), "pool idle closed should be 0")
+
+	// after recycle - 2 idle connection
+	conns[1].Recycle()
+	assert.Zero(t, connPool.Metrics.IdleClosed(), "pool idle closed should be 0")
+
+	// after recycle - 3 idle connection, 1 will be closed
+	conns[2].Recycle()
+	assert.EqualValues(t, 1, connPool.Metrics.IdleClosed(), "pool idle closed should be 1")
+
+	// changing the pool capacity will affect the idle count allowed for that pool.
+	// If setting the capacity to lower value than max idle count.
+
+	err := connPool.SetCapacity(t.Context(), 4)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, connPool.Capacity(), "pool capacity should be 4")
+	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
+
+	err = connPool.SetCapacity(t.Context(), 1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, connPool.Capacity(), "pool capacity should be 1")
+	assert.EqualValues(t, 1, connPool.IdleCount(), "pool idle count should be changed to 1")
+}
+
+func TestConnPoolStatJSON(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	require.Equalf(t, "{}", connPool.StatsJSON(), "pool is closed, stats json should be empty; was: %q", connPool.StatsJSON())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	statsJSON := connPool.StatsJSON()
+	if statsJSON == "" || statsJSON == "{}" {
+		require.Fail(t, "stats json should not be empty")
+	}
+}
+
+func TestConnPoolStateWhilePoolIsClosed(t *testing.T) {
+	connPool := newPool()
+	assert.EqualValues(t, 0, connPool.Capacity(), "pool capacity should be 0 because it is still closed")
+	assert.EqualValues(t, 0, connPool.Available(), "pool available connections should be 0 because it is still closed")
+}
+
+func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	idleTimeout := 10 * time.Second
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	assert.EqualValues(t, 100, connPool.Capacity(), "pool capacity should be 100")
+	assert.EqualValues(t, 0, connPool.Metrics.WaitTime(), "pool wait time should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.WaitCount(), "pool wait count should be 0")
+	assert.Equal(t, idleTimeout, connPool.IdleTimeout(), "pool idle timeout should be 0")
+	assert.EqualValues(t, 100, connPool.Available(), "pool available connections should be 100")
+	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
+	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
+
+	dbConn, _ := connPool.Get(t.Context(), nil)
+	assert.EqualValues(t, 99, connPool.Available(), "pool available connections should be 99")
+	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
+	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
+
+	dbConn.Recycle()
+	assert.EqualValues(t, 100, connPool.Available(), "pool available connections should be 100")
+	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
+	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
+}
+
+func TestConnPoolStateWithSettings(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	capacity := 5
+	connPool := newPoolWithCapacity(capacity)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
+	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
+	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.GetCount(), "pool get count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.GetSettingCount(), "pool get with settings should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	dbConn, err := connPool.Get(t.Context(), nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
+	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
+	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 0, connPool.Metrics.GetSettingCount(), "pool get with settings should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	dbConn.Recycle()
+	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
+	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
+	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.GetSettingCount(), "pool get with settings should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	db.AddQuery("a", &sqltypes.Result{})
+	sa := smartconnpool.NewSetting("a", "")
+	dbConn, err = connPool.Get(t.Context(), sa)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
+	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
+	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics.GetSettingCount(), "pool get with settings should be 1")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	dbConn.Recycle()
+	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
+	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
+	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics.GetSettingCount(), "pool get with settings should be 1")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	// now showcasing diff and reset setting.
+	// Steps 1: acquire all connection with same setting
+	// Steps 2: put all back
+	// Steps 3: acquire a connection with no setting - this will show reset setting count
+	// Steps 4: acquire a connection with different setting - this will show diff setting count
+
+	// Step 1
+	var conns []*PooledConn
+	for range capacity {
+		dbConn, err = connPool.Get(t.Context(), sa)
+		require.NoError(t, err)
+		conns = append(conns, dbConn)
+	}
+	assert.EqualValues(t, 0, connPool.Available(), "pool available connections should be 0")
+	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
+	assert.EqualValues(t, 5, connPool.InUse(), "pool inUse connections should be 5")
+	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 6, connPool.Metrics.GetSettingCount(), "pool get with settings should be 6")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	// Step 2
+	for _, conn := range conns {
+		conn.Recycle()
+	}
+	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
+	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
+	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 6, connPool.Metrics.GetSettingCount(), "pool get with settings should be 6")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+
+	// Step 3
+	dbConn, err = connPool.Get(t.Context(), nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
+	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
+	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
+	assert.EqualValues(t, 2, connPool.Metrics.GetCount(), "pool get count should be 2")
+	assert.EqualValues(t, 6, connPool.Metrics.GetSettingCount(), "pool get with settings should be 6")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 1")
+	dbConn.Recycle()
+
+	// Step 4
+	db.AddQuery("b", &sqltypes.Result{})
+	sb := smartconnpool.NewSetting("b", "")
+	dbConn, err = connPool.Get(t.Context(), sb)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
+	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
+	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
+	assert.EqualValues(t, 2, connPool.Metrics.GetCount(), "pool get count should be 2")
+	assert.EqualValues(t, 7, connPool.Metrics.GetSettingCount(), "pool get with settings should be 7")
+	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 1")
+	dbConn.Recycle()
+}
+
+func TestPoolGetConnTime(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	connPool.getConnTime.Reset()
+
+	getTimeMap := connPool.getConnTime.Counts()
+	assert.Zero(t, getTimeMap["PoolTest.GetWithSettings"])
+	assert.Zero(t, getTimeMap["PoolTest.GetWithoutSettings"])
+
+	dbConn, err := connPool.Get(t.Context(), nil)
+	require.NoError(t, err)
+	defer dbConn.Recycle()
+
+	getTimeMap = connPool.getConnTime.Counts()
+	assert.EqualValues(t, 1, getTimeMap["PoolTest.GetWithoutSettings"])
+	assert.Zero(t, getTimeMap["PoolTest.GetWithSettings"])
+
+	db.AddQuery("b", &sqltypes.Result{})
+	sb := smartconnpool.NewSetting("b", "")
+	dbConn, err = connPool.Get(t.Context(), sb)
+	require.NoError(t, err)
+	defer dbConn.Recycle()
+
+	getTimeMap = connPool.getConnTime.Counts()
+	assert.EqualValues(t, 1, getTimeMap["PoolTest.GetWithSettings"])
+}
+
+func newPool() *Pool {
+	return newPoolWithCapacity(100)
+}
+
+func newPoolWithCapacity(capacity int) *Pool {
+	return NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:        capacity,
+		IdleTimeout: 10 * time.Second,
+	})
+}

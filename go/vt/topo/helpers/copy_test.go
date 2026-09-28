@@ -1,0 +1,142 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package helpers
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server) {
+	// Create a source and destination TS. They will have
+	// different generations, so we test using the Version for
+	// both works as expected.
+	fromTS := memorytopo.NewServer(ctx, "test_cell")
+	toTS := memorytopo.NewServer(ctx, "test_cell")
+
+	// create a keyspace and a couple tablets
+	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+		require.NoError(t, err)
+	}
+	if err := fromTS.CreateShard(ctx, "test_keyspace", "0"); err != nil {
+		require.NoError(t, err)
+	}
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "test_cell",
+			Uid:  123,
+		},
+		Hostname:      "primaryhost",
+		MysqlHostname: "primaryhost",
+		PortMap: map[string]int32{
+			"vt":   8101,
+			"gprc": 8102,
+		},
+		Keyspace:       "test_keyspace",
+		Shard:          "0",
+		Type:           topodatapb.TabletType_PRIMARY,
+		DbNameOverride: "",
+		KeyRange:       nil,
+	}
+	tablet1.MysqlPort = 3306
+	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
+		require.NoError(t, err)
+	}
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "test_cell",
+			Uid:  234,
+		},
+		PortMap: map[string]int32{
+			"vt":   8101,
+			"grpc": 8102,
+		},
+		Hostname:      "replicahost",
+		MysqlHostname: "replicahost",
+
+		Keyspace:       "test_keyspace",
+		Shard:          "0",
+		Type:           topodatapb.TabletType_REPLICA,
+		DbNameOverride: "",
+		KeyRange:       nil,
+	}
+	tablet2.MysqlPort = 3306
+	err := fromTS.CreateTablet(ctx, tablet2)
+	require.NoError(t, err, "cannot create tablet: %v", tablet2)
+
+	rr := &vschemapb.RoutingRules{
+		Rules: []*vschemapb.RoutingRule{{
+			FromTable: "t1",
+			ToTables:  []string{"t2", "t3"},
+		}},
+	}
+	if err := fromTS.SaveRoutingRules(ctx, rr); err != nil {
+		require.NoError(t, err)
+	}
+
+	return fromTS, toTS
+}
+
+func TestBasic(t *testing.T) {
+	ctx := t.Context()
+	fromTS, toTS := createSetup(ctx, t)
+
+	// check keyspace copy
+	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
+	keyspaces, err := toTS.GetKeyspaces(ctx)
+	require.NoError(t, err)
+	require.Truef(t, len(keyspaces) == 1 && keyspaces[0] == "test_keyspace", "unexpected keyspaces: %v", keyspaces)
+	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
+
+	// check shard copy
+	CopyShards(ctx, fromTS, toTS)
+	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
+	require.NoError(t, err)
+	require.Truef(t, len(shards) == 1 && shards[0] == "0", "unexpected shards: %v", shards)
+	CopyShards(ctx, fromTS, toTS)
+
+	// check ShardReplication copy
+	_, err = fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	require.NoError(t, err)
+	CopyShardReplications(ctx, fromTS, toTS)
+	sr, err := toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	require.NoError(t, err)
+	require.Lenf(t, sr.Nodes, 2, "unexpected ShardReplication: %v", sr)
+
+	// check ShardReplications is idempotent
+	CopyShardReplications(ctx, fromTS, toTS)
+	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	require.NoError(t, err)
+	require.Lenf(t, sr.Nodes, 2, "unexpected ShardReplication after second copy: %v", sr)
+
+	// check tablet copy
+	CopyTablets(ctx, fromTS, toTS)
+	tablets, err := toTS.GetTabletAliasesByCell(ctx, "test_cell")
+	require.NoError(t, err)
+	require.Truef(t, len(tablets) == 2 && tablets[0].Uid == 123 && tablets[1].Uid == 234, "unexpected tablets: %v", tablets)
+	CopyTablets(ctx, fromTS, toTS)
+}

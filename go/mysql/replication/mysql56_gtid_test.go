@@ -1,0 +1,191 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package replication
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestParseMysql56GTID(t *testing.T) {
+	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
+	want := Mysql56GTID{
+		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		Sequence: 56789,
+	}
+
+	got, err := parseMysql56GTID(input)
+	require.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, want, got, "parseMysql56GTID(%#v) = %#v, want %#v", input, got, want)
+}
+
+func TestParseMysql56GTIDInvalid(t *testing.T) {
+	table := []string{
+		"",
+		"00010203-0405-0607-0809-0A0B0C0D0E0F",
+		"00010203-0405-0607-0809-0A0B0C0D0E0F:1-5",
+		"00010203-0405-0607-0809-0A0B0C0D0E0F:1:2",
+		"00010203-0405-0607-0809-0A0B0C0D0E0X:1",
+	}
+
+	for _, input := range table {
+		_, err := parseMysql56GTID(input)
+		assert.Error(t, err, "parseMysql56GTID(%#v): expected error, got none", input)
+	}
+}
+
+func TestSIDString(t *testing.T) {
+	input := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	want := "00010203-0405-0607-0809-0a0b0c0d0e0f"
+
+	assert.Equal(t, want, input.String())
+}
+
+func TestParseSID(t *testing.T) {
+	input := "00010203-0405-0607-0809-0A0B0C0D0E0F"
+	want := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+	got, err := ParseSID(input)
+	require.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, want, got, "ParseSID(%#v) = %#v, want %#v", input, got, want)
+}
+
+func TestParseSIDInvalid(t *testing.T) {
+	table := []string{
+		"123",
+		"x",
+		"00010203-0405-0607-0809-0A0B0C0D0E0x",
+		"00010203-0405-0607-080900A0B0C0D0E0F",
+	}
+
+	for _, input := range table {
+		_, err := ParseSID(input)
+		assert.Error(t, err, "ParseSID(%#v): expected error, got none", input)
+	}
+}
+
+func TestMysql56GTIDString(t *testing.T) {
+	input := Mysql56GTID{
+		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		Sequence: 12345,
+	}
+	want := "00010203-0405-0607-0809-0a0b0c0d0e0f:12345"
+	got := strings.ToLower(input.String())
+	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
+}
+
+func TestMysql56GTIDFlavor(t *testing.T) {
+	input := Mysql56GTID{}
+	got := input.Flavor()
+	assert.Equalf(t, "MySQL56", got, "%#v.Flavor() = %#v, want %#v", input, got, "MySQL56")
+}
+
+func TestMysql56SequenceDomain(t *testing.T) {
+	input := Mysql56GTID{}
+	got := input.SequenceDomain()
+	assert.Equalf(t, any(nil), got, "%#v.SequenceDomain() = %#v, want %#v", input, got, any(nil))
+}
+
+func TestMysql56SourceServer(t *testing.T) {
+	input := Mysql56GTID{
+		Server: SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+	}
+	want := any(SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+	got := input.SourceServer()
+	assert.Equalf(t, want, got, "%#v.SourceServer() = %#v, want %#v", input, got, want)
+}
+
+func TestMysql56SequenceNumber(t *testing.T) {
+	input := Mysql56GTID{
+		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		Sequence: 5432,
+	}
+	want := any(int64(5432))
+	got := input.SequenceNumber()
+	assert.Equalf(t, want, got, "%#v.SequenceNumber() = %#v, want %#v", input, got, want)
+}
+
+func TestMysql56GTIDGTIDSet(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	input := Mysql56GTID{Server: sid1, Sequence: 5432}
+	want := Mysql56GTIDSet{sid1: []interval{{5432, 5432}}}
+	assert.Equal(t, want, input.GTIDSet())
+}
+
+func TestMysql56ParseGTID(t *testing.T) {
+	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
+	want := Mysql56GTID{
+		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		Sequence: 56789,
+	}
+
+	got, err := parseMysql56GTID(input)
+	require.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, want, got, "(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
+}
+
+func TestDecodePositionMySQL56(t *testing.T) {
+	{
+		pos, gtidSet, err := DecodePositionMySQL56("")
+		require.NoError(t, err)
+		assert.True(t, pos.IsZero())
+		assert.Nil(t, gtidSet)
+	}
+	{
+		pos, gtidSet, err := DecodePositionMySQL56("MySQL56/00010203-0405-0607-0809-0A0B0C0D0E0F:1-615")
+		require.NoError(t, err)
+		assert.False(t, pos.IsZero())
+		assert.NotNil(t, gtidSet)
+		expectGTID := Mysql56GTIDSet{
+			SID{
+				0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+			}: []interval{{start: 1, end: 615}},
+		}
+		assert.Equal(t, expectGTID, gtidSet)
+	}
+	{
+		pos, gtidSet, err := DecodePositionMySQL56("00010203-0405-0607-0809-0A0B0C0D0E0F:1-615")
+		require.NoError(t, err)
+		assert.False(t, pos.IsZero())
+		assert.NotNil(t, gtidSet)
+		expectGTID := Mysql56GTIDSet{
+			SID{
+				0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+			}: []interval{{start: 1, end: 615}},
+		}
+		assert.Equal(t, expectGTID, gtidSet)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("q-22b6-11ed-b765-0a43f95f28a3:1-615")
+		require.Error(t, err)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("16b1039f-22b6-11ed-b765-0a43f95f28a3")
+		require.Error(t, err)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("FilePos/mysql-bin.000001:234")
+		require.Error(t, err)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("mysql-bin.000001:234")
+		assert.Error(t, err)
+	}
+}

@@ -1,0 +1,8 @@
+window.env = {
+    'VITE_VTADMIN_API_ADDRESS': "",
+    'VITE_FETCH_CREDENTIALS': "omit",
+    'VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS': true,
+    'VITE_BUGSNAG_API_KEY': "",
+    'VITE_DOCUMENT_TITLE': "",
+    'VITE_READONLY_MODE': false,
+};

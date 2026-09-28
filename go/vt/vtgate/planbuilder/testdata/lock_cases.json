@@ -1,0 +1,209 @@
+[
+  {
+    "comment": "get_lock from dual",
+    "query": "select get_lock('xyz', 10) from dual",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10) from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10) from dual where 1 != 1",
+        "lock_func": [
+          "get_lock('xyz', 10)"
+        ]
+      }
+    }
+  },
+  {
+    "comment": "is_free_lock from dual",
+    "query": "select is_free_lock('xyz') from dual",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select is_free_lock('xyz') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select is_free_lock('xyz') from dual where 1 != 1",
+        "lock_func": [
+          "is_free_lock('xyz')"
+        ]
+      }
+    }
+  },
+  {
+    "comment": "get_lock from dual prepare query",
+    "query": "select get_lock(?, ?)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select get_lock(?, ?)",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
+        "lock_func": [
+          "get_lock(:v1, :v2)"
+        ]
+      }
+    }
+  },
+  {
+    "comment": "lock tables read",
+    "query": "lock tables t as x read local",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "LOCK_TABLES",
+      "Original": "lock tables t as x read local",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "lock tables write",
+    "query": "lock tables t low_priority write",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "LOCK_TABLES",
+      "Original": "lock tables t low_priority write",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "unlock tables",
+    "query": "unlock tables",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UNLOCK_TABLES",
+      "Original": "unlock tables",
+      "Instructions": {
+        "OperatorType": "UnlockTables"
+      }
+    }
+  },
+  {
+    "comment": "multiple lock functions",
+    "query": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10), is_free_lock('abc') from dual where 1 != 1",
+        "lock_func": [
+          "get_lock('xyz', 10)",
+          "is_free_lock('abc')"
+        ]
+      }
+    }
+  },
+  {
+    "comment": "select nowait",
+    "query": "select u.col, u.bar from user u join music m on u.foo = m.foo for update nowait",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for update nowait",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_foo": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
+            "Query": "select u.col, u.bar, u.foo from `user` as u for update nowait"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.foo = :u_foo for update nowait"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select skip locked",
+    "query": "select u.col, u.bar from user u join music m on u.foo = m.foo for share skip locked",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for share skip locked",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_foo": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
+            "Query": "select u.col, u.bar, u.foo from `user` as u for share skip locked"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.foo = :u_foo for share skip locked"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  }
+]

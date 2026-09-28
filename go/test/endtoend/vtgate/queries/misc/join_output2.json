@@ -1,0 +1,58 @@
+{
+  "OperatorType": "Join",
+  "Variant": "Join",
+  "JoinColumnIndexes": "R:0,R:1,L:0",
+  "JoinVars": {
+    "t1_id1": 1
+  },
+  "Inputs": [
+    {
+      "OperatorType": "Route",
+      "Variant": "Scatter",
+      "Keyspace": {
+        "Name": "ks_misc",
+        "Sharded": true
+      },
+      "FieldQuery": "select t1.id2, t1.id1 from t1 where 1 != 1",
+      "Query": "select t1.id2, t1.id1 from t1"
+    },
+    {
+      "OperatorType": "VindexLookup",
+      "Variant": "Equal",
+      "Keyspace": {
+        "Name": "ks_misc",
+        "Sharded": true
+      },
+      "Values": [
+        ":t1_id1"
+      ],
+      "Vindex": "nonunq_vdx",
+      "Inputs": [
+        {
+          "OperatorType": "Route",
+          "Variant": "IN",
+          "Keyspace": {
+            "Name": "ks_misc",
+            "Sharded": true
+          },
+          "FieldQuery": "select nonunq_col, keyspace_id from nonunq_idx where 1 != 1",
+          "Query": "select nonunq_col, keyspace_id from nonunq_idx where nonunq_col in ::__vals",
+          "Values": [
+            "::nonunq_col"
+          ],
+          "Vindex": "hash"
+        },
+        {
+          "OperatorType": "Route",
+          "Variant": "ByDestination",
+          "Keyspace": {
+            "Name": "ks_misc",
+            "Sharded": true
+          },
+          "FieldQuery": "select tbl.unq_col, tbl.nonunq_col from tbl where 1 != 1",
+          "Query": "select tbl.unq_col, tbl.nonunq_col from tbl where tbl.nonunq_col = :t1_id1 /* INT64 */"
+        }
+      ]
+    }
+  ]
+}

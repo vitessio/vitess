@@ -1,0 +1,95 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package common
+
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+)
+
+var CompleteOptions = struct {
+	KeepData             bool
+	KeepRoutingRules     bool
+	RenameTables         bool
+	DryRun               bool
+	Shards               []string
+	IgnoreSourceKeyspace bool
+}{}
+
+func GetCompleteCommand(opts *SubCommandsOpts) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "complete",
+		Short: fmt.Sprintf("Complete a %s VReplication workflow.", opts.SubCommand),
+		Example: fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer complete`,
+			opts.SubCommand, opts.Workflow),
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Complete"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandComplete,
+	}
+	return cmd
+}
+
+func commandComplete(cmd *cobra.Command, args []string) error {
+	format, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.MoveTablesCompleteRequest{
+		Workflow:             BaseOptions.Workflow,
+		TargetKeyspace:       BaseOptions.TargetKeyspace,
+		KeepData:             OptionalBoolFromFlag(cmd, "keep-data", CompleteOptions.KeepData),
+		KeepRoutingRules:     CompleteOptions.KeepRoutingRules,
+		RenameTables:         CompleteOptions.RenameTables,
+		DryRun:               CompleteOptions.DryRun,
+		IgnoreSourceKeyspace: CompleteOptions.IgnoreSourceKeyspace,
+	}
+	resp, err := GetClient().MoveTablesComplete(GetCommandCtx(), req)
+	if err != nil {
+		return err
+	}
+
+	var output []byte
+	if format == "json" {
+		output, err = cli.MarshalJSONPretty(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		tout := bytes.Buffer{}
+		AppendWarnings(&tout, resp.Warnings)
+		tout.WriteString(resp.Summary)
+		if len(resp.DryRunResults) > 0 {
+			tout.WriteString("\n\n")
+			for _, r := range resp.DryRunResults {
+				tout.WriteString(r + "\n")
+			}
+		}
+		output = tout.Bytes()
+	}
+	fmt.Printf("%s\n", output)
+
+	return nil
+}

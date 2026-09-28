@@ -1,0 +1,593 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package endtoend
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+)
+
+type test struct {
+	query  string
+	output []string
+}
+
+// the schema version tests can get events related to the creation of the schema version table depending on
+// whether the table already exists or not. To avoid different behaviour when tests are run together
+// this function adds to events expected if table is not present
+func getSchemaVersionTableCreationEvents() []string {
+	tableCreationEvents := []string{"gtid", "other", "gtid", "other", "gtid", "other"}
+	client := framework.NewClient()
+	_, err := client.Execute("describe _vt.schema_version", nil)
+	if err != nil {
+		log.Error("_vt.schema_version not found, will expect its table creation events")
+		return tableCreationEvents
+	}
+	return nil
+}
+
+func TestSchemaVersioning(t *testing.T) {
+	// Restart the tracker and historian so this test starts them from a known
+	// state, and re-enable everything at the end.
+	tsv := framework.Server
+	// The reopened tracker resumes from the last row saved in schema_version.
+	// If the table is still empty, which is the normal case when this test
+	// runs on its own and the boot-time snapshot has not landed yet, it takes
+	// a fresh snapshot instead, at a position read after a full schema reload
+	// that may already include the barrier DDL below; the barrier would then
+	// never be streamed. Wait for a saved row before restarting the tracker.
+	waitForSchemaVersionRow(t)
+	tsv.EnableHistorian(false)
+	tsv.SetTracking(false)
+	tsv.EnableHeartbeat(false)
+	defer tsv.EnableHeartbeat(true)
+	defer tsv.EnableHistorian(true)
+	defer tsv.SetTracking(true)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	wg := sync.WaitGroup{}
+	tsv.EnableHistorian(true)
+	tsv.SetTracking(true)
+	// The reopened tracker may still be replaying DDL from the preceding
+	// tests, and each replayed DDL produces a VERSION event. Wait for it to
+	// catch up before starting the stream below, so that the stream sees only
+	// the VERSION events for this test's own DDL. A fixed sleep raced the
+	// replay on slow runners.
+	waitForSchemaTrackerToCatchUp(t)
+	target := &querypb.Target{
+		Keyspace:   "vttest",
+		Shard:      "0",
+		TabletType: tabletpb.TabletType_PRIMARY,
+		Cell:       "",
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+
+	cases := []test{
+		{
+			query: "create table vitess_version (\n\tid1 int,\n\tid2 int\n)",
+			output: append(append([]string{
+				`gtid`, // gtid+other => vstream current pos
+				`other`,
+				`gtid`, // gtid+ddl => actual query
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "create table vitess_version (\n\tid1 int,\n\tid2 int\n)"}),
+			},
+				getSchemaVersionTableCreationEvents()...),
+				`version`,
+				`gtid`,
+			),
+		},
+		{
+			query: "insert into vitess_version values(1, 10)",
+			output: []string{
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{
+					TableName: "vitess_version",
+					Fields: []*querypb.Field{
+						{Name: "id1", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id1", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id2", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id2", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+					},
+				}}),
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "vitess_version", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("110")}}}}}),
+				`gtid`,
+			},
+		},
+		{
+			query: "alter table vitess_version add column id3 int",
+			output: []string{
+				`gtid`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "alter table vitess_version add column id3 int"}),
+				`version`,
+				`gtid`,
+			},
+		},
+		{
+			query: "insert into vitess_version values(2, 20, 200)",
+			output: []string{
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{
+					TableName: "vitess_version",
+					Fields: []*querypb.Field{
+						{Name: "id1", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id1", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id2", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id2", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id3", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id3", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+					},
+				}}),
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "vitess_version", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 2, 3}, Values: []byte("220200")}}}}}),
+				`gtid`,
+			},
+		},
+		{
+			query: "alter table vitess_version modify column id3 varbinary(16)",
+			output: []string{
+				`gtid`,
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "alter table vitess_version modify column id3 varbinary(16)"}),
+				`version`,
+				`gtid`,
+			},
+		},
+		{
+			query: "insert into vitess_version values(3, 30, 'TTT')",
+			output: []string{
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{
+					TableName: "vitess_version",
+					Fields: []*querypb.Field{
+						{Name: "id1", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id1", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id2", Type: querypb.Type_INT32, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id2", ColumnLength: 11, Charset: 63, ColumnType: "int"},
+						{Name: "id3", Type: querypb.Type_VARBINARY, Table: "vitess_version", OrgTable: "vitess_version", Database: "vttest", OrgName: "id3", ColumnLength: 16, Charset: 63, ColumnType: "varbinary(16)"},
+					},
+				}}),
+				fmt.Sprintf("%v", &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "vitess_version", RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{1, 2, 3}, Values: []byte("330TTT")}}}}}),
+				`gtid`,
+			},
+		},
+	}
+	eventCh := make(chan []*binlogdatapb.VEvent)
+	currentErrCh := make(chan error, 1)
+	var startPos string
+	send := func(events []*binlogdatapb.VEvent) error {
+		var evs []*binlogdatapb.VEvent
+		for _, event := range events {
+			if event.Type == binlogdatapb.VEventType_GTID {
+				if startPos == "" {
+					startPos = event.Gtid
+				}
+			}
+			if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+				continue
+			}
+			log.Info(fmt.Sprintf("Received event %v", event))
+			evs = append(evs, event)
+		}
+		select {
+		case eventCh <- evs:
+		case <-ctx.Done():
+			return nil
+		}
+		return nil
+	}
+	wg.Go(func() {
+		defer close(eventCh)
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: "current", TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
+			if ctx.Err() == nil {
+				select {
+				case currentErrCh <- err:
+				default:
+				}
+			}
+		}
+	})
+	log.Info("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
+	runCases(ctx, t, cases, eventCh)
+
+	tsv.SetTracking(false)
+	cases = []test{
+		{
+			// comment prefix required so we don't look for ddl in schema_version
+			query: "/**/alter table vitess_version add column id4 varbinary(16)",
+			output: []string{
+				`gtid`, // no tracker, so no insert into schema_version or version event
+				`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
+			},
+		},
+	}
+	runCases(ctx, t, cases, eventCh)
+	cancel()
+	wg.Wait()
+	select {
+	case err := <-currentErrCh:
+		require.NoError(t, err)
+	default:
+	}
+
+	client := framework.NewClient()
+	_, err := client.Execute("insert into vitess_version values(4, 40, 'FFF', 'GGGG' )", nil)
+	require.NoError(t, err)
+
+	log.Info("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
+	ctx, cancel = context.WithCancel(t.Context())
+	defer cancel()
+	eventCh = make(chan []*binlogdatapb.VEvent)
+	errCh := make(chan error, 1)
+	send = func(events []*binlogdatapb.VEvent) error {
+		var evs []*binlogdatapb.VEvent
+		for _, event := range events {
+			if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+				continue
+			}
+			log.Info(fmt.Sprintf("Received event %v", event))
+			evs = append(evs, event)
+		}
+		// Ignore unrelated events.
+		if len(evs) == 3 &&
+			evs[0].Type == binlogdatapb.VEventType_BEGIN &&
+			evs[1].Type == binlogdatapb.VEventType_GTID &&
+			evs[2].Type == binlogdatapb.VEventType_COMMIT {
+			return nil
+		}
+		select {
+		case eventCh <- evs:
+		case <-ctx.Done():
+			assert.Fail(t, "Context Done() in send")
+			return nil
+		}
+		return nil
+	}
+	wg.Go(func() {
+		defer close(eventCh)
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
+			select {
+			case errCh <- err:
+			default:
+			}
+		}
+	})
+
+	// playing events from the past: same events as original since historian is providing the latest schema
+	output := append(append([]string{
+		`gtid`,
+		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`,
+	},
+		getSchemaVersionTableCreationEvents()...),
+		`version`,
+		`gtid`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
+		`gtid`,
+		`gtid`,
+		`type:DDL statement:"alter table vitess_version add column id3 int"`,
+		`version`,
+		`gtid`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63 column_type:"varbinary(16)"}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
+		`gtid`,
+		`gtid`,
+		`type:DDL statement:"alter table vitess_version modify column id3 varbinary(16)"`,
+		`version`,
+		`gtid`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"330TTT"}}}`,
+		`gtid`,
+		`gtid`,
+		`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
+	)
+
+	expectLogs(ctx, t, "Past stream", eventCh, output)
+	select {
+	case err := <-errCh:
+		require.ErrorContains(t, err, "cannot determine table columns for vitess_version")
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "timed out waiting for past stream failure after untracked schema change")
+	}
+
+	cancel()
+	wg.Wait()
+
+	log.Info("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
+	tsv.EnableHistorian(false)
+	ctx, cancel = context.WithCancel(t.Context())
+	defer cancel()
+	eventCh = make(chan []*binlogdatapb.VEvent)
+	noHistorianErrCh := make(chan error, 1)
+	send = func(events []*binlogdatapb.VEvent) error {
+		var evs []*binlogdatapb.VEvent
+		for _, event := range events {
+			if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+				continue
+			}
+			log.Info(fmt.Sprintf("Received event %v", event))
+			evs = append(evs, event)
+		}
+		// Ignore unrelated events.
+		if len(evs) == 3 &&
+			evs[0].Type == binlogdatapb.VEventType_BEGIN &&
+			evs[1].Type == binlogdatapb.VEventType_GTID &&
+			evs[2].Type == binlogdatapb.VEventType_COMMIT {
+			return nil
+		}
+		select {
+		case eventCh <- evs:
+		case <-ctx.Done():
+			assert.Fail(t, "Context Done() in send")
+			return nil
+		}
+		return nil
+	}
+	wg.Go(func() {
+		defer close(eventCh)
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
+			if ctx.Err() == nil {
+				select {
+				case noHistorianErrCh <- err:
+				default:
+				}
+			}
+		}
+	})
+
+	// playing events from the past: same as earlier except one below, see comments
+	output = append(append([]string{
+		`gtid`,
+		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`,
+	},
+		getSchemaVersionTableCreationEvents()...),
+		`version`,
+		`gtid`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
+		`gtid`,
+		`gtid`,
+		`type:DDL statement:"alter table vitess_version add column id3 int"`,
+		`version`,
+		`gtid`,
+		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary) so the types don't match. Hence the @ fieldnames*/
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:INT32 charset:63} fields:{name:"@3" type:INT32 charset:63}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
+		`gtid`,
+		`gtid`,
+		`type:DDL statement:"alter table vitess_version modify column id3 varbinary(16)"`,
+		`version`,
+		`gtid`,
+		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary),
+		  but the three fields below match the first three types in the latest, so the field names are correct*/
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"330TTT"}}}`,
+		`gtid`,
+		`gtid`,
+		`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
+		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
+		`gtid`,
+	)
+
+	expectLogs(ctx, t, "Past stream", eventCh, output)
+	cancel()
+	wg.Wait()
+	select {
+	case err := <-noHistorianErrCh:
+		require.NoError(t, err)
+	default:
+	}
+
+	_, err = client.Execute("drop table vitess_version", nil)
+	require.NoError(t, err)
+	// Leave _vt.schema_version and its rows in place. Dropping the table left
+	// the deferred SetTracking(true) unable to restart the tracker, and
+	// emptying it makes the restart take a fresh snapshot, whose schema reload
+	// can race the barrier table's cleanup DDL and kill the tracker's startup.
+	// With the rows present the restart resumes from the last saved position.
+
+	log.Info("=== END OF TEST")
+}
+
+// waitForSchemaVersionRow waits until the schema tracker has saved at least
+// one schema_version row, so that a subsequent restart resumes from a saved
+// position rather than taking a fresh snapshot.
+func waitForSchemaVersionRow(t *testing.T) {
+	t.Helper()
+	client := framework.NewClient()
+	require.Eventually(t, func() bool {
+		qr, err := client.Execute("select id from _vt.schema_version limit 1", nil)
+		return err == nil && len(qr.Rows) > 0
+	}, 30*time.Second, 100*time.Millisecond, "schema tracker never saved its initial schema_version row")
+}
+
+// waitForSchemaTrackerToCatchUp runs a DDL and waits for the schema tracker to
+// save its schema_version row. The tracker saves rows in binlog order, so once
+// that row exists every DDL that preceded it has a row too, and a stream
+// started afterwards from "current" sees VERSION events only for later DDL.
+// The DDL is spelled the way the tablet re-serializes it, since the row is
+// matched on the statement text. The table is dropped when the test ends.
+func waitForSchemaTrackerToCatchUp(t *testing.T) {
+	t.Helper()
+	const ddl = "create table vitess_version_barrier (\n\tid int\n)"
+	client := framework.NewClient()
+	_, err := client.Execute(ddl, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := client.Execute("drop table if exists vitess_version_barrier", nil)
+		assert.NoError(t, err)
+	})
+	_, err = waitForVersionInsert(client, ddl)
+	require.NoError(t, err, "schema tracker never saved a schema_version row for %s", ddl)
+}
+
+func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*binlogdatapb.VEvent) {
+	t.Helper()
+	client := framework.NewClient()
+
+	for _, test := range tests {
+		query := test.query
+		_, err := client.Execute(query, nil)
+		require.NoErrorf(t, err, "executing query %s", query)
+		if len(test.output) > 0 {
+			expectLogs(ctx, t, query, eventCh, test.output)
+		}
+		if strings.HasPrefix(query, "create") || strings.HasPrefix(query, "alter") || strings.HasPrefix(query, "drop") {
+			ok, err := waitForVersionInsert(client, query)
+			require.NoErrorf(t, err, "waiting for schema_version insert for %s", query)
+			require.Truef(t, ok, "Query %s never got inserted into the schema_version table", query)
+			framework.Server.SchemaEngine().Reload(ctx)
+		}
+	}
+}
+
+func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []*binlogdatapb.VEvent, output []string) {
+	t.Helper()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	var evs []*binlogdatapb.VEvent
+	log.Info(fmt.Sprintf("In expectLogs for query %s, output len %d", query, len(output)))
+	for {
+		select {
+		case allevs, ok := <-eventCh:
+			require.True(t, ok, "expectLogs: not ok, stream ended early")
+			// Ignore unrelated gtid progress events that can race with the events that the test expects
+			if len(allevs) == 3 &&
+				allevs[0].Type == binlogdatapb.VEventType_BEGIN &&
+				allevs[1].Type == binlogdatapb.VEventType_GTID &&
+				allevs[2].Type == binlogdatapb.VEventType_COMMIT {
+				continue
+			}
+			for _, ev := range allevs {
+				// Ignore spurious heartbeats that can happen on slow machines.
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				if ev.Type == binlogdatapb.VEventType_ROW {
+					ev.RowEvent.Flags = 0 // null Flags, so we don't have to define flags in every wanted row event.
+				}
+
+				if ev.Throttled {
+					continue
+				}
+				// Also ignore begin/commit to reduce list of events to expect, for readability ...
+				if ev.Type == binlogdatapb.VEventType_BEGIN {
+					continue
+				}
+				if ev.Type == binlogdatapb.VEventType_COMMIT {
+					continue
+				}
+
+				evs = append(evs, ev)
+			}
+			log.Info(fmt.Sprintf("In expectLogs, have got %d events, want %d", len(evs), len(output)))
+		case <-ctx.Done():
+			require.FailNow(t, "expectLog: Done(), stream ended early")
+		case <-timer.C:
+			require.FailNowf(t, "expectLog", "timed out waiting for events: %v: evs\n%v, want\n%v, >> got length %d, wanted length %d", query, evs, output, len(evs), len(output))
+		}
+		if len(evs) >= len(output) {
+			break
+		}
+	}
+	require.Lenf(t, evs, len(output), "expectLog: got wrong number of events: %v: evs\n%v, want\n%v", query, evs, output)
+	for i, want := range output {
+		// CurrentTime is not testable.
+		evs[i].CurrentTime = 0
+		switch want {
+		case "begin":
+			require.Equalf(t, binlogdatapb.VEventType_BEGIN, evs[i].Type, "%v (%d): event: %v, want begin", query, i, evs[i])
+		case "gtid":
+			require.Equalf(t, binlogdatapb.VEventType_GTID, evs[i].Type, "%v (%d): event: %v, want gtid", query, i, evs[i])
+		case "commit":
+			require.Equalf(t, binlogdatapb.VEventType_COMMIT, evs[i].Type, "%v (%d): event: %v, want commit", query, i, evs[i])
+		case "other":
+			require.Equalf(t, binlogdatapb.VEventType_OTHER, evs[i].Type, "%v (%d): event: %v, want other", query, i, evs[i])
+		case "version":
+			require.Equalf(t, binlogdatapb.VEventType_VERSION, evs[i].Type, "%v (%d): event: %v, want version", query, i, evs[i])
+		default:
+			evs[i].Timestamp = 0
+			evs[i].Keyspace = ""
+			evs[i].Shard = ""
+			evs[i].SequenceNumber = 0
+			evs[i].CommitParent = 0
+			evs[i].EventGtid = ""
+			if evs[i].Type == binlogdatapb.VEventType_FIELD {
+				for j := range evs[i].FieldEvent.Fields {
+					evs[i].FieldEvent.Fields[j].Flags = 0
+				}
+				evs[i].FieldEvent.Keyspace = ""
+				evs[i].FieldEvent.Shard = ""
+			}
+			if evs[i].Type == binlogdatapb.VEventType_ROW {
+				evs[i].RowEvent.Keyspace = ""
+				evs[i].RowEvent.Shard = ""
+			}
+			got := fmt.Sprintf("%v", evs[i])
+			require.Equalf(t, want, got, "%v (%d): event mismatch", query, i)
+		}
+	}
+}
+
+func encodeString(in string) string {
+	return sqltypes.EncodeStringSQL(in)
+}
+
+func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
+	qr, err := client.Execute("select * from _vt.schema_version where ddl = "+encodeString(ddl), nil)
+	if err != nil {
+		return false
+	}
+	// A DDL can have more than one row: a save that committed but was
+	// reported as failed, e.g. because Close() killed it, is replayed.
+	if len(qr.Rows) >= 1 {
+		log.Info("Found ddl in schema_version: " + ddl)
+		return true
+	}
+	return false
+}
+
+// To avoid races between ddls and the historian refreshing its cache explicitly wait for tracker's insert to be visible
+func waitForVersionInsert(client *framework.QueryClient, ddl string) (bool, error) {
+	// Generous: the tracker may be saving a backlog of rows on a slow runner.
+	timeout := time.After(30 * time.Second)
+	tick := time.Tick(100 * time.Millisecond)
+	for {
+		select {
+		case <-timeout:
+			log.Info("waitForVersionInsert timed out")
+			return false, errors.New("waitForVersionInsert timed out")
+		case <-tick:
+			ok := validateSchemaInserted(client, ddl)
+			if ok {
+				log.Info("Found version insert for " + ddl)
+				return true, nil
+			}
+		}
+	}
+}

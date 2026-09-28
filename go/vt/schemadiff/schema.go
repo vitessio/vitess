@@ -1,0 +1,1296 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package schemadiff
+
+import (
+	"errors"
+	"maps"
+	"sort"
+	"strings"
+
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+)
+
+// Schema represents a database schema, which may contain entities such as tables and views.
+// Schema is not in itself an Entity, since it is more of a collection of entities.
+type Schema struct {
+	tables []*CreateTableEntity
+	views  []*CreateViewEntity
+
+	named  map[string]Entity
+	sorted []Entity
+
+	fkChildToParents   map[string][]*CreateTableEntity
+	fkParentToChildren map[string][]*CreateTableEntity
+
+	env *Environment
+}
+
+// newEmptySchema is used internally to initialize a Schema object
+func newEmptySchema(env *Environment) *Schema {
+	schema := &Schema{
+		tables: []*CreateTableEntity{},
+		views:  []*CreateViewEntity{},
+		named:  map[string]Entity{},
+		sorted: []Entity{},
+
+		fkChildToParents:   map[string][]*CreateTableEntity{},
+		fkParentToChildren: map[string][]*CreateTableEntity{},
+
+		env: env,
+	}
+	return schema
+}
+
+// NewSchemaFromEntities creates a valid and normalized schema based on list of entities
+func NewSchemaFromEntities(env *Environment, entities []Entity) (*Schema, error) {
+	schema := newEmptySchema(env)
+	for _, e := range entities {
+		switch c := e.(type) {
+		case *CreateTableEntity:
+			schema.tables = append(schema.tables, c)
+		case *CreateViewEntity:
+			schema.views = append(schema.views, c)
+		default:
+			return nil, &UnsupportedEntityError{Entity: c.Name(), Statement: c.Create().CanonicalStatementString()}
+		}
+	}
+	err := schema.normalize(EmptyDiffHints())
+	return schema, err
+}
+
+// NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
+func NewSchemaFromStatements(env *Environment, statements []sqlparser.Statement) (*Schema, error) {
+	entities := make([]Entity, 0, len(statements))
+	for _, s := range statements {
+		switch stmt := s.(type) {
+		case *sqlparser.CreateTable:
+			c, err := NewCreateTableEntity(env, stmt)
+			if err != nil {
+				return nil, err
+			}
+			entities = append(entities, c)
+		case *sqlparser.CreateView:
+			v, err := NewCreateViewEntity(env, stmt)
+			if err != nil {
+				return nil, err
+			}
+			entities = append(entities, v)
+		default:
+			return nil, &UnsupportedStatementError{Statement: sqlparser.CanonicalString(s)}
+		}
+	}
+	return NewSchemaFromEntities(env, entities)
+}
+
+// NewSchemaFromQueries creates a valid and normalized schema based on list of queries
+func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
+	statements := make([]sqlparser.Statement, 0, len(queries))
+	for _, q := range queries {
+		stmt, err := env.Parser().ParseStrictDDL(q)
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, stmt)
+	}
+	return NewSchemaFromStatements(env, statements)
+}
+
+// NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
+// CREATE statements for various objects (tables, views)
+func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
+	statements, err := env.Parser().ParseMultipleIgnoreEmpty(sql)
+	if err != nil {
+		return nil, err
+	}
+	return NewSchemaFromStatements(env, statements)
+}
+
+// getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referenced foreign key tables names.
+// A table name may appear twice in the result output, if it is referenced by more than one foreign key
+func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []string) {
+	for _, cs := range createTable.TableSpec.Constraints {
+		if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+			names = append(names, parentTableName)
+		}
+	}
+	return names
+}
+
+func findForeignKeyDefinition(createTable *sqlparser.CreateTable, constraintName string) *sqlparser.ForeignKeyDefinition {
+	if createTable == nil || createTable.TableSpec == nil {
+		return nil
+	}
+	for _, cs := range createTable.TableSpec.Constraints {
+		if strings.EqualFold(cs.Name.String(), constraintName) {
+			if fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				return fk
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+// getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
+func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, cteNames []string) {
+	cteMap := make(map[string]bool)
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.CommonTableExpr:
+			if !cteMap[node.ID.String()] {
+				cteNames = append(cteNames, node.ID.String())
+				cteMap[node.ID.String()] = true
+			}
+		case *sqlparser.TableName:
+			if _, isCte := cteMap[node.Name.String()]; !isCte {
+				names = append(names, node.Name.String())
+			}
+		case *sqlparser.AliasedTableExpr:
+			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
+				if _, isCte := cteMap[tableName.Name.String()]; !isCte {
+					names = append(names, tableName.Name.String())
+				}
+			}
+			// or, this could be a more complex expression, like a derived table `(select * from v1) as derived`,
+			// in which case further Walk-ing will eventually find the "real" table name
+		}
+		return true, nil
+	}, createView)
+	return names, cteNames
+}
+
+// normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
+// It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
+func (s *Schema) normalize(hints *DiffHints) error {
+	var errs error
+
+	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
+	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
+	// Verify no two entities share same name
+	for _, t := range s.tables {
+		name := t.Name()
+		if _, ok := s.named[name]; ok {
+			return &ApplyDuplicateEntityError{Entity: name}
+		}
+		s.named[name] = t
+	}
+	for _, v := range s.views {
+		name := v.Name()
+		if _, ok := s.named[name]; ok {
+			return &ApplyDuplicateEntityError{Entity: name}
+		}
+		s.named[name] = v
+	}
+
+	// Generally speaking, we want tables and views to be sorted alphabetically
+	sort.SliceStable(s.tables, func(i, j int) bool {
+		return s.tables[i].Name() < s.tables[j].Name()
+	})
+	sort.SliceStable(s.views, func(i, j int) bool {
+		return s.views[i].Name() < s.views[j].Name()
+	})
+
+	// More importantly, we want tables and views to be sorted in applicable order.
+	// For example, if a view v reads from table t, then t must be defined before v.
+	// We actually prioritise all tables first, then views.
+	// If a view v1 depends on v2, then v2 must come before v1, even though v1
+	// precedes v2 alphabetically
+	dependencyLevels := make(map[string]int, len(s.tables)+len(s.views))
+
+	allNamesFoundInLowerLevel := func(names []string, level int) bool {
+		for _, name := range names {
+			dependencyLevel, ok := dependencyLevels[name]
+			if !ok {
+				// named table is not yet handled. This means this view cannot be defined yet.
+				return false
+			}
+			if dependencyLevel >= level {
+				// named table/view is in same dependency level as this view; we want to postpone this
+				// view for s future iteration because we want to first maintain alphabetical ordering.
+				return false
+			}
+		}
+		return true
+	}
+
+	// Utility map and function to only record one foreign-key error per table. We make this limitation
+	// because the search algorithm below could review the same table twice, thus potentially unnecessarily duplicating
+	// found errors.
+	entityFkErrors := map[string]error{}
+	addEntityFkError := func(e Entity, err error) error {
+		if _, ok := entityFkErrors[e.Name()]; ok {
+			// error already recorded for this entity
+			return nil
+		}
+		entityFkErrors[e.Name()] = err
+		return err
+	}
+	// We now iterate all tables. We iterate "dependency levels":
+	// - first we want all tables that don't have foreign keys or which only reference themselves
+	// - then we only want tables that reference 1st level tables. these are 2nd level tables
+	// - etc.
+	// we stop when we have been unable to find a table in an iteration.
+	fkParents := map[string]bool{}
+	iterationLevel := 0
+	for {
+		handledAnyTablesInIteration := false
+		for _, t := range s.tables {
+			name := t.Name()
+			if _, ok := dependencyLevels[name]; ok {
+				// already handled; skip
+				continue
+			}
+			// Not handled. Does this table reference an already handled table?
+			referencedTableNames := getForeignKeyParentTableNames(t.CreateTable)
+			for _, referencedTableName := range referencedTableNames {
+				referencedTableEntity := s.Table(referencedTableName)
+				if referencedTableEntity == nil {
+					continue
+				}
+				s.fkParentToChildren[referencedTableName] = append(s.fkParentToChildren[referencedTableName], t)
+				s.fkChildToParents[name] = append(s.fkChildToParents[name], referencedTableEntity)
+			}
+			nonSelfReferenceNames := []string{}
+			for _, referencedTableName := range referencedTableNames {
+				if referencedTableName != name {
+					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
+				}
+				referencedEntity, ok := s.named[referencedTableName]
+				if !ok {
+					if hints.ForeignKeyCheckStrategy == ForeignKeyCheckStrategyStrict {
+						errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyNonexistentReferencedTableError{Table: name, ReferencedTable: referencedTableName}))
+						continue
+					}
+				}
+				if _, ok := referencedEntity.(*CreateViewEntity); ok {
+					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyReferencesViewError{Table: name, ReferencedView: referencedTableName}))
+					continue
+				}
+
+				fkParents[referencedTableName] = true
+			}
+			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
+				s.sorted = append(s.sorted, t)
+				dependencyLevels[t.Name()] = iterationLevel
+				handledAnyTablesInIteration = true
+			}
+		}
+		if !handledAnyTablesInIteration {
+			break
+		}
+		iterationLevel++
+	}
+	if len(dependencyLevels) != len(s.tables) {
+		// We have leftover tables. This can happen if there's foreign key loops
+		for _, t := range s.tables {
+			if _, ok := dependencyLevels[t.Name()]; ok {
+				// known table
+				continue
+			}
+			// Table is part of a loop or references a loop
+			s.sorted = append(s.sorted, t)
+			dependencyLevels[t.Name()] = iterationLevel // all in same level
+		}
+	}
+
+	// We now iterate all views. We iterate "dependency levels":
+	// - first we want all views that only depend on tables. These are 1st level views.
+	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
+	// - etc.
+	// we stop when we have been unable to find a view in an iteration.
+
+	// It's possible that there's never been any tables in this schema. Which means
+	// iterationLevel remains zero.
+	// To deal with views, we must have iterationLevel at least 1. This is because any view reads
+	// from _something_: at the very least it reads from DUAL (implicitly or explicitly). Which
+	// puts the view at a higher level.
+	if iterationLevel < 1 {
+		iterationLevel = 1
+	}
+	for {
+		handledAnyViewsInIteration := false
+		for _, v := range s.views {
+			name := v.Name()
+			if _, ok := dependencyLevels[name]; ok {
+				// already handled; skip
+				continue
+			}
+			// Not handled. Is this view dependent on already handled objects?
+			dependentNames, _ := getViewDependentTableNames(v.CreateView)
+			if allNamesFoundInLowerLevel(dependentNames, iterationLevel) {
+				s.sorted = append(s.sorted, v)
+				dependencyLevels[v.Name()] = iterationLevel
+				handledAnyViewsInIteration = true
+			}
+		}
+		if !handledAnyViewsInIteration {
+			break
+		}
+		iterationLevel++
+	}
+
+	if len(s.sorted) != len(s.tables)+len(s.views) {
+		// We have leftover tables or views. This can happen if the schema definition is invalid:
+		// - a table's foreign key references a nonexistent table
+		// - two or more tables have circular FK dependency
+		// - a view depends on a nonexistent table
+		// - two or more views have a circular dependency
+		for _, t := range s.tables {
+			if _, ok := dependencyLevels[t.Name()]; !ok {
+				// We _know_ that in this iteration, at least one foreign key is not found.
+				// We return the first one.
+				errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyDependencyUnresolvedError{Table: t.Name()}))
+				s.sorted = append(s.sorted, t)
+			}
+		}
+		for _, v := range s.views {
+			if _, ok := dependencyLevels[v.Name()]; !ok {
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We gather all the errors.
+				dependentNames, _ := getViewDependentTableNames(v.CreateView)
+				missingReferencedEntities := []string{}
+				for _, name := range dependentNames {
+					if _, ok := dependencyLevels[name]; !ok {
+						missingReferencedEntities = append(missingReferencedEntities, name)
+					}
+				}
+				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String(), MissingReferencedEntities: missingReferencedEntities})
+				// We still add it so it shows up in the output if that is used for anything.
+				s.sorted = append(s.sorted, v)
+			}
+		}
+	}
+
+	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
+	if err := s.ValidateViewReferences(); err != nil {
+		errs = errors.Join(errs, err)
+	}
+
+	// Validate table definitions
+	for _, t := range s.tables {
+		if err := t.validate(); err != nil {
+			return errors.Join(errs, err)
+		}
+	}
+
+	// Now validate foreign key columns:
+	// - referenced table columns must exist
+	// - foreign key columns must match in count and type to referenced table columns
+	// - referenced table has an appropriate index over referenced columns
+	for _, t := range s.tables {
+		if len(t.TableSpec.Constraints) == 0 {
+			continue
+		}
+
+		tableColumns := map[string]*sqlparser.ColumnDefinition{}
+		for _, col := range t.TableSpec.Columns {
+			colName := col.Name.Lowered()
+			tableColumns[colName] = col
+		}
+
+		for _, cs := range t.TableSpec.Constraints {
+			check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+			if !ok {
+				continue
+			}
+			referencedTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+			referencedTable := s.Table(referencedTableName)
+			if referencedTable == nil {
+				// This can happen because earlier, when we validated existence of reference table, we took note
+				// of nonexisting tables, but kept on going.
+				continue
+			}
+
+			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
+			for _, col := range referencedTable.TableSpec.Columns {
+				colName := col.Name.Lowered()
+				referencedColumns[colName] = col
+			}
+			// Thanks to table validation, we already know the foreign key covered columns count is equal to the
+			// referenced table column count. Now ensure their types are identical
+			for i, col := range check.Source {
+				coveredColumn, ok := tableColumns[col.Lowered()]
+				if !ok {
+					return errors.Join(errs, &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()})
+				}
+				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
+				referencedColumn, ok := referencedColumns[referencedColumnName]
+				if !ok {
+					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
+				}
+				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
+					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
+				}
+			}
+
+			if !referencedTable.columnsCoveredByInOrderIndex(check.ReferenceDefinition.ReferencedColumns) {
+				return errors.Join(errs, &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName})
+			}
+		}
+	}
+
+	// Validate uniqueness of check constraint and of foreign key constraint names
+	fkConstraintNames := map[string]bool{}
+	checkConstraintNames := map[string]bool{}
+	for _, t := range s.tables {
+		for _, cs := range t.TableSpec.Constraints {
+			if _, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				if _, ok := fkConstraintNames[cs.Name.String()]; ok {
+					errs = errors.Join(errs, &DuplicateForeignKeyConstraintNameError{Table: t.Name(), Constraint: cs.Name.String()})
+				}
+				fkConstraintNames[cs.Name.String()] = true
+			}
+			if _, ok := cs.Details.(*sqlparser.CheckConstraintDefinition); ok {
+				if _, ok := checkConstraintNames[cs.Name.String()]; ok {
+					errs = errors.Join(errs, &DuplicateCheckConstraintNameError{Table: t.Name(), Constraint: cs.Name.String()})
+				}
+				checkConstraintNames[cs.Name.String()] = true
+			}
+		}
+	}
+
+	return errs
+}
+
+func colTypeCompatibleForForeignKey(child, parent *sqlparser.ColumnType) bool {
+	if child.Type == parent.Type {
+		return true
+	}
+	if child.Type == "char" && parent.Type == "varchar" {
+		return true
+	}
+	if child.Type == "varchar" && parent.Type == "char" {
+		return true
+	}
+	return false
+}
+
+func colTypeEqualForForeignKey(env *Environment, ct, pt *sqlparser.TableSpec, child, parent *sqlparser.ColumnType) bool {
+	if colTypeCompatibleForForeignKey(child, parent) &&
+		child.Unsigned == parent.Unsigned &&
+		child.Zerofill == parent.Zerofill &&
+		colCollationEqualForForeignKey(env, ct, pt, child, parent) &&
+		sqlparser.Equals.SliceOfString(child.EnumValues, parent.EnumValues) {
+		// Complete identify (other than precision which is ignored)
+		return true
+	}
+	return false
+}
+
+func colCollationEqualForForeignKey(env *Environment, ct, pt *sqlparser.TableSpec, child, parent *sqlparser.ColumnType) bool {
+	isTextual := func(col *sqlparser.ColumnType) bool {
+		return charsetTypes[strings.ToLower(col.Type)]
+	}
+	if !isTextual(child) || !isTextual(parent) {
+		// irrelevant if columns are not textual
+		return true
+	}
+	return *colCollation(env, ct, child) == *colCollation(env, pt, parent)
+}
+
+func colCollation(env *Environment, t *sqlparser.TableSpec, col *sqlparser.ColumnType) *charsetCollate {
+	tc := getTableCharsetCollate(env, &t.Options)
+	cc := &charsetCollate{}
+	if col.Charset.Name != "" {
+		cc.charset = col.Charset.Name
+	} else if tc.charset != "" {
+		cc.charset = tc.charset
+	} else {
+		cc.charset = env.CollationEnv().LookupCharsetName(env.DefaultColl)
+	}
+	if col.Options != nil && col.Options.Collate != "" {
+		cc.collate = col.Options.Collate
+	} else if tc.collate != "" {
+		cc.collate = tc.collate
+	} else {
+		cc.collate = env.CollationEnv().LookupName(env.DefaultColl)
+	}
+	return cc
+}
+
+// Entities returns this schema's entities in good order (may be applied without error)
+func (s *Schema) Entities() []Entity {
+	return s.sorted
+}
+
+// EntityNames is a convenience function that returns just the names of entities, in good order
+func (s *Schema) EntityNames() []string {
+	names := make([]string, 0, len(s.Entities()))
+	for _, e := range s.Entities() {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+// Tables returns this schema's tables in good order (may be applied without error)
+func (s *Schema) Tables() []*CreateTableEntity {
+	var tables []*CreateTableEntity
+	for _, entity := range s.sorted {
+		if table, ok := entity.(*CreateTableEntity); ok {
+			tables = append(tables, table)
+		}
+	}
+	return tables
+}
+
+// TableNames is a convenience function that returns just the names of tables, in good order
+func (s *Schema) TableNames() []string {
+	tables := s.Tables()
+	names := make([]string, 0, len(tables))
+	for _, e := range tables {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+// Views returns this schema's views in good order (may be applied without error)
+func (s *Schema) Views() []*CreateViewEntity {
+	var views []*CreateViewEntity
+	for _, entity := range s.sorted {
+		if view, ok := entity.(*CreateViewEntity); ok {
+			views = append(views, view)
+		}
+	}
+	return views
+}
+
+// ViewNames is a convenience function that returns just the names of views, in good order
+func (s *Schema) ViewNames() []string {
+	views := s.Views()
+	names := make([]string, 0, len(views))
+	for _, e := range views {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+// Diff compares this schema with another schema, and sees what it takes to make this schema look
+// like the other. It returns a list of diffs.
+func (s *Schema) diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
+	// dropped entities
+	var dropDiffs []EntityDiff
+	for _, e := range s.Entities() {
+		if _, ok := other.named[e.Name()]; !ok {
+			// other schema does not have the entity
+			// Entities are sorted in foreign key CREATE TABLE valid order (create parents first, then children).
+			// When issuing DROPs, we want to reverse that order. We want to first do it for children, then parents.
+			// Instead of analyzing all relationships again, we just reverse the entire order of DROPs, foreign key
+			// related or not.
+			dropDiffs = append([]EntityDiff{e.Drop()}, dropDiffs...)
+		}
+	}
+	// We iterate by order of "other" schema because we need to construct queries that will be valid
+	// for that schema (we need to maintain view dependencies according to target, not according to source)
+	var alterDiffs []EntityDiff
+	var createDiffs []EntityDiff
+	for _, e := range other.Entities() {
+		if fromEntity, ok := s.named[e.Name()]; ok {
+			// entities exist by same name in both schemas. Let's diff them.
+			diff, err := fromEntity.Diff(e, hints)
+
+			switch {
+			case err != nil && errors.Is(err, ErrEntityTypeMismatch):
+				// e.g. comparing a table with a view
+				// there's no single "diff", ie no single ALTER statement to convert from one to another,
+				// hence the error.
+				// But in our schema context, we know better. We know we should DROP the one, CREATE the other.
+				// We proceed to do that, and implicitly ignore the error
+				dropDiffs = append(dropDiffs, fromEntity.Drop())
+				createDiffs = append(createDiffs, e.Create())
+				// And we're good. We can move on to comparing next entity.
+			case err != nil:
+				// Any other kind of error
+				return nil, err
+			default:
+				// No error, let's check the diff:
+				if diff != nil && !diff.IsEmpty() {
+					alterDiffs = append(alterDiffs, diff)
+				}
+			}
+		} else { // !ok
+			// Added entity
+			// this schema does not have the entity
+			createDiffs = append(createDiffs, e.Create())
+		}
+	}
+	dropDiffs, createDiffs, renameDiffs := s.heuristicallyDetectTableRenames(dropDiffs, createDiffs, hints)
+	diffs = append(diffs, dropDiffs...)
+	diffs = append(diffs, alterDiffs...)
+	diffs = append(diffs, createDiffs...)
+	diffs = append(diffs, renameDiffs...)
+
+	return diffs, err
+}
+
+func (s *Schema) heuristicallyDetectTableRenames(
+	dropDiffs []EntityDiff,
+	createDiffs []EntityDiff,
+	hints *DiffHints,
+) (
+	updatedDropDiffs []EntityDiff,
+	updatedCreateDiffs []EntityDiff,
+	renameDiffs []EntityDiff,
+) {
+	renameDiffs = []EntityDiff{}
+
+	findRenamedTable := func() bool {
+		// What we're doing next is to try and identify a table RENAME.
+		// We do so by cross-referencing dropped and created tables.
+		// The check is heuristic, and looks like this:
+		// We consider a table renamed iff:
+		// - the DROP and CREATE table definitions are identical other than the table name
+		// In the case where multiple dropped tables have identical schema, and likewise multiple created tables
+		// have identical schemas, schemadiff makes an arbitrary match.
+		// Once we heuristically decide that we found a RENAME, we cancel the DROP,
+		// cancel the CREATE, and inject a RENAME in place of both.
+
+		// findRenamedTable cross-references dropped and created tables to find a single renamed table. If such is found:
+		// we remove the entry from DROPped tables, remove the entry from CREATEd tables, add an entry for RENAMEd tables,
+		// and return 'true'.
+		// Successive calls to this function will then find the next heuristic RENAMEs.
+		// the function returns 'false' if it is unable to heuristically find a RENAME.
+		for iDrop, drop1 := range dropDiffs {
+			for iCreate, create2 := range createDiffs {
+				dropTableDiff, ok := drop1.(*DropTableEntityDiff)
+				if !ok {
+					continue
+				}
+				createTableDiff, ok := create2.(*CreateTableEntityDiff)
+				if !ok {
+					continue
+				}
+				if !dropTableDiff.from.identicalOtherThanName(createTableDiff.to) {
+					continue
+				}
+				// Yes, it looks like those tables have the exact same spec, just with different names.
+				dropDiffs = append(dropDiffs[0:iDrop], dropDiffs[iDrop+1:]...)
+				createDiffs = append(createDiffs[0:iCreate], createDiffs[iCreate+1:]...)
+				renameTable := &sqlparser.RenameTable{
+					TablePairs: []*sqlparser.RenameTablePair{
+						{FromTable: dropTableDiff.from.Table, ToTable: createTableDiff.to.Table},
+					},
+				}
+				renameTableEntityDiff := &RenameTableEntityDiff{
+					from:        dropTableDiff.from,
+					to:          createTableDiff.to,
+					renameTable: renameTable,
+				}
+				renameDiffs = append(renameDiffs, renameTableEntityDiff)
+				return true
+			}
+		}
+		return false
+	}
+	switch hints.TableRenameStrategy {
+	case TableRenameAssumeDifferent:
+		// do nothing
+	case TableRenameHeuristicStatement:
+		for findRenamedTable() {
+			// Iteratively detect all RENAMEs
+		}
+	}
+
+	return dropDiffs, createDiffs, renameDiffs
+}
+
+// Entity returns an entity by name, or nil if nonexistent
+func (s *Schema) Entity(name string) Entity {
+	return s.named[name]
+}
+
+// Table returns a table by name, or nil if nonexistent
+func (s *Schema) Table(name string) *CreateTableEntity {
+	if table, ok := s.named[name].(*CreateTableEntity); ok {
+		return table
+	}
+	return nil
+}
+
+// View returns a view by name, or nil if nonexistent
+func (s *Schema) View(name string) *CreateViewEntity {
+	if view, ok := s.named[name].(*CreateViewEntity); ok {
+		return view
+	}
+	return nil
+}
+
+// ToStatements returns an ordered list of statements which can be applied to create the schema
+func (s *Schema) ToStatements() []sqlparser.Statement {
+	stmts := make([]sqlparser.Statement, 0, len(s.Entities()))
+	for _, e := range s.Entities() {
+		stmts = append(stmts, e.Create().Statement())
+	}
+	return stmts
+}
+
+// ToQueries returns an ordered list of queries which can be applied to create the schema
+func (s *Schema) ToQueries() []string {
+	queries := make([]string, 0, len(s.Entities()))
+	for _, e := range s.Entities() {
+		queries = append(queries, e.Create().CanonicalStatementString())
+	}
+	return queries
+}
+
+// ToSQL returns a SQL blob with ordered sequence of queries which can be applied to create the schema
+func (s *Schema) ToSQL() string {
+	var buf strings.Builder
+	for _, query := range s.ToQueries() {
+		buf.WriteString(query)
+		buf.WriteString(";\n")
+	}
+	return buf.String()
+}
+
+// copy returns a shallow copy of the schema. This is used when applying changes for example.
+// applying changes will ensure we copy new entities themselves separately.
+func (s *Schema) copy() *Schema {
+	dup := newEmptySchema(s.env)
+	dup.tables = make([]*CreateTableEntity, len(s.tables))
+	copy(dup.tables, s.tables)
+	dup.views = make([]*CreateViewEntity, len(s.views))
+	copy(dup.views, s.views)
+	dup.named = make(map[string]Entity, len(s.named))
+	maps.Copy(dup.named, s.named)
+	dup.sorted = make([]Entity, len(s.sorted))
+	copy(dup.sorted, s.sorted)
+	return dup
+}
+
+// apply attempts to apply given list of diffs to this object.
+// These diffs are CREATE/DROP/ALTER TABLE/VIEW.
+func (s *Schema) apply(diffs []EntityDiff, hints *DiffHints) error {
+	for _, diff := range diffs {
+		switch diff := diff.(type) {
+		case *CreateTableEntityDiff:
+			// We expect the table to not exist
+			name := diff.createTable.Table.Name.String()
+			if _, ok := s.named[name]; ok {
+				return &ApplyDuplicateEntityError{Entity: name}
+			}
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable, Env: s.env})
+			_, s.named[name] = diff.Entities()
+		case *CreateViewEntityDiff:
+			// We expect the view to not exist
+			name := diff.createView.ViewName.Name.String()
+			if _, ok := s.named[name]; ok {
+				return &ApplyDuplicateEntityError{Entity: name}
+			}
+			s.views = append(s.views, &CreateViewEntity{CreateView: diff.createView})
+			_, s.named[name] = diff.Entities()
+		case *DropTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					s.tables = append(s.tables[0:i], s.tables[i+1:]...)
+					delete(s.named, name)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
+			}
+		case *DropViewEntityDiff:
+			// We expect the view to exist
+			found := false
+			for i, v := range s.views {
+				if name := v.ViewName.Name.String(); name == diff.from.ViewName.Name.String() {
+					s.views = append(s.views[0:i], s.views[i+1:]...)
+					delete(s.named, name)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
+			}
+		case *AlterTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					to, err := t.Apply(diff)
+					if err != nil {
+						return err
+					}
+					toCreateTableEntity, ok := to.(*CreateTableEntity)
+					if !ok {
+						return ErrEntityTypeMismatch
+					}
+					s.tables[i] = toCreateTableEntity
+					s.named[name] = toCreateTableEntity
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
+			}
+		case *AlterViewEntityDiff:
+			// We expect the view to exist
+			found := false
+			for i, v := range s.views {
+				if name := v.ViewName.Name.String(); name == diff.from.ViewName.Name.String() {
+					to, err := v.Apply(diff)
+					if err != nil {
+						return err
+					}
+					toCreateViewEntity, ok := to.(*CreateViewEntity)
+					if !ok {
+						return ErrEntityTypeMismatch
+					}
+					s.views[i] = toCreateViewEntity
+					s.named[name] = toCreateViewEntity
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
+			}
+		case *RenameTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					s.tables[i] = diff.to
+					delete(s.named, name)
+					s.named[diff.to.Table.Name.String()] = diff.to
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
+			}
+		default:
+			return &UnsupportedApplyOperationError{Statement: diff.CanonicalStatementString()}
+		}
+	}
+	if err := s.normalize(hints); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Apply attempts to apply given list of diffs to the schema described by this object.
+// These diffs are CREATE/DROP/ALTER TABLE/VIEW.
+// The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
+func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
+	dup := s.copy()
+	if err := dup.apply(diffs, EmptyDiffHints()); err != nil {
+		return nil, err
+	}
+	return dup, nil
+}
+
+// SchemaDiff calculates a rich diff between this schema and the given schema. It builds on top of diff():
+// on top of the list of diffs that can take this schema into the given schema, this function also
+// evaluates the dependencies between those diffs, if any, and the resulting SchemaDiff object offers OrderedDiffs(),
+// the safe ordering of diffs that, when applied sequentially, does not produce any conflicts and keeps schema valid
+// at each step.
+func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
+	diffs, err := s.diff(other, hints)
+	if err != nil {
+		return nil, err
+	}
+	schemaDiff := NewSchemaDiff(s, other, hints)
+	schemaDiff.loadDiffs(diffs)
+
+	// Utility function to see whether the given diff has dependencies on diffs that operate on any of the given named entities,
+	// and if so, record that dependency
+	checkDependencies := func(diff EntityDiff, dependentNames []string) (dependentDiffs []EntityDiff, relationsMade bool) {
+		for _, dependentName := range dependentNames {
+			dependentDiffs = schemaDiff.diffsByEntityName(dependentName)
+			for _, dependentDiff := range dependentDiffs {
+				// 'diff' refers to an entity (call it "e") that has changed. But here we find that one of the
+				// entities that "e" depends on, has also changed.
+				relationsMade = true
+				schemaDiff.addDep(diff, dependentDiff, DiffDependencyOrderUnknown)
+			}
+		}
+		return dependentDiffs, relationsMade
+	}
+
+	checkChildForeignKeyDefinition := func(fk *sqlparser.ForeignKeyDefinition, diff EntityDiff) (bool, error) {
+		// We add a foreign key. Normally that's fine, expect for a couple specific scenarios
+		parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+		dependentDiffs, ok := checkDependencies(diff, []string{parentTableName})
+		if !ok {
+			// No dependency. Not interesting
+			return true, nil
+		}
+		for _, parentDiff := range dependentDiffs {
+			switch parentDiff := parentDiff.(type) {
+			case *CreateTableEntityDiff:
+				// We add a foreign key constraint onto a new table... That table must therefore be first created,
+				// and only then can we proceed to add the FK
+				schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+			case *AlterTableEntityDiff:
+				// The current diff is ALTER TABLE ... ADD FOREIGN KEY, or it is a CREATE TABLE with a FOREIGN KEY
+				// and the parent table also has an ALTER TABLE.
+				// so if the parent's ALTER in any way modifies the referenced FK columns, that's
+				// a sequential execution dependency.
+				// Also, if there is no index on the parent's referenced columns, and a migration adds an index
+				// on those columns, that's a sequential execution dependency.
+				referencedColumnNames := map[string]bool{}
+				for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
+					referencedColumnNames[referencedColumn.Lowered()] = true
+				}
+				// Walk parentDiff.Statement()
+				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					switch node := node.(type) {
+					case *sqlparser.ModifyColumn:
+						if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+						}
+					case *sqlparser.AddColumns:
+						for _, col := range node.Columns {
+							if referencedColumnNames[col.Name.Lowered()] {
+								schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+							}
+						}
+					case *sqlparser.DropColumn:
+						if referencedColumnNames[node.Name.Name.Lowered()] {
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+						}
+					case *sqlparser.AddIndexDefinition:
+						referencedTableEntity, _ := parentDiff.Entities()
+						// We _know_ the type is *CreateTableEntity
+						referencedTable, _ := referencedTableEntity.(*CreateTableEntity)
+						if indexCoversColumnsInOrder(node.IndexDefinition, fk.ReferenceDefinition.ReferencedColumns) {
+							// This diff adds an index covering referenced columns
+							if !referencedTable.columnsCoveredByInOrderIndex(fk.ReferenceDefinition.ReferencedColumns) {
+								// And there was no earlier index on referenced columns. So this is a new index.
+								// In MySQL, you can't add a foreign key constraint on a child, before the parent
+								// has an index of referenced columns. This is a sequential dependency.
+								schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+							}
+						}
+					}
+					return true, nil
+				}, parentDiff.Statement())
+			}
+		}
+		return true, nil
+	}
+
+	// checkForeignKeyShadowConflict detects "shadow table" foreign key corruption. A foreign key
+	// present in the source schema survives on the OnlineDDL held table (`_vt_hld_…`) for the duration
+	// of the child's migration (and until table GC). If a parent table that *survives* this batch is
+	// concurrently altered such that the surviving foreign key becomes invalid — an incompatible
+	// referenced column signature, a dropped or renamed referenced column, or a dropped covering
+	// index — the held table is corrupted. No ordering can resolve this, so we record an
+	// impossible-execution dependency. A *dropped* parent is not a conflict: the table GC reclaims the
+	// held pair with foreign key checks disabled. This is gated behind
+	// ForeignKeyShadowConflictStrategyReject, since it is specific to OnlineDDL's held-table mechanism
+	// and is safe under direct strategy.
+	checkForeignKeyShadowConflict := func(childDiff EntityDiff, cFrom *CreateTableEntity, constraintName string, fk *sqlparser.ForeignKeyDefinition) {
+		referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+		if referencedTableName == cFrom.Name() {
+			// Self-referencing foreign key: the held original table is internally consistent (its
+			// foreign key references its own columns, all at the same version), so it cannot conflict
+			// with a separately-migrated parent. There is no shadow conflict.
+			return
+		}
+		parentDiffs := schemaDiff.diffsByEntityName(referencedTableName)
+		if len(parentDiffs) == 0 {
+			// Parent table is not migrated in this batch: there is no held parent table, and the
+			// final-schema foreign key validation already governs any incompatibility.
+			return
+		}
+		childColumns := cFrom.ColumnDefinitionEntitiesMap()
+		for _, parentDiff := range parentDiffs {
+			breaking := false
+			// Default to the first referenced column so that table-level conflicts (a dropped parent
+			// table or a dropped covering index) still name a column in the error. Column-specific
+			// branches below override this with the exact offending column.
+			referencedColumn := ""
+			if len(fk.ReferenceDefinition.ReferencedColumns) > 0 {
+				referencedColumn = fk.ReferenceDefinition.ReferencedColumns[0].String()
+			}
+			switch parentDiff := parentDiff.(type) {
+			case *AlterTableEntityDiff:
+				_, parentTo := parentDiff.Entities()
+				parentTable, ok := parentTo.(*CreateTableEntity)
+				if !ok {
+					continue
+				}
+				parentColumns := parentTable.ColumnDefinitionEntitiesMap()
+				for i, referencedCol := range fk.ReferenceDefinition.ReferencedColumns {
+					if i >= len(fk.Source) {
+						break
+					}
+					parentCol, ok := parentColumns[referencedCol.Lowered()]
+					if !ok {
+						// Referenced column was dropped or renamed by the parent's ALTER.
+						breaking, referencedColumn = true, referencedCol.String()
+						break
+					}
+					childCol, ok := childColumns[fk.Source[i].Lowered()]
+					if !ok {
+						continue
+					}
+					if !colTypeEqualForForeignKey(s.env, cFrom.TableSpec, parentTable.TableSpec, childCol.ColumnDefinition.Type, parentCol.ColumnDefinition.Type) {
+						// The surviving foreign key's referenced column changed to an incompatible signature.
+						breaking, referencedColumn = true, referencedCol.String()
+						break
+					}
+				}
+				if !breaking && !parentTable.columnsCoveredByInOrderIndex(fk.ReferenceDefinition.ReferencedColumns) {
+					// The parent no longer has an index covering the referenced columns, which the
+					// surviving foreign key requires.
+					breaking = true
+				}
+			default:
+				continue
+			}
+			if breaking {
+				schemaDiff.addDep(childDiff, parentDiff, DiffDependencyImpossibleExecution)
+				schemaDiff.foreignKeyShadowConflicts = append(schemaDiff.foreignKeyShadowConflicts, &ForeignKeyShadowConflictError{
+					Table:            cFrom.Name(),
+					Constraint:       constraintName,
+					ReferencedTable:  referencedTableName,
+					ReferencedColumn: referencedColumn,
+				})
+			}
+		}
+	}
+
+	checkSourceForeignKeyShadowConflicts := func(childDiff EntityDiff, cFrom *CreateTableEntity) {
+		if hints == nil || hints.ForeignKeyShadowConflictStrategy != ForeignKeyShadowConflictStrategyReject {
+			return
+		}
+		for _, constraint := range cFrom.TableSpec.Constraints {
+			if fk, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				checkForeignKeyShadowConflict(childDiff, cFrom, constraint.Name.String(), fk)
+			}
+		}
+	}
+
+	for _, diff := range schemaDiff.UnorderedDiffs() {
+		switch diff := diff.(type) {
+		case *CreateViewEntityDiff:
+			dependentNames, _ := getViewDependentTableNames(diff.createView)
+			checkDependencies(diff, dependentNames)
+		case *AlterViewEntityDiff:
+			fromDependentNames, _ := getViewDependentTableNames(diff.from.CreateView)
+			checkDependencies(diff, fromDependentNames)
+			toDependentNames, _ := getViewDependentTableNames(diff.to.CreateView)
+			checkDependencies(diff, toDependentNames)
+		case *DropViewEntityDiff:
+			dependentNames, _ := getViewDependentTableNames(diff.from.CreateView)
+			checkDependencies(diff, dependentNames)
+		case *CreateTableEntityDiff:
+			checkDependencies(diff, getForeignKeyParentTableNames(diff.CreateTable()))
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ConstraintDefinition:
+					// Only interested in a foreign key
+					fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						return true, nil
+					}
+					return checkChildForeignKeyDefinition(fk, diff)
+				}
+				return true, nil
+			}, diff.Statement())
+
+		case *AlterTableEntityDiff:
+			checkSourceForeignKeyShadowConflicts(diff, diff.from)
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.AddConstraintDefinition:
+					// Only interested in adding a foreign key
+					fk, ok := node.ConstraintDefinition.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						return true, nil
+					}
+					return checkChildForeignKeyDefinition(fk, diff)
+				case *sqlparser.DropKey:
+					switch node.Type {
+					case sqlparser.ForeignKeyType, sqlparser.ConstraintType:
+						// Possibly dropping a foreign key; we need to check if this constraint references another table.
+						// The DropKey statement itself only _names_ the constraint, but does not have information
+						// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
+						fk := findForeignKeyDefinition(diff.from.CreateTable, node.Name.String())
+						if fk == nil {
+							return true, nil
+						}
+						parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+						checkDependencies(diff, []string{parentTableName})
+					default:
+						// Not interesting
+						return true, nil
+					}
+				}
+
+				return true, nil
+			}, diff.Statement())
+		case *DropTableEntityDiff:
+			// Dropping a child table leaves a held original (`_vt_hld_…`) that retains its foreign
+			// keys, so it conflicts when a referenced parent *survives* this batch but is altered
+			// incompatibly. A dropped parent is not a conflict (it falls through below): the table GC
+			// reclaims the held pair with foreign key checks disabled, regardless of order.
+			checkSourceForeignKeyShadowConflicts(diff, diff.from)
+		}
+	}
+
+	// Check and assign capabilities:
+	// Reminder: schemadiff assumes a MySQL flavor, so we only check for MySQL capabilities.
+	if capableOf := capabilities.MySQLVersionCapableOf(s.env.MySQLVersion()); capableOf != nil {
+		for _, diff := range schemaDiff.UnorderedDiffs() {
+			switch diff := diff.(type) {
+			case *AlterTableEntityDiff:
+				instantDDLCapable, err := AlterTableCapableOfInstantDDL(diff.AlterTable(), diff.from.CreateTable, capableOf)
+				if err != nil {
+					return nil, err
+				}
+				if instantDDLCapable {
+					diff.instantDDLCapability = InstantDDLCapabilityPossible
+				} else {
+					diff.instantDDLCapability = InstantDDLCapabilityImpossible
+				}
+			}
+		}
+	}
+	return schemaDiff, nil
+}
+
+func (s *Schema) ValidateViewReferences() error {
+	var errs error
+	schemaInformation := newDeclarativeSchemaInformation(s.env)
+
+	// Remember that s.Entities() is already ordered by dependency. ie. tables first, then views
+	// that only depend on those tables (or on dual), then 2nd tier views, etc.
+	// Thus, the order of iteration below is valid and sufficient, to build
+	for _, e := range s.Entities() {
+		entityColumns, err := s.getEntityColumnNames(e.Name(), schemaInformation)
+		if err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+		schemaInformation.addTable(e.Name())
+		for _, col := range entityColumns {
+			schemaInformation.addColumn(e.Name(), col.Lowered())
+		}
+	}
+
+	for _, view := range s.Views() {
+		sel := sqlparser.Clone(view.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
+		formalizeErr := func(err error) error {
+			if err == nil {
+				return nil
+			}
+			switch e := err.(type) {
+			case *semantics.AmbiguousColumnError:
+				return &InvalidColumnReferencedInViewError{
+					View:      view.Name(),
+					Column:    e.Column,
+					Ambiguous: true,
+				}
+			case semantics.ColumnNotFoundError:
+				return &InvalidColumnReferencedInViewError{
+					View:   view.Name(),
+					Column: e.Column.Name.String(),
+				}
+			case *semantics.UnsupportedConstruct:
+				// These are error types from semantic analysis for executing queries. When we
+				// have a view, we don't have Vitess execute these queries but MySQL does, so
+				// we don't want to return errors for these.
+				return nil
+			}
+			return err
+		}
+		errs = errors.Join(errs, formalizeErr(err))
+	}
+	return errs
+}
+
+// getEntityColumnNames returns the names of columns in given entity (either a table or a view)
+func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *declarativeSchemaInformation) (
+	columnNames []*sqlparser.IdentifierCI,
+	err error,
+) {
+	entity := s.Entity(entityName)
+	if entity == nil {
+		return nil, &EntityNotFoundError{Name: entityName}
+	}
+	// The entity is either a table or a view
+	switch entity := entity.(type) {
+	case *CreateTableEntity:
+		return s.getTableColumnNames(entity), nil
+	case *CreateViewEntity:
+		return s.getViewColumnNames(entity, schemaInformation)
+	}
+	return nil, &UnsupportedEntityError{Entity: entity.Name(), Statement: entity.Create().CanonicalStatementString()}
+}
+
+// getTableColumnNames returns the names of columns in given table.
+func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlparser.IdentifierCI) {
+	for _, c := range t.TableSpec.Columns {
+		columnNames = append(columnNames, &c.Name)
+	}
+	return columnNames
+}
+
+// getViewColumnNames returns the names of aliased columns returned by a given view.
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) ([]*sqlparser.IdentifierCI, error) {
+	var columnNames []*sqlparser.IdentifierCI
+	for _, node := range v.Select.GetColumns() {
+		switch node := node.(type) {
+		case *sqlparser.StarExpr:
+			dependentNames, cteNames := getViewDependentTableNames(v.CreateView)
+			if tableName := node.TableName.Name.String(); tableName != "" {
+				if tbl, ok := schemaInformation.Tables[tableName]; ok {
+					for _, col := range tbl.Columns {
+						name := sqlparser.Clone(col.Name)
+						columnNames = append(columnNames, &name)
+					}
+				}
+			} else {
+				// add all columns from all referenced tables and views
+				for _, entityName := range dependentNames {
+					if tbl, ok := schemaInformation.Tables[entityName]; ok {
+						for _, col := range tbl.Columns {
+							name := sqlparser.Clone(col.Name)
+							columnNames = append(columnNames, &name)
+						}
+					}
+				}
+			}
+			if len(columnNames) == 0 && len(cteNames) == 0 {
+				// *-expressions that do not resolve to any columns are invalid in views.
+				// For CTEs, schemadiff does not analyze the list of columns returned by the CTE (even if the CTE defines it).
+				// TODO(shlomi): analyze CTE columns as well.
+				return nil, &InvalidStarExprInViewError{View: v.Name()}
+			}
+		case *sqlparser.AliasedExpr:
+			ci := sqlparser.NewIdentifierCI(node.ColumnName())
+			columnNames = append(columnNames, &ci)
+		}
+	}
+
+	return columnNames, nil
+}

@@ -1,0 +1,97 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches:
+      - main
+      - release-**.0
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'go', 'javascript', 'python' ]
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: 'false'
+
+      - name: Set up Go
+        uses: $/.github/actions/setup-go
+
+      - name: Tune the OS
+        timeout-minutes: 5
+        uses: $/.github/actions/tune-os
+
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        timeout-minutes: 5
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: ${{ matrix.language }}
+          # If you wish to specify custom queries, you can do so here or in a config file.
+          # By default, queries listed here will override any specified in a config file.
+          # Prefix the list here with "+" to use these queries and those in the config file.
+
+          # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
+          # queries: security-extended,security-and-quality
+
+      - name: Setup MySQL
+        timeout-minutes: 8
+        uses: $/.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.4
+
+      - name: Get base dependencies
+        timeout-minutes: 10
+        run: |
+          sudo DEBIAN_FRONTEND="noninteractive" apt-get update
+
+          # Install everything else we need, and configure
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
+
+          sudo service etcd stop
+
+      - name: Building binaries
+        timeout-minutes: 30
+        run: |
+          source build.env
+          make build
+
+      - name: Perform CodeQL Analysis
+        timeout-minutes: 15
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+
+      - name: Slack Workflow Notification
+        if: ${{ failure() }}
+        uses: Gamesight/slack-workflow-status@2e709ce51fd47f02b7221db8547e6e6f49f81f1d # v2.0.0
+        with:
+          repo_token: ${{secrets.GITHUB_TOKEN}}
+          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
+          channel: '#codeql'
+          name: 'CodeQL Workflows'
+
+      - name: Fail if needed
+        if: ${{ failure() }}
+        run: |
+          exit 1

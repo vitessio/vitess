@@ -1,0 +1,15 @@
+{
+	"extends": [
+		"stylelint-config-standard-scss"
+	],
+	"rules": {
+		"alpha-value-notation": "number",
+		"color-function-notation": "modern",
+		"custom-property-pattern": null,
+		"declaration-block-no-redundant-longhand-properties": null,
+		"scss/at-rule-no-unknown": null,
+		"scss/dollar-variable-pattern": null,
+		"selector-class-pattern": null,
+		"shorthand-property-no-redundant-values": null
+	}
+}

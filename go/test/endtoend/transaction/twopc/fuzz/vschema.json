@@ -1,0 +1,45 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    },
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "twopc_fuzzer_update": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "twopc_fuzzer_insert": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "twopc_fuzzer_multi": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "twopc_t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    }
+  }
+}

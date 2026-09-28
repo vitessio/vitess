@@ -1,0 +1,290 @@
+set autocommit=1
+SELECT @@SQL_AUTO_IS_NULL
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED
+SELECT @@sql_mode
+SHOW FULL TABLES
+SHOW FULL TABLES
+SHOW FULL TABLES
+CREATE TABLE `django_migrations` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `app` varchar(255) NOT NULL, `name` varchar(255) NOT NULL, `applied` datetime(6) NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_migrations'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_migrations'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_migrations'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_migrations'
+CREATE TABLE `accounts_userprofile` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `password` varchar(128) NOT NULL, `last_login` datetime(6) NULL, `email` varchar(255) NOT NULL UNIQUE, `first_name` varchar(255) NULL, `last_name` varchar(255) NULL, `active` bool NOT NULL, `staff` bool NOT NULL, `admin` bool NOT NULL, `timestamp` datetime(6) NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('accounts', '0001_initial', '2019-09-11 20:08:24.240837')
+ALTER TABLE `accounts_userprofile` ADD COLUMN `uid` varchar(8) DEFAULT 'bfghjkl' NOT NULL UNIQUE
+ALTER TABLE `accounts_userprofile` ALTER COLUMN `uid` DROP DEFAULT
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('accounts', '0002_userprofile_uid', '2019-09-11 20:08:24.390839')
+ALTER TABLE `accounts_userprofile` ADD COLUMN `bio` varchar(255) NULL
+SELECT engine FROM information_schema.tables WHERE table_name = 'accounts_userprofile'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('accounts', '0003_userprofile_bio', '2019-09-11 20:08:24.521784')
+CREATE TABLE `django_content_type` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `name` varchar(100) NOT NULL, `app_label` varchar(100) NOT NULL, `model` varchar(100) NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_content_type'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_content_type'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_content_type'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_content_type'
+ALTER TABLE `django_content_type` ADD CONSTRAINT `django_content_type_app_label_model_76bd3d3b_uniq` UNIQUE (`app_label`, `model`)
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('contenttypes', '0001_initial', '2019-09-11 20:08:24.640638')
+CREATE TABLE `django_admin_log` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `action_time` datetime(6) NOT NULL, `object_id` longtext NULL, `object_repr` varchar(200) NOT NULL, `action_flag` smallint UNSIGNED NOT NULL, `change_message` longtext NOT NULL, `content_type_id` integer NULL, `user_id` integer NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_admin_log'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('admin', '0001_initial', '2019-09-11 20:08:24.711570')
+ALTER TABLE `django_admin_log` ADD CONSTRAINT `django_admin_log_content_type_id_c4bce8eb_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
+ALTER TABLE `django_admin_log` ADD CONSTRAINT `django_admin_log_user_id_c564eba6_fk_accounts_userprofile_id` FOREIGN KEY (`user_id`) REFERENCES `accounts_userprofile` (`id`)
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('admin', '0002_logentry_remove_auto_add', '2019-09-11 20:08:24.993999')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('admin', '0003_logentry_add_action_flag_choices', '2019-09-11 20:08:25.005500')
+ALTER TABLE `django_content_type` MODIFY `name` varchar(100) NULL
+set autocommit=0
+commit
+set autocommit=1
+ALTER TABLE `django_content_type` DROP COLUMN `name`
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('contenttypes', '0002_remove_content_type_name', '2019-09-11 20:08:25.195532')
+CREATE TABLE `auth_permission` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `name` varchar(50) NOT NULL, `content_type_id` integer NOT NULL, `codename` varchar(100) NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_permission'
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_permission'
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_permission'
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_permission'
+CREATE TABLE `auth_group` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `name` varchar(80) NOT NULL UNIQUE)
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_group'
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_group'
+CREATE TABLE `auth_group_permissions` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `group_id` integer NOT NULL, `permission_id` integer NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_group_permissions'
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_group_permissions'
+SELECT engine FROM information_schema.tables WHERE table_name = 'auth_group_permissions'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0001_initial', '2019-09-11 20:08:25.380981')
+ALTER TABLE `auth_permission` ADD CONSTRAINT `auth_permission_content_type_id_2f476e4b_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
+ALTER TABLE `auth_permission` ADD CONSTRAINT `auth_permission_content_type_id_codename_01ab375a_uniq` UNIQUE (`content_type_id`, `codename`)
+ALTER TABLE `auth_group_permissions` ADD CONSTRAINT `auth_group_permissions_group_id_b120cbf9_fk_auth_group_id` FOREIGN KEY (`group_id`) REFERENCES `auth_group` (`id`)
+ALTER TABLE `auth_group_permissions` ADD CONSTRAINT `auth_group_permissio_permission_id_84c5c92e_fk_auth_perm` FOREIGN KEY (`permission_id`) REFERENCES `auth_permission` (`id`)
+ALTER TABLE `auth_group_permissions` ADD CONSTRAINT `auth_group_permissions_group_id_permission_id_0cd325b0_uniq` UNIQUE (`group_id`, `permission_id`)
+ALTER TABLE `auth_permission` MODIFY `name` varchar(255) NOT NULL
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0002_alter_permission_name_max_length', '2019-09-11 20:08:25.927116')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0003_alter_user_email_max_length', '2019-09-11 20:08:25.944751')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0004_alter_user_username_opts', '2019-09-11 20:08:25.954957')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0005_alter_user_last_login_null', '2019-09-11 20:08:25.966743')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0006_require_contenttypes_0002', '2019-09-11 20:08:25.970363')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0007_alter_validators_add_error_messages', '2019-09-11 20:08:25.977706')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0008_alter_user_username_max_length', '2019-09-11 20:08:25.988202')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0009_alter_user_last_name_max_length', '2019-09-11 20:08:25.996464')
+ALTER TABLE `auth_group` MODIFY `name` varchar(150) NOT NULL
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0010_alter_group_name_max_length', '2019-09-11 20:08:26.006057')
+set autocommit=0
+commit
+set autocommit=1
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('auth', '0011_update_proxy_permissions', '2019-09-11 20:08:26.019693')
+CREATE TABLE `post_post` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `title` varchar(250) NOT NULL, `body` longtext NOT NULL, `slug` varchar(8) NOT NULL UNIQUE, `pub_date` datetime(6) NOT NULL, `thumbnail` varchar(100) NOT NULL, `author_id` integer NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'post_post'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('post', '0001_initial', '2019-09-11 20:08:26.078601')
+ALTER TABLE `post_post` ADD CONSTRAINT `post_post_author_id_99d134d5_fk_accounts_userprofile_id` FOREIGN KEY (`author_id`) REFERENCES `accounts_userprofile` (`id`)
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('post', '0002_auto_20180225_1142', '2019-09-11 20:08:26.223293')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('post', '0003_auto_20180225_1154', '2019-09-11 20:08:26.231490')
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('post', '0004_auto_20180225_1256', '2019-09-11 20:08:26.241872')
+CREATE TABLE `bookmark_post` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `obj_id` integer NOT NULL, `user_id` integer NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'bookmark_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'bookmark_post'
+SELECT engine FROM information_schema.tables WHERE table_name = 'bookmark_post'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('bookmarks', '0001_initial', '2019-09-11 20:08:26.303419')
+ALTER TABLE `bookmark_post` ADD CONSTRAINT `bookmark_post_obj_id_cff442ed_fk_post_post_id` FOREIGN KEY (`obj_id`) REFERENCES `post_post` (`id`)
+ALTER TABLE `bookmark_post` ADD CONSTRAINT `bookmark_post_user_id_ecbdae36_fk_accounts_userprofile_id` FOREIGN KEY (`user_id`) REFERENCES `accounts_userprofile` (`id`)
+SELECT kc.`constraint_name`, kc.`column_name`,                 kc.`referenced_table_name`, kc.`referenced_column_name`             FROM information_schema.key_column_usage AS kc             WHERE                 kc.table_schema = DATABASE() AND                 kc.table_name = 'bookmark_post'             ORDER BY kc.`ordinal_position`
+SELECT c.constraint_name, c.constraint_type             FROM information_schema.table_constraints AS c             WHERE                 c.table_schema = DATABASE() AND                 c.table_name = 'bookmark_post'
+SHOW INDEX FROM `bookmark_post`
+ALTER TABLE `bookmark_post` DROP FOREIGN KEY `bookmark_post_obj_id_cff442ed_fk_post_post_id`
+ALTER TABLE `bookmark_post` ADD CONSTRAINT `bookmark_post_obj_id_cff442ed_fk_post_post_id` FOREIGN KEY (`obj_id`) REFERENCES `post_post` (`id`)
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('bookmarks', '0002_auto_20180307_0102', '2019-09-11 20:08:26.751223')
+CREATE TABLE `comments_comment` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `object_id` integer UNSIGNED NOT NULL, `content` longtext NOT NULL, `timestamp` datetime(6) NOT NULL, `content_type_id` integer NOT NULL, `user_id` integer NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('comments', '0001_initial', '2019-09-11 20:08:26.827533')
+ALTER TABLE `comments_comment` ADD CONSTRAINT `comments_comment_content_type_id_72fd5dbe_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
+ALTER TABLE `comments_comment` ADD CONSTRAINT `comments_comment_user_id_a1db4881_fk_accounts_userprofile_id` FOREIGN KEY (`user_id`) REFERENCES `accounts_userprofile` (`id`)
+ALTER TABLE `comments_comment` ADD COLUMN `parent_comment_id` integer NULL
+SELECT engine FROM information_schema.tables WHERE table_name = 'comments_comment'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('comments', '0002_comment_parent_comment', '2019-09-11 20:08:27.232388')
+ALTER TABLE `comments_comment` ADD CONSTRAINT `comments_comment_parent_comment_id_71289d4a_fk_comments_` FOREIGN KEY (`parent_comment_id`) REFERENCES `comments_comment` (`id`)
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('comments', '0003_auto_20180227_2159', '2019-09-11 20:08:27.408413')
+CREATE TABLE `likesdislikes_likedislike` (`id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY, `vote` smallint NOT NULL, `object_id` integer UNSIGNED NOT NULL, `content_type_id` integer NOT NULL, `user_id` integer NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'likesdislikes_likedislike'
+SELECT engine FROM information_schema.tables WHERE table_name = 'likesdislikes_likedislike'
+SELECT engine FROM information_schema.tables WHERE table_name = 'likesdislikes_likedislike'
+SELECT engine FROM information_schema.tables WHERE table_name = 'likesdislikes_likedislike'
+SELECT engine FROM information_schema.tables WHERE table_name = 'likesdislikes_likedislike'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('likesdislikes', '0001_initial', '2019-09-11 20:08:27.471337')
+ALTER TABLE `likesdislikes_likedislike` ADD CONSTRAINT `likesdislikes_likedi_content_type_id_1bd751d8_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
+ALTER TABLE `likesdislikes_likedislike` ADD CONSTRAINT `likesdislikes_likedi_user_id_fbedd04e_fk_accounts_` FOREIGN KEY (`user_id`) REFERENCES `accounts_userprofile` (`id`)
+CREATE TABLE `django_session` (`session_key` varchar(40) NOT NULL PRIMARY KEY, `session_data` longtext NOT NULL, `expire_date` datetime(6) NOT NULL)
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_session'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_session'
+SELECT engine FROM information_schema.tables WHERE table_name = 'django_session'
+SHOW FULL TABLES
+INSERT INTO `django_migrations` (`app`, `name`, `applied`) VALUES ('sessions', '0001_initial', '2019-09-11 20:08:27.790749')
+CREATE INDEX `django_session_expire_date_a5c62663` ON `django_session` (`expire_date`)
+SHOW FULL TABLES
+SELECT `django_migrations`.`app`, `django_migrations`.`name` FROM `django_migrations`
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'admin'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('admin', 'logentry')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'admin' AND `django_content_type`.`model` = 'logentry')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (1) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add log entry', 1, 'add_logentry'), ('Can change log entry', 1, 'change_logentry'), ('Can delete log entry', 1, 'delete_logentry'), ('Can view log entry', 1, 'view_logentry')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'admin'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'auth'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('auth', 'permission'), ('auth', 'group')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'auth' AND `django_content_type`.`model` = 'permission')
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'auth' AND `django_content_type`.`model` = 'group')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (2, 3) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add permission', 2, 'add_permission'), ('Can change permission', 2, 'change_permission'), ('Can delete permission', 2, 'delete_permission'), ('Can view permission', 2, 'view_permission'), ('Can add group', 3, 'add_group'), ('Can change group', 3, 'change_group'), ('Can delete group', 3, 'delete_group'), ('Can view group', 3, 'view_group')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'auth'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'contenttypes'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('contenttypes', 'contenttype')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'contenttypes' AND `django_content_type`.`model` = 'contenttype')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (4) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add content type', 4, 'add_contenttype'), ('Can change content type', 4, 'change_contenttype'), ('Can delete content type', 4, 'delete_contenttype'), ('Can view content type', 4, 'view_contenttype')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'contenttypes'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'sessions'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('sessions', 'session')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'sessions' AND `django_content_type`.`model` = 'session')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (5) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add session', 5, 'add_session'), ('Can change session', 5, 'change_session'), ('Can delete session', 5, 'delete_session'), ('Can view session', 5, 'view_session')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'sessions'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'post'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('post', 'post')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'post' AND `django_content_type`.`model` = 'post')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (6) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add post', 6, 'add_post'), ('Can change post', 6, 'change_post'), ('Can delete post', 6, 'delete_post'), ('Can view post', 6, 'view_post')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'post'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'accounts'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('accounts', 'userprofile')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'accounts' AND `django_content_type`.`model` = 'userprofile')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (7) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add user profile', 7, 'add_userprofile'), ('Can change user profile', 7, 'change_userprofile'), ('Can delete user profile', 7, 'delete_userprofile'), ('Can view user profile', 7, 'view_userprofile')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'accounts'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'comments'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('comments', 'comment')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'comments' AND `django_content_type`.`model` = 'comment')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (8) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add comment', 8, 'add_comment'), ('Can change comment', 8, 'change_comment'), ('Can delete comment', 8, 'delete_comment'), ('Can view comment', 8, 'view_comment')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'comments'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'likesdislikes'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('likesdislikes', 'likedislike')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'likesdislikes' AND `django_content_type`.`model` = 'likedislike')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (9) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add like dislike', 9, 'add_likedislike'), ('Can change like dislike', 9, 'change_likedislike'), ('Can delete like dislike', 9, 'delete_likedislike'), ('Can view like dislike', 9, 'view_likedislike')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'likesdislikes'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'bookmarks'
+set autocommit=0
+INSERT INTO `django_content_type` (`app_label`, `model`) VALUES ('bookmarks', 'bookmarkpost')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE (`django_content_type`.`app_label` = 'bookmarks' AND `django_content_type`.`model` = 'bookmarkpost')
+SELECT `auth_permission`.`content_type_id`, `auth_permission`.`codename` FROM `auth_permission` INNER JOIN `django_content_type` ON (`auth_permission`.`content_type_id` = `django_content_type`.`id`) WHERE `auth_permission`.`content_type_id` IN (10) ORDER BY `django_content_type`.`app_label` ASC, `django_content_type`.`model` ASC, `auth_permission`.`codename` ASC
+set autocommit=0
+INSERT INTO `auth_permission` (`name`, `content_type_id`, `codename`) VALUES ('Can add bookmark post', 10, 'add_bookmarkpost'), ('Can change bookmark post', 10, 'change_bookmarkpost'), ('Can delete bookmark post', 10, 'delete_bookmarkpost'), ('Can view bookmark post', 10, 'view_bookmarkpost')
+commit
+set autocommit=1
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'bookmarks'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'pagedown'
+SELECT `django_content_type`.`id`, `django_content_type`.`app_label`, `django_content_type`.`model` FROM `django_content_type` WHERE `django_content_type`.`app_label` = 'pagedown'

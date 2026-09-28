@@ -1,0 +1,114 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package logic
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/process"
+)
+
+func TestWaitForLocksRelease(t *testing.T) {
+	oldShutdownWaitTime := shutdownWaitTime
+	// Restore initial values
+	defer func() {
+		shutdownWaitTime = oldShutdownWaitTime
+	}()
+
+	t.Run("No locks to wait for", func(t *testing.T) {
+		// Initially when shardsLockCounter is zero, waitForLocksRelease should run immediately
+		timeSpent := waitForLocksReleaseAndGetTimeWaitedFor()
+		assert.Less(t, timeSpent, 1*time.Second, "waitForLocksRelease should run immediately if there are no locks to wait for")
+	})
+
+	t.Run("Timeout from shutdownWaitTime", func(t *testing.T) {
+		// Increment shardsLockCounter to simulate locking of a shard
+		shardsLockCounter.Add(1)
+		defer func() {
+			// Restore the initial value
+			shardsLockCounter.Store(0)
+		}()
+		shutdownWaitTime = 200 * time.Millisecond
+		timeSpent := waitForLocksReleaseAndGetTimeWaitedFor()
+		assert.Greater(t, timeSpent, 100*time.Millisecond, "waitForLocksRelease should timeout after 200 milliseconds and not before")
+		assert.Less(t, timeSpent, 300*time.Millisecond, "waitForLocksRelease should timeout after 200 milliseconds and not take any longer")
+	})
+
+	t.Run("Successful wait for locks release", func(t *testing.T) {
+		// Increment shardsLockCounter to simulate locking of a shard
+		shardsLockCounter.Add(1)
+		shutdownWaitTime = 500 * time.Millisecond
+		// Release the locks after 200 milliseconds
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			shardsLockCounter.Store(0)
+		}()
+		timeSpent := waitForLocksReleaseAndGetTimeWaitedFor()
+		assert.Greater(t, timeSpent, 100*time.Millisecond, "waitForLocksRelease should wait for the locks and not return early")
+		assert.Less(t, timeSpent, 300*time.Millisecond, "waitForLocksRelease should be successful after 200 milliseconds as all the locks are released")
+	})
+}
+
+func waitForLocksReleaseAndGetTimeWaitedFor() time.Duration {
+	start := time.Now()
+	waitForLocksRelease()
+	return time.Since(start)
+}
+
+func TestRefreshAllInformation(t *testing.T) {
+	// Store the old flags and restore on test completion
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+	}()
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	// Verify in the beginning, we have the first DiscoveredOnce field false.
+	_, discoveredOnce := process.HealthTest()
+	require.False(t, discoveredOnce)
+
+	// Create a memory topo-server and create the keyspace and shard records
+	ts = memorytopo.NewServer(t.Context(), cell1)
+	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
+	require.NoError(t, err)
+
+	// Test error
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // cancel context to simulate timeout
+	require.Error(t, refreshAllInformation(ctx))
+	require.False(t, process.FirstDiscoveryCycleComplete.Load())
+	_, discoveredOnce = process.HealthTest()
+	require.False(t, discoveredOnce)
+
+	// Test success
+	ctx2 := t.Context()
+	require.NoError(t, refreshAllInformation(ctx2))
+	require.True(t, process.FirstDiscoveryCycleComplete.Load())
+	_, discoveredOnce = process.HealthTest()
+	require.True(t, discoveredOnce)
+}

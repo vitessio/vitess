@@ -1,0 +1,264 @@
+version: "2"
+run:
+  go: "1.27"
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - errcheck
+    - govet
+    - ineffassign
+    - mirror
+    - modernize
+    - nolintlint
+    - nosprintfhostport
+    - prealloc
+    - perfsprint
+    - sqlclosecheck
+    - staticcheck
+    - testifylint
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        use_modern_packages:
+          list-mode: lax
+          deny:
+            - pkg: math/rand$
+              desc: Please use math/rand/v2
+        mysql_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/mysql/**"
+            - "!**/go/mysql/collations/integration/**"
+            - "!**/go/mysql/collations/tools/**"
+          deny:
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "mysql package should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+            - pkg: github.com/spf13/pflag
+              desc: "mysql package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/dbconfigs
+              desc: "mysql package should not depend on dbconfigs - creates servenv dependency"
+        sqlparser_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/vt/sqlparser/**"
+          deny:
+            - pkg: github.com/spf13/pflag
+              desc: "sqlparser package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "sqlparser should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+        schemadiff_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/vt/schemadiff/**"
+          deny:
+            - pkg: github.com/spf13/pflag
+              desc: "schemadiff package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "schemadiff should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+        collations_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/mysql/collations/**"
+            - "!**/go/mysql/collations/integration/**"
+            - "!**/go/mysql/collations/tools/**"
+          deny:
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "collations package should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+            - pkg: github.com/spf13/pflag
+              desc: "collations package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+        vindexes_package_restrictions:
+          list-mode: lax
+          files:
+            - "**/go/vt/vtgate/vindexes/**"
+          deny:
+            - pkg: vitess.io/vitess/go/vt/topotools
+              desc: "vindexes package should not depend on topotools - creates unnecessary dependency tree"
+            - pkg: github.com/spf13/pflag
+              desc: "vindexes package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
+            - pkg: vitess.io/vitess/go/vt/servenv
+              desc: "vindexes should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - io.WriteString(fmt.State)
+        - io.WriteString(net/http.ResponseWriter)
+        - (net.Listener).Close
+        - (net/http.ResponseWriter).Write
+        - (*os.File).Close
+        - os.Remove
+        - os.RemoveAll
+        - os.Rename
+        - (*github.com/spf13/cobra.Command).Help
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+        - (*github.com/spf13/cobra.Command).MarkPersistentFlagRequired
+        - (*github.com/spf13/cobra.Command).MarkPersistentFlagFilename
+        - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
+        - (*google.golang.org/grpc.ClientConn).Close
+        - (*google.golang.org/grpc.Server).Serve
+        - (*vitess.io/vitess/go/bytes2.Buffer).Write
+        - (*vitess.io/vitess/go/bytes2.Buffer).WriteByte
+        - (*vitess.io/vitess/go/bytes2.Buffer).WriteString
+        - (vitess.io/vitess/go/sqltypes.BinWriter).Write
+        - (*vitess.io/vitess/go/vt/vttest.LocalCluster).TearDown
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000"
+        - "-ST1003"
+        - "-ST1005"
+        - "-ST1016"
+        - "-ST1020"
+        - "-ST1021"
+        - "-ST1022"
+        - "-QF1001"
+        - "-QF1005"
+    testifylint:
+      # testifylint checkers are adopted incrementally: each is enabled here
+      # once its findings across the codebase have been fixed. go-require flags
+      # require.* calls from a non-test goroutine (FailNow only works there).
+      disable-all: true
+      enable:
+        - go-require
+        # These checkers have no findings in the codebase today, so they
+        # are enabled directly without a dedicated fix-up commit.
+        - blank-import
+        - suite-extra-assert-call
+        - suite-broken-parallel
+        - suite-method-signature
+        - bool-compare
+        - nil-compare
+        - regexp
+        - suite-dont-use-pkg
+        - contains
+        - compares
+        - negative-positive
+        - formatter
+        - empty
+        - expected-actual
+        - equal-values
+        - error-nil
+        - len
+        - useless-assert
+        - suite-subtest-run
+        - require-error
+        - error-is-as
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # prealloc is enabled for all non-test code.
+      # Test code and test-only paths are permanently excluded.
+      - linters:
+          - prealloc
+        path: _test\.go$
+      - linters:
+          - prealloc
+        path: ^go/(test|tools|vt/vttablet/endtoend)/
+      - linters:
+          - errcheck
+        path: ^go/vt/proto/
+      - linters:
+          - errcheck
+          - whitespace
+        path: ^go/cmd/(vtcombo|vtgateclienttest|vtorc)/
+      - linters:
+          - errcheck
+        path: ^go/mysql/
+      - linters:
+          - errcheck
+        path: ^go/pools/.*_test.go
+      - linters:
+          - errcheck
+        path: ^go/sqltypes/
+      - linters:
+          - whitespace
+        path: ^go/vt/sqlparser/ast_format_fast.go
+      - linters:
+          - errcheck
+        path: ^go/stats/statsd/
+      - linters:
+          - errcheck
+          - nosprintfhostport
+          - sqlclosecheck
+        path: ^go/test/
+      - linters:
+          - errcheck
+        path: ^go/vt/mysqlctl/
+      - linters:
+          - errcheck
+        path: ^go/vt/schemamanager/
+      - linters:
+          - errcheck
+        path: ^go/vt/servenv/
+      - linters:
+          - errcheck
+        path: ^go/vt/sqlparser/(ast_format|ast_format_fast).go
+      - linters:
+          - errcheck
+        path: ^go/vt/throttler/.*_test.go
+      - linters:
+          - errcheck
+        path: ^go/vt/topo/.*/*._test.go
+      - linters:
+          - errcheck
+        path: ^go/vt/vtcombo/
+      - linters:
+          - errcheck
+        path: ^go/vt/vtctl/[^/]*.go
+      - linters:
+          - errcheck
+        path: ^go/vt/vtctl/grpcvtctlclient/
+      - linters:
+          - errcheck
+        path: ^go/vt/vtctl/grpcvtctlserver/
+      - linters:
+          - errcheck
+        path: ^go/vt/vtctld/(schema|.*_test).go
+      - linters:
+          - errcheck
+        path: ^go/vt/vtexplain/
+      - linters:
+          - errcheck
+        path: ^go/vt/vtgate/.*_test.go
+      - linters:
+          - errcheck
+        path: ^go/vt/vttablet/(customrule|filelogger|grpctmserver|onlineddl|sandboxconn|tabletserver)/
+      - linters:
+          - errcheck
+        path: ^go/vt/vttablet/tabletmanager/vreplication
+      - linters:
+          - errcheck
+        path: ^go/vt/vttablet/(.*endtoend.*|.*_test.go)
+      - linters:
+          - errcheck
+        path: ^go/vt/vttest
+      - linters:
+          - errcheck
+        path: ^go/vt/wrangler
+      - linters:
+          - errcheck
+        path: ^go/vt/zkctl
+    paths:
+      - examples$
+formatters:
+  enable:
+    - goimports
+    - gofumpt
+  settings:
+    goimports:
+      local-prefixes:
+        - vitess.io/vitess
+  exclusions:
+    generated: lax
+    paths:
+      - examples$
+      - ^go/vt/proto/

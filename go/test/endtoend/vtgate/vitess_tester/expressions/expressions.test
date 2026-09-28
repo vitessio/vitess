@@ -1,0 +1,30 @@
+# This file contains queries that test expressions in Vitess.
+# We've found a number of bugs around precedences that we want to test.
+CREATE TABLE t0
+(
+    c1 BIT,
+    INDEX idx_c1 (c1)
+);
+
+INSERT INTO t0(c1)
+VALUES ('');
+
+
+SELECT *
+FROM t0;
+
+SELECT ((t0.c1 = 'a'))
+FROM t0;
+
+SELECT *
+FROM t0
+WHERE ((t0.c1 = 'a'));
+
+
+SELECT (1 LIKE ('a' IS NULL));
+SELECT (NOT (1 LIKE ('a' IS NULL)));
+
+SELECT (~ (1 || 0)) IS NULL;
+
+SELECT 1
+WHERE (~ (1 || 0)) IS NULL;

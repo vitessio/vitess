@@ -1,0 +1,42 @@
+[
+  {
+    "comment": "simple create procedure when a single keyspace exists",
+    "query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+      },
+      "TablesUsed": [
+        "main.p1"
+      ]
+    }
+  },
+  {
+    "comment": "simple drop procedure when a single keyspace exists",
+    "query": "drop procedure p1",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop procedure p1",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop procedure p1"
+      },
+      "TablesUsed": [
+        "main.p1"
+      ]
+    }
+  }
+]

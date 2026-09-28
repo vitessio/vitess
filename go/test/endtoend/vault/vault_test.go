@@ -1,0 +1,312 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vault
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"net"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
+)
+
+var (
+	createTable = `create table product (id bigint(20) primary key, name char(10), created bigint(20));`
+	insertTable = `insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
+)
+
+var (
+	clusterInstance *cluster.LocalProcessCluster
+
+	primary *cluster.Vttablet
+	replica *cluster.Vttablet
+
+	cell            = "zone1"
+	hostname        = "localhost"
+	keyspaceName    = "ks"
+	shardName       = "0"
+	mysqlPassword   = "VtDbaPass"
+	vtgateUser      = "vtgate_user"
+	vtgatePassword  = "password123"
+	commonTabletArg = []string{
+		"--vreplication-retry-delay", "1s",
+		"--degraded-threshold", "5s",
+		"--lock-tables-timeout", "5s",
+		// Frequently reload schema, generating some tablet traffic,
+		//   so we can speed up token refresh
+		"--queryserver-config-schema-reload-time", "5s",
+		"--serving-state-grace-period", "1s",
+	}
+	vaultTabletArg = []string{
+		"--db-credentials-server", "vault",
+		"--db-credentials-vault-timeout", "3s",
+		"--db-credentials-vault-path", "kv/prod/dbcreds",
+		// This is overriden by our env VAULT_ADDR
+		"--db-credentials-vault-addr", "https://127.0.0.1:8200",
+		// This is overriden by our env VAULT_CACERT
+		"--db-credentials-vault-tls-ca", "/path/to/ca.pem",
+		// This is provided by our env VAULT_ROLEID
+		//"--db-credentials-vault-roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
+		// Contents of this file provided by our env VAULT_SECRETID
+		//"--db-credentials-vault-secretidfile", "/path/to/file/containing/secret_id",
+		// Make this small, so we can get a renewal
+		"--db-credentials-vault-ttl", "21s",
+	}
+	vaultVTGateArg = []string{
+		"--mysql-auth-server-impl", "vault",
+		"--mysql-auth-vault-timeout", "3s",
+		"--mysql-auth-vault-path", "kv/prod/vtgatecreds",
+		// This is overriden by our env VAULT_ADDR
+		"--mysql-auth-vault-addr", "https://127.0.0.1:8200",
+		// This is overriden by our env VAULT_CACERT
+		"--mysql-auth-vault-tls-ca", "/path/to/ca.pem",
+		// This is provided by our env VAULT_ROLEID
+		//"--mysql-auth-vault-roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
+		// Contents of this file provided by our env VAULT_SECRETID
+		//"--mysql-auth-vault-role-secretidfile", "/path/to/file/containing/secret_id",
+		// Make this small, so we can get a renewal
+		"--mysql-auth-vault-ttl", "21s",
+	}
+	mysqlctlArg = []string{
+		"--db-dba-password", mysqlPassword,
+	}
+	vttabletLogFileNameSuffix = "-vttablet-stderr.txt"
+	tokenRenewalString        = "Vault client status: token renewed"
+)
+
+func TestVaultAuth(t *testing.T) {
+	// Instantiate Vitess Cluster objects and start topo
+	initializeClusterEarly(t)
+	defer clusterInstance.Teardown()
+
+	// start Vault server
+	vs := startVaultServer(t)
+	defer vs.stop()
+
+	// Wait for Vault server to come up
+	for range 60 {
+		time.Sleep(250 * time.Millisecond)
+		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", hostname, vs.port1))
+		if err != nil {
+			// Vault is now up, we can continue
+			break
+		}
+		ln.Close()
+	}
+
+	roleID, secretID := setupVaultServer(t, vs)
+	require.NotEmpty(t, roleID)
+	require.NotEmpty(t, secretID)
+
+	// Passing via environment, easier than trying to modify
+	// vtgate/vttablet flags within our test machinery
+	os.Setenv("VAULT_ROLEID", roleID)
+	os.Setenv("VAULT_SECRETID", secretID)
+
+	// Bring up rest of the Vitess cluster
+	initializeClusterLate(t)
+
+	// Create a table
+	_, err := primary.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
+	require.NoError(t, err)
+
+	// This tests the vtgate Vault auth & indirectly vttablet Vault auth too
+	insertRow(t, 1, "prd-1")
+	insertRow(t, 2, "prd-2")
+
+	cluster.VerifyRowsInTabletForTable(t, replica, keyspaceName, 2, "product")
+
+	// Sleep for a while; giving enough time for a token renewal
+	//   and it making it into the (asynchronous) log
+	time.Sleep(30 * time.Second)
+	// Check the log for the Vault token renewal message
+	//   If we don't see it, that is a test failure
+	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, primary.VttabletProcess.TabletPath+vttabletLogFileNameSuffix))
+	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
+}
+
+func startVaultServer(t *testing.T) *Server {
+	vs := &Server{
+		address: hostname,
+		port1:   clusterInstance.GetAndReservePort(),
+		port2:   clusterInstance.GetAndReservePort(),
+	}
+	err := vs.start()
+	require.NoError(t, err)
+
+	return vs
+}
+
+// Setup everything we need in the Vault server
+func setupVaultServer(t *testing.T, vs *Server) (string, string) {
+	// The setup script uses these environment variables
+	//   We also reuse VAULT_ADDR and VAULT_CACERT later on
+	os.Setenv("VAULT", vs.execPath)
+	os.Setenv("VAULT_ADDR", fmt.Sprintf("https://%s:%d", vs.address, vs.port1))
+	os.Setenv("VAULT_CACERT", path.Join(os.Getenv("PWD"), vaultCAFileName))
+	setup := exec.Command(
+		"/bin/bash",
+		path.Join(os.Getenv("PWD"), vaultSetupScript),
+	)
+
+	logFilePath := path.Join(vs.logDir, "log_setup.txt")
+	logFile, _ := os.Create(logFilePath)
+	setup.Stderr = logFile
+	setup.Stdout = logFile
+
+	setup.Env = append(setup.Env, os.Environ()...)
+	log.Info(fmt.Sprintf("Running Vault setup command: %v", strings.Join(setup.Args, " ")))
+	err := setup.Start()
+	if err != nil {
+		log.Error(fmt.Sprintf("Error during Vault setup: %v", err))
+	}
+
+	setup.Wait()
+	var secretID, roleID string
+	file, err := os.Open(logFilePath)
+	if err != nil {
+		log.Error(fmt.Sprint(err))
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if strings.HasPrefix(scanner.Text(), "ROLE_ID=") {
+			roleID = strings.Split(scanner.Text(), "=")[1]
+		} else if strings.HasPrefix(scanner.Text(), "SECRET_ID=") {
+			secretID = strings.Split(scanner.Text(), "=")[1]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Error(fmt.Sprint(err))
+	}
+
+	return roleID, secretID
+}
+
+// Setup cluster object and start topo
+//
+//	We need this before vault, because we re-use the port reservation code
+func initializeClusterEarly(t *testing.T) {
+	clusterInstance = cluster.NewCluster(cell, hostname)
+
+	// Start topo server
+	err := clusterInstance.StartTopo()
+	require.NoError(t, err)
+}
+
+func initializeClusterLate(t *testing.T) {
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name: keyspaceName,
+	}
+	clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, *keyspace)
+	shard := &cluster.Shard{
+		Name: shardName,
+	}
+
+	primary = clusterInstance.NewVttabletInstance("replica", 0, "")
+	// We don't really need the replica to test this feature
+	//   but keeping it in to excercise the vt_repl user/password path
+	replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+
+	shard.Vttablets = []*cluster.Vttablet{primary, replica}
+
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, vaultTabletArg...)
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vaultVTGateArg...)
+
+	err := clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
+	require.NoError(t, err)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+
+	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	sql := string(initDb)
+	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
+	require.NoError(t, err, "expected to load init_db file")
+	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0o660)
+	require.NoError(t, err, "expected to load init_db file")
+
+	// Start MySQL
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+			tablet.VttabletProcess.DbPassword = mysqlPassword
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			require.NoError(t, err)
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+
+	// Wait for MySQL startup
+	for _, proc := range mysqlCtlProcessList {
+		err = proc.Wait()
+		require.NoError(t, err)
+	}
+
+	for _, tablet := range []*cluster.Vttablet{primary, replica} {
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+
+		// Modify mysqlctl password too, or teardown will be locked out
+		tablet.MysqlctlProcess.ExtraArgs = append(tablet.MysqlctlProcess.ExtraArgs, mysqlctlArg...)
+	}
+
+	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
+	require.NoError(t, err)
+
+	err = clusterInstance.StartVTOrc(cell, keyspaceName)
+	require.NoError(t, err)
+
+	// Start vtgate
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+}
+
+func insertRow(t *testing.T, id int, productName string) {
+	ctx := t.Context()
+	vtParams := mysql.ConnParams{
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: vtgateUser,
+		Pass:  vtgatePassword,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	insertSmt := fmt.Sprintf(insertTable, id, productName)
+	_, err = conn.ExecuteFetch(insertSmt, 1000, true)
+	require.NoError(t, err)
+}

@@ -1,0 +1,34 @@
+{
+	"OperatorType": "Join",
+	"Variant": "Join",
+	"JoinColumnIndexes": "L:0,L:1,R:0",
+	"JoinVars": {
+		"tbl_nonunq_col": 1
+	},
+	"Inputs": [
+		{
+			"OperatorType": "Route",
+			"Variant": "Scatter",
+			"Keyspace": {
+				"Name": "ks_misc",
+				"Sharded": true
+			},
+			"FieldQuery": "select tbl.unq_col, tbl.nonunq_col from tbl where 1 != 1",
+			"Query": "select tbl.unq_col, tbl.nonunq_col from tbl"
+		},
+		{
+			"OperatorType": "Route",
+			"Variant": "EqualUnique",
+			"Keyspace": {
+				"Name": "ks_misc",
+				"Sharded": true
+			},
+			"FieldQuery": "select t1.id2 from t1 where 1 != 1",
+			"Query": "select t1.id2 from t1 where t1.id1 = :tbl_nonunq_col /* INT64 */",
+			"Values": [
+				":tbl_nonunq_col"
+			],
+			"Vindex": "hash"
+		}
+	]
+}

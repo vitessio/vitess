@@ -1,0 +1,99 @@
+[
+  {
+    "comment": "Flush statement",
+    "query": "flush tables unsharded, music",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "FLUSH",
+      "Original": "flush tables unsharded, music",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "flush tables unsharded, music"
+      },
+      "TablesUsed": [
+        "main.music",
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Flush statement with no tables",
+    "query": "flush local tables with read lock",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "FLUSH",
+      "Original": "flush local tables with read lock",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "flush local tables with read lock",
+        "ReservedConnectionNeeded": true
+      }
+    }
+  },
+  {
+    "comment": "Flush statement with flush options",
+    "query": "flush no_write_to_binlog hosts, logs",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "FLUSH",
+      "Original": "flush no_write_to_binlog hosts, logs",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "flush local hosts, logs"
+      }
+    }
+  },
+  {
+    "comment": "Flush statement with multiple tables in different keyspace with read lock",
+    "query": "flush tables user.music, main.unsharded with read lock",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "FLUSH",
+      "Original": "flush tables user.music, main.unsharded with read lock",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush tables unsharded with read lock",
+            "ReservedConnectionNeeded": true
+          },
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush tables music with read lock",
+            "ReservedConnectionNeeded": true
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.music"
+      ]
+    }
+  }
+]

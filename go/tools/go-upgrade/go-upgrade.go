@@ -1,0 +1,679 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/hashicorp/go-version"
+	"github.com/spf13/cobra"
+)
+
+const (
+	goDevAPI = "https://go.dev/dl/?mode=json"
+
+	// golangImageRepository is the Docker Hub repository of the official Go images.
+	golangImageRepository = "golang"
+
+	// dockerPlatformOS and dockerPlatformArch identify the only explicit --platform
+	// the Go image rewrite recognizes in FROM lines.
+	dockerPlatformOS   = "linux"
+	dockerPlatformArch = "amd64"
+
+	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
+	// version is composed of either one or two numbers, for instance: 18.1 or 18.
+	// The expected format of the input is BOOTSTRAP_VERSION=18 or BOOTSTRAP_VERSION=18.1
+	regexpFindBootstrapVersion = "(?i).*BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*([0-9.]+).*"
+
+	// regexpFindGoModGoVersion captures the full Golang version from the top-level
+	// "go" directive in a go.mod file, e.g. "go 1.26.4" -> "1.26.4".
+	regexpFindGoModGoVersion = `(?m)^go[[:space:]]+([0-9.]+)`
+
+	// regexpReplaceGoModGoVersion replaces the top-level golang version instruction in the go.mod file
+	// Example going from go1.20 to go1.20: `go 1.20` -> `go 1.21`
+	regexpReplaceGoModGoVersion = `go[[:space:]]([0-9.]+)\.([0-9.]+)`
+
+	// The regular expressions below match the entire bootstrap_version declaration in Dockerfiles and Makefile
+	// A bootstrap version declaration is usually: 'ARG bootstrap_version = 18' in Dockerfile, and
+	// 'BOOTSTRAP_VERSION=18' in the Makefile. Note that the value 18 can also be a float.
+	regexpReplaceDockerfileBootstrapVersion = "ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+"
+	regexpReplaceMakefileBootstrapVersion   = "BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+"
+
+	// The regular expression below matches the bootstrap_version we are using in the test.go file.
+	// In test.go, there is a flag named 'bootstrap-version' that has a default value. We are looking
+	// to match the entire flag name + the default value (being the current bootstrap version)
+	// Example input: "flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")"
+	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
+)
+
+// regexpReplaceGolangDockerImage matches Go image references that the upgrader rewrites.
+//
+// Supported forms include:
+//   - ARG image=golang:1.25.3-bookworm@sha256:abc
+//   - FROM golang:1.25.3-trixie@sha256:abc AS builder
+//   - FROM --platform=linux/amd64 golang:1.25.3-bookworm@sha256:abc AS builder
+//
+// The first capture group retains the reference prefix. The second capture group retains the distro.
+var regexpReplaceGolangDockerImage = fmt.Sprintf(
+	`(?i)((?:ARG[[:space:]]+image=|FROM(?:[[:space:]]+--platform=%s/%s)?[[:space:]]+)golang:)[0-9.]+-([a-z0-9]+)@sha256:[a-f0-9]{64}`,
+	dockerPlatformOS,
+	dockerPlatformArch,
+)
+
+type (
+	latestGolangRelease struct {
+		Version string `json:"version"`
+		Stable  bool   `json:"stable"`
+	}
+
+	bootstrapVersion struct {
+		major, minor int // when minor == -1, it means there are no minor version
+	}
+)
+
+var (
+	allowMajorUpgrade = false
+	isMainBranch      = false
+	goTo              = ""
+
+	rootCmd = &cobra.Command{
+		Use:   "go-upgrade",
+		Short: "Automates the Golang upgrade.",
+		Long: `go-upgrade allows us to automate some tasks required to bump the version of Golang used throughout our codebase.
+
+It mostly used by the update_golang_version.yml CI workflow that runs on a CRON.
+
+This tool is meant to be run at the root of the repository.
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+		},
+		Args: cobra.NoArgs,
+	}
+
+	getCmd = &cobra.Command{
+		Use:   "get",
+		Short: "Command to get useful information about the codebase.",
+		Long:  "Command to get useful information about the codebase.",
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+		},
+		Args: cobra.NoArgs,
+	}
+
+	getGoCmd = &cobra.Command{
+		Use:   "go-version",
+		Short: "go-version prints the Golang version used by the current codebase.",
+		Long:  "go-version prints the Golang version used by the current codebase.",
+		Run:   runGetGoCmd,
+		Args:  cobra.NoArgs,
+	}
+
+	getBootstrapCmd = &cobra.Command{
+		Use:   "bootstrap-version",
+		Short: "bootstrap-version prints the Docker Bootstrap version used by the current codebase.",
+		Long:  "bootstrap-version prints the Docker Bootstrap version used by the current codebase.",
+		Run:   runGetBootstrapCmd,
+		Args:  cobra.NoArgs,
+	}
+
+	upgradeCmd = &cobra.Command{
+		Use:   "upgrade",
+		Short: "upgrade will upgrade the Golang and Bootstrap versions of the codebase to the latest available version.",
+		Long: `This command bumps the Golang and Bootstrap versions of the codebase.
+
+The latest available version of Golang will be fetched and used instead of the old version.
+
+By default, we do not allow major Golang version upgrade such as 1.20 to 1.21 but this can be overridden using the
+--allow-major-upgrade CLI flag. Usually, we only allow such upgrade on the main branch of the repository.
+
+Moreover, this command automatically bumps the bootstrap version of our codebase. If we are on the main branch, we
+want to use the CLI flag --main to remember to increment the bootstrap version by 1 instead of 0.1.`,
+		Run:  runUpgradeCmd,
+		Args: cobra.NoArgs,
+	}
+)
+
+func init() {
+	rootCmd.AddCommand(getCmd)
+	rootCmd.AddCommand(upgradeCmd)
+
+	getCmd.AddCommand(getGoCmd)
+	getCmd.AddCommand(getBootstrapCmd)
+
+	upgradeCmd.Flags().BoolVar(&allowMajorUpgrade, "allow-major-upgrade", allowMajorUpgrade, "Defines if Golang major version upgrade are allowed.")
+	upgradeCmd.Flags().BoolVar(&isMainBranch, "main", isMainBranch, "Defines if the current branch is the main branch.")
+}
+
+func main() {
+	cobra.CheckErr(rootCmd.Execute())
+}
+
+func runGetGoCmd(_ *cobra.Command, _ []string) {
+	currentVersion, err := currentGolangVersion()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(currentVersion.String())
+}
+
+func runGetBootstrapCmd(_ *cobra.Command, _ []string) {
+	currentVersion, err := currentBootstrapVersion()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(currentVersion.toString())
+}
+
+func runUpgradeCmd(_ *cobra.Command, _ []string) {
+	err := upgradePath(allowMajorUpgrade, isMainBranch)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func upgradePath(allowMajorUpgrade, isMainBranch bool) error {
+	currentVersion, err := currentGolangVersion()
+	if err != nil {
+		return err
+	}
+
+	availableVersions, err := getLatestStableGolangReleases()
+	if err != nil {
+		return err
+	}
+
+	upgradeTo := chooseNewVersion(currentVersion, availableVersions, allowMajorUpgrade)
+
+	// Reconcile the go.mod files (root + tools/*) against the canonical Golang
+	// version even when no newer release is available. This heals tool modules
+	// that have drifted behind the root module.
+	target := currentVersion
+	if upgradeTo != nil {
+		target = upgradeTo
+	}
+	err = upgradeGoModFiles(target)
+	if err != nil {
+		return err
+	}
+
+	if upgradeTo == nil {
+		return nil
+	}
+
+	err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
+	if err != nil {
+		return err
+	}
+
+	currentBootstrapVersionF, err := currentBootstrapVersion()
+	if err != nil {
+		return err
+	}
+	nextBootstrapVersionF := currentBootstrapVersionF
+	if isMainBranch {
+		nextBootstrapVersionF.major += 1
+	} else {
+		nextBootstrapVersionF.minor += 1
+	}
+	err = updateBootstrapVersionInCodebase(currentBootstrapVersionF.toString(), nextBootstrapVersionF.toString(), upgradeTo)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// currentGolangVersion gets the running version of Golang in Vitess
+// and returns it as a *version.Version.
+//
+// The root `./go.mod` is the source of truth for the Golang version used by the
+// codebase. We read the top-level `go` directive to detect the precise version
+// we're using.
+func currentGolangVersion() (*version.Version, error) {
+	contentRaw, err := os.ReadFile("go.mod")
+	if err != nil {
+		return nil, err
+	}
+	content := string(contentRaw)
+
+	versre := regexp.MustCompile(regexpFindGoModGoVersion)
+	versionStr := versre.FindStringSubmatch(content)
+	if len(versionStr) != 2 {
+		return nil, fmt.Errorf("malformatted error, got: %v", versionStr)
+	}
+	return version.NewVersion(versionStr[1])
+}
+
+func currentBootstrapVersion() (bootstrapVersion, error) {
+	contentRaw, err := os.ReadFile("Makefile")
+	if err != nil {
+		return bootstrapVersion{}, err
+	}
+	content := string(contentRaw)
+
+	versre := regexp.MustCompile(regexpFindBootstrapVersion)
+	versionStr := versre.FindStringSubmatch(content)
+	if len(versionStr) != 2 {
+		return bootstrapVersion{}, fmt.Errorf("malformatted error, got: %v", versionStr)
+	}
+	_, err = strconv.ParseFloat(versionStr[1], 64)
+	if err != nil {
+		return bootstrapVersion{}, err
+	}
+
+	vs := strings.Split(versionStr[1], ".")
+	major, err := strconv.Atoi(vs[0])
+	if err != nil {
+		return bootstrapVersion{}, err
+	}
+
+	minor := -1
+	if len(vs) > 1 {
+		minor, err = strconv.Atoi(vs[1])
+		if err != nil {
+			return bootstrapVersion{}, err
+		}
+	}
+
+	return bootstrapVersion{
+		major: major,
+		minor: minor,
+	}, nil
+}
+
+// getLatestStableGolangReleases fetches the latest stable releases of Golang from
+// the official website using the goDevAPI URL.
+// Once fetched, the releases are returned as version.Collection.
+func getLatestStableGolangReleases() (version.Collection, error) {
+	resp, err := http.Get(goDevAPI)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var latestGoReleases []latestGolangRelease
+	err = json.Unmarshal(body, &latestGoReleases)
+	if err != nil {
+		return nil, err
+	}
+
+	var versions version.Collection
+	for _, release := range latestGoReleases {
+		if !release.Stable {
+			continue
+		}
+		if !strings.HasPrefix(release.Version, "go") {
+			return nil, fmt.Errorf("golang version malformatted: %s", release.Version)
+		}
+		newVersion, err := version.NewVersion(release.Version[2:])
+		if err != nil {
+			return nil, err
+		}
+		versions = append(versions, newVersion)
+	}
+	return versions, nil
+}
+
+// chooseNewVersion decides what will be the next version we're going to use in our codebase.
+// Given the current Golang version, the available latest versions and whether we allow major upgrade or not,
+// chooseNewVersion will return either the new version or nil if we cannot/don't need to upgrade.
+func chooseNewVersion(curVersion *version.Version, latestVersions version.Collection, allowMajorUpgrade bool) *version.Version {
+	selectedVersion := curVersion
+	for _, latestVersion := range latestVersions {
+		if !allowMajorUpgrade && !isSameMajorMinorVersion(latestVersion, selectedVersion) {
+			continue
+		}
+		if latestVersion.GreaterThan(selectedVersion) {
+			selectedVersion = latestVersion
+		}
+	}
+	// No change detected, return nil meaning that we do not want to have a new Golang version.
+	if selectedVersion.Equal(curVersion) {
+		return nil
+	}
+	return selectedVersion
+}
+
+// replaceGoVersionInCodebase goes through all the files in the codebase where the
+// Golang version must be updated.
+func replaceGoVersionInCodebase(old, new *version.Version) error {
+	if old.Equal(new) {
+		return nil
+	}
+
+	explore := []string{
+		"./docker/bootstrap/Dockerfile.common",
+		"./docker/lite/Dockerfile",
+		"./docker/lite/Dockerfile.mysql80",
+		"./docker/lite/Dockerfile.mysql84",
+		"./docker/lite/Dockerfile.percona80",
+		"./docker/lite/Dockerfile.percona84",
+		"./docker/vttestserver/Dockerfile.mysql80",
+		"./docker/vttestserver/Dockerfile.mysql84",
+	}
+	filesToChange, err := getListOfFilesInPaths(explore)
+	if err != nil {
+		return err
+	}
+
+	for _, fileToChange := range filesToChange {
+		// The regular expression below simply replace the old version string by the new golang version
+		err = replaceInFile(
+			[]*regexp.Regexp{regexp.MustCompile(fmt.Sprintf(`(%s)`, old.String()))},
+			[]string{new.String()},
+			fileToChange,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, fileToChange := range filesToChange {
+		err = replaceGolangImageReferencesInFile(fileToChange, new)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// goModFilesToUpgrade returns the list of go.mod files whose Golang version
+// directive must be bumped: the root module along with every tool module
+// located under the tools/ directory.
+func goModFilesToUpgrade() ([]string, error) {
+	toolsGoModFiles, err := filepath.Glob("./tools/*/go.mod")
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{"./go.mod"}, toolsGoModFiles...), nil
+}
+
+// upgradeGoModFiles rewrites the top-level "go" directive to target in the root
+// module and every tool module under tools/. It is idempotent: a module already
+// pinned to target is left byte-identical on disk, so reconciling already-current
+// modules produces no diff. It runs regardless of whether a newer Golang release
+// is available, so tool modules that have drifted behind the root module get healed.
+func upgradeGoModFiles(target *version.Version) error {
+	goModFiles, err := goModFilesToUpgrade()
+	if err != nil {
+		return err
+	}
+	replacement := fmt.Sprintf("go %d.%d.%d", target.Segments()[0], target.Segments()[1], target.Segments()[2])
+	for _, file := range goModFiles {
+		err = replaceInFile(
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
+			[]string{replacement},
+			file,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// replaceGolangImageReferencesInFile rewrites pinned Go image references in the given file.
+func replaceGolangImageReferencesInFile(fileToChange string, goVersion *version.Version) error {
+	contentRaw, err := os.ReadFile(fileToChange)
+	if err != nil {
+		return err
+	}
+
+	content, err := replaceGolangImageReferences(string(contentRaw), goVersion)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(fileToChange, []byte(content), 0o644)
+}
+
+// replaceGolangImageReferences rewrites pinned Go image references while preserving each matched distro.
+func replaceGolangImageReferences(content string, goVersion *version.Version) (string, error) {
+	golangImageRegexp := regexp.MustCompile(regexpReplaceGolangDockerImage)
+	matches := golangImageRegexp.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content, nil
+	}
+
+	digestsByDistro := map[string]string{}
+	for _, match := range matches {
+		distro := match[2]
+		if _, ok := digestsByDistro[distro]; ok {
+			continue
+		}
+
+		digest, err := resolveGolangImageDigest(golangImageRepository, goVersion, distro)
+		if err != nil {
+			return "", err
+		}
+
+		digestsByDistro[distro] = digest
+	}
+
+	var replaceErr error
+	replaced := golangImageRegexp.ReplaceAllStringFunc(content, func(match string) string {
+		if replaceErr != nil {
+			return match
+		}
+
+		submatch := golangImageRegexp.FindStringSubmatch(match)
+		if len(submatch) != 3 {
+			replaceErr = fmt.Errorf("malformatted golang image reference: %s", match)
+			return match
+		}
+
+		prefix := submatch[1]
+		distro := submatch[2]
+		digest, ok := digestsByDistro[distro]
+		if !ok {
+			replaceErr = fmt.Errorf("missing golang digest for distro %s", distro)
+			return match
+		}
+
+		return fmt.Sprintf("%s%s@%s", prefix, golangDockerTag(goVersion, distro), digest)
+	})
+	if replaceErr != nil {
+		return "", replaceErr
+	}
+
+	return replaced, nil
+}
+
+// resolveGolangImageDigest resolves the pinned digest for the given Go version and distro.
+//
+// The digest is the one the tag itself points to, which for the official Go images is a
+// multi-platform index. Pinning the index keeps the Dockerfiles buildable on every
+// architecture, whereas pinning a single platform's manifest would break native builds
+// on the others.
+func resolveGolangImageDigest(repository string, goVersion *version.Version, distro string) (string, error) {
+	ref := repository + ":" + golangDockerTag(goVersion, distro)
+
+	digest, err := crane.Digest(ref)
+	if err != nil {
+		return "", fmt.Errorf("resolve golang digest for %s: %w", ref, err)
+	}
+
+	return digest, nil
+}
+
+// golangDockerTag returns the Golang Docker tag for the given version and distro.
+func golangDockerTag(goVersion *version.Version, distro string) string {
+	return goVersion.String() + "-" + distro
+}
+
+func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Version) error {
+	if old == new {
+		return nil
+	}
+	files, err := getListOfFilesInPaths([]string{
+		"./Makefile",
+		"./docker/bootstrap/Dockerfile.mysql80",
+		"./docker/bootstrap/Dockerfile.mysql84",
+		"./docker/bootstrap/Dockerfile.percona80",
+		"./docker/bootstrap/Dockerfile.percona84",
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		err = replaceInFile(
+			[]*regexp.Regexp{
+				regexp.MustCompile(regexpReplaceDockerfileBootstrapVersion), // Dockerfile
+				regexp.MustCompile(regexpReplaceMakefileBootstrapVersion),   // Makefile
+			},
+			[]string{
+				"ARG bootstrap_version=" + new, // Dockerfile
+				"BOOTSTRAP_VERSION=" + new,     // Makefile
+			},
+			file,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = replaceInFile(
+		[]*regexp.Regexp{regexp.MustCompile(regexpReplaceTestGoBootstrapVersion)},
+		[]string{fmt.Sprintf("\"bootstrap-version\", \"%s\"", new)},
+		"./test.go",
+	)
+	if err != nil {
+		return err
+	}
+
+	err = updateBootstrapChangelog(new, newGoVersion)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updateBootstrapChangelog(new string, goVersion *version.Version) error {
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0o644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	s, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	newContent := fmt.Sprintf(`
+
+## [%s] - %s
+### Changes
+- Update build to golang %s`, new, time.Now().Format(time.DateOnly), goVersion.String())
+
+	_, err = file.WriteAt([]byte(newContent), s.Size())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func isSameMajorMinorVersion(a, b *version.Version) bool {
+	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1]
+}
+
+func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
+	var filesToChange []string
+	for _, pathToExplore := range pathsToExplore {
+		stat, err := os.Stat(pathToExplore)
+		if err != nil {
+			return nil, err
+		}
+		if stat.IsDir() {
+			dirEntries, err := os.ReadDir(pathToExplore)
+			if err != nil {
+				return nil, err
+			}
+			for _, entry := range dirEntries {
+				if entry.IsDir() {
+					continue
+				}
+				filesToChange = append(filesToChange, path.Join(pathToExplore, entry.Name()))
+			}
+		} else {
+			filesToChange = append(filesToChange, pathToExplore)
+		}
+	}
+	return filesToChange, nil
+}
+
+// replaceInFile replaces old with new in the given file.
+func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) error {
+	if len(oldexps) != len(new) {
+		panic("old and new should be of the same length")
+	}
+
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var res []string
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			panic(err)
+		}
+		for i, oldexp := range oldexps {
+			line = oldexp.ReplaceAllString(line, new[i])
+		}
+		res = append(res, line)
+	}
+
+	_, err = f.WriteAt([]byte(strings.Join(res, "")), 0)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b bootstrapVersion) toString() string {
+	if b.minor == -1 {
+		return strconv.Itoa(b.major)
+	}
+	return fmt.Sprintf("%d.%d", b.major, b.minor)
+}

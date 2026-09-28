@@ -1,0 +1,26 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+    "twopc_t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "twopc_settings": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    }
+  }
+}

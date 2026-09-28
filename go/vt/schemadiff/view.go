@@ -1,0 +1,432 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package schemadiff
+
+import (
+	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+type AlterViewEntityDiff struct {
+	from      *CreateViewEntity
+	to        *CreateViewEntity
+	alterView *sqlparser.AlterView
+
+	canonicalStatementString string
+}
+
+// IsEmpty implements EntityDiff
+func (d *AlterViewEntityDiff) IsEmpty() bool {
+	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *AlterViewEntityDiff) EntityName() string {
+	return d.from.Name()
+}
+
+// Entities implements EntityDiff
+func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, d.to
+}
+
+func (d *AlterViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
+// Statement implements EntityDiff
+func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.alterView
+}
+
+// AlterView returns the underlying sqlparser.AlterView that was generated for the diff.
+func (d *AlterViewEntityDiff) AlterView() *sqlparser.AlterView {
+	if d == nil {
+		return nil
+	}
+	return d.alterView
+}
+
+// StatementString implements EntityDiff
+func (d *AlterViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
+// CanonicalStatementString implements EntityDiff
+func (d *AlterViewEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
+	}
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *AlterViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *AlterViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &AlterViewEntityDiff{
+		alterView: sqlparser.Clone(d.alterView),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateViewEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateViewEntity)
+	}
+	return clone
+}
+
+type CreateViewEntityDiff struct {
+	createView *sqlparser.CreateView
+
+	canonicalStatementString string
+}
+
+// IsEmpty implements EntityDiff
+func (d *CreateViewEntityDiff) IsEmpty() bool {
+	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *CreateViewEntityDiff) EntityName() string {
+	_, to := d.Entities()
+	return to.Name()
+}
+
+// Entities implements EntityDiff
+func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
+	return nil, &CreateViewEntity{CreateView: d.createView}
+}
+
+func (d *CreateViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
+// Statement implements EntityDiff
+func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.createView
+}
+
+// CreateView returns the underlying sqlparser.CreateView that was generated for the diff.
+func (d *CreateViewEntityDiff) CreateView() *sqlparser.CreateView {
+	if d == nil {
+		return nil
+	}
+	return d.createView
+}
+
+// StatementString implements EntityDiff
+func (d *CreateViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
+// CanonicalStatementString implements EntityDiff
+func (d *CreateViewEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
+	}
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *CreateViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *CreateViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	return &CreateViewEntityDiff{
+		createView: sqlparser.Clone(d.createView),
+	}
+}
+
+type DropViewEntityDiff struct {
+	from     *CreateViewEntity
+	dropView *sqlparser.DropView
+
+	canonicalStatementString string
+}
+
+// IsEmpty implements EntityDiff
+func (d *DropViewEntityDiff) IsEmpty() bool {
+	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *DropViewEntityDiff) EntityName() string {
+	return d.from.Name()
+}
+
+// Entities implements EntityDiff
+func (d *DropViewEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, nil
+}
+
+func (d *DropViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
+// Statement implements EntityDiff
+func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.dropView
+}
+
+// DropView returns the underlying sqlparser.DropView that was generated for the diff.
+func (d *DropViewEntityDiff) DropView() *sqlparser.DropView {
+	if d == nil {
+		return nil
+	}
+	return d.dropView
+}
+
+// CanonicalStatementString implements EntityDiff
+func (d *DropViewEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
+	}
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
+}
+
+// StatementString implements EntityDiff
+func (d *DropViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *DropViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *DropViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &DropViewEntityDiff{
+		dropView: sqlparser.Clone(d.dropView),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateViewEntity)
+	}
+	return clone
+}
+
+// CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
+type CreateViewEntity struct {
+	*sqlparser.CreateView
+	env *Environment
+}
+
+func NewCreateViewEntity(env *Environment, c *sqlparser.CreateView) (*CreateViewEntity, error) {
+	if !c.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
+	}
+	entity := &CreateViewEntity{CreateView: c, env: env}
+	entity.normalize()
+	return entity, nil
+}
+
+func NewCreateViewEntityFromSQL(env *Environment, sql string) (*CreateViewEntity, error) {
+	stmt, err := env.Parser().ParseStrictDDL(sql)
+	if err != nil {
+		return nil, err
+	}
+	createView, ok := stmt.(*sqlparser.CreateView)
+	if !ok {
+		return nil, ErrExpectedCreateTable
+	}
+	return NewCreateViewEntity(env, createView)
+}
+
+func (c *CreateViewEntity) normalize() {
+	// Drop the default algorithm
+	if strings.EqualFold(c.Algorithm, "undefined") {
+		c.Algorithm = ""
+	}
+	// Drop the default security model
+	if strings.EqualFold(c.Security, "definer") {
+		c.Security = ""
+	}
+}
+
+// Name implements Entity interface
+func (c *CreateViewEntity) Name() string {
+	return c.GetTable().Name.String()
+}
+
+// Diff implements Entity interface function
+func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, error) {
+	otherCreateView, ok := other.(*CreateViewEntity)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	return c.ViewDiff(otherCreateView, hints)
+}
+
+// ViewDiff compares this view statement with another view statement, and sees what it takes to
+// change this view to look like the other view.
+// It returns an AlterView statement if changes are found, or nil if not.
+// the other view may be of different name; its name is ignored.
+func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*AlterViewEntityDiff, error) {
+	if !c.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateView)}
+	}
+	if !other.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(other.CreateView)}
+	}
+
+	if c.identicalOtherThanName(other) {
+		return nil, nil
+	}
+
+	alterView := &sqlparser.AlterView{
+		ViewName:    c.ViewName,
+		Algorithm:   other.Algorithm,
+		Definer:     other.Definer,
+		Security:    other.Security,
+		Columns:     other.Columns,
+		Select:      other.Select,
+		CheckOption: other.CheckOption,
+	}
+	return &AlterViewEntityDiff{alterView: alterView, from: c, to: other}, nil
+}
+
+// Create implements Entity interface
+func (c *CreateViewEntity) Create() EntityDiff {
+	if c == nil {
+		return nil
+	}
+	return &CreateViewEntityDiff{createView: c.CreateView}
+}
+
+// Drop implements Entity interface
+func (c *CreateViewEntity) Drop() EntityDiff {
+	dropView := &sqlparser.DropView{
+		FromTables: []sqlparser.TableName{c.ViewName},
+	}
+	return &DropViewEntityDiff{from: c, dropView: dropView}
+}
+
+// apply attempts to apply an ALTER VIEW diff onto this entity's view definition.
+// supported modifications are only those created by schemadiff's Diff() function.
+func (c *CreateViewEntity) apply(diff *AlterViewEntityDiff) error {
+	c.CreateView = diff.to.CreateView
+	return nil
+}
+
+// Apply attempts to apply given ALTER VIEW diff onto the view defined by this entity.
+// This entity is unmodified. If successful, a new CREATE VIEW entity is returned.
+func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
+	alterDiff, ok := diff.(*AlterViewEntityDiff)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	dup := c.Clone().(*CreateViewEntity)
+	if err := dup.apply(alterDiff); err != nil {
+		return nil, err
+	}
+	dup.normalize()
+	return dup, nil
+}
+
+func (c *CreateViewEntity) Clone() Entity {
+	return &CreateViewEntity{CreateView: sqlparser.Clone(c.CreateView)}
+}
+
+func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool {
+	if other == nil {
+		return false
+	}
+	return c.Algorithm == other.Algorithm &&
+		c.Security == other.Security &&
+		c.CheckOption == other.CheckOption &&
+		c.IsReplace == other.IsReplace &&
+		sqlparser.Equals.RefOfDefiner(c.Definer, other.Definer) &&
+		sqlparser.Equals.Columns(c.Columns, other.Columns) &&
+		sqlparser.Equals.Statement(c.Select, other.Select) &&
+		sqlparser.Equals.RefOfParsedComments(c.Comments, other.Comments)
+}

@@ -1,0 +1,400 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vtgate
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
+)
+
+func TestTabletGatewayExecute(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		_, err := tg.Execute(ctx, nil, target, "query", nil, 0, 0, nil)
+		return err
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			assert.Equal(t, want, sc.ExecCount.Load())
+		})
+	testTabletGatewayTransact(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		_, err := tg.Execute(ctx, nil, target, "query", nil, 1, 0, nil)
+		return err
+	})
+}
+
+func TestTabletGatewayExecuteStream(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		err := tg.StreamExecute(ctx, nil, target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
+			return nil
+		})
+		return err
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			assert.Equal(t, want, sc.ExecCount.Load())
+		})
+}
+
+func TestTabletGatewayBegin(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		_, err := tg.Begin(ctx, nil, target, nil)
+		return err
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			assert.Equal(t, want, sc.BeginCount.Load())
+		})
+}
+
+func TestTabletGatewayCommit(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	testTabletGatewayTransact(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		_, err := tg.Commit(ctx, target, 1)
+		return err
+	})
+}
+
+func TestTabletGatewayRollback(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	testTabletGatewayTransact(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		_, err := tg.Rollback(ctx, target, 1)
+		return err
+	})
+}
+
+func TestTabletGatewayBeginExecute(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
+		_, _, err := tg.BeginExecute(ctx, nil, target, nil, "query", nil, 0, nil)
+		return err
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			t.Helper()
+			assert.Equal(t, want, sc.BeginCount.Load())
+		})
+}
+
+func TestTabletGatewayShuffleTablets(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	ts := &econtext.FakeTopoServer{}
+	tg := NewTabletGateway(ctx, hc, ts, "local")
+	defer tg.Close(ctx)
+
+	ts1 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(1, "cell1", "host1"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts2 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(2, "cell1", "host2"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts3 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(3, "cell2", "host3"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts4 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(4, "cell2", "host4"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	sameCellTablets := []*discovery.TabletHealth{ts1, ts2}
+	diffCellTablets := []*discovery.TabletHealth{ts3, ts4}
+	mixedTablets := []*discovery.TabletHealth{ts1, ts2, ts3, ts4}
+	// repeat shuffling 10 times and every time the same cell tablets should be in the front
+	for range 10 {
+		tg.shuffleTablets("cell1", sameCellTablets)
+		assert.Len(t, sameCellTablets, 2, "Wrong number of TabletHealth")
+		assert.Equal(t, "cell1", sameCellTablets[0].Tablet.Alias.Cell, "Wrong tablet cell")
+		assert.Equal(t, "cell1", sameCellTablets[1].Tablet.Alias.Cell, "Wrong tablet cell")
+
+		tg.shuffleTablets("cell1", diffCellTablets)
+		assert.Len(t, diffCellTablets, 2, "should shuffle in only diff cell tablets")
+		assert.Contains(t, diffCellTablets, ts3, "diffCellTablets should contain %v", ts3)
+		assert.Contains(t, diffCellTablets, ts4, "diffCellTablets should contain %v", ts4)
+
+		tg.shuffleTablets("cell1", mixedTablets)
+		assert.Len(t, mixedTablets, 4, "should have 4 tablets, got %+v", mixedTablets)
+
+		assert.Contains(t, mixedTablets[0:2], ts1, "should have same cell tablets in the front, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[0:2], ts2, "should have same cell tablets in the front, got %+v", mixedTablets)
+
+		assert.Contains(t, mixedTablets[2:4], ts3, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[2:4], ts4, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+	}
+}
+
+func TestTabletGatewayReplicaTransactionError(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	keyspace := "ks"
+	shard := "0"
+	// transactions on REPLICA are not allowed from tabletgateway
+	// they have to be executed directly on tabletserver
+	tabletType := topodatapb.TabletType_REPLICA
+	host := "1.1.1.1"
+	port := int32(1001)
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	hc := discovery.NewFakeHealthCheck(nil)
+	ts := &econtext.FakeTopoServer{}
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
+
+	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	_, err := tg.Execute(ctx, nil, target, "query", nil, 1, 0, nil)
+	verifyContainsError(t, err, "query service can only be used for non-transactional queries on replicas", vtrpcpb.Code_INTERNAL)
+}
+
+func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error, verifyExpectedCount func(t *testing.T, sc *sandboxconn.SandboxConn, want int64)) {
+	t.Helper()
+	testTabletGatewayGenericHelper(t, ctx, f, verifyExpectedCount)
+
+	// test again with the balancer enabled assuming vtgates in both cells where there
+	// are tablets, so that it will still route to the local cell always, but this way
+	// it will test both implementations of skipping invalid tablets for retry
+	balancerEnabled = true
+	balancerVtgateCells = []string{"cell", "cell2"}
+	testTabletGatewayGenericHelper(t, ctx, f, verifyExpectedCount)
+	balancerEnabled = false
+}
+
+func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error, verifyExpectedCount func(t *testing.T, sc *sandboxconn.SandboxConn, want int64)) {
+	t.Helper()
+	keyspace := "ks"
+	shard := "0"
+	tabletType := topodatapb.TabletType_REPLICA
+	host := "1.1.1.1"
+	port := int32(1001)
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	hc := discovery.NewFakeHealthCheck(nil)
+	ts := &econtext.FakeTopoServer{}
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
+	// no tablet
+	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
+	err := f(ctx, tg, target)
+	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
+
+	// tablet with error
+	hc.Reset()
+	hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, false, 10, errors.New("no connection"))
+	err = f(ctx, tg, target)
+	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
+
+	// tablet without connection
+	hc.Reset()
+	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, false, 10, nil).Tablet()
+	err = f(ctx, tg, target)
+	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
+
+	// retry error
+	hc.Reset()
+	sc1 := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 := hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	err = f(ctx, tg, target)
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 1)
+
+	// fatal error
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	err = f(ctx, tg, target)
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 1)
+
+	// server error - no retry
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	err = f(ctx, tg, target)
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 0)
+
+	// no failure
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port, keyspace, shard, tabletType, true, 10, nil)
+	err = f(ctx, tg, target)
+	require.NoError(t, err)
+	verifyExpectedCount(t, sc1, 0)
+	verifyExpectedCount(t, sc2, 1)
+
+	// retry successful to other cell
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	err = f(ctx, tg, target)
+	require.NoError(t, err)
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 1)
+}
+
+func testTabletGatewayTransact(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error) {
+	t.Helper()
+
+	keyspace := "ks"
+	shard := "0"
+	// test with PRIMARY because replica transactions don't use gateway's queryservice
+	// they are executed directly on tabletserver
+	tabletType := topodatapb.TabletType_PRIMARY
+	host := "1.1.1.1"
+	port := int32(1001)
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	hc := discovery.NewFakeHealthCheck(nil)
+	ts := &econtext.FakeTopoServer{}
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
+
+	// retry error - no retry
+	sc1 := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 := hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+
+	err := f(ctx, tg, target)
+	verifyContainsError(t, err, "target: ks.0.primary", vtrpcpb.Code_FAILED_PRECONDITION)
+
+	// server error - no retry
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	err = f(ctx, tg, target)
+	verifyContainsError(t, err, "target: ks.0.primary", vtrpcpb.Code_INVALID_ARGUMENT)
+}
+
+func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), wantErr, "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
+	if code := vterrors.Code(err); code != wantCode {
+		assert.Failf(t, "", "wanted error code: %v, got: %v", wantCode, code)
+	}
+}
+
+func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vtrpcpb.Code) {
+	require.Error(t, err)
+	for _, wantErr := range wantErrors {
+		require.Contains(t, err.Error(), wantErr, "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
+	}
+	require.Equal(t, wantCode, vterrors.Code(err), "wanted error code: %s, got: %v", wantCode, vterrors.Code(err))
+}
+
+// TestWithRetry tests the functionality of withRetry function in different circumstances.
+func TestWithRetry(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
+	tg.kev = discovery.NewKeyspaceEventWatcher(ctx, tg.srvTopoServer, tg.hc, tg.localCell)
+	defer func() {
+		cancel()
+		tg.Close(ctx)
+	}()
+
+	testcases := []struct {
+		name          string
+		target        *querypb.Target
+		inTransaction bool
+		inner         func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)
+		expectedErr   string
+	}{
+		{
+			name: "Transaction on a replica",
+			target: &querypb.Target{
+				Keyspace:   "ks",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
+			},
+			inTransaction: true,
+			inner: func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error) {
+				return false, nil
+			},
+			expectedErr: "tabletGateway's query service can only be used for non-transactional queries on replicas",
+		}, {
+			name: "No replica tablets available",
+			target: &querypb.Target{
+				Keyspace:   "ks",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
+			},
+			inTransaction: false,
+			inner: func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error) {
+				return false, nil
+			},
+			expectedErr: `target: ks.0.replica: no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA'`,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tg.withRetry(ctx, tt.target, nil, "", queryservice.WrapOpts{InTransaction: tt.inTransaction}, tt.inner)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}

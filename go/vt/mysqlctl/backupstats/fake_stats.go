@@ -1,0 +1,87 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package backupstats
+
+import (
+	"maps"
+	"sync"
+	"time"
+)
+
+type FakeStats struct {
+	ScopeV                   map[ScopeType]ScopeValue
+	TimedIncrementCalls      []time.Duration
+	TimedIncrementBytesCalls []struct {
+		Bytes    int
+		Duration time.Duration
+	}
+	ScopeCalls   [][]Scope
+	ScopeReturns []*FakeStats
+	mutex        sync.Mutex
+}
+
+func NewFakeStats(scopes ...Scope) *FakeStats {
+	scopeV := make(map[ScopeType]ScopeValue)
+	for _, s := range scopes {
+		scopeV[s.Type] = s.Value
+	}
+	return &FakeStats{
+		ScopeV: scopeV,
+	}
+}
+
+// Scope returns a new FakeStats with scopes merged from the current FakeStats'
+// scopes and provided scopes. It also records the return value in
+// ScopeReturns, for use in unit test assertions.
+func (fs *FakeStats) Scope(scopes ...Scope) Stats {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	fs.ScopeCalls = append(fs.ScopeCalls, scopes)
+	newScopeV := map[ScopeType]ScopeValue{}
+	maps.Copy(newScopeV, fs.ScopeV)
+	for _, s := range scopes {
+		if _, ok := newScopeV[s.Type]; !ok {
+			newScopeV[s.Type] = s.Value
+		}
+	}
+	newScopes := make([]Scope, 0, len(newScopeV))
+	for t, v := range newScopeV {
+		newScopes = append(newScopes, Scope{t, v})
+	}
+	sfs := NewFakeStats(newScopes...)
+	fs.ScopeReturns = append(fs.ScopeReturns, sfs)
+	return sfs
+}
+
+// TimedIncrement does nothing except record calls made to this function in
+// TimedIncrementCalls, for use in unit test assertions.
+func (fs *FakeStats) TimedIncrement(d time.Duration) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	fs.TimedIncrementCalls = append(fs.TimedIncrementCalls, d)
+}
+
+// TimedIncrementBytes does nothing except record calls made to this function in
+// TimedIncrementBytesCalls, for use in unit test assertions.
+func (fs *FakeStats) TimedIncrementBytes(b int, d time.Duration) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	fs.TimedIncrementBytesCalls = append(fs.TimedIncrementBytesCalls, struct {
+		Bytes    int
+		Duration time.Duration
+	}{b, d})
+}

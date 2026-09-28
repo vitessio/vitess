@@ -1,0 +1,280 @@
+[
+  {
+    "comment": "select bypass",
+    "query": "select count(*), col from unsharded",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from unsharded",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Query": "select count(*), col from unsharded"
+      }
+    }
+  },
+  {
+    "comment": "update bypass",
+    "query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1"
+      }
+    }
+  },
+  {
+    "comment": "update bypass autocommit",
+    "query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set val = 1 where id = 18446744073709551616 and id = 1",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set val = 1 where id = 18446744073709551616 and id = 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "MultishardAutocommit": true,
+        "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ `user` set val = 1 where id = 18446744073709551616 and id = 1"
+      }
+    }
+  },
+  {
+    "comment": "update bypass with limit - query sent verbatim to all shards",
+    "query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set is_active = 0 where is_active = 1 limit 100",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set is_active = 0 where is_active = 1 limit 100",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "MultishardAutocommit": true,
+        "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ `user` set is_active = 0 where is_active = 1 limit 100"
+      }
+    }
+  },
+  {
+    "comment": "delete bypass with limit - query sent verbatim to all shards",
+    "query": "delete from user where is_active = 1 limit 100",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "DELETE",
+      "Original": "delete from user where is_active = 1 limit 100",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "Query": "delete from `user` where is_active = 1 limit 100"
+      }
+    }
+  },
+  {
+    "comment": "delete bypass",
+    "query": "DELETE FROM USER WHERE ID = 42",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM USER WHERE ID = 42",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "Query": "delete from `USER` where ID = 42"
+      }
+    }
+  },
+  {
+    "comment": "insert bypass: not supported",
+    "query": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
+    "plan": "VT03023: INSERT not supported when targeting a key range: targetString"
+  },
+  {
+    "comment": "bypass query for into outfile s3",
+    "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Query": "select count(*), col from unsharded into outfile s3 'x.txt'"
+      }
+    }
+  },
+  {
+    "comment": "Select outfile",
+    "query": "select * from user into outfile S3 'x.txt'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select * from user into outfile S3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Query": "select * from `user` into outfile s3 'x.txt'"
+      }
+    }
+  },
+  {
+    "comment": "load data from s3 'x.txt' into table x",
+    "query": "load data from s3 'x.txt' into table x",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "OTHER",
+      "Original": "load data from s3 'x.txt' into table x",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "Query": "load data from s3 'x.txt' into table x",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "load data from s3 'x.txt'",
+    "query": "load data from s3 'x.txt'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "OTHER",
+      "Original": "load data from s3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "IsDML": true,
+        "Query": "load data from s3 'x.txt'",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "create table",
+    "query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "DDL",
+      "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+      }
+    }
+  },
+  {
+    "comment": "remove the matching keyspace from shard targeted query",
+    "query": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
+      }
+    }
+  },
+  {
+    "comment": "show variables on a targeted session substitutes the variables VTGate owns",
+    "query": "show variables",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SHOW",
+      "Original": "show variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "ExactKeyRange(-)",
+            "Query": "show variables"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show global variables on a targeted session substitutes the server identity",
+    "query": "show global variables",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SHOW",
+      "Original": "show global variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "ExactKeyRange(-)",
+            "Query": "show global variables"
+          }
+        ]
+      }
+    }
+  }
+]

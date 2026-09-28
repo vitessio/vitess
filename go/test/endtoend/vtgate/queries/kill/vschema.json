@@ -1,0 +1,42 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "unicode_loose_xxhash" : {
+      "type": "unicode_loose_xxhash"
+    },
+    "xxhash" : {
+      "type": "xxhash"
+    },
+    "test_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "test_idx",
+        "from": "msg,id",
+        "to": "keyspace_id"
+      },
+      "owner": "test"
+    }
+  },
+  "tables": {
+    "test": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        },
+        {
+          "columns": ["msg", "id"],
+          "name": "test_vdx"
+        }
+      ]
+    },
+    "test_idx": {
+      "column_vindexes": [
+        {
+          "column": "msg",
+          "name": "unicode_loose_xxhash"
+        }
+      ]
+    }
+  }
+}

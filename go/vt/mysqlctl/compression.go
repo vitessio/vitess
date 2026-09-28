@@ -1,0 +1,391 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package mysqlctl
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"slices"
+	"sync"
+
+	"github.com/google/shlex"
+	"github.com/klauspost/compress/zstd"
+	"github.com/klauspost/pgzip"
+	"github.com/pierrec/lz4/v4"
+	"github.com/planetscale/pargzip"
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+const (
+	PgzipCompressor    = "pgzip"
+	PargzipCompressor  = "pargzip"
+	ZstdCompressor     = "zstd"
+	Lz4Compressor      = "lz4"
+	ExternalCompressor = "external"
+)
+
+var (
+	compressionLevel = 1
+	// CompressionEngineName specifies which compressor/decompressor to use
+	CompressionEngineName = "pargzip"
+	// ExternalCompressorCmd / ExternalDecompressorCmd specify the external commands compress/decompress the backups
+	ExternalCompressorCmd           string
+	ExternalCompressorExt           string
+	ExternalDecompressorCmd         string
+	ExternalDecompressorUseManifest bool
+	ManifestExternalDecompressorCmd string
+
+	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine. Alternatively, set --external-decompressor-use-manifest to use the decompressor command from the backup manifest, but this is NOT RECOMMENDED as it is a security risk")
+	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
+
+	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
+	engineExtensions = map[string][]string{
+		".gz":  {PgzipCompressor, PargzipCompressor},
+		".lz4": {Lz4Compressor},
+		".zst": {ZstdCompressor},
+	}
+)
+
+type (
+	// writeCloserOnly hides every method of the wrapped writer except
+	// Write and Close, and closes the wrapped writer at most once. The
+	// lz4 writer's ReadFrom only accepts a writer with nothing written
+	// to it yet, while io.Copy and io.CopyN select the destination's
+	// ReadFrom whenever the source has no visible WriteTo; repeated
+	// copies into one compressor — the striped xtrabackup backup
+	// round-robins io.CopyN over its destination writers — would then
+	// fail after the first copy. Hiding the method keeps every copy on
+	// the plain Write path. A second Close on the lz4 writer, which the
+	// builtin backup engine issues when it retries a failed close,
+	// blocks forever in concurrent mode: the goroutine that orders the
+	// compressed blocks exits during the first Close, and the second
+	// one waits on it. Every Close after the first returns the recorded
+	// result of the first instead.
+	writeCloserOnly struct {
+		io.WriteCloser
+		closeOnce sync.Once
+		closeErr  error
+	}
+	// readCloserOnly hides every method of the wrapped reader except
+	// Read and Close. The lz4 reader's WriteTo accepts a reader that is
+	// already mid-stream but discards the bytes still buffered from the
+	// current block, so an io.Copy issued after a partial Read would
+	// silently lose data. Hiding the method keeps every copy on the
+	// plain Read path.
+	readCloserOnly struct{ io.ReadCloser }
+)
+
+func (w *writeCloserOnly) Close() error {
+	w.closeOnce.Do(func() {
+		w.closeErr = w.WriteCloser.Close()
+	})
+	return w.closeErr
+}
+
+func init() {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver"} {
+		servenv.OnParseFor(cmd, registerBackupCompressionFlags)
+	}
+}
+
+func registerBackupCompressionFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&compressionLevel, "compression-level", compressionLevel, "what level to pass to the compressor.")
+	fs.StringVar(&CompressionEngineName, "compression-engine-name", CompressionEngineName, "compressor engine used for compression.")
+	fs.StringVar(&ExternalCompressorCmd, "external-compressor", ExternalCompressorCmd, "command with arguments to use when compressing a backup.")
+	fs.StringVar(&ExternalCompressorExt, "external-compressor-extension", ExternalCompressorExt, "extension to use when using an external compressor.")
+	fs.StringVar(&ExternalDecompressorCmd, "external-decompressor", ExternalDecompressorCmd, "command with arguments to use when decompressing a backup.")
+	fs.BoolVar(&ExternalDecompressorUseManifest, "external-decompressor-use-manifest", ExternalDecompressorUseManifest, "allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.")
+	fs.StringVar(&ManifestExternalDecompressorCmd, "manifest-external-decompressor", ManifestExternalDecompressorCmd, "command with arguments to store in the backup manifest when compressing a backup with an external compression engine.")
+}
+
+func getExtensionFromEngine(engine string) (string, error) {
+	for ext, eng := range engineExtensions {
+		if slices.Contains(eng, engine) {
+			return ext, nil
+		}
+	}
+	return "", fmt.Errorf("%w %q", errUnsupportedCompressionEngine, engine)
+}
+
+// resolveExternalDecompressor returns the external decompressor command to use
+// at restore time. The CLI flag (--external-decompressor) takes precedence. The
+// backup manifest value is only used when --external-decompressor-use-manifest
+// is explicitly set to true.
+func resolveExternalDecompressor(manifestDecompressor string) string {
+	if ExternalDecompressorCmd != "" {
+		return ExternalDecompressorCmd
+	}
+	if ExternalDecompressorUseManifest && manifestDecompressor != "" {
+		return manifestDecompressor
+	}
+	return ""
+}
+
+// Validates if the external decompressor exists and return its path.
+func validateExternalCmd(cmd string) (string, error) {
+	if cmd == "" {
+		return "", errors.New("external command is empty")
+	}
+	return exec.LookPath(cmd)
+}
+
+// Validate compression engine is one of the supported values.
+func validateExternalCompressionEngineName(engine string) error {
+	switch engine {
+	case PgzipCompressor:
+	case PargzipCompressor:
+	case Lz4Compressor:
+	case ZstdCompressor:
+	case ExternalCompressor:
+	default:
+		return fmt.Errorf("%w value: %q", errUnsupportedCompressionEngine, engine)
+	}
+
+	return nil
+}
+
+func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
+	cmdArgs, err := shlex.Split(cmdStr)
+	if err != nil {
+		return nil, err
+	}
+	if len(cmdArgs) < 1 {
+		return nil, errors.New("external command is empty")
+	}
+	cmdPath, err := validateExternalCmd(cmdArgs[0])
+	if err != nil {
+		return nil, err
+	}
+	return exec.CommandContext(ctx, cmdPath, cmdArgs[1:]...), nil
+}
+
+// This returns a writer that writes the compressed output of the external command to the provided writer.
+func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
+	logger.Infof("Compressing using external command: %q", cmdStr)
+	// validate value of compression engine name
+	if err := validateExternalCompressionEngineName(CompressionEngineName); err != nil {
+		return nil, err
+	}
+
+	cmd, err := prepareExternalCmd(ctx, cmdStr)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "unable to start external command")
+	}
+	compressor := &externalCompressor{cmd: cmd}
+	cmd.Stdout = writer
+	cmdIn, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "cannot create external ompressor stdin pipe")
+	}
+	compressor.stdin = cmdIn
+	cmdErr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "cannot create external ompressor stderr pipe")
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, vterrors.Wrap(err, "can't start external decompressor")
+	}
+
+	compressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the writer
+	go scanLinesToLogger("compressor stderr", cmdErr, logger, compressor.wg.Done)
+	return compressor, nil
+}
+
+// This returns a reader that reads the compressed input and passes it to the external command to be decompressed. Calls to its
+// Read() will return the uncompressed data until EOF.
+func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
+	logger.Infof("Decompressing using external command: %q", cmdStr)
+
+	cmd, err := prepareExternalCmd(ctx, cmdStr)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "unable to start external command")
+	}
+	decompressor := &externalDecompressor{cmd: cmd}
+	cmd.Stdin = reader
+	cmdOut, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
+	}
+	decompressor.stdout = cmdOut
+	cmdErr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, vterrors.Wrap(err, "can't start external decompressor")
+	}
+
+	decompressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the reader
+	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
+	return decompressor, nil
+}
+
+// This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
+func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
+	if engine == PargzipCompressor {
+		logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		engine = PgzipCompressor
+	}
+
+	switch engine {
+	case PgzipCompressor:
+		d, err := pgzip.NewReader(reader)
+		if err != nil {
+			return nil, err
+		}
+		decompressor = d
+	case Lz4Compressor:
+		decompressor = readCloserOnly{io.NopCloser(lz4.NewReader(reader))}
+	case ZstdCompressor:
+		d, err := zstd.NewReader(reader)
+		if err != nil {
+			return nil, err
+		}
+		decompressor = d.IOReadCloser()
+	default:
+		err = fmt.Errorf("Unkown decompressor engine: %q", engine)
+		return decompressor, err
+	}
+
+	logger.Infof("Decompressing backup using engine %q", engine)
+	return decompressor, err
+}
+
+// lz4ConcurrencyBlocks maps the --backup-storage-number-blocks value to
+// the lz4 concurrency option. A value of 0 selected serial compression
+// in the lz4 v2 writer, while the v4 option reads any non-positive value
+// as GOMAXPROCS, so 0 maps to 1 — the value the v4 writer treats as
+// serial. A negative value means GOMAXPROCS in both versions and passes
+// through.
+func lz4ConcurrencyBlocks(blocks int) int {
+	if blocks == 0 {
+		return 1
+	}
+	return blocks
+}
+
+// lz4CompressionLevel maps the numeric --compression-level value onto the
+// lz4 level enum; lz4.CompressionLevelOption rejects any value outside the
+// named constants. A negative value selected an unlimited hash-chain
+// search depth in the lz4 v2 writer, so it maps to the deepest named
+// level. Values 0 and 1 map to the fast compressor: the hash-chain search
+// depth of 1 that a value of 1 previously requested does almost no
+// searching, so the fast compressor is the closest match. Values from 2
+// through 9 map onto the matching hash-chain levels, whose fixed search
+// depths grow from 1024 (Level2) to 131072 (Level9). Values above 9,
+// which the lz4 v2 writer used as a raw search depth, also select
+// Level9: there is no deeper named level, and a level above the scale
+// asks for the strongest compression.
+func lz4CompressionLevel(level int) lz4.CompressionLevel {
+	switch {
+	case level < 0 || level >= 9:
+		return lz4.Level9
+	case level <= 1:
+		return lz4.Fast
+	default:
+		return lz4.Level1 << (level - 1)
+	}
+}
+
+// This returns a writer that will compress the data using the specified engine before writing to the underlying writer.
+func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger) (compressor io.WriteCloser, err error) {
+	switch engine {
+	case PgzipCompressor:
+		gzip, err := pgzip.NewWriterLevel(writer, compressionLevel)
+		if err != nil {
+			return compressor, vterrors.Wrap(err, "cannot create gzip compressor")
+		}
+		gzip.SetConcurrency(backupCompressBlockSize, backupCompressBlocks)
+		compressor = gzip
+	case PargzipCompressor:
+		gzip := pargzip.NewWriter(writer)
+		gzip.ChunkSize = backupCompressBlockSize
+		gzip.Parallel = backupCompressBlocks
+		gzip.CompressionLevel = compressionLevel
+		compressor = gzip
+	case Lz4Compressor:
+		lz4Writer := lz4.NewWriter(writer)
+		if err := lz4Writer.Apply(
+			lz4.ConcurrencyOption(lz4ConcurrencyBlocks(backupCompressBlocks)),
+			lz4.CompressionLevelOption(lz4CompressionLevel(compressionLevel)),
+		); err != nil {
+			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
+		}
+		compressor = &writeCloserOnly{WriteCloser: lz4Writer}
+	case ZstdCompressor:
+		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(compressionLevel)))
+		if err != nil {
+			return compressor, vterrors.Wrap(err, "cannot create zstd compressor")
+		}
+		compressor = zst
+	default:
+		err = fmt.Errorf("%w value: %q", errUnsupportedCompressionEngine, engine)
+		return compressor, err
+	}
+
+	logger.Infof("Compressing backup using engine %q", engine)
+	return
+}
+
+// This struct wraps the underlying exec.Cmd and implements the io.WriteCloser interface.
+type externalCompressor struct {
+	cmd   *exec.Cmd
+	stdin io.WriteCloser
+	wg    sync.WaitGroup
+}
+
+func (e *externalCompressor) Write(p []byte) (n int, err error) {
+	return e.stdin.Write(p)
+}
+
+func (e *externalCompressor) Close() error {
+	if err := e.stdin.Close(); err != nil {
+		return err
+	}
+
+	// wait for the stderr to finish reading as well
+	e.wg.Wait()
+	return e.cmd.Wait()
+}
+
+// This struct wraps the underlying exec.Cmd and implements the io.ReadCloser interface.
+type externalDecompressor struct {
+	cmd    *exec.Cmd
+	stdout io.ReadCloser
+	wg     sync.WaitGroup
+}
+
+func (e *externalDecompressor) Read(p []byte) (n int, err error) {
+	return e.stdout.Read(p)
+}
+
+func (e *externalDecompressor) Close() error {
+	// wait for the stderr to finish reading as well
+	e.wg.Wait()
+
+	// exec.Cmd.Wait() will also close the stdout pipe, so we don't need to call it directly
+	return e.cmd.Wait()
+}

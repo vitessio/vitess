@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS zip(
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    code5 INT(5) NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB;
+
+INSERT INTO zip(id, code5)
+VALUES (1, 47107),
+       (2, 82845),
+       (3, 11237);
+
+CREATE TABLE IF NOT EXISTS zip_detail(
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    zip_id BIGINT NOT NULL,
+    discontinued_at DATE,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB;

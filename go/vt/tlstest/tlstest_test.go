@@ -1,0 +1,422 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package tlstest
+
+import (
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"io"
+	"net"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/vt/vttls"
+)
+
+func TestClientServerWithoutCombineCerts(t *testing.T) {
+	testClientServer(t, false)
+}
+
+func TestClientServerWithCombineCerts(t *testing.T) {
+	testClientServer(t, true)
+}
+
+// testClientServer generates:
+// - a root CA
+// - a server intermediate CA, with a server.
+// - a client intermediate CA, with a client.
+// And then performs a few tests on them.
+func testClientServer(t *testing.T, combineCerts bool) {
+	// Our test root.
+	root := t.TempDir()
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+	serverCA := ""
+
+	if combineCerts {
+		serverCA = clientServerKeyPairs.ServerCA
+	}
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.ClientCRL,
+		serverCA,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.ClientCert,
+		clientServerKeyPairs.ClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	// Create a TLS server listener.
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	defer listener.Close()
+	// create a dialer with timeout
+	dialer := new(net.Dialer)
+	dialer.Timeout = 10 * time.Second
+
+	//
+	// Positive case: accept on server side, connect a client, send data.
+	//
+	var clientEG errgroup.Group
+	clientEG.Go(func() error {
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
+		if err != nil {
+			return err
+		}
+
+		_, _ = conn.Write([]byte{42})
+		_ = conn.Close()
+		return nil
+	})
+
+	serverConn, err := listener.Accept()
+	require.NoError(t, err)
+
+	result := make([]byte, 1)
+	if n, err := serverConn.Read(result); (err != nil && err != io.EOF) || n != 1 {
+		require.Failf(t, "Read failed", "%v %v", n, err)
+	}
+	require.Equalf(t, byte(42), result[0], "Read returned wrong result: %v", result)
+	serverConn.Close()
+
+	if err := clientEG.Wait(); err != nil {
+		require.NoError(t, err)
+	}
+
+	//
+	// Negative case: connect a client with wrong cert (using the
+	// server cert on the client side).
+	//
+
+	badClientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	var serverEG errgroup.Group
+	serverEG.Go(func() error {
+		// We expect the Accept to work, but the first read to fail.
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+
+		// This will fail.
+		result := make([]byte, 1)
+		if n, err := conn.Read(result); err == nil {
+			return fmt.Errorf("unexpectedly able to read %d bytes from server", n)
+		}
+
+		_ = conn.Close()
+		return nil
+	})
+
+	// When using TLS 1.2, the Dial will fail.
+	// With TLS 1.3, the Dial will succeed and the first Read will fail.
+	clientConn, err := tls.DialWithDialer(dialer, "tcp", addr, badClientConfig)
+	if err != nil {
+		assert.ErrorContains(t, err, "certificate required")
+		return
+	}
+
+	require.NoError(t, serverEG.Wait())
+
+	data := make([]byte, 1)
+	_, err = clientConn.Read(data)
+	require.ErrorContains(t, err, "certificate required", "Dial or first Read was expected to fail with 'certificate required'")
+}
+
+func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
+	return vttls.ServerConfig(
+		keypairs.ServerCert,
+		keypairs.ServerKey,
+		keypairs.ClientCA,
+		keypairs.ClientCRL,
+		"",
+		tls.VersionTLS12)
+}
+
+func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
+	return vttls.ServerConfig(
+		keypairs.ServerCert,
+		keypairs.ServerKey,
+		keypairs.ClientCA,
+		keypairs.ClientCRL,
+		keypairs.ServerCA,
+		tls.VersionTLS12)
+}
+
+func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
+	return vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		keypairs.ClientCert,
+		keypairs.ClientKey,
+		keypairs.ServerCA,
+		keypairs.ServerCRL,
+		keypairs.ServerName,
+		tls.VersionTLS12)
+}
+
+func testServerTLSConfigCaching(t *testing.T, getServerConfig func(ClientServerKeyPairs) (*tls.Config, error)) {
+	testConfigGeneration(t, "servertlstest", getServerConfig, func(config *tls.Config) *x509.CertPool {
+		return config.ClientCAs
+	})
+}
+
+func TestServerTLSConfigCachingWithoutCombinedCerts(t *testing.T) {
+	testServerTLSConfigCaching(t, getServerConfigWithoutCombinedCerts)
+}
+
+func TestServerTLSConfigCachingWithCombinedCerts(t *testing.T) {
+	testServerTLSConfigCaching(t, getServerConfigWithCombinedCerts)
+}
+
+func TestClientTLSConfigCaching(t *testing.T) {
+	testConfigGeneration(t, "clienttlstest", getClientConfig, func(config *tls.Config) *x509.CertPool {
+		return config.RootCAs
+	})
+}
+
+func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(ClientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
+	// Our test root.
+	root := t.TempDir()
+
+	const configsToGenerate = 1
+
+	firstClientServerKeyPairs := CreateClientServerCertPairs(root)
+	secondClientServerKeyPairs := CreateClientServerCertPairs(root)
+
+	firstExpectedConfig, _ := generateConfig(firstClientServerKeyPairs)
+	secondExpectedConfig, _ := generateConfig(secondClientServerKeyPairs)
+	firstConfigChannel := make(chan *tls.Config, configsToGenerate)
+	secondConfigChannel := make(chan *tls.Config, configsToGenerate)
+
+	configCounter := 0
+
+	for i := 1; i <= configsToGenerate; i++ {
+		go func() {
+			firstConfig, _ := generateConfig(firstClientServerKeyPairs)
+			firstConfigChannel <- firstConfig
+			secondConfig, _ := generateConfig(secondClientServerKeyPairs)
+			secondConfigChannel <- secondConfig
+		}()
+	}
+
+	for {
+		select {
+		case firstConfig := <-firstConfigChannel:
+			assert.Equal(t, &firstExpectedConfig.Certificates, &firstConfig.Certificates)
+			assert.Equal(t, getCertPool(firstExpectedConfig), getCertPool(firstConfig))
+		case secondConfig := <-secondConfigChannel:
+			assert.Equal(t, &secondExpectedConfig.Certificates, &secondConfig.Certificates)
+			assert.Equal(t, getCertPool(secondExpectedConfig), getCertPool(secondConfig))
+		}
+		configCounter = configCounter + 1
+
+		if configCounter >= 2*configsToGenerate {
+			break
+		}
+	}
+}
+
+func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {
+	// Our test root.
+	root := t.TempDir()
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+	serverCA := ""
+	if combine {
+		serverCA = clientServerKeyPairs.ServerCA
+	}
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.ClientCRL,
+		serverCA,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	assert.Len(t, serverConfig.Certificates[0].Certificate, numCertsExpected)
+}
+
+func TestNumberOfCertsWithoutCombining(t *testing.T) {
+	testNumberOfCertsWithOrWithoutCombining(t, 1, false)
+}
+
+func TestNumberOfCertsWithCombining(t *testing.T) {
+	testNumberOfCertsWithOrWithoutCombining(t, 2, true)
+}
+
+func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Config) {
+	// Create a TLS server listener.
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	defer listener.Close()
+	// create a dialer with timeout
+	dialer := new(net.Dialer)
+	dialer.Timeout = 10 * time.Second
+
+	wg := sync.WaitGroup{}
+
+	var clientErr error
+	wg.Go(func() {
+		var clientConn *tls.Conn
+		clientConn, clientErr = tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
+		if clientErr == nil {
+			clientConn.Close()
+		}
+	})
+
+	serverConn, err := listener.Accept()
+	if err != nil {
+		// We should always be able to accept on the socket
+		require.NoError(t, err)
+	}
+
+	err = serverConn.(*tls.Conn).Handshake()
+	require.Error(t, err, "Server should have failed the TLS handshake but it did not")
+	assert.Truef(t,
+		strings.Contains(err.Error(), "Certificate revoked: CommonName=") ||
+			strings.Contains(err.Error(), "remote error: tls: bad certificate"),
+		"unexpected handshake error: %v", err)
+	serverConn.Close()
+	wg.Wait()
+}
+
+func TestClientServerWithRevokedServerCert(t *testing.T) {
+	root := t.TempDir()
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.RevokedServerCert,
+		clientServerKeyPairs.RevokedServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.ClientCRL,
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.ClientCert,
+		clientServerKeyPairs.ClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.RevokedServerName,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+
+	serverConfig, err = vttls.ServerConfig(
+		clientServerKeyPairs.RevokedServerCert,
+		clientServerKeyPairs.RevokedServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.CombinedCRL,
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	clientConfig, err = vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.ClientCert,
+		clientServerKeyPairs.ClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.CombinedCRL,
+		clientServerKeyPairs.RevokedServerName,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+}
+
+func TestClientServerWithRevokedClientCert(t *testing.T) {
+	root := t.TempDir()
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+
+	// Single CRL
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.ClientCRL,
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.RevokedClientCert,
+		clientServerKeyPairs.RevokedClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+
+	// CombinedCRL
+
+	serverConfig, err = vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.CombinedCRL,
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	clientConfig, err = vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.RevokedClientCert,
+		clientServerKeyPairs.RevokedClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.CombinedCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
+	require.NoError(t, err)
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+}

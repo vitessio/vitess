@@ -1,0 +1,360 @@
+[
+  {
+    "Name": "a",
+    "Columns": [
+      {
+        "Name": "eid",
+        "Default": 0
+      },
+      {
+        "Name": "id",
+        "Default": 0
+      },
+      {
+        "Name": "name",
+        "Default": "MA=="
+      },
+      {
+        "Name": "foo",
+        "Default": "MA=="
+      },
+      {
+        "Name": "CamelCase",
+        "Default": "MA=="
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "eid",
+          "id"
+        ],
+        "Cardinality": [
+          1,
+          1
+        ],
+        "DataColumns": [
+          "eid",
+          "id",
+          "name",
+          "foo"
+        ]
+      },
+      {
+        "Name": "a_name",
+        "Unique": true,
+        "Columns": [
+          "eid",
+          "name"
+        ],
+        "Cardinality": [
+          1,
+          1
+        ],
+        "DataColumns": [
+          "eid",
+          "name",
+          "id"
+        ]
+      },
+      {
+        "Name": "b_name",
+        "Columns": [
+          "name"
+        ],
+        "Cardinality": [
+          3
+        ],
+        "DataColumns": [
+          "name",
+          "eid",
+          "id"
+        ]
+      },
+      {
+        "Name": "c_name",
+        "Columns": [
+          "name"
+        ],
+        "Cardinality": [
+          2
+        ],
+        "DataColumns": [
+          "name",
+          "eid",
+          "id"
+        ]
+      }
+    ],
+    "PKColumns": [
+      0,
+      1
+    ],
+    "Type": 0
+  },
+  {
+    "Name": "b",
+    "Columns": [
+      {
+        "Name": "eid",
+        "Default": 0
+      },
+      {
+        "Name": "id",
+        "Default": 0
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "eid",
+          "id"
+        ],
+        "Cardinality": [
+          1,
+          1
+        ],
+        "DataColumns": [
+          "eid",
+          "id"
+        ]
+      }
+    ],
+    "PKColumns": [
+      0,
+      1
+    ],
+    "Type": 0
+  },
+  {
+    "Name": "c",
+    "Columns": [
+      {
+        "Name": "eid",
+        "Default": 0
+      },
+      {
+        "Name": "id",
+        "Default": 0
+      }
+    ],
+    "Indexes": [],
+    "PKColumns": null,
+    "Type": 0
+  },
+  {
+    "Name": "d",
+    "Columns": [
+      {
+        "Name": "name",
+        "Default": "MA=="
+      },
+      {
+        "Name": "id",
+        "Default": 0
+      },
+      {
+        "Name": "foo",
+        "Default": "MA=="
+      },
+      {
+        "Name": "bar",
+        "Default": "MA=="
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "name"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+          "name"
+        ]
+      },
+      {
+        "Name": "d_id",
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+          "name"
+        ]
+      },
+      {
+        "Name": "d_bar_never",
+        "Columns": [
+          "bar",
+          "foo"
+        ],
+        "Cardinality": [
+          2,
+          1
+        ],
+        "DataColumns": [
+          "name"
+        ]
+      },
+      {
+        "Name": "d_bar",
+        "Columns": [
+          "bar",
+          "foo"
+        ],
+        "Cardinality": [
+          3,
+          1
+        ],
+        "DataColumns": [
+          "name"
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 0
+  },
+  {
+    "Name": "seq",
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 1
+  },
+  {
+    "Name": "auto",
+    "Columns": [
+      {
+        "Name": "id",
+        "IsAuto": true
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 0
+  },
+  {
+    "Name": "with_defaults",
+    "Columns": [
+      {
+        "Name": "aid",
+        "Default": 3
+      },
+      {
+        "Name": "bid",
+        "Default": -2
+      },
+      {
+        "Name": "cid",
+        "Default": null
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 0
+  },
+  {
+    "Name": "msg",
+    "Columns": [
+      {
+        "Name": "id"
+      },
+      {
+        "Name": "priority"
+      },
+      {
+        "Name": "epoch"
+      },
+      {
+        "Name": "time_next"
+      },
+      {
+        "Name": "time_acked"
+      },
+      {
+        "Name": "tenant_id"
+      },
+      {
+        "Name": "message"
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
+    "Type": 2
+  },
+  {
+    "Name": "dual",
+    "Type": 0
+  }
+]

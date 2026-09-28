@@ -1,0 +1,187 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"fmt"
+	"math/rand/v2"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
+)
+
+func insertInitialData(t *testing.T) {
+	t.Run("insertInitialData", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
+		log.Info("Inserting initial data")
+		lines, _ := os.ReadFile("unsharded_init_data.sql")
+		execMultipleQueries(t, vtgateConn, defaultSourceKs+":0", string(lines))
+		_, err := execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
+		require.NoError(t, err)
+		log.Info("Done inserting initial data")
+
+		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "product", 2)
+		waitForRowCount(t, vtgateConn, defaultSourceKs+":0", "customer", 3)
+		waitForQueryResult(t, vtgateConn, defaultSourceKs+":0", "select * from merchant",
+			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
+
+		insertJSONValues(t)
+
+		require.NoError(t, insertLargeTransactionForChunkTesting(vtgateConn, defaultSourceKs+":0", 50000))
+		log.Info("Inserted large transaction for chunking tests")
+
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "delete from customer where cid >= 50000 and cid < 50100")
+		require.NoError(t, err)
+		log.Info("Cleaned up chunk testing rows from source keyspace")
+	})
+}
+
+const NumJSONRows = 100
+
+func insertJSONValues(t *testing.T) {
+	// insert null value combinations
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	_, err := execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(1, \"{}\")")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", "insert into json_tbl(id, j3) values(6, '{}')")
+	require.NoError(t, err)
+
+	id := 8 // 6 inserted above and one after copy phase is done
+
+	q := "insert into json_tbl(id, j1, j2, j3) values(%d, '%s', '%s', '{}')"
+	numJsonValues := len(jsonValues)
+	for id <= NumJSONRows {
+		id++
+		j1 := rand.IntN(numJsonValues)
+		j2 := rand.IntN(numJsonValues)
+		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs+":0", query)
+		require.NoError(t, err)
+	}
+}
+
+// insertMoreCustomers creates additional customers.
+// Note: this will only work when the customer sequence is in place.
+func insertMoreCustomers(t *testing.T, numCustomers int) {
+	// Let's first be sure that the sequence is working.
+	// We reserve all of the sequence values we need for
+	// the number of customer records we are going to
+	// create. The value we get back is the max value
+	// that we reserved.
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	maxID := waitForSequenceValue(t, vtgateConn, defaultSourceKs, "customer_seq", numCustomers)
+	// So we need to calculate the first value we reserved
+	// from the max.
+	cid := maxID - int64(numCustomers)
+
+	// Now let's insert the records using the sequence
+	// values we reserved.
+	sql := "insert into customer (cid, name) values "
+	var sqlSb101 strings.Builder
+	for i := 1; i <= numCustomers; i++ {
+		fmt.Fprintf(&sqlSb101, "(%d, 'customer%d')", cid, i)
+		if i != numCustomers {
+			sqlSb101.WriteString(",")
+		}
+		cid++
+	}
+	sql += sqlSb101.String()
+	_, err := execVtgateQuery(vtgateConn, defaultTargetKs, sql)
+	require.NoError(t, err)
+}
+
+func insertMoreProducts(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
+	_, err := execVtgateQuery(vtgateConn, defaultSourceKs, sql)
+	require.NoError(t, err)
+}
+
+func insertMoreProductsForSourceThrottler(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
+	_, err := execVtgateQuery(vtgateConn, defaultSourceKs, sql)
+	require.NoError(t, err)
+}
+
+func insertMoreProductsForTargetThrottler(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
+	_, err := execVtgateQuery(vtgateConn, defaultSourceKs, sql)
+	require.NoError(t, err)
+}
+
+var blobTableQueries = []string{
+	"insert into `blüb_tbl`(id, val1, txt1) values (1, 'Jøhn \"❤️\" Paül','Jøhn \"❤️\" Paül keyböard ⌨️ jo˙n')",
+	"insert into `blüb_tbl`(id, val1, `blöb1`, `bl@b2`) values (2, 'val1_aaa', 'blb1_aaa', 'blb2_AAAA')",
+	"update `blüb_tbl` set val1 = 'val1_bbb', `bl@b2` = 'blb2_bbb' where id = 1",
+	"insert into `blüb_tbl`(id, val2, txt1, txt2, blb4) values (3, 'val2_ccc', 'txt1_ccc', 'txt2_ccc', 'blb4_CCC')",
+	"update `blüb_tbl` set txt1 = 'txt1_ddd'",
+	"update `blüb_tbl` set blb3 = 'blb3_eee'",
+	"delete from `blüb_tbl` where id = 2",
+	"insert into `blüb_tbl`(id, val2, txt1, txt2, blb4) values (4, 'val2_fff', 'txt1_fff', 'txt2_fff', 'blb4_FFF')",
+	"update `blüb_tbl` set txt1 = 'txt1_eee', blb3 = 'blb3_eee' where id = 4",
+}
+
+func insertIntoBlobTable(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	for _, query := range blobTableQueries {
+		_, err := execVtgateQuery(vtgateConn, defaultSourceKs+":0", query)
+		require.NoError(t, err)
+	}
+}
+
+// insertLargeTransactionForChunkTesting inserts a transaction large enough to exceed the 1KB chunking threshold.
+func insertLargeTransactionForChunkTesting(vtgateConn *mysql.Conn, keyspace string, startID int) error {
+	if _, err := execVtgateQuery(vtgateConn, keyspace, "BEGIN"); err != nil {
+		return err
+	}
+	for i := range 15 {
+		largeData := strings.Repeat("x", 94) + fmt.Sprintf("_%05d", i)
+		query := fmt.Sprintf("INSERT INTO customer (cid, name) VALUES (%d, '%s')",
+			startID+i, largeData)
+		if _, err := execVtgateQuery(vtgateConn, keyspace, query); err != nil {
+			return err
+		}
+	}
+	_, err := execVtgateQuery(vtgateConn, keyspace, "COMMIT")
+	return err
+}

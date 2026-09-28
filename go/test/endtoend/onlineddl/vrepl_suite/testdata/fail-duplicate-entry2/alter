@@ -1,0 +1,1 @@
+add column empty_text varchar(5) not null default '', add unique key uk_empty_text(empty_text)

@@ -1,0 +1,59 @@
+/**
+ * Copyright 2023 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import { expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import * as matchers from '@testing-library/jest-dom/matchers';
+import { fetch } from 'cross-fetch';
+import { server } from './server'
+
+global.fetch = fetch;
+
+// Mock IntersectionObserver for @headlessui/react
+// JSDOM doesn't support IntersectionObserver
+class IntersectionObserverMock {
+  disconnect() {}
+  observe() {}
+  takeRecords() {
+    return [];
+  }
+  unobserve() {}
+}
+
+global.IntersectionObserver = IntersectionObserverMock;
+
+const ORIGINAL_PROCESS_ENV = { ...import.meta.env };
+const TEST_PROCESS_ENV = {
+    ...import.meta.env,
+    VITE_VTADMIN_API_ADDRESS: 'http://test-api.com',
+};
+global.server = server
+beforeAll(() => {
+  Object.assign(import.meta.env, TEST_PROCESS_ENV);
+  server.listen({ onUnhandledRequest: `error` })
+});
+afterAll(() => {
+  Object.assign(import.meta.env, ORIGINAL_PROCESS_ENV);
+  cleanup()
+  server.close()
+})
+afterEach(() => {
+  Object.assign(import.meta.env, TEST_PROCESS_ENV);
+  server.resetHandlers()
+
+});
+
+// extends Vitest's expect method with methods from react-testing-library
+expect.extend(matchers);

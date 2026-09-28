@@ -1,0 +1,331 @@
+/*
+ * Copyright 2019 The Vitess Authors.
+
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+
+ *     http://www.apache.org/licenses/LICENSE-2.0
+
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.vitess.client;
+
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableMap;
+
+import binlogdata.Binlogdata.FieldEvent;
+import binlogdata.Binlogdata.RowEvent;
+import binlogdata.Binlogdata.ShardGtid;
+import binlogdata.Binlogdata.VEvent;
+import binlogdata.Binlogdata.VEventType;
+import binlogdata.Binlogdata.VGtid;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.Row;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Vtgate.VStreamRequest;
+import io.vitess.proto.Vtgate.VStreamResponse;
+import io.vitess.proto.Vtrpc.CallerID;
+
+import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.joda.time.DateTime;
+import org.joda.time.Duration;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+/**
+ * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
+ * (go/cmd/vtgateclienttest).
+ *
+ * Each implementation should extend this class, add a @BeforeClass method that starts the
+ * vtgateclienttest server with the necessary parameters and then set 'client'.
+ */
+public abstract class RpcClientTest {
+
+  protected static RpcClient client;
+  // ready is true when "vtgateclienttest" can accept RPCs. It is set by "waitForVtgateclienttest"
+  // and reset to "false" at the start of each test class by "resetReady".
+  private static boolean ready;
+
+  private Context ctx;
+  private VTGateBlockingConnection conn;
+  private VTSession session;
+
+  @BeforeClass
+  public static void resetReady() throws Exception {
+    ready = false;
+  }
+
+  @Before
+  public void setUp() throws SQLException, InterruptedException {
+    // Test VTGateConnection via the synchronous VTGateBlockingConnection wrapper.
+    conn = new VTGateBlockingConnection(client);
+    session = new VTSession(KEYSPACE+"@"+TABLET_TYPE, Query.ExecuteOptions.newBuilder().setIncludedFields(ALL_FIELDS).build());
+
+    waitForVtgateclienttest();
+
+    // ctx is used by all RPCs within one test method. A deadline is set to cap test execution.
+    // (RPCs will fail with DEADLINE_EXCEEDED if they keep using "ctx" 5 seconds from now.)
+    ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(5))
+        .withCallerId(CALLER_ID);
+  }
+
+  private static final String ECHO_PREFIX = "echo://";
+  private static final String ERROR_PREFIX = "error://";
+  private static final String PARTIAL_ERROR_PREFIX = "partialerror://";
+
+  private static final ImmutableMap<String, Class<?>> EXECUTE_ERRORS =
+      new ImmutableMap.Builder<String, Class<?>>()
+          .put("bad input", SQLSyntaxErrorException.class)
+          .put("deadline exceeded", SQLTimeoutException.class)
+          .put("integrity error", SQLIntegrityConstraintViolationException.class)
+          .put("transient error", SQLTransientException.class)
+          .put("unauthenticated", SQLInvalidAuthorizationSpecException.class)
+          .put("aborted", SQLRecoverableException.class)
+          .put("unknown error", SQLNonTransientException.class)
+          .build();
+
+  private static final String QUERY = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4";
+  private static final String KEYSPACE = "test_keyspace";
+
+  private static final TabletType TABLET_TYPE = TabletType.REPLICA;
+  private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
+  private static final Query.ExecuteOptions.IncludedFields ALL_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
+  private static final String OPTIONS_ALL_FIELDS_ECHO =
+      "included_fields:" + ALL_FIELDS.toString() + " ";
+
+  private static final ImmutableMap<String, Object> BIND_VARS = new ImmutableMap.Builder<String, Object>()
+      .put("int", 123)
+      .put("float", 2.5)
+      .put("bytes", new byte[]{1, 2, 3})
+      .build();
+  private static final String BIND_VARS_ECHO =
+      "map[bytes:type:VARBINARY value:\"\\x01\\x02\\x03\" float:type:FLOAT64 value:\"2.5\" int:type:INT64 value:\"123\"]";
+
+  private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@REPLICA\" options:{included_fields:ALL}";
+
+  private static final CallerID CALLER_ID = CallerID.newBuilder().setPrincipal("test_principal")
+      .setComponent("test_component").setSubcomponent("test_subcomponent").build();
+  private static final String CALLER_ID_ECHO =
+      "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\"";
+
+  private static Map<String, String> getEcho(Cursor cursor) throws Exception {
+    Map<String, String> values = new HashMap<String, String>();
+    Map<String, Object> rawValues = new HashMap<String, Object>();
+
+    // Echo values are stored as columns in the first row of the result.
+    List<Field> fields = cursor.getFields();
+    Row row = cursor.next();
+    Assert.assertNotNull(row);
+    int columnIndex = 1;
+    for (Field field : fields) {
+      byte[] bytes = row.getBytes(columnIndex);
+      if (bytes != null) {
+        values.put(field.getName(), new String(row.getBytes(columnIndex), StandardCharsets.UTF_8));
+      }
+      rawValues.put(field.getName(), row.getObject(columnIndex));
+      ++columnIndex;
+    }
+    Assert.assertNull(cursor.next()); // There should only be one row.
+    cursor.close();
+
+    // Check NULL vs. empty string.
+    Assert.assertTrue(rawValues.containsKey("null"));
+    Assert.assertNull(rawValues.get("null"));
+    Assert.assertTrue(values.containsKey("emptyString"));
+    Assert.assertEquals("", values.get("emptyString"));
+
+    return values;
+  }
+
+  /**
+   * waitForVtgateclienttest blocks until the "vtgateclienttest" binary is reachable via RPC.
+   *
+   * We will constantly execute the "GetSrvKeyspace" RPC and return when the binary responded
+   * successfully.
+   */
+  private void waitForVtgateclienttest() throws SQLException, InterruptedException {
+    if (ready) {
+      return;
+    }
+
+    DateTime start = DateTime.now();
+    DateTime deadline = start.plusSeconds(60);
+
+    boolean waited = false;
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(30));
+        conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, session);
+        // RPC succeeded. Stop testing.
+        break;
+      } catch (SQLTransientException e) {
+        Throwable rootCause = Throwables.getRootCause(e);
+        if (!rootCause.getMessage().contains("Connection refused")) {
+          // Non-retryable exception. Fail for good.
+          throw e;
+        }
+
+        System.out
+            .format("Waiting until vtgateclienttest is ready and responds (got exception: %s)\n",
+                rootCause);
+        Thread.sleep(100 /* milliseconds */);
+        waited = true;
+      }
+    }
+
+    if (waited) {
+      double waitTimeSeconds = (DateTime.now().getMillis() - start.getMillis()) / 1000.0;
+      System.out.format("Had to wait %.1f second(s) until vtgateclienttest was ready.\n",
+          waitTimeSeconds);
+    }
+    ready = true;
+  }
+
+  @Test
+  public void testEchoExecute() throws Exception {
+    Map<String, String> echo;
+    echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, session));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
+  }
+
+  @Test
+  public void testEchoStreamExecute() throws Exception {
+    Map<String, String> echo;
+    echo = getEcho(
+        conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, session));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
+  }
+
+  abstract static class Executable {
+
+    abstract void execute(String query) throws Exception;
+  }
+
+  void checkExecuteErrors(Executable exe, boolean partial) {
+    for (String error : EXECUTE_ERRORS.keySet()) {
+      Class<?> cls = EXECUTE_ERRORS.get(error);
+
+      try {
+        String query = ERROR_PREFIX + error;
+        exe.execute(query);
+        Assert.fail("no exception thrown for " + query);
+      } catch (Exception e) {
+        Assert.assertEquals(cls, e.getClass());
+      }
+
+      if (partial) {
+        try {
+          String query = PARTIAL_ERROR_PREFIX + error;
+          exe.execute(query);
+          Assert.fail("no exception thrown for " + query);
+        } catch (Exception e) {
+          Assert.assertEquals(cls, e.getClass());
+        }
+      }
+    }
+  }
+
+  void checkExecuteErrors(Executable exe) {
+    checkExecuteErrors(exe, true);
+  }
+
+  void checkStreamExecuteErrors(Executable exe) {
+    // Streaming calls don't have partial errors.
+    checkExecuteErrors(exe, false);
+  }
+
+  @Test
+  public void testExecuteErrors() throws Exception {
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.execute(ctx, query, BIND_VARS, session);
+      }
+    });
+  }
+
+  @Test
+  public void testStreamExecuteErrors() throws Exception {
+    checkStreamExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.streamExecute(ctx, query, BIND_VARS, session).next();
+      }
+    });
+  }
+
+  @Test
+  public void testVStream() throws Exception {
+    VGtid vgtid = VGtid.newBuilder()
+        .addShardGtids(ShardGtid.newBuilder()
+            .setGtid("gtid")
+            .setShard(ECHO_PREFIX + System.currentTimeMillis())
+            .setKeyspace("keyspace: " + System.currentTimeMillis())
+            .build())
+        .build();
+
+    VStreamRequest vstreamRequest = VStreamRequest.newBuilder()
+        .setCallerId(CALLER_ID)
+        .setVgtid(vgtid)
+        .setTabletType(TABLET_TYPE)
+        .build();
+
+    StreamIterator<VStreamResponse> vstream = client.getVStream(ctx, vstreamRequest);
+    VStreamResponse actual = vstream.next();
+    Assert.assertFalse(vstream.hasNext());
+
+    VStreamResponse expected = VStreamResponse.newBuilder()
+        .addEvents(VEvent.newBuilder()
+            .setType(VEventType.forNumber(1))
+            .setTimestamp(1234)
+            .setGtid("echo-gtid-1")
+            .setStatement("echo-ddl-1")
+            .setVgtid(vgtid)
+            .setRowEvent(RowEvent.newBuilder()
+                .setTableName("echo-table-1")
+                .build())
+            .build())
+        .addEvents(VEvent.newBuilder()
+            .setType(VEventType.forNumber(2))
+            .setTimestamp(4321)
+            .setGtid("echo-gtid-2")
+            .setStatement("echo-ddl-2")
+            .setVgtid(vgtid)
+            .setFieldEvent(FieldEvent.newBuilder()
+                .setTableName("echo-table-2")
+                .build())
+            .build())
+        .build();
+
+    Assert.assertEquals(expected, actual);
+  }
+
+}

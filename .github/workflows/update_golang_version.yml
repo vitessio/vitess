@@ -1,0 +1,118 @@
+name: Update Golang Version
+
+permissions: read-all
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs every day at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  update_golang_version:
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      pull-requests: read
+    strategy:
+      matrix:
+        branch: [ main, release-24.0, release-23.0 ]
+    name: Update Golang Version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-members: read
+
+      - name: Get GitHub App User ID
+        id: get-user-id
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.branch }}
+          persist-credentials: 'false'
+
+      - name: Set up Go
+        # The shared setup-go action is resolved from the matrix.branch
+        # checkout, where it may not exist or may be outdated. This job only
+        # compiles the small go-upgrade tool once a day, so caching is not
+        # worth it anyway.
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Detect new version and update codebase
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GOTOOLCHAIN: auto
+        id: detect-and-update
+        run: |
+          old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
+          echo "old-go-version=${old_go_version}" >> $GITHUB_OUTPUT
+
+          if [[ "${{ matrix.branch }}" == "main" ]]; then
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
+          else
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
+          fi
+
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+            exit 0
+          fi
+          
+          go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
+          bootstrap_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get bootstrap-version)
+          echo "go-version=${go_version}" >> $GITHUB_OUTPUT
+          echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
+
+          # Check if the PR already exists, if it does then do not create new PR.
+          gh pr list -S 'is:open "[${{ matrix.branch }}] Upgrade the Golang version to go${go_version}"' > out.txt 2>&1 | true
+          if [ -s out.txt ]; then
+            rm -f out.txt
+            exit 0
+          fi
+          rm -f out.txt
+          echo "create-pr=true" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.detect-and-update.outputs.create-pr == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          committer: "${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>"
+          author: "${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>"
+          branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"
+          commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
+          signoff: true
+          delete-branch: true
+          team-reviewers: Release
+          title: "[${{ matrix.branch }}] Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
+          body: |
+            This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
+
+            > Do not trust the bot blindly. A thorough code review must be done to ensure all the files have been correctly modified.
+            
+            cc @vitessio/release
+          base: ${{ matrix.branch }}
+          labels: |
+            go
+            Benchmark me
+            Component: General
+            Type: CI/Build

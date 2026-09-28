@@ -1,0 +1,305 @@
+name: Backups - Manual - Next Release - Upgrade Downgrade Testing
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - Manual - Next Release')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  # Path filtering and release-branch discovery run once here, on a
+  # GitHub-hosted runner, so that the test job below (on a large runner) is not
+  # started at all when nothing relevant changed or there is no next release.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
+      next_release_ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
+    steps:
+    - name: Check out commit's code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        # Full history is needed to list the release branches.
+        fetch-depth: 0
+        persist-credentials: 'false'
+
+    - name: Set output with latest release branch
+      id: output-next-release-ref
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        REF: ${{ github.ref }}
+      run: |
+        next_release_ref=$(./tools/get_next_release.sh "$BASE_REF" "$REF")
+        echo $next_release_ref
+        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'test/config.json'
+            - 'go/**/!(*_test).go'
+            - 'go/**/*.s'
+            - 'go/test/endtoend/**'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_backups_manual_next_release.yml'
+            - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
+            - 'examples/**'
+
+  # This job usually execute in ± 20 minutes
+  upgrade_downgrade_test_manual:
+    needs: changes
+    # Runs when the gate found relevant changes. Also runs when the gate did not
+    # succeed (it failed, or was cancelled by its timeout) or the PR has the
+    # 'Skip CI' label, so that those fail this job instead of silently skipping
+    # a required status check.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true' && needs.changes.outputs.next_release_ref != '')) }}
+    timeout-minutes: 40
+    name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
+    # The large runner is only claimed when the tests will actually run; a
+    # failed or cancelled gate and the 'Skip CI' label only report a failure.
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Fail if the gate job failed
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    # Checkout to this build's commit
+    - name: Checkout to commit's code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
+    - name: Tune the OS
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+
+    - name: Set up python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+
+    - name: Setup MySQL
+      timeout-minutes: 8
+      uses: $/.github/actions/setup-mysql
+      with:
+        flavor: mysql-8.4
+
+    - name: Setup Percona Apt repository
+      timeout-minutes: 5
+      uses: $/.github/actions/setup-percona-repo
+
+    - name: Get base dependencies
+      timeout-minutes: 10
+      run: |
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get update
+
+        # Install everything else we need, and configure
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget grep
+        
+        sudo service etcd stop
+
+        sudo percona-release enable tools
+        sudo percona-release setup pxb-80
+        sudo apt-get update
+        sudo apt-get install -y percona-xtrabackup-80
+
+    # Checkout to the next release of Vitess
+    - name: Checkout to the other version's code (${{ needs.changes.outputs.next_release_ref }})
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ needs.changes.outputs.next_release_ref }}
+        persist-credentials: 'false'
+
+    - name: Set up Go
+      uses: $/.github/actions/setup-go
+      with:
+        # Only the current commit's tree feeds the shared Go caches.
+        cache: 'false'
+
+    - name: Building next release's binaries
+      timeout-minutes: 5
+      run: |
+        source build.env
+        NOVTADMINBUILD=1 make build
+        mkdir -p /tmp/vitess-build-other/
+        cp -R bin /tmp/vitess-build-other/
+        rm -Rf bin/*
+
+    # Checkout to this build's commit
+    - name: Checkout to commit's code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
+    - name: Set up Go
+      uses: $/.github/actions/setup-go
+      with:
+        # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
+        # must not be the one saving the branch caches; restore on PRs only.
+        cache: ${{ github.event_name == 'pull_request' }}
+
+    - name: Run make minimaltools
+      timeout-minutes: 5
+      run: |
+        make minimaltools
+
+    - name: Building the binaries for this commit
+      timeout-minutes: 5
+      run: |
+        source build.env
+        NOVTADMINBUILD=1 make build
+        mkdir -p /tmp/vitess-build-current/
+        cp -R bin /tmp/vitess-build-current/
+
+    # We create a sharded Vitess cluster following the local example.
+    # We also insert a few rows in our three tables.
+    - name: Create the example Vitess cluster with all components using version N
+      timeout-minutes: 10
+      run: |
+        source build.env ; cd examples/backups
+        ./start_cluster.sh
+
+    # Taking a backup
+    - name: Take a backup of all the shards
+      timeout-minutes: 5
+      run: |
+        source build.env ; cd examples/backups
+        ./take_backups.sh
+
+    # We insert more data in every table after the backup.
+    # When we restore the backup made in the next step, we do not want to see the rows we are about to insert now.
+    # The initial number of rows for each table is:
+    #     - customer: 5
+    #     - product:  2
+    #     - corder:   5
+    # We shall see the same number of rows after restoring the backup.
+    - name: Insert more data after the backup
+      run: |
+        source build.env ; cd examples ; source ./common/env.sh
+
+        echo "insert into customer(email) values('new_user_1@domain.com');" | mysql
+        echo "insert into product(sku, description, price) values('SKU-1009', 'description', 89);" | mysql
+        echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1009', 100);" | mysql
+
+    # Stop all the tablets and remove their data
+    - name: Stop tablets
+      timeout-minutes: 10
+      run: |
+        source build.env ; cd examples/backups
+        ./stop_tablets.sh
+
+    # We downgrade: we use the version N+1 of vttablet
+    - name: Downgrade - Swap binaries, use VTTablet N+1
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
+        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
+        vttablet --version
+
+    # Starting the tablets again, they will automatically start restoring the last backup.
+    - name: Start new tablets and restore
+      timeout-minutes: 10
+      run: |
+        source build.env ; cd examples/backups
+        ./restart_tablets.sh
+        # give enough time to the tablets to restore the backup
+        sleep 60
+
+    # Count the number of rows in each table to make sure the restoration is successful.
+    - name: Assert the number of rows in every table
+      run: |
+        source build.env ; cd examples ; source ./common/env.sh
+
+        echo "select count(sku) from product;" | mysql 2>&1| grep 2
+        echo "select count(email) from customer;" | mysql 2>&1| grep 5
+        echo "select count(sku) from corder;" | mysql 2>&1| grep 5
+
+    # We insert one more row in every table.
+    - name: Insert more rows in the tables
+      run: |
+        source build.env ; cd examples ; source ./common/env.sh
+
+        echo "insert into customer(email) values('new_user_2@domain.com');" | mysql
+        echo "insert into product(sku, description, price) values('SKU-1011', 'description', 111);" | mysql
+        echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1011', 111);" | mysql
+
+    # Taking a second backup of the cluster.
+    - name: Take a second backup of all the shards
+      timeout-minutes: 10
+      run: |
+        source build.env ; cd examples/backups
+        ./take_backups.sh
+
+    # We upgrade: we swap binaries and use the version N of the tablet.
+    - name: Upgrade - Swap binaries, use VTTablet N
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
+        cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
+        vttablet --version
+
+    # Starting the tablets again and restoring the next backup.
+    - name: Start new tablets and restore
+      timeout-minutes: 10
+      run: |
+        source build.env ; cd examples/backups
+        ./upgrade_cluster.sh
+
+    # We count the number of rows in every table to check that the restore step was successful.
+    - name: Assert the number of rows in every table
+      run: |
+        source build.env ; cd examples ; source ./common/env.sh
+
+        echo "select count(sku) from product;" | mysql 2>&1| grep 3
+        echo "select count(email) from customer;" | mysql 2>&1| grep 6
+        echo "select count(sku) from corder;" | mysql 2>&1| grep 6
+
+    - name: Stop the Vitess cluster
+      if: ${{ !cancelled() }}
+      run: |
+        source build.env ; cd examples/local
+        ./401_teardown.sh || true

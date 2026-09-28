@@ -1,0 +1,80 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "unicode_loose_xxhash": {
+      "type": "unicode_loose_xxhash"
+    },
+    "t1_id2_idx": {
+      "type": "lookup_unique",
+      "params": {
+        "table": "t1_id2_idx",
+        "from": "id2",
+        "to": "keyspace_id"
+      },
+      "owner": "t3"
+    },
+    "t7_xxhash_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t7_xxhash_idx",
+        "from": "phone",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t7_xxhash"
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        },
+        {
+          "column": "id2",
+          "name": "t1_id2_idx"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "t3_id7_idx": {
+      "column_vindexes": [
+        {
+          "column": "id7",
+          "name": "hash"
+        }
+      ]
+    },
+    "t7_xxhash": {
+      "column_vindexes": [
+        {
+          "column": "uid",
+          "name": "unicode_loose_xxhash"
+        },
+        {
+          "column": "phone",
+          "name": "t7_xxhash_vdx"
+        }
+      ]
+    },
+    "t7_xxhash_idx": {
+      "column_vindexes": [
+        {
+          "column": "phone",
+          "name": "unicode_loose_xxhash"
+        }
+      ]
+    }
+  }
+}

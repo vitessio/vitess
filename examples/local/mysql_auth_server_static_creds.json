@@ -1,0 +1,33 @@
+{
+  "mysql_user": [
+    {
+      "MysqlNativePassword": "*9E128DA0C64A6FCCCDCFBDD0FC0A2C967C6DB36F",
+      "Password": "mysql_password",
+      "UserData": "mysql_user"
+    }
+  ],
+  "mysql_user2": [
+    { 
+      "Password": "mysql_password",
+      "UserData": "mysql_user"
+    }
+  ],
+  "mysql_user3": [
+    {
+      "MysqlNativePassword": "*9E128DA0C64A6FCCCDCFBDD0FC0A2C967C6DB36F",
+      "UserData": "mysql_user"
+    }
+  ],
+  
+  "vt_appdebug": [
+    {
+      "Password": "vtappdebug_password",
+      "UserData": "vt_appdebug"
+    },
+    {
+      "SourceHost": "localhost",
+      "Password": "",
+      "UserData": "vt_appdebug"
+    }
+  ]
+}
