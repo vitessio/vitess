@@ -22,12 +22,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -90,83 +92,196 @@ func watchCRL(crl string) {
 	markCachedFilesInUse()
 }
 
+// maxReloadAttempts bounds how many times ReloadCachedFiles reads the
+// files again looking for a consistent view of them.
+const maxReloadAttempts = 5
+
+// reloadTestHook, when set, runs on every attempt ReloadCachedFiles
+// makes to read the files, after it digested them and before it reads
+// them, so that a test can change the files in between. Nil outside
+// tests.
+var reloadTestHook func()
+
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // that ClientConfig and ServerConfig loaded, so that the configs they
-// build from then on use what the files now hold. A file that cannot
-// be loaded keeps what was loaded from it before, and its error is
-// returned. It reports whether any file changed.
+// build from then on use what the files now hold. It reports whether
+// any file changed.
+//
+// The files are digested before and after they are read, and read
+// again until both digests agree, so that what it publishes comes from
+// one version of the files: when their directory is swapped for a new
+// one halfway through, as Kubernetes updates a secret, a client does
+// not end up with its old key pair and the new CA. When the files keep
+// changing, nothing is published. A file that cannot be loaded keeps
+// what was loaded from it before, and its error is returned.
 func ReloadCachedFiles() (changed bool, err error) {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
 
-	var errs []error
-	reloadKeyPairs := func(cache, files *sync.Map, read func(keyPairFiles) (*[]tls.Certificate, error)) {
-		files.Range(func(id, value any) bool {
-			fresh, err := read(value.(keyPairFiles))
+	entries := snapshotCachedFiles()
+	paths := entries.paths()
+	for attempt := 1; ; attempt++ {
+		before := digestFiles(paths)
+		if reloadTestHook != nil {
+			reloadTestHook()
+		}
+		updates, errs := entries.read()
+		if maps.Equal(before, digestFiles(paths)) {
+			for _, u := range updates {
+				u.cache.Store(u.key, u.value)
+			}
+			if len(updates) > 0 {
+				cachedFilesGeneration.Add(1)
+			}
+			return len(updates) > 0, vterrors.Aggregate(errs)
+		}
+		if attempt == maxReloadAttempts {
+			return false, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the TLS files kept changing across %d attempts to read them consistently; none was reloaded", maxReloadAttempts)
+		}
+	}
+}
+
+// cachedFiles are the entries of the caches that ReloadCachedFiles
+// reloads, and the files they were loaded from.
+type cachedFiles struct {
+	keyPairs, combinedKeyPairs map[any]keyPairFiles
+	certPools                  map[string]*x509.CertPool
+	caCertificates             map[string][]*x509.Certificate
+	crls                       map[string][sha256.Size]byte
+}
+
+func snapshotCachedFiles() cachedFiles {
+	entries := cachedFiles{
+		keyPairs:         make(map[any]keyPairFiles),
+		combinedKeyPairs: make(map[any]keyPairFiles),
+		certPools:        make(map[string]*x509.CertPool),
+		caCertificates:   make(map[string][]*x509.Certificate),
+		crls:             make(map[string][sha256.Size]byte),
+	}
+	cachedKeyPairs.Range(func(id, files any) bool {
+		entries.keyPairs[id] = files.(keyPairFiles)
+		return true
+	})
+	cachedCombinedKeyPairs.Range(func(id, files any) bool {
+		entries.combinedKeyPairs[id] = files.(keyPairFiles)
+		return true
+	})
+	certPools.Range(func(ca, pool any) bool {
+		entries.certPools[ca.(string)] = pool.(*x509.CertPool)
+		return true
+	})
+	caCertificates.Range(func(ca, certificates any) bool {
+		entries.caCertificates[ca.(string)] = certificates.([]*x509.Certificate)
+		return true
+	})
+	watchedCRLs.Range(func(crl, digest any) bool {
+		entries.crls[crl.(string)] = digest.([sha256.Size]byte)
+		return true
+	})
+	return entries
+}
+
+// paths returns the files the entries were loaded from.
+func (c cachedFiles) paths() []string {
+	var paths []string
+	for _, files := range c.keyPairs {
+		paths = append(paths, files.cert, files.key)
+	}
+	for _, files := range c.combinedKeyPairs {
+		paths = append(paths, files.ca, files.cert, files.key)
+	}
+	for ca := range c.certPools {
+		paths = append(paths, ca)
+	}
+	for ca := range c.caCertificates {
+		paths = append(paths, ca)
+	}
+	for crl := range c.crls {
+		paths = append(paths, crl)
+	}
+	slices.Sort(paths)
+	return slices.Compact(paths)
+}
+
+// cacheUpdate is an entry that ReloadCachedFiles stores once it has
+// read every file consistently.
+type cacheUpdate struct {
+	cache      *sync.Map
+	key, value any
+}
+
+// read reads the files of the entries, and returns the updates of
+// those whose files changed, without applying them.
+func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
+	readKeyPairs := func(cache *sync.Map, entries map[any]keyPairFiles, read func(keyPairFiles) (*[]tls.Certificate, error)) {
+		for id, files := range entries {
+			fresh, err := read(files)
 			if err != nil {
 				errs = append(errs, err)
-				return true
+				continue
 			}
 			if cached, ok := cache.Load(id); !ok || !sameCertificates(*cached.(*[]tls.Certificate), *fresh) {
-				cache.Store(id, fresh)
-				changed = true
+				updates = append(updates, cacheUpdate{cache: cache, key: id, value: fresh})
 			}
-			return true
-		})
+		}
 	}
-	reloadKeyPairs(&tlsCertificates, &cachedKeyPairs, func(f keyPairFiles) (*[]tls.Certificate, error) {
+	readKeyPairs(&tlsCertificates, c.keyPairs, func(f keyPairFiles) (*[]tls.Certificate, error) {
 		return readTLSCertificate(f.cert, f.key)
 	})
-	reloadKeyPairs(&combinedTLSCertificates, &cachedCombinedKeyPairs, func(f keyPairFiles) (*[]tls.Certificate, error) {
+	readKeyPairs(&combinedTLSCertificates, c.combinedKeyPairs, func(f keyPairFiles) (*[]tls.Certificate, error) {
 		return readAndCombineTLSCertificates(f.ca, f.cert, f.key)
 	})
-
-	certPools.Range(func(ca, cached any) bool {
-		fresh, err := readx509CertPool(ca.(string))
+	for ca, cached := range c.certPools {
+		fresh, err := readx509CertPool(ca)
 		if err != nil {
 			errs = append(errs, err)
-			return true
+			continue
 		}
-		if !fresh.Equal(cached.(*x509.CertPool)) {
-			certPools.Store(ca, fresh)
-			changed = true
+		if !fresh.Equal(cached) {
+			updates = append(updates, cacheUpdate{cache: &certPools, key: ca, value: fresh})
 		}
-		return true
-	})
-	caCertificates.Range(func(ca, cached any) bool {
-		fresh, err := readx509Certificates(ca.(string))
+	}
+	for ca, cached := range c.caCertificates {
+		fresh, err := readx509Certificates(ca)
 		if err != nil {
 			errs = append(errs, err)
-			return true
+			continue
 		}
-		if !slices.EqualFunc(fresh, cached.([]*x509.Certificate), (*x509.Certificate).Equal) {
-			caCertificates.Store(ca, fresh)
-			changed = true
+		if !slices.EqualFunc(fresh, cached, (*x509.Certificate).Equal) {
+			updates = append(updates, cacheUpdate{cache: &caCertificates, key: ca, value: fresh})
 		}
-		return true
-	})
-	watchedCRLs.Range(func(crl, seen any) bool {
-		digest, err := fileDigest(crl.(string))
+	}
+	for crl, seen := range c.crls {
+		digest, err := fileDigest(crl)
 		if err != nil {
 			errs = append(errs, vterrors.Wrapf(err, "failed to read crl file: %s", crl))
-			return true
+			continue
 		}
-		if digest == seen.([sha256.Size]byte) {
-			return true
+		if digest == seen {
+			continue
 		}
-		if _, err := loadCRLSet(crl.(string)); err != nil {
+		if _, err := loadCRLSet(crl); err != nil {
 			errs = append(errs, vterrors.Wrapf(err, "cannot use the CRL file %s; the CRLs last loaded from it stay in use", crl))
-			return true
+			continue
 		}
-		watchedCRLs.Store(crl, digest)
-		changed = true
-		return true
-	})
-
-	if changed {
-		cachedFilesGeneration.Add(1)
+		updates = append(updates, cacheUpdate{cache: &watchedCRLs, key: crl, value: digest})
 	}
-	return changed, vterrors.Aggregate(errs)
+	return updates, errs
+}
+
+// fileState is a file's digest, or that it could not be read.
+type fileState struct {
+	digest   [sha256.Size]byte
+	readable bool
+}
+
+func digestFiles(paths []string) map[string]fileState {
+	states := make(map[string]fileState, len(paths))
+	for _, path := range paths {
+		digest, err := fileDigest(path)
+		states[path] = fileState{digest: digest, readable: err == nil}
+	}
+	return states
 }
 
 // clientCRLChecker is newCRLChecker for ClientConfig, which reads the
