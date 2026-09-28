@@ -3021,6 +3021,36 @@ func TestSettingSwitchClosesTheConnectionOnRelease(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// A setting that fails to apply on a transaction's connection may have taken
+// effect in part, or not at all, so the connection's session is in a state no
+// setting or recorded mode describes: the connection is closed, as the pool
+// closes one it fails to apply a setting to, and its loss is not counted as a
+// discard of a diverged connection when the transaction releases it.
+func TestFailedSettingApplyClosesTheConnection(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(`set .*sql_safe_updates.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	db.AddRejectedQuery("set sql_mode = 'PIPES_AS_CONCAT'", errors.New("interrupted"))
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, []string{"set sql_safe_updates = 1"}, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	txConns := db.QueryConnIDs("set sql_safe_updates = 1")
+	require.Len(t, txConns, 1)
+
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, []string{"set sql_mode = 'PIPES_AS_CONCAT'"}, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.ErrorContains(t, err, "failed to execute system setting on the connection")
+	require.Eventually(t, func() bool { return !db.IsConnectionOpen(txConns[0]) },
+		30*time.Second, 10*time.Millisecond, "the connection a setting failed to apply on must be closed")
+
+	_, _ = tsv.Rollback(ctx, &target, beginState.TransactionID)
+	assert.Zero(t, tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "a connection already closed must not be counted as discarded")
+}
+
 // The pre-queries of a reservation of an existing transaction change its
 // connection's session behind the settings it carries: a later request that
 // brings those settings applies them again rather than skipping them.

@@ -325,14 +325,15 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 			sc.pool.tempTableUnmanaged.Add(-1)
 		}
 	}
-	if sc.sessionDiverged && !sc.tainted {
+	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
 		// The MySQL session carries state the settings the pool files the
 		// connection under do not describe, from a SET that ran on it or from a
 		// setting applied over another, and applying those settings again
 		// restores their own variables only. The pool would hand it to the next
 		// request that brings those settings as if nothing else had changed:
 		// discard it instead, and the pool opens a replacement and counts the
-		// loss. A tainted connection never returns to the pool.
+		// loss. A tainted connection never returns to the pool, and one already
+		// closed was lost for another reason and is not counted as discarded.
 		sc.dbConn.Discard()
 	}
 	sc.dbConn.Recycle()
@@ -493,6 +494,12 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 		sc.sessionDiverged = true
 	}
 	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {
+		// Applying the setting failed or was interrupted, so its variables, and
+		// sql_mode among them, may or may not have taken effect: the session is
+		// in a state no setting or recorded mode describes. Close the
+		// connection, as the pool does when it fails to apply a setting to one
+		// it hands out.
+		sc.dbConn.Close()
 		return true, err
 	}
 	sc.settingStale = false
