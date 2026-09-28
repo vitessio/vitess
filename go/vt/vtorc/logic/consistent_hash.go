@@ -56,14 +56,19 @@ func higherRank(weightA uint64, indexA int, weightB uint64, indexB int) bool {
 //
 // Because HRW weights are independent of the candidate set, changing the ring
 // by a single instance moves a shard's top-k set by at most one member, so the
-// old and new watcher sets share at least k-1 instances. More generally, a
-// resize of m instances shares at least max(0, k-m): the sets can become
-// disjoint once m >= k. During a rolling resize where instances briefly run
-// different ring sizes, every shard therefore keeps at least k-1 live watchers
-// when the ring changes by one instance, and at least one watcher when it
-// changes by at most k-1. A resize of k or more instances at once can leave a
-// shard transiently unwatched, so operators should resize in increments of at
-// most k-1 (ideally 1) per rollout.
+// old and new watcher sets share at least k-1 instances; a resize of m shares
+// at least max(0, k-m) and can become disjoint once m >= k.
+// TestIsInRingSegment_ResizePreservesCoverage asserts this bound.
+//
+// Turning that set overlap into gap-free live coverage during a resize must
+// account for the restart each instance needs to adopt new ring flags: it is
+// briefly offline while restarting, so it does not watch during that window.
+// Staging the rollout — moving every surviving instance to the new ring size
+// before removing any old index — preserves coverage for any resize, because
+// the old indices keep watching until the survivors are all on the new size.
+// In arbitrary restart order (any one instance offline at a time) at least one
+// watcher survives only when the old and new watcher sets share >= 2 instances,
+// i.e. a change of at most k-2 instances per rollout.
 //
 // When ringSize <= watchersPerShard every instance is always within the top-k,
 // so all instances watch every shard — matching the full-fleet default.
