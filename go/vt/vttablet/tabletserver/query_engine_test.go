@@ -236,7 +236,7 @@ func TestQueryPlanCacheParseSQLMode(t *testing.T) {
 	pipesPlan, err := qe.GetPlan(ctx, logStats, query, sqlmode.PipesAsConcat, false, false)
 	require.NoError(t, err)
 	// || is string concatenation under PIPES_AS_CONCAT
-	assert.Equal(t, "select concat('a', 'b') from test_table_01 limit :#maxLimit", pipesPlan.FullQuery.Query)
+	assert.Equal(t, "select concat('a', 'b') as `'a' || 'b'` from test_table_01 limit :#maxLimit", pipesPlan.FullQuery.Query)
 	assertPlanCacheSize(t, qe, 2)
 
 	// each mode's plan is cached under its own key
@@ -251,7 +251,7 @@ func TestQueryPlanCacheParseSQLMode(t *testing.T) {
 	// the streaming plan is read under the mode as well
 	streamPlan, err := qe.GetStreamPlan(ctx, logStats, query, sqlmode.PipesAsConcat, false)
 	require.NoError(t, err)
-	assert.Equal(t, "select concat('a', 'b') from test_table_01", streamPlan.FullQuery.Query)
+	assert.Equal(t, "select concat('a', 'b') as `'a' || 'b'` from test_table_01", streamPlan.FullQuery.Query)
 
 	qe.ClearQueryPlanCache()
 }

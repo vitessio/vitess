@@ -2717,14 +2717,14 @@ func TestReserveExecute_ParseSQLMode(t *testing.T) {
 
 	// under PIPES_AS_CONCAT this query only matches its concat() serialization; the
 	// logical-OR reading would hit an unregistered query and fail
-	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	concatQuery := "select concat('a', 'b') as `'a' || 'b'` from dual limit 10001"
 	db.AddQuery(concatQuery, &sqltypes.Result{})
 	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, 0, state.ReservedID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
 
 	// the streaming path finds the mode on the reserved connection as well
-	streamConcatQuery := "select concat('a', 'b') from dual"
+	streamConcatQuery := "select concat('a', 'b') as `'a' || 'b'` from dual"
 	db.AddQuery(streamConcatQuery, &sqltypes.Result{})
 	err = tsv.StreamExecute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, 0, state.ReservedID, &querypb.ExecuteOptions{}, func(*sqltypes.Result) error { return nil })
 	require.NoError(t, err)
@@ -2764,7 +2764,7 @@ func TestReserveExistingTx_KeepsParseSQLMode(t *testing.T) {
 	require.Equal(t, beginState.TransactionID, reserveState.ReservedID)
 
 	// under PIPES_AS_CONCAT this query only matches its concat() serialization
-	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	concatQuery := "select concat('a', 'b') as `'a' || 'b'` from dual limit 10001"
 	db.AddQuery(concatQuery, &sqltypes.Result{})
 	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, beginState.TransactionID, reserveState.ReservedID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
@@ -2793,7 +2793,7 @@ func TestSettingsWithoutSQLModeKeepTheConnectionMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(0), beginState.ReservedID)
 
-	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	concatQuery := "select concat('a', 'b') as `'a' || 'b'` from dual limit 10001"
 	db.AddQuery(concatQuery, &sqltypes.Result{})
 	_, _, err = tsv.ReserveExecute(ctx, nil, &target, []string{"set sql_safe_updates = 1"},
 		"select 'a' || 'b' from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
@@ -2837,7 +2837,7 @@ func TestInBandSetMakesTheConnectionSettingStale(t *testing.T) {
 	assert.Contains(t, db.QueryLog(), "sql_mode = 'pipes_as_concat'", "the settings must be applied again after the in-band SET")
 
 	// and the connection is read under the settings' mode again
-	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	concatQuery := "select concat('a', 'b') as `'a' || 'b'` from dual limit 10001"
 	db.AddQuery(concatQuery, &sqltypes.Result{})
 	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, beginState.TransactionID, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
@@ -2911,7 +2911,7 @@ func TestSettingSwitchClosesTheConnectionOnRelease(t *testing.T) {
 	require.Equal(t, int64(0), beginState.ReservedID)
 	// the other setting is applied on top: the session keeps the mode, and
 	// the connection is read under it, as the setting does not touch sql_mode
-	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	concatQuery := "select concat('a', 'b') as `'a' || 'b'` from dual limit 10001"
 	db.AddQuery(concatQuery, &sqltypes.Result{})
 	_, _, err = tsv.ReserveExecute(ctx, nil, &target, otherSettings, "select 'a' || 'b' from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
