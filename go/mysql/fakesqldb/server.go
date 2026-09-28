@@ -460,7 +460,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		if f := result.BeforeFunc; f != nil {
 			f()
 		}
-		return callback(result.Result)
+		return replyInTransaction(c, result.Result, callback)
 	}
 
 	// Check query patterns from AddQueryPattern().
@@ -474,7 +474,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 			if pat.err != "" {
 				return errors.New(pat.err)
 			}
-			return callback(pat.result)
+			return replyInTransaction(c, pat.result, callback)
 		}
 	}
 
@@ -490,6 +490,20 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	log.Error("Query not found: " + parser.TruncateForUI(query))
 
 	return err
+}
+
+// replyInTransaction sends a registered result. The server writes the status
+// flags of its connection, not the result's, so a result registered with
+// ServerStatusInTrans reports an open transaction by setting the flag on the
+// connection for this reply only: a test can answer a statement the way MySQL
+// answers it inside a transaction, which fakesqldb does not track itself.
+func replyInTransaction(c *mysql.Conn, result *sqltypes.Result, callback func(*sqltypes.Result) error) error {
+	if result == nil || result.StatusFlags&mysql.ServerStatusInTrans == 0 || c.StatusFlags&mysql.ServerStatusInTrans != 0 {
+		return callback(result)
+	}
+	c.StatusFlags |= mysql.ServerStatusInTrans
+	defer func() { c.StatusFlags &^= mysql.ServerStatusInTrans }()
+	return callback(result)
 }
 
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {

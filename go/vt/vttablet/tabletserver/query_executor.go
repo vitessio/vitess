@@ -681,6 +681,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 
 		conn := txConn.UnderlyingDBConn()
+		if qre.plan.PlanID == p.PlanCallProc {
+			// see execProc: the procedure body may leave session state behind
+			txConn.MarkSessionDiverged()
+		}
 		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
@@ -1623,6 +1627,12 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	if err != nil {
 		return nil, err
 	}
+	// A procedure body can leave session state behind that the statement's plan
+	// cannot see (a SET SESSION, SET NAMES, a temporary table), whatever the
+	// CALL's outcome. A pooled connection is discarded after a CALL for that
+	// reason (see execCallProc); a transaction's connection is discarded when the
+	// transaction releases it, rather than recycled for the next one.
+	conn.MarkSessionDiverged()
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		// A stored procedure can start a transaction that Vitess does not
