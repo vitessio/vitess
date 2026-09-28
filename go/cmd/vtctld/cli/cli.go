@@ -70,10 +70,6 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Init the vtctld core
-	if err := vtctld.InitVtctld(env, ts); err != nil {
-		return err
-	}
 
 	// Register http debug/health
 	vtctld.RegisterDebugHealthHandler(ts)
