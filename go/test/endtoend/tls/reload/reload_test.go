@@ -225,7 +225,8 @@ func TestTLSReload(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			reloadErr = servesCerts(t, newCerts, newCert)
 			return reloadErr == nil
-		}, reloadTimeout, 100*time.Millisecond, "vtgate must serve the new certificates after SIGHUP: %v", reloadErr)
+		}, reloadTimeout, 100*time.Millisecond, "vtgate must serve the new certificates after SIGHUP")
+		require.NoError(t, reloadErr)
 
 		// Clients of the old CA are no longer accepted on new
 		// connections.
@@ -249,6 +250,7 @@ func TestTLSReload(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			reloadErr = servesCerts(t, oldCerts, oldCert)
 			return reloadErr == nil
-		}, reloadTimeout, 100*time.Millisecond, "vtgate must serve the new certificates without a SIGHUP: %v", reloadErr)
+		}, reloadTimeout, 100*time.Millisecond, "vtgate must serve the new certificates without a SIGHUP")
+		require.NoError(t, reloadErr)
 	})
 }

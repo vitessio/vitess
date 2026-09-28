@@ -181,6 +181,7 @@ func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
 	var sink configSink
 	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
 	require.NoError(t, err)
+	ticketConfig := reloader.ticketConfig
 
 	// The CA file changes only once the hook fires, simulating a
 	// rotation landing exactly between Reload's pre-load digest and
@@ -205,7 +206,7 @@ func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sha256.Sum256(wantCA), reloader.caFingerprint,
 		"the recorded CA fingerprint must match the CA that was actually loaded, not the one read before the race")
-	require.NotNil(t, reloader.ticketKeys, "a CA that changed mid-reload must still rotate the session-ticket keys")
+	require.NotSame(t, ticketConfig, reloader.ticketConfig, "a CA that changed mid-reload must still get new session ticket keys")
 }
 
 func TestTLSReloaderKeepsConfigOnError(t *testing.T) {
@@ -306,57 +307,61 @@ func TestTLSReloaderSessionTicketKeys(t *testing.T) {
 	}
 }
 
-// TestTLSReloaderRotatesTicketKeysAfterCAChange checks that the key a
-// CA change pins (TestTLSReloaderSessionTicketKeys) does not then
-// stay in sole use for the life of the process: it rotates and
-// expires on the same schedule crypto/tls uses for its own
-// automatically-managed ticket keys, so that key does not become a
-// single point of long-term exposure once pinned.
-func TestTLSReloaderRotatesTicketKeysAfterCAChange(t *testing.T) {
-	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
-	files := liveTLSFiles(t)
-	installTLSFiles(t, files, certs)
+// TestTLSReloaderRotatesTicketKeysWithoutReloading checks, through
+// real handshakes, that the session ticket keys a CA change puts in
+// place rotate and expire on crypto/tls's schedule as handshakes
+// happen, even when nothing reloads again, rather than staying in use
+// for the life of the process.
+func TestTLSReloaderRotatesTicketKeysWithoutReloading(t *testing.T) {
+	for _, version := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
+		t.Run(tls.VersionName(version), func(t *testing.T) {
+			certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+			otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+			files := liveTLSFiles(t)
+			installTLSFiles(t, files, certs)
 
-	var sink configSink
-	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
-	require.NoError(t, err)
+			var current atomic.Pointer[tls.Config]
+			reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, func(config *tls.Config) {
+				config.MaxVersion = version
+				current.Store(config)
+			})
+			require.NoError(t, err)
+			var clock atomic.Int64
+			clock.Store(time.Now().UnixNano())
+			reloader.ticketClock = func() time.Time { return time.Unix(0, clock.Load()) }
 
-	now := time.Now()
-	reloader.now = func() time.Time { return now }
+			clientCA, err := os.ReadFile(certs.ClientCA)
+			require.NoError(t, err)
+			otherCA, err := os.ReadFile(otherCerts.ClientCA)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
+			require.NoError(t, reloader.Reload(false))
 
-	clientCA, err := os.ReadFile(certs.ClientCA)
-	require.NoError(t, err)
-	otherCA, err := os.ReadFile(otherCerts.ClientCA)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
-	require.NoError(t, reloader.Reload(true))
-	require.Len(t, reloader.ticketKeys, 1, "the CA change must pin exactly one key")
-	pinned := reloader.ticketKeys[0]
+			serverConfig := &tls.Config{
+				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+					return current.Load(), nil
+				},
+			}
+			newClient := func() *tls.Config {
+				config, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+				require.NoError(t, err)
+				config.ClientSessionCache = tls.NewLRUClientSessionCache(1)
+				return config
+			}
+			rotated, expired := newClient(), newClient()
+			for _, client := range []*tls.Config{rotated, expired} {
+				require.False(t, tlsHandshake(t, serverConfig, client).DidResume)
+			}
 
-	// Short of a full rotation period, a reload must leave the pinned
-	// key alone.
-	now = now.Add(ticketKeyRotation - time.Second)
-	require.NoError(t, reloader.Reload(true))
-	require.Equal(t, []ticketKeyEntry{pinned}, reloader.ticketKeys,
-		"the pinned key must not rotate before a full rotation period has passed")
+			// A day later the key is rotated out for new tickets, but
+			// the tickets it issued still resume.
+			clock.Add(int64(25 * time.Hour))
+			require.True(t, tlsHandshake(t, serverConfig, rotated).DidResume)
 
-	// Once a rotation period has passed, the next reload must rotate
-	// in a new key rather than keeping the pinned one in sole use
-	// indefinitely, while keeping the old one so tickets it already
-	// issued keep resuming.
-	now = now.Add(2 * time.Second)
-	require.NoError(t, reloader.Reload(true))
-	require.Len(t, reloader.ticketKeys, 2)
-	require.NotEqual(t, pinned.key, reloader.ticketKeys[0].key, "rotation must generate a new key")
-	require.Equal(t, pinned, reloader.ticketKeys[1], "the previous key must be kept for tickets it already issued")
-
-	// Once the pinned key is older than its lifetime, it must be
-	// dropped rather than kept forever.
-	now = pinned.created.Add(ticketKeyLifetime + time.Second)
-	require.NoError(t, reloader.Reload(true))
-	for _, k := range reloader.ticketKeys {
-		require.NotEqual(t, pinned.key, k.key, "an expired key must not still be handed to configs")
+			// A week later it is gone, and its tickets no longer resume.
+			clock.Add(int64(7 * 24 * time.Hour))
+			require.False(t, tlsHandshake(t, serverConfig, expired).DidResume)
+		})
 	}
 }
 
