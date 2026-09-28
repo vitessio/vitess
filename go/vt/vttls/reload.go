@@ -25,6 +25,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -119,8 +120,15 @@ var reloadTestHook, publishTestHook func()
 // one version of the files: when their directory is swapped for a new
 // one halfway through, as Kubernetes updates a secret, a client does
 // not end up with its old key pair and the new CA. When the files keep
-// changing, nothing is published. A file that cannot be loaded keeps
-// what was loaded from it before, and its error is returned.
+// changing, nothing is published.
+//
+// A file that cannot be loaded keeps what was loaded from it before,
+// and its error is returned. So do the files that a configuration built
+// from it was built from along with it, and theirs in turn, so that no
+// configuration is left with some of its files reloaded and not the
+// others: with the new CA but its old key pair, or with a new CA its
+// CRL is not valid under. Configurations that share no file reload
+// independently.
 func ReloadCachedFiles() (changed bool, err error) {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
@@ -132,8 +140,9 @@ func ReloadCachedFiles() (changed bool, err error) {
 		if reloadTestHook != nil {
 			reloadTestHook()
 		}
-		updates, errs := entries.read()
+		results := entries.read()
 		if maps.Equal(before, digestFiles(paths)) {
+			updates, errs := entries.withhold(results)
 			publish(updates)
 			return len(updates) > 0, vterrors.Aggregate(errs)
 		}
@@ -167,6 +176,8 @@ type cachedFiles struct {
 	certPools                  map[string]*x509.CertPool
 	caCertificates             map[string][]*x509.Certificate
 	crls                       map[crlWatch][sha256.Size]byte
+	// fileSets are the entries each configuration was built from.
+	fileSets [][]entryID
 }
 
 func snapshotCachedFiles() cachedFiles {
@@ -195,6 +206,10 @@ func snapshotCachedFiles() cachedFiles {
 	})
 	watchedCRLs.Range(func(w, digest any) bool {
 		entries.crls[w.(crlWatch)] = digest.([sha256.Size]byte)
+		return true
+	})
+	fileSets.Range(func(_, set any) bool {
+		entries.fileSets = append(entries.fileSets, set.([]entryID))
 		return true
 	})
 	return entries
@@ -232,35 +247,74 @@ type cacheUpdate struct {
 	key, value any
 }
 
-// read reads the files of the entries, and returns the updates of
-// those whose files changed, without applying them.
-func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
-	readKeyPairs := func(cache *sync.Map, entries map[any]keyPairFiles, read func(keyPairFiles) (*[]tls.Certificate, error)) {
+// entryID names a cache entry, as the files it is loaded from.
+type entryID string
+
+func keyPairEntry(id any) entryID { return entryID(fmt.Sprintf("key pair %v", id)) }
+func combinedKeyPairEntry(id any) entryID {
+	return entryID(fmt.Sprintf("key pair with CA chain %v", id))
+}
+func caPoolEntry(ca string) entryID { return entryID("CA pool " + ca) }
+func caCertificatesEntry(ca string) entryID {
+	return entryID("CA certificates " + ca)
+}
+func crlEntry(w crlWatch) entryID { return entryID(fmt.Sprintf("CRL %s under CA %s", w.crl, w.ca)) }
+
+// fileSets maps the entries a configuration was built from, joined, to
+// those entries. See ReloadCachedFiles.
+var fileSets sync.Map
+
+// registerFileSet records that a configuration was built from the
+// entries of set.
+func registerFileSet(set ...entryID) {
+	if len(set) > 1 {
+		key := make([]string, len(set))
+		for i, id := range set {
+			key[i] = string(id)
+		}
+		fileSets.LoadOrStore(strings.Join(key, "\x00"), set)
+	}
+}
+
+// entryResult is what reading the files of a cache entry again gave:
+// the update of an entry whose files changed, or the error of one that
+// could not be loaded. The entries whose files did not change have no
+// result.
+type entryResult struct {
+	update *cacheUpdate
+	err    error
+}
+
+// read reads the files of the entries, and returns the result of each
+// entry whose files changed or failed to load, without applying them.
+func (c cachedFiles) read() map[entryID]entryResult {
+	results := make(map[entryID]entryResult)
+	readKeyPairs := func(cache *sync.Map, entries map[any]keyPairFiles, name func(any) entryID, read func(keyPairFiles) (*[]tls.Certificate, error)) {
 		for id, files := range entries {
 			fresh, err := read(files)
 			if err != nil {
-				errs = append(errs, err)
+				results[name(id)] = entryResult{err: err}
 				continue
 			}
 			if cached, ok := cache.Load(id); !ok || !sameCertificates(*cached.(*[]tls.Certificate), *fresh) {
-				updates = append(updates, cacheUpdate{cache: cache, key: id, value: fresh})
+				results[name(id)] = entryResult{update: &cacheUpdate{cache: cache, key: id, value: fresh}}
 			}
 		}
 	}
-	readKeyPairs(&tlsCertificates, c.keyPairs, func(f keyPairFiles) (*[]tls.Certificate, error) {
+	readKeyPairs(&tlsCertificates, c.keyPairs, keyPairEntry, func(f keyPairFiles) (*[]tls.Certificate, error) {
 		return readTLSCertificate(f.cert, f.key)
 	})
-	readKeyPairs(&combinedTLSCertificates, c.combinedKeyPairs, func(f keyPairFiles) (*[]tls.Certificate, error) {
+	readKeyPairs(&combinedTLSCertificates, c.combinedKeyPairs, combinedKeyPairEntry, func(f keyPairFiles) (*[]tls.Certificate, error) {
 		return readAndCombineTLSCertificates(f.ca, f.cert, f.key)
 	})
 	for ca, cached := range c.certPools {
 		fresh, err := readx509CertPool(ca)
 		if err != nil {
-			errs = append(errs, err)
+			results[caPoolEntry(ca)] = entryResult{err: err}
 			continue
 		}
 		if !fresh.Equal(cached) {
-			updates = append(updates, cacheUpdate{cache: &certPools, key: ca, value: fresh})
+			results[caPoolEntry(ca)] = entryResult{update: &cacheUpdate{cache: &certPools, key: ca, value: fresh}}
 		}
 	}
 	// The CA certificates that CRLs are validated under: the ones
@@ -269,18 +323,18 @@ func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
 	for ca, cached := range c.caCertificates {
 		fresh, err := readx509Certificates(ca)
 		if err != nil {
-			errs = append(errs, err)
+			results[caCertificatesEntry(ca)] = entryResult{err: err}
 			continue
 		}
 		if !slices.EqualFunc(fresh, cached, (*x509.Certificate).Equal) {
-			updates = append(updates, cacheUpdate{cache: &caCertificates, key: ca, value: fresh})
+			results[caCertificatesEntry(ca)] = entryResult{update: &cacheUpdate{cache: &caCertificates, key: ca, value: fresh}}
 			readCAs[ca] = fresh
 		}
 	}
 	for w, seen := range c.crls {
 		body, err := os.ReadFile(w.crl)
 		if err != nil {
-			errs = append(errs, vterrors.Wrapf(err, "failed to read crl file: %s", w.crl))
+			results[crlEntry(w)] = entryResult{err: vterrors.Wrapf(err, "failed to read crl file: %s", w.crl)}
 			continue
 		}
 		digest := sha256.Sum256(body)
@@ -290,7 +344,7 @@ func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
 		}
 		if w.ca != "" && !caChanged {
 			if issuers, err = loadx509Certificates(w.ca); err != nil {
-				errs = append(errs, err)
+				results[crlEntry(w)] = entryResult{err: err}
 				continue
 			}
 		}
@@ -302,12 +356,64 @@ func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
 			_, err = newCRLCheckerFrom(crls, issuers)
 		}
 		if err != nil {
-			errs = append(errs, vterrors.Wrapf(err, "cannot use the CRL file %s under the CA file %s; the CRLs last loaded from it stay in use", w.crl, w.ca))
+			results[crlEntry(w)] = entryResult{err: vterrors.Wrapf(err, "cannot use the CRL file %s under the CA file %s; the CRLs last loaded from it stay in use", w.crl, w.ca)}
 			continue
 		}
 		if digest != seen {
-			updates = append(updates, cacheUpdate{cache: &watchedCRLs, key: w, value: digest})
+			results[crlEntry(w)] = entryResult{update: &cacheUpdate{cache: &watchedCRLs, key: w, value: digest}}
 		}
+	}
+	return results
+}
+
+// withhold returns the updates of results to publish, and the errors
+// to report. An entry that failed to load holds back the updates of
+// every entry that it shares a configuration with, directly or through
+// other entries, so that each configuration keeps all its files from
+// before the reload or takes all of them from after it.
+func (c cachedFiles) withhold(results map[entryID]entryResult) ([]cacheUpdate, []error) {
+	group := make(map[entryID]entryID)
+	var find func(entryID) entryID
+	find = func(id entryID) entryID {
+		parent, ok := group[id]
+		if !ok || parent == id {
+			return id
+		}
+		root := find(parent)
+		group[id] = root
+		return root
+	}
+	for _, set := range c.fileSets {
+		for _, id := range set[1:] {
+			if a, b := find(set[0]), find(id); a != b {
+				group[b] = a
+			}
+		}
+	}
+
+	failed := make(map[entryID]bool)
+	var errs []error
+	for id, result := range results {
+		if result.err != nil {
+			failed[find(id)] = true
+			errs = append(errs, result.err)
+		}
+	}
+	var updates []cacheUpdate
+	var heldBack []string
+	for id, result := range results {
+		if result.update == nil {
+			continue
+		}
+		if failed[find(id)] {
+			heldBack = append(heldBack, string(id))
+			continue
+		}
+		updates = append(updates, *result.update)
+	}
+	if len(heldBack) > 0 {
+		slices.Sort(heldBack)
+		errs = append(errs, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "not reloaded either, since a configuration uses them along with a file that failed to load: %s", strings.Join(heldBack, ", ")))
 	}
 	return updates, errs
 }
