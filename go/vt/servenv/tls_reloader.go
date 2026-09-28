@@ -37,8 +37,8 @@ import (
 )
 
 var (
-	tlsReloadSuccessTimestamp = stats.NewGaugesWithSingleLabel("TLSReloadSuccessTimestamp", "Unix time of the last successful load of a server's TLS files", "Server")
-	tlsReloadErrors           = stats.NewCountersWithSingleLabel("TLSReloadErrors", "Number of failed reloads of a server's TLS files", "Server")
+	tlsReloadSuccessTimestamp = stats.NewGaugesWithSingleLabel("TLSReloadSuccessTimestamp", "Unix time of the last successful load of the TLS files of a server, or of the process's clients", "Server")
+	tlsReloadErrors           = stats.NewCountersWithSingleLabel("TLSReloadErrors", "Number of failed reloads of the TLS files of a server, or of the process's clients", "Server")
 	tlsCertNotAfter           = stats.NewGaugesWithSingleLabel("TLSCertNotAfter", "Unix time at which the certificate a server presents expires", "Server")
 )
 

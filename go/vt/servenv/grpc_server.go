@@ -139,8 +139,9 @@ var (
 	gRPCEnableOptionalTLS bool
 	// gRPCServerCA if specified will combine server cert and server CA.
 	gRPCServerCA string
-	// tlsReloadInterval is how often the servers' TLS files are checked
-	// for changes, zero for never. SIGHUP reloads them regardless.
+	// tlsReloadInterval is how often the TLS files of the servers and
+	// clients are checked for changes, zero for never. SIGHUP reloads
+	// them regardless.
 	tlsReloadInterval time.Duration
 )
 
@@ -167,7 +168,6 @@ func RegisterGRPCServerFlags() {
 		utils.SetFlagStringVar(fs, &gRPCCRL, "grpc-crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
 		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
 		utils.SetFlagStringVar(fs, &gRPCServerCA, "grpc-server-ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
-		utils.SetFlagDurationVar(fs, &tlsReloadInterval, "tls-reload-interval", tlsReloadInterval, "how often to check the gRPC and MySQL servers' TLS certificate, key, CA and CRL files for changes and reload them, 0 to disable; SIGHUP always reloads them")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTime, "grpc-server-keepalive-time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTimeout, "grpc-server-keepalive-timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	})

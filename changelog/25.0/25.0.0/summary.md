@@ -9,6 +9,7 @@
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Reloading TLS certificates without a restart](#tls-reload)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -110,6 +111,23 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="tls-reload"/>Reloading TLS certificates without a restart</a>
+
+Vitess components now reload their TLS certificate, key, CA and CRL files from disk on `SIGHUP`, without a restart:
+
+- The gRPC server of every Vitess component (`--grpc-cert`, `--grpc-key`, `--grpc-ca`, `--grpc-crl`, `--grpc-server-ca`), and the MySQL server of `vtgate` and `vtcombo` (`--mysql-server-ssl-cert`, `--mysql-server-ssl-key`, `--mysql-server-ssl-ca`, `--mysql-server-ssl-crl`, `--mysql-server-ssl-server-ca`). `vtgate` already reloaded its MySQL server's TLS config on `SIGHUP`, but reused the certificate, key and CA it had loaded at startup, so only a changed CRL took effect; now every file does.
+- The TLS clients of `vtgate`, `vttablet`, `vtctld`, `vtorc`, `vtbackup`, `vtcombo`, `mysqlctld` and `vttestserver`: their gRPC clients (the `--tablet-grpc-*`, `--tablet-manager-grpc-*`, `--vtgate-grpc-*`, `--vtctld-grpc-*` and `--binlog-player-grpc-*` flags), their MySQL client connections to `mysqld` (the `--db-ssl-*` flags), and the connections of the LDAP authentication server to LDAP.
+
+The new `--tls-reload-interval` flag (default `0`, disabled) of those components also checks the files for changes periodically, which suits deployments that update certificates without signaling the process, such as Kubernetes secrets.
+
+New connections use the reloaded files as soon as a reload succeeds; established connections keep the session they negotiated until they close. A gRPC client connection, such as the one from `vtgate` to a `vttablet`, stays open for as long as it is healthy, and uses the reloaded files when it next reconnects. A reload that fails, for instance because a certificate was replaced before its key, is logged and leaves the previous files in use: the next `SIGHUP`, or the next check with `--tls-reload-interval`, tries again. When a server's CA file changes, TLS sessions established before the reload no longer resume, so that a client whose CA was removed has to present a certificate that the new CAs accept.
+
+A component with a TLS client now handles `SIGHUP` instead of terminating on it, as components with a TLS server already did.
+
+To rotate a CA, first install a CA file that holds both the old and the new CA and reload, then reissue the certificates under the new CA, and remove the old CA last.
+
+Each server exports, labeled by `Server` (`grpc` or `mysql`), `TLSReloadSuccessTimestamp`, the Unix time of the last successful load, `TLSReloadErrors`, the number of failed reloads, and `TLSCertNotAfter`, the Unix time at which the certificate it presents expires. The reloads of a component's TLS clients are counted in `TLSReloadSuccessTimestamp` and `TLSReloadErrors` under `clients`.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
