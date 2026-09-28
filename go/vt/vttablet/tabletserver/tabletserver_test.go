@@ -2838,40 +2838,102 @@ func TestSettingsWithoutSQLModeKeepTheConnectionMode(t *testing.T) {
 
 // A SET run on a connection after its settings were applied leaves the MySQL
 // session out of step with them: a later request that brings the same settings
-// must apply them again instead of skipping them as already applied.
+// must apply them again instead of skipping them as already applied. That holds
+// for a constant value, judged at plan time, and for one the executor reads back
+// after the SET ran.
 func TestInBandSetMakesTheConnectionSettingStale(t *testing.T) {
-	ctx := t.Context()
-	db, tsv := setupTabletServerTest(t, ctx, "")
-	defer tsv.StopService()
-	defer db.Close()
+	for _, set := range []string{"set sql_mode = ''", "set sql_mode = @v"} {
+		t.Run(set, func(t *testing.T) {
+			ctx := t.Context()
+			db, tsv := setupTabletServerTest(t, ctx, "")
+			defer tsv.StopService()
+			defer db.Close()
 
-	db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
-	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+			db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+			db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+			// the read-back of a non-constant value
+			db.AddQuery("select @@sql_mode", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@sql_mode", "varchar"), ""))
+			target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+			settings := []string{"set sql_mode = 'PIPES_AS_CONCAT'"}
+
+			beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+
+			// the SET runs on the transaction's connection and leaves its session in a
+			// different mode than the settings say
+			_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, set, nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+
+			db.ResetQueryLog()
+			_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			assert.Contains(t, db.QueryLog(), "sql_mode = 'pipes_as_concat'", "the settings must be applied again after the in-band SET")
+
+			// and the connection is read under the settings' mode again
+			concatQuery := "select concat('a', 'b') from dual limit 10001"
+			db.AddQuery(concatQuery, &sqltypes.Result{})
+			_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, beginState.TransactionID, 0, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
+
+			_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// The post-begin queries of a transaction are parsed under the mode its
+// connection's session is in, whether the transaction is on a settings-pool
+// connection, where the settings carry the mode, or on a true reservation,
+// where the connection records the mode its pre-queries put it in. Only the
+// concat() serialization of || is registered: the logical-OR reading would hit
+// an unregistered query and fail.
+func TestPostBeginQueriesParseUnderTheSessionMode(t *testing.T) {
 	settings := []string{"set sql_mode = 'PIPES_AS_CONCAT'"}
+	postBeginQueries := []string{"set @x = 'a' || 'b'"}
+	concatQuery := "set @x = concat('a', 'b')"
 
-	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
+	t.Run("settings-pool transaction", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setupTabletServerTest(t, ctx, "")
+		defer tsv.StopService()
+		defer db.Close()
 
-	// the SET runs on the transaction's connection and leaves its session in a
-	// different mode than the settings say
-	_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "set sql_mode = ''", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
+		db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+		db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+		db.AddQuery(concatQuery, &sqltypes.Result{})
+		target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	db.ResetQueryLog()
-	_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.Contains(t, db.QueryLog(), "sql_mode = 'pipes_as_concat'", "the settings must be applied again after the in-band SET")
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, postBeginQueries, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+		require.NoError(t, err)
+		require.Equal(t, int64(0), state.ReservedID, "a settings-pool transaction is not a true reservation")
+		require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
 
-	// and the connection is read under the settings' mode again
-	concatQuery := "select concat('a', 'b') from dual limit 10001"
-	db.AddQuery(concatQuery, &sqltypes.Result{})
-	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, beginState.TransactionID, 0, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
+		_, err = tsv.Commit(ctx, &target, state.TransactionID)
+		require.NoError(t, err)
+	})
 
-	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
-	require.NoError(t, err)
+	t.Run("true reservation", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setupTabletServerTest(t, ctx, "")
+		defer tsv.StopService()
+		defer db.Close()
+
+		db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+		db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
+		db.AddQuery(concatQuery, &sqltypes.Result{})
+		target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+		// get_lock needs a true reservation: the settings-pool attempt is rolled
+		// back and the post-begin queries run again on the reserved connection
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, postBeginQueries, "select get_lock('l', 10) from dual", nil, &querypb.ExecuteOptions{})
+		require.NoError(t, err)
+		require.NotEqual(t, int64(0), state.ReservedID)
+		require.Equal(t, 2, db.GetQueryCalledNum(concatQuery))
+
+		err = tsv.Release(ctx, &target, state.TransactionID, state.ReservedID)
+		require.NoError(t, err)
+	})
 }
 
 // A connection a SET ran on is closed when it is released, rather than recycled
