@@ -823,9 +823,9 @@ func TestSettingsForStatementPinsOnlyWhenTheTabletReserved(t *testing.T) {
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, []key.ShardDestination{key.DestinationShard("0")})
 	require.NoError(t, err)
 	queries := []*querypb.BoundQuery{{Sql: "query1", BindVariables: map[string]*querypb.BindVariable{}}}
-	execute := func(t *testing.T, session *econtext.SafeSession, settingsForStatement bool) {
+	execute := func(t *testing.T, session *econtext.SafeSession, applySettingsToConn bool) {
 		t.Helper()
-		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, settingsForStatement, false, nullResultsObserver{}, false)
+		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, applySettingsToConn, false, nullResultsObserver{}, false)
 		require.NoError(t, vterrors.Aggregate(errs))
 	}
 	newSession := func() *econtext.SafeSession {

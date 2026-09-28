@@ -106,9 +106,9 @@ type (
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 	iExecute interface {
 		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error)
-		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, settingsForStatement bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
+		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, applySettingsToConn bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
 		ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error)
-		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, settingsForStatement bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
+		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, applySettingsToConn bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 		Commit(ctx context.Context, safeSession *SafeSession) error
 		ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -164,23 +164,24 @@ type (
 	VCursorImpl struct {
 		config      VCursorConfig
 		SafeSession *SafeSession
-		// settingsForStatement makes the statement run with the session's system
+		// applySettingsToConn makes the statement run with the session's system
 		// variables applied to its connection through the tablet's connection
-		// settings: the statement cannot carry them in a SET_VAR hint. Unlike
-		// SetReservedConn it does not pin the session; a later hint-capable query
-		// carries the hint again. The session is pinned only when a tablet answers
-		// that it reserved a connection for the statement, which a lock or a
-		// temporary table needs and a DDL does not.
-		settingsForStatement bool
-		keyspace             string
-		tabletType           topodatapb.TabletType
-		destination          key.ShardDestination
-		marginComments       sqlparser.MarginComments
-		executor             iExecute
-		resolver             Resolver
-		topoServer           *topo.Server
-		logStats             *logstats.LogStats
-		metrics              Metrics
+		// settings, instead of carrying them in a SET_VAR hint: the statement
+		// cannot carry the hint, or, for a SET, its evaluation on a shard must see
+		// the session's current values. Unlike SetReservedConn it does not pin the
+		// session; a later hint-capable query carries the hint again. The session
+		// is pinned only if a tablet answers that it reserved a connection for the
+		// statement.
+		applySettingsToConn bool
+		keyspace            string
+		tabletType          topodatapb.TabletType
+		destination         key.ShardDestination
+		marginComments      sqlparser.MarginComments
+		executor            iExecute
+		resolver            Resolver
+		topoServer          *topo.Server
+		logStats            *logstats.LogStats
+		metrics             Metrics
 
 		// fkChecksState stores the state of foreign key checks variable.
 		// This state is meant to be the final fk checks state after consulting the
@@ -903,7 +904,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.settingsForStatement, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.applySettingsToConn, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr != nil && qr.InsertIDUpdated() {
@@ -942,7 +943,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 		return []error{err}
 	}
 
-	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, vc.settingsForStatement, callback, vc.observer, fetchLastInsertID)
+	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, vc.applySettingsToConn, callback, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
@@ -965,7 +966,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, false /* settingsForStatement */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, false /* applySettingsToConn */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr.InsertIDUpdated() {
 		vc.SafeSession.LastInsertId = qr.InsertID
@@ -1149,7 +1150,7 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Show,
 		sqlparser.SupportOptimizerHint:
 	default:
-		vc.settingsForStatement = true
+		vc.applySettingsToConn = true
 	}
 }
 
