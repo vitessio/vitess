@@ -3287,6 +3287,23 @@ func TestCallInTransactionDiscardsConnOnRelease(t *testing.T) {
 		require.NoError(t, err)
 		callConnDiscarded(t, db, tsv)
 	})
+	t.Run("CALL returning rows, then commit", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		rows := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+		rows.StatusFlags = sqltypes.ServerStatusInTrans
+		db.AddQuery(query, rows)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		qr, err := tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
 	t.Run("failed CALL, then commit", func(t *testing.T) {
 		// a procedure that dirtied the session and then failed leaves the same
 		// residue as one that succeeded, and the transaction stays usable
