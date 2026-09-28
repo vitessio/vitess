@@ -154,3 +154,106 @@ func TestClientConfigKeepsLastValidCRL(t *testing.T) {
 	_, err = ClientConfig(VerifyIdentity, "", "", certs.ServerCA, unused, certs.RevokedServerName, tls.VersionTLS12)
 	require.Error(t, err)
 }
+
+// clientFiles are the files of a TLS client, installed in turn from
+// unrelated sets of certificates, as a rotation replaces them.
+type clientFiles struct {
+	t                  *testing.T
+	cert, key, ca, crl string
+}
+
+func newClientFiles(t *testing.T) clientFiles {
+	live := t.TempDir()
+	return clientFiles{t: t, cert: path.Join(live, "cert.pem"), key: path.Join(live, "key.pem"), ca: path.Join(live, "ca.pem"), crl: path.Join(live, "crl.pem")}
+}
+
+func (f clientFiles) copy(dst, src string) {
+	b, err := os.ReadFile(src)
+	require.NoError(f.t, err)
+	require.NoError(f.t, os.WriteFile(dst, b, 0o600))
+}
+
+func (f clientFiles) installKeyPair(certs tlstest.ClientServerKeyPairs) {
+	f.copy(f.cert, certs.ClientCert)
+	f.copy(f.key, certs.ClientKey)
+}
+
+func (f clientFiles) installTrust(certs tlstest.ClientServerKeyPairs) {
+	f.copy(f.ca, certs.ServerCA)
+	f.copy(f.crl, certs.ServerCRL)
+}
+
+// requireServes requires the configs ClientConfig builds from f to
+// present the client certificate of keyPair and to trust the server
+// CA of trust.
+func (f clientFiles) requireServes(keyPair, trust tlstest.ClientServerKeyPairs) {
+	f.t.Helper()
+	config, err := ClientConfig(VerifyIdentity, f.cert, f.key, f.ca, f.crl, "", tls.VersionTLS12)
+	require.NoError(f.t, err)
+	require.Equal(f.t, loadOneCert(f.t, keyPair.ClientCert).Raw, config.Certificates[0].Certificate[0], "the client must present the certificate of the expected set")
+	want, err := readx509CertPool(trust.ServerCA)
+	require.NoError(f.t, err)
+	require.True(f.t, want.Equal(config.RootCAs), "the client must trust the CA of the expected set")
+}
+
+// TestReloadCachedFilesReadsConsistently checks that a rotation that
+// lands while ReloadCachedFiles reads the files, the key pair first
+// and the CA and CRL a moment later, does not leave the client with
+// the new key pair and the old CA: the files are read again until
+// they read the same before and after.
+func TestReloadCachedFilesReadsConsistently(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installKeyPair(oldCerts)
+	files.installTrust(oldCerts)
+	files.requireServes(oldCerts, oldCerts)
+
+	var attempts int
+	reloadTestHook = func() {
+		attempts++
+		switch attempts {
+		case 1:
+			files.installKeyPair(newCerts)
+		case 2:
+			files.installTrust(newCerts)
+		}
+	}
+	t.Cleanup(func() { reloadTestHook = nil })
+
+	changed, err := ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(files.cert))
+	require.True(t, changed)
+	require.Equal(t, 3, attempts, "the reads that the rotation changed must be read again")
+	files.requireServes(newCerts, newCerts)
+}
+
+// TestReloadCachedFilesPublishesNothingWhileFilesChange checks that
+// when the files keep changing across every read, ReloadCachedFiles
+// fails and the client keeps what it loaded before.
+func TestReloadCachedFilesPublishesNothingWhileFilesChange(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installKeyPair(oldCerts)
+	files.installTrust(oldCerts)
+	files.requireServes(oldCerts, oldCerts)
+
+	var attempts int
+	reloadTestHook = func() {
+		attempts++
+		if attempts%2 == 1 {
+			files.installKeyPair(newCerts)
+		} else {
+			files.installKeyPair(oldCerts)
+		}
+	}
+	t.Cleanup(func() { reloadTestHook = nil })
+
+	generation := CachedFilesGeneration()
+	changed, err := ReloadCachedFiles()
+	require.ErrorContains(t, err, "kept changing")
+	require.False(t, changed)
+	require.Equal(t, generation, CachedFilesGeneration())
+	files.requireServes(oldCerts, oldCerts)
+}
