@@ -103,7 +103,9 @@ func TLSVersionToNumber(tlsVersion string) (uint16, error) {
 var onceByKeys = sync.Map{}
 
 // ClientConfig returns the TLS config to use for a client to
-// connect to a server with the provided parameters.
+// connect to a server with the provided parameters. The certificate,
+// key and CA files are loaded once per path, and loaded again by
+// ReloadCachedFiles; the CRL is read on every call.
 func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
 	config := &tls.Config{
 		MinVersion: minTLSVersion,
@@ -141,6 +143,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		if err != nil {
 			return nil, err
 		}
+		watchCRL(crl)
 	}
 
 	// The modes that build the peer's chain themselves verify it
@@ -265,8 +268,8 @@ var diskLoader = loader{
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections. Each file is loaded once per path, so
-// a later call with the same paths does not see changes to them;
-// ReadServerConfig does.
+// a later call with the same paths does not see changes to them
+// until ReloadCachedFiles reads them again; ReadServerConfig does.
 func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
 	return serverConfig(cachedLoader, cert, key, ca, crl, serverCA, minTLSVersion)
 }
@@ -355,6 +358,7 @@ func doLoadx509CertPool(ca string) error {
 	}
 
 	certPools.Store(ca, cp)
+	markCachedFilesInUse()
 
 	return nil
 }
@@ -405,6 +409,7 @@ func doLoadx509Certificates(ca string) error {
 	}
 
 	caCertificates.Store(ca, certificates)
+	markCachedFilesInUse()
 
 	return nil
 }
@@ -478,6 +483,8 @@ func doLoadTLSCertificate(cert, key string) error {
 	}
 
 	tlsCertificates.Store(tlsIdentifier, certificate)
+	cachedKeyPairs.Store(tlsIdentifier, keyPairFiles{cert: cert, key: key})
+	markCachedFilesInUse()
 
 	return nil
 }
@@ -525,6 +532,8 @@ func doLoadAndCombineTLSCertificates(ca, cert, key string) error {
 	}
 
 	combinedTLSCertificates.Store(combinedTLSIdentifier, certificate)
+	cachedCombinedKeyPairs.Store(combinedTLSIdentifier, keyPairFiles{ca: ca, cert: cert, key: key})
+	markCachedFilesInUse()
 
 	return nil
 }
