@@ -44,8 +44,9 @@ var (
 	// tlsCertificates and combinedTLSCertificates to the files their
 	// certificates were loaded from.
 	cachedKeyPairs, cachedCombinedKeyPairs sync.Map
-	// watchedCRLs maps the CRL files ClientConfig used to the SHA-256
-	// digest of their contents when last seen valid.
+	// watchedCRLs maps the CRL files ClientConfig used, with the CA
+	// file it used them with, to the SHA-256 digest of their contents
+	// when last seen valid under that CA.
 	watchedCRLs sync.Map
 	// lastValidCRLs maps the CRL files ClientConfig used to the CRLs
 	// last loaded from them, and staleCRLWarnings holds the files and
@@ -54,6 +55,10 @@ var (
 
 	reloadMu              sync.Mutex
 	cachedFilesGeneration atomic.Uint64
+	// publishMu keeps ClientConfig and ServerConfig from reading the
+	// caches while ReloadCachedFiles updates them, so that a config
+	// never combines files from before and after a reload.
+	publishMu sync.RWMutex
 
 	cachedFilesInUse     = make(chan struct{})
 	cachedFilesInUseOnce sync.Once
@@ -77,19 +82,20 @@ func CachedFilesGeneration() uint64 {
 	return cachedFilesGeneration.Load()
 }
 
-// watchCRL has ReloadCachedFiles watch the CRL file crl for changes.
-// ClientConfig reads the CRL on every call, so the file is only
-// watched, for CachedFilesGeneration, not cached.
-func watchCRL(crl string) {
-	if _, ok := watchedCRLs.Load(crl); ok {
-		return
+// crlWatch is a CRL file that ClientConfig used, and the CA file it
+// used it with, empty for none.
+type crlWatch struct {
+	crl, ca string
+}
+
+// watchCRL has ReloadCachedFiles watch the CRL file of w for changes,
+// starting from digest, the digest of the contents ClientConfig
+// loaded from it. ClientConfig reads the CRL on every call, so the
+// file is only watched, for CachedFilesGeneration, not cached.
+func watchCRL(w crlWatch, digest [sha256.Size]byte) {
+	if _, loaded := watchedCRLs.LoadOrStore(w, digest); !loaded {
+		markCachedFilesInUse()
 	}
-	digest, err := fileDigest(crl)
-	if err != nil {
-		return
-	}
-	watchedCRLs.LoadOrStore(crl, digest)
-	markCachedFilesInUse()
 }
 
 // maxReloadAttempts bounds how many times ReloadCachedFiles reads the
@@ -98,9 +104,10 @@ const maxReloadAttempts = 5
 
 // reloadTestHook, when set, runs on every attempt ReloadCachedFiles
 // makes to read the files, after it digested them and before it reads
-// them, so that a test can change the files in between. Nil outside
-// tests.
-var reloadTestHook func()
+// them, so that a test can change the files in between. publishTestHook,
+// when set, runs after ReloadCachedFiles updated the first cache entry
+// of a reload and before the others. Both are nil outside tests.
+var reloadTestHook, publishTestHook func()
 
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // that ClientConfig and ServerConfig loaded, so that the configs they
@@ -127,12 +134,7 @@ func ReloadCachedFiles() (changed bool, err error) {
 		}
 		updates, errs := entries.read()
 		if maps.Equal(before, digestFiles(paths)) {
-			for _, u := range updates {
-				u.cache.Store(u.key, u.value)
-			}
-			if len(updates) > 0 {
-				cachedFilesGeneration.Add(1)
-			}
+			publish(updates)
 			return len(updates) > 0, vterrors.Aggregate(errs)
 		}
 		if attempt == maxReloadAttempts {
@@ -141,13 +143,30 @@ func ReloadCachedFiles() (changed bool, err error) {
 	}
 }
 
+// publish applies updates to the caches, all at once to ClientConfig
+// and ServerConfig.
+func publish(updates []cacheUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+	publishMu.Lock()
+	defer publishMu.Unlock()
+	for i, u := range updates {
+		u.cache.Store(u.key, u.value)
+		if i == 0 && publishTestHook != nil {
+			publishTestHook()
+		}
+	}
+	cachedFilesGeneration.Add(1)
+}
+
 // cachedFiles are the entries of the caches that ReloadCachedFiles
 // reloads, and the files they were loaded from.
 type cachedFiles struct {
 	keyPairs, combinedKeyPairs map[any]keyPairFiles
 	certPools                  map[string]*x509.CertPool
 	caCertificates             map[string][]*x509.Certificate
-	crls                       map[string][sha256.Size]byte
+	crls                       map[crlWatch][sha256.Size]byte
 }
 
 func snapshotCachedFiles() cachedFiles {
@@ -156,7 +175,7 @@ func snapshotCachedFiles() cachedFiles {
 		combinedKeyPairs: make(map[any]keyPairFiles),
 		certPools:        make(map[string]*x509.CertPool),
 		caCertificates:   make(map[string][]*x509.Certificate),
-		crls:             make(map[string][sha256.Size]byte),
+		crls:             make(map[crlWatch][sha256.Size]byte),
 	}
 	cachedKeyPairs.Range(func(id, files any) bool {
 		entries.keyPairs[id] = files.(keyPairFiles)
@@ -174,8 +193,8 @@ func snapshotCachedFiles() cachedFiles {
 		entries.caCertificates[ca.(string)] = certificates.([]*x509.Certificate)
 		return true
 	})
-	watchedCRLs.Range(func(crl, digest any) bool {
-		entries.crls[crl.(string)] = digest.([sha256.Size]byte)
+	watchedCRLs.Range(func(w, digest any) bool {
+		entries.crls[w.(crlWatch)] = digest.([sha256.Size]byte)
 		return true
 	})
 	return entries
@@ -196,8 +215,11 @@ func (c cachedFiles) paths() []string {
 	for ca := range c.caCertificates {
 		paths = append(paths, ca)
 	}
-	for crl := range c.crls {
-		paths = append(paths, crl)
+	for w := range c.crls {
+		paths = append(paths, w.crl)
+		if w.ca != "" {
+			paths = append(paths, w.ca)
+		}
 	}
 	slices.Sort(paths)
 	return slices.Compact(paths)
@@ -241,6 +263,9 @@ func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
 			updates = append(updates, cacheUpdate{cache: &certPools, key: ca, value: fresh})
 		}
 	}
+	// The CA certificates that CRLs are validated under: the ones
+	// this read loads, or else the ones in the cache.
+	readCAs := make(map[string][]*x509.Certificate)
 	for ca, cached := range c.caCertificates {
 		fresh, err := readx509Certificates(ca)
 		if err != nil {
@@ -249,22 +274,40 @@ func (c cachedFiles) read() (updates []cacheUpdate, errs []error) {
 		}
 		if !slices.EqualFunc(fresh, cached, (*x509.Certificate).Equal) {
 			updates = append(updates, cacheUpdate{cache: &caCertificates, key: ca, value: fresh})
+			readCAs[ca] = fresh
 		}
 	}
-	for crl, seen := range c.crls {
-		digest, err := fileDigest(crl)
+	for w, seen := range c.crls {
+		body, err := os.ReadFile(w.crl)
 		if err != nil {
-			errs = append(errs, vterrors.Wrapf(err, "failed to read crl file: %s", crl))
+			errs = append(errs, vterrors.Wrapf(err, "failed to read crl file: %s", w.crl))
 			continue
 		}
-		if digest == seen {
+		digest := sha256.Sum256(body)
+		issuers, caChanged := readCAs[w.ca]
+		if digest == seen && !caChanged {
 			continue
 		}
-		if _, err := loadCRLSet(crl); err != nil {
-			errs = append(errs, vterrors.Wrapf(err, "cannot use the CRL file %s; the CRLs last loaded from it stay in use", crl))
+		if w.ca != "" && !caChanged {
+			if issuers, err = loadx509Certificates(w.ca); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+		// Validated as ClientConfig will use it, since a CRL that its
+		// CA does not validate would have ClientConfig fall back to the
+		// CRLs last loaded from the file.
+		crls, err := parseCRLSet(w.crl, body)
+		if err == nil {
+			_, err = newCRLCheckerFrom(crls, issuers)
+		}
+		if err != nil {
+			errs = append(errs, vterrors.Wrapf(err, "cannot use the CRL file %s under the CA file %s; the CRLs last loaded from it stay in use", w.crl, w.ca))
 			continue
 		}
-		updates = append(updates, cacheUpdate{cache: &watchedCRLs, key: crl, value: digest})
+		if digest != seen {
+			updates = append(updates, cacheUpdate{cache: &watchedCRLs, key: w, value: digest})
+		}
 	}
 	return updates, errs
 }
@@ -298,12 +341,18 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 			return nil, err
 		}
 	}
-	crls, err := loadCRLSet(crl)
+	// The CRL is read once, so that the digest the file is watched
+	// from is the digest of the CRLs checked against.
+	body, err := os.ReadFile(crl)
 	if err == nil {
-		var checker *crlChecker
-		if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
-			lastValidCRLs.Store(crl, crls)
-			return checker, nil
+		var crls []*x509.RevocationList
+		if crls, err = parseCRLSet(crl, body); err == nil {
+			var checker *crlChecker
+			if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
+				lastValidCRLs.Store(crl, crls)
+				watchCRL(crlWatch{crl: crl, ca: ca}, sha256.Sum256(body))
+				return checker, nil
+			}
 		}
 	}
 	last, ok := lastValidCRLs.Load(crl)
