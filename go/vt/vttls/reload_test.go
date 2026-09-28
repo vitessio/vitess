@@ -375,3 +375,53 @@ func TestReloadCachedFilesKeepsConfigurationsWhole(t *testing.T) {
 	rotated.requireServes(news[1], news[1])
 	badCRL.requireServes(olds[2], olds[2])
 }
+
+// TestReloadCachedFilesRereadsWhenConfigurationsRegister checks that a
+// configuration that registers while ReloadCachedFiles reads the
+// files, using together entries that the reload took as unrelated, is
+// taken into account: here a key pair that fails to load, used so far
+// without a CA, and a CA that another configuration uses and that
+// changed, which must then be held back with the key pair rather than
+// reloaded.
+func TestReloadCachedFilesRereadsWhenConfigurationsRegister(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installKeyPair(oldCerts)
+	files.installTrust(oldCerts)
+	other := newClientFiles(t)
+	other.installKeyPair(oldCerts)
+
+	build := func(cert, key, ca string) *tls.Config {
+		t.Helper()
+		config, err := ClientConfig(VerifyIdentity, cert, key, ca, "", "", tls.VersionTLS12)
+		require.NoError(t, err)
+		return config
+	}
+	build(files.cert, files.key, files.ca)
+	build(other.cert, other.key, "")
+
+	// The CA is replaced, and the other key pair is halfway through
+	// its rotation.
+	files.installTrust(newCerts)
+	other.copy(other.cert, newCerts.ClientCert)
+
+	var attempts int
+	reloadTestHook = func() {
+		attempts++
+		if attempts == 1 {
+			build(other.cert, other.key, files.ca)
+		}
+	}
+	t.Cleanup(func() { reloadTestHook = nil })
+
+	_, err := ReloadCachedFiles()
+	require.ErrorContains(t, err, other.key)
+	require.Greater(t, attempts, 1, "the reload must be read again once a configuration registered")
+
+	config := build(other.cert, other.key, files.ca)
+	require.Equal(t, loadOneCert(t, oldCerts.ClientCert).Raw, config.Certificates[0].Certificate[0])
+	want, err := readx509CertPool(oldCerts.ServerCA)
+	require.NoError(t, err)
+	require.True(t, want.Equal(config.RootCAs), "the CA must be held back with the key pair it is now used with")
+}
