@@ -17,7 +17,10 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -147,6 +151,32 @@ func (env *relayLogTestEnv) assertRelayLogKept(t *testing.T) {
 	assert.Equal(t, relayLogTestServerUUID+":1-210", env.mysqld.CurrentRelayLogPosition.GTIDSet.String(), "the relay log must be kept")
 }
 
+// lockedBuffer is a bytes.Buffer that is safe for concurrent writes.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// captureLogs collects what is logged until the test ends.
+func captureLogs(t *testing.T) *lockedBuffer {
+	logs := &lockedBuffer{}
+	old := log.SwapLogger(slog.New(slog.NewTextHandler(logs, nil)))
+	t.Cleanup(func() { log.SwapLogger(old) })
+	return logs
+}
+
 func setReplicationPreserveRelayLogs(t *testing.T, enabled bool) {
 	old := replicationPreserveRelayLogs
 	replicationPreserveRelayLogs = enabled
@@ -203,10 +233,10 @@ func TestRepointStartsStoppedApplierToPreserveRelayLog(t *testing.T) {
 	env.assertRelayLogKept(t)
 }
 
-// TestRepointDiscardsRelayLogWhenApplierCannotRun checks that when the applier cannot run, the
-// repoint falls back to the full reconfiguration, as before: it discards the relay log, which
-// loses nothing, as the new primary has every transaction in it. The receiver is started again
-// if replication is to run.
+// TestRepointDiscardsRelayLogWhenApplierCannotRun checks that when the applier cannot run and the
+// replica is pointed at a different source, the repoint falls back to the full reconfiguration,
+// as before: it discards the relay log, whose transactions the new primary has, and logs them.
+// The receiver is started again if replication is to run.
 func TestRepointDiscardsRelayLogWhenApplierCannotRun(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -241,6 +271,7 @@ func TestRepointDiscardsRelayLogWhenApplierCannotRun(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			logs := captureLogs(t)
 			env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
 			env.mysqld.Replicating = false
 			tc.setup(env)
@@ -250,6 +281,8 @@ func TestRepointDiscardsRelayLogWhenApplierCannotRun(t *testing.T) {
 			require.NoError(t, env.mysqld.CheckSuperQueryList())
 			assert.Equal(t, relayLogTestPrimaryHost, env.mysqld.CurrentSourceHost)
 			assert.Equal(t, env.mysqld.CurrentPrimaryPosition, env.mysqld.CurrentRelayLogPosition, "the relay log must be discarded")
+			assert.Contains(t, logs.String(), "discarding the relay log to change the replication source: the replication applier cannot run")
+			assert.Contains(t, logs.String(), relayLogTestServerUUID+":201-210")
 		})
 	}
 }
@@ -272,26 +305,79 @@ func TestRepointWithStoppedApplierAndNothingUnappliedUsesFullReconfiguration(t *
 	require.NoError(t, env.mysqld.CheckSuperQueryList())
 }
 
-// TestRepointWithStoppedApplierDiscardsSourcesUncommittedTransactions checks that when the
-// applier cannot be started, the relay log is discarded even though the new primary's executed
-// position lacks some of its own unapplied transactions: the primary wrote them to its binary
-// log before sending them, and sends them again. They are not committed on the primary yet, or
-// were committed after its position was read.
-func TestRepointWithStoppedApplierDiscardsSourcesUncommittedTransactions(t *testing.T) {
-	// The primary has executed only 1-205 of the 1-210 the replica received.
-	env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestServerUUID+":1-205")
-	env.mysqld.Replicating = false
-	env.mysqld.StartSQLThreadError = vterrors.New(vtrpcpb.Code_UNKNOWN, "applier cannot start")
+// TestRepointKeepsRelayLogWhenApplierCannotRunAndSourceUnchanged covers VTOrc's repair of a
+// replica whose applier cannot run: it repoints to the primary the replica already replicates
+// from, with a heartbeat interval. Any change of the replication source would discard the relay
+// log, so the receiver is restarted on it instead. The relay log holds transactions the primary
+// has not committed yet, or committed after its position was read: the primary has executed only
+// 1-205 of the 1-210 the replica received.
+func TestRepointKeepsRelayLogWhenApplierCannotRunAndSourceUnchanged(t *testing.T) {
+	testCases := []struct {
+		name string
+		// setup prepares the replica's stopped applier.
+		setup func(env *relayLogTestEnv)
+		// forceStart makes SetReplicationSource start replication afterwards.
+		forceStart bool
+		expected   []string
+	}{
+		{
+			name:       "replication is to stay stopped",
+			setup:      func(env *relayLogTestEnv) {},
+			forceStart: false,
+			expected:   []string{"STOP REPLICA IO_THREAD"},
+		},
+		{
+			name: "applier does not start",
+			setup: func(env *relayLogTestEnv) {
+				env.mysqld.StartSQLThreadError = vterrors.New(vtrpcpb.Code_UNKNOWN, "applier cannot start")
+			},
+			forceStart: true,
+			expected:   []string{"STOP REPLICA IO_THREAD", "START REPLICA SQL_THREAD", "START REPLICA"},
+		},
+		{
+			name:       "applier stops again",
+			setup:      func(env *relayLogTestEnv) { env.mysqld.SQLThreadStopsOnStart = true },
+			forceStart: true,
+			expected:   []string{"STOP REPLICA IO_THREAD", "START REPLICA SQL_THREAD", "START REPLICA"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestServerUUID+":1-205")
+			env.mysqld.Replicating = false
+			tc.setup(env)
+			env.mysqld.ExpectedExecuteSuperQueryList = tc.expected
+
+			require.NoError(t, env.tm.SetReplicationSource(t.Context(), env.parent, 0, "", tc.forceStart, false, 15))
+			require.NoError(t, env.mysqld.CheckSuperQueryList())
+			env.assertRelayLogKept(t)
+		})
+	}
+}
+
+// TestRepointLogsRelayLogDiscardedByReceiverChange checks the applier stopping right before the
+// receiver-only change: MySQL then discards the relay log, which the repoint cannot prevent, but
+// logs.
+func TestRepointLogsRelayLogDiscardedByReceiverChange(t *testing.T) {
+	logs := captureLogs(t)
+	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
 	env.mysqld.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA IO_THREAD",
-		"START REPLICA SQL_THREAD",
-		"STOP REPLICA",
-		"FAKE SET SOURCE",
+		"FAKE SET SOURCE RECEIVER",
 		"START REPLICA",
 	}
+	env.mysqld.ExecuteSuperQueryListCallback = func() {
+		if env.mysqld.ExpectedExecuteSuperQueryCurrent == 1 {
+			// The applier stops right before the receiver-only change.
+			env.mysqld.Replicating = false
+		}
+	}
 
-	require.NoError(t, env.setReplicationSource(t, 15))
+	require.NoError(t, env.setReplicationSource(t, 0))
 	require.NoError(t, env.mysqld.CheckSuperQueryList())
+	assert.Equal(t, env.mysqld.CurrentPrimaryPosition, env.mysqld.CurrentRelayLogPosition, "the relay log must be discarded")
+	assert.Contains(t, logs.String(), "the replication applier stopped before the replication receiver was changed, which discarded the relay log")
+	assert.Contains(t, logs.String(), relayLogTestServerUUID+":201-210")
 }
 
 // TestRepointRefusesTransactionsReceivedWhileStoppingReceiver checks that the relay log is
