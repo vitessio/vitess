@@ -2723,6 +2723,13 @@ func TestReserveExecute_ParseSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
 
+	// the streaming path finds the mode on the reserved connection as well
+	streamConcatQuery := "select concat('a', 'b') from dual"
+	db.AddQuery(streamConcatQuery, &sqltypes.Result{})
+	err = tsv.StreamExecute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, 0, state.ReservedID, &querypb.ExecuteOptions{}, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(streamConcatQuery))
+
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)
 }
@@ -2829,6 +2836,13 @@ func TestInBandSetMakesTheConnectionSettingStale(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, db.QueryLog(), "sql_mode = 'pipes_as_concat'", "the settings must be applied again after the in-band SET")
 
+	// and the connection is read under the settings' mode again
+	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	db.AddQuery(concatQuery, &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, beginState.TransactionID, 0, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
+
 	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
 	require.NoError(t, err)
 }
@@ -2848,23 +2862,31 @@ func TestInBandSetClosesTheConnectionOnRelease(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	settings := []string{"set sql_safe_updates = 1"}
 
-	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	require.Equal(t, int64(0), beginState.ReservedID, "a settings-pool transaction is not a true reservation")
-	_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "set sql_mode = 'PIPES_AS_CONCAT'", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
-	require.NoError(t, err)
+	for _, queryBeforeCommit := range []bool{false, true} {
+		beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+		require.NoError(t, err)
+		require.Equal(t, int64(0), beginState.ReservedID, "a settings-pool transaction is not a true reservation")
+		_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "set sql_mode = 'PIPES_AS_CONCAT'", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+		require.NoError(t, err)
+		if queryBeforeCommit {
+			// applying the settings again restores their own variables only;
+			// the SET's change stays on the session
+			_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+		}
+		_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+		require.NoError(t, err)
 
-	// the connection was closed at commit, so the next transaction with the
-	// same settings opens a fresh one and applies them again; a recycled
-	// connection would have been handed over with the settings marked applied
-	db.ResetQueryLog()
-	beginState, _, err = tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.Contains(t, db.QueryLog(), "sql_safe_updates = 1", "the settings must be applied on a fresh connection")
-	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
-	require.NoError(t, err)
+		// the connection was closed at commit, so the next transaction with the
+		// same settings opens a fresh one and applies them again; a recycled
+		// connection would have been handed over with the settings marked applied
+		db.ResetQueryLog()
+		beginState, _, err = tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, db.QueryLog(), "sql_safe_updates = 1", "the settings must be applied on a fresh connection (query before commit: %t)", queryBeforeCommit)
+		_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+		require.NoError(t, err)
+	}
 }
 
 // A post-begin query runs on the transaction's connection under the same rule

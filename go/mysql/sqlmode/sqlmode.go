@@ -281,11 +281,12 @@ var unsupportedModes = []Mode{
 // Validate parses and validates an sql_mode assignment value the way MySQL does, and
 // additionally rejects the modes that change how SQL text is interpreted (LexerModes),
 // except those in honored: the lexer modes the caller's parser reads SQL under
-// (sqlparser.HonoredSQLModes at vtgate; vttablet honors none). It returns the expanded
-// mode, whose String form is the canonical value MySQL would report back for @@sql_mode.
-// Both vtgate (SET statements) and vttablet (settings, SET_VAR hints, SET statements
-// from older vtgates or direct clients) validate with this, so the same value fails with
-// the same error at either layer.
+// (sqlparser.HonoredSQLModes for a layer that parses under them, 0 for one that runs
+// Vitess-formatted SQL with no parser involved). It returns the expanded mode, whose
+// String form is the canonical value MySQL would report back for @@sql_mode. Both
+// vtgate (SET statements) and vttablet (settings, SET statements from older vtgates or
+// direct clients) validate with this, so the same value fails with the same error at
+// either layer; SET_VAR hints are not judged, MySQL judges those itself.
 func Validate(value sqltypes.Value, honored Mode) (Mode, error) {
 	mode, err := FromValue(value)
 	if err != nil {

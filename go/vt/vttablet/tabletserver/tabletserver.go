@@ -1281,8 +1281,9 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
-	// The default parse mode is used: a query that only parses under a session's
-	// lexer modes simply skips hot row protection.
+	// The default parse mode is used: the key only groups queries for hot row
+	// protection, so a query read differently under a session's lexer modes, or
+	// not at all, is grouped as its default reading is, or skips the protection.
 	sql, _ = sqlparser.SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, 0, false, false)
 	if err != nil {
