@@ -48,8 +48,8 @@ func (s *Setting) SQLMode() uint64 {
 }
 
 // SetsSQLMode reports whether the settings assign sql_mode at all. Settings that
-// do not leave a connection's session in whatever mode it already is, which its
-// recorded parse-relevant bits, not this setting's, describe.
+// do not assign it leave a connection's session in whatever mode it is already
+// in, which the connection's recorded parse-relevant bits describe, not SQLMode.
 func (s *Setting) SetsSQLMode() bool {
 	return s.setsSQLMode
 }
