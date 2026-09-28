@@ -40,9 +40,10 @@ type reloadingCreds struct {
 
 	mu sync.Mutex
 	// generation is the vttls.CachedFilesGeneration creds was built
-	// at, or last tried to be built again at.
-	generation uint64
-	creds      credentials.TransportCredentials
+	// at, and failedGeneration the last one creds failed to be built
+	// again at, which was logged.
+	generation, failedGeneration uint64
+	creds                        credentials.TransportCredentials
 }
 
 func newReloadingCreds(build func() (*tls.Config, error)) (*reloadingCreds, error) {
@@ -55,19 +56,24 @@ func newReloadingCreds(build func() (*tls.Config, error)) (*reloadingCreds, erro
 }
 
 // current returns the credentials built from what the files hold now.
-// When they cannot be built, the previous ones stay in use until the
-// files change again.
+// When they cannot be built, for instance while a file is being
+// replaced, the previous ones stay in use, and building them is tried
+// again on the next handshake: nothing may reload the files again once
+// the file is back as it was.
 func (c *reloadingCreds) current() credentials.TransportCredentials {
 	generation := vttls.CachedFilesGeneration()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if generation != c.generation {
-		c.generation = generation
 		config, err := c.build()
 		if err != nil {
-			log.Error(vterrors.Wrapf(err, "cannot build the gRPC client's TLS config from the reloaded files; its connections keep using the previous one").Error())
+			if c.failedGeneration != generation {
+				c.failedGeneration = generation
+				log.Error(vterrors.Wrapf(err, "cannot build the gRPC client's TLS config from the reloaded files; its connections keep using the previous one, and building it is tried again on their next handshake").Error())
+			}
 		} else {
 			c.creds = credentials.NewTLS(config)
+			c.generation = generation
 		}
 	}
 	return c.creds
