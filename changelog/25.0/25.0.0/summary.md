@@ -539,7 +539,7 @@ See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
 
 VTTablet now keeps a MySQL 8.0.26+ replica's relay log when it repoints replication that uses GTID auto-positioning (reparents, VTOrc's replica repairs, tablet startup), so received but unapplied transactions, which a semi-sync primary may already have reported as committed, are no longer discarded. A replica whose relay log holds another server's transactions that the shard primary lacks now fails to start, as it does for errant GTIDs in its executed set. MariaDB and file-position replication still discard the relay log when repointed.
 
-The repoint no longer stops the replica's applier, so it no longer waits for a busy or blocked applier. `EmergencyReparentShard` can therefore repoint such a replica at once and count it as a semi-sync acker of the new primary.
+Changing a replica's replication source no longer stops its applier, so it no longer waits for a busy or blocked applier. `EmergencyReparentShard` can therefore repoint such a replica to the new primary at once and count it as a semi-sync acker. Restarting replication without changing the source still stops the applier.
 
 The new VTTablet flag `--replication-preserve-relay-logs` (default `true`) restores the previous behavior when set to `false`.
 
