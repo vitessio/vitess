@@ -18,7 +18,9 @@ package chaos
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +35,39 @@ func (c *Chaos) KillMysqld(n *Node, noRestart bool) {
 	}
 	p := signalGroup(n.Group, syscall.SIGKILL, "mysqld")
 	c.Log.Add("fault", fmt.Sprintf("kill -9 mysqld of %s pids=%v", n.Tablet.Alias, p))
+	if noRestart {
+		// A mysqld blocked in the kernel (e.g. in fsync) takes a moment to exit; mysqld_safe
+		// refuses to start while it still exists ("A mysqld process already exists").
+		waitExited(p, 30*time.Second)
+		// An exited mysqld whose parent (mysqld_safe) was killed stays a zombie until the
+		// container's init reaps it, and mysqld_safe's "kill -0 <pid-file pid>" check treats a
+		// zombie as running. The process is gone, so its pid file is stale.
+		pidFile := path.Join(n.DataDir(), "mysql.pid")
+		if err := os.Remove(pidFile); err == nil {
+			c.Log.Add("fault", "removed stale "+pidFile)
+		}
+	}
+}
+
+// waitExited waits until none of pids is alive (zombies count as exited).
+func waitExited(pids []int, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		alive := false
+		for _, pid := range pids {
+			b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+			if err != nil {
+				continue
+			}
+			if f := strings.Fields(string(b)); len(f) > 2 && f[2] != "Z" && f[2] != "X" {
+				alive = true
+			}
+		}
+		if !alive {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // RestartMysqld starts a crashed mysqld again (mysqlctl start).
