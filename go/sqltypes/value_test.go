@@ -446,6 +446,10 @@ func TestEncodeStringSQL(t *testing.T) {
 			in:  "\x00'\"\b\n\r\t\x1A\\",
 			out: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 		},
+		{
+			in:  "a\xffb",
+			out: "'a\xffb'",
+		},
 	}
 	for _, tcase := range testcases {
 		out := EncodeStringSQL(tcase.in)
