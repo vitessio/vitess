@@ -69,6 +69,7 @@
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
+        - [Server TLS files reload without a restart](#tls-reload)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -789,3 +790,22 @@ Several configurations that used to connect with the CRL silently ignored are no
 - A delta CRL, an indirect CRL, or a CRL that its issuing distribution point limits to end-entity certificates, to CA certificates, to attribute certificates, or to some revocation reasons: only complete CRLs are supported. A CRL that names its distribution point without limiting itself otherwise is accepted, and every such partition of an issuer's CRL is applied.
 - A CRL that carries a critical extension other than the issuing distribution point, on the list or on an entry.
 - A CRL whose `thisUpdate` lies more than five minutes in the future, so that a CRL staged ahead of time cannot supersede the current one. Provide the current CRL, and check the clocks.
+
+#### <a id="tls-reload"/>Server TLS files reload without a restart</a>
+
+The gRPC server of each Vitess component that serves gRPC, and VTGate's MySQL server, now reload their TLS files from disk without a restart. Certificates, CAs, and CRLs can be rotated while the process keeps serving. Established connections keep their TLS configuration; new connections use the reloaded files. A reload happens in two ways:
+
+- On `SIGHUP`, the server always reloads its TLS files. VTGate's MySQL server already handled `SIGHUP`, but it reused the files it had read at startup. Changes on disk did not take effect.
+- The new `--tls-reload-interval` flag, available on `vtgate`, `vttablet`, `vtctld`, `mysqlctld`, `vtcombo`, and `vttestserver`, sets how often the server checks its TLS files and reloads them when their contents changed. The default, `0`, turns off interval checks.
+
+The reloaded files are those of `--grpc-cert`, `--grpc-key`, `--grpc-ca`, `--grpc-crl`, and `--grpc-server-ca`, and of `--mysql-server-ssl-cert`, `--mysql-server-ssl-key`, `--mysql-server-ssl-ca`, `--mysql-server-ssl-crl`, and `--mysql-server-ssl-server-ca`. Client-side TLS files, such as `--tablet-grpc-cert`, are not reloaded. When the CA file changes, TLS sessions established before the reload can no longer be resumed, so clients are verified against the new CA. A reload that fails, for example because a key does not match its certificate, logs an error and leaves the previous TLS configuration in place.
+
+New metrics, each labeled by `Server` (`grpc` or `mysql`):
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `TLSReloadSuccessTimestamp` | gauge | Unix time of the last successful load of the server's TLS files. |
+| `TLSReloadErrors` | counter | Number of failed reloads of the server's TLS files. |
+| `TLSCertNotAfter` | gauge | Unix time at which the certificate the server presents expires. |
+
+See [#21255](https://github.com/vitessio/vitess/pull/21255) for details.
