@@ -329,3 +329,49 @@ func TestReloadCachedFilesPublishesAtOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, want.Equal(b.config.RootCAs))
 }
+
+// TestReloadCachedFilesKeepsConfigurationsWhole checks that a file
+// that fails to load holds back the reload of the files it is used
+// with, so that its configuration keeps all of its files from before
+// the reload rather than taking some from after it, while another
+// configuration, sharing no file with it, reloads.
+func TestReloadCachedFilesKeepsConfigurationsWhole(t *testing.T) {
+	var olds, news []tlstest.ClientServerKeyPairs
+	for range 3 {
+		olds = append(olds, tlstest.CreateClientServerCertPairs(t.TempDir()))
+		news = append(news, tlstest.CreateClientServerCertPairs(t.TempDir()))
+	}
+	var clients []clientFiles
+	for i := range 3 {
+		files := newClientFiles(t)
+		files.installKeyPair(olds[i])
+		files.installTrust(olds[i])
+		files.requireServes(olds[i], olds[i])
+		clients = append(clients, files)
+	}
+	halfRotated, rotated, badCRL := clients[0], clients[1], clients[2]
+
+	// The CA and the certificate are replaced, but the key is not yet.
+	halfRotated.installTrust(news[0])
+	halfRotated.copy(halfRotated.cert, news[0].ClientCert)
+
+	rotated.installKeyPair(news[1])
+	rotated.installTrust(news[1])
+
+	// Everything is replaced, but the CRL is not valid under the new CA.
+	badCRL.installKeyPair(news[2])
+	badCRL.installTrust(news[2])
+	newCA := loadOneCert(t, news[2].ServerCA)
+	other, otherKey := selfSignedCA(t, 1, "", newCA.RawSubject)
+	require.NoError(t, os.WriteFile(badCRL.crl, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, other, otherKey)}), 0o600))
+
+	changed, err := ReloadCachedFiles()
+	require.True(t, changed)
+	require.ErrorContains(t, err, halfRotated.key)
+	require.ErrorContains(t, err, "cannot use the CRL file "+badCRL.crl)
+	requireNoErrorFor(t, err, path.Dir(rotated.cert))
+
+	halfRotated.requireServes(olds[0], olds[0])
+	rotated.requireServes(news[1], news[1])
+	badCRL.requireServes(olds[2], olds[2])
+}
