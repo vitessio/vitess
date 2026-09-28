@@ -3304,6 +3304,23 @@ func TestCallInTransactionDiscardsConnOnRelease(t *testing.T) {
 		require.NoError(t, err)
 		callConnDiscarded(t, db, tsv)
 	})
+	t.Run("streamed CALL whose client went away", func(t *testing.T) {
+		// a failed stream closes the transaction's connection right away; that
+		// loss is not the discard policy's, so the release does not count it
+		ctx := t.Context()
+		db, tsv := setup(t)
+		rows := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+		rows.StatusFlags = sqltypes.ServerStatusInTrans
+		db.AddQuery(query, rows)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		err = tsv.StreamExecute(ctx, nil, target, query, nil, state.TransactionID, 0, nil, func(*sqltypes.Result) error { return errors.New("client went away") })
+		require.ErrorContains(t, err, "client went away")
+
+		_, _ = tsv.Rollback(ctx, target, state.TransactionID)
+		assert.Zero(t, discarded(tsv), "a connection already closed must not be counted as discarded")
+	})
 	t.Run("failed CALL, then commit", func(t *testing.T) {
 		// a procedure that dirtied the session and then failed leaves the same
 		// residue as one that succeeded, and the transaction stays usable

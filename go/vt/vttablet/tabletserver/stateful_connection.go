@@ -314,11 +314,13 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 			sc.pool.tempTableUnmanaged.Add(-1)
 		}
 	}
-	if sc.sessionDiverged && !sc.tainted {
+	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
 		// The MySQL session carries state the pool cannot see or undo, and the
 		// pool would hand the connection to the next request as if it were
 		// fresh: discard it instead, and the pool opens a replacement and counts
-		// the loss. A tainted connection never returns to the pool.
+		// the loss. A tainted connection never returns to the pool, and one
+		// already closed, by a timeout or a failed stream, was lost for another
+		// reason and is not counted as discarded.
 		sc.dbConn.Discard()
 	}
 	sc.dbConn.Recycle()
