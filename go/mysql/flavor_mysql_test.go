@@ -198,7 +198,7 @@ func TestMysql9SetReplicationSourceCommandSSL(t *testing.T) {
 	assert.Equal(t, want, got, "mysqlFlavor9.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 }
 
-// TestSetReplicationSourceReceiverCommand checks that the MySQL 8.0+ flavors change only the
+// TestSetReplicationSourceReceiverCommand checks that the MySQL 8.0.26+ flavors change only the
 // receiver options: the same options as the full command, without SOURCE_AUTO_POSITION, which
 // MySQL refuses while the applier is running (ERROR 3081).
 func TestSetReplicationSourceReceiverCommand(t *testing.T) {

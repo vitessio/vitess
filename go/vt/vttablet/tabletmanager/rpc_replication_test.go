@@ -827,7 +827,7 @@ func TestHandleRecoverableReplicationInitializationError(t *testing.T) {
 				},
 			}
 
-			err := tm.handleRecoverableReplicationInitError(t.Context(), tc.inputErr, replicationSource{})
+			err := tm.handleRecoverableReplicationInitError(t.Context(), tc.inputErr)
 			if tc.shouldRestart {
 				require.NoError(t, err)
 			} else {
@@ -1147,7 +1147,7 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 
 		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
 
-		err := tm.setReplicationSourceRecoverable(t.Context(), "mysql-new-primary", 3306, 0, replicationSource{}, false, false)
+		err := tm.setReplicationSourceRecoverable(t.Context(), "mysql-new-primary", 3306, 0, false, false)
 		require.NoError(t, err)
 		require.Equal(t, 2, setSourceCalls)
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
@@ -1196,7 +1196,7 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 
 		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
 
-		err := tm.setReplicationSourceRecoverable(t.Context(), "mysql-new-primary", 3306, 0, replicationSource{}, false, true)
+		err := tm.setReplicationSourceRecoverable(t.Context(), "mysql-new-primary", 3306, 0, false, true)
 		require.NoError(t, err)
 		require.Equal(t, 2, setSourceCalls)
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)

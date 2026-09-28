@@ -96,10 +96,6 @@ type FakeMysqlDaemon struct {
 	// replication is configured with GTID auto-positioning.
 	AutoPosition bool
 
-	// LastSQLError is returned by ReplicationStatus, as the error the
-	// applier stopped on.
-	LastSQLError string
-
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
@@ -183,8 +179,12 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceReceiverError is used by SetReplicationSourceReceiver.
 	SetReplicationSourceReceiverError error
 
-	// StartSQLThreadError is used by StartSQLThread.
+	// StartSQLThreadError is returned by StartSQLThread, after it records the statement.
 	StartSQLThreadError error
+
+	// SQLThreadStopsOnStart makes StartSQLThread leave the applier stopped, like an applier
+	// that stops again right away on an error.
+	SQLThreadStopsOnStart bool
 
 	// StopReplicationError error is used by StopReplication.
 	StopReplicationError error
@@ -407,7 +407,6 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		SourceHost:   fmd.CurrentSourceHost,
 		SourcePort:   fmd.CurrentSourcePort,
 		AutoPosition: fmd.AutoPosition,
-		LastSQLError: fmd.LastSQLError,
 	}, nil
 }
 
@@ -598,12 +597,16 @@ func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 
 // StartSQLThread is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StartSQLThread(ctx context.Context) error {
-	if fmd.StartSQLThreadError != nil {
-		return fmd.StartSQLThreadError
-	}
-	return fmd.ExecuteSuperQueryList(ctx, []string{
+	replicating := fmd.Replicating
+	if err := fmd.ExecuteSuperQueryList(ctx, []string{
 		"START REPLICA SQL_THREAD",
-	})
+	}); err != nil {
+		return err
+	}
+	if fmd.StartSQLThreadError != nil || fmd.SQLThreadStopsOnStart {
+		fmd.Replicating = replicating
+	}
+	return fmd.StartSQLThreadError
 }
 
 // SetReplicationPosition is part of the MysqlDaemon interface.

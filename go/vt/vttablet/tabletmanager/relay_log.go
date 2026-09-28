@@ -29,11 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // A semi-sync replica acknowledges a transaction once it is written to its relay log, before it
@@ -42,15 +39,20 @@ import (
 // have reported as committed; if the primary is gone before the replica fetches them again, they
 // are lost. MySQL discards the relay log on CHANGE REPLICATION SOURCE when both replication
 // threads are stopped, and on RESET REPLICA.
+//
+// Repointing replication (repointReplication) therefore never loses transactions: it keeps the
+// relay log when it can, and discards it only when the new source has every transaction in it.
+// Resetting replication (RESET REPLICA, and the full CHANGE REPLICATION SOURCE with both threads
+// stopped) discards it unchecked, and is only used where that is needed: to set up replication,
+// and to recover from broken replication metadata, which MySQL refuses to replicate with.
 
-// replicationPreserveRelayLogs enables repointing replication without discarding the relay log,
-// and the checks that refuse to discard it when that would lose transactions.
+// replicationPreserveRelayLogs enables repointing replication without discarding the relay log.
 var replicationPreserveRelayLogs = true
 
 func registerReplicationRelayLogFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &replicationPreserveRelayLogs, "replication-preserve-relay-logs", replicationPreserveRelayLogs,
-		"Keep the relay log when repointing a MySQL 8.0+ replica that uses GTID auto-positioning: only the replication receiver is stopped and reconfigured while the applier keeps running, "+
-			"so received but unapplied transactions (possibly acknowledged to a semi-sync primary) are not discarded. Operations that must discard the relay log proceed only if the replication source has every discarded transaction. "+
+		"Keep the relay log when repointing a MySQL 8.0.26+ replica that uses GTID auto-positioning: only the replication receiver is stopped and reconfigured while the applier keeps running, "+
+			"so received but unapplied transactions (possibly acknowledged to a semi-sync primary) are not discarded. A repoint whose replica received transactions of another server that the new source lacks fails, instead of applying or discarding them. "+
 			"Set to false to restore the previous behavior of stopping both replication threads, which discards the relay log.")
 }
 
@@ -58,10 +60,6 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerReplicationRelayLogFlags)
 	servenv.OnParseFor("vttablet", registerReplicationRelayLogFlags)
 }
-
-// relayLogLossRemedy ends a refusal to lose relay log transactions that the new replication
-// source lacks, with the ways to proceed.
-const relayLogLossRemedy = "; to proceed, restore the replica from a backup, or run VTTablet with --replication-preserve-relay-logs=false to discard them"
 
 // unappliedRelayLogGTIDs returns the GTIDs the replica has received into its relay log but not
 // applied yet. ok is false when the positions are not MySQL GTID sets, in which case the relay
@@ -79,22 +77,10 @@ func unappliedRelayLogGTIDs(status replication.ReplicationStatus) (unapplied rep
 }
 
 // replicationSource is what is known of the replication source a replica will replicate from:
-// its tablet, its executed GTID position and its server UUID. The zero value means they are
-// unknown.
+// its executed GTID position and its server UUID.
 type replicationSource struct {
-	tablet   *topodatapb.Tablet
 	position replication.Position
 	uuid     replication.SID
-}
-
-// known reports whether the replication source is known.
-func (source replicationSource) known() bool {
-	return source.tablet != nil
-}
-
-// logAttr returns the source's tablet alias as a log attribute.
-func (source replicationSource) logAttr() slog.Attr {
-	return slog.String("source_tablet", topoproto.TabletAliasString(source.tablet.GetAlias()))
 }
 
 // lacks returns the GTIDs in gtids that the source does not have.
@@ -116,84 +102,37 @@ func (source replicationSource) lacks(gtids replication.Mysql56GTIDSet) replicat
 	return gtids.Difference(sourceGTIDs)
 }
 
-// checkRelayLogDiscard decides whether an operation that discards the relay log may proceed,
-// given the replica's replication status, which must be final (the receiver stopped).
-// Discarded transactions can only come back by fetching them again from the replication
-// source, so it refuses with FAILED_PRECONDITION if the source the replica will replicate from
-// lacks any of them. When the source is unknown, it logs the transactions that the source must
-// still provide.
-func checkRelayLogDiscard(status replication.ReplicationStatus, source replicationSource, operation string) error {
-	if !replicationPreserveRelayLogs {
-		return nil
-	}
-	unapplied, ok := unappliedRelayLogGTIDs(status)
-	if !ok || unapplied.Empty() {
-		return nil
-	}
-	if !source.known() {
-		log.Warn("discarding the relay log with received but unapplied transactions. The replication source must send them again; any it no longer has are lost.",
-			slog.String("operation", operation), slog.String("unapplied", unapplied.String()))
-		return nil
-	}
-	if lost := source.lacks(unapplied); !lost.Empty() {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"refusing to %s: it discards the relay log, and the new replication source (executed %s) lacks these received but unapplied transactions, which would be lost: %s"+relayLogLossRemedy,
-			operation, source.position, lost)
-	}
-	log.Info("discarding the relay log; its unapplied transactions will be fetched again from the replication source, which has them",
-		slog.String("operation", operation), slog.String("unapplied", unapplied.String()), source.logAttr())
-	return nil
-}
-
-// checkRelayLogDiscardBefore reads the replication status and applies checkRelayLogDiscard. If
-// the status cannot be read, the relay log contents are unknown: it refuses when the source is
-// known, and only logs that otherwise.
-func (tm *TabletManager) checkRelayLogDiscardBefore(ctx context.Context, source replicationSource, operation string) error {
-	if !replicationPreserveRelayLogs {
-		return nil
-	}
-	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-	if errors.Is(err, mysql.ErrNotReplica) {
-		return nil
-	}
-	if err != nil {
-		if source.known() {
-			return vterrors.Wrapf(err, "refusing to %s: it discards the relay log, and the replication status cannot be read to check what it holds", operation)
-		}
-		log.Warn("cannot read the replication status to check what the operation discards from the relay log",
-			slog.String("operation", operation), slog.Any("error", err))
-		return nil
-	}
-	return checkRelayLogDiscard(status, source, operation)
-}
-
 // repointReplication points replication at host:port, and starts it afterwards if
 // startReplicationAfter is set. source is the new replication source.
 //
-// For MySQL 8.0.22 and later with GTID auto-positioning, which is how Vitess configures
-// replication, it first stops the receiver, so that the relay log contents are final when it
-// checks them, and then changes only the receiver options while the applier runs, which makes
-// MySQL keep the relay log (MySQL keeps it if at least one replication thread is running).
-//
-// Otherwise it reconfigures the whole channel, stopping both threads first, which discards the
-// relay log: for first-time setup (there is no relay log to lose), for replication that Vitess
-// does not manage this way (without MySQL GTIDs, before MySQL 8.0.22, without auto-positioning),
-// when the kill switch is off, and, after making sure the new source has every unapplied relay
-// log transaction (refusing with FAILED_PRECONDITION otherwise), when the applier is stopped and
-// cannot be started, or stopped on an error.
+// For MySQL 8.0.26 and later with GTID auto-positioning, which is how Vitess configures
+// replication, it stops the receiver, so that the relay log contents are final when it checks
+// them, and changes only the receiver options while the applier runs, which makes MySQL keep the
+// relay log (MySQL keeps it if at least one replication thread is running). A stopped applier is
+// started first if replication is to run afterwards, also when it stopped on an error: if it
+// stops again before the change, the relay log is discarded as below; otherwise it is kept,
+// including a relay log the applier cannot read, until a later repoint finds the applier stopped.
 //
 // It refuses with FAILED_PRECONDITION when the replica received transactions of other servers
 // that the new source lacks: applying them would introduce errant GTIDs, and discarding them would
-// lose them. It stops the applier in that case, so the unapplied ones stay unapplied. SetReplicationSource's own
-// errant GTID check covers the relay log and refuses most of those before it gets here; this check
-// also covers what the receiver wrote until it stopped, and tablet startup, which checks only the
-// executed GTIDs.
+// lose them. It stops the applier in that case, so the unapplied ones stay unapplied.
+// SetReplicationSource's own errant GTID check covers the relay log and refuses most of those
+// before it gets here; this check also covers what the receiver wrote until it stopped, and
+// tablet startup, which checks only the executed GTIDs. Once it passes, the new source has every
+// transaction the relay log holds, so discarding the relay log loses nothing.
+//
+// Otherwise it reconfigures the whole channel as before, which discards the relay log: when the
+// applier cannot run (it is to stay stopped, or does not start or stops again), for first-time
+// setup (there is no relay log), for replication that Vitess does not configure this way
+// (without MySQL GTIDs, before MySQL 8.0.26, without auto-positioning), when the kill switch is
+// off, and when the receiver-only change hits broken replication metadata, which only resetting
+// replication repairs.
 func (tm *TabletManager) repointReplication(ctx context.Context, host string, port int32, heartbeatInterval float64, source replicationSource, wasReplicating bool, startReplicationAfter bool) error {
-	if !replicationPreserveRelayLogs {
-		return tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, replicationSource{}, wasReplicating, startReplicationAfter)
-	}
 	fullReconfiguration := func(stopReplicationBefore bool) error {
-		return tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, source, stopReplicationBefore, startReplicationAfter)
+		return tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, stopReplicationBefore, startReplicationAfter)
+	}
+	if !replicationPreserveRelayLogs {
+		return fullReconfiguration(wasReplicating)
 	}
 
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
@@ -213,8 +152,8 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 		return vterrors.Wrapf(err, "failed to check whether the replication receiver can be changed alone")
 	}
 	if !supported || !status.AutoPosition {
-		// Replication that Vitess does not manage, from MySQL before 8.0.22 or configured without
-		// auto-positioning (Vitess always enables it), keeps the previous repoint.
+		// Replication that Vitess does not configure this way, from MySQL before 8.0.26 or
+		// without auto-positioning (Vitess always enables it), keeps the previous repoint.
 		return fullReconfiguration(wasReplicating)
 	}
 
@@ -232,7 +171,7 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 	received, _ := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet)
 	if errant := source.lacks(received); !errant.Empty() {
 		refusal := fmt.Sprintf("refusing to change the replication source: the replica received transactions %s that the new replication source (executed %s) lacks; "+
-			"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them"+relayLogLossRemedy, errant, source.position)
+			"applying them would introduce errant GTIDs, and discarding the unapplied ones would lose them", errant, source.position)
 		if status.SQLHealthy() {
 			// Keep the unapplied ones unapplied. A stop that fails (e.g. times out on a
 			// blocked applier) may still take effect later, after the applier applied more.
@@ -243,32 +182,19 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, refusal)
 	}
 
-	const operation = "change the replication source"
-	discardRelayLog := func() error {
-		if err := checkRelayLogDiscard(status, source, operation); err != nil {
-			return err
-		}
-		return fullReconfiguration(true)
-	}
 	if !status.SQLHealthy() {
-		if unapplied.Empty() {
-			// Nothing to lose: take the regular path, which also resets the applier.
-			return fullReconfiguration(true)
-		}
-		// An applier that stopped on an error is not started: it stops again on the same
-		// transaction within milliseconds, and if it does so before the change, MySQL discards
-		// the relay log without the checks of the discard below.
-		if startReplicationAfter && status.LastSQLError == "" {
-			// Replication is going to run anyway: start the applier first, so the relay log
-			// survives the change. If it fails to start, the relay log will be discarded.
+		// The receiver-only change keeps the relay log only while the applier runs. Replication is
+		// going to run anyway, so start the applier first.
+		if startReplicationAfter && !unapplied.Empty() {
 			if err := tm.MysqlDaemon.StartSQLThread(ctx); err != nil {
-				log.Warn("failed to start the replication applier to preserve the relay log", slog.Any("error", err))
+				log.Warn("failed to start the replication applier to keep the relay log", slog.Any("error", err))
 			} else if status, err = tm.MysqlDaemon.ReplicationStatus(ctx); err != nil {
 				return vterrors.Wrapf(err, "failed to read the replication status after starting the replication applier; the replication receiver is stopped")
 			}
 		}
 		if !status.SQLHealthy() {
-			return discardRelayLog()
+			// The new source has every transaction the relay log holds (checked above).
+			return fullReconfiguration(true)
 		}
 	}
 
@@ -276,14 +202,14 @@ func (tm *TabletManager) repointReplication(ctx context.Context, host string, po
 		if !isRecoverableReplicationInitializationError(err) {
 			return vterrors.Wrapf(err, "failed to change the replication receiver; the replication receiver is stopped")
 		}
-		// The replication metadata is broken; the full reconfiguration resets it.
+		// The replication metadata is broken; only resetting replication repairs it.
 		log.Warn("Encountered recoverable replication initialization error while changing the replication receiver, reconfiguring replication",
 			slog.String("source_host", host), slog.Int("source_port", int(port)), slog.Any("error", err))
-		return discardRelayLog()
+		return fullReconfiguration(true)
 	}
 
 	if !startReplicationAfter {
 		return nil
 	}
-	return tm.startReplicationRecoverable(ctx, source)
+	return tm.startReplicationRecoverable(ctx)
 }

@@ -78,7 +78,6 @@ func relayLogTestSource(t *testing.T, gtids string) replicationSource {
 	uuid, err := replication.ParseSID(relayLogTestServerUUID)
 	require.NoError(t, err)
 	return replicationSource{
-		tablet:   &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 200}},
 		position: mustParseMysql56Position(t, gtids),
 		uuid:     uuid,
 	}
@@ -204,33 +203,64 @@ func TestRepointStartsStoppedApplierToPreserveRelayLog(t *testing.T) {
 	env.assertRelayLogKept(t)
 }
 
-// TestRepointDoesNotStartApplierStoppedOnError checks that an applier that stopped on an error is
-// not started before the change: it would stop again on the same transaction right away, and if
-// it did so before the change, MySQL would discard the relay log without the discard's checks.
-// The relay log goes through the checked discard instead.
-func TestRepointDoesNotStartApplierStoppedOnError(t *testing.T) {
-	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
-	env.mysqld.Replicating = false
-	env.mysqld.LastSQLError = "Error 'Duplicate entry' on query"
-	env.mysqld.ExpectedExecuteSuperQueryList = []string{
-		"STOP REPLICA IO_THREAD",
-		"STOP REPLICA",
-		"FAKE SET SOURCE",
-		"START REPLICA",
+// TestRepointDiscardsRelayLogWhenApplierCannotRun checks that when the applier cannot run, the
+// repoint falls back to the full reconfiguration, as before: it discards the relay log, which
+// loses nothing, as the new primary has every transaction in it. The receiver is started again
+// if replication is to run.
+func TestRepointDiscardsRelayLogWhenApplierCannotRun(t *testing.T) {
+	testCases := []struct {
+		name string
+		// setup prepares the replica's stopped applier.
+		setup func(env *relayLogTestEnv)
+		// forceStart makes SetReplicationSource start replication afterwards.
+		forceStart bool
+		expected   []string
+	}{
+		{
+			// Starting the applier would apply what an operator may have stopped it for.
+			name:       "replication is to stay stopped",
+			setup:      func(env *relayLogTestEnv) {},
+			forceStart: false,
+			expected:   []string{"STOP REPLICA IO_THREAD", "STOP REPLICA", "FAKE SET SOURCE"},
+		},
+		{
+			name: "applier does not start",
+			setup: func(env *relayLogTestEnv) {
+				env.mysqld.StartSQLThreadError = vterrors.New(vtrpcpb.Code_UNKNOWN, "applier cannot start")
+			},
+			forceStart: true,
+			expected:   []string{"STOP REPLICA IO_THREAD", "START REPLICA SQL_THREAD", "STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"},
+		},
+		{
+			// For example, on the error it stopped on before.
+			name:       "applier stops again",
+			setup:      func(env *relayLogTestEnv) { env.mysqld.SQLThreadStopsOnStart = true },
+			forceStart: true,
+			expected:   []string{"STOP REPLICA IO_THREAD", "START REPLICA SQL_THREAD", "STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"},
+		},
 	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
+			env.mysqld.Replicating = false
+			tc.setup(env)
+			env.mysqld.ExpectedExecuteSuperQueryList = tc.expected
 
-	require.NoError(t, env.setReplicationSource(t, 0))
-	require.NoError(t, env.mysqld.CheckSuperQueryList())
-	assert.Equal(t, relayLogTestPrimaryHost, env.mysqld.CurrentSourceHost)
+			require.NoError(t, env.tm.SetReplicationSource(t.Context(), env.parent, 0, "", tc.forceStart, false, 0))
+			require.NoError(t, env.mysqld.CheckSuperQueryList())
+			assert.Equal(t, relayLogTestPrimaryHost, env.mysqld.CurrentSourceHost)
+			assert.Equal(t, env.mysqld.CurrentPrimaryPosition, env.mysqld.CurrentRelayLogPosition, "the relay log must be discarded")
+		})
+	}
 }
 
-// TestRepointWithStoppedApplierDiscardsRelayLogWhenLossless checks that when the applier cannot
-// be started, the relay log is discarded (by the full reconfiguration) only because the new
-// primary has every unapplied transaction.
-func TestRepointWithStoppedApplierDiscardsRelayLogWhenLossless(t *testing.T) {
+// TestRepointWithStoppedApplierAndNothingUnappliedUsesFullReconfiguration checks that a stopped
+// applier with nothing left to apply is not started: there is no relay log to keep, and the full
+// reconfiguration also resets the applier.
+func TestRepointWithStoppedApplierAndNothingUnappliedUsesFullReconfiguration(t *testing.T) {
 	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
 	env.mysqld.Replicating = false
-	env.mysqld.StartSQLThreadError = vterrors.New(vtrpcpb.Code_UNKNOWN, "applier cannot start")
+	env.mysqld.CurrentRelayLogPosition = env.mysqld.CurrentPrimaryPosition
 	env.mysqld.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA IO_THREAD",
 		"STOP REPLICA",
@@ -240,7 +270,6 @@ func TestRepointWithStoppedApplierDiscardsRelayLogWhenLossless(t *testing.T) {
 
 	require.NoError(t, env.setReplicationSource(t, 0))
 	require.NoError(t, env.mysqld.CheckSuperQueryList())
-	assert.Equal(t, relayLogTestPrimaryHost, env.mysqld.CurrentSourceHost)
 }
 
 // TestRepointWithStoppedApplierDiscardsSourcesUncommittedTransactions checks that when the
@@ -255,6 +284,7 @@ func TestRepointWithStoppedApplierDiscardsSourcesUncommittedTransactions(t *test
 	env.mysqld.StartSQLThreadError = vterrors.New(vtrpcpb.Code_UNKNOWN, "applier cannot start")
 	env.mysqld.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA IO_THREAD",
+		"START REPLICA SQL_THREAD",
 		"STOP REPLICA",
 		"FAKE SET SOURCE",
 		"START REPLICA",
@@ -267,7 +297,7 @@ func TestRepointWithStoppedApplierDiscardsSourcesUncommittedTransactions(t *test
 // TestRepointRefusesTransactionsReceivedWhileStoppingReceiver checks that the relay log is
 // checked once the receiver has stopped: transactions of the old primary that the new primary
 // lacks, written to the relay log while the receiver was being stopped, are refused, and left
-// unapplied, whether the applier keeps running, stops, or cannot be started; and refused as well
+// unapplied, whether the applier keeps running or stops; and refused as well
 // when the applier already applied them.
 func TestRepointRefusesTransactionsReceivedWhileStoppingReceiver(t *testing.T) {
 	testCases := []struct {
@@ -288,15 +318,6 @@ func TestRepointRefusesTransactionsReceivedWhileStoppingReceiver(t *testing.T) {
 			name:     "applier stops",
 			setup:    func(env *relayLogTestEnv) {},
 			onStop:   func(env *relayLogTestEnv) { env.mysqld.Replicating = false },
-			expected: []string{"STOP REPLICA IO_THREAD"},
-		},
-		{
-			name: "applier cannot start",
-			setup: func(env *relayLogTestEnv) {
-				env.mysqld.Replicating = false
-				env.mysqld.StartSQLThreadError = vterrors.New(vtrpcpb.Code_UNKNOWN, "applier cannot start")
-			},
-			onStop:   func(env *relayLogTestEnv) {},
 			expected: []string{"STOP REPLICA IO_THREAD"},
 		},
 		{
@@ -359,8 +380,8 @@ func TestRepointReportsFailedApplierStopOnRefusal(t *testing.T) {
 }
 
 // TestRepointReconfiguresRecoverableReceiverChangeError checks that a recoverable replication
-// metadata error from the receiver-only change falls back to the full reconfiguration, as the
-// relay log's transactions are on the new primary.
+// metadata error from the receiver-only change falls back to the full reconfiguration, which
+// resets the broken metadata.
 func TestRepointReconfiguresRecoverableReceiverChangeError(t *testing.T) {
 	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
 	env.mysqld.SetReplicationSourceReceiverError = recoverableReplicationInitError()
@@ -441,7 +462,7 @@ func TestRepointKillSwitchUsesFullReconfiguration(t *testing.T) {
 }
 
 // TestRepointUnsupportedFlavorUsesFullReconfiguration checks that flavors without the
-// receiver-only command (MySQL before 8.0.22) keep the previous repoint.
+// receiver-only command (MySQL before 8.0.26) keep the previous repoint.
 func TestRepointUnsupportedFlavorUsesFullReconfiguration(t *testing.T) {
 	env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestPrimaryPosition)
 	env.mysqld.ReplicationSourceReceiverChangeUnsupported = true
@@ -477,91 +498,7 @@ func TestTabletStartupRefusesRelayLogTransactionsTheSourceLacks(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	require.ErrorContains(t, err, relayLogTestOtherServerTransactions)
-	require.ErrorContains(t, err, "restore the replica from a backup, or run VTTablet with --replication-preserve-relay-logs=false")
 	require.NoError(t, env.mysqld.CheckSuperQueryList(), "only the receiver and the applier may be stopped")
 	assert.Equal(t, "mysql-old-primary", env.mysqld.CurrentSourceHost)
 	assert.Equal(t, relayLogTestServerUUID+":1-210,"+relayLogTestOtherServerTransactions, env.mysqld.CurrentRelayLogPosition.GTIDSet.String(), "the relay log must be kept")
-}
-
-// TestResetReplicationSelfHealRefusesLossyDiscard checks that the RESET REPLICA self-heal after
-// a recoverable replication initialization error is refused when the replication source is
-// known to lack unapplied relay log transactions, and runs otherwise.
-func TestResetReplicationSelfHealRefusesLossyDiscard(t *testing.T) {
-	t.Run("lossy", func(t *testing.T) {
-		env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestPrimaryPosition)
-		env.receiveOtherServerTransactions(t)
-		initErr := recoverableReplicationInitError()
-		err := env.tm.handleRecoverableReplicationInitError(t.Context(), initErr, relayLogTestSource(t, relayLogTestPrimaryPosition))
-		require.Error(t, err)
-		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-		require.ErrorContains(t, err, relayLogTestOtherServerTransactions)
-		require.ErrorContains(t, err, "--replication-preserve-relay-logs=false")
-		require.NoError(t, env.mysqld.CheckSuperQueryList(), "RESET REPLICA must not run")
-	})
-	t.Run("lossless", func(t *testing.T) {
-		env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestPrimaryPosition)
-		env.mysqld.ExpectedExecuteSuperQueryList = []string{
-			"STOP REPLICA",
-			"RESET REPLICA",
-			"START REPLICA",
-		}
-		err := env.tm.handleRecoverableReplicationInitError(t.Context(), recoverableReplicationInitError(), relayLogTestSource(t, relayLogTestPrimaryPosition))
-		require.NoError(t, err)
-		require.NoError(t, env.mysqld.CheckSuperQueryList())
-	})
-	t.Run("source's uncommitted transactions", func(t *testing.T) {
-		// The primary has executed only 1-205 of its own 1-210 the replica received, and sends
-		// 206-210 again.
-		env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestPrimaryPosition)
-		env.mysqld.ExpectedExecuteSuperQueryList = []string{
-			"STOP REPLICA",
-			"RESET REPLICA",
-			"START REPLICA",
-		}
-		err := env.tm.handleRecoverableReplicationInitError(t.Context(), recoverableReplicationInitError(), relayLogTestSource(t, relayLogTestServerUUID+":1-205"))
-		require.NoError(t, err)
-		require.NoError(t, env.mysqld.CheckSuperQueryList())
-	})
-	t.Run("unreadable replication status", func(t *testing.T) {
-		env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestPrimaryPosition)
-		env.mysqld.ReplicationStatusError = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "status unavailable")
-		err := env.tm.handleRecoverableReplicationInitError(t.Context(), recoverableReplicationInitError(), relayLogTestSource(t, relayLogTestPrimaryPosition))
-		require.Error(t, err)
-		require.ErrorContains(t, err, "the replication status cannot be read")
-		require.NoError(t, env.mysqld.CheckSuperQueryList(), "RESET REPLICA must not run")
-	})
-	t.Run("unknown source position", func(t *testing.T) {
-		env := newRelayLogTestEnv(t, relayLogTestPrimaryHost, relayLogTestPrimaryPort, relayLogTestPrimaryPosition)
-		env.mysqld.ExpectedExecuteSuperQueryList = []string{
-			"STOP REPLICA",
-			"RESET REPLICA",
-			"START REPLICA",
-		}
-		err := env.tm.handleRecoverableReplicationInitError(t.Context(), recoverableReplicationInitError(), replicationSource{})
-		require.NoError(t, err)
-		require.NoError(t, env.mysqld.CheckSuperQueryList())
-	})
-}
-
-// TestResetReplicaAllFallbackRefusesLossyDiscard checks that the RESET REPLICA ALL fallback of
-// the full reconfiguration is refused when the new source lacks unapplied relay log
-// transactions.
-func TestResetReplicaAllFallbackRefusesLossyDiscard(t *testing.T) {
-	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
-	env.receiveOtherServerTransactions(t)
-	env.mysqld.ExpectedExecuteSuperQueryList = []string{
-		"STOP REPLICA",
-		"STOP REPLICA",
-	}
-	env.mysqld.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
-		require.NoError(t, env.mysqld.ExecuteSuperQueryList(ctx, []string{"STOP REPLICA"}))
-		return recoverableReplicationInitError()
-	}
-
-	err := env.tm.setReplicationSourceRecoverable(t.Context(), relayLogTestPrimaryHost, relayLogTestPrimaryPort, 0,
-		relayLogTestSource(t, relayLogTestPrimaryPosition), true, true)
-	require.Error(t, err)
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	require.ErrorContains(t, err, relayLogTestOtherServerTransactions)
-	require.NoError(t, env.mysqld.CheckSuperQueryList(), "RESET REPLICA ALL must not run")
 }
