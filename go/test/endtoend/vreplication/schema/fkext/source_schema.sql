@@ -1,2 +1,0 @@
-create table if not exists parent(id int, name varchar(128), primary key(id)) engine=innodb;
-create table if not exists child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade) engine=innodb;

@@ -1,1 +1,0 @@
-alter vschema create vindex my_vdx using hash

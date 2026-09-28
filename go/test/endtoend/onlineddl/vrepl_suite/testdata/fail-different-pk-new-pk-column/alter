@@ -1,1 +1,0 @@
-drop primary key, add column id int unsigned auto_increment primary key

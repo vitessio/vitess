@@ -1,7 +1,0 @@
-{
-  "keyspaces": {
-    "main": {
-      "sharded": false
-    }
-  }
-}

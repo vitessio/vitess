@@ -1,6 +1,0 @@
-{
-  "sharded": false,
-  "tables": {
-    "t2": {}
-  }
-}

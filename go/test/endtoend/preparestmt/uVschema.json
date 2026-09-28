@@ -1,8 +1,0 @@
-{
-  "sharded": false,
-  "tables": {
-    "sequence_test_seq": {
-      "type":   "sequence"
-    }
-  }
-}
