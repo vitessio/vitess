@@ -306,6 +306,60 @@ func TestTLSReloaderSessionTicketKeys(t *testing.T) {
 	}
 }
 
+// TestTLSReloaderRotatesTicketKeysAfterCAChange checks that the key a
+// CA change pins (TestTLSReloaderSessionTicketKeys) does not then
+// stay in sole use for the life of the process: it rotates and
+// expires on the same schedule crypto/tls uses for its own
+// automatically-managed ticket keys, so that key does not become a
+// single point of long-term exposure once pinned.
+func TestTLSReloaderRotatesTicketKeysAfterCAChange(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, certs)
+
+	var sink configSink
+	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
+	require.NoError(t, err)
+
+	now := time.Now()
+	reloader.now = func() time.Time { return now }
+
+	clientCA, err := os.ReadFile(certs.ClientCA)
+	require.NoError(t, err)
+	otherCA, err := os.ReadFile(otherCerts.ClientCA)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
+	require.NoError(t, reloader.Reload(true))
+	require.Len(t, reloader.ticketKeys, 1, "the CA change must pin exactly one key")
+	pinned := reloader.ticketKeys[0]
+
+	// Short of a full rotation period, a reload must leave the pinned
+	// key alone.
+	now = now.Add(ticketKeyRotation - time.Second)
+	require.NoError(t, reloader.Reload(true))
+	require.Equal(t, []ticketKeyEntry{pinned}, reloader.ticketKeys,
+		"the pinned key must not rotate before a full rotation period has passed")
+
+	// Once a rotation period has passed, the next reload must rotate
+	// in a new key rather than keeping the pinned one in sole use
+	// indefinitely, while keeping the old one so tickets it already
+	// issued keep resuming.
+	now = now.Add(2 * time.Second)
+	require.NoError(t, reloader.Reload(true))
+	require.Len(t, reloader.ticketKeys, 2)
+	require.NotEqual(t, pinned.key, reloader.ticketKeys[0].key, "rotation must generate a new key")
+	require.Equal(t, pinned, reloader.ticketKeys[1], "the previous key must be kept for tickets it already issued")
+
+	// Once the pinned key is older than its lifetime, it must be
+	// dropped rather than kept forever.
+	now = pinned.created.Add(ticketKeyLifetime + time.Second)
+	require.NoError(t, reloader.Reload(true))
+	for _, k := range reloader.ticketKeys {
+		require.NotEqual(t, pinned.key, k.key, "an expired key must not still be handed to configs")
+	}
+}
+
 // tlsHandshake completes one TLS connection between a server using
 // serverConfig and a client using clientConfig over a loopback
 // listener, requires both sides to succeed, and returns the client's
