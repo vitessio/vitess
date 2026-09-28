@@ -331,9 +331,9 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 		// setting applied over another, and applying those settings again
 		// restores their own variables only. The pool would hand it to the next
 		// request that brings those settings as if nothing else had changed:
-		// close it instead, and the pool opens a replacement. A tainted
-		// connection never returns to the pool.
-		sc.dbConn.Close()
+		// discard it instead, and the pool opens a replacement and counts the
+		// loss. A tainted connection never returns to the pool.
+		sc.dbConn.Discard()
 	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil

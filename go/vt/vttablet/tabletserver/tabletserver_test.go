@@ -2901,8 +2901,10 @@ func TestInBandSetClosesTheConnectionOnRelease(t *testing.T) {
 			_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
 			require.NoError(t, err)
 		}
+		discarded := tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount()
 		_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
 		require.NoError(t, err)
+		assert.Equal(t, discarded+1, tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "the pool counts the connection closed at commit as discarded")
 
 		// the connection was closed at commit, so the next transaction with the
 		// same settings opens a fresh one and applies them again; a recycled
