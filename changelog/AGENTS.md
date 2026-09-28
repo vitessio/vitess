@@ -8,6 +8,7 @@ Add an entry only for a change that users or operators need to know about, or ac
 - Changed defaults
 - Deprecations, removals, and other breaking changes
 - Behavior changes that are not bug fixes, such as stricter validation that rejects input Vitess used to accept
+- Security fixes that have a published advisory. Until the advisory is public, leave the fix out of the release summary.
 
 Everything else stays out of the release summary:
 
