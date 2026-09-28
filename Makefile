@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate-flag-testdata
+.PHONY: all build build-experimental-simd install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate-flag-testdata
 
 all: build
 
@@ -83,6 +83,25 @@ endif
 		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-tags "$(EXTRA_BUILD_TAGS)" \
 		-o ${VTROOTBIN} ./go/...
+
+# build the vitess binaries with the experimental SIMD fast paths
+build-experimental-simd:
+	GOEXPERIMENT=simd $(MAKE) build EXTRA_BUILD_TAGS="$(EXTRA_BUILD_TAGS) simd"
+
+# TEMPORARY, DO NOT MERGE -- revert before this pull request leaves Draft.
+#
+# Aliases `build` to the experimental SIMD path so arewefastyet benchmarks the
+# kernels instead of the scalar fallbacks. This deliberately contradicts §6
+# rule 7 of doc/design-docs/SIMDOptimizations.md ("`make build` remains the
+# scalar release path"), which is the branch's own normative policy, so it can
+# only stand while the pull request is a Draft.
+#
+# 22 workflows call `make build`, so this also puts the experiment into the
+# end-to-end, upgrade/downgrade and example suites. That is extra kernel
+# coverage, but a failure in them may now be the experiment rather than the
+# change under test.
+build: export GOEXPERIMENT = simd
+build: EXTRA_BUILD_TAGS += simd
 
 # build the vitess binaries statically
 build:

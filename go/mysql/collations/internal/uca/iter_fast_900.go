@@ -68,6 +68,14 @@ func (it *FastIterator900) FastForward32(it2 *FastIterator900) int {
 	p2 := it2.input
 	var w1, w2 uint16
 
+	// Skip the leading blocks that are byte-equal and all ASCII in one
+	// step: they are exactly the blocks the loop below would consume
+	// without a lookup, one `it.unicode--` each.
+	if n := equalASCIIPrefix(p1, p2); n > 0 {
+		p1, p2 = p1[n:], p2[n:]
+		it.unicode -= n / 4
+	}
+
 	for len(p1) >= 4 && len(p2) >= 4 {
 		dword1 := *(*uint32)(unsafe.Pointer(&p1[0]))
 		dword2 := *(*uint32)(unsafe.Pointer(&p2[0]))

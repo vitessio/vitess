@@ -17,7 +17,9 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -293,6 +295,80 @@ func TestIntegerAndID(t *testing.T) {
 				expectedOut = tcase.in
 			}
 			require.Equal(t, expectedOut, out)
+		})
+	}
+}
+
+// scanStringBenchCase is one string literal for the scanString benchmarks:
+// sql is the literal with its delimiters, so a tokenizer over it enters
+// scanString at Pos 1 the way Scan does after consuming the opening quote.
+type scanStringBenchCase struct {
+	name  string
+	delim byte
+	size  int
+	sql   string
+}
+
+// scanStringBenchCases returns a literal for each delimiter, size and shape
+// the scanString benchmarks cover. The "clean" literals take the fast path;
+// the "escape" literals carry one backslash escape in the middle. The
+// escape-run cells keep a fixed number of clean bytes between escapes and
+// cover both sides of scanStringScalarPrefix.
+func scanStringBenchCases() []scanStringBenchCase {
+	const text = "The quick brown fox jumps over the lazy dog, then it does so again. "
+	var cases []scanStringBenchCase
+	for _, delim := range []struct {
+		name string
+		ch   byte
+	}{{"squote", '\''}, {"dquote", '"'}} {
+		for _, size := range []int{16, 64, 256, 4096} {
+			body := strings.Repeat(text, size/len(text)+1)[:size]
+			for _, shape := range []struct {
+				name    string
+				literal string
+			}{{"clean", body}, {"escape", body[:size/2] + `\n` + body[size/2+2:]}} {
+				cases = append(cases, scanStringBenchCase{
+					name:  fmt.Sprintf("%s/%d/%s", delim.name, size, shape.name),
+					delim: delim.ch,
+					size:  size,
+					sql:   string(delim.ch) + shape.literal + string(delim.ch),
+				})
+			}
+			for _, run := range []int{2, 4, 6, 16} {
+				unit := strings.Repeat("a", run) + `\n`
+				if len(unit) > size {
+					continue
+				}
+				literal := strings.Repeat(unit, size/len(unit)+1)[:size]
+				cases = append(cases, scanStringBenchCase{
+					name:  fmt.Sprintf("%s/%d/escape-run-%d", delim.name, size, run),
+					delim: delim.ch,
+					size:  size,
+					sql:   string(delim.ch) + literal + string(delim.ch),
+				})
+			}
+		}
+	}
+	return cases
+}
+
+// BenchmarkTokenizerScanString measures scanning a single quoted string
+// literal, which the tokenizer does for every literal in every query vtgate
+// parses before it normalizes them into bind variables.
+func BenchmarkTokenizerScanString(b *testing.B) {
+	for _, tc := range scanStringBenchCases() {
+		tkn := NewTestParser().NewStringTokenizer(tc.sql)
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(tc.size))
+			for b.Loop() {
+				// Position just past the opening delimiter, as Scan does
+				// before it hands off to scanString.
+				tkn.Pos = 1
+				if id, _ := tkn.scanString(uint16(tc.delim), STRING); id != STRING {
+					b.Fatalf("scanString returned token %d, want STRING", id)
+				}
+			}
 		})
 	}
 }

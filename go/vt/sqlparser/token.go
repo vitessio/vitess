@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -601,6 +602,12 @@ exit:
 	return token, tkn.buf[start:tkn.Pos]
 }
 
+// scanStringScalarPrefix is how many bytes scanString checks one at a time
+// before it hands the hunt for the closing delimiter to IndexAny2. Its fixed
+// first window is a bad trade for a literal that closes, or escapes, within
+// the first few bytes.
+const scanStringScalarPrefix = 8
+
 // scanString scans a string surrounded by the given `delim`, which can be
 // either single or double quotes. Assumes that the given delimiter has just
 // been scanned. If the skin contains any escape sequences, this function
@@ -608,26 +615,37 @@ exit:
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
 
-	for {
-		switch tkn.cur() {
-		case delim:
-			if tkn.peek(1) != delim {
-				tkn.skip(1)
-				return typ, tkn.buf[start : tkn.Pos-1]
-			}
-			fallthrough
-
-		case '\\':
-			var buffer strings.Builder
-			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			return tkn.scanStringSlow(&buffer, delim, typ)
-
-		case eofChar:
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+	// Most literals have no escapes, so the common case scans for the closing
+	// delimiter or a backslash instead of peeking once per byte. Keep the
+	// first few bytes on the scalar loop: IndexAny2's fixed first window costs
+	// more when the first escape is nearby.
+	end := min(start+scanStringScalarPrefix, len(tkn.buf))
+	for tkn.Pos < end {
+		ch := uint16(tkn.buf[tkn.Pos])
+		if ch == delim || ch == '\\' {
+			break
 		}
-
-		tkn.skip(1)
+		tkn.Pos++
 	}
+	if tkn.Pos == end {
+		i := bytes2.IndexAny2(tkn.buf[end:], byte(delim), '\\')
+		if i < 0 {
+			tkn.Pos = len(tkn.buf)
+			return LEX_ERROR, tkn.buf[start:]
+		}
+		tkn.Pos = end + i
+	}
+
+	if tkn.cur() == delim && tkn.peek(1) != delim {
+		tkn.skip(1)
+		return typ, tkn.buf[start : tkn.Pos-1]
+	}
+
+	// A doubled delimiter or a backslash: the literal has escapes, so hand
+	// the clean prefix and the rest to the slow path.
+	var buffer strings.Builder
+	buffer.WriteString(tkn.buf[start:tkn.Pos])
+	return tkn.scanStringSlow(&buffer, delim, typ)
 }
 
 // scanString scans a string surrounded by the given `delim` and containing escape
@@ -642,7 +660,10 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 		}
 
 		if ch != delim && ch != '\\' {
-			// Scan ahead to the next interesting character.
+			// Scan ahead to the next interesting character. Once a literal
+			// contains an escape, short clean runs are common enough that the
+			// byte loop is cheaper than paying IndexAny2's fixed first window
+			// after every one.
 			start := tkn.Pos
 			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
 				ch = uint16(tkn.buf[tkn.Pos])

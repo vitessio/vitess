@@ -187,3 +187,54 @@ func BenchmarkWildcardContains(b *testing.B) {
 		})
 	}
 }
+
+// benchSharedPrefix returns an n-byte ASCII buffer built from a fixed
+// alphanumeric alphabet, with the byte at differAt bumped to the next letter
+// so that two buffers built with different differAt values share the longest
+// possible prefix and then differ in primary weight, never just in case. The
+// alphabet has no punctuation so no byte has a zero (ignorable) weight, which
+// keeps the UCA900 fast path engaged for the whole comparison.
+func benchSharedPrefix(n, differAt int) []byte {
+	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+	buf := make([]byte, n)
+	for i := range buf {
+		buf[i] = alphabet[i%len(alphabet)]
+	}
+	if differAt >= 0 && differAt < n {
+		buf[differAt] = alphabet[(differAt+1)%len(alphabet)]
+	}
+	return buf
+}
+
+// BenchmarkCollateSharedPrefix measures Collate on utf8mb4_0900_ai_ci for the
+// inputs that reach it on the vtgate query path: ORDER BY, GROUP BY, DISTINCT
+// and hash joins compare values through the tiny-weight prefix first, so the
+// full collation only runs for strings that share their first four weight
+// bytes. The shared-prefix cases differ in the last byte; the short case
+// differs in the first four bytes and bounds the fixed cost of a compare that
+// gets nothing from the fast path.
+func BenchmarkCollateSharedPrefix(b *testing.B) {
+	coll := benchCollation(b, "utf8mb4_0900_ai_ci")
+	cases := []struct {
+		name  string
+		left  []byte
+		right []byte
+	}{
+		{"16", benchSharedPrefix(16, -1), benchSharedPrefix(16, 15)},
+		{"64", benchSharedPrefix(64, -1), benchSharedPrefix(64, 63)},
+		{"256", benchSharedPrefix(256, -1), benchSharedPrefix(256, 255)},
+		{"1024", benchSharedPrefix(1024, -1), benchSharedPrefix(1024, 1023)},
+		{"short-16", benchSharedPrefix(16, -1), benchSharedPrefix(16, 2)},
+	}
+	for _, tc := range cases {
+		b.Run("utf8mb4_0900_ai_ci/"+tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(tc.left)))
+			for b.Loop() {
+				if coll.Collate(tc.left, tc.right, false) == 0 {
+					b.Fatal("inputs differ but Collate returned 0")
+				}
+			}
+		})
+	}
+}

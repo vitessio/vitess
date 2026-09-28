@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -310,5 +312,44 @@ func createRowTupleBV() *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:   querypb.Type_ROW_TUPLE,
 		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
+	}
+}
+
+// BenchmarkGenerateQueryStringBinds measures the vttablet per-query path
+// that substitutes string and binary bind variables into the query text:
+// query_executor.go calls ParsedQuery.GenerateQuery on every query, and for
+// text or blob values almost all of its time is the SQL-literal escaping in
+// sqltypes. The INSERT carries eight binds so a single GenerateQuery call is
+// dominated by encoding rather than by the fixed cost of walking the query.
+func BenchmarkGenerateQueryStringBinds(b *testing.B) {
+	parser := NewTestParser()
+	stmt, err := parser.Parse("insert into t(a, b, c, d, e, f, g, h) values (:a, :b, :c, :d, :e, :f, :g, :h)")
+	require.NoError(b, err)
+	pq := NewParsedQuery(stmt)
+
+	// The text has one quote per 64 bytes, so every bind variable exercises
+	// both the clean-run copy and the escape branch of the encoder.
+	const text = "It's the quick brown fox that jumps over the lazy dog; again. "
+	for _, size := range []int{64, 1024} {
+		payload := strings.Repeat(text, size/len(text)+1)[:size]
+		bindVars := map[string]*querypb.BindVariable{
+			"a": sqltypes.StringBindVariable(payload),
+			"b": sqltypes.StringBindVariable(payload),
+			"c": sqltypes.StringBindVariable(payload),
+			"d": sqltypes.StringBindVariable(payload),
+			"e": sqltypes.BytesBindVariable([]byte(payload)),
+			"f": sqltypes.BytesBindVariable([]byte(payload)),
+			"g": sqltypes.BytesBindVariable([]byte(payload)),
+			"h": sqltypes.BytesBindVariable([]byte(payload)),
+		}
+		b.Run(fmt.Sprintf("%dB", size), func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(8 * size))
+			for b.Loop() {
+				if _, err := pq.GenerateQuery(bindVars, nil); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

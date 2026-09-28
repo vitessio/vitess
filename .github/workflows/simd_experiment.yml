@@ -1,0 +1,231 @@
+name: SIMD Experiment
+
+# Runs the unit tests with the SIMD kernels compiled in, on amd64 and arm64, so
+# they are held to the same tests the scalar paths already pass in the Unit Test
+# workflow. It is not a required check.
+#
+# This proves the kernels behave the same, not that they are faster. Benchmarks
+# are not a CI check in this repository and this does not make them one:
+# performance is measured by hand per section 4 of
+# doc/design-docs/SIMDOptimizations.md, and by arewefastyet on a labelled pull
+# request.
+#
+# The mirror job is the Unit Test workflow's own runner -- `make unit_test`, the
+# same 469 packages -- with both experiment opt-ins set, so nothing about which
+# tests run is decided here. It is trimmed to the cells that can tell a kernel
+# apart:
+#
+#   - evalengine "0" only. The "1" cell narrows the run to 3 packages, none of
+#     which carries a kernel.
+#   - mysql80 only. The kernels are pure Go and touch no MySQL; the flavour is
+#     here because `make unit_test` runs packages that need a live server.
+#   - both arches, because the lane count is what the kernels branch on: arm64
+#     NEON is always 16, amd64 is 16, 32 or 64 by CPU.
+#
+# Launchable, java, python and the reporting steps are deliberately not mirrored.
+# They serve the required check's test intelligence, and a second workflow
+# recording the same test names into the same build would skew it.
+#
+# GOFLAGS carries the tag to `go test` and `go list` inside the runner, which
+# takes no -tags argument of its own. EXTRA_BUILD_TAGS is also set because the
+# Makefile passes `-tags "$(EXTRA_BUILD_TAGS)"` explicitly, and an explicit flag
+# beats GOFLAGS -- without it the binaries would build scalar while the tests
+# ran with the kernels.
+
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "go/bytes2/**"
+      - "go/sqltypes/**"
+      - "go/mysql/collations/**"
+      - "go/vt/sqlparser/**"
+      - "Makefile"
+      - ".github/workflows/simd_experiment.yml"
+  pull_request:
+    branches: "**"
+    paths:
+      - "go/bytes2/**"
+      - "go/sqltypes/**"
+      - "go/mysql/collations/**"
+      - "go/vt/sqlparser/**"
+      - "Makefile"
+      - ".github/workflows/simd_experiment.yml"
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: "Time per kernel fuzz target (-fuzztime)"
+        default: "30s"
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'SIMD Experiment')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The packages that carry a SIMD fast path. collations/integration is left
+  # out because its TestMain needs a live MySQL.
+  SIMD_PACKAGES: "./go/bytes2/... ./go/sqltypes/... ./go/mysql/collations/charset/... ./go/mysql/collations/colldata/... ./go/mysql/collations/internal/... ./go/vt/sqlparser/..."
+
+jobs:
+  unit-test-simd:
+    name: "Unit Test (experimental SIMD, ${{ matrix.arch || 'amd64' }})"
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: mysql80
+            flavor: mysql-8.0
+
+          - platform: mysql80
+            flavor: mysql-8.0
+            arch: arm64
+    runs-on: ${{ github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Set up Go
+        uses: $/.github/actions/setup-go
+
+      - name: Avoid the Oracle Cloud apt mirror
+        if: matrix.arch == 'arm64'
+        run: |
+          # The Oracle Cloud regional apt mirror (e.g. us-sanjose-1-ad-1.clouds.ports.ubuntu.com)
+          # is extremely slow; point apt at the default Ubuntu ports archive instead.
+          sudo grep -rl '\.clouds\.ports\.ubuntu\.com' /etc/apt --include='*.list' --include='*.sources' \
+            | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
+
+      - name: Tune the OS
+        timeout-minutes: 5
+        uses: $/.github/actions/tune-os
+
+      - name: Setup MySQL
+        timeout-minutes: 8
+        uses: $/.github/actions/setup-mysql
+        with:
+          flavor: ${{ matrix.flavor }}
+
+      - name: Get dependencies
+        timeout-minutes: 5
+        run: |
+          export DEBIAN_FRONTEND="noninteractive"
+          sudo apt-get install -y make unzip g++ curl git wget
+
+      - name: Run make tools
+        timeout-minutes: 10
+        run: |
+          make BUILD_JAVA=0 BUILD_PROTOC=0 tools
+
+      - name: Run test
+        env:
+          GOEXPERIMENT: simd
+          GOFLAGS: -tags=simd
+          EXTRA_BUILD_TAGS: simd
+        run: |
+          set -exo pipefail
+
+          export VTDATAROOT="/tmp/"
+          export NOVTADMINBUILD=1
+          export VT_GO_PARALLEL_VALUE=$(nproc)
+          export VTEVALENGINETEST="0"
+          export CI_DB_PLATFORM="${{ matrix.platform }}"
+
+          make unit_test
+
+  kernel-equivalence:
+    name: "Kernel equivalence (${{ matrix.arch }})"
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
+    env:
+      GOEXPERIMENT: simd
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Set up Go
+        uses: $/.github/actions/setup-go
+
+      - name: Build the whole tree under the experiment
+        run: |
+          set -exo pipefail
+          make build-experimental-simd NOVTADMINBUILD=1
+
+      - name: Vet the SIMD packages
+        run: |
+          set -exo pipefail
+          go vet -tags simd ${SIMD_PACKAGES}
+
+      # GODEBUG=simd=128 caps the vector width, so amd64 also exercises the
+      # 128-bit lane count that arm64 NEON uses. The mirror job above covers the
+      # native width; this is the lane count it cannot reach.
+      - name: Test the SIMD packages at 128-bit vectors
+        if: matrix.arch == 'amd64'
+        env:
+          GODEBUG: simd=128
+        run: |
+          set -exo pipefail
+          go test -tags simd -timeout 10m ${SIMD_PACKAGES}
+
+      # Every kernel is fuzzed against its scalar reference under the
+      # experiment, per rule 4 of the adoption policy in
+      # doc/design-docs/SIMDOptimizations.md. The mirror job replays only the
+      # seed corpus: reaching generated inputs needs -fuzz, which takes one
+      # package and one target per run.
+      - name: Fuzz the kernels against their scalar references
+        env:
+          FUZZTIME: ${{ inputs.fuzztime || '30s' }}
+        run: |
+          set -exo pipefail
+          # -list confirms the target is still there before fuzzing it: a
+          # -fuzz regexp that matches nothing exits 0, so a renamed target
+          # would leave this step green having fuzzed nothing. grep must not
+          # be -q, which exits at the first match and races go test into a
+          # SIGPIPE that pipefail then adopts as the pipeline's status.
+          fuzz() {
+            go test -tags simd -list "^$1\$" "$2" | grep -x "$1" >/dev/null
+            go test -tags simd -run '^$' -fuzz "^$1\$" -fuzztime "${FUZZTIME}" "$2"
+          }
+          fuzz FuzzByteSetIndex ./go/bytes2/
+          fuzz FuzzIndexAny2 ./go/bytes2/
+          fuzz FuzzEncodeBytesSQL ./go/sqltypes/
+          fuzz FuzzEqualASCIIPrefix ./go/mysql/collations/internal/uca/
+          fuzz FuzzScanString ./go/vt/sqlparser/

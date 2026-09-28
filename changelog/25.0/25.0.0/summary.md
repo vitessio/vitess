@@ -7,6 +7,7 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Experimental: SIMD hardware acceleration on the query path](#simd)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -93,6 +94,27 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="simd"/>Experimental: SIMD hardware acceleration on the query path</a>
+
+Vitess v25 adds an experiment of SIMD hardware acceleration on the query path, built on Go's `simd` package, which has been behind `GOEXPERIMENT=simd` since Go 1.26. Two scans have a vectorized kernel:
+
+- `bytes2.ByteSet.Index`, behind SQL string-literal escaping, which vttablet runs for every query carrying a string or binary bind variable.
+- `uca.equalASCIIPrefix`, in the `utf8mb4_0900` collation fast path, which vtgate reaches for `ORDER BY`, `GROUP BY`, `DISTINCT` and hash joins once the tiny-weight comparison ties.
+
+Both require two controls together: they compile only when `GOEXPERIMENT=simd` is set **and** the `simd` build tag is passed. The `build-experimental-simd` make target supplies both:
+
+```sh
+make build-experimental-simd
+```
+
+`make build`, `make install`, the release artifacts and the Docker images supply neither, so you have to build from source to get the kernels; there is no runtime flag. The scalar rewrites they plug into are **not** experimental and ship by default — that is where most of the measured win comes from.
+
+**This is experimental and subject to change.** The `simd` packages are not covered by the Go 1 compatibility promise, so the build controls will change when `simd` graduates out of `GOEXPERIMENT`, and a kernel that does not beat its scalar path may be narrowed to the architectures where it does, or dropped. Something in this shape is highly likely to ship; these particular controls are not. Further hot paths in Vitess are likely to use SIMD in the future.
+
+**Please try it and tell us what you find.** Feedback is appreciated in GitHub issues or the `#developers` channel of the [Vitess Community Slack](https://vitess.io/slack), measurements from your own workload especially — the verdicts so far are arm64 only and from a single machine, and amd64 is unmeasured. If you report results, please include the architecture you ran on and whatever numbers you have, `benchstat` output ideally.
+
+See [the SIMD optimizations design doc](../../../doc/design-docs/SIMDOptimizations.md) for the path ranking, the benchmark method and the adoption policy.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
