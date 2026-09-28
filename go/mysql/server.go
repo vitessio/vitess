@@ -56,10 +56,6 @@ const (
 	versionTLS13      = "TLS13"
 	versionTLSUnknown = "UnknownTLSVersion"
 	versionNoTLS      = "None"
-
-	// proxyProtocolHeaderTimeout is how long the PROXY protocol listener
-	// waits for a header before giving up on one.
-	proxyProtocolHeaderTimeout = 200 * time.Millisecond
 )
 
 var (
@@ -258,6 +254,7 @@ func NewFromListener(
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
 	proxyProtocol bool,
+	proxyProtocolHeaderTimeout time.Duration,
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
@@ -289,12 +286,15 @@ func NewFromListener(
 			},
 			// MySQL is a server-speaks-first protocol, so on a headerless
 			// connection the server's first write blocks here until this
-			// timeout expires, delaying the handshake greeting. Without an
-			// explicit value, go-proxyproto falls back to its own 10s
-			// default; a proxy that does send a header sends it as the
-			// connection's first bytes, so a short timeout only needs to
-			// cover local network latency, not any round trip to the
-			// far-end client.
+			// timeout expires, delaying the handshake greeting. But it must
+			// stay well above the time a real header can be delayed by nothing
+			// worse than normal network jitter (e.g. a TCP retransmit, whose
+			// minimum timeout is already 200ms on Linux, or a slower
+			// proxy-to-listener hop): once the timeout fires, the USE policy
+			// above accepts the connection as headerless, so a header that
+			// arrives even slightly late is read as the start of the client's
+			// handshake response instead, corrupting it. Without an explicit
+			// value, go-proxyproto falls back to its own 10s default.
 			ReadHeaderTimeout: proxyProtocolHeaderTimeout,
 		}
 	}
@@ -310,6 +310,7 @@ func NewListener(
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
 	proxyProtocol bool,
+	proxyProtocolHeaderTimeout time.Duration,
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
@@ -320,7 +321,7 @@ func NewListener(
 		return nil, err
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, proxyProtocolHeaderTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
