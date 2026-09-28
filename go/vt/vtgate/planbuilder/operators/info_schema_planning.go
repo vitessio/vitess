@@ -80,7 +80,15 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 }
 
 func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
-	isr.seenPredicates = append(isr.seenPredicates, expr)
+	original := expr
+	if cmp, ok := expr.(*sqlparser.ComparisonExpr); ok {
+		// Extraction rewrites the comparison's operands and operator in place.
+		// Keep the original fields for resetRoutingLogic, while retaining the
+		// child expressions and their semantic information.
+		pristine := *cmp
+		original = &pristine
+	}
+	isr.seenPredicates = append(isr.seenPredicates, original)
 	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
 		return isr
