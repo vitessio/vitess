@@ -67,9 +67,20 @@ type TLSReloader struct {
 	// the CA file changed, nil before that. See Reload.
 	ticketKeys [][32]byte
 
+	// testHook, when set, runs once per Reload call, between the
+	// pre-load digest and the config load, so a test can change the
+	// files in that window to exercise the race described in Reload.
+	// Nil outside tests.
+	testHook func()
+
 	cancel context.CancelFunc
 	done   chan struct{}
 }
+
+// maxReadAttempts bounds how many times Reload re-reads the files
+// looking for a digest that matches what it actually loaded, before
+// giving up and keeping the previous config.
+const maxReadAttempts = 5
 
 // NewTLSReloader loads the TLS config of the server that name
 // identifies in logs and metrics from files and hands it to sink.
@@ -149,19 +160,43 @@ func (r *TLSReloader) Reload(force bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// The files are digested before they are loaded, so that files
-	// changing in between are loaded again on the next tick.
-	fingerprint, caFingerprint, err := r.digest()
-	if err != nil {
-		return r.failed(err)
-	}
-	if !force && fingerprint == r.fingerprint {
-		return nil
-	}
+	var (
+		fingerprint, caFingerprint [sha256.Size]byte
+		config                     *tls.Config
+	)
+	// The files are digested before they are loaded, and again after,
+	// so that a file changing mid-load is caught rather than paired
+	// with a fingerprint of what it contained before the change: a CA
+	// file replaced in that window would otherwise be loaded into
+	// config while caFingerprint still reflected the old CA, silently
+	// skipping the session-ticket rotation below. The read is retried,
+	// re-digesting first, until a pre- and post-load digest agree.
+	for attempt := 1; ; attempt++ {
+		var err error
+		if fingerprint, caFingerprint, err = r.digest(); err != nil {
+			return r.failed(err)
+		}
+		if !force && attempt == 1 && fingerprint == r.fingerprint {
+			return nil
+		}
+		if r.testHook != nil {
+			r.testHook()
+		}
 
-	config, err := vttls.ReadServerConfig(r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA, r.minTLSVersion)
-	if err != nil {
-		return r.failed(err)
+		if config, err = vttls.ReadServerConfig(r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA, r.minTLSVersion); err != nil {
+			return r.failed(err)
+		}
+
+		after, _, err := r.digest()
+		if err != nil {
+			return r.failed(err)
+		}
+		if after == fingerprint {
+			break
+		}
+		if attempt == maxReadAttempts {
+			return r.failed(fmt.Errorf("the files kept changing across %d attempts to read them consistently", maxReadAttempts))
+		}
 	}
 
 	var zero [sha256.Size]byte
