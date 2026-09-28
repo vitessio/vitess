@@ -366,4 +366,24 @@ func TestVPlayerMultiStatements(t *testing.T) {
 		require.Equal(t, []bool{true}, dbClient.calls, "a closed connection must not be written to")
 		require.Zero(t, vr.dbClient.maxBatchSize)
 	})
+
+	// A player whose stop position is already reached replays nothing, so it
+	// must stop without asking for a capability it will never use: a refusal
+	// would otherwise end the workflow in an error instead.
+	t.Run("a player at its stop position does not configure the connection", func(t *testing.T) {
+		pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+		require.NoError(t, err)
+
+		mock := binlogplayer.NewMockDBClient(t)
+		mock.ExpectRequest(SqlMaxAllowedPacket, maxAllowedPacket, nil)
+		mock.ExpectRequestRE("update _vt.vreplication set state='Stopped'", &sqltypes.Result{}, nil)
+		dbClient := &multiStatementDBClient{DBClient: mock, err: errors.New("multi statements refused")}
+		vr := newVR(t, dbClient, true)
+		vp := newVPlayer(vr, binlogplayer.VRSettings{StartPos: pos, StopPos: pos}, nil, replication.Position{}, "replicate")
+		require.True(t, vp.batchMode)
+
+		require.NoError(t, vp.play(t.Context()))
+		require.Empty(t, dbClient.calls)
+		require.Equal(t, binlogdatapb.VReplicationWorkflowState_Stopped.String(), vr.stats.State.Load())
+	})
 }

@@ -256,6 +256,16 @@ func (vp *vplayer) clearConnectionBatchMode() {
 
 // play is the entry point for playing binlogs.
 func (vp *vplayer) play(ctx context.Context) error {
+	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
+		log.Info(fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+		if vp.saveStop {
+			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+		}
+		return nil
+	}
+
+	// A player that has nothing left to replay sends no batch, so the connection
+	// is only configured once there is something to replay.
 	if err := vp.setConnectionBatchMode(); err != nil {
 		return err
 	}
@@ -263,13 +273,6 @@ func (vp *vplayer) play(ctx context.Context) error {
 		// A player that does not batch has already turned the capability off
 		// above, so only the one that turned it on has something to give back.
 		defer vp.clearConnectionBatchMode()
-	}
-	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
-		log.Info(fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
-		if vp.saveStop {
-			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
-		}
-		return nil
 	}
 
 	plan, err := vp.vr.buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
