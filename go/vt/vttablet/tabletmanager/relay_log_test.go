@@ -467,13 +467,22 @@ func TestRepointReportsFailedApplierStopOnRefusal(t *testing.T) {
 
 // TestRepointReconfiguresRecoverableReceiverChangeError checks that a recoverable replication
 // metadata error from the receiver-only change falls back to the full reconfiguration, which
-// resets the broken metadata.
+// resets the broken metadata when the full change hits it too.
 func TestRepointReconfiguresRecoverableReceiverChangeError(t *testing.T) {
 	env := newRelayLogTestEnv(t, "mysql-old-primary", 3305, relayLogTestPrimaryPosition)
 	env.mysqld.SetReplicationSourceReceiverError = recoverableReplicationInitError()
+	fullChanges := 0
+	env.mysqld.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+		fullChanges++
+		if fullChanges == 1 {
+			return recoverableReplicationInitError()
+		}
+		return env.mysqld.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"})
+	}
 	env.mysqld.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA IO_THREAD",
 		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}
