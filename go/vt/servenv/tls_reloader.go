@@ -18,7 +18,6 @@ package servenv
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -32,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -63,44 +63,26 @@ type TLSReloader struct {
 	// fingerprint digests the files the current config was built
 	// from, and caFingerprint the CA file alone.
 	fingerprint, caFingerprint [sha256.Size]byte
-	// ticketKeys are the session ticket keys every config gets once
-	// the CA file changed, nil before that, newest first. See Reload.
-	ticketKeys []ticketKeyEntry
-	// now is time.Now, overridden in tests so ticket key rotation can
-	// be exercised without waiting on the wall clock.
-	now func() time.Time
+	// ticketConfig encrypts and decrypts the session tickets of every
+	// config built since the CA file last changed. See Reload.
+	ticketConfig *tls.Config
+	// ticketClock is ticketConfig's clock: nil, for time.Now, outside
+	// tests.
+	ticketClock func() time.Time
 
-	// testHook, when set, runs once per Reload call, between the
-	// pre-load digest and the config load, so a test can change the
-	// files in that window to exercise the race described in Reload.
-	// Nil outside tests.
+	// testHook, when set, runs on every attempt Reload makes to read
+	// the files, between the pre-load digest and the config load, so
+	// a test can change the files in that window. Nil outside tests.
 	testHook func()
 
 	cancel context.CancelFunc
 	done   chan struct{}
 }
 
-// ticketKeyEntry is one session ticket key handed to configs, and
-// when it was generated.
-type ticketKeyEntry struct {
-	key     [32]byte
-	created time.Time
-}
-
-const (
-	// maxReadAttempts bounds how many times Reload re-reads the files
-	// looking for a digest that matches what it actually loaded,
-	// before giving up and keeping the previous config.
-	maxReadAttempts = 5
-
-	// ticketKeyRotation and ticketKeyLifetime match crypto/tls's own
-	// defaults for its automatically-managed ticket keys, so pinning
-	// explicit keys across a CA change (see Reload) does not also
-	// trade away Go's usual rotation cadence for as long as the
-	// process runs.
-	ticketKeyRotation = 24 * time.Hour
-	ticketKeyLifetime = 7 * 24 * time.Hour
-)
+// maxReadAttempts bounds how many times Reload re-reads the files
+// looking for a digest that matches what it actually loaded, before
+// giving up and keeping the previous config.
+const maxReadAttempts = 5
 
 // NewTLSReloader loads the TLS config of the server that name
 // identifies in logs and metrics from files and hands it to sink.
@@ -110,7 +92,6 @@ func NewTLSReloader(name string, files TLSServerFiles, minTLSVersion uint16, sin
 		files:         files,
 		minTLSVersion: minTLSVersion,
 		sink:          sink,
-		now:           time.Now,
 	}
 	if err := r.Reload(true); err != nil {
 		return nil, err
@@ -172,14 +153,13 @@ func (r *TLSReloader) Stop() {
 // Unless force is set, it does nothing when the files are the same as
 // the ones the current config was built from.
 //
-// When the CA file changed, the new config gets a fresh session
-// ticket key, which every later config keeps using. On resumption Go
-// does not verify the client's certificate against the CAs again, so
-// a session established under a CA that has since been removed would
-// otherwise still resume. That key, and the ones it later rotates to,
-// are on the same schedule Go itself uses for its automatic ticket
-// keys, so pinning an explicit key across the CA change does not also
-// pin it for the life of the process.
+// The configs built from one CA file share their session ticket keys,
+// so sessions resume across reloads, and crypto/tls rotates those
+// keys during handshakes on its usual schedule, whether or not
+// anything reloads. When the CA file changes, the new config gets new
+// keys: on resumption Go does not verify the client's certificate
+// against the CAs again, so a session established under a CA that has
+// since been removed would otherwise still resume.
 func (r *TLSReloader) Reload(force bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -219,42 +199,19 @@ func (r *TLSReloader) Reload(force bool) error {
 			break
 		}
 		if attempt == maxReadAttempts {
-			return r.failed(fmt.Errorf("the files kept changing across %d attempts to read them consistently", maxReadAttempts))
+			return r.failed(vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "the files kept changing across %d attempts to read them consistently", maxReadAttempts))
 		}
 	}
 
-	var zero [sha256.Size]byte
-	switch now := r.now(); {
-	case r.caFingerprint != zero && caFingerprint != r.caFingerprint:
-		// The CA changed: pin a key no session from before this point
-		// could have been encrypted with, discarding any carried over
-		// from an earlier pin.
-		key, err := newTicketKey(now)
-		if err != nil {
-			return r.failed(err)
-		}
-		r.ticketKeys = []ticketKeyEntry{key}
-	case len(r.ticketKeys) > 0 && now.Sub(r.ticketKeys[0].created) >= ticketKeyRotation:
-		key, err := newTicketKey(now)
-		if err != nil {
-			return r.failed(err)
-		}
-		keys := make([]ticketKeyEntry, 0, len(r.ticketKeys)+1)
-		keys = append(keys, key)
-		for _, k := range r.ticketKeys {
-			if now.Sub(k.created) < ticketKeyLifetime {
-				keys = append(keys, k)
-			}
-		}
-		r.ticketKeys = keys
+	// ticketConfig serves no handshakes. Its EncryptTicket and
+	// DecryptTicket use the ticket keys crypto/tls manages for it,
+	// rotating them as tickets are issued. Explicit keys set with
+	// SetSessionTicketKeys would never rotate.
+	if r.ticketConfig == nil || caFingerprint != r.caFingerprint {
+		r.ticketConfig = &tls.Config{Time: r.ticketClock}
 	}
-	if len(r.ticketKeys) > 0 {
-		keys := make([][32]byte, len(r.ticketKeys))
-		for i, k := range r.ticketKeys {
-			keys[i] = k.key
-		}
-		config.SetSessionTicketKeys(keys)
-	}
+	config.WrapSession = r.ticketConfig.EncryptTicket
+	config.UnwrapSession = r.ticketConfig.DecryptTicket
 
 	r.sink(config)
 	r.fingerprint, r.caFingerprint = fingerprint, caFingerprint
@@ -266,16 +223,6 @@ func (r *TLSReloader) Reload(force bool) error {
 		log.Info(fmt.Sprintf("Loaded the %s server's TLS config: certificate %q, serial %s, valid until %s", r.name, leaf.Subject, leaf.SerialNumber, leaf.NotAfter.Format(time.RFC3339)))
 	}
 	return nil
-}
-
-// newTicketKey generates a random session ticket key, timestamped at
-// created.
-func newTicketKey(created time.Time) (ticketKeyEntry, error) {
-	var key [32]byte
-	if _, err := rand.Read(key[:]); err != nil {
-		return ticketKeyEntry{}, err
-	}
-	return ticketKeyEntry{key: key, created: created}, nil
 }
 
 func (r *TLSReloader) failed(err error) error {
