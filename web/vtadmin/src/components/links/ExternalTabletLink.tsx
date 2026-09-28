@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-interface Props {
+interface Props extends React.PropsWithChildren {
     className?: string;
     fqdn?: string | null | undefined;
 }

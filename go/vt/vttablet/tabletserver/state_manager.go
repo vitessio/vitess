@@ -438,9 +438,9 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 	if target != nil {
 		switch {
 		case target.Keyspace != sm.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v does not match expected %v", target.Keyspace, sm.target.Keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongKeyspaceShard, "keyspace", target.Keyspace, sm.target.Keyspace)
 		case target.Shard != sm.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v does not match expected %v", target.Shard, sm.target.Shard)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongKeyspaceShard, "shard", target.Shard, sm.target.Shard)
 		case target.TabletType != sm.target.TabletType:
 			if slices.Contains(sm.alsoAllow, target.TabletType) {
 				return nil

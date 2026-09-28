@@ -101,6 +101,10 @@ func TestMain(m *testing.M) {
 			"testuser2": {
 				"Password": "testpassword2",
 				"UserData": "vtgate client 2"
+			},
+			"testuser3": {
+				"Password": "testpassword3",
+				"UserData": "vtgate client 3"
 			}
 		}`
 		if err := createConfig(mysqlAuthServerStatic, SQLConfig); err != nil {
@@ -119,6 +123,11 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--table-acl-config", clusterInstance.TmpDirectory + tableACLConfig,
 			"--queryserver-config-strict-table-acl",
+			// Under strict table ACL, CALL is denied to every caller the ACL does
+			// not exempt, since the tablet cannot determine a procedure body's
+			// tables; testuser3 ("vtgate client 3") is exempt so TestWarnings
+			// can CALL.
+			"--queryserver-config-acl-exempt-acl", "vtgate client 3",
 		}
 
 		// Start keyspace

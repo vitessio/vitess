@@ -57,7 +57,6 @@ func (set *StringSetFlag) ToSet() sets.Set[string] {
 func (set *StringSetFlag) Set(s string) error {
 	if set.set == nil {
 		set.set = sets.New[string]()
-		return nil
 	}
 
 	set.set.Insert(s)

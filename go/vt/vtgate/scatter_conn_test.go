@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -658,6 +659,56 @@ func TestReservedConnFail(t *testing.T) {
 	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")
+}
+
+// TestEndActionRollbackMarking pins which shard-error codes mark the
+// transaction for rollback. The DEADLINE_EXCEEDED and CANCELED rows are the
+// contract the tablet's brief-hold wait-out (TxPool.GetAndLock) relies on: a
+// caller whose own context ends the wait for an internal keepalive or
+// activity-refresh hold never acquired the connection, so its error must not
+// roll back an otherwise untouched transaction — which the ABORTED shape
+// would.
+func TestEndActionRollbackMarking(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	target := &querypb.Target{Keyspace: keyspace, Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
+
+	cases := []struct {
+		name         string
+		err          error
+		mustRollback bool
+	}{{
+		name: "deadline-ended brief-hold wait",
+		err: vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED,
+			"transaction 123: context deadline exceeded: in use: for temp-table activity refresh"),
+		mustRollback: false,
+	}, {
+		name: "canceled brief-hold wait",
+		err: vterrors.Errorf(vtrpcpb.Code_CANCELED,
+			"transaction 123: context canceled: in use: for reserved connection keepalive"),
+		mustRollback: false,
+	}, {
+		name:         "aborted in-use",
+		err:          vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 123: in use: for query"),
+		mustRollback: true,
+	}, {
+		name:         "resource exhausted",
+		err:          vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "pool full"),
+		mustRollback: true,
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+			startTime, statsKey := sc.startAction("Execute", target)
+			err := tc.err
+			sc.endAction(startTime, &concurrency.AllErrorRecorder{}, statsKey, &err, session)
+			assert.Equal(t, tc.mustRollback, session.MustRollback())
+		})
+	}
 }
 
 func TestIsConnClosed(t *testing.T) {

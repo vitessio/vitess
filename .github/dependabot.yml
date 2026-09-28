@@ -57,7 +57,10 @@ updates:
       default-days: 14
 
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # "/" only covers .github/workflows; the composite actions must be listed.
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     cooldown:

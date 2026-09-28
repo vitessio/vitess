@@ -77,8 +77,12 @@ var procSQL = []string{
 	END;`,
 }
 
+// The CALL tests run as framework.ExemptCallerID: under strict table ACL the
+// tablet cannot determine a procedure body's tables and denies CALL to every
+// caller the ACL does not exempt (TestTableACL pins that for "dev"). These tests
+// exercise CALL's own semantics, so they need a caller that is allowed to CALL.
 func TestCallProcedure(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	type testcases struct {
 		query   string
 		wantErr bool
@@ -101,7 +105,7 @@ func TestCallProcedure(t *testing.T) {
 		t.Run(tc.query, func(t *testing.T) {
 			_, err := client.Execute(tc.query, nil)
 			if tc.wantErr {
-				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: acl-exempt)")
 				return
 			}
 			require.NoError(t, err)
@@ -110,7 +114,7 @@ func TestCallProcedure(t *testing.T) {
 }
 
 func TestCallProcedureStreaming(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	type testcases struct {
 		query   string
 		wantErr string
@@ -124,7 +128,7 @@ func TestCallProcedureStreaming(t *testing.T) {
 		// A multi-resultset procedure must be rejected, not silently truncated
 		// to its first resultset.
 		query:   "call proc_select4()",
-		wantErr: "Multi-Resultset not supported in stored procedure (CallerID: dev)",
+		wantErr: "Multi-Resultset not supported in stored procedure (CallerID: acl-exempt)",
 	}, {
 		// A procedure that returns no resultset and concludes its own transaction
 		// streams fine.
@@ -150,7 +154,7 @@ func TestCallProcedureStreaming(t *testing.T) {
 func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T) {
 	setStreamPoolSize(t, 1)
 
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	checkClient := framework.NewClient()
 	_, _ = checkClient.Execute("delete from vitess_test where intval = 8675309", nil)
 	t.Cleanup(func() {
@@ -163,7 +167,7 @@ func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T
 	beforeConnID := qr.Rows[0][0].ToString()
 
 	_, err = client.StreamExecute("call proc_select2_tx_insert()", nil)
-	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: acl-exempt)")
 
 	qr, err = client.StreamExecute("select connection_id()", nil)
 	require.NoError(t, err)
@@ -179,10 +183,44 @@ func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T
 	assert.Empty(t, qr.Rows)
 }
 
-func TestCallProcedureStreamingMultiResultsetCleanConnectionReused(t *testing.T) {
+// TestCallProcedureDiscardsConnection pins that a buffered CALL costs the OLTP
+// pool its connection — on success and after the procedure's own error alike:
+// a procedure body can change the session in ways the tablet cannot see, so no
+// connection a CALL ran on is reused (vitessio/vitess#21046). With a
+// one-connection pool, the next query on a different connection id proves the
+// CALL's connection was closed, not recycled.
+func TestCallProcedureDiscardsConnection(t *testing.T) {
+	setOltpPoolSize(t, 1)
+
+	client := framework.NewExemptClient()
+	connID := func() string {
+		qr, err := client.Execute("select connection_id()", nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+
+	before := connID()
+	_, err := client.Execute("call proc_dml()", nil)
+	require.NoError(t, err)
+	after := connID()
+	assert.NotEqual(t, before, after, "the connection a successful CALL ran on must not be reused")
+
+	_, err = client.Execute("call proc_select4()", nil)
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: acl-exempt)")
+	assert.NotEqual(t, after, connID(), "the connection a failed CALL ran on must not be reused either")
+}
+
+// TestCallProcedureStreamingMultiResultsetDiscardsConnection pins that even a
+// cleanly drained multi-resultset CALL costs the streaming pool its connection:
+// a procedure body can change the session in ways the tablet cannot see, so no
+// connection a CALL ran on is reused (vitessio/vitess#21046). The CALL's own
+// outcome is still what the client sees, and the pool serves the next query on
+// a fresh connection.
+func TestCallProcedureStreamingMultiResultsetDiscardsConnection(t *testing.T) {
 	setStreamPoolSize(t, 1)
 
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 
 	qr, err := client.StreamExecute("select connection_id()", nil)
 	require.NoError(t, err)
@@ -190,18 +228,18 @@ func TestCallProcedureStreamingMultiResultsetCleanConnectionReused(t *testing.T)
 	beforeConnID := qr.Rows[0][0].ToString()
 
 	_, err = client.StreamExecute("call proc_select4()", nil)
-	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: acl-exempt)")
 
 	qr, err = client.StreamExecute("select connection_id()", nil)
 	require.NoError(t, err)
 	require.Len(t, qr.Rows, 1)
-	assert.Equal(t, beforeConnID, qr.Rows[0][0].ToString())
+	assert.NotEqual(t, beforeConnID, qr.Rows[0][0].ToString(), "the connection a CALL ran on must not be reused")
 }
 
 func TestCallProcedureStreamingCallbackErrorClosesConnection(t *testing.T) {
 	setStreamPoolSize(t, 1)
 
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 
 	qr, err := client.StreamExecute("select connection_id()", nil)
 	require.NoError(t, err)
@@ -230,15 +268,25 @@ func setStreamPoolSize(t *testing.T, size int) {
 	})
 }
 
+func setOltpPoolSize(t *testing.T, size int) {
+	t.Helper()
+
+	defaultPoolSize := framework.Server.PoolSize()
+	require.NoError(t, framework.Server.SetPoolSize(t.Context(), size))
+	t.Cleanup(func() {
+		require.NoError(t, framework.Server.SetPoolSize(t.Context(), defaultPoolSize))
+	})
+}
+
 func TestCallProcedureLeakTxStreaming(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 
 	_, err := client.StreamExecute(`call proc_tx_begin()`, nil)
-	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: dev)")
+	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: acl-exempt)")
 }
 
 func TestCallProcedureChangedTxStreaming(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	defer client.Release()
 
 	queries := []string{
@@ -248,27 +296,27 @@ func TestCallProcedureChangedTxStreaming(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.StreamBeginExecuteWithOptions(query, nil, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
 			client.Release()
 		})
 	}
 }
 
 func TestCallProcedureInsideTx(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	defer client.Release()
 
 	_, err := client.BeginExecute(`call proc_dml()`, nil, nil)
-	require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+	require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
 
 	_, err = client.Execute(`select 1`, nil)
 	require.Contains(t, err.Error(), "ended")
 }
 
 func TestCallProcedureInsideReservedConn(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	_, err := client.ReserveBeginExecute(`call proc_dml()`, nil, nil, nil)
-	require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+	require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
 	client.Release()
 
 	_, err = client.ReserveExecute(`call proc_dml()`, nil, nil)
@@ -281,18 +329,18 @@ func TestCallProcedureInsideReservedConn(t *testing.T) {
 }
 
 func TestCallProcedureLeakTx(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 
 	_, err := client.Execute(`call proc_tx_begin()`, nil)
-	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: dev)")
+	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: acl-exempt)")
 }
 
 func TestCallProcedureChangedTx(t *testing.T) {
-	client := framework.NewClient()
+	client := framework.NewExemptClient()
 	defer client.Release()
 
 	_, err := client.Execute(`call proc_tx_begin()`, nil)
-	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: dev)")
+	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: acl-exempt)")
 
 	queries := []string{
 		`call proc_tx_commit()`,
@@ -301,7 +349,7 @@ func TestCallProcedureChangedTx(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.BeginExecute(query, nil, nil)
-			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: acl-exempt)")
 			client.Release()
 		})
 	}

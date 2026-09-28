@@ -53,7 +53,7 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	txid := newTransaction(tsv, nil)
 
 	// taint the connection.
-	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	sc, err := tsv.te.txPool.GetAndLock(ctx, txid, "taint")
 	require.NoError(t, err)
 	sc.Taint(ctx, tsv.te.reservedConnStats)
 	sc.Unlock()
@@ -74,7 +74,7 @@ func TestExecutorPrepareFailure(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 
 	// taint the connection.
-	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	sc, err := tsv.te.txPool.GetAndLock(ctx, txid, "taint")
 	require.NoError(t, err)
 	sc.Taint(ctx, tsv.te.reservedConnStats)
 	sc.Unlock()
@@ -190,7 +190,7 @@ func TestExecutorPrepareRuleFailure(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 
 	// taint the connection.
-	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
+	sc, err := tsv.te.txPool.GetAndLock(ctx, txid, "adding query property")
 	require.NoError(t, err)
 	sc.txProps.Queries = append(sc.txProps.Queries, tx.Query{
 		Sql:    "update test_table set col = 5",
@@ -212,7 +212,7 @@ func TestExecutorPrepareConnFailure(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 
 	// taint the connection.
-	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
+	sc, err := tsv.te.txPool.GetAndLock(ctx, txid, "adding query property")
 	require.NoError(t, err)
 	sc.Unlock()
 	sc.dbConn.Close()
@@ -351,7 +351,7 @@ func TestExecutorStartCommitFailure(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 
 	// taint the connection.
-	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	sc, err := tsv.te.txPool.GetAndLock(ctx, txid, "taint")
 	require.NoError(t, err)
 	sc.Taint(ctx, tsv.te.reservedConnStats)
 	sc.Unlock()

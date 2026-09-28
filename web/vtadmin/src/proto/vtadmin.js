@@ -33,7 +33,7 @@ export const vtadmin = $root.vtadmin = (() => {
             $protobuf.rpc.Service.call(this, rpcImpl, requestDelimited, responseDelimited);
         };
 
-        (VTAdmin.prototype = $Object.create($protobuf.rpc.Service.prototype)).constructor = VTAdmin;
+        $Object.defineProperty(VTAdmin.prototype = $Object.create($protobuf.rpc.Service.prototype), "constructor", { value: VTAdmin, writable: true, enumerable: false, configurable: true });
 
         /**
          * Creates new VTAdmin service using the specified rpc implementation.
@@ -3151,7 +3151,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Cluster.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -3441,7 +3441,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ClusterBackup.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -3737,7 +3737,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ClusterCellsAliases.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -4083,7 +4083,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ClusterCellInfo.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -4415,7 +4415,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ClusterShardReplicationPosition.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -4747,7 +4747,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ClusterWorkflows.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -5077,7 +5077,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Keyspace.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -5460,7 +5460,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Schema.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -5845,7 +5845,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ShardTableSize.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -6182,7 +6182,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TableSize.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -6570,7 +6570,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SchemaMigration.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -6862,7 +6862,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Shard.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -7165,7 +7165,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SrvVSchema.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -7497,7 +7497,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Tablet.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -7740,7 +7740,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {number} NOT_SERVING=2 NOT_SERVING value
          */
         Tablet.ServingState = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "UNKNOWN"] = 0;
             values[valuesById[1] = "SERVING"] = 1;
             values[valuesById[2] = "NOT_SERVING"] = 2;
@@ -7867,7 +7867,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VSchema.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -8188,7 +8188,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Vtctld.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -8543,7 +8543,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VTGate.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -8928,7 +8928,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Workflow.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -9238,7 +9238,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowDeleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -9529,7 +9529,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowSwitchTrafficRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -9842,7 +9842,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplySchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -10169,7 +10169,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CancelSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -10460,7 +10460,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CleanupSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -10751,7 +10751,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CompleteSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -11042,7 +11042,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -11332,7 +11332,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -11612,7 +11612,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -11884,7 +11884,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -12175,7 +12175,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -12466,7 +12466,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteShardsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -12770,7 +12770,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -13090,7 +13090,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteTabletResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -13381,7 +13381,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         EmergencyFailoverShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -13707,7 +13707,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         EmergencyFailoverShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -14082,7 +14082,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FindSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -14430,7 +14430,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetBackupsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -14779,7 +14779,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetBackupsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -15080,7 +15080,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellInfosRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -15400,7 +15400,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellInfosResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -15677,7 +15677,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellsAliasesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -15949,7 +15949,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellsAliasesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -16213,7 +16213,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetClustersRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -16445,7 +16445,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetClustersResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -16731,7 +16731,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetFullStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -17013,7 +17013,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetGatesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -17285,7 +17285,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetGatesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -17571,7 +17571,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -17852,7 +17852,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspacesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -18124,7 +18124,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspacesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -18432,7 +18432,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -18761,7 +18761,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -19053,7 +19053,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -19330,7 +19330,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaMigrationsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -19613,7 +19613,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ClusterRequest.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -19898,7 +19898,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaMigrationsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -20201,7 +20201,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardReplicationPositionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -20530,7 +20530,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardReplicationPositionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -20829,7 +20829,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -21152,7 +21152,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspacesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -21455,7 +21455,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspacesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -21770,7 +21770,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -22064,7 +22064,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -22365,7 +22365,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -22651,7 +22651,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaTableSizeOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -22943,7 +22943,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -23235,7 +23235,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -23507,7 +23507,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -23793,7 +23793,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTopologyPathRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -24083,7 +24083,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTransactionInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -24385,7 +24385,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetUnresolvedTransactionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -24709,7 +24709,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -24990,7 +24990,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVSchemasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -25262,7 +25262,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVSchemasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -25539,7 +25539,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVtctldsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -25811,7 +25811,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVtctldsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -26119,7 +26119,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -26456,7 +26456,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetWorkflowStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -26775,7 +26775,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -27094,7 +27094,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -27430,7 +27430,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetWorkflowsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -27780,7 +27780,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetWorkflowsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -28095,7 +28095,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LaunchSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -28397,7 +28397,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MaterializeCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -28706,7 +28706,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MoveTablesCompleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -28997,7 +28997,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MoveTablesCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -29290,7 +29290,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PingTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -29591,7 +29591,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PingTabletResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -29882,7 +29882,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PlannedFailoverShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -30208,7 +30208,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PlannedFailoverShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -30594,7 +30594,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RebuildKeyspaceGraphRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -30920,7 +30920,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RebuildKeyspaceGraphResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -31193,7 +31193,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -31494,7 +31494,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -31848,7 +31848,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -32292,7 +32292,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -32644,7 +32644,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             KeyspaceResult.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -32952,7 +32952,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ShardResult.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -33258,7 +33258,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TabletResult.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -33596,7 +33596,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -33949,7 +33949,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -34237,7 +34237,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshTabletReplicationSourceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -34560,7 +34560,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshTabletReplicationSourceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -34921,7 +34921,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveKeyspaceCellRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -35254,7 +35254,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveKeyspaceCellResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -35525,7 +35525,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RetrySchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -35818,7 +35818,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunHealthCheckRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -36119,7 +36119,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunHealthCheckResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -36410,7 +36410,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReshardCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -36703,7 +36703,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadOnlyRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -36982,7 +36982,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadOnlyResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -37225,7 +37225,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadWriteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -37504,7 +37504,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadWriteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -37747,7 +37747,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -38048,7 +38048,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -38341,7 +38341,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -38642,7 +38642,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -38935,7 +38935,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletExternallyPromotedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -39269,7 +39269,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletExternallyPromotedResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -39618,7 +39618,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletExternallyReparentedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -39919,7 +39919,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -40220,7 +40220,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -40528,7 +40528,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateSchemaKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -40840,7 +40840,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -41166,7 +41166,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVersionKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -41467,7 +41467,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVersionShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -41775,7 +41775,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -42066,7 +42066,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffShowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -42357,7 +42357,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffProgress.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -42691,7 +42691,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffShardReport.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -43063,7 +43063,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffShowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -43389,7 +43389,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VTExplainRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -43686,7 +43686,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VTExplainResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -43968,7 +43968,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VExplainRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -44265,7 +44265,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VExplainResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -44452,7 +44452,7 @@ export const logutil = $root.logutil = (() => {
      * @property {number} CONSOLE=3 CONSOLE value
      */
     logutil.Level = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "INFO"] = 0;
         values[valuesById[1] = "WARNING"] = 1;
         values[valuesById[2] = "ERROR"] = 2;
@@ -44599,7 +44599,7 @@ export const logutil = $root.logutil = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Event.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -44991,7 +44991,7 @@ export const vttime = $root.vttime = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Time.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -45297,7 +45297,7 @@ export const vttime = $root.vttime = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Duration.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -45606,7 +45606,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -45865,7 +45865,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -46106,7 +46106,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShutdownRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -46375,7 +46375,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShutdownResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -46594,7 +46594,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunMysqlUpgradeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -46813,7 +46813,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunMysqlUpgradeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -47065,7 +47065,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyBinlogFileRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -47352,7 +47352,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyBinlogFileResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -47584,7 +47584,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadBinlogFilesTimestampsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -47887,7 +47887,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadBinlogFilesTimestampsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -48193,7 +48193,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReinitConfigRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -48412,7 +48412,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReinitConfigResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -48631,7 +48631,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshConfigRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -48850,7 +48850,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshConfigResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -49069,7 +49069,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VersionStringRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -49299,7 +49299,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VersionStringResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -49548,7 +49548,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         HostMetricsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -49782,7 +49782,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         HostMetricsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -50105,7 +50105,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Metric.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -50327,7 +50327,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
             $protobuf.rpc.Service.call(this, rpcImpl, requestDelimited, responseDelimited);
         };
 
-        (MysqlCtl.prototype = $Object.create($protobuf.rpc.Service.prototype)).constructor = MysqlCtl;
+        $Object.defineProperty(MysqlCtl.prototype = $Object.create($protobuf.rpc.Service.prototype), "constructor", { value: MysqlCtl, writable: true, enumerable: false, configurable: true });
 
         /**
          * Creates new MysqlCtl service using the specified rpc implementation.
@@ -50887,7 +50887,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BackupInfo.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -51212,7 +51212,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @property {number} VALID=4 VALID value
          */
         BackupInfo.Status = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "UNKNOWN"] = 0;
             values[valuesById[1] = "INCOMPLETE"] = 1;
             values[valuesById[2] = "COMPLETE"] = 2;
@@ -51342,7 +51342,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         KeyRange.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -51552,7 +51552,7 @@ export const topodata = $root.topodata = (() => {
      * @property {number} SNAPSHOT=1 SNAPSHOT value
      */
     topodata.KeyspaceType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "NORMAL"] = 0;
         values[valuesById[1] = "SNAPSHOT"] = 1;
         return values;
@@ -51664,7 +51664,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletAlias.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -51865,7 +51865,7 @@ export const topodata = $root.topodata = (() => {
      * @property {number} DRAINED=8 DRAINED value
      */
     topodata.TabletType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
         values[valuesById[1] = "PRIMARY"] = 1;
         values["MASTER"] = 1;
@@ -52133,7 +52133,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Tablet.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -52849,7 +52849,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Shard.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -53297,7 +53297,7 @@ export const topodata = $root.topodata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             SourceShard.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -53690,7 +53690,7 @@ export const topodata = $root.topodata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TabletControl.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -54172,7 +54172,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Keyspace.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -54576,7 +54576,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplication.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -54848,7 +54848,7 @@ export const topodata = $root.topodata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Node.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -55123,7 +55123,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationError.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -55329,7 +55329,7 @@ export const topodata = $root.topodata = (() => {
          * @property {number} TOPOLOGY_MISMATCH=2 TOPOLOGY_MISMATCH value
          */
         ShardReplicationError.Type = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "UNKNOWN"] = 0;
             values[valuesById[1] = "NOT_FOUND"] = 1;
             values[valuesById[2] = "TOPOLOGY_MISMATCH"] = 2;
@@ -55445,7 +55445,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReference.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -55747,7 +55747,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardTabletControl.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -56078,7 +56078,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ThrottledAppRule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -56470,7 +56470,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ThrottlerConfig.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -56966,7 +56966,7 @@ export const topodata = $root.topodata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             MetricNames.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -57263,7 +57263,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SrvKeyspace.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -57601,7 +57601,7 @@ export const topodata = $root.topodata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             KeyspacePartition.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -57990,7 +57990,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CellInfo.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -58271,7 +58271,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CellsAlias.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -58563,7 +58563,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TopoConfig.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -58860,7 +58860,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExternalVitessCluster.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -59123,7 +59123,7 @@ export const topodata = $root.topodata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExternalClusters.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -59410,7 +59410,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Keyspace.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -59670,7 +59670,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Shard.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -59941,7 +59941,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryHealthEvent.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -60249,7 +60249,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryHealthState.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -60468,7 +60468,7 @@ export const querythrottler = $root.querythrottler = (() => {
      * @property {number} TABLET_THROTTLER=1 TABLET_THROTTLER value
      */
     querythrottler.ThrottlingStrategy = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
         values[valuesById[1] = "TABLET_THROTTLER"] = 1;
         return values;
@@ -60602,7 +60602,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Config.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -60933,7 +60933,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletStrategyConfig.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -61241,7 +61241,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StatementRuleSet.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -61549,7 +61549,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MetricRuleSet.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -61855,7 +61855,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MetricRule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -62141,7 +62141,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ThrottleThreshold.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -62467,7 +62467,7 @@ export const vtrpc = $root.vtrpc = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CallerID.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -62723,7 +62723,7 @@ export const vtrpc = $root.vtrpc = (() => {
      * @property {number} READ_ONLY=18 READ_ONLY value
      */
     vtrpc.Code = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "OK"] = 0;
         values[valuesById[1] = "CANCELED"] = 1;
         values[valuesById[2] = "UNKNOWN"] = 2;
@@ -62852,7 +62852,7 @@ export const vtrpc = $root.vtrpc = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RPCError.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -63136,7 +63136,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
      * @property {number} UNKNOWN=3 UNKNOWN value
      */
     tabletmanagerdata.TabletSelectionPreference = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "ANY"] = 0;
         values[valuesById[1] = "INORDER"] = 1;
         values[valuesById[3] = "UNKNOWN"] = 3;
@@ -63321,7 +63321,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TableDefinition.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -63790,7 +63790,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SchemaDefinition.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -64095,7 +64095,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SchemaChangeResult.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -64411,7 +64411,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UserPermission.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -64818,7 +64818,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DbPermission.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -65189,7 +65189,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Permissions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -65498,7 +65498,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PingRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -65758,7 +65758,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PingResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -66018,7 +66018,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SleepRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -66283,7 +66283,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SleepResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -66539,7 +66539,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteHookRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -66909,7 +66909,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteHookResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -67259,7 +67259,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -67596,7 +67596,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -67846,7 +67846,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetPermissionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -68076,7 +68076,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetPermissionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -68339,7 +68339,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetGlobalStatusVarsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -68611,7 +68611,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetGlobalStatusVarsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -68900,7 +68900,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadOnlyRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -69119,7 +69119,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadOnlyResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -69338,7 +69338,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadWriteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -69557,7 +69557,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReadWriteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -69798,7 +69798,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTypeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -70113,7 +70113,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTypeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -70332,7 +70332,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -70551,7 +70551,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -70770,7 +70770,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunHealthCheckRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -70989,7 +70989,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunHealthCheckResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -71219,7 +71219,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -71468,7 +71468,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -71700,7 +71700,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PreflightSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -71972,7 +71972,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PreflightSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -72324,7 +72324,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplySchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -72740,7 +72740,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplySchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -73010,7 +73010,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LockTablesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -73229,7 +73229,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LockTablesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -73448,7 +73448,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UnlockTablesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -73667,7 +73667,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UnlockTablesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -73930,7 +73930,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteQueryRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -74271,7 +74271,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteQueryResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -74587,7 +74587,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsDbaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -74963,7 +74963,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsDbaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -75235,7 +75235,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SessionVariable.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -75582,7 +75582,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteMultiFetchAsDbaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -75994,7 +75994,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteMultiFetchAsDbaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -76302,7 +76302,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsAllPrivsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -76642,7 +76642,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsAllPrivsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -76914,7 +76914,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsAppRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -77218,7 +77218,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsAppResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -77479,7 +77479,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetUnresolvedTransactionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -77757,7 +77757,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetUnresolvedTransactionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -78032,7 +78032,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -78292,7 +78292,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadTransactionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -78553,7 +78553,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTransactionInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -78848,7 +78848,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTransactionInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -79201,7 +79201,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -79469,7 +79469,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -79688,7 +79688,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MysqlHostMetricsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -79918,7 +79918,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MysqlHostMetricsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -80168,7 +80168,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReplicationStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -80398,7 +80398,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReplicationStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -80648,7 +80648,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -80878,7 +80878,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -81128,7 +81128,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryPositionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -81358,7 +81358,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryPositionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -81618,7 +81618,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WaitForPositionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -81867,7 +81867,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WaitForPositionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -82086,7 +82086,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -82305,7 +82305,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -82546,7 +82546,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationMinimumRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -82841,7 +82841,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationMinimumResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -83101,7 +83101,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -83350,7 +83350,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -83580,7 +83580,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RestartReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -83829,7 +83829,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RestartReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -84070,7 +84070,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationUntilAfterRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -84354,7 +84354,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationUntilAfterResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -84573,7 +84573,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetReplicasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -84805,7 +84805,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetReplicasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -85064,7 +85064,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResetReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -85283,7 +85283,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResetReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -85513,7 +85513,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VReplicationExecRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -85773,7 +85773,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VReplicationExecResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -86045,7 +86045,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VReplicationWaitForPosRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -86313,7 +86313,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VReplicationWaitForPosResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -86543,7 +86543,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         InitPrimaryRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -86803,7 +86803,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         InitPrimaryResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -87096,7 +87096,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PopulateReparentJournalRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -87417,7 +87417,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PopulateReparentJournalResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -87636,7 +87636,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadReparentJournalInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -87866,7 +87866,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadReparentJournalInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -88159,7 +88159,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         InitReplicaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -88480,7 +88480,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         InitReplicaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -88710,7 +88710,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DemotePrimaryRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -88970,7 +88970,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DemotePrimaryResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -89231,7 +89231,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UndoDemotePrimaryRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -89480,7 +89480,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UndoDemotePrimaryResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -89699,7 +89699,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReplicaWasPromotedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -89918,7 +89918,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReplicaWasPromotedResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -90137,7 +90137,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResetReplicationParametersRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -90356,7 +90356,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResetReplicationParametersResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -90575,7 +90575,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FullStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -90805,7 +90805,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FullStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -91121,7 +91121,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReplicationSourceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -91478,7 +91478,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetReplicationSourceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -91708,7 +91708,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReplicaWasRestartedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -91958,7 +91958,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReplicaWasRestartedResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -92188,7 +92188,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationAndGetStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -92459,7 +92459,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationAndGetStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -92720,7 +92720,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PromoteReplicaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -92980,7 +92980,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PromoteReplicaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -93315,7 +93315,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BackupRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -93718,7 +93718,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             InitSQL.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -94113,7 +94113,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BackupResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -94420,7 +94420,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RestoreFromBackupRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -94766,7 +94766,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RestoreFromBackupResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -95142,7 +95142,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateVReplicationWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -95731,7 +95731,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateVReplicationWorkflowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -96005,7 +96005,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteTableDataRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -96329,7 +96329,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteTableDataResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -96559,7 +96559,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteVReplicationWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -96819,7 +96819,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteVReplicationWorkflowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -97069,7 +97069,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         HasVReplicationWorkflowsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -97299,7 +97299,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         HasVReplicationWorkflowsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -97621,7 +97621,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadVReplicationWorkflowsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -98107,7 +98107,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadVReplicationWorkflowsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -98382,7 +98382,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadVReplicationWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -98768,7 +98768,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadVReplicationWorkflowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -99546,7 +99546,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Stream.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -100117,7 +100117,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVReplicationPermissionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -100369,7 +100369,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVReplicationPermissionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -100721,7 +100721,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -101095,7 +101095,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -101431,7 +101431,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffPickerOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -101783,7 +101783,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffReportOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -102274,7 +102274,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffCoreOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -102798,7 +102798,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -103118,7 +103118,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffTableLastPK.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -103537,7 +103537,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateVReplicationWorkflowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -104159,7 +104159,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateVReplicationWorkflowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -104500,7 +104500,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateVReplicationWorkflowsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -104898,7 +104898,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateVReplicationWorkflowsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -105161,7 +105161,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResetSequencesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -105420,7 +105420,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResetSequencesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -105683,7 +105683,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CheckThrottlerRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -105915,7 +105915,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
      * @property {number} INTERNAL_ERROR=5 INTERNAL_ERROR value
      */
     tabletmanagerdata.CheckThrottlerResponseCode = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "UNDEFINED"] = 0;
         values[valuesById[1] = "OK"] = 1;
         values[valuesById[2] = "THRESHOLD_EXCEEDED"] = 2;
@@ -106112,7 +106112,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CheckThrottlerResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -106652,7 +106652,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Metric.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -107040,7 +107040,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetThrottlerStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -107477,7 +107477,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetThrottlerStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -108305,7 +108305,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             MetricResult.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -108595,7 +108595,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             MetricHealth.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -108902,7 +108902,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             RecentApp.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -109225,7 +109225,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTagsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -109546,7 +109546,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTagsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -109848,7 +109848,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateSequenceTablesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -110142,7 +110142,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             SequenceMetadata.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -110447,7 +110447,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateSequenceTablesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -110679,7 +110679,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetMaxValueForSequencesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -110984,7 +110984,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             SequenceMetadata.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -111304,7 +111304,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetMaxValueForSequencesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -111650,7 +111650,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Charset.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -111960,7 +111960,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BinlogTransaction.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -112274,7 +112274,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Statement.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -112542,7 +112542,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @property {number} BL_DELETE=9 BL_DELETE value
              */
             Statement.Category = (function() {
-                const valuesById = {}, values = $Object.create(valuesById);
+                const valuesById = $Object.create(null), values = $Object.create(valuesById);
                 values[valuesById[0] = "BL_UNRECOGNIZED"] = 0;
                 values[valuesById[1] = "BL_BEGIN"] = 1;
                 values[valuesById[2] = "BL_COMMIT"] = 2;
@@ -112679,7 +112679,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamKeyRangeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -112978,7 +112978,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamKeyRangeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -113263,7 +113263,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamTablesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -113572,7 +113572,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamTablesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -113844,7 +113844,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CharsetConversion.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -114219,7 +114219,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Rule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -114783,7 +114783,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Filter.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -115051,7 +115051,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {number} BEST_EFFORT=1 BEST_EFFORT value
          */
         Filter.FieldEventMode = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "ERR_ON_MISMATCH"] = 0;
             values[valuesById[1] = "BEST_EFFORT"] = 1;
             return values;
@@ -115070,7 +115070,7 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} EXEC_IGNORE=3 EXEC_IGNORE value
      */
     binlogdata.OnDDLAction = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "IGNORE"] = 0;
         values[valuesById[1] = "STOP"] = 1;
         values[valuesById[2] = "EXEC"] = 2;
@@ -115090,7 +115090,7 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} OnlineDDL=5 OnlineDDL value
      */
     binlogdata.VReplicationWorkflowType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "Materialize"] = 0;
         values[valuesById[1] = "MoveTables"] = 1;
         values[valuesById[2] = "CreateLookupIndex"] = 2;
@@ -115109,7 +115109,7 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} AtomicCopy=2 AtomicCopy value
      */
     binlogdata.VReplicationWorkflowSubType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "None"] = 0;
         values[valuesById[1] = "Partial"] = 1;
         values[valuesById[2] = "AtomicCopy"] = 2;
@@ -115129,7 +115129,7 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} Lagging=6 Lagging value
      */
     binlogdata.VReplicationWorkflowState = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "Unknown"] = 0;
         values[valuesById[1] = "Init"] = 1;
         values[valuesById[2] = "Stopped"] = 2;
@@ -115358,7 +115358,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BinlogSource.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -115830,7 +115830,7 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} ROWS_QUERY=22 ROWS_QUERY value
      */
     binlogdata.VEventType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
         values[valuesById[1] = "GTID"] = 1;
         values[valuesById[2] = "BEGIN"] = 2;
@@ -115866,6 +115866,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {query.Row.$Properties|null} [after] RowChange after
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [data_columns] RowChange data_columns
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [json_partial_values] RowChange json_partial_values
+         * @property {binlogdata.RowChange.Bitmap.$Properties|null} [before_data_columns] RowChange before_data_columns
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -115930,6 +115931,14 @@ export const binlogdata = $root.binlogdata = (() => {
         RowChange.prototype.json_partial_values = null;
 
         /**
+         * RowChange before_data_columns.
+         * @member {binlogdata.RowChange.Bitmap.$Properties|null|undefined} before_data_columns
+         * @memberof binlogdata.RowChange
+         * @instance
+         */
+        RowChange.prototype.before_data_columns = null;
+
+        /**
          * Creates a new RowChange instance using the specified properties.
          * @function create
          * @memberof binlogdata.RowChange
@@ -115969,6 +115978,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.binlogdata.RowChange.Bitmap.encode(message.data_columns, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.json_partial_values != null && $Object.hasOwnProperty.call(message, "json_partial_values"))
                 $root.binlogdata.RowChange.Bitmap.encode(message.json_partial_values, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns"))
+                $root.binlogdata.RowChange.Bitmap.encode(message.before_data_columns, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -115985,7 +115996,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RowChange.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -116038,6 +116049,12 @@ export const binlogdata = $root.binlogdata = (() => {
                         if (wireType !== 2)
                             break;
                         message.json_partial_values = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.json_partial_values);
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.before_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_data_columns);
                         continue;
                     }
                 }
@@ -116103,6 +116120,11 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (error)
                     return "json_partial_values." + error;
             }
+            if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns")) {
+                let error = $root.binlogdata.RowChange.Bitmap.verify(message.before_data_columns, _depth + 1);
+                if (error)
+                    return "before_data_columns." + error;
+            }
             return null;
         };
 
@@ -116144,6 +116166,11 @@ export const binlogdata = $root.binlogdata = (() => {
                     throw $TypeError(".binlogdata.RowChange.json_partial_values: object expected");
                 message.json_partial_values = $root.binlogdata.RowChange.Bitmap.fromObject(object.json_partial_values, _depth + 1);
             }
+            if (object.before_data_columns != null) {
+                if (!$util.isObject(object.before_data_columns))
+                    throw $TypeError(".binlogdata.RowChange.before_data_columns: object expected");
+                message.before_data_columns = $root.binlogdata.RowChange.Bitmap.fromObject(object.before_data_columns, _depth + 1);
+            }
             return message;
         };
 
@@ -116169,6 +116196,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.after = null;
                 object.data_columns = null;
                 object.json_partial_values = null;
+                object.before_data_columns = null;
             }
             if (message.before != null && $Object.hasOwnProperty.call(message, "before"))
                 object.before = $root.query.Row.toObject(message.before, options, _depth + 1);
@@ -116178,6 +116206,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.data_columns = $root.binlogdata.RowChange.Bitmap.toObject(message.data_columns, options, _depth + 1);
             if (message.json_partial_values != null && $Object.hasOwnProperty.call(message, "json_partial_values"))
                 object.json_partial_values = $root.binlogdata.RowChange.Bitmap.toObject(message.json_partial_values, options, _depth + 1);
+            if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns"))
+                object.before_data_columns = $root.binlogdata.RowChange.Bitmap.toObject(message.before_data_columns, options, _depth + 1);
             return object;
         };
 
@@ -116312,7 +116342,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Bitmap.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -116676,7 +116706,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RowEvent.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -117100,7 +117130,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FieldEvent.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -117502,7 +117532,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardGtid.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -117835,7 +117865,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VGtid.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -118121,7 +118151,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         KeyspaceShard.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -118313,7 +118343,7 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} SHARDS=1 SHARDS value
      */
     binlogdata.MigrationType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "TABLES"] = 0;
         values[valuesById[1] = "SHARDS"] = 1;
         return values;
@@ -118488,7 +118518,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Journal.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -119123,7 +119153,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VEvent.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -119890,7 +119920,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MinimalTable.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -120252,7 +120282,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MinimalSchema.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -120578,7 +120608,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -121153,7 +121183,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -121545,7 +121575,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -121875,7 +121905,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamRowsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -122314,7 +122344,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamRowsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -122782,7 +122812,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamTablesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -123162,7 +123192,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamTablesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -123572,7 +123602,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LastPKEvent.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -123863,7 +123893,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TableLastPK.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -124176,7 +124206,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamResultsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -124520,7 +124550,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VStreamResultsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -124914,7 +124944,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BinlogDumpGTIDRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -125302,7 +125332,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BinlogDumpResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -125616,7 +125646,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Target.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -125991,7 +126021,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VTGateCallerID.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -126302,7 +126332,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         EventToken.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -126546,7 +126576,7 @@ export const query = $root.query = (() => {
      * @property {number} BINCMP_FLAG=131072 BINCMP_FLAG value
      */
     query.MySqlFlag = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "EMPTY"] = 0;
         values[valuesById[1] = "NOT_NULL_FLAG"] = 1;
         values[valuesById[2] = "PRI_KEY_FLAG"] = 2;
@@ -126583,7 +126613,7 @@ export const query = $root.query = (() => {
      * @property {number} ISBINARY=8192 ISBINARY value
      */
     query.Flag = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "NONE"] = 0;
         values[valuesById[256] = "ISINTEGRAL"] = 256;
         values[valuesById[512] = "ISUNSIGNED"] = 512;
@@ -126638,7 +126668,7 @@ export const query = $root.query = (() => {
      * @property {number} ROW_TUPLE=37 ROW_TUPLE value
      */
     query.Type = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "NULL_TYPE"] = 0;
         values[valuesById[257] = "INT8"] = 257;
         values[valuesById[770] = "UINT8"] = 770;
@@ -126786,7 +126816,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Value.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -127253,7 +127283,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BindVariable.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -127745,7 +127775,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BoundQuery.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -128287,7 +128317,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -128939,7 +128969,7 @@ export const query = $root.query = (() => {
          * @property {number} ALL=2 ALL value
          */
         ExecuteOptions.IncludedFields = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "TYPE_AND_NAME"] = 0;
             values[valuesById[1] = "TYPE_ONLY"] = 1;
             values[valuesById[2] = "ALL"] = 2;
@@ -128956,7 +128986,7 @@ export const query = $root.query = (() => {
          * @property {number} DBA=3 DBA value
          */
         ExecuteOptions.Workload = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "UNSPECIFIED"] = 0;
             values[valuesById[1] = "OLTP"] = 1;
             values[valuesById[2] = "OLAP"] = 2;
@@ -128977,7 +129007,7 @@ export const query = $root.query = (() => {
          * @property {number} AUTOCOMMIT=6 AUTOCOMMIT value
          */
         ExecuteOptions.TransactionIsolation = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "DEFAULT"] = 0;
             values[valuesById[1] = "REPEATABLE_READ"] = 1;
             values[valuesById[2] = "READ_COMMITTED"] = 2;
@@ -129002,7 +129032,7 @@ export const query = $root.query = (() => {
          * @property {number} V3Insert=7 V3Insert value
          */
         ExecuteOptions.PlannerVersion = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "DEFAULT_PLANNER"] = 0;
             values[valuesById[1] = "V3"] = 1;
             values[valuesById[2] = "Gen4"] = 2;
@@ -129024,7 +129054,7 @@ export const query = $root.query = (() => {
          * @property {number} CONSOLIDATOR_ENABLED_REPLICAS=3 CONSOLIDATOR_ENABLED_REPLICAS value
          */
         ExecuteOptions.Consolidator = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "CONSOLIDATOR_UNSPECIFIED"] = 0;
             values[valuesById[1] = "CONSOLIDATOR_DISABLED"] = 1;
             values[valuesById[2] = "CONSOLIDATOR_ENABLED"] = 2;
@@ -129041,7 +129071,7 @@ export const query = $root.query = (() => {
          * @property {number} READ_ONLY=2 READ_ONLY value
          */
         ExecuteOptions.TransactionAccessMode = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "CONSISTENT_SNAPSHOT"] = 0;
             values[valuesById[1] = "READ_WRITE"] = 1;
             values[valuesById[2] = "READ_ONLY"] = 2;
@@ -129256,7 +129286,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Field.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -129864,7 +129894,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Row.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -130250,7 +130280,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         QueryResult.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -130694,7 +130724,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         QueryWarning.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -130986,7 +131016,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamEvent.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -131326,7 +131356,7 @@ export const query = $root.query = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Statement.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -131626,7 +131656,7 @@ export const query = $root.query = (() => {
              * @property {number} DDL=2 DDL value
              */
             Statement.Category = (function() {
-                const valuesById = {}, values = $Object.create(valuesById);
+                const valuesById = $Object.create(null), values = $Object.create(valuesById);
                 values[valuesById[0] = "Error"] = 0;
                 values[valuesById[1] = "DML"] = 1;
                 values[valuesById[2] = "DDL"] = 2;
@@ -131651,6 +131681,9 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] ExecuteRequest transaction_id
          * @property {query.ExecuteOptions.$Properties|null} [options] ExecuteRequest options
          * @property {number|Long|null} [reserved_id] ExecuteRequest reserved_id
+         * @property {boolean|null} [reserved_conn_keep_alive] ExecuteRequest reserved_conn_keep_alive
+         * @property {Array.<number|Long>|null} [reserved_conn_keep_alive_ids] ExecuteRequest reserved_conn_keep_alive_ids
+         * @property {boolean|null} [reserved_conn_activity_refresh] ExecuteRequest reserved_conn_activity_refresh
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -131672,6 +131705,9 @@ export const query = $root.query = (() => {
          *   transaction_id?: number|Long|null;
          *   options?: query.ExecuteOptions.$Shape|null;
          *   reserved_id?: number|Long|null;
+         *   reserved_conn_keep_alive?: boolean|null;
+         *   reserved_conn_keep_alive_ids?: Array.<number|Long>|null;
+         *   reserved_conn_activity_refresh?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ExecuteRequest.$Shape
          */
@@ -131685,6 +131721,7 @@ export const query = $root.query = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteRequest = function (properties) {
+            this.reserved_conn_keep_alive_ids = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -131748,6 +131785,30 @@ export const query = $root.query = (() => {
         ExecuteRequest.prototype.reserved_id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * ExecuteRequest reserved_conn_keep_alive.
+         * @member {boolean} reserved_conn_keep_alive
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.reserved_conn_keep_alive = false;
+
+        /**
+         * ExecuteRequest reserved_conn_keep_alive_ids.
+         * @member {Array.<number|Long>} reserved_conn_keep_alive_ids
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.reserved_conn_keep_alive_ids = $util.emptyArray;
+
+        /**
+         * ExecuteRequest reserved_conn_activity_refresh.
+         * @member {boolean} reserved_conn_activity_refresh
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.reserved_conn_activity_refresh = false;
+
+        /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ExecuteRequest
@@ -131793,6 +131854,12 @@ export const query = $root.query = (() => {
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive") && message.reserved_conn_keep_alive !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.reserved_conn_keep_alive);
+            if (message.reserved_conn_keep_alive_ids != null && message.reserved_conn_keep_alive_ids.length)
+                writer.uint32(/* id 9, wireType 2 =*/74).int64s(message.reserved_conn_keep_alive_ids);
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh") && message.reserved_conn_activity_refresh !== false)
+                writer.uint32(/* id 10, wireType 0 =*/80).bool(message.reserved_conn_activity_refresh);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -131809,7 +131876,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -131888,6 +131955,38 @@ export const query = $root.query = (() => {
                             delete message.reserved_id;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.reserved_conn_keep_alive = value;
+                        else
+                            delete message.reserved_conn_keep_alive;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType === 2) {
+                            if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
+                                message.reserved_conn_keep_alive_ids = [];
+                            reader.int64s(message.reserved_conn_keep_alive_ids);
+                            continue;
+                        }
+                        if (wireType !== 0)
+                            break;
+                        if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
+                            message.reserved_conn_keep_alive_ids = [];
+                        message.reserved_conn_keep_alive_ids.push(reader.int64());
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.reserved_conn_activity_refresh = value;
+                        else
+                            delete message.reserved_conn_activity_refresh;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -131962,6 +132061,19 @@ export const query = $root.query = (() => {
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
                 if (!$util.isInteger(message.reserved_id) && !(message.reserved_id && $util.isInteger(message.reserved_id.low) && $util.isInteger(message.reserved_id.high)))
                     return "reserved_id: integer|Long expected";
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
+                if (typeof message.reserved_conn_keep_alive !== "boolean")
+                    return "reserved_conn_keep_alive: boolean expected";
+            if (message.reserved_conn_keep_alive_ids != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive_ids")) {
+                if (!$Array.isArray(message.reserved_conn_keep_alive_ids))
+                    return "reserved_conn_keep_alive_ids: array expected";
+                for (let i = 0; i < message.reserved_conn_keep_alive_ids.length; ++i)
+                    if (!$util.isInteger(message.reserved_conn_keep_alive_ids[i]) && !(message.reserved_conn_keep_alive_ids[i] && $util.isInteger(message.reserved_conn_keep_alive_ids[i].low) && $util.isInteger(message.reserved_conn_keep_alive_ids[i].high)))
+                        return "reserved_conn_keep_alive_ids: integer|Long[] expected";
+            }
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
+                if (typeof message.reserved_conn_activity_refresh !== "boolean")
+                    return "reserved_conn_activity_refresh: boolean expected";
             return null;
         };
 
@@ -132028,6 +132140,26 @@ export const query = $root.query = (() => {
                         message.reserved_id = object.reserved_id;
                     else if (typeof object.reserved_id === "object")
                         message.reserved_id = new $util.LongBits(object.reserved_id.low >>> 0, object.reserved_id.high >>> 0).toNumber();
+            if (object.reserved_conn_keep_alive != null)
+                if (object.reserved_conn_keep_alive)
+                    message.reserved_conn_keep_alive = $Boolean(object.reserved_conn_keep_alive);
+            if (object.reserved_conn_keep_alive_ids) {
+                if (!$Array.isArray(object.reserved_conn_keep_alive_ids))
+                    throw $TypeError(".query.ExecuteRequest.reserved_conn_keep_alive_ids: array expected");
+                message.reserved_conn_keep_alive_ids = $Array(object.reserved_conn_keep_alive_ids.length);
+                for (let i = 0; i < object.reserved_conn_keep_alive_ids.length; ++i)
+                    if ($util.Long)
+                        message.reserved_conn_keep_alive_ids[i] = $util.Long.fromValue(object.reserved_conn_keep_alive_ids[i], false);
+                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "string")
+                        message.reserved_conn_keep_alive_ids[i] = $parseInt(object.reserved_conn_keep_alive_ids[i], 10);
+                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "number")
+                        message.reserved_conn_keep_alive_ids[i] = object.reserved_conn_keep_alive_ids[i];
+                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "object")
+                        message.reserved_conn_keep_alive_ids[i] = new $util.LongBits(object.reserved_conn_keep_alive_ids[i].low >>> 0, object.reserved_conn_keep_alive_ids[i].high >>> 0).toNumber();
+            }
+            if (object.reserved_conn_activity_refresh != null)
+                if (object.reserved_conn_activity_refresh)
+                    message.reserved_conn_activity_refresh = $Boolean(object.reserved_conn_activity_refresh);
             return message;
         };
 
@@ -132048,6 +132180,8 @@ export const query = $root.query = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.reserved_conn_keep_alive_ids = [];
             if (options.defaults) {
                 object.effective_caller_id = null;
                 object.immediate_caller_id = null;
@@ -132064,6 +132198,8 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.reserved_conn_keep_alive = false;
+                object.reserved_conn_activity_refresh = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -132089,6 +132225,20 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? $String(message.reserved_id) : message.reserved_id;
                 else
                     object.reserved_id = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_id) : options.longs === $Number ? new $util.LongBits(message.reserved_id.low >>> 0, message.reserved_id.high >>> 0).toNumber() : message.reserved_id;
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
+                object.reserved_conn_keep_alive = message.reserved_conn_keep_alive;
+            if (message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length) {
+                object.reserved_conn_keep_alive_ids = $Array(message.reserved_conn_keep_alive_ids.length);
+                for (let j = 0; j < message.reserved_conn_keep_alive_ids.length; ++j)
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.reserved_conn_keep_alive_ids[j] = typeof message.reserved_conn_keep_alive_ids[j] === "number" ? $BigInt(message.reserved_conn_keep_alive_ids[j]) : $util.Long.fromBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0, false).toBigInt();
+                    else if (typeof message.reserved_conn_keep_alive_ids[j] === "number")
+                        object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $String(message.reserved_conn_keep_alive_ids[j]) : message.reserved_conn_keep_alive_ids[j];
+                    else
+                        object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_conn_keep_alive_ids[j]) : options.longs === $Number ? new $util.LongBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0).toNumber() : message.reserved_conn_keep_alive_ids[j];
+            }
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
+                object.reserved_conn_activity_refresh = message.reserved_conn_activity_refresh;
             return object;
         };
 
@@ -132215,7 +132365,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -132487,7 +132637,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ResultWithError.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -132843,7 +132993,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -133249,7 +133399,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -133549,7 +133699,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BeginRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -133890,7 +134040,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BeginResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -134237,7 +134387,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CommitRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -134571,7 +134721,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CommitResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -134880,7 +135030,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RollbackRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -135214,7 +135364,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RollbackResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -135534,7 +135684,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrepareRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -135875,7 +136025,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrepareResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -136138,7 +136288,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CommitPreparedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -136445,7 +136595,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CommitPreparedResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -136719,7 +136869,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RollbackPreparedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -137060,7 +137210,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RollbackPreparedResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -137336,7 +137486,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -137677,7 +137827,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateTransactionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -137951,7 +138101,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartCommitRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -138217,7 +138367,7 @@ export const query = $root.query = (() => {
      * @property {number} Success=2 Success value
      */
     query.StartCommitState = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "Unknown"] = 0;
         values[valuesById[1] = "Fail"] = 1;
         values[valuesById[2] = "Success"] = 2;
@@ -138319,7 +138469,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartCommitResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -138638,7 +138788,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetRollbackRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -138979,7 +139129,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetRollbackResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -139242,7 +139392,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -139549,7 +139699,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -139812,7 +139962,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -140130,7 +140280,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReadTransactionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -140424,7 +140574,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UnresolvedTransactionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -140760,7 +140910,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UnresolvedTransactionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -141112,7 +141262,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BeginExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -141557,7 +141707,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BeginExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -141986,7 +142136,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BeginStreamExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -142431,7 +142581,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BeginStreamExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -142816,7 +142966,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MessageStreamRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -143134,7 +143284,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MessageStreamResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -143441,7 +143591,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MessageAckRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -143793,7 +143943,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MessageAckResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -144131,7 +144281,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -144565,7 +144715,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -144976,7 +145126,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveStreamExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -145410,7 +145560,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveStreamExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -145823,7 +145973,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveBeginExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -146274,7 +146424,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveBeginExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -146739,7 +146889,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveBeginStreamExecuteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -147190,7 +147340,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReserveBeginStreamExecuteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -147620,7 +147770,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReleaseRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -147977,7 +148127,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReleaseResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -148196,7 +148346,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamHealthRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -148529,7 +148679,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RealtimeStats.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -149023,7 +149173,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         AggregateStats.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -149382,7 +149532,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StreamHealthResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -149649,7 +149799,7 @@ export const query = $root.query = (() => {
      * @property {number} COMMIT=3 COMMIT value
      */
     query.TransactionState = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
         values[valuesById[1] = "PREPARE"] = 1;
         values[valuesById[2] = "ROLLBACK"] = 2;
@@ -149787,7 +149937,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TransactionMetadata.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -150068,7 +150218,7 @@ export const query = $root.query = (() => {
      * @property {number} UDFS=3 UDFS value
      */
     query.SchemaTableType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "VIEWS"] = 0;
         values[valuesById[1] = "TABLES"] = 1;
         values[valuesById[2] = "ALL"] = 2;
@@ -150195,7 +150345,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -150545,7 +150695,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UDFInfo.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -151012,7 +151162,7 @@ export const query = $root.query = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -151655,7 +151805,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Status.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -152413,7 +152563,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Configuration.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -152703,7 +152853,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationStatus.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -152897,7 +153047,7 @@ export const replicationdata = $root.replicationdata = (() => {
      * @property {number} IOTHREADONLY=1 IOTHREADONLY value
      */
     replicationdata.StopReplicationMode = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "IOANDSQLTHREAD"] = 0;
         values[valuesById[1] = "IOTHREADONLY"] = 1;
         return values;
@@ -153031,7 +153181,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrimaryStatus.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -153390,7 +153540,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardPeerHealth.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -154020,7 +154170,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FullStatus.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -154827,7 +154977,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RoutingRules.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -155115,7 +155265,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RoutingRule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -155478,7 +155628,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Keyspace.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -155868,7 +156018,7 @@ export const vschema = $root.vschema = (() => {
          * @property {number} managed=3 managed value
          */
         Keyspace.ForeignKeyMode = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "unspecified"] = 0;
             values[valuesById[1] = "disallow"] = 1;
             values[valuesById[2] = "unmanaged"] = 2;
@@ -155985,7 +156135,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MultiTenantSpec.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -156443,7 +156593,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Vindex.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -156851,7 +157001,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Table.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -157277,7 +157427,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ColumnVindex.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -157596,7 +157746,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         AutoIncrement.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -157974,7 +158124,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Column.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -158592,7 +158742,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SrvVSchema.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -158976,7 +159126,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardRoutingRules.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -159273,7 +159423,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardRoutingRule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -159572,7 +159722,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         KeyspaceRoutingRules.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -159858,7 +160008,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         KeyspaceRoutingRule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -160139,7 +160289,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MirrorRules.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -160436,7 +160586,7 @@ export const vschema = $root.vschema = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MirrorRule.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -160758,7 +160908,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteVtctlCommandRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -161063,7 +161213,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteVtctlCommandResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -161239,7 +161389,7 @@ export const vtctldata = $root.vtctldata = (() => {
      * @property {number} REFERENCE=3 REFERENCE value
      */
     vtctldata.MaterializationIntent = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "CUSTOM"] = 0;
         values[valuesById[1] = "MOVETABLES"] = 1;
         values[valuesById[2] = "CREATELOOKUPINDEX"] = 2;
@@ -161364,7 +161514,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TableMaterializeSettings.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -161854,7 +162004,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MaterializeSettings.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -162504,7 +162654,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Keyspace.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -162698,7 +162848,7 @@ export const vtctldata = $root.vtctldata = (() => {
      * @property {number} DESCENDING=2 DESCENDING value
      */
     vtctldata.QueryOrdering = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "NONE"] = 0;
         values[valuesById[1] = "ASCENDING"] = 1;
         values[valuesById[2] = "DESCENDING"] = 2;
@@ -163394,7 +163544,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SchemaMigration.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -164702,7 +164852,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number} MYSQL=4 MYSQL value
          */
         SchemaMigration.Strategy = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "VITESS"] = 0;
             values["ONLINE"] = 0;
             values[valuesById[3] = "DIRECT"] = 3;
@@ -164724,7 +164874,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number} FAILED=7 FAILED value
          */
         SchemaMigration.Status = (function() {
-            const valuesById = {}, values = $Object.create(valuesById);
+            const valuesById = $Object.create(null), values = $Object.create(valuesById);
             values[valuesById[0] = "UNKNOWN"] = 0;
             values[valuesById[1] = "REQUESTED"] = 1;
             values[valuesById[2] = "CANCELLED"] = 2;
@@ -164856,7 +165006,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Shard.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -165068,7 +165218,7 @@ export const vtctldata = $root.vtctldata = (() => {
      * @property {number} REPLACE=2 REPLACE value
      */
     vtctldata.ShardedAutoIncrementHandling = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "LEAVE"] = 0;
         values[valuesById[1] = "REMOVE"] = 1;
         values[valuesById[2] = "REPLACE"] = 2;
@@ -165231,7 +165381,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowOptions.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -165763,7 +165913,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         Workflow.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -166276,7 +166426,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ReplicationLocation.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -166591,7 +166741,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ShardStream.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -167137,7 +167287,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             Stream.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -167927,7 +168077,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 CopyState.encodeDelimited = function(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
                 };
 
                 /**
@@ -168317,7 +168467,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 Log.encodeDelimited = function(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
                 };
 
                 /**
@@ -168765,7 +168915,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 ThrottlerStatus.encodeDelimited = function(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
                 };
 
                 /**
@@ -169062,7 +169212,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         AddCellInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -169331,7 +169481,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         AddCellInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -169574,7 +169724,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         AddCellsAliasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -169852,7 +170002,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         AddCellsAliasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -170106,7 +170256,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyKeyspaceRoutingRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -170415,7 +170565,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyKeyspaceRoutingRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -170700,7 +170850,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyRoutingRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -170998,7 +171148,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyRoutingRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -171252,7 +171402,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyShardRoutingRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -171550,7 +171700,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyShardRoutingRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -171861,7 +172011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplySchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -172303,7 +172453,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplySchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -172712,7 +172862,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -173108,7 +173258,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ApplyVSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -173431,7 +173581,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ParamList.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -173790,7 +173940,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BackupRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -174212,7 +174362,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BackupResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -174606,7 +174756,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         BackupShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -175017,7 +175167,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CancelSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -175317,7 +175467,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CancelSchemaMigrationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -175653,7 +175803,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTabletTagsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -176007,7 +176157,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTabletTagsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -176387,7 +176537,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTabletTypeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -176754,7 +176904,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ChangeTabletTypeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -177097,7 +177247,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CheckThrottlerRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -177442,7 +177592,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CheckThrottlerResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -177745,7 +177895,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CleanupSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -178045,7 +178195,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CleanupSchemaMigrationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -178379,7 +178529,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CompleteSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -178679,7 +178829,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CompleteSchemaMigrationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -179072,7 +179222,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CopySchemaShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -179472,7 +179622,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CopySchemaShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -179779,7 +179929,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -180178,7 +180328,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -180472,7 +180622,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -180809,7 +180959,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         CreateShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -181119,7 +181269,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteCellInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -181387,7 +181537,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteCellInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -181617,7 +181767,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteCellsAliasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -181866,7 +182016,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteCellsAliasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -182118,7 +182268,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -182404,7 +182554,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -182669,7 +182819,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteShardsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -182989,7 +183139,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteShardsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -183219,7 +183369,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteSrvVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -183468,7 +183618,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteSrvVSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -183711,7 +183861,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteTabletsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -183994,7 +184144,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         DeleteTabletsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -184314,7 +184464,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         EmergencyReparentShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -184773,7 +184923,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         EmergencyReparentShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -185138,7 +185288,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsAppRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -185470,7 +185620,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsAppResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -185775,7 +185925,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsDBARequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -186125,7 +186275,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteFetchAsDBAResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -186397,7 +186547,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteHookRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -186678,7 +186828,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteHookResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -186983,7 +187133,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteMultiFetchAsDBARequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -187335,7 +187485,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ExecuteMultiFetchAsDBAResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -187610,7 +187760,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FindAllShardsInKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -187874,7 +188024,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         FindAllShardsInKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -188200,7 +188350,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ForceCutOverSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -188500,7 +188650,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ForceCutOverSchemaMigrationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -188856,7 +189006,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetBackupsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -189191,7 +189341,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetBackupsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -189466,7 +189616,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -189726,7 +189876,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -189976,7 +190126,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellInfoNamesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -190208,7 +190358,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellInfoNamesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -190467,7 +190617,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellsAliasesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -190701,7 +190851,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetCellsAliasesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -191005,7 +191155,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetFullStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -191266,7 +191416,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetFullStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -191516,7 +191666,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspacesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -191748,7 +191898,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspacesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -192023,7 +192173,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -192283,7 +192433,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -192544,7 +192694,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetPermissionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -192805,7 +192955,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetPermissionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -193055,7 +193205,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspaceRoutingRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -193285,7 +193435,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetKeyspaceRoutingRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -193535,7 +193685,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetRoutingRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -193765,7 +193915,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetRoutingRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -194096,7 +194246,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -194488,7 +194638,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -194826,7 +194976,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaMigrationsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -195298,7 +195448,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSchemaMigrationsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -195597,7 +195747,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -195909,7 +196059,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -196224,7 +196374,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -196503,7 +196653,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -196753,7 +196903,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardRoutingRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -196983,7 +197133,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetShardRoutingRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -197246,7 +197396,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspaceNamesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -197520,7 +197670,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspaceNamesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -197823,7 +197973,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             NameList.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -198109,7 +198259,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspacesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -198402,7 +198552,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvKeyspacesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -198829,7 +198979,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateThrottlerConfigRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -199289,7 +199439,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateThrottlerConfigResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -199519,7 +199669,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -199779,7 +199929,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -200042,7 +200192,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -200316,7 +200466,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetSrvVSchemasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -200620,7 +200770,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -200881,7 +201031,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -201201,7 +201351,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -201628,7 +201778,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTabletsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -201903,7 +202053,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetThrottlerStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -202164,7 +202314,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetThrottlerStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -202447,7 +202597,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTopologyPathRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -202760,7 +202910,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTopologyPathResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -203067,7 +203217,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TopologyCell.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -203438,7 +203588,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetUnresolvedTransactionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -203735,7 +203885,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetUnresolvedTransactionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -204010,7 +204160,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTransactionInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -204316,7 +204466,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardTransactionState.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -204689,7 +204839,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetTransactionInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -204997,7 +205147,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -205280,7 +205430,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ConcludeTransactionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -205510,7 +205660,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -205770,7 +205920,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVersionRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -206031,7 +206181,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVersionResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -206291,7 +206441,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetVSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -206609,7 +206759,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetWorkflowsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -206973,7 +207123,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetWorkflowsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -207292,7 +207442,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         InitShardPrimaryRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -207629,7 +207779,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         InitShardPrimaryResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -207926,7 +208076,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LaunchSchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -208226,7 +208376,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LaunchSchemaMigrationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -208560,7 +208710,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexCompleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -208846,7 +208996,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexCompleteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -209145,7 +209295,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -209595,7 +209745,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexCreateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -209858,7 +210008,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexExternalizeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -210184,7 +210334,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexExternalizeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -210485,7 +210635,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexInternalizeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -210771,7 +210921,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         LookupVindexInternalizeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -211001,7 +211151,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MaterializeCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -211251,7 +211401,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MaterializeCreateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -211516,7 +211666,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowAddTablesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -211855,7 +212005,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowAddTablesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -212268,7 +212418,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MigrateCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -212983,7 +213133,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MigrateCompleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -213347,7 +213497,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MigrateCompleteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -213669,7 +213819,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountRegisterRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -213973,7 +214123,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountRegisterResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -214203,7 +214353,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountUnregisterRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -214452,7 +214602,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountUnregisterResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -214682,7 +214832,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountShowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -214975,7 +215125,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountShowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -215279,7 +215429,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountListRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -215511,7 +215661,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MountListResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -215999,7 +216149,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MoveTablesCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -216737,7 +216887,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MoveTablesCreateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -217039,7 +217189,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TabletInfo.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -217410,7 +217560,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MoveTablesCompleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -217833,7 +217983,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         MoveTablesCompleteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -218151,7 +218301,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PingTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -218401,7 +218551,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PingTabletResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -218708,7 +218858,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PlannedReparentShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -219135,7 +219285,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PlannedReparentShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -219491,7 +219641,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RebuildKeyspaceGraphRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -219788,7 +219938,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RebuildKeyspaceGraphResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -220020,7 +220170,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RebuildVSchemaGraphRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -220279,7 +220429,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RebuildVSchemaGraphResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -220509,7 +220659,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -220759,7 +220909,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -221013,7 +221163,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateByShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -221332,7 +221482,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RefreshStateByShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -221611,7 +221761,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -221861,7 +222011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -222124,7 +222274,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -222441,7 +222591,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -222760,7 +222910,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -223095,7 +223245,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReloadSchemaShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -223392,7 +223542,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveBackupRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -223678,7 +223828,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveBackupResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -223941,7 +224091,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveKeyspaceCellRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -224245,7 +224395,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveKeyspaceCellResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -224519,7 +224669,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveShardCellRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -224841,7 +224991,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RemoveShardCellResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -225071,7 +225221,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReparentTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -225354,7 +225504,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReparentTabletResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -225791,7 +225941,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ReshardCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -226437,7 +226587,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RestoreFromBackupRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -226835,7 +226985,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RestoreFromBackupResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -227174,7 +227324,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RetrySchemaMigrationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -227474,7 +227624,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RetrySchemaMigrationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -227786,7 +227936,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunHealthCheckRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -228036,7 +228186,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         RunHealthCheckResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -228277,7 +228427,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetKeyspaceDurabilityPolicyRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -228556,7 +228706,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetKeyspaceDurabilityPolicyResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -228828,7 +228978,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetKeyspaceShardingInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -229107,7 +229257,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetKeyspaceShardingInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -229390,7 +229540,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetShardIsPrimaryServingRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -229687,7 +229837,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetShardIsPrimaryServingResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -230018,7 +230168,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetShardTabletControlRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -230456,7 +230606,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetShardTabletControlResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -230728,7 +230878,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetWritableRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -230997,7 +231147,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetWritableResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -231249,7 +231399,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationAddRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -231536,7 +231686,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationAddResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -231788,7 +231938,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationFixRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -232085,7 +232235,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationFixResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -232357,7 +232507,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationPositionsRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -232655,7 +232805,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationPositionsResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -233043,7 +233193,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationRemoveRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -233330,7 +233480,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ShardReplicationRemoveResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -233571,7 +233721,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SleepTabletRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -233841,7 +233991,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SleepTabletResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -234139,7 +234289,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SourceShardAddRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -234520,7 +234670,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SourceShardAddResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -234803,7 +234953,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SourceShardDeleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -235100,7 +235250,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SourceShardDeleteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -235361,7 +235511,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -235611,7 +235761,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StartReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -235841,7 +235991,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -236091,7 +236241,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         StopReplicationResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -236321,7 +236471,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletExternallyReparentedRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -236615,7 +236765,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         TabletExternallyReparentedResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -236943,7 +237093,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateCellInfoRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -237234,7 +237384,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateCellInfoResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -237525,7 +237675,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateCellsAliasRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -237816,7 +237966,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateCellsAliasResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -238096,7 +238246,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -238373,7 +238523,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -238717,7 +238867,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -239013,7 +239163,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -239359,7 +239509,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidatePermissionsKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -239637,7 +239787,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidatePermissionsKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -239926,7 +240076,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateSchemaKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -240316,7 +240466,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateSchemaKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -240671,7 +240821,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -240970,7 +241120,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -241240,7 +241390,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVersionKeyspaceRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -241517,7 +241667,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVersionKeyspaceResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -241861,7 +242011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVersionShardRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -242142,7 +242292,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVersionShardResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -242449,7 +242599,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVSchemaRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -242803,7 +242953,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         ValidateVSchemaResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -243383,7 +243533,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffCreateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -244199,7 +244349,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffCreateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -244481,7 +244631,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffDeleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -244767,7 +244917,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffDeleteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -245032,7 +245182,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffResumeRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -245347,7 +245497,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffResumeResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -245610,7 +245760,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffShowRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -245929,7 +246079,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffShowResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -246268,7 +246418,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffStopRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -246583,7 +246733,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         VDiffStopResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -246890,7 +247040,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowDeleteRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -247311,7 +247461,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowDeleteResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -247642,7 +247792,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TabletInfo.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -247949,7 +248099,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowStatusRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -248172,7 +248322,7 @@ export const vtctldata = $root.vtctldata = (() => {
      * @property {number} COMPLETE=3 COMPLETE value
      */
     vtctldata.TableCopyPhase = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
         values[valuesById[1] = "NOT_STARTED"] = 1;
         values[valuesById[2] = "IN_PROGRESS"] = 2;
@@ -248305,7 +248455,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowStatusResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -248753,7 +248903,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TableCopyState.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -249260,7 +249410,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ShardStreamState.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -249614,7 +249764,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             ShardStreams.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -250018,7 +250168,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowSwitchTrafficRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -250600,7 +250750,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowSwitchTrafficResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -250937,7 +251087,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowUpdateRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -251230,7 +251380,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowUpdateResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -251532,7 +251682,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @returns {$protobuf.Writer} Writer
              */
             TabletInfo.encodeDelimited = function(message, writer) {
-                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
             };
 
             /**
@@ -251804,7 +251954,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetMirrorRulesRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -252034,7 +252184,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         GetMirrorRulesResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -252329,7 +252479,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowMirrorTrafficRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -252731,7 +252881,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         WorkflowMirrorTrafficResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -253050,7 +253200,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetVtorcEmergencyReparentRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -253336,7 +253486,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         SetVtorcEmergencyReparentResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**

@@ -463,12 +463,22 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
-	conn, err := vttablet.TabletConn(keyspace, useDb)
+	return vttablet.QueryTabletWithContext(context.Background(), query, keyspace, useDb)
+}
+
+// QueryTabletWithContext is QueryTablet bounded by the given context: it
+// bounds connection establishment, and once the context is done the
+// connection is closed, which fails a query still executing, and the
+// context's error is returned instead of the query being retried.
+func (vttablet *VttabletProcess) QueryTabletWithContext(ctx context.Context, query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	conn, err := vttablet.TabletConnWithContext(ctx, keyspace, useDb)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	return executeQuery(conn, query)
+	stop := context.AfterFunc(ctx, conn.Close)
+	defer stop()
+	return executeQueryWithContext(ctx, conn, query)
 }
 
 // MultiQueryTablet lets you execute a query in this tablet and get the result
@@ -522,11 +532,17 @@ func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace 
 
 // TabletConn opens a MySQL connection on this tablet
 func (vttablet *VttabletProcess) TabletConn(keyspace string, useDb bool) (*mysql.Conn, error) {
+	return vttablet.TabletConnWithContext(context.Background(), keyspace, useDb)
+}
+
+// TabletConnWithContext opens a MySQL connection on this tablet under the
+// given context, so that a caller's deadline bounds connection establishment.
+func (vttablet *VttabletProcess) TabletConnWithContext(ctx context.Context, keyspace string, useDb bool) (*mysql.Conn, error) {
 	if !useDb {
 		keyspace = ""
 	}
 	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
-	return vttablet.conn(&dbParams)
+	return mysql.Connect(ctx, &dbParams)
 }
 
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
@@ -569,6 +585,12 @@ func (vttablet *VttabletProcess) MultiQueryTabletWithDB(query string, dbname str
 // executeQuery will retry the query up to 10 times with a small sleep in between each try.
 // This allows the tests to be more robust in the face of transient failures.
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	return executeQueryWithContext(context.Background(), dbConn, query)
+}
+
+// executeQueryWithContext is executeQuery that stops retrying, and returns
+// the context's error, once the context is done.
+func executeQueryWithContext(ctx context.Context, dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	var (
 		err    error
 		result *sqltypes.Result
@@ -584,7 +606,14 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 		if err == nil {
 			break
 		}
-		time.Sleep(retryDelay)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		select {
+		case <-time.After(retryDelay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 
 	return result, err

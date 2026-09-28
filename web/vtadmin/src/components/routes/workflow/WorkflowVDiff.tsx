@@ -135,7 +135,7 @@ export const WorkflowVDiff = ({ clusterID, keyspace, name }: Props) => {
                 cancelText="Cancel"
                 onConfirm={hasMutationRun ? closeDialog : handleCreateVDiff}
                 loadingText={'Creating'}
-                loading={createVDiffMutation.isLoading}
+                loading={createVDiffMutation.isPending}
                 onCancel={closeDialog}
                 onClose={closeDialog}
                 hideCancel={hasMutationRun}

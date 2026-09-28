@@ -1147,6 +1147,11 @@ func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
 }
 
+// ResetReservedConn implements the SessionActions interface
+func (vc *VCursorImpl) ResetReservedConn() {
+	vc.SafeSession.SetReservedConn(false)
+}
+
 func (vc *VCursorImpl) InReservedConn() bool {
 	return vc.SafeSession.InReservedConn()
 }
@@ -1392,7 +1397,7 @@ func (vc *VCursorImpl) SetSessionTrackGTIDs(enable bool) {
 
 // HasCreatedTempTable implements the SessionActions interface
 func (vc *VCursorImpl) HasCreatedTempTable() {
-	vc.SafeSession.GetOrCreateOptions().HasCreatedTempTables = true
+	vc.SafeSession.SetHasCreatedTempTables()
 }
 
 // GetWarnings implements the SessionActions interface

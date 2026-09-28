@@ -655,6 +655,13 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string)
 	return fmd.ExecuteSuperQueryList(ctx, []string{query})
 }
 
+// ExecuteSuperQueryListTainted is part of the MysqlDaemon interface. The fake
+// has no pool to protect, so it shares the expectations of
+// ExecuteSuperQueryList.
+func (fmd *FakeMysqlDaemon) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
+	return fmd.ExecuteSuperQueryList(ctx, queryList)
+}
+
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	if fmd.ExecuteSuperQueryListCallback != nil {
