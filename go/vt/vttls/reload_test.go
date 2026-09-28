@@ -111,3 +111,46 @@ func TestReloadCachedFiles(t *testing.T) {
 	require.NoError(t, res.clientErr)
 	require.NoError(t, res.serverErr)
 }
+
+// TestClientConfigKeepsLastValidCRL checks, through real handshakes,
+// that once ClientConfig loaded a CRL file, a replacement it cannot
+// use neither fails the configs it builds nor lets a server that the
+// CRLs last loaded from the file revoke through, and that
+// ReloadCachedFiles reports that replacement.
+func TestClientConfigKeepsLastValidCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	crl := path.Join(t.TempDir(), "crl.pem")
+	b, err := os.ReadFile(certs.ServerCRL)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(crl, b, 0o600))
+
+	revokedServer, err := ReadServerConfig(certs.RevokedServerCert, certs.RevokedServerKey, "", "", "", tls.VersionTLS12)
+	require.NoError(t, err)
+	client := func() (*tls.Config, error) {
+		return ClientConfig(VerifyIdentity, "", "", certs.ServerCA, crl, certs.RevokedServerName, tls.VersionTLS12)
+	}
+	requireRejected := func() {
+		t.Helper()
+		config, err := client()
+		require.NoError(t, err)
+		res := handshake(t, revokedServer, config)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	}
+
+	requireRejected()
+
+	require.NoError(t, os.WriteFile(crl, []byte("not a CRL"), 0o600))
+	requireRejected()
+	_, err = ReloadCachedFiles()
+	require.ErrorContains(t, err, crl)
+
+	require.NoError(t, os.Remove(crl))
+	requireRejected()
+
+	// Without a CRL loaded from the file before, there is nothing to
+	// hold against the server instead.
+	unused := path.Join(t.TempDir(), "crl.pem")
+	require.NoError(t, os.WriteFile(unused, []byte("not a CRL"), 0o600))
+	_, err = ClientConfig(VerifyIdentity, "", "", certs.ServerCA, unused, certs.RevokedServerName, tls.VersionTLS12)
+	require.Error(t, err)
+}
