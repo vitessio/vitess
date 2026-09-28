@@ -54,11 +54,16 @@ func higherRank(weightA uint64, indexA int, weightB uint64, indexB int) bool {
 // the watchersPerShard highest-ranked instances for the keyspace/shard under
 // rendezvous hashing, i.e. whether this instance should watch that shard.
 //
-// Because HRW weights are independent of the candidate set, the top-k watcher
-// sets for ring sizes N and N+1 always share at least k-1 pre-existing
-// instances. During a rolling resize where instances briefly run different
-// ring sizes, every shard therefore keeps at least k-1 live watchers at all
-// times, with no staging window required.
+// Because HRW weights are independent of the candidate set, changing the ring
+// by a single instance moves a shard's top-k set by at most one member, so the
+// old and new watcher sets share at least k-1 instances. More generally, a
+// resize of m instances shares at least max(0, k-m): the sets can become
+// disjoint once m >= k. During a rolling resize where instances briefly run
+// different ring sizes, every shard therefore keeps at least k-1 live watchers
+// when the ring changes by one instance, and at least one watcher when it
+// changes by at most k-1. A resize of k or more instances at once can leave a
+// shard transiently unwatched, so operators should resize in increments of at
+// most k-1 (ideally 1) per rollout.
 //
 // When ringSize <= watchersPerShard every instance is always within the top-k,
 // so all instances watch every shard — matching the full-fleet default.
@@ -73,7 +78,7 @@ func isInRingSegment(keyspace, shard string, ringIndex, ringSize, watchersPerSha
 	// outrank it for this key. Stop early once enough higher-ranked instances
 	// are found.
 	higher := 0
-	for i := 0; i < ringSize; i++ {
+	for i := range ringSize {
 		if i == ringIndex {
 			continue
 		}

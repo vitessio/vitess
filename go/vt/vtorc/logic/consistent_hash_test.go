@@ -28,7 +28,7 @@ import (
 // keyspace/shard for a ring of ringSize with watchersPerShard watchers.
 func watchersFor(keyspace, shard string, ringSize, watchersPerShard int) map[int]bool {
 	watchers := make(map[int]bool)
-	for idx := 0; idx < ringSize; idx++ {
+	for idx := range ringSize {
 		if isInRingSegment(keyspace, shard, idx, ringSize, watchersPerShard) {
 			watchers[idx] = true
 		}
@@ -37,8 +37,9 @@ func watchersFor(keyspace, shard string, ringSize, watchersPerShard int) map[int
 }
 
 func TestRingWeight_Deterministic(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		assert.Equal(t, ringWeight(3, "ks/0"), ringWeight(3, "ks/0"),
+	want := ringWeight(3, "ks/0")
+	for range 10 {
+		assert.Equal(t, want, ringWeight(3, "ks/0"),
 			"same (index, key) must produce the same weight")
 	}
 }
@@ -74,10 +75,9 @@ func TestIsInRingSegment_NoOpWhenRingSizeAtOrBelowWatchers(t *testing.T) {
 }
 
 func TestIsInRingSegment_Deterministic(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		assert.Equal(t,
-			isInRingSegment("mykeyspace", "0", 2, 8, 3),
-			isInRingSegment("mykeyspace", "0", 2, 8, 3),
+	want := isInRingSegment("mykeyspace", "0", 2, 8, 3)
+	for range 10 {
+		assert.Equal(t, want, isInRingSegment("mykeyspace", "0", 2, 8, 3),
 			"repeated calls must return the same result")
 	}
 }
@@ -88,7 +88,7 @@ func TestIsInRingSegment_Deterministic(t *testing.T) {
 func TestIsInRingSegment_ExactlyKWatchersPerShard(t *testing.T) {
 	for _, watchersPerShard := range []int{1, 2, 3, 4} {
 		for _, ringSize := range []int{watchersPerShard + 1, 8, 12} {
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				ks := fmt.Sprintf("keyspace%d", i)
 				watchers := watchersFor(ks, "0", ringSize, watchersPerShard)
 				assert.Len(t, watchers, watchersPerShard,
@@ -104,7 +104,7 @@ func TestIsInRingSegment_ExactlyKWatchersPerShard(t *testing.T) {
 func TestIsInRingSegment_NoShardOrphaned(t *testing.T) {
 	const watchersPerShard = 3
 	for _, ringSize := range []int{1, 4, 5, 10, 25} {
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			ks := fmt.Sprintf("keyspace%d", i)
 			assert.NotEmpty(t, watchersFor(ks, "0", ringSize, watchersPerShard),
 				"ringSize=%d: shard %s/0 must have at least one watcher", ringSize, ks)
@@ -112,27 +112,38 @@ func TestIsInRingSegment_NoShardOrphaned(t *testing.T) {
 	}
 }
 
-// TestIsInRingSegment_ResizePreservesCoverage is the core property: growing the
-// ring from N to N+1 keeps at least watchersPerShard-1 of a shard's watchers,
-// so a rolling resize never drops coverage below that. This is what rendezvous
-// hashing buys over modulo, where nearly every shard would remap at once.
+// TestIsInRingSegment_ResizePreservesCoverage is the core property: a resize of
+// m instances keeps at least max(0, watchersPerShard-m) of a shard's watchers.
+// For m=1 that is watchersPerShard-1, so a one-at-a-time rolling resize never
+// drops coverage below that; for a resize of at most watchersPerShard-1 it
+// keeps at least one watcher. This is what rendezvous hashing buys over modulo,
+// where nearly every shard would remap at once. It also documents the limit:
+// once m >= watchersPerShard the shared set can be empty, which is why the ring
+// must be resized in increments of at most watchersPerShard-1.
 func TestIsInRingSegment_ResizePreservesCoverage(t *testing.T) {
 	const watchersPerShard = 3
-	for ringSize := watchersPerShard; ringSize < 40; ringSize++ {
-		for i := 0; i < 200; i++ {
-			ks := fmt.Sprintf("keyspace%d", i)
-			before := watchersFor(ks, "0", ringSize, watchersPerShard)
-			after := watchersFor(ks, "0", ringSize+1, watchersPerShard)
-
-			shared := 0
-			for idx := range before {
-				if after[idx] {
-					shared++
-				}
+	for before := watchersPerShard; before < 40; before++ {
+		for after := watchersPerShard; after < 40; after++ {
+			m := after - before
+			if m < 0 {
+				m = -m
 			}
-			assert.GreaterOrEqual(t, shared, watchersPerShard-1,
-				"resize %d->%d for %s/0 must retain >= %d watchers (before=%v after=%v)",
-				ringSize, ringSize+1, ks, watchersPerShard-1, before, after)
+			wantShared := max(0, watchersPerShard-m)
+			for i := range 200 {
+				ks := fmt.Sprintf("keyspace%d", i)
+				beforeSet := watchersFor(ks, "0", before, watchersPerShard)
+				afterSet := watchersFor(ks, "0", after, watchersPerShard)
+
+				shared := 0
+				for idx := range beforeSet {
+					if afterSet[idx] {
+						shared++
+					}
+				}
+				assert.GreaterOrEqual(t, shared, wantShared,
+					"resize %d->%d (m=%d) for %s/0 must retain >= %d watchers (before=%v after=%v)",
+					before, after, m, ks, wantShared, beforeSet, afterSet)
+			}
 		}
 	}
 }
@@ -146,7 +157,7 @@ func TestIsInRingSegment_ReasonableDistribution(t *testing.T) {
 		numKeyspaces     = 1000
 	)
 	counts := make([]int, ringSize)
-	for i := 0; i < numKeyspaces; i++ {
+	for i := range numKeyspaces {
 		ks := fmt.Sprintf("keyspace%d", i)
 		for idx := range watchersFor(ks, "0", ringSize, watchersPerShard) {
 			counts[idx]++
@@ -201,6 +212,7 @@ func TestLogRingConfig(t *testing.T) {
 		{1, 0, 3}, // disabled
 		{3, 0, 3}, // no-op (ring-size <= watchers)
 		{8, 1, 3}, // partitioned
+		{8, 0, 1}, // partitioned, single watcher (no-redundancy warning)
 	}
 	for _, c := range cases {
 		ringSize, ringIndex, ringWatchersPerShard = c[0], c[1], c[2]

@@ -141,9 +141,12 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	// get all shards for keyspace name.
 	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, &topo.FindAllShardsInKeyspaceOptions{
-		// Fetch shard records concurrently to speed up discovery. A typical
-		// Vitess cluster will have 1-3 vtorc instances deployed, so there is
-		// little risk of a thundering herd.
+		// Fetch shard records concurrently to speed up discovery. Note that
+		// ring partitioning (--vtorc-ring-size) filters shards only after this
+		// call, so every instance still fetches every shard record here on each
+		// refresh; a larger ring multiplies these topo reads rather than
+		// dividing them. Operators running many instances should size the ring
+		// against their topology server accordingly.
 		Concurrency: 8,
 	})
 	if err != nil {

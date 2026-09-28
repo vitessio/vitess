@@ -285,6 +285,10 @@ func logRingConfig() {
 			ringSize, ringIndex, ringWatchersPerShard))
 		return
 	}
+	if ringWatchersPerShard < 2 {
+		log.Warn(fmt.Sprintf("VTOrc ring: --vtorc-ring-watchers-per-shard=%d provides no redundancy — each shard is watched by a single instance, so any restart or resize leaves that shard unwatched until a replacement picks it up. Set it to >= 2 for high availability.",
+			ringWatchersPerShard))
+	}
 	log.Info(fmt.Sprintf("VTOrc ring: size %d, index %d, %d watchers/shard — each instance watches ~%d/%d of the fleet",
 		ringSize, ringIndex, ringWatchersPerShard, ringWatchersPerShard, ringSize))
 }
