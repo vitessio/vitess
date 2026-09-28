@@ -2734,6 +2734,33 @@ func TestReserveExecute_ParseSQLMode(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// A query that needs a reserved connection falls back to a true reservation even
+// when its settings cannot become a settings-pool setting: the reservation runs
+// them as written and judges them itself. The settings are read before the plan,
+// for the mode they put the session in, but their error must not preempt the
+// fallback.
+func TestReserveExecute_FallsBackWithSettingsThePoolCannotCarry(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// a user variable is not a session setting the settings pool builds, but a
+	// reservation runs it like any other pre-query
+	db.AddQuery("set @x = 1", &sqltypes.Result{})
+	db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, []string{"set @x = 1"},
+		"select get_lock('l', 10) from dual", nil, 0, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.NotEqual(t, int64(0), state.ReservedID)
+	require.Equal(t, 1, db.GetQueryCalledNum("set @x = 1"))
+
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+}
+
 // Reserving an existing transaction with settings that do not assign sql_mode leaves
 // the parse mode the transaction's connection is already in untouched: the mode its
 // connection settings put it in keeps governing how later queries on it are parsed.

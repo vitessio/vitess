@@ -1038,12 +1038,14 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
 
+			// The settings are read before the plan, which is parsed under the mode
+			// they put the session in, but their error is reported after the plan's
+			// validity: ReserveExecute falls back to a reserved connection, which
+			// judges the settings itself, when the query needs one.
 			var connSetting *smartconnpool.Setting
+			var settingErr error
 			if len(settings) > 0 {
-				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
-				if err != nil {
-					return err
-				}
+				connSetting, settingErr = tsv.qe.GetConnSetting(ctx, settings)
 			}
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, tsv.parseSQLModeFor(connSetting, transactionID, reservedID), skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
 			if err != nil {
@@ -1052,6 +1054,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
+			}
+			if settingErr != nil {
+				return settingErr
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
@@ -1140,13 +1145,11 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
+			// as in execute: the settings error is reported after the plan's validity
 			var connSetting *smartconnpool.Setting
+			var settingErr error
 			if len(settings) > 0 {
-				var err error
-				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
-				if err != nil {
-					return err
-				}
+				connSetting, settingErr = tsv.qe.GetConnSetting(ctx, settings)
 			}
 			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, tsv.parseSQLModeFor(connSetting, transactionID, reservedID), skipQueryPlanCache(options))
 			if err != nil {
@@ -1154,6 +1157,9 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			}
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
+			}
+			if settingErr != nil {
+				return settingErr
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
