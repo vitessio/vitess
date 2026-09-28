@@ -19,9 +19,11 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"os"
 	"path"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -107,4 +109,45 @@ func TestSecureCredentialsReload(t *testing.T) {
 		return checkErr == nil
 	}, 30*time.Second, 50*time.Millisecond, "the connection must reconnect with the reloaded files")
 	require.NoError(t, checkErr)
+}
+
+// TestReloadingCredsRetriesFailedBuild checks that credentials that
+// fail to be built again after a reload, for instance while a file is
+// being replaced, are built again on a later handshake once they can
+// be, without another reload.
+func TestReloadingCredsRetriesFailedBuild(t *testing.T) {
+	var fail atomic.Bool
+	creds, err := newReloadingCreds(func() (*tls.Config, error) {
+		if fail.Load() {
+			return nil, errors.New("the files are being replaced")
+		}
+		return &tls.Config{}, nil
+	})
+	require.NoError(t, err)
+	initial := creds.current()
+
+	// Reloading a changed file moves the generation on.
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	ca := path.Join(t.TempDir(), "ca.pem")
+	for _, certs := range []tlstest.ClientServerKeyPairs{oldCerts, newCerts} {
+		b, err := os.ReadFile(certs.ServerCA)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(ca, b, 0o600))
+		if certs == oldCerts {
+			_, err = vttls.ClientConfig(vttls.VerifyIdentity, "", "", ca, "", "", tls.VersionTLS12)
+			require.NoError(t, err)
+		}
+	}
+	generation := vttls.CachedFilesGeneration()
+	_, err = vttls.ReloadCachedFiles()
+	if err != nil {
+		require.NotContains(t, err.Error(), ca)
+	}
+	require.NotEqual(t, generation, vttls.CachedFilesGeneration())
+
+	fail.Store(true)
+	require.Same(t, initial, creds.current(), "credentials that cannot be built must keep the previous ones")
+	fail.Store(false)
+	require.NotSame(t, initial, creds.current(), "credentials that failed to be built must be built again once they can")
 }
