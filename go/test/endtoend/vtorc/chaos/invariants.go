@@ -220,12 +220,12 @@ func (c *Chaos) WaitHealthy(timeout time.Duration) {
 	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if p.status("Rpl_semi_sync_source_clients")["Rpl_semi_sync_source_clients"] == "2" {
+		if p.status("Rpl_semi_sync_source_clients")["Rpl_semi_sync_source_clients"] == strconv.Itoa(c.semiSyncAckers(p)) {
 			return
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	c.t.Fatalf("primary %s does not have 2 semi-sync clients", p.Tablet.Alias)
+	c.t.Fatalf("primary %s does not have %d semi-sync clients", p.Tablet.Alias, c.semiSyncAckers(p))
 }
 
 // ---- report ----
@@ -487,18 +487,22 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 			continue
 		}
 		v := n.variables("rpl_semi_sync_%enabled")
-		if v["rpl_semi_sync_replica_enabled"] != "ON" || v["rpl_semi_sync_source_enabled"] != "OFF" {
+		wantReplica := "ON"
+		if n.Cell == p.Cell {
+			wantReplica = "OFF" // same-cell replicas are not cross_cell ackers
+		}
+		if v["rpl_semi_sync_replica_enabled"] != wantReplica || v["rpl_semi_sync_source_enabled"] != "OFF" {
 			r.violation("SEMISYNC: replica %s replica_enabled=%s source_enabled=%s", n.Tablet.Alias, v["rpl_semi_sync_replica_enabled"], v["rpl_semi_sync_source_enabled"])
 		}
 	}
 	deadline := time.Now().Add(20 * time.Second)
 	for {
 		cl := p.status("Rpl_semi_sync_source_clients")["Rpl_semi_sync_source_clients"]
-		if cl == "2" {
+		if cl == strconv.Itoa(c.semiSyncAckers(p)) {
 			break
 		}
 		if time.Now().After(deadline) {
-			r.violation("SEMISYNC: primary %s has %s semi-sync clients, want 2", p.Tablet.Alias, cl)
+			r.violation("SEMISYNC: primary %s has %s semi-sync clients, want %d", p.Tablet.Alias, cl, c.semiSyncAckers(p))
 			break
 		}
 		time.Sleep(500 * time.Millisecond)

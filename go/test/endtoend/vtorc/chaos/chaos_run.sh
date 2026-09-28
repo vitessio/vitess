@@ -19,7 +19,7 @@ RESULTS=${CHAOS_RESULTS_DIR:-/home/$RUN_USER/chaos-results}
 BIN=/home/$RUN_USER/e2e-bins/chaos.test
 
 mkdir -p "$CG"
-for g in harness infra vtgate tablet1 tablet2 tablet3 orc1 orc2 orc3 etcd1 etcd2 etcd3; do
+for g in harness infra vtgate tablet1 tablet2 tablet3 tablet4 orc1 orc2 orc3 etcd1 etcd2 etcd3; do
   mkdir -p "$CG/$g"
   chown "$RUN_USER" "$CG/$g" "$CG/$g/cgroup.procs" "$CG/$g/cgroup.kill" 2>/dev/null || true
 done

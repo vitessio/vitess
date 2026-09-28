@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -79,6 +80,10 @@ type Options struct {
 	OrcExtraArgs    []string
 	OrcConfig       cluster.VTOrcConfiguration
 	TabletExtraArgs []string
+	// ExtraTabletCells adds one more REPLICA tablet per entry, in the given cell (which must be
+	// one of cells). Extra tablets get their own network group (tablet4, ...) but share that
+	// cell's etcd and VTOrc.
+	ExtraTabletCells []string
 }
 
 // Chaos is a running reference deployment plus fault injection machinery.
@@ -116,6 +121,9 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 	groups := []string{harnessGroup, "infra", "vtgate"}
 	for i := range cells {
 		groups = append(groups, fmt.Sprintf("tablet%d", i+1), fmt.Sprintf("orc%d", i+1), fmt.Sprintf("etcd%d", i+1))
+	}
+	for i := range opts.ExtraTabletCells {
+		groups = append(groups, fmt.Sprintf("tablet%d", len(cells)+i+1))
 	}
 	for _, g := range groups {
 		// Kill leftovers of an earlier crashed run.
@@ -168,12 +176,24 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 		require.NoError(t, err, out)
 	}
 
+	// Extra tablets share their cell's etcd and VTOrc.
+	for _, cell := range opts.ExtraTabletCells {
+		cellIdx := slices.Index(cells, cell)
+		require.GreaterOrEqual(t, cellIdx, 0, "unknown cell %s", cell)
+		idx := len(c.Nodes)
+		c.Nodes = append(c.Nodes, &Node{Idx: idx, Cell: cell, Group: fmt.Sprintf("tablet%d", idx+1), OrcGroup: fmt.Sprintf("orc%d", cellIdx+1), EtcdGroup: fmt.Sprintf("etcd%d", cellIdx+1)})
+	}
+
 	ts, err := topo.OpenServer("etcd2", ci.VtctldClientProcess.TopoGlobalAddress, ci.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 	c.Ts = ts
 
 	// Tablets.
 	ci.VtTabletExtraArgs = append([]string{"--lock-tables-timeout", "5s"}, opts.TabletExtraArgs...)
+	if os.Getenv("CHAOS_VTTABLET_HEARTBEAT") == "1" {
+		// Vitess replication heartbeats, as most production deployments run them.
+		ci.VtTabletExtraArgs = append(ci.VtTabletExtraArgs, "--heartbeat-enable", "--heartbeat-interval", "1s")
+	}
 	keyspace := &cluster.Keyspace{Name: keyspaceName, DurabilityPolicy: "cross_cell"}
 	shard := cluster.Shard{Name: shardName}
 	for i, n := range c.Nodes {
@@ -211,7 +231,7 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 	}
 
 	// VTOrcs, one per cell.
-	for _, n := range c.Nodes {
+	for _, n := range c.Nodes[:len(cells)] {
 		orc := ci.NewVTOrcProcess(opts.OrcConfig, n.Cell)
 		orc.Binary = path.Join(c.wrappers(n.OrcGroup, "vtorc"), "vtorc")
 		orc.LogFileName = fmt.Sprintf("vtorc-%s-stderr.txt", n.Cell)
@@ -220,6 +240,9 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 		ci.VTOrcProcesses = append(ci.VTOrcProcesses, orc)
 		n.Orc = orc
 		nf.SetPorts(n.OrcGroup, orc.Port)
+	}
+	for _, n := range c.Nodes[len(cells):] {
+		n.Orc = c.Nodes[slices.Index(cells, n.Cell)].Orc
 	}
 
 	// Wait for VTOrc to elect the initial primary.
@@ -270,6 +293,18 @@ func portFromURL(u string) int {
 	var p int
 	fmt.Sscanf(u[i+1:], "%d", &p)
 	return p
+}
+
+// semiSyncAckers returns how many semi-sync clients primary p should have under cross_cell:
+// every other tablet in a different cell.
+func (c *Chaos) semiSyncAckers(p *Node) int {
+	k := 0
+	for _, n := range c.Nodes {
+		if n != p && n.Cell != p.Cell {
+			k++
+		}
+	}
+	return k
 }
 
 // topoPrimary returns the node that is the shard primary in the global topo, or nil.

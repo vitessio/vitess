@@ -134,7 +134,7 @@ func (c *Chaos) GrepLogs(pattern string, max int) string {
 // VTOrcSummary summarizes the recoveries each VTOrc ran (from its log) for the report.
 func (c *Chaos) VTOrcSummary() []string {
 	var res []string
-	for _, n := range c.Nodes {
+	for _, n := range c.Nodes[:len(cells)] {
 		f := fmt.Sprintf("%s/%s", c.CI.TmpDirectory, n.Orc.LogFileName)
 		script := fmt.Sprintf(`grep -oE 'Unlocking shard ks/0 for (successful )?action VTOrc Recovery for [A-Za-z]+ on [a-z0-9-]+( with error [^:]*)?' %s | sed -E 's/Unlocking shard ks\/0 for //' | sort | uniq -c | sort -rn | head -12`, f)
 		out, _ := exec.Command("sh", "-c", script).CombinedOutput()
