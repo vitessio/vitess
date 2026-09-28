@@ -18,9 +18,11 @@ package vttls
 
 import (
 	"crypto/tls"
+	"encoding/pem"
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -256,4 +258,74 @@ func TestReloadCachedFilesPublishesNothingWhileFilesChange(t *testing.T) {
 	require.False(t, changed)
 	require.Equal(t, generation, CachedFilesGeneration())
 	files.requireServes(oldCerts, oldCerts)
+}
+
+// TestReloadCachedFilesValidatesCRLsUnderTheirCA checks that a CRL
+// that parses but that its CA does not validate, here one under the
+// CA's name signed by another key, is reported by ReloadCachedFiles
+// rather than counted as reloaded, since ClientConfig keeps the CRLs
+// last loaded from the file instead of using it.
+func TestReloadCachedFilesValidatesCRLsUnderTheirCA(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installTrust(certs)
+	_, err := ClientConfig(VerifyIdentity, "", "", files.ca, files.crl, certs.ServerName, tls.VersionTLS12)
+	require.NoError(t, err)
+
+	ca := loadOneCert(t, certs.ServerCA)
+	other, otherKey := selfSignedCA(t, 1, "", ca.RawSubject)
+	require.NoError(t, os.WriteFile(files.crl, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, other, otherKey)}), 0o600))
+	_, err = loadCRLSet(files.crl)
+	require.NoError(t, err, "the CRL must parse for this test to be meaningful")
+
+	generation := CachedFilesGeneration()
+	_, err = ReloadCachedFiles()
+	require.ErrorContains(t, err, "cannot use the CRL file "+files.crl)
+	require.Equal(t, generation, CachedFilesGeneration(), "a CRL that its CA does not validate must not count as reloaded")
+}
+
+// TestReloadCachedFilesPublishesAtOnce checks that a config built
+// while ReloadCachedFiles updates the caches does not combine the new
+// key pair with the old CA: it is built from the files before the
+// reload or after it.
+func TestReloadCachedFilesPublishesAtOnce(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installKeyPair(oldCerts)
+	files.installTrust(oldCerts)
+	files.requireServes(oldCerts, oldCerts)
+	files.installKeyPair(newCerts)
+	files.installTrust(newCerts)
+
+	type built struct {
+		config *tls.Config
+		err    error
+	}
+	results := make(chan built, 1)
+	var duringPublish *built
+	publishTestHook = func() {
+		go func() {
+			config, err := ClientConfig(VerifyIdentity, files.cert, files.key, files.ca, files.crl, "", tls.VersionTLS12)
+			results <- built{config, err}
+		}()
+		// A config built halfway through the update would be ready
+		// long before this.
+		select {
+		case b := <-results:
+			duringPublish = &b
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	t.Cleanup(func() { publishTestHook = nil })
+
+	_, err := ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(files.cert))
+	require.Nil(t, duringPublish, "no config must be built while the caches are being updated")
+	b := <-results
+	require.NoError(t, b.err)
+	require.Equal(t, loadOneCert(t, newCerts.ClientCert).Raw, b.config.Certificates[0].Certificate[0])
+	want, err := readx509CertPool(newCerts.ServerCA)
+	require.NoError(t, err)
+	require.True(t, want.Equal(b.config.RootCAs))
 }

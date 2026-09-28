@@ -643,7 +643,11 @@ func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseCRLSet(crl, body)
+}
 
+// parseCRLSet parses the CRLs in body, the contents of the file crl.
+func parseCRLSet(crl string, body []byte) ([]*x509.RevocationList, error) {
 	crlSet := make([]*x509.RevocationList, 0)
 	for len(body) > 0 {
 		var block *pem.Block

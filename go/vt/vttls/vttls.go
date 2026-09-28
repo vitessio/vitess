@@ -108,6 +108,9 @@ var onceByKeys = sync.Map{}
 // ReloadCachedFiles; the CRL is read on every call, see
 // clientCRLChecker.
 func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
+	publishMu.RLock()
+	defer publishMu.RUnlock()
+
 	config := &tls.Config{
 		MinVersion: minTLSVersion,
 	}
@@ -144,7 +147,6 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		if err != nil {
 			return nil, err
 		}
-		watchCRL(crl)
 	}
 
 	// The modes that build the peer's chain themselves verify it
@@ -272,6 +274,8 @@ var diskLoader = loader{
 // a later call with the same paths does not see changes to them
 // until ReloadCachedFiles reads them again; ReadServerConfig does.
 func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
+	publishMu.RLock()
+	defer publishMu.RUnlock()
 	return serverConfig(cachedLoader, cert, key, ca, crl, serverCA, minTLSVersion)
 }
 
