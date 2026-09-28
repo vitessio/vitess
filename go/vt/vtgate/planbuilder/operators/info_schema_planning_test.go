@@ -52,6 +52,9 @@ func (infoSchemaRoutingVSchema) ConnCollation() collations.ID {
 	return collations.CollationUtf8mb4ID
 }
 
+// TestInfoSchemaRoutingResetPreservesRoutingValues pins that resetRoutingLogic
+// replays the original predicates, not the rewritten ones: the routing values
+// and the tablet predicates must be unchanged after repeated resets.
 func TestInfoSchemaRoutingResetPreservesRoutingValues(t *testing.T) {
 	tests := []struct {
 		name       string
