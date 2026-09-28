@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -162,6 +163,49 @@ func TestTLSReloaderSkipsUnchangedFilesUnlessForced(t *testing.T) {
 
 	require.NoError(t, reloader.Reload(true))
 	require.Equal(t, 2, sink.count(), "a forced reload must hand over a new config")
+}
+
+// TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange checks that
+// a CA file replaced between Reload's pre-load digest and its config
+// load is still detected, rather than recorded under the CA
+// fingerprint read before the replacement. Without this, the
+// mismatch would silently skip the session-ticket rotation a CA
+// change requires, letting a session authenticated under a CA that
+// was just removed keep resuming.
+func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, certs)
+
+	var sink configSink
+	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
+	require.NoError(t, err)
+
+	// The CA file changes only once the hook fires, simulating a
+	// rotation landing exactly between Reload's pre-load digest and
+	// its read of the config.
+	var fired bool
+	reloader.testHook = func() {
+		if fired {
+			return
+		}
+		fired = true
+		clientCA, err := os.ReadFile(certs.ClientCA)
+		require.NoError(t, err)
+		otherCA, err := os.ReadFile(otherCerts.ClientCA)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
+	}
+
+	require.NoError(t, reloader.Reload(true))
+	require.True(t, fired, "the hook must have run for this test to be meaningful")
+
+	wantCA, err := os.ReadFile(files.CA)
+	require.NoError(t, err)
+	require.Equal(t, sha256.Sum256(wantCA), reloader.caFingerprint,
+		"the recorded CA fingerprint must match the CA that was actually loaded, not the one read before the race")
+	require.NotNil(t, reloader.ticketKeys, "a CA that changed mid-reload must still rotate the session-ticket keys")
 }
 
 func TestTLSReloaderKeepsConfigOnError(t *testing.T) {
