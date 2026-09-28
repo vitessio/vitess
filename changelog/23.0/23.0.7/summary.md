@@ -25,6 +25,7 @@ Along with that:
 Several configurations that used to connect with the CRL silently ignored are now refused when the TLS configuration is built, at startup, since the CRL cannot be applied as configured:
 
 - A server-side CRL (`--grpc-crl`, `--mysql-server-ssl-crl`) without the matching CA (`--grpc-ca`, `--mysql-server-ssl-ca`): without a CA no client certificate is requested, so the CRL could not apply. Configure the CA, or drop the CRL.
+- A server-side CRL (`--grpc-crl`, `--mysql-server-ssl-crl`) without the matching certificate and key (`--grpc-cert` and `--grpc-key`, `--mysql-server-ssl-cert` and `--mysql-server-ssl-key`): the server is then not configured for TLS at all, so the CRL could not apply; the gRPC server used to start in plaintext, and the MySQL server without TLS, with the CRL silently ignored. Configure the certificate and the key along with the CA, or drop the CRL.
 - A `*-crl` file that holds no CRL. Point the flag at a file with at least one `X509 CRL` block, or drop the flag.
 - A CRL that the certificate of its issuer in the CA file does not validate: one whose signature does not verify against that certificate, or one signed by the key of a CA certificate that is not allowed to sign CRLs, that is, without the `cRLSign` key usage. Re-issue the CRL, or the CA certificate with `cRLSign`. When such an issuer is only found in a peer's chain, as an intermediate CA the peer presents, that peer's connections are rejected instead. A CRL whose authority key identifier names another key than the CA certificate's, as the CRL of a re-keyed CA's predecessor does, is not held against that CA's certificates; one that names another key while the certificate's key signed it is refused, since it would otherwise be passed over. Re-issue such a CRL with the certificate's subject key identifier as its authority key identifier.
 - A CRL signed with an algorithm that is not supported.
@@ -68,3 +69,15 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a vtgate older than v23.0.7 still stores a targeted session's `SET` expression as written. Against a v23.0.7 vttablet running strict table ACL without dry run, such a vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+### Legacy vtctld HTTP API removed
+
+The HTTP API that vtctld served under `/api/` has been removed because it was dead code that exposed a security attack surface. It was built for the vtctld web UI, which VTAdmin replaced in v16. Nothing has served or called it since, and VTAdmin reaches vtctld over gRPC. What remained was an unauthenticated HTTP surface that served topology data, tablet health, arbitrary vtctl commands, schema changes, and keyspace and shard validations. Its `--security-policy` coverage varied from one endpoint to the next. Removing it removes that surface, rather than patching it endpoint by endpoint.
+
+The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keyspace`, `tablets`, `tablet_statuses`, `tablet_health`, `topology_info`, `topodata`, `vtctl`, `schema/apply`, and `features`, and the keyspace, shard, and tablet action endpoints behind them. The `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` flags of vtctld and vtcombo that configured the API are now deprecated no-ops, so a process started with them still starts. They will be removed in v26.
+
+**Migration**: use `vtctldclient`, or the `VtctldServer` gRPC service it calls, for anything a script did against `/api/`. Remove `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` from vtctld and vtcombo startup arguments. The `/debug/health` and `/debug/status` endpoints are unchanged.
+
+**Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
+
+See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.

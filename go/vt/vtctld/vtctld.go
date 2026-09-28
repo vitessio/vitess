@@ -14,26 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package vtctld contains all the code to expose a vtctld server
-// based on the provided topo.Server.
+// Package vtctld holds the flags of the vtctld server and its
+// /debug/health handler.
 package vtctld
 
 import (
-	"context"
+	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/wrangler"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -48,91 +39,18 @@ func init() {
 
 func registerVtctldFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &sanitizeLogMessages, "vtctld-sanitize-log-messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
-}
 
-// InitVtctld initializes all the vtctld functionality.
-func InitVtctld(env *vtenv.Environment, ts *topo.Server) error {
-	actionRepo := NewActionRepository(env, ts)
-
-	// keyspace actions
-	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
-			return "", wr.ValidateKeyspace(ctx, keyspace, false)
-		})
-
-	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(ctx, keyspace, nil /*excludeTables*/, false /*includeViews*/, false /*skipNoPrimary*/, false /*includeVSchema*/)
-		})
-
-	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
-			return "", wr.ValidateVersionKeyspace(ctx, keyspace)
-		})
-
-	actionRepo.RegisterKeyspaceAction("ValidatePermissionsKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
-			return "", wr.ValidatePermissionsKeyspace(ctx, keyspace)
-		})
-
-	// shard actions
-	actionRepo.RegisterShardAction("ValidateShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
-			return "", wr.ValidateShard(ctx, keyspace, shard, false)
-		})
-
-	actionRepo.RegisterShardAction("ValidateSchemaShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
-			return "", wr.ValidateSchemaShard(ctx, keyspace, shard, nil, false, false /*includeVSchema*/)
-		})
-
-	actionRepo.RegisterShardAction("ValidateVersionShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
-			return "", wr.ValidateVersionShard(ctx, keyspace, shard)
-		})
-
-	actionRepo.RegisterShardAction("ValidatePermissionsShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
-			return "", wr.ValidatePermissionsShard(ctx, keyspace, shard)
-		})
-
-	// tablet actions
-	actionRepo.RegisterTabletAction("Ping", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
-			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-			if err != nil {
-				return "", err
-			}
-			return "", wr.TabletManagerClient().Ping(ctx, ti.Tablet)
-		})
-
-	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
-			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-			if err != nil {
-				return "", err
-			}
-			return "", wr.TabletManagerClient().RefreshState(ctx, ti.Tablet)
-		})
-
-	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
-			return "", wr.DeleteTablet(ctx, tabletAlias, false)
-		})
-
-	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
-			_, err := wr.VtctldServer().ReloadSchema(ctx, &vtctldatapb.ReloadSchemaRequest{
-				TabletAlias: tabletAlias,
-			})
-			return "", err
-		})
-
-	// Serve the REST API
-	initAPI(context.Background(), ts, actionRepo)
-
-	// Serve the topology endpoint in the REST API at /topodata
-	initExplorer(ts)
-
-	return nil
+	// These flags configured the HTTP API under /api/ that served the
+	// vtctld web UI, which VTAdmin replaced in v16. The API has been
+	// removed; the flags are kept for one release so that processes
+	// started with them keep starting.
+	const deprecationMsg = "this flag is a no-op and will be removed in v26"
+	fs.String("cell", "", "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
+	_ = fs.MarkDeprecated("cell", deprecationMsg)
+	fs.Bool("proxy-tablets", false, "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
+	_ = fs.MarkDeprecated("proxy-tablets", deprecationMsg)
+	fs.Duration("action-timeout", time.Minute, "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
+	_ = fs.MarkDeprecated("action-timeout", deprecationMsg)
+	fs.Duration("tablet-health-keep-alive", 5*time.Minute, "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
+	_ = fs.MarkDeprecated("tablet-health-keep-alive", deprecationMsg)
 }

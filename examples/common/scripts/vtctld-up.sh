@@ -18,7 +18,6 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-cell=${CELL:-'test'}
 grpc_port=15999
 
 echo "Starting vtctld..."
@@ -26,7 +25,6 @@ echo "Starting vtctld..."
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtctld \
  $TOPOLOGY_FLAGS \
- --cell $cell \
  --service-map 'grpc-vtctl,grpc-vtctld' \
  --backup-storage-implementation file \
  --file-backup-storage-root $VTDATAROOT/backups \
