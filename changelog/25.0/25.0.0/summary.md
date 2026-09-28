@@ -671,10 +671,9 @@ semicolons of its own, are unaffected. Stored procedure calls returning several
 result sets rely on a different capability and are unaffected as well.
 
 `ExecuteFetchAsApp` and `ExecuteFetchAsAllPrivs` run a single statement and can
-only report one result. A request holding several used to run every statement it
-held and then fail with `unexpected multiple results`, having reported none of
-them; it now fails with a MySQL parse error, having run nothing. Neither has a
-multi statement variant, so multi statement queries are not supported.
+only report one result. A request holding several now fails with a MySQL parse
+error, having run nothing. Neither has a multi statement variant, so multi
+statement queries are not supported.
 
 **Impact**: No supported path loses functionality. `ExecuteMultiFetchAsDba`
 still runs batches, and `ExecuteFetchAsDba` already rejected them.
@@ -682,11 +681,7 @@ still runs batches, and `ExecuteFetchAsDba` already rejected them.
 The init SQL of a backup — each entry of `--init-backup-sql-queries`, and of
 `InitSQL` in a `BackupRequest` — is operator written, so it keeps running as it
 was written, including an entry that holds several statements separated by a
-semicolon. Such an entry is also no longer reported as having failed: it used to
-run every statement it held and then report `unexpected multiple results`, which
-counted as a failure and stopped every entry after it from running at all.
-Whether a failure fails the backup is still up to
-`--init-backup-sql-fail-on-error`, which defaults to `false`.
+semicolon.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
