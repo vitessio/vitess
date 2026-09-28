@@ -72,9 +72,13 @@ func TestConsistentHashRing(t *testing.T) {
 	}
 
 	// Set up the tablets but no VTOrcs (count 0); we start two below with
-	// distinct ring indices, which the shared setup cannot do.
+	// distinct ring indices, which the shared setup cannot do. DurabilityNone
+	// so that killing the primary and leaving one replica + one rdonly still
+	// promotes cleanly — under semi_sync the lone surviving rdonly would not
+	// ack the new primary, and this test is about ring ownership of recovery,
+	// not durability semantics.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, config,
-		map[string]int{cluster.DefaultCell: 0}, policy.DurabilitySemiSync)
+		map[string]int{cluster.DefaultCell: 0}, policy.DurabilityNone)
 
 	vtorc0 := startRingVTOrc(t, config, cluster.DefaultCell, append([]string{"--vtorc-ring-index=0"}, ringArgs...))
 	vtorc1 := startRingVTOrc(t, config, cluster.DefaultCell, append([]string{"--vtorc-ring-index=1"}, ringArgs...))
@@ -111,10 +115,14 @@ func TestConsistentHashRing(t *testing.T) {
 	}, 30*time.Second, time.Second, "ring did not converge to a single watcher for the shard")
 
 	// The owner watches the shard's tablets; the non-owner watches none.
-	tabletsByShard, ok := owner.GetVars()["TabletsWatchedByShard"].(map[string]any)
-	require.True(t, ok, "owner must publish TabletsWatchedByShard")
-	require.Positive(t, utils.GetIntFromValue(tabletsByShard[shardKey]),
-		"owner must watch the shard's tablets")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		tabletsByShard, ok := owner.GetVars()["TabletsWatchedByShard"].(map[string]any)
+		if !assert.True(c, ok, "owner must publish TabletsWatchedByShard") {
+			return
+		}
+		assert.Positive(c, utils.GetIntFromValue(tabletsByShard[shardKey]),
+			"owner must watch the shard's tablets")
+	}, 30*time.Second, time.Second, "owner did not report watching the shard's tablets")
 	require.Zero(t, ringShardsWatched(t, nonOwner), "non-owner must watch no shards")
 
 	// Only the owner elects the initial primary.
