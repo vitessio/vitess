@@ -133,9 +133,18 @@ func ReloadCachedFiles() (changed bool, err error) {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
 
-	entries := snapshotCachedFiles()
-	paths := entries.paths()
 	for attempt := 1; ; attempt++ {
+		// The snapshot is taken while no ClientConfig or ServerConfig
+		// is building a config, so that it holds every configuration
+		// whose entries it holds. One that registers after it may use
+		// its entries together in a way it does not know about, so the
+		// reload is then read again rather than published.
+		publishMu.Lock()
+		registered := fileSetsRegistered.Load()
+		entries := snapshotCachedFiles()
+		publishMu.Unlock()
+
+		paths := entries.paths()
 		before := digestFiles(paths)
 		if reloadTestHook != nil {
 			reloadTestHook()
@@ -143,23 +152,28 @@ func ReloadCachedFiles() (changed bool, err error) {
 		results := entries.read()
 		if maps.Equal(before, digestFiles(paths)) {
 			updates, errs := entries.withhold(results)
-			publish(updates)
-			return len(updates) > 0, vterrors.Aggregate(errs)
+			if publish(updates, registered) {
+				return len(updates) > 0, vterrors.Aggregate(errs)
+			}
 		}
 		if attempt == maxReloadAttempts {
-			return false, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the TLS files kept changing across %d attempts to read them consistently; none was reloaded", maxReloadAttempts)
+			return false, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the TLS files, or the configurations built from them, kept changing across %d attempts to read them consistently; none was reloaded", maxReloadAttempts)
 		}
 	}
 }
 
 // publish applies updates to the caches, all at once to ClientConfig
-// and ServerConfig.
-func publish(updates []cacheUpdate) {
+// and ServerConfig, unless a configuration registered since registered
+// was the count of registrations, in which case it reports false.
+func publish(updates []cacheUpdate, registered uint64) bool {
 	if len(updates) == 0 {
-		return
+		return true
 	}
 	publishMu.Lock()
 	defer publishMu.Unlock()
+	if fileSetsRegistered.Load() != registered {
+		return false
+	}
 	for i, u := range updates {
 		u.cache.Store(u.key, u.value)
 		if i == 0 && publishTestHook != nil {
@@ -167,6 +181,7 @@ func publish(updates []cacheUpdate) {
 		}
 	}
 	cachedFilesGeneration.Add(1)
+	return true
 }
 
 // cachedFiles are the entries of the caches that ReloadCachedFiles
@@ -261,8 +276,12 @@ func caCertificatesEntry(ca string) entryID {
 func crlEntry(w crlWatch) entryID { return entryID(fmt.Sprintf("CRL %s under CA %s", w.crl, w.ca)) }
 
 // fileSets maps the entries a configuration was built from, joined, to
-// those entries. See ReloadCachedFiles.
-var fileSets sync.Map
+// those entries, and fileSetsRegistered counts them. See
+// ReloadCachedFiles.
+var (
+	fileSets           sync.Map
+	fileSetsRegistered atomic.Uint64
+)
 
 // registerFileSet records that a configuration was built from the
 // entries of set.
@@ -272,7 +291,9 @@ func registerFileSet(set ...entryID) {
 		for i, id := range set {
 			key[i] = string(id)
 		}
-		fileSets.LoadOrStore(strings.Join(key, "\x00"), set)
+		if _, loaded := fileSets.LoadOrStore(strings.Join(key, "\x00"), set); !loaded {
+			fileSetsRegistered.Add(1)
+		}
 	}
 }
 
