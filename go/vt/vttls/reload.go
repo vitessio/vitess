@@ -21,11 +21,13 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -41,8 +43,12 @@ var (
 	// certificates were loaded from.
 	cachedKeyPairs, cachedCombinedKeyPairs sync.Map
 	// watchedCRLs maps the CRL files ClientConfig used to the SHA-256
-	// digest of their contents when last seen.
+	// digest of their contents when last seen valid.
 	watchedCRLs sync.Map
+	// lastValidCRLs maps the CRL files ClientConfig used to the CRLs
+	// last loaded from them, and staleCRLWarnings holds the files and
+	// errors that it held those CRLs against peers for.
+	lastValidCRLs, staleCRLWarnings sync.Map
 
 	reloadMu              sync.Mutex
 	cachedFilesGeneration atomic.Uint64
@@ -145,10 +151,15 @@ func ReloadCachedFiles() (changed bool, err error) {
 			errs = append(errs, vterrors.Wrapf(err, "failed to read crl file: %s", crl))
 			return true
 		}
-		if digest != seen.([sha256.Size]byte) {
-			watchedCRLs.Store(crl, digest)
-			changed = true
+		if digest == seen.([sha256.Size]byte) {
+			return true
 		}
+		if _, err := loadCRLSet(crl.(string)); err != nil {
+			errs = append(errs, vterrors.Wrapf(err, "cannot use the CRL file %s; the CRLs last loaded from it stay in use", crl))
+			return true
+		}
+		watchedCRLs.Store(crl, digest)
+		changed = true
 		return true
 	})
 
@@ -156,6 +167,42 @@ func ReloadCachedFiles() (changed bool, err error) {
 		cachedFilesGeneration.Add(1)
 	}
 	return changed, vterrors.Aggregate(errs)
+}
+
+// clientCRLChecker is newCRLChecker for ClientConfig, which reads the
+// CRL file on every call. When the file cannot be read or used, for
+// instance while it is being replaced, the CRLs last loaded from it
+// are held against the peer instead, as a server whose reload fails
+// keeps its previous CRLs, rather than every new connection failing.
+// Only the first load of a file must succeed.
+func clientCRLChecker(crl, ca string) (*crlChecker, error) {
+	var issuers []*x509.Certificate
+	if ca != "" {
+		var err error
+		if issuers, err = loadx509Certificates(ca); err != nil {
+			return nil, err
+		}
+	}
+	crls, err := loadCRLSet(crl)
+	if err == nil {
+		var checker *crlChecker
+		if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
+			lastValidCRLs.Store(crl, crls)
+			return checker, nil
+		}
+	}
+	last, ok := lastValidCRLs.Load(crl)
+	if !ok {
+		return nil, err
+	}
+	checker, lastErr := newCRLCheckerFrom(last.([]*x509.RevocationList), issuers)
+	if lastErr != nil {
+		return nil, err
+	}
+	if _, warned := staleCRLWarnings.LoadOrStore(crl+"\x00"+err.Error(), struct{}{}); !warned {
+		log.Warn(fmt.Sprintf("Cannot use the CRL file %s, so the CRLs last loaded from it stay in use: %v", crl, err))
+	}
+	return checker, nil
 }
 
 // sameCertificates reports whether a and b hold the same certificate
