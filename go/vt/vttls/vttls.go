@@ -149,6 +149,21 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		}
 	}
 
+	var set []entryID
+	if cert != "" && key != "" {
+		set = append(set, keyPairEntry(tlsCertificatesIdentifier(cert, key)))
+	}
+	if ca != "" {
+		set = append(set, caPoolEntry(ca))
+	}
+	if crl != "" {
+		if ca != "" {
+			set = append(set, caCertificatesEntry(ca))
+		}
+		set = append(set, crlEntry(crlWatch{crl: crl, ca: ca}))
+	}
+	registerFileSet(set...)
+
 	// The modes that build the peer's chain themselves verify it
 	// against the configured CA, or the system roots without one,
 	// resolved once here rather than on every handshake.
@@ -276,7 +291,24 @@ var diskLoader = loader{
 func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
 	publishMu.RLock()
 	defer publishMu.RUnlock()
-	return serverConfig(cachedLoader, cert, key, ca, crl, serverCA, minTLSVersion)
+	config, err := serverConfig(cachedLoader, cert, key, ca, crl, serverCA, minTLSVersion)
+	if err != nil {
+		return nil, err
+	}
+	var set []entryID
+	if serverCA != "" {
+		set = append(set, combinedKeyPairEntry(tlsCertificatesIdentifier(serverCA, cert, key)))
+	} else {
+		set = append(set, keyPairEntry(tlsCertificatesIdentifier(cert, key)))
+	}
+	if ca != "" {
+		set = append(set, caPoolEntry(ca))
+		if crl != "" {
+			set = append(set, caCertificatesEntry(ca))
+		}
+	}
+	registerFileSet(set...)
+	return config, nil
 }
 
 // ReadServerConfig returns the TLS config to use for a server to
