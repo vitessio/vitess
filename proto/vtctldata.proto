@@ -515,6 +515,10 @@ message BackupShardRequest {
   // IncludeBinlogs includes the source's binary logs in a full builtin backup.
   // Restores use them automatically.
   bool include_binlogs = 9;
+  // TabletTypes is an ordered preference of the tablet types to take the backup from.
+  // Defaults to REPLICA, RDONLY and SPARE by lowest replication lag.
+  // PRIMARY may be listed, but only together with AllowPrimary.
+  repeated topodata.TabletType tablet_types = 10;
 }
 
 message CancelSchemaMigrationRequest {
