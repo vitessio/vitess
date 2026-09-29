@@ -17,27 +17,69 @@ limitations under the License.
 package servenv
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc/stats"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-func TestOrcaEgressStatsHandlerCountsEverySentMessageOnly(t *testing.T) {
+func TestOrcaCountingUnaryInterceptorCountsFailedCallsAsQueriesAndErrors(t *testing.T) {
 	orcaEgressMessages.Store(0)
-	handler := orcaEgressStatsHandler{}
+	orcaErrors.Store(0)
 
-	for _, method := range []string{
-		"/vtgateservice.Vitess/Execute",
-		"/vtgateservice.Vitess/VStream",
-		"/grpc.health.v1.Health/Check",
-		"/xds.service.orca.v3.OpenRcaService/StreamCoreMetrics",
-	} {
-		ctx := handler.TagRPC(t.Context(), &stats.RPCTagInfo{FullMethodName: method})
-		handler.HandleRPC(ctx, &stats.InPayload{WireLength: 100})
-		handler.HandleRPC(ctx, &stats.OutPayload{WireLength: 100})
-		handler.HandleRPC(ctx, &stats.OutPayload{WireLength: 5000})
+	succeed := func(context.Context, any) (any, error) { return "ok", nil }
+	fail := func(context.Context, any) (any, error) { return nil, errors.New("failed") }
+	for _, handler := range []grpc.UnaryHandler{succeed, succeed, fail} {
+		_, _ = orcaCountingUnaryInterceptor(t.Context(), nil, &grpc.UnaryServerInfo{}, handler)
 	}
 
-	assert.EqualValues(t, 8, orcaEgressMessages.Load())
+	assert.EqualValues(t, 3, orcaEgressMessages.Load())
+	assert.EqualValues(t, 1, orcaErrors.Load())
+}
+
+func TestOrcaCountingStreamInterceptorCountsEverySentMessageAndStreamEnd(t *testing.T) {
+	orcaEgressMessages.Store(0)
+	orcaErrors.Store(0)
+
+	err := orcaCountingStreamInterceptor(nil, fakeSendServerStream{}, &grpc.StreamServerInfo{}, func(_ any, stream grpc.ServerStream) error {
+		for range 3 {
+			if err := stream.SendMsg("event"); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, orcaEgressMessages.Load())
+	assert.EqualValues(t, 0, orcaErrors.Load())
+}
+
+func TestOrcaCountingStreamInterceptorCountsFailedStreamAsQueryAndError(t *testing.T) {
+	orcaEgressMessages.Store(0)
+	orcaErrors.Store(0)
+
+	err := orcaCountingStreamInterceptor(nil, fakeSendServerStream{}, &grpc.StreamServerInfo{}, func(_ any, stream grpc.ServerStream) error {
+		for range 2 {
+			if err := stream.SendMsg("event"); err != nil {
+				return err
+			}
+		}
+		return errors.New("failed")
+	})
+
+	require.Error(t, err)
+	assert.EqualValues(t, 3, orcaEgressMessages.Load())
+	assert.EqualValues(t, 1, orcaErrors.Load())
+}
+
+type fakeSendServerStream struct {
+	grpc.ServerStream
+}
+
+func (fakeSendServerStream) SendMsg(any) error {
+	return nil
 }

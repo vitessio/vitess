@@ -280,9 +280,6 @@ func createGRPCServer() {
 	if gRPCIngressStatsEnabled {
 		opts = append(opts, grpc.StatsHandler(GRPCIngressStatsHandler()))
 	}
-	if gRPCEnableOrcaMetrics {
-		opts = append(opts, grpc.StatsHandler(orcaEgressStatsHandler{}))
-	}
 
 	opts = append(opts, interceptors()...)
 
@@ -307,6 +304,10 @@ func interceptors() []grpc.ServerOption {
 
 	if grpccommon.EnableGRPCPrometheus() {
 		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
+	}
+
+	if gRPCEnableOrcaMetrics {
+		interceptors.Add(orcaCountingStreamInterceptor, orcaCountingUnaryInterceptor)
 	}
 
 	trace.AddGrpcServerOptions(interceptors.Add)
@@ -412,8 +413,11 @@ func registerOrca() (stop func()) {
 			case now := <-ticker.C:
 				recorder.SetCPUUtilization(getCpuUsage())
 				recorder.SetMemoryUtilization(getMemoryUsage())
-				// Weighted round robin (gRFC A58) weights backends by qps / cpu.
-				recorder.SetQPS(float64(orcaEgressMessages.Swap(0)) / now.Sub(lastReport).Seconds())
+				// gRPC's default weighted round robin (gRFC A58) weights
+				// backends by qps / (cpu + eps/qps * errorUtilizationPenalty).
+				elapsed := now.Sub(lastReport).Seconds()
+				recorder.SetQPS(float64(orcaEgressMessages.Swap(0)) / elapsed)
+				recorder.SetEPS(float64(orcaErrors.Swap(0)) / elapsed)
 				lastReport = now
 			case <-stopCh:
 				return

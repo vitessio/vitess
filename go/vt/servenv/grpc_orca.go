@@ -20,30 +20,45 @@ import (
 	"context"
 	"sync/atomic"
 
-	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc"
 )
 
-// orcaEgressMessages counts gRPC messages sent since the last ORCA report.
-// We count sent messages, not requests, so unary calls and long-lived streams
-// like VStream are measured the same way. A unary call sends one message, so
-// for unary traffic this equals QPS. A stream gets one request and then sends
-// many messages over time, so this represents the stream's ongoing work.
+// orcaEgressMessages counts gRPC messages sent since the last ORCA report, so
+// unary calls (one message each, i.e. QPS) and long-lived streams like VStream
+// are measured the same way. Every message counts equally regardless of cost,
+// health checks and ORCA reports included. Every call also counts once when it
+// ends, and once in orcaErrors if it ends with an error, so EPS/QPS is its
+// error rate.
 var orcaEgressMessages atomic.Int64
 
-type orcaEgressStatsHandler struct{}
+var orcaErrors atomic.Int64
 
-func (orcaEgressStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	return ctx
+func orcaCountingUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	resp, err := handler(ctx, req)
+	orcaEgressMessages.Add(1)
+	if err != nil {
+		orcaErrors.Add(1)
+	}
+	return resp, err
 }
 
-func (orcaEgressStatsHandler) HandleRPC(_ context.Context, rpcStats stats.RPCStats) {
-	if _, ok := rpcStats.(*stats.OutPayload); ok {
+func orcaCountingStreamInterceptor(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	err := handler(srv, orcaCountingServerStream{stream})
+	orcaEgressMessages.Add(1)
+	if err != nil {
+		orcaErrors.Add(1)
+	}
+	return err
+}
+
+type orcaCountingServerStream struct {
+	grpc.ServerStream
+}
+
+func (s orcaCountingServerStream) SendMsg(m any) error {
+	err := s.ServerStream.SendMsg(m)
+	if err == nil {
 		orcaEgressMessages.Add(1)
 	}
+	return err
 }
-
-func (orcaEgressStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
-	return ctx
-}
-
-func (orcaEgressStatsHandler) HandleConn(context.Context, stats.ConnStats) {}

@@ -68,6 +68,7 @@
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
+        - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -767,3 +768,9 @@ Several configurations that used to connect with the CRL silently ignored are no
 - A delta CRL, an indirect CRL, or a CRL that its issuing distribution point limits to end-entity certificates, to CA certificates, to attribute certificates, or to some revocation reasons: only complete CRLs are supported. A CRL that names its distribution point without limiting itself otherwise is accepted, and every such partition of an issuer's CRL is applied.
 - A CRL that carries a critical extension other than the issuing distribution point, on the list or on an entry.
 - A CRL whose `thisUpdate` lies more than five minutes in the future, so that a CRL staged ahead of time cannot supersede the current one. Provide the current CRL, and check the clocks.
+
+#### <a id="grpc-orca-qps"/>ORCA metrics now report QPS and EPS</a>
+
+With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their ORCA load reports, alongside CPU and memory utilization. QPS is the rate of gRPC messages sent: one per unary call, and one per message sent on a stream, so long-lived streams such as `VStream` keep counting while they send. EPS is the rate of calls that end with an error.
+
+Clients using gRPC's standard `weighted_round_robin` policy ignore reports without QPS, so they previously fell back to plain round robin. After upgrading, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
