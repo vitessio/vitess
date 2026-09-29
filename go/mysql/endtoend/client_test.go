@@ -154,18 +154,10 @@ func TestClientFoundRows(t *testing.T) {
 }
 
 func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
-<<<<<<< HEAD
 	ctx := context.Background()
-	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	ctx := t.Context()
-	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
-=======
-	ctx := t.Context()
 	params := connParams
 	params.DisableClientDeprecateEOF = disableClientDeprecateEOF
 	params.EnableMultiStatements = true
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 
 	conn, err := mysql.Connect(ctx, &params)
 	expectNoError(t, err)

@@ -419,16 +419,10 @@ func (m *Monitor) clearAllData() {
 		return
 	}
 	defer conn.Recycle()
-<<<<<<< HEAD
-	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)))
-=======
 	err = m.setLockWaitTimeout(conn)
 	if err == nil {
 		_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
 	}
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Error(fmt.Sprintf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err))

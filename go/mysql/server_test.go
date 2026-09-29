@@ -1601,33 +1601,6 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.NoError(t, err)
-<<<<<<< HEAD
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	// A ping is connection activity: the observing handler must be notified
-	// so it can propagate the liveness signal (vtgate refreshes temp-table
-	// reserved connections on it).
-	require.Equal(t, 1, th.Activity(), "the handler must observe a served ping")
-
-	// A locally answered non-ping command is activity too: COM_SET_OPTION
-	// never reaches the handler's own methods, but MySQL counts it against
-	// the idle wait like any other command.
-	conn.sequence = 0
-	require.NoError(t, conn.writeComSetOption(0))
-	_, err = conn.ReadPacket()
-	require.NoError(t, err)
-	require.Equal(t, 2, th.Activity(), "the handler must observe a locally answered COM_SET_OPTION")
-=======
-	// A ping is connection activity: the observing handler must be notified
-	// so it can propagate the liveness signal (vtgate refreshes temp-table
-	// reserved connections on it).
-	require.Equal(t, 1, th.Activity(), "the handler must observe a served ping")
-
-	// A locally answered non-ping command is activity too: COM_SET_OPTION
-	// never reaches the handler's own methods, but MySQL counts it against
-	// the idle wait like any other command.
-	require.NoError(t, conn.SetMultiStatements(true))
-	require.Equal(t, 2, th.Activity(), "the handler must observe a locally answered COM_SET_OPTION")
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 
 	l.Shutdown()
 

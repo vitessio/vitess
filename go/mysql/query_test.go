@@ -105,18 +105,6 @@ func expectComSetOption(t *testing.T, sConn *Conn, operand uint16, respond func(
 	// A server starts a new packet sequence for every command it reads.
 	sConn.sequence = 0
 
-<<<<<<< HEAD
-	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
-		t.Fatalf("writeComSetOption failed: %v", err)
-	}
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
-		require.NoError(t, err)
-	}
-=======
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 	data, err := sConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ComSetOption {
 		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
