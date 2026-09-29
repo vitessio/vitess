@@ -19,6 +19,9 @@ limitations under the License.
 package servenv
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,4 +60,32 @@ func TestErrHandlingWithCgroups(t *testing.T) {
 	mem, err = getCgroupMemoryUsage()
 	require.ErrorContains(t, err, errCgroupMetricsNotAvailable.Error())
 	require.Equal(t, -1, int(mem))
+}
+
+func TestCgroupCpuCount(t *testing.T) {
+	numCPU := float64(runtime.NumCPU())
+
+	tests := []struct {
+		name   string
+		cpuMax map[string]string
+		want   float64
+	}{
+		{name: "no cpu.max files", want: numCPU},
+		{name: "unlimited", cpuMax: map[string]string{"/pod/ctr": "max 100000\n"}, want: numCPU},
+		{name: "limit on the group", cpuMax: map[string]string{"/pod/ctr": "200000 100000\n"}, want: 2},
+		{name: "limit on an ancestor", cpuMax: map[string]string{"/pod": "50000 100000\n", "/pod/ctr": "max 100000\n"}, want: 0.5},
+		{name: "smallest limit wins", cpuMax: map[string]string{"/pod": "300000 100000\n", "/pod/ctr": "150000 100000\n"}, want: 1.5},
+		{name: "limit above the host CPU count", cpuMax: map[string]string{"/pod/ctr": "100000000 100000\n"}, want: numCPU},
+		{name: "malformed", cpuMax: map[string]string{"/pod/ctr": "garbage\n"}, want: numCPU},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mountpoint := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(mountpoint, "pod", "ctr"), 0o755))
+			for group, content := range tt.cpuMax {
+				require.NoError(t, os.WriteFile(filepath.Join(mountpoint, group, "cpu.max"), []byte(content), 0o644))
+			}
+			require.InDelta(t, tt.want, cgroupCpuCount(mountpoint, "/pod/ctr"), 1e-9)
+		})
+	}
 }
