@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -836,32 +837,59 @@ func TestStartWrites(t *testing.T) {
 	m.startWrites()
 	require.Empty(t, db.QueryLog())
 
+	// Block the INSERT so that the writes stay in progress until the test has
+	// seen them. Otherwise the first write can succeed, unblock the monitor and
+	// finish before the assertion below ever observes inProgressWriteCount > 0.
+	// The deferred release runs before the deferred teardown above, so a failing
+	// assertion cannot leave a write stuck inside BeforeFunc.
+	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	release := func() { unblockOnce.Do(func() { close(unblock) }) }
+	defer release()
+	db.SetBeforeFunc("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", func() {
+		<-unblock
+	})
+
 	// Now we set the monitor to be blocked.
 	m.setIsBlocked(true)
 
-	// Start writes and wait for them to complete.
-	m.startWrites()
+	// startWrites keeps going for as long as the monitor is blocked, so it runs
+	// in the background.
+	startWritesDone := make(chan struct{})
+	go func() {
+		defer close(startWritesDone)
+		m.startWrites()
+	}()
 
 	// Check that some writes are in progress.
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 2*time.Second, 5*time.Microsecond)
+	}, 2*time.Second, time.Millisecond)
 
-	// Verify the query log shows the writes were executed.
-	queryLog := db.QueryLog()
-	require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat")
+	// A write is counted before it reaches the server, so wait for the INSERT
+	// to show up in the query log. It is held there until release.
+	require.Eventually(t, func() bool {
+		return strings.Contains(db.QueryLog(), "insert into _vt.semisync_heartbeat")
+	}, 2*time.Second, time.Millisecond)
 
-	// Make the monitor unblocked. This should stop the writes.
+	// Make the monitor unblocked. This should stop the writes, even though the
+	// ones already sent have not come back yet.
 	m.setIsBlocked(false)
+	select {
+	case <-startWritesDone:
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "startWrites did not stop after the monitor was unblocked")
+	}
 
-	// Check that no writes are in progress anymore.
+	// Let the writes in flight finish, and check that none are left.
+	release()
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount == 0
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 5*time.Second, 10*time.Millisecond)
 }
 
 func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
