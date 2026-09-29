@@ -978,19 +978,36 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	return qr, vterrors.Aggregate(errs)
 }
 
-// ValidateSessionSettings is part of the engine.VCursor interface. The query runs in a
-// copy of the session without its transaction and shard sessions, marked as needing a
+// ValidateSessionSettings is part of the engine.VCursor interface.
+func (vc *VCursorImpl) ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error {
+	_, err := vc.ExecuteWithSessionSettings(ctx, rs, "select 1 from dual", nil, "")
+	return err
+}
+
+// ExecuteWithSessionSettings is part of the engine.VCursor interface. The query runs in
+// a copy of the session without its transaction and shard sessions, marked as needing a
 // reserved connection, so that the shard receives the session's system variables as
 // settings. VTTablet applies them to a connection from its settings pool, which fails
 // on a value MySQL rejects, and serves the query there without reserving a connection.
-func (vc *VCursorImpl) ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error {
+func (vc *VCursorImpl) ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error) {
+	atomic.AddUint64(&vc.logStats.ShardQueries, 1)
 	session := NewAutocommitSession(vc.SafeSession.Session)
-	session.SetReservedConn(true)
+	// A tablet-specific target (USE ks:shard@type|alias) is stored on SafeSession, not
+	// in the vtgatepb.Session proto, so NewAutocommitSession drops it; the query must
+	// reach the tablet the session's queries reach.
+	session.SetTargetTabletAlias(vc.SafeSession.GetTargetTabletAlias())
+	if omitSysVar != "" {
+		delete(session.SystemVariables, omitSysVar)
+	}
+	session.SetReservedConn(len(session.SystemVariables) > 0)
 	rss := []*srvtopo.ResolvedShard{rs}
-	queries := []*querypb.BoundQuery{{Sql: "select 1 from dual"}}
-	_, errs := vc.executor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, session, false /*autocommit*/, vc.ignoreMaxMemoryRows, vc.observer, false /*fetchLastInsertID*/)
+	queries := []*querypb.BoundQuery{{
+		Sql:           vc.marginComments.Leading + query + vc.marginComments.Trailing,
+		BindVariables: bindVars,
+	}}
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, session, false /*autocommit*/, vc.ignoreMaxMemoryRows, vc.observer, false /*fetchLastInsertID*/)
 	vc.logShardsQueried(nil /*primitive*/, len(rss))
-	return vterrors.Aggregate(errs)
+	return qr, vterrors.Aggregate(errs)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.

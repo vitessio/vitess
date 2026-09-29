@@ -226,6 +226,11 @@ func buildSetOpReservedConn(s setting) planFunc {
 		if !vschema.SysVarSetEnabled() {
 			return planSysVarCheckIgnore(expr, vschema, s.boolean)
 		}
+		if containsLockingFunc(expr.Expr) {
+			// The assignment is evaluated on a pooled connection, and VTTablet runs a lock
+			// function only on a reserved connection.
+			return nil, vterrors.VT12001("lock function in the assignment of system variable " + expr.Var.Name.Lowered())
+		}
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -245,6 +250,17 @@ func buildSetOpReservedConn(s setting) planFunc {
 			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
+}
+
+func containsLockingFunc(expr sqlparser.Expr) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.LockingFunc); ok {
+			found = true
+		}
+		return !found, nil
+	}, expr)
+	return found
 }
 
 func provideAppliedCase(value string, storageCase sysvars.StorageCase) string {

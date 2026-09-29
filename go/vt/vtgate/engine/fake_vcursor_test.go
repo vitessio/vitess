@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -418,6 +419,10 @@ func (t *noopVCursor) AutocommitApproval() bool {
 	panic("unimplemented")
 }
 
+func (t *noopVCursor) ExecuteWithSessionSettings(context.Context, *srvtopo.ResolvedShard, string, map[string]*querypb.BindVariable, string) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
 func (t *noopVCursor) ValidateSessionSettings(context.Context, *srvtopo.ResolvedShard) error {
 	panic("unimplemented")
 }
@@ -489,6 +494,10 @@ type loggingVCursor struct {
 
 	// validateSettingsErr is returned from ValidateSessionSettings
 	validateSettingsErr error
+
+	// withSettingsErrs are returned, one per call and in order, from
+	// ExecuteWithSessionSettings; once they run out, multiShardErrs apply
+	withSettingsErrs []error
 
 	log []string
 	mu  sync.Mutex
@@ -732,11 +741,29 @@ func (f *loggingVCursor) ValidateSessionSettings(ctx context.Context, rs *srvtop
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ValidateSessionSettings %s.%s", rs.Target.Keyspace, rs.Target.Shard))
-	if ctx.Value(IgnoreReserveTxn) != nil {
-		// the validation must carry the session's settings, which IgnoreReserveTxn drops
-		f.log = append(f.log, "IgnoreReserveTxn")
-	}
 	return f.validateSettingsErr
+}
+
+func (f *loggingVCursor) ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	line := fmt.Sprintf("ExecuteWithSessionSettings %s.%s: %s {%s}", rs.Target.Keyspace, rs.Target.Shard, query, deprecatedPrintBindVars(bindVars))
+	if omitSysVar != "" {
+		line += " without " + omitSysVar
+	}
+	f.log = append(f.log, line)
+	if len(f.withSettingsErrs) > 0 {
+		err := f.withSettingsErrs[0]
+		f.withSettingsErrs = f.withSettingsErrs[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
+	res, err := f.nextResult()
+	if err != nil {
+		return nil, err
+	}
+	return res, vterrors.Aggregate(f.multiShardErrs)
 }
 
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {

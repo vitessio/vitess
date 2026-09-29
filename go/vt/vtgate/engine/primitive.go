@@ -79,6 +79,11 @@ type (
 		// transaction and reserved connections, on a connection that carries the session's
 		// system variables as settings, so that the shard rejects a value it does not accept.
 		ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error
+		// ExecuteWithSessionSettings runs a read query on the shard the same way: outside
+		// the session's transaction and reserved connections, on a connection that
+		// carries the session's system variables as settings, except omitSysVar when it
+		// is not empty.
+		ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error)
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)

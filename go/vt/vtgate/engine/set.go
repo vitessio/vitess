@@ -318,9 +318,12 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 // evaluate runs the assignment on the probe shard and reports whether it changes the
 // variable's value, along with the evaluated value for the session to store and the shard
 // that evaluated it. The query runs outside the session's reserved connection and
-// transaction: it only needs the shard's own defaults, and the reserved connection's
-// settings may hold the very value this SET is replacing, which the shard may reject. It
-// must also not reserve a shard merely to evaluate an expression.
+// transaction, so that it neither reserves a shard merely to evaluate an expression nor
+// joins the session's transaction, but with the session's system variables as settings:
+// the expression is evaluated against the session's values, including those an earlier
+// assignment of the same SET stored. When the session holds a value for this variable,
+// that value may be what the shard rejects, and the SET replacing it must still get
+// through, so a failed evaluation is retried without it.
 func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (changed bool, storedValue string, probeShard *srvtopo.ResolvedShard, err error) {
 	_, held := svs.heldValue(vcursor)
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
@@ -332,7 +335,6 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 		// the value to compare against: the new value is stored either way.
 		sysVarExprValidationQuery = fmt.Sprintf("select %s from dual", svs.Expr)
 	}
-	ctx = context.WithValue(ctx, IgnoreReserveTxn, true)
 	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.probeDestination()})
 	if err != nil {
 		return false, "", nil, err
@@ -340,7 +342,10 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 	if len(rss) == 0 {
 		return false, "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no shard resolved for %v", svs.probeDestination())
 	}
-	qr, err := execShard(ctx, nil /*primitive*/, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+	qr, err := vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, "")
+	if err != nil && held {
+		qr, err = vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, svs.Name)
+	}
 	if err != nil {
 		return false, "", nil, err
 	}

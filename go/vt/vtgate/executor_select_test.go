@@ -338,7 +338,8 @@ func TestSetSystemVariables(t *testing.T) {
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
 
-	lookup.SetResults([]*sqltypes.Result{{
+	// the first result answers the session's settings, which the evaluation carries
+	lookup.SetResults([]*sqltypes.Result{{}, {
 		Fields: []*querypb.Field{
 			{Name: "sql_safe_updates", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
@@ -350,6 +351,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
+		{Sql: "set sql_mode = 'only_full_group_by'"},
 		{Sql: "select 0 from dual where @@sql_safe_updates != 0"},
 		{Sql: "set sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
 		{Sql: "select 1 from dual"},
@@ -386,7 +388,8 @@ func TestSetSystemVariables(t *testing.T) {
 	// Set system variable that is not supported by SET_VAR
 	// We expect the next select to not have any SET_VAR query hint, instead it will use set statements
 
-	lookup.SetResults([]*sqltypes.Result{{
+	// the first result answers the session's settings, which the evaluation carries
+	lookup.SetResults([]*sqltypes.Result{{}, {
 		Fields: []*querypb.Field{
 			{Name: "max_tmp_tables", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
@@ -402,6 +405,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries = []*querypb.BoundQuery{
+		{Sql: "set sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
 		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
 		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
 		{Sql: "select 1 from dual"},

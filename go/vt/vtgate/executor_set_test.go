@@ -861,13 +861,15 @@ func TestSetVarTargetedSession(t *testing.T) {
 	assert.Empty(t, session.ShardSessions)
 
 	// a variable without SET_VAR support marks the session as reserved, and the shard
-	// receives the stored settings with the next query rather than a SET of its own
-	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+	// receives the stored settings with the next query rather than a SET of its own; the
+	// evaluation carries the session's settings, which the first result answers
+	sbc1.SetResults([]*sqltypes.Result{{}, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("new", "int64"),
 		"0")})
 	_, err = executorExecSession(ctx, executor, session, "set @@sql_notes = 0", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
+		"set sql_mode = 'only_full_group_by'",
 		"select 0 from dual where @@sql_notes != 0",
 		"set sql_mode = 'only_full_group_by', sql_notes = 0",
 		"select 1 from dual",
@@ -884,9 +886,9 @@ func TestSetVarTargetedSession(t *testing.T) {
 }
 
 // TestSetSysVarRecoversSessionWithRejectedStoredValue checks that a corrective SET gets
-// through a session whose stored value the shard rejects: the assignment is evaluated
-// outside the reserved connection, so the rejected pre-query does not precede it, and the
-// next query carries the corrected value.
+// through a session whose stored value the shard rejects: the evaluation, which carries
+// the session's settings, is retried without the variable's rejected value, and the next
+// query carries the corrected value.
 func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	// A session whose stored value the shard rejects: every reservation fails on
@@ -899,12 +901,16 @@ func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
 	})
 
 	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"), "good")})
+	// the shard rejects the stored value when the evaluation's settings apply it
+	lookup.EphemeralShardErr = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Variable 'default_week_format' can't be set to the value of 'bad'")
 	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 'good'", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "'good'", session.SystemVariables["default_week_format"])
 	assert.Empty(t, session.ShardSessions, "the SET must not reserve a connection")
-	// the shard validates the corrected value, not the rejected one
+	// the evaluation is retried without the rejected value, and the shard validates the
+	// corrected value, not the rejected one
 	utils.MustMatch(t, []*querypb.BoundQuery{
+		{Sql: "set default_week_format = 'bad'", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "select 'good' from dual", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "select 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
@@ -918,4 +924,53 @@ func TestSetSysVarRecoversSessionWithRejectedStoredValue(t *testing.T) {
 		{Sql: "set default_week_format = 'good'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}, lookup.Queries)
+}
+
+// TestSetSysVarMultiAssignmentReadsEarlierAssignment checks that a later assignment of a
+// SET is evaluated against the value an earlier assignment of the same SET stored, as
+// MySQL evaluates a multi-assignment SET: the evaluation carries the session's settings.
+func TestSetSysVarMultiAssignmentReadsEarlierAssignment(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	lookup.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"), "1"),
+		// the validation of the first value: its settings and its query
+		{},
+		{},
+		// the evaluation of the second assignment: its settings and its query
+		{},
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"), "2"),
+	})
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@default_week_format = 1, @@default_week_format = @@default_week_format + 1", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	assert.Equal(t, "2", session.SystemVariables["default_week_format"])
+	utils.MustMatch(t, []*querypb.BoundQuery{
+		{Sql: "select 1 from dual where @@default_week_format != 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
+		// the second assignment reads the first one's value
+		{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select @@default_week_format + 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 2", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
+	}, lookup.Queries)
+}
+
+// TestSetSysVarPreservesTargetTabletAlias checks that a SET in a session pinned to a
+// tablet (USE ks:shard@type|alias) evaluates and validates its value on that tablet. The
+// alias is stored on SafeSession, not in the vtgatepb.Session proto, so the session copy
+// these queries run in must carry it over. A nonexistent alias proves it: honoured, the
+// SET fails closed with "not found"; dropped, it would succeed on a gateway-selected tablet.
+func TestSetSysVarPreservesTargetTabletAlias(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	// Sanity: with only the shard target, the SET reaches the shard.
+	shardSession := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestSharded + ":-20@primary"})
+	_, err := executorExecSession(ctx, executor, shardSession, "set @@default_week_format = 1", nil)
+	require.NoError(t, err)
+
+	pinnedSession := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestSharded + ":-20@primary|aa-9999999"})
+	_, err = executorExecSession(ctx, executor, pinnedSession, "set @@default_week_format = 1", nil)
+	require.ErrorContains(t, err, "not found")
 }

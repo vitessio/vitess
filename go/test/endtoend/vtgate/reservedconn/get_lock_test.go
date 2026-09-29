@@ -271,3 +271,20 @@ func TestLockWaitOnConnTimeoutWithTxNext(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id, val1 from test where val1 = 'msg'`, `[[INT64(1) VARCHAR("msg")]]`)
 	_ = utils.Exec(t, conn, `commit`)
 }
+
+// TestSetSysVarRefusesLockFunction checks that a system variable's assignment cannot call
+// a lock function, in an untargeted and in a targeted session: the assignment is evaluated
+// on a pooled connection, which cannot hold a lock, and no lock is left behind.
+func TestSetSysVarRefusesLockFunction(t *testing.T) {
+	for _, target := range []string{"ks", "ks:-80"} {
+		t.Run(target, func(t *testing.T) {
+			conn, err := mysql.Connect(t.Context(), &vtParams)
+			require.NoError(t, err)
+			defer conn.Close()
+
+			utils.Exec(t, conn, "use `"+target+"`")
+			utils.AssertContainsError(t, conn, `set @@group_concat_max_len = get_lock('set lock', 2)`, "lock function in the assignment of system variable group_concat_max_len")
+			utils.AssertMatches(t, conn, `select is_free_lock('set lock')`, `[[INT64(1)]]`)
+		})
+	}
+}
