@@ -582,6 +582,11 @@
     "plan": "VT12001: unsupported: lock function in the assignment of system variable group_concat_max_len"
   },
   {
+    "comment": "lock function in the assignment of a global system variable",
+    "query": "set global group_concat_max_len = get_lock('x', 1)",
+    "plan": "VT12001: unsupported: lock function in the assignment of system variable group_concat_max_len"
+  },
+  {
     "comment": "change read only variable",
     "query": "set socket = ''",
     "plan": "VT03010: variable 'socket' is a read only variable"

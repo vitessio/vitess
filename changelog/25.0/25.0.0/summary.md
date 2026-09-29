@@ -40,7 +40,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
-        - [Shard-targeted sessions carry system variables like untargeted sessions](#vtgate-targeted-session-sysvars)
+        - [`SET` fails on a value MySQL rejects, and on a lock function in the assignment](#vtgate-set-sysvar-rejections)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -452,17 +452,11 @@ Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQ
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
 
-#### <a id="vtgate-targeted-session-sysvars"/>Shard-targeted sessions carry system variables like untargeted sessions</a>
+#### <a id="vtgate-set-sysvar-rejections"/>`SET` fails on a value MySQL rejects, and on a lock function in the assignment</a>
 
-A session targeted at a shard or key range (`USE ks:-80`, `USE ks/-80`) used to handle `SET` statements for MySQL system variables differently from an untargeted session: VTGate executed the `SET` on the target shards right away, always marked the session as needing a reserved connection, never used the `SET_VAR` optimizer hint, and recorded the assignment even when it did not change the value. When the `SET` was the session's first system variable, the target shards kept a dedicated MySQL connection for the rest of the session.
+A shard now checks a system variable's new value before the `SET` returns, so a value MySQL rejects, such as `SET time_zone = 'No/Such_Zone'`, fails the `SET` itself. Before, the session stored the value and every later query failed, or, for a variable VTGate sends as a `SET_VAR` hint, MySQL ignored the value with a warning and later queries ran with the shard's value.
 
-A targeted session now takes the same path as an untargeted one. The assignment is evaluated on the target shard, stored in the session when it changes the value, and delivered to the shards as a `SET_VAR` hint when the variable supports one, or otherwise through the settings the session sends with its queries, which VTTablet serves from its settings pool. A targeted session no longer holds a reserved connection because of a `SET`, and a `SET` that does not change the value is ignored, as it already was for untargeted sessions.
-
-A value that MySQL rejects fails the `SET` itself, in targeted and untargeted sessions alike: a shard checks the new value on a connection from its settings pool before the `SET` returns. Before, an untargeted session stored a value MySQL rejects and then failed every later query that carried it, and a variable carried as a `SET_VAR` hint was silently ignored by MySQL, so later queries ran with the shard's value instead.
-
-Evaluating the assigned expression no longer depends on the session's reserved connection. A session whose stored value a shard rejects, so that every reservation failed on the pre-query, could not be corrected before: the corrective `SET` was evaluated through the same reserved connection and failed the same way. The evaluation now runs on a pooled connection that carries the session's system variables as settings, so it still sees the values the session and earlier assignments of the same `SET` hold; when the session's own value of the variable is what the shard rejects, the evaluation is retried without it, so a corrective `SET` gets through, and the next query carries the corrected value. Because the comparison is now against the shard's default rather than the session's current value, a `SET` on a variable the session already overrides always stores the new value, including one equal to the default, which previously left the old override in place. A `SET` that a shard rejects leaves the session's variables as they were. VTGate now refuses an assignment that calls a lock function, such as `SET @@group_concat_max_len = GET_LOCK('l', 1)`, in every session, since a pooled connection cannot hold the lock; before, only an untargeted session without a reserved connection refused it.
-
-A targeted `SET` of a variable that VTGate only checks and ignores, such as a `GLOBAL` assignment, no longer fails when the target spans several shards; it is checked on the first shard of the target.
+VTGate now refuses a system variable assignment that calls a lock function, such as `SET @@group_concat_max_len = GET_LOCK('l', 1)`. Sessions targeted at a shard (`USE ks:-80`) and sessions holding a reserved connection used to accept one.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

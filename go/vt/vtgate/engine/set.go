@@ -398,13 +398,11 @@ func (svs *SysVarReservedConn) apply(ctx context.Context, vcursor VCursor, env *
 	// The session stays marked as needing a reserved connection even if the set fails,
 	// as the set may have reserved one that remains in use.
 	session.NeedsReservedConn()
-	value := svs.Expr
-	if svs.Name == "sql_mode" {
-		// The SET carries the judged value, not the expression: evaluating the
-		// expression a second time could apply a value the session never judged.
-		value = storedValue
-	}
-	return svs.execSetStatement(ctx, vcursor, rss, env, value)
+	// The SET carries the evaluated value, not the expression: evaluating the expression
+	// again on each shard could apply a value other than the one the session stores and
+	// replays on the connections it reserves later, such as RAND()'s, or a sql_mode the
+	// session never judged.
+	return svs.execSetStatement(ctx, vcursor, rss, env, storedValue)
 }
 
 // heldValue returns the value the session currently holds for the variable, if any.

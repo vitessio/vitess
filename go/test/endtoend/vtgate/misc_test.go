@@ -1444,9 +1444,10 @@ func TestQueryProcessedMetric(t *testing.T) {
 		sql:         "set @x=3",
 		queryMetric: "SET.Local.PRIMARY",
 	}, {
+		// the SET evaluates the assignment and validates the new value on a shard
 		sql:         "set sql_mode=''",
 		queryMetric: "SET.MultiShard.PRIMARY",
-		shards:      1,
+		shards:      2,
 	}, {
 		sql:         "set @@vitess_metadata.k1='v1'",
 		queryMetric: "SET.Topology.PRIMARY",

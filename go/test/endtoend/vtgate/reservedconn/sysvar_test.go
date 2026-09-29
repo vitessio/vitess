@@ -917,7 +917,7 @@ func TestSetSysVarMultiAssignmentReadsEarlierAssignment(t *testing.T) {
 		t.Run(target, func(t *testing.T) {
 			conn, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
-			defer conn.Close()
+			t.Cleanup(conn.Close)
 
 			utils.Exec(t, conn, "use `"+target+"`")
 			utils.Exec(t, conn, "set sort_buffer_size = 300000, sort_buffer_size = @@sort_buffer_size + 1")

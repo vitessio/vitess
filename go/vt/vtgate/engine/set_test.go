@@ -67,7 +67,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		"ExecuteWithSessionSettings ks.-20: select dummy_expr from dual where @@x != dummy_expr {}",
 		"SysVar set with (x,'foobar')",
 		"Needs Reserved Conn",
-		"ExecuteMultiShard ks.-20: set x = dummy_expr {} false false",
+		"ExecuteMultiShard ks.-20: set x = 'foobar' {} false false",
 	})
 }
 
@@ -390,7 +390,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteWithSessionSettings ks.DestinationShard(-20): select dummy_expr from dual where @@x != dummy_expr {}`,
 			`SysVar set with (x,123456)`,
 			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
 		},
 	}, {
 		// a failed targeted SET must not leave its value in the session, where the
@@ -1091,7 +1091,7 @@ func TestSetTable(t *testing.T) {
 			`ExecuteWithSessionSettings ks.DestinationShard(-20): select dummy_expr from dual where @@x != dummy_expr {}`,
 			`SysVar set with (x,123456)`,
 			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
 			`SysVar removed (x)`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
