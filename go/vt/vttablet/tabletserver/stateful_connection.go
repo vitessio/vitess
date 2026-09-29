@@ -493,7 +493,16 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 		// what applying the new setting to a fresh connection makes it.
 		sc.MarkSessionDiverged()
 	}
-	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
+	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {
+		// Applying the setting failed or was interrupted, so its variables may or
+		// may not have taken effect: the session is in a state no setting
+		// describes. A timeout here kills only the query, as the setting is not a
+		// statement of the transaction. Close the connection, as the pool does
+		// when it fails to apply a setting to one it hands out.
+		sc.dbConn.Close()
+		return true, err
+	}
+	return true, nil
 }
 
 // resetLastUsed restarts the idle clock ElapsedTimeout measures from.
