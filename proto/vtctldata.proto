@@ -509,6 +509,10 @@ message BackupShardRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+  // TabletTypes is an ordered preference of the tablet types to take the backup from.
+  // Defaults to REPLICA, RDONLY and SPARE by lowest replication lag.
+  // PRIMARY may be listed, but only together with AllowPrimary.
+  repeated topodata.TabletType tablet_types = 9;
 }
 
 message CancelSchemaMigrationRequest {

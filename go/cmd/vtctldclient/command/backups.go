@@ -46,11 +46,23 @@ var (
 	}
 	// BackupShard makes a BackupShard gRPC call to a vtctld.
 	BackupShard = &cobra.Command{
-		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] <keyspace/shard>",
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--tablet-types=<types>] <keyspace/shard>",
 		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
 		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
 
-If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.`,
+--tablet-types restricts the choice to the given types, in order of preference: the most up-to-date tablet of the first type that has one is used.
+
+primary may be listed, but only together with --allow-primary, and it is then chosen at its position in the list. --allow-primary on its own does not add a primary that --tablet-types leaves out.
+
+With no --tablet-types, the backup can be taken on the primary if --allow-primary is specified.`,
+		Example: `  # Prefer an rdonly tablet, falling back to a replica
+  BackupShard --tablet-types=rdonly,replica commerce/0
+
+  # Only an rdonly tablet, with no fallback
+  BackupShard --tablet-types=rdonly commerce/0
+
+  # The primary only when no rdonly tablet can serve the backup
+  BackupShard --tablet-types=rdonly,primary --allow-primary commerce/0`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackupShard,
@@ -160,6 +172,7 @@ var backupShardOptions = struct {
 	IncrementalFromPos   string
 	UpgradeSafe          bool
 	MysqlShutdownTimeout time.Duration
+	TabletTypes          []topodatapb.TabletType
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -181,6 +194,7 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		IncrementalFromPos:   backupShardOptions.IncrementalFromPos,
 		UpgradeSafe:          backupShardOptions.UpgradeSafe,
 		MysqlShutdownTimeout: protoutil.DurationToProto(backupShardOptions.MysqlShutdownTimeout),
+		TabletTypes:          backupShardOptions.TabletTypes,
 		InitSql: &tabletmanagerdatapb.BackupRequest_InitSQL{
 			Queries:     backupOptions.InitSQLQueries,
 			TabletTypes: backupOptions.InitSQLTabletTypes,
@@ -344,6 +358,7 @@ func init() {
 	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	BackupShard.Flags().Var((*topoproto.TabletTypeListFlag)(&backupShardOptions.TabletTypes), "tablet-types", "Tablet types to take the backup from, in order of preference, for example \"rdonly,replica\". The first type with a tablet able to serve the backup is used, and the lowest replication lag wins within a type. Defaults to replica, rdonly and spare. primary may be listed, but only together with --allow-primary.")
 	addInitSQLFlags(BackupShard)
 	Root.AddCommand(BackupShard)
 
