@@ -131,6 +131,14 @@ type SandboxConn struct {
 	// reserve id generator
 	ReserveID atomic.Int64
 
+	// NoReservation makes a reserve apply its pre-queries and answer without a
+	// reserved id, the way a tablet does for a statement that does not need a
+	// pinned connection and runs on a connection from its settings pool.
+	// Without it the sandbox always reserves, and inside a transaction it
+	// answers with the transaction id. A tablet never does that: it applies the
+	// settings to the transaction's connection and reserves nothing.
+	NoReservation bool
+
 	mapMu     sync.Mutex // protects the map txIDToRID
 	txIDToRID map[int64]int64
 
@@ -867,6 +875,9 @@ func (sbc *SandboxConn) reserve(ctx context.Context, session queryservice.Sessio
 	sbc.ReserveCount.Add(1)
 	for _, query := range preQueries {
 		sbc.Execute(ctx, session, target, query, bindVariables, transactionID, 0, options)
+	}
+	if sbc.NoReservation {
+		return 0
 	}
 	if transactionID != 0 {
 		return transactionID
