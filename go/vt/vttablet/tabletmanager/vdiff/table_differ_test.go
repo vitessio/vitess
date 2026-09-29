@@ -37,6 +37,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type (
@@ -777,6 +778,146 @@ func TestGetSourcePKCols_FreshReorderedLayoutCheckpoints(t *testing.T) {
 	require.Len(t, sourceResult.Rows, 1)
 	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
 	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
+}
+
+// TestGetSourcePKCols_ExtendedTargetPK verifies that a target PK that is the
+// source key followed by more columns, as a target partitioned by created_at
+// requires, is accepted when the source key is unique: the source stream is
+// ordered by that key and has no ties on it, so it is also ordered by the
+// comparison key. The source checkpoint then holds the source key and the
+// target checkpoint the whole target PK. The all-columns substitute key need not
+// be unique, so it is still rejected. With more than one source shard the source
+// key is unique only within each shard, and a single source checkpoint applied to
+// every shard could skip rows, so the table restarts on resume instead.
+func TestGetSourcePKCols_ExtendedTargetPK(t *testing.T) {
+	targetFields := sqltypes.MakeTestFields("id|created_at|v", "int64|datetime|varchar")
+	newTableDiffer := func(ct *controller, tableName string) *tableDiffer {
+		targetTable := &tabletmanagerdatapb.TableDefinition{
+			Name:              tableName,
+			Columns:           []string{"id", "created_at", "v"},
+			PrimaryKeyColumns: []string{"id", "created_at"},
+			Fields:            targetFields,
+		}
+		return &tableDiffer{
+			wd:    &workflowDiffer{ct: ct},
+			table: targetTable,
+			tablePlan: &tablePlan{
+				table:       targetTable,
+				sourceQuery: fmt.Sprintf("select id, created_at, v from %s order by id asc, created_at asc", tableName),
+				compareCols: []compareColInfo{
+					{colIndex: 0, colName: "id", isPK: true},
+					{colIndex: 1, colName: "created_at", isPK: true},
+					{colIndex: 2, colName: "v"},
+				},
+				comparePKs: []compareColInfo{
+					{colIndex: 0, colName: "id", isPK: true},
+					{colIndex: 1, colName: "created_at", isPK: true},
+				},
+				pkCols: []int{0, 1},
+			},
+		}
+	}
+	setSourceTable := func(tvde *testVDiffEnv, tableName string, pkColumns []string) {
+		tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:              tableName,
+				Columns:           []string{"id", "created_at", "v"},
+				PrimaryKeyColumns: pkColumns,
+				Fields:            targetFields,
+			}},
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		tableName string
+		sourcePK  []string
+		// pke, when set, is the source table's primary key equivalent.
+		pke []string
+	}{
+		{name: "physical source pk", tableName: "ext_pk", sourcePK: []string{"id"}},
+		{name: "source primary key equivalent", tableName: "ext_pke", pke: []string{"id"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tvde := newTestVDiffEnv(t)
+			defer tvde.close()
+			ct := tvde.createController(t, 1)
+			setSourceTable(tvde, tc.tableName, tc.sourcePK)
+			if tc.pke != nil {
+				tvde.tmc.pkeResults[tc.tableName] = sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("column_name|index_name", "varchar|varchar"),
+					tc.pke[0]+"|uk_id",
+				)
+			}
+
+			td := newTableDiffer(ct, tc.tableName)
+			require.NoError(t, td.getSourcePKCols())
+			require.False(t, td.tablePlan.sourceCheckpointUnavailable)
+			require.Equal(t, []int{0}, td.tablePlan.sourcePkCols)
+
+			// The source resumes after id 7 and the target after (7, created_at).
+			row := []sqltypes.Value{
+				sqltypes.NewInt64(7),
+				sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2024-01-02 03:04:05")),
+				sqltypes.NewVarChar("x"),
+			}
+			lastPK := td.lastPKFromRow(row)
+			require.NotNil(t, lastPK.Source)
+			source := sqltypes.Proto3ToResult(lastPK.Source)
+			require.Len(t, source.Fields, 1)
+			require.Equal(t, "id", source.Fields[0].Name)
+			require.Equal(t, "7", source.Rows[0][0].ToString())
+			target := sqltypes.Proto3ToResult(lastPK.Target)
+			require.Len(t, target.Fields, 2)
+			require.Equal(t, "7", target.Rows[0][0].ToString())
+			require.Equal(t, "2024-01-02 03:04:05", target.Rows[0][1].ToString())
+		})
+	}
+
+	t.Run("all-columns substitute source key is rejected", func(t *testing.T) {
+		tvde := newTestVDiffEnv(t)
+		defer tvde.close()
+		ct := tvde.createController(t, 1)
+		// With no PK and no primary key equivalent, the source key is every
+		// source column, here just (id), which need not be unique.
+		tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:    "ext_nokey",
+				Columns: []string{"id"},
+				Fields:  sqltypes.MakeTestFields("id", "int64"),
+			}},
+		}
+
+		td := newTableDiffer(ct, "ext_nokey")
+		err := td.getSourcePKCols()
+		require.ErrorContains(t, err, "not unique")
+		require.Empty(t, td.tablePlan.sourcePkCols)
+	})
+
+	t.Run("more than one source shard restarts on resume", func(t *testing.T) {
+		tvde := newTestVDiffEnv(t)
+		defer tvde.close()
+		ct := tvde.createController(t, 1)
+		setSourceTable(tvde, "ext_shards", []string{"id"})
+		const otherShard = "80-"
+		other := tvde.addTablet(101, tstenv.KeyspaceName, otherShard, topodatapb.TabletType_PRIMARY)
+		t.Cleanup(func() {
+			require.NoError(t, tstenv.TopoServ.DeleteShard(context.Background(), tstenv.KeyspaceName, otherShard))
+		})
+		ct.sources[otherShard] = &migrationSource{
+			vrID:          2,
+			shardStreamer: &shardStreamer{tablet: other.tablet, shard: otherShard},
+		}
+
+		td := newTableDiffer(ct, "ext_shards")
+		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("id", "int64")}
+		td.lastTargetPK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("id|created_at", "int64|datetime")}
+		require.NoError(t, td.getSourcePKCols())
+		require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+		require.Empty(t, td.tablePlan.sourcePkCols)
+		require.Nil(t, td.lastSourcePK, "a stale source checkpoint must be discarded")
+		require.Nil(t, td.lastTargetPK, "a stale target checkpoint must be discarded")
+	})
 }
 
 // TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint verifies the upgrade guard.

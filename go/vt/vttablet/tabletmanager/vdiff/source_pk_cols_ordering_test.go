@@ -391,7 +391,12 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 		// colTypes maps source columns to their types; only integer columns are
 		// treated as single-valued (pinnable) under "col = literal".
 		colTypes map[string]querypb.Type
-		wantErr  bool
+		// nonUniqueSourceKey marks sourcePKColumns as the all-columns substitute
+		// key rather than a physical PK or a primary key equivalent.
+		nonUniqueSourceKey bool
+		wantErr            bool
+		// wantExtended is whether the comparison key extends the source key.
+		wantExtended bool
 	}{
 		{
 			// Documented safe case: source PK (cid, typ) compared on cid. cid is a
@@ -419,12 +424,43 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			sourcePKColumns:     []string{"cid", "typ"},
 		},
 		{
-			// Comparison key has more columns than the physical source PK.
-			name:                "comparison key longer than source pk is rejected",
+			// The comparison key is the unique source PK (cid) followed by typ, as
+			// for a target partitioned by typ. A stream ordered by the unique cid
+			// has no ties on cid, so it is also ordered by (cid, typ).
+			name:                "comparison key extending a unique source pk is allowed",
 			sourceQuery:         "select cid, typ from customer order by cid asc, typ asc",
 			comparePKColIndices: []int{0, 1},
 			sourcePKColumns:     []string{"cid"},
+			wantExtended:        true,
+		},
+		{
+			// The all-columns substitute key need not be unique, so ties on it are
+			// possible and a stream ordered by it is not ordered by a longer key.
+			name:                "comparison key extending a non-unique source key is rejected",
+			sourceQuery:         "select cid, typ from customer order by cid asc, typ asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"cid"},
+			nonUniqueSourceKey:  true,
 			wantErr:             true,
+		},
+		{
+			// The comparison key (cid, typ) is longer than the source PK (cid, x)
+			// only in part: typ is compared where the source PK has x.
+			name:                "comparison key not starting with the whole source pk is rejected",
+			sourceQuery:         "select cid, typ, x from customer order by cid asc, typ asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"cid", "x"},
+			wantErr:             true,
+		},
+		{
+			// With tenant_id pinned, the source stream is ordered by the unique id,
+			// so a comparison key of id followed by created_at is ordered as well.
+			name:                "comparison key extending a pinned source pk is allowed",
+			sourceQuery:         "select tenant_id, id, created_at from src where tenant_id = 1 order by id asc, created_at asc",
+			comparePKColIndices: []int{1, 2},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
+			wantExtended:        true,
 		},
 		{
 			// A comparison column that is a computed value (not a physical column)
@@ -550,12 +586,13 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 				comparePKs[i] = compareColInfo{colIndex: idx, isPK: true}
 			}
 
-			err = comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns, tc.colTypes)
+			extended, err := comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns, !tc.nonUniqueSourceKey, tc.colTypes)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
+			require.Equal(t, tc.wantExtended, extended)
 		})
 	}
 }
@@ -706,9 +743,9 @@ func TestComparisonKeyPrefixRejectionIsNonEphemeral(t *testing.T) {
 
 	// Compare on cid, but the physical source PK is (typ, cid): cid is not a
 	// prefix, so the plan is rejected.
-	rejectErr := comparisonKeyIsSourcePKPrefix(sel,
+	_, rejectErr := comparisonKeyIsSourcePKPrefix(sel,
 		[]compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
-		[]string{"typ", "cid"}, nil)
+		[]string{"typ", "cid"}, true, nil)
 	require.Error(t, rejectErr)
 	require.False(t, sqlerror.IsEphemeralError(rejectErr), "the rejection error must be non-ephemeral")
 
