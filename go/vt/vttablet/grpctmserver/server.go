@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -716,17 +717,27 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	// hand-built event would render with an empty "file:line]" prefix.
 	completion := logutil.NewMemoryLogger()
 	completion.Infof("backup completed: %s", status)
-	if sendErr := stream.Send(&tabletmanagerdatapb.BackupResponse{
+	resp := &tabletmanagerdatapb.BackupResponse{
 		Event:      completion.Events[0],
 		Manifest:   outcome.Manifest,
 		Status:     status,
 		BackupName: outcome.Name,
-	}); sendErr != nil {
-		// The backup itself already succeeded and is persisted, so failing to
-		// deliver this last message must not turn it into a reported failure.
-		// This mirrors the logger callback above, which likewise tolerates a
-		// disconnected client. Note the manifest can be large on shards with
-		// very many files, so an oversized message is one way this can fail.
+	}
+	// A message over the gRPC limit fails the whole RPC, not just this Send, so
+	// the caller would see an error for a backup that is already stored. Drop
+	// the manifest instead; the name and status still identify the backup.
+	if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+		log.Warn("backup MANIFEST exceeds --grpc-max-message-size; sending the terminal Backup message without it",
+			slog.String("backup_name", resp.BackupName),
+			slog.Int("manifest_bytes", len(resp.Manifest)),
+			slog.Int("max_message_size", maxSize),
+		)
+		resp.Manifest = ""
+	}
+	if sendErr := stream.Send(resp); sendErr != nil {
+		// gRPC has already sent this error to the caller as the RPC's status, so
+		// returning it would change nothing. The likely cause is a client that
+		// disconnected during a long backup.
 		log.Warn("backup completed but sending the terminal Backup message failed",
 			slog.String("status", status.String()),
 			slog.Any("error", sendErr),

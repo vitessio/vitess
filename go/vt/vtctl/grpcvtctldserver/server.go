@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
+	"vitess.io/vitess/go/vt/grpccommon"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -570,6 +571,14 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 				Manifest:    tmResp.Manifest,
 				Status:      tmResp.Status,
 				BackupName:  tmResp.BackupName,
+			}
+			// This message is slightly larger than the tablet's, so a manifest that
+			// just fit there can overflow here and fail the whole RPC. Drop it the
+			// same way the tablet does.
+			if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+				logger.Warningf("backup MANIFEST exceeds --grpc-max-message-size (%d bytes); forwarding backup %v from %v without it",
+					maxSize, resp.BackupName, topoproto.TabletAliasString(resp.TabletAlias))
+				resp.Manifest = ""
 			}
 			if err := stream.Send(resp); err != nil {
 				// resp.Manifest is deliberately omitted: it can be megabytes, and

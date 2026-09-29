@@ -17,14 +17,21 @@ limitations under the License.
 package grpctmserver_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
+	"strconv"
+	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -85,10 +92,10 @@ func (tm *backupOutcomeTM) Backup(ctx context.Context, logger logutil.Logger, re
 }
 
 // startServer serves tm over gRPC and returns a tablet record pointing at it.
-func startServer(t *testing.T, tm tabletmanager.RPCTM) *topodatapb.Tablet {
+func startServer(t *testing.T, tm tabletmanager.RPCTM, opts ...grpc.ServerOption) *topodatapb.Tablet {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	s := grpc.NewServer()
+	s := grpc.NewServer(opts...)
 	grpctmserver.RegisterForTest(s, tm)
 	go s.Serve(listener)
 	t.Cleanup(s.Stop)
@@ -157,4 +164,44 @@ func TestBackupTerminalMessage(t *testing.T) {
 			assert.ErrorIs(t, err, io.EOF)
 		})
 	}
+}
+
+// setMaxMessageSize sets --grpc-max-message-size for the rest of the test.
+func setMaxMessageSize(t *testing.T, size int) {
+	fs := pflag.NewFlagSet(t.Name(), pflag.ContinueOnError)
+	grpccommon.RegisterFlags(fs)
+	orig := grpccommon.MaxMessageSize()
+	require.NoError(t, fs.Set("grpc-max-message-size", strconv.Itoa(size)))
+	t.Cleanup(func() { _ = fs.Set("grpc-max-message-size", strconv.Itoa(orig)) })
+}
+
+func TestBackupTerminalMessageTooLarge(t *testing.T) {
+	var logBuf bytes.Buffer
+	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	defer log.SwapLogger(oldLogger)
+	setMaxMessageSize(t, 1024)
+
+	// servenv applies the same flag as the server's send limit.
+	tablet := startServer(t, &backupOutcomeTM{
+		RPCTM:   tmrpctest.NewFakeRPCTM(t),
+		outcome: mysqlctl.BackupOutcome{Name: "b1", Manifest: strings.Repeat("x", 4096), Result: mysqlctl.BackupUsable},
+	}, grpc.MaxSendMsgSize(grpccommon.MaxMessageSize()))
+	stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{})
+	require.NoError(t, err)
+
+	_, err = stream.Recv()
+	require.NoError(t, err)
+
+	// The backup is stored, so it is reported without its manifest rather than
+	// failing the RPC.
+	term, err := stream.Recv()
+	require.NoError(t, err)
+	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
+	assert.Equal(t, "b1", term.BackupName)
+	assert.Empty(t, term.Manifest)
+	assert.NotNil(t, term.Event)
+
+	_, err = stream.Recv()
+	require.ErrorIs(t, err, io.EOF)
+	assert.Contains(t, logBuf.String(), "exceeds --grpc-max-message-size")
 }
