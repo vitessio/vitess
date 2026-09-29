@@ -1133,9 +1133,12 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
-func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
+// StatementNeedsSettingsOnConn reports whether stmt must run on a connection
+// with the session's settings applied, because the session has settings to
+// carry and stmt cannot carry them as a SET_VAR hint.
+func (vc *VCursorImpl) StatementNeedsSettingsOnConn(setVarComment string, stmt sqlparser.Statement) bool {
 	if setVarComment == "" {
-		return
+		return false
 	}
 	// An EXPLAIN or VEXPLAIN wraps an inner statement that carries the SET_VAR hint;
 	// decide against that inner statement so, for example, EXPLAIN of a SELECT is
@@ -1148,13 +1151,17 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		stmt = explain.Statement
 	}
 	switch stmt.(type) {
-	// If the statement supports optimizer hints or a transaction statement or a SET statement
-	// or a USE statement (which VTGate handles itself), no reserved connection is needed
+	// A statement that supports optimizer hints, a transaction statement, a SET statement
+	// or a USE statement (which VTGate handles itself) needs no settings on its connection.
+	// PREPARE and DEALLOCATE are handled by VTGate too, and an EXECUTE plan carries the
+	// need of the statement it runs.
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
-		*sqlparser.Use, sqlparser.SupportOptimizerHint:
+		*sqlparser.Use, *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt,
+		sqlparser.SupportOptimizerHint:
+		return false
 	default:
-		vc.NeedsReservedConn()
+		return true
 	}
 }
 

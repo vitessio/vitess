@@ -47,6 +47,10 @@ type (
 	planResult struct {
 		primitive engine.Primitive
 		tables    []string
+		// needsSettingsOnConn is set when the plan runs a statement that needs the
+		// session's settings on its connection, as an EXECUTE can for its prepared
+		// statement.
+		needsSettingsOnConn bool
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
@@ -115,11 +119,15 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 
 	var primitive engine.Primitive
 	var tablesUsed []string
+	var needsSettingsOnConn bool
 	if planResult != nil {
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
+		needsSettingsOnConn = planResult.needsSettingsOnConn
 	}
-	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
+	plan := engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed)
+	plan.NeedsSettingsOnConn = needsSettingsOnConn
+	return plan, nil
 }
 
 func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
