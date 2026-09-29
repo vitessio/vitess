@@ -266,18 +266,31 @@ func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 	return vc.SafeSession
 }
 
+// PrepareSetVarComment returns the SET_VAR query hint content for the session's system
+// variables. The variables are listed sorted by name, so that the same session renders
+// the same hint on every request: the hint is part of the plan cache key and of the
+// query text sent to the tablets.
 func (vc *VCursorImpl) PrepareSetVarComment() string {
-	var res []string
+	var keys []string
+	values := make(map[string]string)
 	vc.Session().GetSystemVariables(func(k, v string) {
 		if sysvars.SupportsSetVar(k) {
-			if k == "sql_mode" && v == "''" {
-				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
-				// | Warning | 1064 | Optimizer hint syntax error near ''') */
-				v = "' '"
-			}
-			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+			keys = append(keys, k)
+			values[k] = v
 		}
 	})
+	sort.Strings(keys)
+
+	res := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := values[k]
+		if k == "sql_mode" && v == "''" {
+			// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+			// | Warning | 1064 | Optimizer hint syntax error near ''') */
+			v = "' '"
+		}
+		res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+	}
 
 	return strings.Join(res, " ")
 }
