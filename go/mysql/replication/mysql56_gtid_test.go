@@ -17,6 +17,8 @@ limitations under the License.
 package replication
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -89,6 +91,34 @@ func TestMysql56GTIDString(t *testing.T) {
 	want := "00010203-0405-0607-0809-0a0b0c0d0e0f:12345"
 	got := strings.ToLower(input.String())
 	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
+}
+
+func TestMysql56GTIDStringMatchesSprintf(t *testing.T) {
+	sids := []SID{
+		{},
+		{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		{0x16, 0xb1, 0x03, 0x9f, 0x22, 0xb6, 0x11, 0xed, 0xb7, 0x65, 0x0a, 0x43, 0xf9, 0x5f, 0x28, 0xa3},
+	}
+	sequences := []int64{0, 1, 9, 10, 12345, math.MaxInt64, -1, math.MinInt64}
+	for _, sid := range sids {
+		want := fmt.Sprintf("%x-%x-%x-%x-%x", sid[:4], sid[4:6], sid[6:8], sid[8:10], sid[10:])
+		assert.Equal(t, want, sid.String())
+		for _, seq := range sequences {
+			gtid := Mysql56GTID{Server: sid, Sequence: seq}
+			assert.Equal(t, fmt.Sprintf("%s:%d", sid, seq), gtid.String())
+		}
+	}
+}
+
+func BenchmarkMysql56GTIDString(b *testing.B) {
+	sid, err := ParseSID("16b1039f-22b6-11ed-b765-0a43f95f28a3")
+	require.NoError(b, err)
+	gtid := Mysql56GTID{Server: sid, Sequence: 123456789}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = gtid.String()
+	}
 }
 
 func TestMysql56GTIDFlavor(t *testing.T) {
