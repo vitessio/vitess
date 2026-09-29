@@ -17,12 +17,12 @@ limitations under the License.
 package binlogplayer
 
 import (
-	"net"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 )
 
 // TestSetMultiStatementsOnAClosedConnection covers what a dead connection
@@ -31,10 +31,11 @@ import (
 // granted on a connection that cannot carry it, and the caller would go on to
 // build a batch for it.
 func TestSetMultiStatementsOnAClosedConnection(t *testing.T) {
-	client, server := net.Pipe()
-	t.Cleanup(func() { server.Close() })
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
 
-	conn := mysql.NewConnForTest(client)
+	conn, err := mysql.Connect(t.Context(), db.ConnParams())
+	require.NoError(t, err)
 	conn.Capabilities = mysql.CapabilityClientMultiStatements
 	conn.Close()
 

@@ -69,25 +69,6 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
-<<<<<<< HEAD
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-// ExecuteSuperQueryListTainted executes queries as a super user like
-// ExecuteSuperQueryList, but discards the connection afterwards instead of
-// returning it to the pool. Use it for operator-supplied SQL, whose session
-// state changes (e.g. sql_mode) must not leak into pooled connections.
-func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
-	defer conn.Close()
-
-	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
-}
-
-=======
 // comSetOption describes the capability exchange in the log line that says
 // what a timeout killed.
 const comSetOption = "COM_SET_OPTION"
@@ -101,13 +82,12 @@ var killGraceTimeout = 5 * time.Second
 // written by an operator, where a single entry may hold several statements
 // separated by a semicolon.
 //
-// The connection is discarded afterwards instead of returning to the pool, like
-// ExecuteSuperQueryListTainted does: it can send a batch, which nothing else
-// drawing on the pool expects, and operator-supplied SQL may have changed
-// session state (e.g. sql_mode) that must not leak into pooled connections.
-// MySQL parses the statements, so an entry holding a compound statement such as
-// CREATE PROCEDURE, whose body carries semicolons of its own, means what it
-// says.
+// The connection is discarded afterwards instead of returning to the pool: it
+// can send a batch, which nothing else drawing on the pool expects, and
+// operator-supplied SQL may have changed session state (e.g. sql_mode) that must
+// not leak into pooled connections. MySQL parses the statements, so an entry
+// holding a compound statement such as CREATE PROCEDURE, whose body carries
+// semicolons of its own, means what it says.
 func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -133,38 +113,20 @@ func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList 
 	})
 }
 
-// ExecuteSuperQueryListTainted executes queries as a super user like
-// ExecuteSuperQueryList, but discards the connection afterwards instead of
-// returning it to the pool. Use it for operator-supplied SQL, whose session
-// state changes (e.g. sql_mode) must not leak into pooled connections.
-func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
-	defer conn.Close()
-
-	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
-}
-
 // executeQueryList runs each query through exec, stopping at the first failure.
 // name says what exec calls, for the error that failure returns.
 func executeQueryList(queryList []string, name string, exec func(query string) error) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
+		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
 		if err := exec(query); err != nil {
-			msg := fmt.Sprintf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
-			log.Error(msg)
-			return &execError{msg: msg, cause: err}
+			log.Errorf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
+			return fmt.Errorf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
 		}
 	}
 	return nil
 }
 
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 func limitString(s string, limit int) string {
 	if len(s) > limit {
 		return s[:limit]
@@ -173,33 +135,10 @@ func limitString(s string, limit int) string {
 }
 
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
-<<<<<<< HEAD
-	const LogQueryLengthLimit = 200
-	for _, query := range queryList {
-		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
-		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
-		}
-	}
-	return nil
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	const LogQueryLengthLimit = 200
-	for _, query := range queryList {
-		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
-		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			msg := fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
-			log.Error(msg)
-			return &execError{msg: msg, cause: err}
-		}
-	}
-	return nil
-=======
 	return executeQueryList(queryList, "ExecuteFetch", func(query string) error {
 		_, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false)
 		return err
 	})
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 }
 
 // FetchSuperQuery returns the results of executing a query as a super user.
@@ -268,21 +207,10 @@ func (mysqld *Mysqld) executeWithContext(ctx context.Context, conn *dbconnpool.P
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the query.
 		connID := conn.Conn.ID()
-<<<<<<< HEAD
-		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-		log.Info(fmt.Sprintf("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, redactPassword(query)))
-=======
-		log.Info(fmt.Sprintf("Mysqld.executeWithContext(): killing connID %v due to timeout of query: %v", connID, redactPassword(query)))
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
+		log.Infof("Mysqld.executeWithContext(): killing connID %v due to timeout of query: %v", connID, query)
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
-<<<<<<< HEAD
-			log.Warningf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr)
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-			log.Warn(fmt.Sprintf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr))
-=======
-			log.Warn(fmt.Sprintf("Mysqld.executeWithContext(): failed to kill connID %v: %v", connID, killErr))
+			log.Warningf("Mysqld.executeWithContext(): failed to kill connID %v: %v", connID, killErr)
 		}
 		// Waiting for exec() to come back is not enough on its own: a kill that
 		// was not delivered leaves a read the server never answers, and nothing
@@ -291,10 +219,9 @@ func (mysqld *Mysqld) executeWithContext(ctx context.Context, conn *dbconnpool.P
 		select {
 		case <-done:
 		case <-time.After(killGraceTimeout):
-			log.Warn(fmt.Sprintf("Mysqld.executeWithContext(): connID %v did not come back after the kill, closing the connection to interrupt it", connID))
+			log.Warningf("Mysqld.executeWithContext(): connID %v did not come back after the kill, closing the connection to interrupt it", connID)
 			conn.Close()
 			<-done
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 		}
 		// Close the connection. Upon Recycle() it will be thrown out.
 		conn.Close()

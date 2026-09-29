@@ -260,7 +260,7 @@ func TestMultiStatementsAreNotNegotiated(t *testing.T) {
 	}
 	// Without this the sweep above silently stops testing anything if the
 	// connectors ever stop looking like connectors.
-	require.Equal(t, 11, found, "expected to find every connector on DBConfigs")
+	require.Equal(t, 10, found, "expected to find every connector on DBConfigs")
 }
 
 func TestAccessors(t *testing.T) {

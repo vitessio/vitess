@@ -159,7 +159,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 
 	var maxBatchSize int64
 	if batchMode {
-<<<<<<< HEAD
 		// relayLogMaxSize is effectively the limit used when not batching.
 		maxAllowedPacket := int64(vr.workflowConfig.RelayLogMaxSize)
 		// We explicitly do NOT want to batch this, we want to send it down the wire
@@ -177,11 +176,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		// and 64MiB in 8.0 -- and the default for max_relay_log_size is 250000
 		// bytes -- so we have plenty of room.
 		maxAllowedPacket -= 64
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-		maxAllowedPacket := vr.maxQuerySize(vr.dbClient)
-=======
-		maxBatchSize = vr.maxQuerySize(vr.dbClient)
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
+		maxBatchSize = maxAllowedPacket
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
 				return vr.dbClient.Execute(sql)
@@ -270,10 +265,7 @@ func (vp *vplayer) clearConnectionBatchMode() {
 	}
 
 	if err := vp.vr.dbClient.SetMultiStatements(false); err != nil {
-		log.Warn("failed to disable multi statement support",
-			slog.String("workflow", vp.vr.WorkflowName),
-			slog.Any("error", err),
-		)
+		log.Warningf("failed to disable multi statement support for workflow %s: %v", vp.vr.WorkflowName, err)
 	}
 }
 

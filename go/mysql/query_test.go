@@ -105,30 +105,12 @@ func expectComSetOption(t *testing.T, sConn *Conn, operand uint16, respond func(
 	// A server starts a new packet sequence for every command it reads.
 	sConn.sequence = 0
 
-<<<<<<< HEAD
-	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
-		t.Fatalf("writeComSetOption failed: %v", err)
-	}
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
-		require.NoError(t, err)
-	}
-=======
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComSetOption {
-		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComSetOption failed: %v", data)
+	require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
-<<<<<<< HEAD
-	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
-
-||||||| parent of acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
-	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
-=======
 	require.Equal(t, operand, operation, "parseComSetOption returned unexpected data: %v", operation)
 	require.NoError(t, respond())
 }
@@ -233,7 +215,6 @@ func TestSetMultiStatements(t *testing.T) {
 		require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must stay unset when the response is lost")
 		require.True(t, cConn.IsClosed(), "connection must be closed when the response is lost")
 	})
->>>>>>> acdc8f8815 (Only negotiate multi statement support on connections that send batches (#21221))
 }
 
 func TestComStmtPrepare(t *testing.T) {
