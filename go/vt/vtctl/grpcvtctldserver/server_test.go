@@ -17,10 +17,12 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"slices"
@@ -46,6 +48,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -981,6 +984,63 @@ func TestBackup(t *testing.T) {
 			}
 		})
 	}
+}
+
+// failingBackupSendStream counts Send calls and fails every one of them.
+type failingBackupSendStream struct {
+	sent int
+}
+
+// Send implements the backupTablet stream interface for failingBackupSendStream.
+func (s *failingBackupSendStream) Send(*vtctldatapb.BackupResponse) error {
+	s.sent++
+	return errors.New("grpc: message larger than max")
+}
+
+// TestBackupTabletSendFailure verifies that a failed Send is logged without the
+// manifest and does not stop backupTablet from draining the tablet stream.
+func TestBackupTabletSendFailure(t *testing.T) {
+	var logBuf bytes.Buffer
+	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	defer log.SwapLogger(oldLogger)
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
+		}{
+			"zone1-0000000100": {
+				Events:   []*logutilpb.Event{{}},
+				Manifest: `{"BackupName":"secret-manifest-body"}`,
+				Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+			},
+		},
+	}
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	stream := &failingBackupSendStream{}
+
+	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{}, stream)
+	require.NoError(t, err, "a failed Send should be logged, not returned")
+	assert.Equal(t, 2, stream.sent, "expected 1 log event + 1 terminal message")
+
+	out := logBuf.String()
+	assert.Contains(t, out, "failed to send stream response")
+	assert.Contains(t, out, "status=USABLE")
+	assert.NotContains(t, out, "secret-manifest-body", "manifest must not be logged")
 }
 
 // TestBackupShard verifies shard tablet selection and backup stream forwarding

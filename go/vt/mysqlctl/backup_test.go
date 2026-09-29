@@ -132,17 +132,21 @@ func TestBackupEmitsStats(t *testing.T) {
 func TestBackupReturnsManifestAndResult(t *testing.T) {
 	const manifestJSON = `{"BackupName":"test-backup","BackupMethod":"fake"}`
 
-	// backupHandleNamed builds a read handle matching the name Backup derives
-	// from BackupTime/TabletAlias, serving the given MANIFEST contents.
-	backupHandleNamed := func(env *fakeBackupRestoreEnv, contents string, readErr error) {
-		name := fmt.Sprintf("%v.%v",
+	// backupName is the name Backup derives from BackupTime/TabletAlias.
+	backupName := func(env *fakeBackupRestoreEnv) string {
+		return fmt.Sprintf("%v.%v",
 			env.backupParams.BackupTime.UTC().Format(BackupTimestampFormat),
 			env.backupParams.TabletAlias,
 		)
+	}
+
+	// backupHandleNamed builds a read handle matching backupName, serving the
+	// given MANIFEST contents.
+	backupHandleNamed := func(env *fakeBackupRestoreEnv, contents string, readErr error) {
 		env.backupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
 			BackupHandles: []backupstorage.BackupHandle{
 				&FakeBackupHandle{
-					NameV: name,
+					NameV: backupName(env),
 					ReadFileReturnF: func(_ context.Context, filename string) (io.ReadCloser, error) {
 						if readErr != nil {
 							return nil, readErr
@@ -204,6 +208,82 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 		require.NoError(t, err, "the backup succeeded; reading its manifest back is best-effort")
 		assert.Equal(t, BackupUsable, outcome.Result)
 		assert.Empty(t, outcome.Manifest)
+	})
+
+	t.Run("storage fallback returns only this backup's manifest", func(t *testing.T) {
+		env := createFakeBackupRestoreEnv(t)
+		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
+		handle := func(name, contents string) backupstorage.BackupHandle {
+			return &FakeBackupHandle{
+				NameV: name,
+				ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader(contents)), nil
+				},
+			}
+		}
+		// Decoys on both sides catch a "take first" or "take last" regression.
+		env.backupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
+			BackupHandles: []backupstorage.BackupHandle{
+				handle("older", `{"BackupName":"older"}`),
+				handle(backupName(env), manifestJSON),
+				handle("newer", `{"BackupName":"newer"}`),
+			},
+		}
+
+		outcome, err := Backup(env.ctx, env.backupParams)
+		require.NoError(t, err, env.logger.Events)
+		assert.Equal(t, manifestJSON, outcome.Manifest)
+	})
+
+	t.Run("storage fallback without this backup's handle returns no manifest", func(t *testing.T) {
+		// The default storage lists a single unnamed handle serving a valid manifest.
+		env := createFakeBackupRestoreEnv(t)
+		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
+
+		outcome, err := Backup(env.ctx, env.backupParams)
+		require.NoError(t, err, env.logger.Events)
+		assert.Equal(t, BackupUsable, outcome.Result)
+		assert.NotEmpty(t, outcome.Name)
+		assert.Empty(t, outcome.Manifest, "another backup's manifest must not be reported")
+	})
+
+	t.Run("finalize failure is reported without a name or manifest", func(t *testing.T) {
+		for _, tc := range []struct {
+			name     string
+			result   BackupResult
+			endErr   error
+			abortErr error
+			wantErr  string
+		}{
+			{
+				name:    "EndBackup fails for a usable backup",
+				result:  BackupUsable,
+				endErr:  errors.New("end failed"),
+				wantErr: "end failed",
+			},
+			{
+				name:     "AbortBackup fails for an empty backup",
+				result:   BackupEmpty,
+				abortErr: errors.New("abort failed"),
+				wantErr:  "abort failed",
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				env := createFakeBackupRestoreEnv(t)
+				env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{tc.result, nil}
+				env.backupEngine.ExecuteBackupManifest = manifestJSON
+				env.backupStorage.StartBackupReturn = FakeBackupStorageStartBackupReturn{
+					&FakeBackupHandle{EndBackupReturn: tc.endErr, AbortBackupReturn: tc.abortErr}, nil,
+				}
+
+				outcome, err := Backup(env.ctx, env.backupParams)
+				require.ErrorContains(t, err, tc.wantErr)
+				assert.Equal(t, BackupUnusable, outcome.Result)
+				assert.Empty(t, outcome.Name)
+				assert.Empty(t, outcome.Manifest)
+				assert.Empty(t, env.backupStorage.ListBackupsCalls)
+			})
+		}
 	})
 }
 
