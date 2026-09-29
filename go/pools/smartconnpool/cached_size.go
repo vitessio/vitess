@@ -25,11 +25,18 @@ func (cached *Setting) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(80)
 	}
 	// field queryApply string
 	size += hack.RuntimeAllocSize(int64(len(cached.queryApply)))
 	// field queryReset string
 	size += hack.RuntimeAllocSize(int64(len(cached.queryReset)))
+	// field variables []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.variables)) * int64(16))
+		for _, elem := range cached.variables {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }

@@ -221,9 +221,16 @@ type Plan struct {
 
 	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
 	// judged at plan time (a non-constant expression): the executor must read back the
-	// applied value and validate it with sqlmode.Validate. Such a plan has sql_mode as
-	// its only assignment (see validateSetStatementSQLMode).
+	// applied value, validate it with sqlmode.Validate, and record the lexer modes the
+	// connection is then read under. Such a plan has sql_mode as its only assignment
+	// (see validateSetStatementSQLMode).
 	VerifySQLMode bool
+
+	// SetsSQLMode is set on a PlanSet whose statement assigns sql_mode a constant
+	// value, and SQLModeParseBits holds the lexer modes of that value the parser
+	// honors: after the statement ran, the connection is read under them.
+	SetsSQLMode      bool
+	SQLModeParseBits sqlmode.Mode
 }
 
 // TableName returns the table name for the plan.
@@ -411,40 +418,71 @@ func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	return mutating, acquiring
 }
 
-// BuildSettingQuery builds a query for system settings. Under strict table
+// SettingQuery is what BuildSettingQuery makes of a connection's settings.
+type SettingQuery struct {
+	// Apply is the SET statement that applies the settings, and Reset the one
+	// that undoes them.
+	Apply, Reset string
+	// Variables names the session variables the settings assign, lowered.
+	Variables []string
+	// ParseMode holds the lexer modes the parser honors of the sql_mode the
+	// settings put the session in, so that the pooled connection is read under
+	// them, and SetsSQLMode reports whether the settings assign sql_mode at all.
+	ParseMode   sqlmode.Mode
+	SetsSQLMode bool
+}
+
+// BuildSettingQuery builds the queries for system settings. Under strict table
 // ACL a setting with a subquery is refused, see rejectSettingSubqueries.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableACL bool) (query string, resetQuery string, err error) {
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableACL bool) (*SettingQuery, error) {
 	if len(settings) == 0 {
-		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
+	var (
+		parseMode   sqlmode.Mode
+		setsSQLMode bool
+		variables   []string
+	)
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
 	defaultValue := &sqlparser.Default{}
+	// MySQL reads each setting under the sql_mode the settings before it put the
+	// session in, so each is parsed under the lexer modes that mode carries
+	settingParser := parser
 	for _, setting := range settings {
-		stmt, err := parser.Parse(setting)
+		stmt, err := settingParser.Parse(setting)
 		if err != nil {
-			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+			return nil, vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
 		// settings are applied with no verification and no table ACL check, so a
 		// subquery is refused where the ACL is enforced, and sql_mode values must
 		// be constants that can be judged here
 		if strictTableACL {
 			if err := rejectSettingSubqueries(set, setting); err != nil {
-				return "", "", err
+				return nil, err
 			}
 		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return "", "", err
+			return nil, err
+		}
+		mode, sawConstant, err := constantSetExprsSQLModeBits(set.Exprs)
+		if err != nil {
+			return nil, err
+		}
+		if sawConstant {
+			parseMode = mode
+			setsSQLMode = true
+			settingParser = parser.WithSQLMode(mode)
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
 			sysVar := sExpr.Var
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
-				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
 			resetExpr := sqlparser.Expr(defaultValue)
 			switch sysVar.Name.Lowered() {
@@ -462,11 +500,18 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, strictTableA
 				// the neutralized global instead
 				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
 				if err != nil {
-					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
+					return nil, vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
 				}
 			}
 			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
+			variables = append(variables, sysVar.Name.Lowered())
 		}
 	}
-	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
+	return &SettingQuery{
+		Apply:       sqlparser.String(&sqlparser.Set{Exprs: setExprs}),
+		Reset:       sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}),
+		Variables:   variables,
+		ParseMode:   parseMode,
+		SetsSQLMode: setsSQLMode,
+	}, nil
 }

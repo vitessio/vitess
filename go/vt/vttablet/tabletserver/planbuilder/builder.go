@@ -191,12 +191,18 @@ func analyzeSet(set *sqlparser.Set) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	parseBits, sawConstant, err := constantSetExprsSQLModeBits(set.Exprs)
+	if err != nil {
+		return nil, err
+	}
 	return &Plan{
 		PlanID:            PlanSet,
 		FullQuery:         GenerateFullQuery(set),
 		FullStmt:          set,
 		NeedsReservedConn: true,
 		VerifySQLMode:     verify,
+		SetsSQLMode:       sawConstant,
+		SQLModeParseBits:  parseBits,
 	}, nil
 }
 

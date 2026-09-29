@@ -19,9 +19,11 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -61,6 +63,21 @@ type StatefulConnection struct {
 	// refreshes the connection. Both are sticky by design.
 	holdsTempTables  bool
 	keepAliveManaged bool
+
+	// parseSQLMode holds the lexer modes the connection's session is in (from its
+	// settings or SET statements; see sqlparser.HonoredSQLModes): queries on the
+	// connection are parsed under them. Atomic because the plan path reads it
+	// without locking the connection.
+	parseSQLMode atomic.Uint64
+	// settingStale is set once the connection's MySQL session changed after its
+	// settings were applied, and cleared once they are applied again (see
+	// MarkSettingStale). sessionDiverged is set at the same time, and when a
+	// setting is applied on a connection that already carries one that assigns a
+	// variable the new one does not, and stays set: applying a setting restores
+	// its own variables only, so the connection must not return to the pool under
+	// any setting once its session carries state a setting does not describe.
+	settingStale    bool
+	sessionDiverged bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
 	// captured when its first temporary-table DDL runs and re-captured after
@@ -308,6 +325,17 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 			sc.pool.tempTableUnmanaged.Add(-1)
 		}
 	}
+	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
+		// The MySQL session carries state the settings the pool files the
+		// connection under do not describe, from a SET that ran on it or from a
+		// setting applied over one it does not cover, and applying those settings again
+		// restores their own variables only. The pool would hand it to the next
+		// request that brings those settings as if nothing else had changed:
+		// discard it instead, and the pool opens a replacement and counts the
+		// loss. A tainted connection never returns to the pool, and one already
+		// closed was lost for another reason and is not counted as discarded.
+		sc.dbConn.Discard()
+	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn(reason)
@@ -456,10 +484,53 @@ func (sc *StatefulConnection) getUsername() string {
 
 // ApplySetting returns whether the settings where applied or not. It also returns an error, if encountered.
 func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) (bool, error) {
-	if sc.dbConn.Conn.Setting() == setting {
+	current := sc.dbConn.Conn.Setting()
+	if current == setting && !sc.settingStale {
 		return false, nil
 	}
-	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
+	if current != nil && current != setting && !setting.Covers(current) {
+		// the new setting is applied on top of the old one's variables, and those
+		// it does not assign stay in effect on the session without the new
+		// setting describing them; one that assigns them all leaves the session
+		// as it describes it. VTGate's settings for a session only ever grow, so
+		// a session whose queries carry its settings and that changes a variable
+		// mid-transaction switches to a setting that covers the old one.
+		sc.sessionDiverged = true
+	}
+	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {
+		// Applying the setting failed or was interrupted, so its variables, and
+		// sql_mode among them, may or may not have taken effect: the session is
+		// in a state no setting or recorded mode describes. Close the
+		// connection, as the pool does when it fails to apply a setting to one
+		// it hands out.
+		sc.dbConn.Close()
+		return true, err
+	}
+	sc.settingStale = false
+	if setting.SetsSQLMode() {
+		sc.SetParseSQLMode(sqlmode.Mode(setting.SQLMode()))
+	}
+	return true, nil
+}
+
+// MarkSettingStale records that the connection's MySQL session changed since its
+// settings were applied, by a SET statement or by the pre-queries of a
+// reservation: a request that brings the same settings must apply them again
+// rather than skip them, and the connection is closed rather than recycled when
+// it is released.
+func (sc *StatefulConnection) MarkSettingStale() {
+	sc.settingStale = true
+	sc.sessionDiverged = true
+}
+
+// ParseSQLMode returns the lexer modes the connection's session is in.
+func (sc *StatefulConnection) ParseSQLMode() sqlmode.Mode {
+	return sqlmode.Mode(sc.parseSQLMode.Load())
+}
+
+// SetParseSQLMode records the lexer modes the connection's session is in.
+func (sc *StatefulConnection) SetParseSQLMode(mode sqlmode.Mode) {
+	sc.parseSQLMode.Store(uint64(mode))
 }
 
 // resetLastUsed restarts the idle clock ElapsedTimeout measures from.
