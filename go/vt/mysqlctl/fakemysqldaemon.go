@@ -657,6 +657,13 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string)
 	return fmd.ExecuteSuperQueryList(ctx, []string{query})
 }
 
+// ExecuteSuperQueryListMulti is part of the MysqlDaemon interface. There is no
+// connection here to allow a batch on, so an entry holding several statements is
+// checked against the expected list as it was written.
+func (fmd *FakeMysqlDaemon) ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error {
+	return fmd.ExecuteSuperQueryList(ctx, queryList)
+}
+
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	if fmd.ExecuteSuperQueryListCallback != nil {
