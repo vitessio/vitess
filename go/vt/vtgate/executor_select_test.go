@@ -4747,7 +4747,6 @@ func TestSysVarGlobalAndSession(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "uint64"), "40"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.innodb_lock_wait_timeout", "uint64"), "20"),
 	})
 	qr, err := executorExecSession(t.Context(), executor, session,
