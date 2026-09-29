@@ -77,6 +77,8 @@ func TestCgroupCpuCount(t *testing.T) {
 		{name: "smallest limit wins", cpuMax: map[string]string{"/pod": "300000 100000\n", "/pod/ctr": "150000 100000\n"}, want: 1.5},
 		{name: "limit above the host CPU count", cpuMax: map[string]string{"/pod/ctr": "100000000 100000\n"}, want: numCPU},
 		{name: "malformed", cpuMax: map[string]string{"/pod/ctr": "garbage\n"}, want: numCPU},
+		{name: "invalid quota", cpuMax: map[string]string{"/pod/ctr": "abc 100000\n"}, want: numCPU},
+		{name: "zero period", cpuMax: map[string]string{"/pod/ctr": "100000 0\n"}, want: numCPU},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
