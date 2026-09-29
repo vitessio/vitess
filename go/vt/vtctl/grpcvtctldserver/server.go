@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -475,41 +476,33 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("upgrade_safe", req.UpgradeSafe)
 	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
+	span.Annotate("tablet_types", topoproto.MakeStringTypeCSV(req.TabletTypes))
+
+	if unsupported := reparentutil.UnsupportedBackupTabletTypes(req.TabletTypes); len(unsupported) > 0 {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet type %s cannot take a backup of a shard",
+			topoproto.MakeStringTypeCSV(unsupported))
+		return err
+	}
+
+	if !req.AllowPrimary && slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
+		return err
+	}
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
-	if err != nil {
-		tablets = reparentutil.GetBackupCandidates(tablets, stats)
-		// Only return err when no usable tablet
-		if len(tablets) == 0 {
-			return err
-		}
+	if err != nil && len(reparentutil.GetBackupCandidates(tablets, stats)) == 0 {
+		return err
 	}
 
-	var (
-		backupTablet    *topodatapb.Tablet
-		backupTabletLag uint32
-	)
+	var backupTablet *topodatapb.Tablet
 
-	for i, tablet := range tablets {
-		switch tablet.Type {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
-		default:
-			continue
-		}
-
-		// ignore tablet with an unknown replication lag status
-		if stats[i].ReplicationLagUnknown {
-			continue
-		}
-
-		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
-			backupTablet = tablet.Tablet
-			backupTabletLag = lag
-		}
+	if tablet := reparentutil.ChooseBackupTablet(tablets, stats, req.TabletTypes); tablet != nil {
+		backupTablet = tablet.Tablet
 	}
 
-	if backupTablet == nil && req.AllowPrimary {
+	if backupTablet == nil && len(req.TabletTypes) == 0 && req.AllowPrimary {
 		for _, tablet := range tablets {
 			if tablet.Type != topodatapb.TabletType_PRIMARY {
 				continue

@@ -1021,6 +1021,245 @@ func TestBackupShard(t *testing.T) {
 			},
 		},
 		{
+			name: "tablet types with allow primary, a listed type matches",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:     "ks",
+				Shard:        "-",
+				AllowPrimary: true,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.NotEmpty(t, responses)
+				for _, resp := range responses {
+					assert.Equal(t, 101, int(resp.TabletAlias.Uid), "expected the replica, not the primary")
+				}
+			},
+		},
+		{
+			name: "allow primary does not add an unlisted primary",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:     "ks",
+				Shard:        "-",
+				AllowPrimary: true,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "a listed primary is chosen when nothing earlier matches",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:     "ks",
+				Shard:        "-",
+				AllowPrimary: true,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.NotEmpty(t, responses)
+				for _, resp := range responses {
+					assert.Equal(t, 200, int(resp.TabletAlias.Uid), "expected the listed primary")
+				}
+			},
+		},
+		{
+			name: "primary in tablet types without allow primary",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc:  &testutil.TabletManagerClient{},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				require.ErrorContains(t, err, "--allow-primary")
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "replication status error on one replica",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}, {}, {}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {Error: assert.AnError},
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 1}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+				for _, resp := range responses {
+					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
+				}
+			},
+		},
+		{
 			name: "cannot backup primary",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{

@@ -68232,6 +68232,9 @@ export namespace vtctldata {
         /** BackupShardRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupShardRequest tablet_types. */
+        tablet_types: topodata.TabletType[];
+
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -68339,6 +68342,9 @@ export namespace vtctldata {
 
             /** BackupShardRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupShardRequest tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
