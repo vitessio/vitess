@@ -64,10 +64,11 @@ type StatefulConnection struct {
 
 	// sessionDiverged is set once the connection's MySQL session may carry state
 	// that nothing the pool knows about describes, such as the change of a SET
-	// statement that ran on it, or the session variables or temporary tables of
-	// a stored procedure called on it, and stays set: the connection must not
-	// return to the pool (see MarkSessionDiverged). Applying the connection's
-	// settings again restores their own variables only, so it does not clear it.
+	// statement that ran on it, what a setting applied over another leaves of
+	// the old one, or the session variables or temporary tables of a stored
+	// procedure called on it, and stays set: the connection must not return to
+	// the pool (see MarkSessionDiverged). Applying the connection's settings
+	// again restores their own variables only, so it does not clear it.
 	sessionDiverged bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
@@ -480,8 +481,17 @@ func (sc *StatefulConnection) getUsername() string {
 
 // ApplySetting returns whether the settings where applied or not. It also returns an error, if encountered.
 func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) (bool, error) {
-	if sc.dbConn.Conn.Setting() == setting {
+	current := sc.dbConn.Conn.Setting()
+	if current == setting {
 		return false, nil
+	}
+	if current != nil {
+		// The new setting is applied on top of the old one: the old one's
+		// variables it does not assign stay in effect, and one it assigns can
+		// keep part of its old value (optimizer_switch merges the flags an
+		// assignment names into the current ones), so the session need not be
+		// what applying the new setting to a fresh connection makes it.
+		sc.MarkSessionDiverged()
 	}
 	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
 }

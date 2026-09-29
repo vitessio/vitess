@@ -2781,6 +2781,49 @@ func TestPostBeginSetNeedsReservedConnection(t *testing.T) {
 	}
 }
 
+// A setting applied on a connection that already carries another one is
+// applied on top of it: the old one's variables the new one does not assign
+// stay in effect, and one it assigns can keep part of its old value
+// (optimizer_switch merges the flags an assignment names into the current
+// ones). The connection is discarded when it is released rather than recycled
+// under the new setting, also when the new setting assigns every variable the
+// old one did, as VTGate's settings do when a session changes a variable a
+// SET_VAR hint can carry mid-transaction.
+func TestSettingSwitchDiscardsTheConnectionOnRelease(t *testing.T) {
+	for _, tc := range []struct {
+		name, applyNew string
+	}{
+		{name: "other variables", applyNew: "set sql_select_limit = 10"},
+		{name: "every old variable", applyNew: "set sql_safe_updates = 0, sql_select_limit = 10"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			db, tsv := setupTabletServerTest(t, ctx, "")
+			t.Cleanup(db.Close)
+			t.Cleanup(tsv.StopService)
+
+			const applyOld = "set sql_safe_updates = 1"
+			db.AddQuery(applyOld, &sqltypes.Result{})
+			db.AddQuery(tc.applyNew, &sqltypes.Result{})
+			db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+			target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+			beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, []string{applyOld}, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			require.Equal(t, int64(0), beginState.ReservedID)
+			txConns := db.QueryConnIDs(applyOld)
+			require.Len(t, txConns, 1)
+			_, _, err = tsv.ReserveExecute(ctx, nil, &target, []string{tc.applyNew}, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+			require.NoError(t, err)
+			assert.Equal(t, int64(1), tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "the pool counts the connection discarded at commit")
+			require.Eventually(t, func() bool { return !db.IsConnectionOpen(txConns[0]) },
+				30*time.Second, 10*time.Millisecond, "a connection a setting was applied over must be closed")
+		})
+	}
+}
+
 func TestReserveExecute_WithTx(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
