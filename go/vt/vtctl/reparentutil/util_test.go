@@ -2960,3 +2960,162 @@ func TestGetBackupCandidates(t *testing.T) {
 		})
 	}
 }
+
+func TestChooseBackupTablet(t *testing.T) {
+	tablet := func(uid uint32, tabletType topodatapb.TabletType) *topo.TabletInfo {
+		return &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+				Type:  tabletType,
+			},
+		}
+	}
+
+	var (
+		primaryTablet  = tablet(1, topodatapb.TabletType_PRIMARY)
+		replicaTablet  = tablet(2, topodatapb.TabletType_REPLICA)
+		replica2Tablet = tablet(3, topodatapb.TabletType_REPLICA)
+		rdonlyTablet   = tablet(4, topodatapb.TabletType_RDONLY)
+		spareTablet    = tablet(5, topodatapb.TabletType_SPARE)
+	)
+
+	tests := []struct {
+		name        string
+		tablets     []*topo.TabletInfo
+		stats       []*replicationdatapb.Status
+		tabletTypes []topodatapb.TabletType
+		expected    *topo.TabletInfo
+	}{
+		{
+			name:     "no types given picks the lowest lag of any backup type",
+			tablets:  []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet},
+			stats:    []*replicationdatapb.Status{nil, {ReplicationLagSeconds: 10}, {ReplicationLagSeconds: 2}},
+			expected: rdonlyTablet,
+		},
+		{
+			name:     "no types given never picks the primary, which reports zero lag",
+			tablets:  []*topo.TabletInfo{primaryTablet, replicaTablet},
+			stats:    []*replicationdatapb.Status{{ReplicationLagSeconds: 0}, {ReplicationLagSeconds: 9}},
+			expected: replicaTablet,
+		},
+		{
+			name:        "rdonly preferred even when the replica and primary have less lag",
+			tablets:     []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet},
+			stats:       []*replicationdatapb.Status{{ReplicationLagSeconds: 0}, {ReplicationLagSeconds: 1}, {ReplicationLagSeconds: 30}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
+			expected:    rdonlyTablet,
+		},
+		{
+			name:        "falls back to the next type when the preferred one has no tablet",
+			tablets:     []*topo.TabletInfo{primaryTablet, replicaTablet},
+			stats:       []*replicationdatapb.Status{nil, {ReplicationLagSeconds: 5}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
+			expected:    replicaTablet,
+		},
+		{
+			name:        "falls back when the preferred tablet has unknown lag",
+			tablets:     []*topo.TabletInfo{rdonlyTablet, replicaTablet},
+			stats:       []*replicationdatapb.Status{{ReplicationLagUnknown: true}, {ReplicationLagSeconds: 5}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
+			expected:    replicaTablet,
+		},
+		{
+			name:        "no fallback when only the preferred type is given",
+			tablets:     []*topo.TabletInfo{primaryTablet, replicaTablet},
+			stats:       []*replicationdatapb.Status{nil, {ReplicationLagSeconds: 5}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			expected:    nil,
+		},
+		{
+			name:        "lowest lag wins within the preferred type",
+			tablets:     []*topo.TabletInfo{replicaTablet, replica2Tablet},
+			stats:       []*replicationdatapb.Status{{ReplicationLagSeconds: 9}, {ReplicationLagSeconds: 3}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+			expected:    replica2Tablet,
+		},
+		{
+			name:        "the primary is chosen when it is listed and nothing earlier matches",
+			tablets:     []*topo.TabletInfo{primaryTablet, replicaTablet},
+			stats:       []*replicationdatapb.Status{{ReplicationLagSeconds: 0}, {ReplicationLagSeconds: 5}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			expected:    primaryTablet,
+		},
+		{
+			name:        "an earlier type still wins over a listed primary",
+			tablets:     []*topo.TabletInfo{primaryTablet, rdonlyTablet},
+			stats:       []*replicationdatapb.Status{{ReplicationLagSeconds: 0}, {ReplicationLagSeconds: 60}},
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			expected:    rdonlyTablet,
+		},
+		{
+			name:     "spare is eligible",
+			tablets:  []*topo.TabletInfo{primaryTablet, spareTablet},
+			stats:    []*replicationdatapb.Status{nil, {ReplicationLagSeconds: 7}},
+			expected: spareTablet,
+		},
+		{
+			name:     "a missing status does not select or panic",
+			tablets:  []*topo.TabletInfo{replicaTablet, rdonlyTablet},
+			stats:    []*replicationdatapb.Status{nil, nil},
+			expected: nil,
+		},
+		{
+			name:     "fewer stats than tablets does not panic",
+			tablets:  []*topo.TabletInfo{replicaTablet, rdonlyTablet},
+			stats:    []*replicationdatapb.Status{{ReplicationLagSeconds: 4}},
+			expected: replicaTablet,
+		},
+		{
+			name:     "no tablets at all",
+			tablets:  nil,
+			stats:    nil,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, ChooseBackupTablet(tt.tablets, tt.stats, tt.tabletTypes))
+		})
+	}
+}
+
+func TestUnsupportedBackupTabletTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		tabletTypes []topodatapb.TabletType
+		expected    []topodatapb.TabletType
+	}{
+		{
+			name:        "no types",
+			tabletTypes: nil,
+			expected:    nil,
+		},
+		{
+			name:        "all supported",
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_SPARE},
+			expected:    nil,
+		},
+		{
+			name:        "primary may be requested",
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			expected:    nil,
+		},
+		{
+			name:        "a type that cannot back up is reported",
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_DRAINED, topodatapb.TabletType_REPLICA},
+			expected:    []topodatapb.TabletType{topodatapb.TabletType_DRAINED},
+		},
+		{
+			name:        "reported in the order given",
+			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_REPLICA, topodatapb.TabletType_DRAINED},
+			expected:    []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_DRAINED},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, UnsupportedBackupTabletTypes(tt.tabletTypes))
+		})
+	}
+}
