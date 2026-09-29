@@ -63,9 +63,11 @@ type StatefulConnection struct {
 	keepAliveManaged bool
 
 	// sessionDiverged is set once the connection's MySQL session may carry state
-	// that nothing the pool knows about describes, such as the session variables
-	// or temporary tables of a stored procedure called on it, and stays set: the
-	// connection must not return to the pool (see MarkSessionDiverged).
+	// that nothing the pool knows about describes, such as the change of a SET
+	// statement that ran on it, or the session variables or temporary tables of
+	// a stored procedure called on it, and stays set: the connection must not
+	// return to the pool (see MarkSessionDiverged). Applying the connection's
+	// settings again restores their own variables only, so it does not clear it.
 	sessionDiverged bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
