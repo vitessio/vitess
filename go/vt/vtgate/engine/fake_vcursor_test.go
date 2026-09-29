@@ -315,9 +315,6 @@ func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard
 func (t *noopVCursor) NeedsReservedConn() {
 }
 
-func (t *noopVCursor) ResetReservedConn() {
-}
-
 func (t *noopVCursor) RemoveSysVar(string) {
 }
 
@@ -611,11 +608,6 @@ func (f *loggingVCursor) RemoveSysVar(name string) {
 func (f *loggingVCursor) NeedsReservedConn() {
 	f.log = append(f.log, "Needs Reserved Conn")
 	f.inReservedConn = true
-}
-
-func (f *loggingVCursor) ResetReservedConn() {
-	f.log = append(f.log, "Reset Reserved Conn")
-	f.inReservedConn = false
 }
 
 func (f *loggingVCursor) InReservedConn() bool {
