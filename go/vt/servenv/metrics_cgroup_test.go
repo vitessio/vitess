@@ -23,11 +23,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetCGroupCpuUsageMetrics(t *testing.T) {
+	getCgroupCpuUsage()
 	sleepBeforeCpuSample()
 	cpu, err := getCgroupCpuUsage()
 	validateCpu(t, cpu, err)
@@ -46,6 +48,8 @@ func TestErrHandlingWithCgroups(t *testing.T) {
 		cgroupManager = origCgroupManager
 	}()
 
+	getCgroupCpuUsage()
+	sleepBeforeCpuSample()
 	cpu, err := getCgroupCpuUsage()
 	validateCpu(t, cpu, err)
 	mem, err := getCgroupMemoryUsage()
@@ -90,4 +94,23 @@ func TestCgroupCpuCount(t *testing.T) {
 			require.InDelta(t, tt.want, cgroupCpuCount(mountpoint, "/pod/ctr"), 1e-9)
 		})
 	}
+}
+
+func TestFirstCgroupCpuSampleIsNotPublished(t *testing.T) {
+	once.Do(setup)
+	origLastCpu, origLastTime := lastCpu, lastTime
+	t.Cleanup(func() { lastCpu, lastTime = origLastCpu, origLastTime })
+
+	lastTime = time.Time{}
+	cpu, err := getCgroupCpuUsage()
+	require.ErrorIs(t, err, errNoPreviousCpuSample)
+	require.Equal(t, -1, int(cpu))
+
+	lastTime = time.Time{}
+	require.Equal(t, -1, int(getCpuUsage()), "the first cgroup sample must not fall back to host CPU")
+}
+
+func TestGetCpuUsageFromSamplesRejectsShortInterval(t *testing.T) {
+	_, err := getCpuUsageFromSamples(1_000, 2_000, 500*time.Nanosecond, 1)
+	require.Error(t, err)
 }
