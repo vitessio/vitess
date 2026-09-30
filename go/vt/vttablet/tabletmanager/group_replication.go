@@ -83,6 +83,9 @@ var (
 	// START GROUP_REPLICATION whose client gave up, so the loop waits for it rather than leave it
 	// running in the background.
 	groupReplicationJoinTimeout = 1 * time.Minute
+	// groupReplicationVoterUUIDWarmInterval is how often the sync loop asks, in the background,
+	// the voters whose server_uuid the tablet does not know yet for it.
+	groupReplicationVoterUUIDWarmInterval = 30 * time.Second
 	// groupReplicationStatusTimeout bounds every read of the group replication status.
 	groupReplicationStatusTimeout = 10 * time.Second
 	// groupReplicationRejoinGateInterval is how long the sync loop waits before it checks again

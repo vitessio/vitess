@@ -96,6 +96,9 @@ type groupReplicationSync struct {
 
 	// loopCtx is the context of the loop, which ends when the loop stops.
 	loopCtx context.Context
+	// uuidsWarmed is when the loop last asked the voters whose server_uuid the tablet does not
+	// know for it in the background.
+	uuidsWarmed time.Time
 }
 
 func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
@@ -170,6 +173,9 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	if mysql.IsGroupMemberActive(status) && s.isForeignGroup(ctx, status) {
 		s.leaveForeignGroup(ctx)
 		return
+	}
+	if mysql.IsGroupMemberActive(status) {
+		s.warmVoterServerUUIDs(ctx)
 	}
 
 	tablet := tm.Tablet()
@@ -516,6 +522,29 @@ func (s *groupReplicationSync) getRecord(ctx context.Context, fresh bool) (*shar
 	s.record = rec
 	s.recordRead = time.Now()
 	return rec, nil
+}
+
+// warmVoterServerUUIDs asks the voters whose server_uuid the tablet does not know for it, in the
+// background and at most every groupReplicationVoterUUIDWarmInterval, so that a promotion after a
+// failure finds the voters in its view without waiting for them.
+func (s *groupReplicationSync) warmVoterServerUUIDs(ctx context.Context) {
+	if time.Since(s.uuidsWarmed) < groupReplicationVoterUUIDWarmInterval {
+		return
+	}
+	rec, err := s.getRecord(ctx, false)
+	if err != nil {
+		return
+	}
+	missing := s.tm.votersWithoutServerUUID(rec)
+	if len(missing) == 0 {
+		return
+	}
+	s.uuidsWarmed = time.Now()
+	base := s.loopCtx
+	if base == nil {
+		base = ctx
+	}
+	go s.tm.fetchPeerServerUUIDs(base, missing, func() bool { return false })
 }
 
 // isForeignGroup returns whether MySQL is an active member of a group of another incarnation

@@ -48,6 +48,8 @@ type grPeersTMC struct {
 	mu       sync.Mutex
 	statuses map[string]*replicationdatapb.FullStatus
 	calls    int
+	// frozen tablets do not answer until the caller gives up, like a SIGSTOPped vttablet.
+	frozen map[string]bool
 }
 
 func newGRPeersTMC() *grPeersTMC {
@@ -68,6 +70,13 @@ func (c *grPeersTMC) fullStatusCalls() int {
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.
 func (c *grPeersTMC) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	c.mu.Lock()
+	frozen := c.frozen[topoproto.TabletAliasString(tablet.Alias)]
+	c.mu.Unlock()
+	if frozen {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls++
@@ -183,6 +192,29 @@ func TestGroupReplicationSyncPromotesOnlyWithVoterMajority(t *testing.T) {
 	s.reconcile(ctx)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 	assert.Positive(t, peers.fullStatusCalls(), "the voters' server_uuids come from their FullStatus")
+}
+
+// TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter checks that the promotion of the
+// group's new primary does not wait for the failed primary's tablet, which cannot tell its
+// server_uuid, once the voters that answer make a majority (S2: the old primary is frozen).
+func TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter(t *testing.T) {
+	enableGroupReplication(t)
+	oldPeerTimeout := groupReplicationPeerTimeout
+	groupReplicationPeerTimeout = 10 * time.Second
+	t.Cleanup(func() { groupReplicationPeerTimeout = oldPeerTimeout })
+	ctx := t.Context()
+	tm, fmd, peers, _ := newLegitimacyTestTM(t)
+	peers.mu.Lock()
+	peers.frozen = map[string]bool{"cell1-0000000002": true}
+	peers.mu.Unlock()
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(3), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:5"))
+
+	start := time.Now()
+	newGroupReplicationSync(tm).reconcile(ctx)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	assert.Less(t, time.Since(start), 5*time.Second, "the promotion must not wait for the frozen voter")
 }
 
 // TestGroupReplicationSyncTrustsOwnBootstrap checks that a tablet does not take the group it just

@@ -157,23 +157,73 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context) (*shardGroupR
 
 // legitimateGroup returns the shard's legitimate group as this tablet sees it. The incarnation of
 // a group that this tablet bootstrapped within the grace period is legitimate too: the component
-// that asked for the bootstrap records it right after. When fetchMissing is set, the tablet asks
-// the voters whose server_uuid it does not know yet for their FullStatus.
+// that asked for the bootstrap records it right after. When fetchMissing is set and the member's
+// view does not hold a majority of the voters that the tablet can identify, the tablet asks the
+// voters whose server_uuid it does not know yet for their FullStatus, until the majority is
+// established or every answer is in: a voter that does not answer, for example the failed
+// primary, does not delay a promotion that does not depend on it.
 func (tm *TabletManager) legitimateGroup(ctx context.Context, rec *shardGroupRecord, status *replicationdatapb.GroupReplicationStatus, fetchMissing bool) *policy.LegitimateGroup {
 	self := topoproto.TabletAliasString(tm.tabletAlias)
 	if uuid, err := tm.MysqlDaemon.GetServerUUID(ctx); err == nil {
 		tm.groupReplicationPeers.setServerUUID(self, uuid)
 	}
-	if fetchMissing {
-		var missing []*topodatapb.Tablet
-		for _, voter := range rec.voters {
-			alias := topoproto.TabletAliasString(voter)
-			if tablet := rec.tablets[alias]; tablet != nil && alias != self && tm.groupReplicationPeers.serverUUID(alias) == "" {
-				missing = append(missing, tablet)
-			}
-		}
-		tm.peerFullStatuses(ctx, missing)
+	legitimate := tm.buildLegitimateGroup(rec, status)
+	if !fetchMissing || legitimate.HasVoterMajority(status) {
+		return legitimate
 	}
+	missing := tm.votersWithoutServerUUID(rec)
+	if len(missing) == 0 {
+		return legitimate
+	}
+	tm.fetchPeerServerUUIDs(ctx, missing, func() bool {
+		return tm.buildLegitimateGroup(rec, status).HasVoterMajority(status)
+	})
+	return tm.buildLegitimateGroup(rec, status)
+}
+
+// votersWithoutServerUUID returns the tablets of the listed voters, other than this tablet, whose
+// server_uuid the tablet does not know.
+func (tm *TabletManager) votersWithoutServerUUID(rec *shardGroupRecord) []*topodatapb.Tablet {
+	self := topoproto.TabletAliasString(tm.tabletAlias)
+	var missing []*topodatapb.Tablet
+	for _, voter := range rec.voters {
+		alias := topoproto.TabletAliasString(voter)
+		if tablet := rec.tablets[alias]; tablet != nil && alias != self && tm.groupReplicationPeers.serverUUID(alias) == "" {
+			missing = append(missing, tablet)
+		}
+	}
+	return missing
+}
+
+// fetchPeerServerUUIDs asks the given tablets for their FullStatus concurrently, each bounded by
+// groupReplicationPeerTimeout, and remembers the server_uuids they report. It returns as soon as
+// enough reports that done returns true, or once every tablet answered or timed out.
+func (tm *TabletManager) fetchPeerServerUUIDs(ctx context.Context, tablets []*topodatapb.Tablet, done func() bool) {
+	if tm.tmc == nil {
+		return
+	}
+	answered := make(chan struct{}, len(tablets))
+	for _, tablet := range tablets {
+		go func() {
+			defer func() { answered <- struct{}{} }()
+			peerCtx, cancel := context.WithTimeout(ctx, groupReplicationPeerTimeout)
+			defer cancel()
+			if status, err := tm.tmc.FullStatus(peerCtx, tablet); err == nil && status != nil {
+				tm.groupReplicationPeers.setServerUUID(topoproto.TabletAliasString(tablet.Alias), status.ServerUuid)
+			}
+		}()
+	}
+	for range tablets {
+		<-answered
+		if done() {
+			return
+		}
+	}
+}
+
+// buildLegitimateGroup returns the shard's legitimate group from the record and the server_uuids
+// the tablet knows.
+func (tm *TabletManager) buildLegitimateGroup(rec *shardGroupRecord, status *replicationdatapb.GroupReplicationStatus) *policy.LegitimateGroup {
 	uuids := make(map[string]string, len(rec.tablets))
 	for alias := range rec.tablets {
 		uuids[alias] = tm.groupReplicationPeers.serverUUID(alias)
