@@ -60,6 +60,24 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			primaryTimestampWanted: timeToUse.Add(1 * time.Hour).UTC(),
 		},
 		{
+			name:         "Success with group replication voters",
+			keyspaceName: "ks1",
+			shardName:    "80-",
+			shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  301,
+				},
+				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse),
+				GroupReplicationVoters: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 301},
+					{Cell: "zone2", Uid: 401},
+				},
+			},
+			primaryAliasWanted:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 301},
+			primaryTimestampWanted: timeToUse.UTC(),
+		},
+		{
 			name:         "Success with empty primary alias",
 			keyspaceName: "ks1",
 			shardName:    "-",
@@ -107,6 +125,14 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			testRequireTabletAliasEqual(t, tt.primaryAliasWanted, shardPrimaryAlias)
 			require.Equal(t, tt.primaryTimestampWanted, primaryTimestamp)
 
+			// ReadShardGroupReplicationVoters
+			voters, err := ReadShardGroupReplicationVoters(tt.keyspaceName, tt.shardName)
+			require.NoError(t, err)
+			require.Len(t, voters, len(tt.shard.GroupReplicationVoters))
+			for i, voter := range voters {
+				testRequireTabletAliasEqual(t, tt.shard.GroupReplicationVoters[i], voter)
+			}
+
 			// ReadShardNames
 			shardNames, err := ReadShardNames(tt.keyspaceName)
 			require.NoError(t, err)
@@ -115,6 +141,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			// DeleteShard
 			require.NoError(t, DeleteShard(tt.keyspaceName, tt.shardName))
 			_, _, err = ReadShardPrimaryInformation(tt.keyspaceName, tt.shardName)
+			require.EqualError(t, err, ErrShardNotFound.Error())
+			_, err = ReadShardGroupReplicationVoters(tt.keyspaceName, tt.shardName)
 			require.EqualError(t, err, ErrShardNotFound.Error())
 		})
 	}

@@ -17,6 +17,8 @@ limitations under the License.
 package inst
 
 import (
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
 
@@ -91,6 +94,28 @@ func member(row *test.InfoForRecoveryAnalysis, state, role string, quorum bool, 
 	return row
 }
 
+// sees makes the row's MySQL see the MySQL of the given tablets as active members of its group.
+func sees(row *test.InfoForRecoveryAnalysis, tablets ...*topodatapb.Tablet) *test.InfoForRecoveryAnalysis {
+	var uuids []string
+	for _, tablet := range tablets {
+		uuids = append(uuids, serverUUID(tablet))
+	}
+	row.GroupActiveMemberUUIDs = strings.Join(uuids, ",")
+	return row
+}
+
+// voterList formats the voters of a shard as they are stored in the database.
+func voterList(tablets ...*topodatapb.Tablet) string {
+	var aliases []*topodatapb.TabletAlias
+	for _, tablet := range tablets {
+		aliases = append(aliases, tablet.Alias)
+	}
+	slices.SortFunc(aliases, func(a, b *topodatapb.TabletAlias) int {
+		return strings.Compare(topoproto.TabletAliasString(a), topoproto.TabletAliasString(b))
+	})
+	return formatGroupReplicationVoters(aliases)
+}
+
 func runAnalysis(t *testing.T, rows []*test.InfoForRecoveryAnalysis) []*DetectionAnalysis {
 	oldDB := db.Db
 	t.Cleanup(func() { db.Db = oldDB })
@@ -119,30 +144,44 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 	resetPrimaryHealthState()
 	oldGrace := groupPrimaryNotInTopoGracePeriod
 	groupPrimaryNotInTopoGracePeriod = 0
+	oldVoterGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
 	t.Cleanup(func() {
 		groupPrimaryNotInTopoGracePeriod = oldGrace
+		config.SetGroupReplicationVoterReplacementGracePeriod(oldVoterGrace)
 		GroupReplicationConditions.Reset()
+		UnreachableGroupTablets.Reset()
 	})
 
 	primary := grTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
 	replica := grTablet("zone1", 100, topodatapb.TabletType_REPLICA)
 	replica2 := grTablet("zone1", 102, topodatapb.TabletType_REPLICA)
 	crossCellReplica := grTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	crossCellReplica2 := grTablet("zone2", 201, topodatapb.TabletType_REPLICA)
 	rdonly := grTablet("zone1", 102, topodatapb.TabletType_RDONLY)
 	backup := grTablet("zone1", 102, topodatapb.TabletType_BACKUP)
 	gr := policy.DurabilityGroupReplication
+	crossCell := policy.DurabilityGroupReplicationCrossCell
 
 	tests := []struct {
 		name string
 		rows func() []*test.InfoForRecoveryAnalysis
+		// voters are the voters recorded in the shard record.
+		voters []*topodatapb.Tablet
+		// voterGracePeriod is --group-replication-voter-replacement-grace-period; 0 means 1h.
+		voterGracePeriod time.Duration
 		// want is the analysis of every tablet that has a problem.
 		want map[string]AnalysisCode
+		// wantDesiredVoters are the voters that the policy selects, if they are computed.
+		wantDesiredVoters []*topodatapb.Tablet
+		// alsoMatched are problems that a tablet has besides the reported one.
+		alsoMatched map[string]AnalysisCode
 		// notWant are analyses that must not be reported, for cases where the other analyses
 		// do not matter.
 		notWant []AnalysisCode
 	}{
 		{
-			name: "group elected a replica: its tablet is promoted, the demoted primary is left alone",
+			name:   "group elected a replica: its tablet is promoted, the demoted primary is left alone",
+			voters: []*topodatapb.Tablet{primary, replica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				// The old primary's tablet already demoted itself; the topology is not updated yet.
 				oldPrimary := member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, replica)
@@ -175,7 +214,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want: map[string]AnalysisCode{"zone1-0000000100": GroupPrimaryNotInTopo},
 		},
 		{
-			name: "dead primary: the group primary's tablet is promoted before any failover",
+			name:   "dead primary: the group primary's tablet is promoted before any failover",
+			voters: []*topodatapb.Tablet{primary, replica, replica2},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				deadPrimary := member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary)
 				deadPrimary.LastCheckValid = 0
@@ -190,7 +230,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			},
 		},
 		{
-			name: "voting member is offline while the group is active; the async replica keeps its analysis",
+			name:   "voting member is offline while the group is active; the async replica keeps its analysis",
+			voters: []*topodatapb.Tablet{primary, replica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				groupPrimary := member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary)
 				offline := member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil)
@@ -205,7 +246,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			},
 		},
 		{
-			name: "no member is active: the group is bootstrapped instead of electing a primary",
+			name:   "no member is active: the group is bootstrapped instead of electing a primary",
+			voters: []*topodatapb.Tablet{replica, replica2},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return []*test.InfoForRecoveryAnalysis{
 					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
@@ -215,7 +257,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want: map[string]AnalysisCode{"zone1-0000000100": GroupNotBootstrapped},
 		},
 		{
-			name: "no member is active but a voting member is unreachable: nothing is bootstrapped",
+			name:   "no member is active but a voting member is unreachable: nothing is bootstrapped",
+			voters: []*topodatapb.Tablet{replica, replica2},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				unreachable := member(grRow(replica2, gr), mysql.GroupMemberStateOffline, "", false, nil)
 				unreachable.LastCheckValid = 0
@@ -227,7 +270,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			notWant: []AnalysisCode{GroupNotBootstrapped, ClusterHasNoPrimary},
 		},
 		{
-			name: "a tablet taking a backup is an active member: nothing is bootstrapped",
+			name:   "a tablet taking a backup is an active member: nothing is bootstrapped",
+			voters: []*topodatapb.Tablet{replica, backup},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return []*test.InfoForRecoveryAnalysis{
 					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
@@ -237,7 +281,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			notWant: []AnalysisCode{GroupNotBootstrapped},
 		},
 		{
-			name: "no member has quorum",
+			name:   "no member has quorum",
+			voters: []*topodatapb.Tablet{primary, replica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return []*test.InfoForRecoveryAnalysis{
 					member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, false, nil),
@@ -250,19 +295,141 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			},
 		},
 		{
-			name: "one cell holds a majority of the online members with the cross-cell policy",
+			name: "one cell holds a majority of the online members with the cross-cell policy: the extra member loses its seat",
 			rows: func() []*test.InfoForRecoveryAnalysis {
-				crossCell := policy.DurabilityGroupReplicationCrossCell
 				return []*test.InfoForRecoveryAnalysis{
 					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
 					member(grRow(replica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
 					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
 				}
 			},
-			want: map[string]AnalysisCode{"zone1-0000000101": GroupCellMajority},
+			voters:            []*topodatapb.Tablet{primary, replica, crossCellReplica},
+			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
+			alsoMatched:       map[string]AnalysisCode{"zone1-0000000101": GroupCellMajority},
 		},
 		{
-			name: "one cell holds a majority of the online members without the cross-cell policy",
+			name: "an active member that is not a voter must leave the group",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
+					member(grRow(replica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+				}
+			},
+			voters:            []*topodatapb.Tablet{primary, crossCellReplica},
+			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
+		},
+		{
+			name: "a replica that is not a voter is an asynchronous replica and keeps its analyses",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				asyncReplica := grRow(replica, crossCell)
+				asyncReplica.IsPrimary = 0
+				asyncReplica.PrimaryTabletInfo = primary
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
+					asyncReplica,
+					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+				}
+			},
+			voters: []*topodatapb.Tablet{primary, crossCellReplica},
+			want:   map[string]AnalysisCode{"zone1-0000000100": ReplicationStopped},
+		},
+		{
+			name: "a voter failed for longer than the grace period: a tablet of its cell replaces it",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				failed := grRow(crossCellReplica, crossCell)
+				failed.LastCheckValid = 0
+				failed.IsPrimary = 0
+				failed.ReplicationStopped = 0
+				failed.PrimaryTabletInfo = primary
+				asyncReplica := grRow(crossCellReplica2, crossCell)
+				asyncReplica.IsPrimary = 0
+				asyncReplica.ReplicationStopped = 0
+				asyncReplica.PrimaryTabletInfo = primary
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
+					failed,
+					asyncReplica,
+				}
+			},
+			voters:            []*topodatapb.Tablet{primary, crossCellReplica},
+			voterGracePeriod:  -1,
+			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica2},
+		},
+		{
+			name: "a voter unreachable within the grace period keeps its seat",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				failed := grRow(crossCellReplica, crossCell)
+				failed.LastCheckValid = 0
+				failed.IsPrimary = 0
+				failed.ReplicationStopped = 0
+				failed.PrimaryTabletInfo = primary
+				asyncReplica := grRow(crossCellReplica2, crossCell)
+				asyncReplica.IsPrimary = 0
+				asyncReplica.ReplicationStopped = 0
+				asyncReplica.PrimaryTabletInfo = primary
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
+					failed,
+					asyncReplica,
+				}
+			},
+			voters:  []*topodatapb.Tablet{primary, crossCellReplica},
+			notWant: []AnalysisCode{GroupVotersOutOfDate},
+		},
+		{
+			name: "an unreachable voter whose MySQL is still an active member keeps its seat",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				// Its vttablet is down, but the group primary still sees its MySQL ONLINE.
+				unreachable := member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary)
+				unreachable.LastCheckValid = 0
+				asyncReplica := grRow(crossCellReplica2, crossCell)
+				asyncReplica.IsPrimary = 0
+				asyncReplica.ReplicationStopped = 0
+				asyncReplica.PrimaryTabletInfo = primary
+				return []*test.InfoForRecoveryAnalysis{
+					sees(member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary, crossCellReplica),
+					unreachable,
+					asyncReplica,
+				}
+			},
+			voters:           []*topodatapb.Tablet{primary, crossCellReplica},
+			voterGracePeriod: -1,
+			notWant:          []AnalysisCode{GroupVotersOutOfDate},
+		},
+		{
+			name: "no voter is selected in an active group: they are selected",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
+					member(grRow(replica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+				}
+			},
+			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
+		},
+		{
+			name: "no voter is selected and no member is active: they are selected before the group is bootstrapped",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					grRow(replica2, gr),
+				}
+			},
+			want: map[string]AnalysisCode{
+				"zone1-0000000100": GroupVotersOutOfDate,
+				"zone1-0000000102": NotConnectedToPrimary,
+			},
+			wantDesiredVoters: []*topodatapb.Tablet{replica, replica2},
+			notWant:           []AnalysisCode{GroupNotBootstrapped},
+		},
+		{
+			name:   "one cell holds a majority of the online members without the cross-cell policy",
+			voters: []*topodatapb.Tablet{primary, replica, crossCellReplica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return []*test.InfoForRecoveryAnalysis{
 					member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
@@ -285,7 +452,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want: map[string]AnalysisCode{},
 		},
 		{
-			name: "semi-sync enabled on an active group primary with the group replication policy",
+			name:   "semi-sync enabled on an active group primary with the group replication policy",
+			voters: []*topodatapb.Tablet{primary, replica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				groupPrimary := member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary)
 				groupPrimary.SemiSyncPrimaryEnabled = 1
@@ -296,7 +464,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want: map[string]AnalysisCode{},
 		},
 		{
-			name: "writable group secondary",
+			name:   "writable group secondary",
+			voters: []*topodatapb.Tablet{primary, replica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				secondary := member(grRow(replica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary)
 				secondary.ReadOnly = 0
@@ -308,7 +477,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want: map[string]AnalysisCode{"zone1-0000000100": ReplicaIsWritable},
 		},
 		{
-			name: "unreachable primary whose members replicate through the group is not dead",
+			name:   "unreachable primary whose members replicate through the group is not dead",
+			voters: []*topodatapb.Tablet{primary, replica, replica2},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				invalidPrimary := grRow(primary, gr)
 				invalidPrimary.IsInvalid = 1
@@ -325,9 +495,38 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			GroupReplicationConditions.Reset()
-			got := analysisCodes(runAnalysis(t, tt.rows()))
+			UnreachableGroupTablets.Reset()
+			switch tt.voterGracePeriod {
+			case 0:
+				config.SetGroupReplicationVoterReplacementGracePeriod(time.Hour)
+			case -1:
+				config.SetGroupReplicationVoterReplacementGracePeriod(0)
+			default:
+				config.SetGroupReplicationVoterReplacementGracePeriod(tt.voterGracePeriod)
+			}
+			rows := tt.rows()
+			for _, row := range rows {
+				row.ShardGroupReplicationVoters = voterList(tt.voters...)
+			}
+			analyses := runAnalysis(t, rows)
+			got := analysisCodes(analyses)
 			if tt.want != nil {
 				assert.Equal(t, tt.want, got)
+			}
+			if tt.wantDesiredVoters != nil {
+				require.NotEmpty(t, analyses)
+				assert.Equal(t, voterList(tt.wantDesiredVoters...), formatGroupReplicationVoters(analyses[0].ShardGroupDesiredVoters))
+			}
+			for alias, code := range tt.alsoMatched {
+				var matched []AnalysisCode
+				for _, a := range analyses {
+					if topoproto.TabletAliasString(a.AnalyzedInstanceAlias) == alias {
+						for _, problem := range a.AnalysisMatchedProblems {
+							matched = append(matched, problem.Analysis)
+						}
+					}
+				}
+				assert.Contains(t, matched, code, "tablet %s", alias)
 			}
 			for _, code := range tt.notWant {
 				assert.NotContains(t, got, code)
@@ -352,12 +551,16 @@ func TestGetDetectionAnalysisGroupReplicationShardState(t *testing.T) {
 
 	deadPrimary := member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary)
 	deadPrimary.LastCheckValid = 0
-	analyses := runAnalysis(t, []*test.InfoForRecoveryAnalysis{
+	rows := []*test.InfoForRecoveryAnalysis{
 		deadPrimary,
 		// The members still see the unreachable primary as their primary.
 		member(grRow(replica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
 		member(grRow(replica2, gr), mysql.GroupMemberStateRecovering, "", true, primary),
-	})
+	}
+	for _, row := range rows {
+		row.ShardGroupReplicationVoters = voterList(primary, replica, replica2)
+	}
+	analyses := runAnalysis(t, rows)
 	require.Len(t, analyses, 1)
 	a := analyses[0]
 	assert.Equal(t, DeadPrimaryWithoutReplicas, a.Analysis)
@@ -368,6 +571,8 @@ func TestGetDetectionAnalysisGroupReplicationShardState(t *testing.T) {
 	assert.Nil(t, a.ShardGroupPrimaryAlias, "the unreachable primary is not a reachable group primary")
 	assert.EqualValues(t, 3, a.ShardGroupVotingMembers)
 	assert.EqualValues(t, 1, a.ShardGroupUnreachableVotingMembers)
+	assert.Equal(t, voterList(primary, replica, replica2), formatGroupReplicationVoters(a.ShardGroupVoters))
+	assert.True(t, a.IsGroupVoter)
 }
 
 func TestMatchGroupPrimaryNotInTopoGracePeriod(t *testing.T) {
@@ -563,6 +768,7 @@ func TestReadTopologyInstanceGroupReplication(t *testing.T) {
 					{MemberUuid: "00000000-0000-0000-0000-000000000100", State: mysql.GroupMemberStateOnline, Role: mysql.GroupMemberRoleSecondary},
 					{MemberUuid: "00000000-0000-0000-0000-000000000101", State: mysql.GroupMemberStateOnline, Role: mysql.GroupMemberRolePrimary},
 					{MemberUuid: "00000000-0000-0000-0000-000000000102", State: mysql.GroupMemberStateRecovering, Role: mysql.GroupMemberRoleSecondary},
+					{MemberUuid: "00000000-0000-0000-0000-000000000103", State: mysql.GroupMemberStateUnreachable, Role: mysql.GroupMemberRoleSecondary},
 				},
 			},
 		},
@@ -583,7 +789,12 @@ func TestReadTopologyInstanceGroupReplication(t *testing.T) {
 	assert.Equal(t, "00000000-0000-0000-0000-000000000101", instance.GroupPrimaryUUID)
 	assert.True(t, instance.GroupHasQuorum)
 	assert.EqualValues(t, 2, instance.GroupOnlineMembers)
-	assert.EqualValues(t, 3, instance.GroupViewMembers)
+	assert.EqualValues(t, 4, instance.GroupViewMembers)
+	assert.Equal(t, []string{
+		"00000000-0000-0000-0000-000000000100",
+		"00000000-0000-0000-0000-000000000101",
+		"00000000-0000-0000-0000-000000000102",
+	}, instance.GroupActiveMemberUUIDs, "an UNREACHABLE member is not active")
 	assert.True(t, instance.IsGroupMemberActive())
 	assert.False(t, instance.IsGroupPrimary())
 }

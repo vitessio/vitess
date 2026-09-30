@@ -67,13 +67,18 @@ const (
 	// replication group, with quorum, while the tablet is not the topology primary. The tablet
 	// normally promotes itself; VTOrc promotes it when it does not.
 	GroupPrimaryNotInTopo AnalysisCode = "GroupPrimaryNotInTopo"
-	// GroupMemberNotOnline describes a tablet that the durability policy makes a voting member
-	// of its shard's replication group, but whose MySQL is not an active member, while the
-	// group is active on other tablets.
+	// GroupMemberNotOnline describes a tablet that is a voter of its shard's replication group
+	// (Shard.group_replication_voters), but whose MySQL is not an active member, while the group
+	// is active on other tablets.
 	GroupMemberNotOnline AnalysisCode = "GroupMemberNotOnline"
 	// GroupNotBootstrapped describes a shard whose durability policy uses Group Replication, but
-	// on which no tablet is an active member of the group, while all voting members are reachable.
+	// on which no tablet is an active member of the group, while all voters are reachable.
 	GroupNotBootstrapped AnalysisCode = "GroupNotBootstrapped"
+	// GroupVotersOutOfDate describes a shard whose recorded voters differ from the voters that its
+	// durability policy selects: no voter is selected yet, a voter failed for longer than
+	// --group-replication-voter-replacement-grace-period, a cell misses a voter, or a tablet that
+	// is not a voter is an active member. It is reported on a single tablet of the shard.
+	GroupVotersOutOfDate AnalysisCode = "GroupVotersOutOfDate"
 	// GroupQuorumLost describes a shard whose group has active members, none of which has quorum.
 	// The group cannot commit. VTOrc does not act; forcing a new membership is an operator decision.
 	GroupQuorumLost AnalysisCode = "GroupQuorumLost"
@@ -209,20 +214,31 @@ type DetectionAnalysis struct {
 	// ShardGroupPrimaryUUID is the server_uuid of the group primary, as reported by the reachable
 	// members that have quorum.
 	ShardGroupPrimaryUUID string
-	// ShardGroupVotingMembers is the number of tablets that the durability policy makes voting
-	// members of the shard's group.
+	// ShardGroupVotingMembers is the number of voters of the shard's group, as recorded in the
+	// shard record.
 	ShardGroupVotingMembers uint
-	// ShardGroupUnreachableVotingMembers is the number of voting member tablets that VTOrc could
-	// not reach on its last check.
+	// ShardGroupUnreachableVotingMembers is the number of voters that VTOrc could not reach on its
+	// last check.
 	ShardGroupUnreachableVotingMembers uint
 	// ShardGroupCellMajority is the cell that holds a majority of the shard's ONLINE members, if any.
 	ShardGroupCellMajority string
+	// ShardGroupVoters are the voters of the shard's group, as recorded in the shard record.
+	ShardGroupVoters []*topodatapb.TabletAlias
+	// ShardGroupDesiredVoters are the voters that the shard's durability policy selects, when
+	// VTOrc may change them.
+	ShardGroupDesiredVoters []*topodatapb.TabletAlias
+	// IsGroupVoter is true when the analyzed tablet is a voter of its shard's group. Tablets that
+	// are not voters replicate asynchronously from the primary.
+	IsGroupVoter bool
 	// shardGroupAnyActive is true when any tablet of the shard, reachable or not, last reported
 	// an active member.
 	shardGroupAnyActive bool
 	// shardReachableNonMemberPrimary is true when VTOrc reached a PRIMARY tablet of the shard whose
 	// MySQL is not an active group member.
 	shardReachableNonMemberPrimary bool
+	// isGroupVotersReporter is true when the shard's voters are out of date and the analyzed
+	// tablet is the one on which GroupVotersOutOfDate is reported.
+	isGroupVotersReporter bool
 
 	QuorumDetail *QuorumResult `json:",omitempty"`
 }

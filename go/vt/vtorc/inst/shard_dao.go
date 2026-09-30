@@ -18,6 +18,7 @@ package inst
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -136,17 +137,71 @@ func SaveShard(shard *topo.ShardInfo) error {
 	}
 	_, err := db.ExecVTOrc(`
 		replace	into vitess_shard (
-			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent
+			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent, group_replication_voters
 		) values (
-			?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?
 		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
 		getShardPrimaryTermStartTime(shard),
 		disableEmergencyReparent,
+		formatGroupReplicationVoters(shard.GroupReplicationVoters),
 	)
 	return err
+}
+
+// ReadShardGroupReplicationVoters reads the voting members of the shard's replication group, as
+// recorded in the shard record.
+func ReadShardGroupReplicationVoters(keyspaceName, shardName string) ([]*topodatapb.TabletAlias, error) {
+	query := `SELECT
+			group_replication_voters
+		FROM
+			vitess_shard
+		WHERE
+			keyspace = ?
+			AND shard = ?`
+	var voters []*topodatapb.TabletAlias
+	shardFound := false
+	err := db.QueryVTOrc(query, sqlutils.Args(keyspaceName, shardName), func(row sqlutils.RowMap) (err error) {
+		shardFound = true
+		voters, err = parseGroupReplicationVoters(row.GetString("group_replication_voters"))
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !shardFound {
+		return nil, ErrShardNotFound
+	}
+	return voters, nil
+}
+
+// formatGroupReplicationVoters formats the voting members of a shard's replication group to be
+// stored in the database.
+func formatGroupReplicationVoters(voters []*topodatapb.TabletAlias) string {
+	aliases := make([]string, 0, len(voters))
+	for _, voter := range voters {
+		aliases = append(aliases, topoproto.TabletAliasString(voter))
+	}
+	return strings.Join(aliases, ",")
+}
+
+// parseGroupReplicationVoters parses the voting members of a shard's replication group as they are
+// stored in the database.
+func parseGroupReplicationVoters(value string) ([]*topodatapb.TabletAlias, error) {
+	if value == "" {
+		return nil, nil
+	}
+	var voters []*topodatapb.TabletAlias
+	for aliasString := range strings.SplitSeq(value, ",") {
+		alias, err := topoproto.ParseTabletAlias(aliasString)
+		if err != nil {
+			return nil, err
+		}
+		voters = append(voters, alias)
+	}
+	return voters, nil
 }
 
 // getShardPrimaryAliasString gets the shard primary alias to be stored as a string in the database.

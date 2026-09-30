@@ -108,6 +108,10 @@ type Instance struct {
 	GroupOnlineMembers uint
 	// GroupViewMembers is the number of members in this member's view of the group.
 	GroupViewMembers uint
+	// GroupActiveMemberUUIDs are the server_uuids of the members that this member sees as
+	// active (ONLINE or RECOVERING), sorted. VTOrc uses them to tell whether a tablet that it
+	// cannot reach is still a member of its group.
+	GroupActiveMemberUUIDs []string
 
 	LastSeenTimestamp    string
 	IsLastCheckValid     bool

@@ -114,6 +114,7 @@ CREATE TABLE database_instance (
 	gr_has_quorum TINYint NOT NULL DEFAULT 0,
 	gr_online_members int NOT NULL DEFAULT 0,
 	gr_view_members int NOT NULL DEFAULT 0,
+	gr_active_member_uuids text NOT NULL DEFAULT '',
 	PRIMARY KEY (alias)
 )`,
 	`
@@ -314,6 +315,7 @@ CREATE TABLE vitess_shard (
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
 	disable_emergency_reparent tinyint NOT NULL,
+	group_replication_voters text NOT NULL DEFAULT '',
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`
