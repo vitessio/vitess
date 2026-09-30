@@ -121,7 +121,8 @@ func killHost(t *testing.T, tablet *cluster.Vttablet) {
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	require.NoError(t, err)
 	require.NoError(t, syscall.Kill(pid, syscall.SIGKILL))
-	require.NoError(t, tablet.VttabletProcess.Kill())
+	// Kill returns the exit error of the killed process, "signal: killed".
+	_ = tablet.VttabletProcess.Kill()
 }
 
 type failoverResult struct {
