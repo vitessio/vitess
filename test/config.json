@@ -241,7 +241,6 @@
       "Shard": "xb_backup",
       "Tags": [],
       "Needs": [
-        "larger-runner",
         "xtrabackup"
       ]
     },
@@ -261,7 +260,6 @@
       "Shard": "xb_backup",
       "Tags": [],
       "Needs": [
-        "larger-runner",
         "xtrabackup"
       ]
     },
