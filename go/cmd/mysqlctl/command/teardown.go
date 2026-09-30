@@ -34,8 +34,9 @@ var Teardown = &cobra.Command{
 		"This is a destructive operation.\n" +
 		"{{</ warning >}}\n\n" +
 		"Shuts down a `mysqld` instance and removes its data directory.",
-	Args: cobra.NoArgs,
-	RunE: commandTeardown,
+	Example: `mysqlctl --tablet-uid 101 teardown`,
+	Args:    cobra.NoArgs,
+	RunE:    commandTeardown,
 }
 
 var teardownArgs = struct {

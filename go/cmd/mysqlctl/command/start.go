@@ -29,11 +29,12 @@ import (
 )
 
 var Start = &cobra.Command{
-	Use:   "start",
-	Short: "Starts mysqld on an already 'init'-ed directory.",
-	Long:  "Resume an existing `mysqld` instance that was previously bootstrapped with `init` or `init_config`",
-	Args:  cobra.NoArgs,
-	RunE:  commandStart,
+	Use:     "start",
+	Short:   "Starts mysqld on an already 'init'-ed directory.",
+	Long:    "Resume an existing `mysqld` instance that was previously bootstrapped with `init` or `init_config`",
+	Example: `mysqlctl --tablet-uid 101 start`,
+	Args:    cobra.NoArgs,
+	RunE:    commandStart,
 }
 
 var startArgs = struct {
