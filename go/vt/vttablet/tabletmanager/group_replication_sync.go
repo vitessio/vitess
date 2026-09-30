@@ -81,10 +81,8 @@ type groupReplicationSync struct {
 	// lastIllegitimateLog is when the loop last logged that it does not promote a group primary
 	// that is not legitimate.
 	lastIllegitimateLog time.Time
-	// notServingReason is the reason for which the loop last made the PRIMARY stop serving, empty
-	// if it did not, and peersFetched is when it last asked the voters for their server_uuids.
-	notServingReason string
-	peersFetched     time.Time
+	// peersFetched is when the loop last asked the voters for their server_uuids.
+	peersFetched time.Time
 
 	lastState string
 	lastRole  string
@@ -440,10 +438,12 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 			reason = groupReplicationVoterMajorityLost
 		}
 	}
-	if reason == "" && s.notServingReason == "" {
+	// The reason may also have been set outside of the loop, by a bootstrap on a PRIMARY tablet.
+	current := tm.tmState.GroupReplicationNotServing()
+	if reason == "" && current == "" {
 		return
 	}
-	if reason != s.notServingReason {
+	if reason != current {
 		if reason != "" {
 			log.Warn("Group replication sync: the group view holds fewer than a majority of the shard's voters, the primary stops serving",
 				slog.String("group", status.GetGroupName()),
@@ -458,9 +458,7 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 	}
 	if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
 		log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
-		return
 	}
-	s.notServingReason = reason
 }
 
 // voterMajorityLost returns whether the member's view holds fewer than a majority of the shard's

@@ -55,6 +55,9 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, bootstrap bo
 	tm.groupReplicationRejoinSuspended.Store(bootstrap)
 	if bootstrap {
 		defer tm.groupReplicationRejoinSuspended.Store(false)
+		if err := tm.stopServingBeforeBootstrap(ctx); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := tm.startGroupReplicationLocked(ctx, bootstrap); err != nil {
 		return nil, err

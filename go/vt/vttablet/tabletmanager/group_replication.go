@@ -718,6 +718,71 @@ func (tm *TabletManager) bootstrapGroupForInitPrimaryLocked(ctx context.Context)
 	return tm.waitForGroupPrimaryWritable(ctx)
 }
 
+// stopServingBeforeBootstrap makes a PRIMARY tablet stop serving before its MySQL bootstraps a new
+// group, when the durability policy uses Group Replication and the shard record lists more than
+// one voter. The new group has this member only, and MySQL makes it writable right away, so a
+// transaction it committed would exist on a single voter until the others joined. The tablet keeps
+// its type, and the sync loop makes it serve again once a majority of the voters is ONLINE in its
+// view (enforceVoterMajority). In the S7d chaos scenario VTOrc bootstrapped the group on the old
+// primary while its tablet was still PRIMARY, its sync loop being blocked on the unreachable
+// topology, and the tablet acknowledged writes for 2.3s with a single voter in its group.
+//
+// During a migration the policy does not use Group Replication yet: the primary keeps serving,
+// with semi-sync, while it bootstraps the group.
+func (tm *TabletManager) stopServingBeforeBootstrap(ctx context.Context) error {
+	if tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
+		return nil
+	}
+	durability, err := tm.keyspaceDurability(ctx)
+	if err != nil {
+		return err
+	}
+	if !policy.IsGroupReplication(durability) {
+		return nil
+	}
+	voters, err := tm.groupReplicationVoters(ctx)
+	if err != nil {
+		return err
+	}
+	if len(voters) < 2 {
+		return nil
+	}
+	log.Warn("Bootstrapping a group on a PRIMARY tablet: it stops serving until a majority of the voters is ONLINE in the group", slog.Int("voters", len(voters)))
+	return tm.tmState.SetGroupReplicationNotServing(ctx, groupReplicationVoterMajorityLost)
+}
+
+// checkLegitimatePrimaryToServe returns an error unless the tablet may serve as the primary as far
+// as its shard's replication group is concerned: under a group replication policy that lists
+// voters, MySQL must be the primary of the shard's legitimate group (see policy.LegitimateGroup).
+// VTOrc's PrimaryIsReadOnly recovery undid the demotion of a PRIMARY tablet whose MySQL was in the
+// ERROR state after its group lost its majority, which cleared super_read_only on a MySQL outside
+// of any group (S7d chaos scenario); a group primary without a majority of the voters would commit
+// transactions that exist on too few voters.
+func (tm *TabletManager) checkLegitimatePrimaryToServe(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) error {
+	if !groupReplicationEnabled() {
+		return nil
+	}
+	durability, err := tm.keyspaceDurability(ctx)
+	if err != nil {
+		return err
+	}
+	if !policy.IsGroupReplication(durability) {
+		return nil
+	}
+	rec, err := tm.readShardGroupRecord(ctx)
+	if err != nil {
+		return err
+	}
+	if len(rec.voters) == 0 {
+		return nil
+	}
+	if !tm.legitimateGroup(ctx, rec, status, true).IsLegitimatePrimary(status) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL is not the primary of the shard's replication group with a majority of its voters (member %s %s, view %s)",
+			status.GetMemberState(), status.GetMemberRole(), status.GetViewId())
+	}
+	return nil
+}
+
 // groupReplicationVoters returns the voting members of the tablet's shard's group, as recorded
 // in the shard record.
 func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodatapb.TabletAlias, error) {

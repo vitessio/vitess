@@ -893,6 +893,9 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if mysql.IsGroupMemberActive(groupStatus) && !mysql.IsGroupPrimary(groupStatus) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: MySQL is no longer the primary of group %s (member %s %s)", groupStatus.GroupName, groupStatus.MemberState, groupStatus.MemberRole)
 	}
+	if err := tm.checkLegitimatePrimaryToServe(ctx, groupStatus); err != nil {
+		return err
+	}
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {

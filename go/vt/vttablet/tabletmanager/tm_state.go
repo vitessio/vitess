@@ -416,6 +416,14 @@ func (ts *tmState) SetGroupReplicationNotServing(ctx context.Context, reason str
 	return ts.updateLocked(ctx)
 }
 
+// GroupReplicationNotServing returns the reason for which a PRIMARY tablet does not serve while its
+// replication group lacks the majority of its voters, empty if there is none.
+func (ts *tmState) GroupReplicationNotServing() string {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.groupReplicationNotServing
+}
+
 func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 	denyListRules := rules.New()
 	deniedTables := ts.deniedTables[ts.tablet.Type]

@@ -269,6 +269,68 @@ func TestGroupReplicationSyncTrustsOwnBootstrap(t *testing.T) {
 	assert.Zero(t, stops)
 }
 
+// TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe reproduces a run of the S7d chaos
+// scenario: VTOrc bootstrapped the group on the old primary, whose tablet was still PRIMARY because
+// its sync loop was blocked on the unreachable topology, and the tablet acknowledged writes for 2.3s
+// while it was the only voter in the new group. A PRIMARY tablet must stop serving before its MySQL
+// bootstraps a group, and serve again once a majority of the voters is ONLINE in it.
+func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	require.True(t, qsc.IsServing())
+	fmd.StartGroupReplicationError = nil
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+
+	status, err := tm.StartGroupReplication(ctx, true)
+	require.NoError(t, err)
+	require.True(t, mysql.IsGroupPrimary(status))
+	assert.False(t, qsc.IsServing(), "the only voter of a new group must not serve")
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type, "the tablet keeps its type so that vtgate buffers")
+
+	// Alone in its group, it keeps not serving.
+	s := newGroupReplicationSync(tm)
+	s.reconcile(ctx)
+	assert.False(t, qsc.IsServing())
+
+	// A second voter joined: a majority of the three voters is ONLINE in the group.
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)),
+		policy.GroupIncarnation(status.ViewId)+":2"))
+	s.reconcile(ctx)
+	assert.True(t, qsc.IsServing(), "the primary serves once a majority of the voters is back")
+}
+
+// TestUndoDemotePrimaryRequiresLegitimateGroupPrimary reproduces a run of the S7d chaos scenario:
+// VTOrc's PrimaryIsReadOnly recovery undid the demotion of a PRIMARY tablet whose MySQL was in the
+// ERROR state after its group lost its majority, and cleared super_read_only on it. Under a group
+// replication policy, a demotion is only undone on the primary of the shard's legitimate group.
+func TestUndoDemotePrimaryRequiresLegitimateGroupPrimary(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	fmd.SuperReadOnly.Store(true)
+	fmd.ReadOnly = true
+
+	// The group lost its majority and MySQL left it.
+	fmd.SetGroupReplicationStatus(&replicationdatapb.GroupReplicationStatus{
+		PluginActive: true, GroupName: policy.GroupName("ks", "0"), MemberState: mysql.GroupMemberStateError,
+	})
+	requireCode(t, tm.UndoDemotePrimary(ctx, false), vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, fmd.SuperReadOnly.Load())
+
+	// The primary of the shard's group, alone in its view: a single voter.
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)), "1780000001:9"))
+	requireCode(t, tm.UndoDemotePrimary(ctx, false), vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, fmd.SuperReadOnly.Load())
+	assert.True(t, fmd.ReadOnly)
+}
+
 // TestGroupReplicationSyncStopsServingWithoutVoterMajority checks the graceful-leave shrink of the
 // Group Replication failover audit: once the other voters left the group (an expulsion, a clean
 // shutdown, unreachable_majority_timeout), MySQL's view of one still has quorum and commits, but a
