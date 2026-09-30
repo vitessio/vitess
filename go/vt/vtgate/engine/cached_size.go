@@ -866,6 +866,8 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	// field QueryHints vitess.io/vitess/go/vt/sqlparser.QueryHints
 	size += cached.QueryHints.CachedSize(false)
+	// field ColumnRenames *vitess.io/vitess/go/vt/sqlparser.ColumnRenames
+	size += cached.ColumnRenames.CachedSize(true)
 	return size
 }
 

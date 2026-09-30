@@ -462,7 +462,7 @@ func TestNormalize(t *testing.T) {
 			bv := make(map[string]*querypb.BindVariable)
 			out, err := Normalize(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
-			AliasColumnNames(out.AST, ColumnNameEnv{})
+			AliasColumnNames(out.AST, ColumnNameEnv{}, nil)
 			assert.Equal(t, tc.outstmt, String(out.AST))
 			assert.Equal(t, tc.outbv, bv)
 		})
@@ -892,7 +892,7 @@ func TestRewrites(in *testing.T) {
 				&fakeViews{},
 			)
 			if err == nil {
-				AliasColumnNames(result.AST, ColumnNameEnv{})
+				AliasColumnNames(result.AST, ColumnNameEnv{}, nil)
 			}
 			require.NoError(err)
 
@@ -999,7 +999,7 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 				&fakeViews{},
 			)
 			if err == nil {
-				AliasColumnNames(result.AST, ColumnNameEnv{})
+				AliasColumnNames(result.AST, ColumnNameEnv{}, nil)
 			}
 
 			require.NoError(err)
@@ -1063,7 +1063,7 @@ func TestRewritesSysVar(in *testing.T) {
 				&fakeViews{},
 			)
 			if err == nil {
-				AliasColumnNames(result.AST, ColumnNameEnv{})
+				AliasColumnNames(result.AST, ColumnNameEnv{}, nil)
 			}
 
 			require.NoError(err)
@@ -1129,7 +1129,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 				&fakeViews{},
 			)
 			if err == nil {
-				AliasColumnNames(result.AST, ColumnNameEnv{})
+				AliasColumnNames(result.AST, ColumnNameEnv{}, nil)
 			}
 
 			require.NoError(err)

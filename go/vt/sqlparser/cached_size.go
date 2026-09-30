@@ -777,6 +777,31 @@ func (cached *ColumnDefinition) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *ColumnRenames) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field renames []vitess.io/vitess/go/vt/sqlparser.columnRename
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.renames)) * int64(24))
+		for _, elem := range cached.renames {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field unnamed []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unnamed)) * int64(16))
+		for _, elem := range cached.unnamed {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	return size
+}
+
 func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -5786,5 +5811,18 @@ func (cached *columnNameInput) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.edits)) * int64(24))
 	}
+	return size
+}
+
+func (cached *columnRename) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }

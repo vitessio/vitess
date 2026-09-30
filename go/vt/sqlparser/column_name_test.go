@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type columnNameCase struct {
@@ -301,12 +302,26 @@ func TestAliasColumnNames(t *testing.T) {
 		query: "select (select 1), count(*) from t having `count(*)` > 0",
 		want:  "select (select 1 from dual) as `(select 1)`, count(*) as `count(*)` from t having `count(*)` > 0",
 	}, {
+		query: "select (a, b) = (1, 2), not a = 1, not a from t",
+		want:  "select (a, b) = (1, 2) as `(a, b) = (1, 2)`, not a = 1 as `not a = 1`, not a from t",
+	}, {
 		// Columns of derived tables, CTEs and views are named too.
 		query: "with c as (select 'x') select * from (select 1+1) as d, c",
 		want:  "with c as (select 'x' as x from dual) select * from (select 1 + 1 as `1+1` from dual) as d, c",
 	}, {
 		query: "create view v as select 1+1",
 		want:  "create view v as select 1 + 1 as `1+1` from dual",
+	}, {
+		// MySQL names a view column Name_exp_<position> when its name would
+		// be empty, longer than 64 characters or end with a space. It does
+		// so itself for the concat, which vtgate sends as it is spelled.
+		query: "create view v as select 1, concat('" + strings.Repeat("a", 60) + "'), 'b ', ''",
+		want:  "create view v as select 1, concat('" + strings.Repeat("a", 60) + "'), 'b ' as Name_exp_3, '' as Name_exp_4 from dual",
+	}, {
+		// A derived table column with an empty name needs a name that the
+		// SQL vtgate sends can use.
+		query: "select * from (select '') as t",
+		want:  "select * from (select '' as vt_unnamed_0 from dual) as t",
 	}, {
 		// A column reference into a derived table that MySQL materializes
 		// keeps its own spelling; one that MySQL merges takes the column's.
@@ -324,7 +339,7 @@ func TestAliasColumnNames(t *testing.T) {
 		t.Run(tc.query, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.query)
 			require.NoError(t, err)
-			AliasColumnNames(stmt, ColumnNameEnv{})
+			AliasColumnNames(stmt, ColumnNameEnv{}, nil)
 			assert.Equal(t, tc.want, String(stmt))
 		})
 	}
@@ -340,4 +355,43 @@ func TestRedactSQLQueryHidesRewrittenExpressions(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, redacted, "secret", query)
 	}
+}
+
+// TestColumnRenames checks that result columns named after bind variables,
+// and ones with empty names, are renamed in each result instead of aliased.
+func TestColumnRenames(t *testing.T) {
+	stmt, err := NewTestParser().Parse("select :a + 1, 1+1, t.*, '', :b as x from t")
+	require.NoError(t, err)
+	bindVars := map[string]*querypb.BindVariable{"a": {}, "b": {}}
+	renames := AliasColumnNames(stmt, ColumnNameEnv{}, bindVars)
+	assert.Equal(t, "select :a + 1, 1 + 1 as `1+1`, t.*, '', :b as x from t", String(stmt))
+
+	// The star expands to three columns.
+	fields := []*querypb.Field{{Name: ":a + 1"}, {Name: "1+1"}, {Name: "c1"}, {Name: "c2"}, {Name: "c3"}, {Name: "''"}, {Name: "x"}}
+	renamed := renames.Apply(fields)
+	var names []string
+	for _, f := range renamed {
+		names = append(names, f.Name)
+	}
+	assert.Equal(t, []string{":a + 1", "1+1", "c1", "c2", "c3", "", "x"}, names)
+	assert.Equal(t, "''", fields[5].Name, "the fields are not changed in place")
+	assert.Same(t, fields[0], renamed[0])
+
+	// Without a star, the fields must match the select expressions.
+	stmt, err = NewTestParser().Parse("select :a + 2, ''")
+	require.NoError(t, err)
+	renames = AliasColumnNames(stmt, ColumnNameEnv{}, bindVars)
+	fields = []*querypb.Field{{Name: "3"}, {Name: "''"}}
+	assert.Equal(t, ":a + 2", renames.Apply(fields)[0].Name)
+	assert.Equal(t, "", renames.Apply(fields)[1].Name)
+	assert.Equal(t, fields[:1], renames.Apply(fields[:1]))
+
+	// A star over a derived table returns the columns with empty names
+	// under the names that stand in for them.
+	stmt, err = NewTestParser().Parse("select * from (select '', 1) as t")
+	require.NoError(t, err)
+	renames = AliasColumnNames(stmt, ColumnNameEnv{}, nil)
+	fields = []*querypb.Field{{Name: "vt_unnamed_0"}, {Name: "1"}}
+	assert.Equal(t, "", renames.Apply(fields)[0].Name)
+	assert.Equal(t, "1", renames.Apply(fields)[1].Name)
 }

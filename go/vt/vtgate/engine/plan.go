@@ -52,6 +52,11 @@ type (
 		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
 		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
 
+		// ColumnRenames name the result columns of a prepared statement that
+		// the plan does not name. Prepared statements are cached by their
+		// text, and their plans are used without parsing it again.
+		ColumnRenames *sqlparser.ColumnRenames
+
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
 		ShardQueries uint64 // ShardQueries is the total count of shard-level queries performed.

@@ -91,10 +91,10 @@ select name, count(*) from user group by name /* scatter aggregate */
 ----------------------------------------------------------------------
 select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */
 
-1 ks_sharded/-40: select 1 as `1`, 'hello' as hello, 3.14 as `3.14`, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
-1 ks_sharded/40-80: select 1 as `1`, 'hello' as hello, 3.14 as `3.14`, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
-1 ks_sharded/80-c0: select 1 as `1`, 'hello' as hello, 3.14 as `3.14`, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
-1 ks_sharded/c0-: select 1 as `1`, 'hello' as hello, 3.14 as `3.14`, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
+1 ks_sharded/-40: select 1, 'hello', 3.14, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
+1 ks_sharded/40-80: select 1, 'hello', 3.14, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
+1 ks_sharded/80-c0: select 1, 'hello', 3.14, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
+1 ks_sharded/c0-: select 1, 'hello', 3.14, null as `NULL` from `user` limit 10 /* INT64 */ /* select constant sql values */
 
 ----------------------------------------------------------------------
 select * from (select id from user) s /* scatter paren select */
@@ -155,12 +155,12 @@ select distinct name from user where id = 1 /* select distinct */
 ----------------------------------------------------------------------
 select id, substring(name, 1, -1) from user where id = 123 /* select substring */
 
-1 ks_sharded/-40: select id, substr(`name`, 1, -1) as `substring(name, 1, -1)` from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
+1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
 
 ----------------------------------------------------------------------
 select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */
 
-1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) as `substring_index(name, '123456', -1)` from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
+1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
 
 ----------------------------------------------------------------------
 select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */

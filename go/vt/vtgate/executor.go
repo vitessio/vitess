@@ -24,6 +24,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -375,12 +376,13 @@ func (e *Executor) StreamExecute(
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
-					result.Fields = qr.Fields
+					fields := vc.RenameColumns(qr.Fields)
+					result.Fields = fields
 					// Send only the fields here: any OK-packet data on qr was
 					// accumulated into result above and goes to the client with
 					// the left-over result, so repeating it in this packet would
 					// deliver it twice to clients that sum across packets.
-					if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
+					if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
 						return err
 					}
 					seenResults.Store(true)
@@ -563,6 +565,15 @@ func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
 		stmtType = plan.QueryType
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
+		if err == nil && qr != nil {
+			if fields := vc.RenameColumns(qr.Fields); !slices.Equal(fields, qr.Fields) {
+				// The result can be shared, for example by consolidated
+				// queries, so rename the columns on a copy.
+				renamed := *qr
+				renamed.Fields = fields
+				qr = &renamed
+			}
+		}
 		return err
 	}, func(typ sqlparser.StatementType, result *sqltypes.Result) error {
 		stmtType = typ
@@ -1269,6 +1280,9 @@ func (e *Executor) fetchOrCreatePlan(
 	if preparedPlan {
 		planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
+		if plan != nil {
+			vcursor.SetColumnRenames(plan.ColumnRenames)
+		}
 	}
 
 	if plan == nil {
@@ -1429,7 +1443,16 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 	stmt = rewriteASTResult.AST
-	sqlparser.AliasColumnNames(stmt, vcursor.SafeSession.ColumnNameEnv())
+	// Prepared statements are cached by their text, so their plans can carry
+	// every column name. Other statements share plans with statements that
+	// differ in their literals, so columns named after literals are renamed
+	// in each result.
+	literals := bindVars
+	if preparedPlan {
+		literals = nil
+	}
+	columnRenames := sqlparser.AliasColumnNames(stmt, vcursor.SafeSession.ColumnNameEnv(), literals)
+	vcursor.SetColumnRenames(columnRenames)
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
 	if rewriteASTResult.UpdateQueryFromAST && !preparedPlan {
 		query = sqlparser.String(stmt)
@@ -1442,11 +1465,19 @@ func (e *Executor) getCachedOrBuildPlan(
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
-			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+			plan, err := e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+			if err == nil && preparedPlan {
+				plan.ColumnRenames = columnRenames
+			}
+			return plan, err
 		})
 		return plan, cached, stmt, err
 	}
 	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+	if err == nil && preparedPlan {
+		// An optimized plan for a prepared statement replaces the cached one.
+		plan.ColumnRenames = columnRenames
+	}
 	return plan, false, stmt, err
 }
 

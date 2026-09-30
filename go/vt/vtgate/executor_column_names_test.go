@@ -17,13 +17,18 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func fieldNames(fields []*querypb.Field) []string {
@@ -94,7 +99,9 @@ func TestColumnNamesInRoutedQueries(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select count(*), COUNT(*), id+1 from user where id = 1", nil)
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 1)
-	assert.Equal(t, "select count(*), count(*) as `COUNT(*)`, id + :vtg1 /* INT64 */ as `id+1` from `user` where id = :vtg1 /* INT64 */", sbc1.Queries[0].Sql)
+	// Names that contain literals are not part of the plan: vtgate gives
+	// them to the result columns of each execution.
+	assert.Equal(t, "select count(*), count(*) as `COUNT(*)`, id + :vtg1 /* INT64 */ from `user` where id = :vtg1 /* INT64 */", sbc1.Queries[0].Sql)
 }
 
 func TestColumnNamesOfPreparedStatements(t *testing.T) {
@@ -108,4 +115,68 @@ func TestColumnNamesOfPreparedStatements(t *testing.T) {
 		assert.EqualValues(t, 2, paramsCount)
 		assert.Equal(t, []string{"?", "? + 1", "a"}, fieldNames(fields))
 	}
+}
+
+// TestColumnNamesDoNotSplitThePlanCache checks that statements that differ
+// only in the literals their column names contain share a plan, and that each
+// gets the column names of its own literals.
+func TestColumnNamesDoNotSplitThePlanCache(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := &vtgatepb.Session{TargetString: "@primary"}
+
+	for i := range 20 {
+		query := fmt.Sprintf("select id, %d, 'user%d', (select %d) from user where id = 1000", i, i, i)
+		// The shard names the columns after the SQL that vtgate sends it,
+		// with the bind variables substituted.
+		sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|:vtg2|:vtg3|(select :vtg2 from dual)", "int64|int64|varchar|int64"), "1|2|3|4")})
+		qr, err := executorExec(ctx, executor, session, query, nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id", strconv.Itoa(i), fmt.Sprintf("user%d", i), fmt.Sprintf("(select %d)", i)}, fieldNames(qr.Fields), query)
+	}
+	plans := 0
+	executor.ForEachPlan(func(plan *engine.Plan) bool {
+		if strings.HasPrefix(plan.Original, "select id, ") {
+			plans++
+		}
+		return true
+	})
+	assert.Equal(t, 1, plans)
+}
+
+func TestColumnNamesOfStreamedResults(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	qr, err := executorStream(ctx, executor, "select 1+1, '' as x, '', 'x' as ' y' from dual")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"1+1", "x", "", "y"}, fieldNames(qr.Fields))
+}
+
+// BenchmarkSelectColumnNames measures executing selects whose result columns
+// are named after the query text, including selects whose literals differ in
+// every execution.
+func BenchmarkSelectColumnNames(b *testing.B) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(b, createExecutorConfigWithNormalizer())
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	for _, query := range []string{
+		"select id, name from user where id = 1",
+		"select id, count(*), 1+1, 'abc' from user where id = 1",
+		"select 1, 1+1, now()",
+	} {
+		b.Run(query, func(b *testing.B) {
+			for b.Loop() {
+				if _, err := executorExec(ctx, executor, session, query, nil); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+	b.Run("a different literal in each select", func(b *testing.B) {
+		i := 0
+		for b.Loop() {
+			i++
+			if _, err := executorExec(ctx, executor, session, fmt.Sprintf("select id, %d from user where id = 1", i), nil); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }

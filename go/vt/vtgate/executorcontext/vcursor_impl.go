@@ -204,6 +204,11 @@ type (
 		// execution time, so that downstream consumers (e.g. GetRoutingIndexes)
 		// don't have to re-evaluate PlanSwitcher conditions.
 		executedPrimitive engine.Primitive
+
+		// columnRenames name the result columns of the executed statement
+		// that its plan, which statements with other names can share, does
+		// not name.
+		columnRenames *sqlparser.ColumnRenames
 	}
 )
 
@@ -1762,6 +1767,18 @@ func (vc *VCursorImpl) GetQueryPriority() (int, error) {
 		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
 	}
 	return 0, nil
+}
+
+// SetColumnRenames sets the result columns to rename in each result of the
+// executed statement.
+func (vc *VCursorImpl) SetColumnRenames(renames *sqlparser.ColumnRenames) {
+	vc.columnRenames = renames
+}
+
+// RenameColumns gives result fields the names of the executed statement's
+// columns. It never changes the fields in place.
+func (vc *VCursorImpl) RenameColumns(fields []*querypb.Field) []*querypb.Field {
+	return vc.columnRenames.Apply(fields)
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.

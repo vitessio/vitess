@@ -98,7 +98,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	sqlparser.AliasColumnNames(result.AST, sqlparser.ColumnNameEnv{})
+	sqlparser.AliasColumnNames(result.AST, sqlparser.ColumnNameEnv{}, nil)
 
 	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, staticConfig{})
 }

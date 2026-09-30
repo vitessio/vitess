@@ -18,10 +18,14 @@ package sqlparser
 
 import (
 	"slices"
+	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations/charset/eightbit"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // This file implements the rules MySQL uses to name the result-set column of
@@ -245,43 +249,101 @@ func (ae *AliasedExpr) MySQLColumnName(env ColumnNameEnv) string {
 // tables, CTEs and views, which queries refer to by name. It is called after
 // the statement is normalized, and before the plan cache key is taken from
 // it: the aliases distinguish statements whose columns have different names.
-func AliasColumnNames(stmt Statement, env ColumnNameEnv) {
-	if ts, ok := stmt.(TableStatement); ok {
-		aliasSelectExprs(ts, env)
+//
+// A result column whose name contains the values of bind variables in
+// bindVars, such as the literals that normalizing replaced with bind
+// variables, is not aliased, so that statements that differ only in those
+// values share a plan. Nor is one with an empty name, which cannot be an
+// alias. The returned renames name these columns in each result.
+func AliasColumnNames(stmt Statement, env ColumnNameEnv, bindVars map[string]*querypb.BindVariable) *ColumnRenames {
+	var renames *ColumnRenames
+	ts, isTableStatement := stmt.(TableStatement)
+	if isTableStatement {
+		renames = aliasSelectExprs(ts, env, resultColumns, bindVars)
+	}
+	var unnamed []string
+	aliasTableColumns := func(table TableStatement) {
+		if generated := aliasSelectExprs(table, env, tableColumns, nil); generated != nil {
+			unnamed = append(unnamed, generated.unnamed...)
+		}
 	}
 	_ = Walk(func(node SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *AliasedTableExpr:
 			if dt, ok := node.Expr.(*DerivedTable); ok && len(node.Columns) == 0 {
-				aliasSelectExprs(dt.Select, env)
+				aliasTableColumns(dt.Select)
 			}
 		case *CommonTableExpr:
 			if len(node.Columns) == 0 {
-				aliasSelectExprs(node.Subquery, env)
+				aliasTableColumns(node.Subquery)
 			}
 		case *CreateView:
 			if len(node.Columns) == 0 {
-				aliasSelectExprs(node.Select, env)
+				aliasSelectExprs(node.Select, env, viewColumns, nil)
 			}
 		case *AlterView:
 			if len(node.Columns) == 0 {
-				aliasSelectExprs(node.Select, env)
+				aliasSelectExprs(node.Select, env, viewColumns, nil)
 			}
 		}
 		return true, nil
 	}, stmt)
+	if len(unnamed) > 0 && isTableStatement {
+		// A star over a derived table or CTE returns its columns under the
+		// names that stand in for their empty names.
+		if renames == nil {
+			renames = newColumnRenames(ts)
+		}
+		if renames != nil {
+			renames.unnamed = unnamed
+		}
+	}
+	return renames
 }
 
+// columnsOf says what the select expressions of a query expression name.
+type columnsOf int
+
+const (
+	// resultColumns are the columns of the result set.
+	resultColumns columnsOf = iota
+	// tableColumns are the columns of a derived table or CTE.
+	tableColumns
+	// viewColumns are the columns of a view.
+	viewColumns
+)
+
+// maxViewColumnName is the number of characters a view column name can
+// have. MySQL names a view column whose name would be longer, empty, or end
+// with a space Name_exp_<position>.
+const maxViewColumnName = 64
+
 // aliasSelectExprs aliases the select expressions of the first query block of
-// a query expression, which name its columns.
-func aliasSelectExprs(ts TableStatement, env ColumnNameEnv) {
+// a query expression, which name its columns. For result columns, it returns
+// the columns to rename in each result.
+func aliasSelectExprs(ts TableStatement, env ColumnNameEnv, of columnsOf, bindVars map[string]*querypb.BindVariable) *ColumnRenames {
 	sel, err := GetFirstSelect(ts)
 	if err != nil || sel == nil {
-		return
+		return nil
+	}
+	var renames *ColumnRenames
+	rename := func(ordinal int, name string) {
+		if renames == nil {
+			renames = newColumnRenames(ts)
+		}
+		renames.renames = append(renames.renames, columnRename{ordinal: ordinal, name: name})
 	}
 	referenced := referencedNames(ts)
+	// A referenced name that is not a plain identifier can only be the name
+	// of a select expression. The SQL that vtgate sends must not give it to
+	// an expression that MySQL names differently.
+	refersToExpressions := slices.ContainsFunc(referenced, func(name string) bool {
+		return strings.ContainsFunc(name, func(r rune) bool {
+			return r != '_' && r != '$' && !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		})
+	})
 	var materialized map[string]TableStatement
-	for _, expr := range sel.SelectExprs.Exprs {
+	for i, expr := range sel.SelectExprs.Exprs {
 		ae, ok := expr.(*AliasedExpr)
 		if !ok || !ae._name.parsed {
 			continue
@@ -289,8 +351,13 @@ func aliasSelectExprs(ts TableStatement, env ColumnNameEnv) {
 		if ae.As.NotEmpty() {
 			// MySQL's rules apply to aliases too: for example, leading
 			// spaces are removed.
-			if name := ae.MySQLColumnName(env); ae._name.aliased && name != "" && name != ae.As.String() {
+			name := ae.MySQLColumnName(env)
+			switch {
+			case !ae._name.aliased || name == ae.As.String():
+			case name != "":
 				ae.As = NewIdentifierCI(name)
+			case of == resultColumns:
+				rename(i, name)
 			}
 			continue
 		}
@@ -311,18 +378,147 @@ func aliasSelectExprs(ts TableStatement, env ColumnNameEnv) {
 			continue
 		}
 		name := ae.MySQLColumnName(env)
-		if name == "" {
-			// An empty name cannot be an alias.
+		isReferenced := len(referenced) > 0 && slices.Contains(referenced, strings.ToLower(name))
+		if of == resultColumns && !isReferenced && (name == "" || (!refersToExpressions && containsBindVar(ae.Expr, bindVars))) {
+			// MySQL gets the values of bind variables, not their names,
+			// and an empty name cannot be an alias.
+			rename(i, name)
 			continue
 		}
-		if name == String(ae.Expr) && !slices.Contains(referenced, strings.ToLower(name)) && !containsSubquery(ae.Expr) {
-			// MySQL names the SQL that vtgate sends the same way. Planning
-			// rewrites subqueries, and a column that the query refers to
-			// by name needs an alias for vtgate to resolve the reference.
+		if name == String(ae.Expr) && !isReferenced && !rewrittenByPlanning(ae.Expr) {
+			// MySQL names the SQL that vtgate sends the same way. A column
+			// that the query refers to by name needs an alias for vtgate to
+			// resolve the reference.
+			continue
+		}
+		switch of {
+		case tableColumns:
+			if name == "" {
+				// The column cannot be referenced, but it needs a name
+				// that the SQL vtgate sends can use.
+				name = "vt_unnamed_" + strconv.Itoa(i)
+				if renames == nil {
+					renames = &ColumnRenames{}
+				}
+				renames.unnamed = append(renames.unnamed, name)
+			}
+		case viewColumns:
+			if name == "" || utf8.RuneCountInString(name) > maxViewColumnName || strings.HasSuffix(name, " ") {
+				name = "Name_exp_" + strconv.Itoa(i+1)
+			}
+		}
+		if name == "" {
 			continue
 		}
 		ae.As = NewIdentifierCI(name)
 	}
+	return renames
+}
+
+// containsBindVar reports whether an expression contains one of the bind
+// variables.
+func containsBindVar(expr Expr, bindVars map[string]*querypb.BindVariable) bool {
+	if len(bindVars) == 0 {
+		return false
+	}
+	found := false
+	_ = Walk(func(node SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *Argument:
+			_, found = bindVars[node.Name]
+		case ListArg:
+			_, found = bindVars[string(node)]
+		}
+		return !found, nil
+	}, expr)
+	return found
+}
+
+// ColumnRenames are the result columns that a statement names in each result
+// rather than with aliases.
+type ColumnRenames struct {
+	renames []columnRename
+	// exprs is the number of select expressions, and firstStar and lastStar
+	// are the positions of the first and last star among them, or -1.
+	exprs, firstStar, lastStar int
+	// unnamed are the names that stand in for the empty names of columns of
+	// derived tables and CTEs. A star returns them, and they become empty.
+	unnamed []string
+}
+
+// newColumnRenames returns the renames of the result columns of a query
+// expression, or nil if it has no first query block.
+func newColumnRenames(ts TableStatement) *ColumnRenames {
+	sel, err := GetFirstSelect(ts)
+	if err != nil || sel == nil {
+		return nil
+	}
+	renames := &ColumnRenames{exprs: len(sel.SelectExprs.Exprs), firstStar: -1, lastStar: -1}
+	for i, expr := range sel.SelectExprs.Exprs {
+		if _, ok := expr.(*StarExpr); ok {
+			if renames.firstStar < 0 {
+				renames.firstStar = i
+			}
+			renames.lastStar = i
+		}
+	}
+	return renames
+}
+
+type columnRename struct {
+	ordinal int
+	name    string
+}
+
+// Apply returns the fields with the names of the renamed columns. It never
+// changes fields in place, because they can be shared, for example by cached
+// plans: it returns a new slice when a name changes. The columns of a star
+// between two others cannot be told apart, so columns between the first and
+// the last star keep their names.
+func (r *ColumnRenames) Apply(fields []*querypb.Field) []*querypb.Field {
+	if r == nil || len(fields) == 0 {
+		return fields
+	}
+	var renamed []*querypb.Field
+	setName := func(idx int, name string) {
+		if renamed == nil {
+			renamed = slices.Clone(fields)
+		}
+		field := fields[idx].CloneVT()
+		field.Name = name
+		renamed[idx] = field
+	}
+	if r.firstStar >= 0 {
+		for idx := r.firstStar; idx < len(fields)-(r.exprs-1-r.lastStar); idx++ {
+			if slices.Contains(r.unnamed, fields[idx].Name) {
+				setName(idx, "")
+			}
+		}
+	}
+	if r.firstStar < 0 && len(fields) != r.exprs {
+		if renamed == nil {
+			return fields
+		}
+		return renamed
+	}
+	for _, rn := range r.renames {
+		idx := rn.ordinal
+		switch {
+		case r.firstStar < 0 || rn.ordinal < r.firstStar:
+		case rn.ordinal > r.lastStar:
+			idx = len(fields) - (r.exprs - rn.ordinal)
+		default:
+			continue
+		}
+		if idx < 0 || idx >= len(fields) || fields[idx].Name == rn.name {
+			continue
+		}
+		setName(idx, rn.name)
+	}
+	if renamed == nil {
+		return fields
+	}
+	return renamed
 }
 
 // referencedNames returns the lowercased names that the ORDER BY, GROUP BY and
@@ -393,12 +589,21 @@ func materializedTables(sel *Select, ts TableStatement) map[string]TableStatemen
 	return materialized
 }
 
-// containsSubquery reports whether an expression contains a subquery.
-func containsSubquery(expr Expr) bool {
+// rewrittenByPlanning reports whether planning can rewrite an expression, so
+// that the SQL vtgate sends spells it differently: planning rewrites
+// subqueries, NOT before a comparison, and comparisons of tuples.
+func rewrittenByPlanning(expr Expr) bool {
 	found := false
 	_ = Walk(func(node SQLNode) (bool, error) {
-		if _, ok := node.(*Subquery); ok {
+		switch node := node.(type) {
+		case *Subquery:
 			found = true
+		case *NotExpr:
+			_, found = node.Expr.(*ComparisonExpr)
+		case *ComparisonExpr:
+			_, left := node.Left.(ValTuple)
+			_, right := node.Right.(ValTuple)
+			found = left && right
 		}
 		return !found, nil
 	}, expr)
