@@ -489,7 +489,6 @@ func init() {
 
 	// Flags in package log are installed for all binaries.
 	OnParse(log.RegisterFlags)
-	// Flags in package logutil are installed for all binaries.
 	// Flags in package viperutil/config are installed for all binaries.
 	OnParse(viperutil.RegisterFlags)
 }
