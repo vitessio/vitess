@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd/zk/internal/zkfs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
 )
 
@@ -54,9 +53,6 @@ variable.`,
 			}
 
 			return nil
-		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			logutil.Flush()
 		},
 	}
 )

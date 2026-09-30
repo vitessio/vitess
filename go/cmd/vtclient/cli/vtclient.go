@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/utils"
@@ -151,8 +150,6 @@ func newBindvars(fs *pflag.FlagSet, name, usage string) *bindvars {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	defer logutil.Flush()
-
 	qr, err := _run(cmd, args)
 	if jsonOutput && qr != nil {
 		data, err := json.MarshalIndent(qr, "", "  ")

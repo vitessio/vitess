@@ -137,12 +137,14 @@ Some of the flags above did not show a deprecation warning in v24.
 
 In `vtctldclient`, `-v` is now the shorthand for `--version`, matching the other binaries.
 
+The `/debug/flushlogs` HTTP endpoint is removed from all binaries.
+
 **Migration**: remove the flags above from startup arguments. Use `--log-level=debug` for debug logs and
 `--log-format=text` for human-readable output. Logs are written to stderr, so redirect or collect stderr to keep them
 in files.
 
 **Impact**: binaries will fail to start when passed a removed logging flag. Go callers must replace `log.V` with
-`log.Debug` and remove calls to `log.Flush`.
+`log.Debug` and remove calls to `log.Flush`, `logutil.Flush`, and `logutil.OnFlush`.
 
 #### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
 
