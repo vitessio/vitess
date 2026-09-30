@@ -19,6 +19,7 @@ This directory records a multi-round performance investigation of Vitess (base c
 | 2 | End-to-end profiling on a real local cluster | Baseline: `BASELINE.md`. Brief: `BRIEF2.md`. Plan and statuses: `ROUND2_PLAN.md`. Reports: `P1-point-read` (point selects), `P2-writes-tx` (writes and transactions), `P3-scatter` (cross-shard), `P4-vreplication`, `P5-operations` (failover, backup), `P6-runtime` (connections, GC, TLS), `P7-combined` (the safe changes integrated and measured end to end; `P7-combined.patch` is the integration branch). |
 | 2b | Why Vitess is ~15x slower than plain MySQL on point selects | `HOP-OVERHEAD-prelim.md`, `H1-hop-rootcause` (root cause: goroutine hand-offs and vCPU wake-ups in the gRPC hop), `H2-grpc-transport` (unary vs streams vs pooled TCP; PRs #19620/#20215) |
 | 3 | VReplication deep dive | Brief: `BRIEF3-vreplication.md`. Reports: `V1-copy`, `V2-apply` (incl. PR #19535), `V3-vdiff`, `V4-scale` + `V4b-scale-cont`, `V5-vstream`, `V6-static` |
+| 4 | Bug validation (failing tests or repros, no fixes) | Brief: `BRIEF-VAL.md`. Reports: `VAL-A`…`VAL-D` (`.md` plus `.patch` with tests and repro scripts). Results are in the Validated column of `BUGS.md`. |
 
 Each `<ID>.md` is a full report with benchmark output. Each `<ID>.patch` is a prototype against aa9ccf9 (`git apply perf-findings/<ID>.patch`); some include harness scripts under `perf-findings/<ID>-scripts/` or `perf-findings/harness/`. `*-raw/` directories hold raw benchmark output.
 

@@ -40,6 +40,6 @@ Prompted by the ~15x QPS gap to plain MySQL. Preliminary data is in HOP-OVERHEAD
 | ID | Bugs (BUGS.md rank) | BASE | Status |
 |---|---|---|---|
 | VAL-A | #1 generated-column shifted values, #3 `select *` drops conversions, #22 nil ConvertCharset | 30000 | running |
-| VAL-B | #5 PAD SPACE end to end vs real MySQL, #26 Collation_binary.Hash panic, #28 counters invalid JSON | 40000 | running |
+| VAL-B | #5 PAD SPACE end to end vs real MySQL, #26 Collation_binary.Hash panic, #28 counters invalid JSON | 40000 | **done**: #5 R, #26 T (unreachable), #28 R (suggest P2); new bugs #36–#39 (`VAL-B.md`) |
 | VAL-C | #16 throttler checkScope race, #19 FetchNext uncapped slices + consolidator over-count, #24 relay-log stall race, #4 parallel-insert-worker TZ end to end | 30000/20000 | running |
-| VAL-D | #12 vtgate 40 s routing after tablet restart, #13 VTOrc FullStatus hang, #14 VDiff stop/delete blocked | tbd | pending |
+| VAL-D | #12 vtgate 40 s routing after tablet restart, #13 VTOrc FullStatus hang, #14 VDiff stop/delete blocked | 40000 | running |

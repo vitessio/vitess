@@ -30,7 +30,7 @@ The tables below give details for each bug.
 - **C:** confirmed by code reading only.
 - **U:** observed once and never reproduced.
 
-A validation pass (VAL-A…D) is under way to raise the C, P and U entries to T or R, or to refute them.
+A validation pass (VAL-A…D, reports `VAL-*.md`) is under way to raise the C, P and U entries to T or R, or to refute them.
 
 | # | Bug | Pri | Validated | Why this position | Status |
 |---|---|---|---|---|---|
@@ -38,7 +38,7 @@ A validation pass (VAL-A…D) is under way to raise the C, P and U entries to T 
 | 2 | Copy phase turns JSON doubles into DECIMAL (MoveTables/Reshard) | P0 | R | Silent, on the **default** path, and invisible to VDiff; any JSON with floating-point numbers is affected | open (needs a consistent type rule) |
 | 3 | `select *` rules drop ConvertCharset / ConvertIntToEnum | P0 | C | Silent unconverted data, but only for workflows that combine `select *` with conversion rules | open |
 | 4 | Parallel-insert-worker connections skip session setup (TZ, `set names binary`, timeouts) | P0 | T | Silent TIMESTAMP shifts and misread bytes, but only with an opt-in flag on a non-UTC target; not reproduced end to end | patch ready |
-| 5 | PAD SPACE ignored in general_ci/latin1/unicode_ci/`_bin` Collate and Hash | P1 | P | Silent wrong query results whenever vtgate evaluates (cross-shard filters, GROUP BY, DISTINCT, joins); `utf8mb4_general_ci` is very common | open (behaviour change) |
+| 5 | PAD SPACE ignored in general_ci/latin1/unicode_ci/`_bin` Collate and Hash | P1 | R | Silent wrong query results whenever vtgate evaluates: GROUP BY, COUNT(DISTINCT), UNION, ORDER BY merge, HAVING, planner-chosen hash joins (1 row instead of 6). `utf8mb4_general_ci` is very common. The weight_string paths are wrong too (VAL-B) | open (behaviour change; see VAL-B for the fix plan) |
 | 6 | Tablet restart during VDiff setup orphans the workflow lock for 24 h | P1 | R | A routine restart blocks VDiff and **SwitchTraffic** for a day and leaves the stream stopped; reproduced on base | patch ready |
 | 7 | Semi-sync PRS has a ~1 s write outage (DemotePrimary waits for the ACK receiver) | P1 | R | Hits **every** planned reparent in semi-sync deployments, which is the common production setup | patch ready |
 | 8 | VStream `minimize_skew` stalls with 3+ shards, then fails after 10 minutes | P1 | R | Deterministic (6/6 on 4 shards) for every CDC user of that option | patch ready |
@@ -59,13 +59,17 @@ A validation pass (VAL-A…D) is under way to raise the C, P and U entries to T 
 | 23 | mysqld shutdown waits 2 s for Vitess's own idle connection | P2 | R | +2–3 s on every backup, restore and tablet shutdown | patch ready |
 | 24 | Relay-log stall-flag race | P3 | C | A spurious stall error needing exact timing at the 5-min deadline | open |
 | 25 | `VDiff --wait` checks for completion only once a minute (vtctldclient and legacy vtctl) | P3 | R | A slow CLI return, no correctness impact | patch ready (vtctldclient) |
-| 26 | `Collation_binary.Hash` panics when `numCodepoints > len` | P3 | C | No production caller today | open |
+| 26 | `Collation_binary.Hash` panics when `numCodepoints > len` | P3 | T | No production caller today: every caller passes 0 (VAL-B). Could drop to P4 | open |
 | 27 | `charset.Convert` panics on a destination buffer smaller than 4 bytes | P3 | T | No current caller | fixed in patch |
-| 28 | `counters.String` emits invalid JSON for control characters | P3 | C | Only odd label values in `/debug/vars` | open |
+| 28 | `counters.String` emits invalid JSON for control characters | P3 → P2? | R | Any client can break `/debug/vars` (vtgate and vttablet) for every JSON consumer until restart, e.g. with the user name `bob\a` or a table named `t\x01x` (VAL-B). Monitoring only | open |
 | 29 | `Timings.Reset` race | P3 | T | Only tests call it | fixed in patch |
 | 30 | vtexplain test flake (background `wait_timeout` query) | P3 | R | Flaky CI | open |
 | 31 | servenv cgroup tests fail in containers | P3 | R (env?) | Test robustness | open |
 | 32 | Wrong "not thread safe" doc comment on the throttler client | P3 | C | Docs only | fixed in patch |
+| 36 | `COUNT(*) FROM (SELECT DISTINCT v FROM t)` on a sharded table is scattered unchanged and the shard counts summed, so it over-counts (5 vs 3) | P1? | R | Silent wrong results for a common query shape, any collation; found by VAL-B, needs triage | open |
+| 37 | vtgate types `CONCAT(...,v,...)` / `IFNULL(v,'x')` over a general_ci column as `utf8mb4_0900_bin`, so it groups case-sensitively | P1? | R | Wrong GROUP BY results (1,2,2 vs 2,3); found by VAL-B | open |
+| 38 | With schema tracking off, cross-shard UNION merges different values (`'a '` and `'b'`) and hash joins return extra weight_string columns and a near cross-product | P2? | R | Wrong results, but only without schema tracking; found by VAL-B | open |
+| 39 | `metro.Metro128.Sum128()` finalizes in place, so a second call returns a different hash | P3 | T | Test pitfall; found by VAL-B | open |
 | 33–35 | Upstream: Go `utf8.RuneCount` allocation; missing `VZEROUPPER` in the simd experiment; grpc-go BDP pings per round trip | – | – | Report to Go / grpc-go | – |
 
 ## P0: silent wrong data
@@ -81,7 +85,7 @@ A validation pass (VAL-A…D) is under way to raise the C, P and U entries to T 
 
 | Bug | Where | Impact | Status | Source |
 |---|---|---|---|---|
-| PAD SPACE not honoured: `'a'` vs `'a '` compare unequal and hash differently | `colldata` `Collate`/`Hash` for general_ci, latin1 ci, legacy unicode_ci, utf8mb4_bin (0900 collations are NO PAD, so not affected) | Wrong results whenever vtgate evaluates: cross-shard filters, GROUP BY/DISTINCT/UNION, hash joins, aggregation. `utf8mb4_general_ci` is very common in 5.7-era schemas. | open; the fix is a behaviour change (trim a trailing all-space tail in `Collate`, trim trailing spaces in `Hash`, leave `WeightString` alone); coordinate with F14 | F30 #16, F14 |
+| PAD SPACE not honoured: `'a'` vs `'a '` compare unequal and hash differently | `colldata` `Collate`/`Hash` for general_ci, latin1 ci, legacy unicode_ci, utf8mb4_bin (0900 collations are NO PAD, so not affected) | Wrong results whenever vtgate evaluates: cross-shard filters, GROUP BY/DISTINCT/UNION, hash joins, aggregation. `utf8mb4_general_ci` is very common in 5.7-era schemas. | open; the fix is a behaviour change (trim a trailing all-space tail in `Collate`, trim trailing spaces in `Hash`). **VAL-B:** leaving `WeightString` alone only fixes plans where vtgate knows the column collation. MySQL's `WEIGHT_STRING()` keeps trailing spaces, so weight_string-based plans (no schema tracking, views, untyped expressions) need PAD-aware weight comparison too. Coordinate with F14. `TestPadSpaceCollateAndHash` fails on main | F30 #16, F14, VAL-B |
 | vtgate accepts `SET SESSION innodb_lock_wait_timeout = '26'` (a quoted int that MySQL rejects), then every later query in the session fails with errno 1232 | vtgate SET handling / settings pool | The session is poisoned; clients see errors on unrelated queries | open; validate at SET time | P2 |
 | Restarting a target vttablet during VDiff setup orphans the workflow lock in topo with a 24 h lease | `vdiff/table_differ.go`: the stream restart is a gRPC call from the tablet to itself after its gRPC server stopped | For up to 24 h, later VDiffs hang and SwitchTraffic fails ("failed to lock the ... workflow"); the stream is left stopped at the VDiff snapshot position and `Workflow start` doesn't clear it. Reproduced on base with a plain SIGTERM. | patch ready (`TestRestartTargetVReplicationStreams` fails on main) | V3 #1 |
 | `VDiff stop/delete` blocked ~7 minutes while a controller waited for the workflow lock | vdiff controller / workflow lock | Operators can't stop a stuck VDiff promptly | unverified (observed once) | V3 follow-up |
@@ -106,14 +110,23 @@ A validation pass (VAL-A…D) is under way to raise the C, P and U entries to T 
 | mysqld shutdown waits 2 s for Vitess's own idle dba-pool connection | `mysqlctl/mysqld.go` | Every backup, restore and tablet shutdown is 2–3 s slower | patch ready (`TestClosePooledConnections`) | P5 #3 |
 | The VDiff `VDiffRowsCompared` gauge re-adds the cumulative count every 10k rows (a 1M-row diff reads 50.5M), and `VDiffRowsComparedTotal` double-counts earlier attempts after a resume | `vdiff/table_differ.go:875`, `:588` | Misleading VDiff progress metrics | patch ready (`TestUpdateTableProgressRowCounts`; passes with the fix, not yet run on main) | V6 |
 
+## Found during validation (needs triage)
+
+| Bug | Where | Impact | Status | Source |
+|---|---|---|---|---|
+| `SELECT COUNT(*) FROM (SELECT DISTINCT v FROM t) x`, where `v` is not a vindex, is sent to every shard unchanged and vtgate sums the counts (`Aggregate sum_count_star` over a scatter Route) | vtgate planner (derived table + DISTINCT + aggregation) | Over-counts for any collation (5 vs MySQL's 3 on the NO PAD control) | open | VAL-B S1 |
+| `CONCAT('[',v,']')` and `IFNULL(v,'x')` over a `utf8mb4_general_ci` column are typed `utf8mb4_0900_bin` | vtgate/evalengine collation derivation | Case-sensitive grouping: `GROUP BY ifnull(v,'x')` gives 1,2,2 vs MySQL's 2,3 | open | VAL-B S2 |
+| With `--schema-change-signal=false`, a cross-shard UNION merges `'a '` and `'b'` into one row, and hash joins return extra binary weight_string columns and a near cross-product | vtgate weight_string handling without column types | Wrong results without schema tracking | open | VAL-B S3 |
+| `metro.Metro128.Sum128()` finalizes in place, so calling it twice gives different hashes | `go/hack` / metro hash | Test pitfall, no known production misuse | open | VAL-B S4 |
+
 ## P3: latent, tests only, or cosmetic
 
 | Bug | Where | Impact | Status | Source |
 |---|---|---|---|---|
 | `Timings.Reset` swaps the map under a read lock | `go/stats/timings.go` | Race; only tests call it | fixed in patch (the `-race` test fails before the fix) | F30 #13 |
-| `Collation_binary.Hash` panics when `numCodepoints > len(src)` | `colldata` | No production caller passes a nonzero value today | open | F06 |
+| `Collation_binary.Hash` panics when `numCodepoints > len(src)` | `colldata` | No production caller passes a nonzero value today | open; `TestCollationBinaryHashNumCodepointsLongerThanInput` fails on main | F06, VAL-B |
 | `charset.Convert` panics when a non-nil `dst` has capacity < 4 | `charset/convert.go` | No current caller does this | fixed in patch (`TestConvertSmallDestination` panics on main) | F13 |
-| `counters.String` uses `%q`, which is not valid JSON for control characters | `go/stats/counters.go` | `/debug/vars` can emit invalid JSON for odd label values | open | F30 #2 |
+| `counters.String` uses `%q`, which is not valid JSON for control characters | `go/stats/counters.go` | `/debug/vars` becomes invalid JSON; any client can trigger it through its user name or a table name (reproduced on a cluster). Candidate for P2 | open; `TestCountersStringIsValidJSONForControlCharacters` fails on main | F30 #2, VAL-B |
 | The throttler client doc comment says "not thread safe", which is wrong | `throttle/client.go` | Misleading docs | fixed in patch | F27 |
 | Relay-log stall flag race: a stall timer that fires just as `Fetch` drains can report "relay log I/O stalled" | `vreplication/relaylog.go` | A spurious stall error (needs exact timing at the 5-min deadline) | open | V6 |
 | `vtctldclient VDiff create --wait` and legacy `vtctl VDiff --wait` only check for completion every `--wait-update-interval` (default 1 min) | vtctldclient vdiff | A 5 s VDiff takes 60 s to return | patch ready for vtctldclient (`TestWaitForVDiff`); legacy vtctl open | V3 #5 |

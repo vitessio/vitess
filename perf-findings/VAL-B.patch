@@ -1,0 +1,659 @@
+diff --git a/go/mysql/collations/colldata/8bit_test.go b/go/mysql/collations/colldata/8bit_test.go
+new file mode 100644
+index 0000000000..bd72c2c4f0
+--- /dev/null
++++ b/go/mysql/collations/colldata/8bit_test.go
+@@ -0,0 +1,43 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package colldata
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++
++	"vitess.io/vitess/go/vt/vthash"
++)
++
++// TestCollationBinaryHashNumCodepointsLongerThanInput checks that Collation_binary.Hash accepts a
++// numCodepoints larger than the input. binary is a NO PAD collation, so the Collation interface says
++// numCodepoints is ignored, and the hash must equal the hash with numCodepoints = 0.
++func TestCollationBinaryHashNumCodepointsLongerThanInput(t *testing.T) {
++	coll := testcollation(t, "binary")
++	src := []byte("ab")
++
++	h := vthash.New()
++	coll.Hash(&h, src, 0)
++	want := h.Sum128() // Sum128 finalizes the hasher, so call it once.
++
++	for _, n := range []int{len(src), len(src) + 1, 40} {
++		got := vthash.New()
++		assert.NotPanics(t, func() { coll.Hash(&got, src, n) }, "Hash(%q, numCodepoints=%d)", src, n)
++		assert.Equal(t, want, got.Sum128(), "Hash(%q, numCodepoints=%d)", src, n)
++	}
++}
+diff --git a/go/mysql/collations/colldata/padspace_test.go b/go/mysql/collations/colldata/padspace_test.go
+new file mode 100644
+index 0000000000..8f71fb4b44
+--- /dev/null
++++ b/go/mysql/collations/colldata/padspace_test.go
+@@ -0,0 +1,100 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package colldata
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/collations/charset"
++	"vitess.io/vitess/go/vt/vthash"
++)
++
++func sign(n int) int {
++	switch {
++	case n < 0:
++		return -1
++	case n > 0:
++		return 1
++	}
++	return 0
++}
++
++// TestPadSpaceCollateAndHash checks that Collate and Hash follow MySQL's PAD SPACE semantics:
++// in a PAD SPACE collation the shorter string is compared as if padded with spaces, so 'a' = 'a '.
++// NO PAD collations (the 0900 family) must keep comparing trailing spaces.
++//
++// The expected signs are STRCMP(l COLLATE c, r COLLATE c) from MySQL 8.0.46, and the PAD_ATTRIBUTE
++// of every collation below comes from information_schema.COLLATIONS.
++func TestPadSpaceCollateAndHash(t *testing.T) {
++	pairs := [][2]string{
++		{"a", "a "},
++		{"a ", "a"},
++		{"a", "a   "},
++		{"", "  "},
++		{"a\t", "a"}, // TAB sorts before the pad character
++		{"a b", "a"}, // an inner space is not padding
++		{"ab", "a "},
++		{"A ", "a"},
++	}
++	padSpaceCI := []int{0, 0, 0, 0, -1, 1, 1, 0}
++	padSpaceBin := []int{0, 0, 0, 0, -1, 1, 1, -1}
++
++	cases := []struct {
++		collation string
++		expected  []int
++	}{
++		{"utf8mb4_general_ci", padSpaceCI},
++		{"utf8mb3_general_ci", padSpaceCI},
++		{"latin1_swedish_ci", padSpaceCI},
++		{"latin1_bin", padSpaceBin},
++		{"utf8mb4_unicode_ci", padSpaceCI},
++		{"utf8mb4_unicode_520_ci", padSpaceCI},
++		{"utf8mb4_bin", padSpaceBin},
++		{"utf8mb3_bin", padSpaceBin},
++		{"gbk_chinese_ci", padSpaceCI},
++		{"gbk_bin", padSpaceBin},
++		{"ascii_general_ci", padSpaceCI},
++		// NO PAD controls.
++		{"utf8mb4_0900_ai_ci", []int{-1, 1, -1, -1, 1, 1, 1, 1}},
++		{"utf8mb4_0900_bin", []int{-1, 1, -1, -1, 1, 1, 1, -1}},
++	}
++
++	for _, tc := range cases {
++		t.Run(tc.collation, func(t *testing.T) {
++			coll := testcollation(t, tc.collation)
++			for i, p := range pairs {
++				left, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(p[0]))
++				require.NoError(t, err)
++				right, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(p[1]))
++				require.NoError(t, err)
++
++				got := sign(coll.Collate(left, right, false))
++				assert.Equal(t, tc.expected[i], got, "Collate(%q, %q) in %s", p[0], p[1], tc.collation)
++
++				if tc.expected[i] == 0 {
++					h1, h2 := vthash.New(), vthash.New()
++					coll.Hash(&h1, left, 0)
++					coll.Hash(&h2, right, 0)
++					assert.Equal(t, h1.Sum128(), h2.Sum128(), "Hash(%q) != Hash(%q) in %s, but the strings are equal", p[0], p[1], tc.collation)
++				}
++			}
++		})
++	}
++}
+diff --git a/go/stats/counters_test.go b/go/stats/counters_test.go
+index 25fd75024e..b55ae30e53 100644
+--- a/go/stats/counters_test.go
++++ b/go/stats/counters_test.go
+@@ -17,8 +17,11 @@ limitations under the License.
+ package stats
+ 
+ import (
++	"encoding/json"
+ 	"expvar"
+ 	"fmt"
++	"net/http"
++	"net/http/httptest"
+ 	"slices"
+ 	"strings"
+ 	"sync"
+@@ -273,3 +276,47 @@ func TestCountersCombineDimension(t *testing.T) {
+ 	c4.Add([]string{"c4", "c2", "c5"}, 1)
+ 	assert.Equal(t, `{"all.c2.all": 2}`, c4.String())
+ }
++
++// TestCountersStringIsValidJSONForControlCharacters checks that the /debug/vars output of labelled
++// counters stays valid JSON when a label value holds characters that Go's %q escapes differently
++// from JSON (control characters, DEL, invalid UTF-8).
++func TestCountersStringIsValidJSONForControlCharacters(t *testing.T) {
++	clearStats()
++	t.Cleanup(clearStats)
++
++	labels := []string{"a\x01b", "tab\there", "bell\a", "vt\v", "del\x7f", "nul\x00"}
++	c := NewCountersWithSingleLabel("counters_json_control_chars", "help", "label")
++	m := NewCountersWithMultiLabels("counters_json_control_chars_multi", "help", []string{"table", "user"})
++	f := NewCountersFuncWithMultiLabels("counters_json_control_chars_func", "help", []string{"label"}, func() map[string]int64 {
++		out := make(map[string]int64, len(labels))
++		for i, l := range labels {
++			out[l] = int64(i + 1)
++		}
++		return out
++	})
++	for i, l := range labels {
++		c.Add(l, int64(i+1))
++		m.Add([]string{l, "user"}, int64(i+1))
++	}
++	c.Add("bad\xffutf8", 100)
++
++	for name, v := range map[string]fmt.Stringer{"single": c, "multi": m, "func": f} {
++		var decoded map[string]int64
++		if !assert.NoError(t, json.Unmarshal([]byte(v.String()), &decoded), "%s: %s", name, v.String()) {
++			continue
++		}
++		for i, l := range labels {
++			key := l
++			if name == "multi" {
++				key = l + ".user"
++			}
++			assert.Equal(t, int64(i+1), decoded[key], "%s: label %q", name, l)
++		}
++	}
++
++	// The whole /debug/vars document must parse as well.
++	rec := httptest.NewRecorder()
++	expvar.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/debug/vars", nil))
++	var vars map[string]any
++	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &vars))
++}
+diff --git a/perf-findings/VAL-B/cl.sh b/perf-findings/VAL-B/cl.sh
+new file mode 100755
+index 0000000000..eea12f6998
+--- /dev/null
++++ b/perf-findings/VAL-B/cl.sh
+@@ -0,0 +1,4 @@
++#!/bin/bash
++# Run the perf cluster harness as vt with BASE=40000 (VAL-B).
++cd /home/vt/perf
++exec runuser -u vt -- env BASE=40000 HOME=/home/vt TABLES=1 /home/vt/perf/cluster.sh "$@"
+diff --git a/perf-findings/VAL-B/debugvars-repro.sh b/perf-findings/VAL-B/debugvars-repro.sh
+new file mode 100644
+index 0000000000..c217d7ddb5
+--- /dev/null
++++ b/perf-findings/VAL-B/debugvars-repro.sh
+@@ -0,0 +1,31 @@
++#!/bin/bash
++# VAL-B / BUGS #28: make control characters reach stats labels on a live cluster (BASE=40000) and
++# check whether /debug/vars on vtgate and vttablet still parses as JSON.
++check() {
++  for port in 40001 40100 40101; do
++    curl -s "http://localhost:$port/debug/vars" | python3 -c '
++import json, sys
++raw = sys.stdin.buffer.read()
++try:
++    json.loads(raw)
++    print(sys.argv[1], "valid JSON,", len(raw), "bytes")
++except Exception as e:
++    print(sys.argv[1], "INVALID JSON:", e)
++    pos = getattr(e, "pos", None)
++    if pos is not None:
++        print("   context:", raw[max(0, pos-120):pos+40])
++' "$port"
++  done
++}
++echo "== before"; check
++
++echo "== 1) table name with a control character (U+0001) created and queried through vtgate"
++TNAME=$(printf 't\001x')
++mysql -h 127.0.0.1 -P 40003 -u root sbtest -e "create table if not exists \`$TNAME\` (id bigint primary key, v varchar(10))" 2>&1
++mysql -h 127.0.0.1 -P 40003 -u root 'sbtest:-80' -e "select * from \`$TNAME\`" 2>&1
++check
++
++echo "== 2) user name with a control character (U+0007), vtgate --mysql-auth-server-impl none"
++UNAME=$(printf 'bob\007')
++mysql -h 127.0.0.1 -P 40003 -u "$UNAME" sbtest -e "select count(*) from t_gen" 2>&1
++check
+diff --git a/perf-findings/VAL-B/explain.sh b/perf-findings/VAL-B/explain.sh
+new file mode 100644
+index 0000000000..6044dc0b02
+--- /dev/null
++++ b/perf-findings/VAL-B/explain.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# Print the vtgate plan (vexplain plan) of each argument query.
++for q in "$@"; do
++  echo "### $q"
++  mysql -h 127.0.0.1 -P "${VTG_PORT:-40003}" -u root sbtest -N -B -e "vexplain plan $q" | sed 's/\\n/\n/g' |
++    grep -E '"(OperatorType|Variant|Query|GroupBy|OrderBy|Aggregates|Expressions|JoinColumnIndexes|Collations|ComparisonType|Predicate|ResultColumns|Columns)"' | head -40
++done
+diff --git a/perf-findings/VAL-B/load.sh b/perf-findings/VAL-B/load.sh
+new file mode 100644
+index 0000000000..2daa63cf34
+--- /dev/null
++++ b/perf-findings/VAL-B/load.sh
+@@ -0,0 +1,15 @@
++#!/bin/bash
++# VAL-B / BUGS #5: load identical rows into the sharded keyspace (via vtgate) and the reference schema.
++# Hash vindex placement for BIGINT ids: -80 = {1,2,3,5}, 80- = {4,6,7,8}.
++set -euo pipefail
++REF_SOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++# 'a ' (id 1, shard -80), 'a' (id 4, shard 80-), 'A ' (id 6, 80-), 'b' on both shards (control).
++ROWS="(1,'a ',1),(4,'a',10),(6,'A ',100),(2,'b',1000),(7,'b',10000)"
++ROWS2="(5,'a',1),(8,'a  ',2)"  # join partner table: 'a' on -80, 'a  ' on 80-
++for t in gen lat uni bin ai mb3; do
++  mysql -h 127.0.0.1 -P 40003 -u root sbtest -e "delete from t_$t; insert into t_$t(id,v,n) values $ROWS"
++  mysql -S "$REF_SOCK" -u vt_dba ref -e "SET sql_log_bin=0; delete from t_$t; insert into t_$t(id,v,n) values $ROWS"
++done
++mysql -h 127.0.0.1 -P 40003 -u root sbtest -e "delete from t_gen2; insert into t_gen2(id,v,n) values $ROWS2"
++mysql -S "$REF_SOCK" -u vt_dba ref -e "SET sql_log_bin=0; delete from t_gen2; insert into t_gen2(id,v,n) values $ROWS2"
++echo loaded
+diff --git a/perf-findings/VAL-B/matrix.sh b/perf-findings/VAL-B/matrix.sh
+new file mode 100644
+index 0000000000..000242a507
+--- /dev/null
++++ b/perf-findings/VAL-B/matrix.sh
+@@ -0,0 +1,17 @@
++#!/bin/bash
++# Ask MySQL for STRCMP sign of PAD SPACE-relevant pairs per collation (golden values for the unit test).
++SOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++PAIRS=("a|a " "a |a" "a|a   " "|  " "a\t|a" "a b|a" "ab|a " "A |a")
++for c in utf8mb4:utf8mb4_general_ci utf8mb3:utf8mb3_general_ci latin1:latin1_swedish_ci latin1:latin1_bin \
++  utf8mb4:utf8mb4_unicode_ci utf8mb4:utf8mb4_unicode_520_ci utf8mb4:utf8mb4_bin utf8mb3:utf8mb3_bin gbk:gbk_chinese_ci gbk:gbk_bin \
++  ascii:ascii_general_ci utf8mb4:utf8mb4_0900_ai_ci utf8mb4:utf8mb4_0900_bin binary:binary; do
++  cs=${c%%:*}; co=${c#*:}
++  sel=""
++  for p in "${PAIRS[@]}"; do
++    l=${p%%|*}; r=${p#*|}
++    sel+="strcmp(convert(_utf8mb4'$l' using $cs) collate $co, convert(_utf8mb4'$r' using $cs) collate $co),"
++  done
++  sel+="(select PAD_ATTRIBUTE from information_schema.COLLATIONS where COLLATION_NAME='$co')"
++  printf '%-24s ' "$co"
++  mysql -S "$SOCK" -u vt_dba -N -B -e "select $sel" 2>&1
++done
+diff --git a/perf-findings/VAL-B/queries.sh b/perf-findings/VAL-B/queries.sh
+new file mode 100644
+index 0000000000..f3d271152a
+--- /dev/null
++++ b/perf-findings/VAL-B/queries.sh
+@@ -0,0 +1,68 @@
++#!/bin/bash
++# VAL-B / BUGS #5: run each query shape through vtgate (2 shards) and against the reference schema
++# holding the same rows on a single MySQL; print DIFF/same per query.
++REF_SOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++TABLES=${TABLES:-"gen lat uni bin mb3 ai"}
++VTG_PORT=${VTG_PORT:-40003}
++
++# Queries use T as the table placeholder. Only collation-independent output is printed
++# (counts/sums/ids), because the representative value of a group is arbitrary.
++QUERIES=(
++  "Q01 group by + count|select count(*) c, sum(n) s from T group by v order by s"
++  "Q02 count(distinct v)|select count(distinct v) from T"
++  "Q03 select distinct v (row count)|select count(*) from (select distinct v from T) x"
++  "Q04 distinct v, raw rows|select distinct concat('[',v,']') from T order by 1"
++  "Q05 union distinct across shards|select count(*) from (select v from T where id = 1 union select v from T where id = 4) x"
++  "Q06 union distinct, raw rows|select v from T where id = 1 union select v from T where id = 4"
++  "Q07 order by v, id (merge sort)|select id from T order by v, id"
++  "Q08 order by v desc, id|select id from T order by v desc, id"
++  "Q09 filter on derived aggregate at vtgate|select x.s from (select v, sum(n) s from T group by v) x where x.v = 'a' order by x.s"
++  "Q10 having max(v) = 'a'|select sum(n) s from T group by n > 500 having max(v) = 'a' order by s"
++  "Q11 filter pushed to MySQL (control)|select id from T where v = 'a' order by id"
++  "Q12 group by v with limit (ordered aggregate)|select count(*) c from T group by v order by c desc limit 1"
++  "Q13 count(distinct v) grouped|select n > 500 g, count(distinct v) from T group by g order by g"
++  "Q14 min(v)/max(v) as hex|select hex(min(v)), hex(max(v)) from T where v < 'b'"
++)
++
++run_vtg() { mysql -h 127.0.0.1 -P "$VTG_PORT" -u root sbtest -N -B -e "$1" 2>&1 | tr '\n' ';'; }
++run_ref() { mysql -S "$REF_SOCK" -u vt_dba ref -N -B -e "$1" 2>&1 | tr '\n' ';'; }
++
++for t in $TABLES; do
++  echo "=== t_$t"
++  for q in "${QUERIES[@]}"; do
++    name=${q%%|*}; sql=${q#*|}; sql=${sql//T/t_$t}
++    a=$(run_vtg "$sql"); b=$(run_ref "$sql")
++    if [[ $a == "$b" ]]; then st=same; else st=DIFF; fi
++    printf '%-4s %-45s vtgate=%-28s mysql=%s\n' "$st" "$name" "$a" "$b"
++  done
++done
++
++echo "=== joins (t_gen.v = t_gen2.v, general_ci): expected (1,5),(1,8),(4,5),(4,8),(6,5),(6,8)"
++J=(
++  "J1 nested-loop join|select a.id, b.id from t_gen a join t_gen2 b on a.v = b.v order by a.id, b.id"
++  "J2 hash join hint|select /*vt+ ALLOW_HASH_JOIN */ a.id, b.id from t_gen a join t_gen2 b on a.v = b.v order by a.id, b.id"
++  "J3 left join|select a.id, b.id from t_gen a left join t_gen2 b on a.v = b.v order by a.id, b.id"
++  "J4 in-subquery|select id from t_gen where v in (select v from t_gen2) order by id"
++  "J6 hash join (LIMIT on both sides)|select a.id, b.id from (select id, v from t_gen limit 10) a join (select id, v from t_gen2 limit 10) b on a.v = b.v order by a.id, b.id"
++  "J7 hash left join (LIMIT on RHS)|select a.id, b.id from t_gen a left join (select id, v from t_gen2 limit 10) b on a.v = b.v order by a.id, b.id"
++  "J5 join on derived aggregates|select x.v is not null, y.c from (select v, count(*) c from t_gen group by v) x join (select v, count(*) c from t_gen2 group by v) y on x.v = y.v order by y.c"
++)
++for q in "${J[@]}"; do
++  name=${q%%|*}; sql=${q#*|}
++  a=$(run_vtg "$sql"); b=$(run_ref "$sql")
++  if [[ $a == "$b" ]]; then st=same; else st=DIFF; fi
++  printf '%-4s %-45s vtgate=%-28s mysql=%s\n' "$st" "$name" "$a" "$b"
++done
++
++echo "=== literal comparisons evaluated by vtgate (select without FROM)"
++L=(
++  "L1 general_ci literal|select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'a '"
++  "L2 latin1 literal|select _latin1'a' collate latin1_swedish_ci = _latin1'a '"
++  "L3 0900 literal (NO PAD control)|select _utf8mb4'a' collate utf8mb4_0900_ai_ci = _utf8mb4'a '"
++)
++for q in "${L[@]}"; do
++  name=${q%%|*}; sql=${q#*|}
++  a=$(run_vtg "$sql"); b=$(run_ref "$sql")
++  if [[ $a == "$b" ]]; then st=same; else st=DIFF; fi
++  printf '%-4s %-45s vtgate=%-28s mysql=%s\n' "$st" "$name" "$a" "$b"
++done
+diff --git a/perf-findings/VAL-B/result-tracked.txt b/perf-findings/VAL-B/result-tracked.txt
+new file mode 100644
+index 0000000000..2d364b0d78
+--- /dev/null
++++ b/perf-findings/VAL-B/result-tracked.txt
+@@ -0,0 +1,102 @@
++=== t_gen
++DIFF Q01 group by + count                          vtgate=1	1;2	110;2	11000;           mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a ];[a];[b];           mysql=[a ];[a];[b];
++DIFF Q05 union distinct across shards              vtgate=2;                           mysql=1;
++DIFF Q06 union distinct, raw rows                  vtgate=a ;a;                        mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=1;110;                       mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=                             mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=61	6120;                     mysql=6120	6120;
++=== t_lat
++DIFF Q01 group by + count                          vtgate=1	1;2	110;2	11000;           mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a];[b];                mysql=[a ];[a];[b];
++DIFF Q05 union distinct across shards              vtgate=2;                           mysql=1;
++DIFF Q06 union distinct, raw rows                  vtgate=a ;a;                        mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=1;110;                       mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=                             mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=61	6120;                     mysql=6120	6120;
++=== t_uni
++DIFF Q01 group by + count                          vtgate=1	1;2	110;2	11000;           mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a ];[a];[b];           mysql=[a ];[a];[b];
++DIFF Q05 union distinct across shards              vtgate=2;                           mysql=1;
++DIFF Q06 union distinct, raw rows                  vtgate=a ;a;                        mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=1;110;                       mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=                             mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=61	6120;                     mysql=6120	6120;
++=== t_bin
++DIFF Q01 group by + count                          vtgate=1	1;1	10;1	100;2	11000;      mysql=2	11;1	100;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=4;                           mysql=3;
++DIFF Q03 select distinct v (row count)             vtgate=5;                           mysql=3;
++same Q04 distinct v, raw rows                      vtgate=[A ];[a ];[a];[b];           mysql=[A ];[a ];[a];[b];
++DIFF Q05 union distinct across shards              vtgate=2;                           mysql=1;
++DIFF Q06 union distinct, raw rows                  vtgate=a ;a;                        mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=6;4;1;2;7;                   mysql=6;1;4;2;7;
++same Q08 order by v desc, id                       vtgate=2;7;1;4;6;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=1;10;                        mysql=11;
++DIFF Q10 having max(v) = 'a'                       vtgate=                             mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;                         mysql=1;4;
++same Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=2;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	3;1	1;                     mysql=0	2;1	1;
++same Q14 min(v)/max(v) as hex                      vtgate=4120	6120;                   mysql=4120	6120;
++=== t_mb3
++DIFF Q01 group by + count                          vtgate=1	1;2	110;2	11000;           mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++same Q04 distinct v, raw rows                      vtgate=[a ];[a];[b];                mysql=[a ];[a];[b];
++DIFF Q05 union distinct across shards              vtgate=2;                           mysql=1;
++DIFF Q06 union distinct, raw rows                  vtgate=a ;a;                        mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=1;110;                       mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=                             mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=61	6120;                     mysql=6120	6120;
++=== t_ai
++same Q01 group by + count                          vtgate=1	10;2	101;2	11000;          mysql=1	10;2	101;2	11000;
++same Q02 count(distinct v)                         vtgate=3;                           mysql=3;
++DIFF Q03 select distinct v (row count)             vtgate=5;                           mysql=3;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a];[b];                mysql=[a ];[a];[b];
++same Q05 union distinct across shards              vtgate=2;                           mysql=2;
++same Q06 union distinct, raw rows                  vtgate=a ;a;                        mysql=a ;a;
++same Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=4;1;6;2;7;
++same Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;6;4;
++same Q09 filter on derived aggregate at vtgate     vtgate=10;                          mysql=10;
++same Q10 having max(v) = 'a'                       vtgate=                             mysql=
++same Q11 filter pushed to MySQL (control)          vtgate=4;                           mysql=4;
++same Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=2;
++same Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	2;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=61	4120;                     mysql=61	6120;
++=== joins (t_gen.v = t_gen2.v, general_ci): expected (1,5),(1,8),(4,5),(4,8),(6,5),(6,8)
++same J1 nested-loop join                           vtgate=1	5;1	8;4	5;4	8;6	5;6	8;     mysql=1	5;1	8;4	5;4	8;6	5;6	8;
++same J2 hash join hint                             vtgate=1	5;1	8;4	5;4	8;6	5;6	8;     mysql=1	5;1	8;4	5;4	8;6	5;6	8;
++same J3 left join                                  vtgate=1	5;1	8;2	NULL;4	5;4	8;6	5;6	8;7	NULL; mysql=1	5;1	8;2	NULL;4	5;4	8;6	5;6	8;7	NULL;
++same J4 in-subquery                                vtgate=1;4;6;                       mysql=1;4;6;
++DIFF J6 hash join (LIMIT on both sides)            vtgate=4	5;                         mysql=1	5;1	8;4	5;4	8;6	5;6	8;
++DIFF J7 hash left join (LIMIT on RHS)              vtgate=1	NULL;2	NULL;4	5;6	NULL;7	NULL; mysql=1	5;1	8;2	NULL;4	5;4	8;6	5;6	8;7	NULL;
++DIFF J5 join on derived aggregates                 vtgate=1	1;                         mysql=1	2;
++=== literal comparisons evaluated by vtgate (select without FROM)
++same L1 general_ci literal                         vtgate=1;                           mysql=1;
++DIFF L2 latin1 literal                             vtgate=0;                           mysql=1;
++same L3 0900 literal (NO PAD control)              vtgate=0;                           mysql=0;
+diff --git a/perf-findings/VAL-B/result-untracked.txt b/perf-findings/VAL-B/result-untracked.txt
+new file mode 100644
+index 0000000000..e1084c9e77
+--- /dev/null
++++ b/perf-findings/VAL-B/result-untracked.txt
+@@ -0,0 +1,102 @@
++=== t_gen
++DIFF Q01 group by + count                          vtgate=1	10;2	101;2	11000;          mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a];[b];                mysql=[a ];[a];[b];
++same Q05 union distinct across shards              vtgate=1;                           mysql=1;
++same Q06 union distinct, raw rows                  vtgate=a ;                          mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=10;101;                      mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=6120	6120;
++=== t_lat
++DIFF Q01 group by + count                          vtgate=1	10;2	101;2	11000;          mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a];[b];                mysql=[a ];[a];[b];
++same Q05 union distinct across shards              vtgate=1;                           mysql=1;
++same Q06 union distinct, raw rows                  vtgate=a ;                          mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=10;101;                      mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=6120	6120;
++=== t_uni
++DIFF Q01 group by + count                          vtgate=1	10;2	101;2	11000;          mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a];[b];                mysql=[a ];[a];[b];
++same Q05 union distinct across shards              vtgate=1;                           mysql=1;
++same Q06 union distinct, raw rows                  vtgate=a ;                          mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=10;101;                      mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=6120	6120;
++=== t_bin
++DIFF Q01 group by + count                          vtgate=1	1;1	10;1	100;2	11000;      mysql=2	11;1	100;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=4;                           mysql=3;
++DIFF Q03 select distinct v (row count)             vtgate=5;                           mysql=3;
++same Q04 distinct v, raw rows                      vtgate=[A ];[a ];[a];[b];           mysql=[A ];[a ];[a];[b];
++same Q05 union distinct across shards              vtgate=1;                           mysql=1;
++same Q06 union distinct, raw rows                  vtgate=a ;                          mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=6;4;1;2;7;                   mysql=6;1;4;2;7;
++same Q08 order by v desc, id                       vtgate=2;7;1;4;6;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=1;10;                        mysql=11;
++DIFF Q10 having max(v) = 'a'                       vtgate=                             mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;                         mysql=1;4;
++same Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=2;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	3;1	1;                     mysql=0	2;1	1;
++same Q14 min(v)/max(v) as hex                      vtgate=4120	6120;                   mysql=4120	6120;
++=== t_mb3
++DIFF Q01 group by + count                          vtgate=1	10;2	101;2	11000;          mysql=3	111;2	11000;
++DIFF Q02 count(distinct v)                         vtgate=3;                           mysql=2;
++DIFF Q03 select distinct v (row count)             vtgate=4;                           mysql=2;
++DIFF Q04 distinct v, raw rows                      vtgate=[A ];[a];[b];                mysql=[a ];[a];[b];
++same Q05 union distinct across shards              vtgate=1;                           mysql=1;
++same Q06 union distinct, raw rows                  vtgate=a ;                          mysql=a ;
++DIFF Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=1;4;6;2;7;
++DIFF Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;4;6;
++DIFF Q09 filter on derived aggregate at vtgate     vtgate=10;101;                      mysql=111;
++DIFF Q10 having max(v) = 'a'                       vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=111;
++same Q11 filter pushed to MySQL (control)          vtgate=1;4;6;                       mysql=1;4;6;
++DIFF Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=3;
++DIFF Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	1;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=6120	6120;
++=== t_ai
++same Q01 group by + count                          vtgate=1	10;2	101;2	11000;          mysql=1	10;2	101;2	11000;
++same Q02 count(distinct v)                         vtgate=3;                           mysql=3;
++DIFF Q03 select distinct v (row count)             vtgate=5;                           mysql=3;
++same Q04 distinct v, raw rows                      vtgate=[a ];[a];[b];                mysql=[a ];[a];[b];
++DIFF Q05 union distinct across shards              vtgate=1;                           mysql=2;
++DIFF Q06 union distinct, raw rows                  vtgate=a ;                          mysql=a ;a;
++same Q07 order by v, id (merge sort)               vtgate=4;1;6;2;7;                   mysql=4;1;6;2;7;
++same Q08 order by v desc, id                       vtgate=2;7;1;6;4;                   mysql=2;7;1;6;4;
++same Q09 filter on derived aggregate at vtgate     vtgate=10;                          mysql=10;
++DIFF Q10 having max(v) = 'a'                       vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=
++same Q11 filter pushed to MySQL (control)          vtgate=4;                           mysql=4;
++same Q12 group by v with limit (ordered aggregate) vtgate=2;                           mysql=2;
++same Q13 count(distinct v) grouped                 vtgate=0	2;1	1;                     mysql=0	2;1	1;
++DIFF Q14 min(v)/max(v) as hex                      vtgate=ERROR 1235 (42000) at line 1: VT12001: unsupported: min/max on types that are not comparable is not supported; mysql=61	6120;
++=== joins (t_gen.v = t_gen2.v, general_ci): expected (1,5),(1,8),(4,5),(4,8),(6,5),(6,8)
++same J1 nested-loop join                           vtgate=1	5;1	8;4	5;4	8;6	5;6	8;     mysql=1	5;1	8;4	5;4	8;6	5;6	8;
++same J2 hash join hint                             vtgate=1	5;1	8;4	5;4	8;6	5;6	8;     mysql=1	5;1	8;4	5;4	8;6	5;6	8;
++same J3 left join                                  vtgate=1	5;1	8;2	NULL;4	5;4	8;6	5;6	8;7	NULL; mysql=1	5;1	8;2	NULL;4	5;4	8;6	5;6	8;7	NULL;
++same J4 in-subquery                                vtgate=1;4;6;                       mysql=1;4;6;
++DIFF J6 hash join (LIMIT on both sides)            vtgate=1	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;1	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;2	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;2	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;4	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;4	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;6	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;6	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;7	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;7	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0; mysql=1	5;1	8;4	5;4	8;6	5;6	8;
++DIFF J7 hash left join (LIMIT on RHS)              vtgate=1	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;1	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;2	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;2	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;4	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;4	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;6	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;6	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0;7	5	€\0\0\0\0\0\0	€\0\0\0\0\0\0;7	8	€\0\0\0\0\0\0	€\0\0\0\0\0\0; mysql=1	5;1	8;2	NULL;4	5;4	8;6	5;6	8;7	NULL;
++DIFF J5 join on derived aggregates                 vtgate=1	1;1	1;1	1;1	1;1	1;1	1;     mysql=1	2;
++=== literal comparisons evaluated by vtgate (select without FROM)
++same L1 general_ci literal                         vtgate=1;                           mysql=1;
++DIFF L2 latin1 literal                             vtgate=0;                           mysql=1;
++same L3 0900 literal (NO PAD control)              vtgate=0;                           mysql=0;
+diff --git a/perf-findings/VAL-B/setup.sh b/perf-findings/VAL-B/setup.sh
+new file mode 100644
+index 0000000000..c874777a49
+--- /dev/null
++++ b/perf-findings/VAL-B/setup.sh
+@@ -0,0 +1,23 @@
++#!/bin/bash
++# VAL-B / BUGS #5: create PAD SPACE test tables in the 2-shard cluster (BASE=40000),
++# and the same tables in an unsharded reference schema `ref` on one mysqld.
++set -euo pipefail
++VTCTLD=localhost:40021
++REF_SOCK=/home/vt/perf/c40000/vt_0000000100/mysql.sock
++
++SQL=""
++VS='{"sharded":true,"vindexes":{"hash":{"type":"hash"}},"tables":{"sbtest1":{"column_vindexes":[{"column":"id","name":"hash"}]}'
++for t in gen:utf8mb4:utf8mb4_general_ci gen2:utf8mb4:utf8mb4_general_ci lat:latin1:latin1_swedish_ci \
++  uni:utf8mb4:utf8mb4_unicode_ci bin:utf8mb4:utf8mb4_bin ai:utf8mb4:utf8mb4_0900_ai_ci mb3:utf8mb3:utf8mb3_general_ci; do
++  IFS=: read -r n cs co <<<"$t"
++  SQL+="CREATE TABLE IF NOT EXISTS t_$n (id BIGINT NOT NULL PRIMARY KEY, v VARCHAR(20) CHARACTER SET $cs COLLATE $co NOT NULL, n INT NOT NULL DEFAULT 1) ENGINE=InnoDB;"
++  VS+=",\"t_$n\":{\"column_vindexes\":[{\"column\":\"id\",\"name\":\"hash\"}]}"
++done
++VS+='}}'
++
++/home/vt/bin/vtctldclient --server "$VTCTLD" ApplySchema --sql "$SQL" sbtest >/dev/null
++/home/vt/bin/vtctldclient --server "$VTCTLD" ApplyVSchema --vschema "$VS" sbtest >/dev/null
++
++mysql -S "$REF_SOCK" -u vt_dba -e "SET sql_log_bin=0; CREATE DATABASE IF NOT EXISTS ref"
++mysql -S "$REF_SOCK" -u vt_dba ref -e "SET sql_log_bin=0; $SQL"
++echo setup done
+diff --git a/perf-findings/VAL-B/vtgate2.sh b/perf-findings/VAL-B/vtgate2.sh
+new file mode 100644
+index 0000000000..fde0de7108
+--- /dev/null
++++ b/perf-findings/VAL-B/vtgate2.sh
+@@ -0,0 +1,11 @@
++#!/bin/bash
++# Second vtgate on the BASE=40000 cluster with schema tracking disabled, so vtgate has no column
++# types/collations and must fall back to weight_string() from MySQL. MySQL port 40033.
++cd /home/vt/perf
++exec runuser -u vt -- env HOME=/home/vt /home/vt/bin/vtgate --topo-implementation etcd2 \
++  --topo-global-server-address localhost:40010 --topo-global-root /vitess/global \
++  --cell zone1 --cells-to-watch zone1 --tablet-types-to-wait PRIMARY,REPLICA \
++  --port 40031 --grpc-port 40032 --mysql-server-port 40033 \
++  --mysql-server-socket-path /home/vt/perf/c40000/vtgate2.sock --service-map grpc-vtgateservice \
++  --mysql-auth-server-impl none --log-format text --config-file-not-found-handling=ignore \
++  --schema-change-signal=false >/home/vt/perf/c40000/logs/vtgate2.log 2>&1
