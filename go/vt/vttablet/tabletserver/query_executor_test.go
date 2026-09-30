@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -2468,6 +2469,7 @@ const (
 	smallResultSize
 	disableOnlineDDL
 	enableConsolidator
+	enableTableACLDryRun
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -2647,10 +2649,11 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 
 // A setting is applied with no table ACL check, so under strict table ACL one
 // that would read a table through a subquery is rejected before it reaches the
-// backend, on the settings-pool path and on the reservation path alike. Without
-// strict table ACL there is nothing for the check to protect, and a vtgate from
-// before the value was sent still sends a targeted session's SET expression as
-// written, so the setting is accepted as it always was.
+// backend, on the settings-pool path and on both reservation paths alike.
+// Without strict table ACL there is nothing for the check to protect, and a
+// vtgate from before the value was sent still sends a targeted session's SET
+// expression as written, so the setting is accepted as it always was. A table
+// ACL dry run accepts it too, as it lets through any request the ACL would deny.
 func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
 	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
 	settingErr := "connection setting must not contain a subquery: " + subquerySetting
@@ -2664,25 +2667,97 @@ func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
 
 		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
 		require.EqualError(t, err, settingErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
+		require.EqualError(t, err, settingErr)
 		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
 		require.EqualError(t, err, settingErr)
 		assert.Zero(t, db.GetQueryCalledNum(subquerySetting), "a rejected setting must not reach the backend")
 	})
 
-	t.Run("without strict table ACL the setting is applied", func(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		flags executorFlags
+	}{
+		{"without strict table ACL the setting is applied", noFlags},
+		{"a strict table ACL dry run applies the setting", enableStrictTableACL | enableTableACLDryRun},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, tc.flags, db)
+			defer tsv.StopService()
+			db.AddQuery(subquerySetting, &sqltypes.Result{})
+
+			connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
+			require.NoError(t, err)
+			require.NoError(t, tsv.te.Release(ctx, connID))
+			connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
+			require.NoError(t, err)
+			require.NoError(t, tsv.te.Release(ctx, connID))
+			assert.Equal(t, 2, db.GetQueryCalledNum(subquerySetting), "the setting is applied to each reserved connection")
+			_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
+			require.NoError(t, err)
+		})
+	}
+
+	// the dry run logs a setting with a subquery only once the rest of the
+	// settings validation has passed, so a setting rejected for another reason
+	// is never logged as allowed
+	t.Run("the dry run logs only a setting it applies", func(t *testing.T) {
 		db := setUpQueryExecutorTest(t)
 		defer db.Close()
 		ctx := t.Context()
-		tsv := newTestTabletServer(ctx, noFlags, db)
+		tsv := newTestTabletServer(ctx, enableStrictTableACL|enableTableACLDryRun, db)
 		defer tsv.StopService()
 		db.AddQuery(subquerySetting, &sqltypes.Result{})
 
+		origLogger := logSettingSubqueryDryRun
+		t.Cleanup(func() { logSettingSubqueryDryRun = origLogger })
+		resetLog := func() {
+			logSettingSubqueryDryRun = logutil.NewThrottledLogger("SettingSubqueryDryRun", time.Minute)
+		}
+		logged := func() bool { return !logSettingSubqueryDryRun.GetLastLogTime().IsZero() }
+
+		sqlModeSetting := "set @@sql_mode = (select 'ANSI' from dual)"
+		sqlModeErr := "non-constant sql_mode value in connection settings"
+		resetLog()
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{sqlModeSetting})
+		require.ErrorContains(t, err, sqlModeErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{sqlModeSetting})
+		require.ErrorContains(t, err, sqlModeErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{sqlModeSetting})
+		require.ErrorContains(t, err, sqlModeErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{"set @@global.max_connections = (select 1)"})
+		require.ErrorContains(t, err, "session scope expected")
+		assert.False(t, logged(), "a setting rejected by the rest of the validation must not be logged as allowed")
+
+		resetLog()
 		connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
 		require.NoError(t, err)
 		require.NoError(t, tsv.te.Release(ctx, connID))
-		assert.Equal(t, 1, db.GetQueryCalledNum(subquerySetting), "the setting is applied to the reserved connection")
+		assert.True(t, logged(), "ReserveBegin must log the setting it lets through")
+
+		resetLog()
+		connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
+		require.NoError(t, err)
+		require.NoError(t, tsv.te.Release(ctx, connID))
+		assert.True(t, logged(), "Reserve must log the setting it lets through")
+
+		resetLog()
 		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
 		require.NoError(t, err)
+		assert.True(t, logged(), "GetConnSetting must log the setting it lets through")
+	})
+
+	// the dry run logs the setting it lets through, and with
+	// --sanitize-log-messages only the variables it sets, never its values
+	t.Run("the dry run log of a setting is sanitized", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+		secretSetting := "set @@sql_select_limit = (select count(*) from test_table where token = 'secret')"
+		assert.Equal(t, secretSetting, settingForLog(secretSetting, false, parser))
+		assert.Equal(t, "set @@sql_select_limit [values REDACTED]", settingForLog(secretSetting, true, parser))
+		assert.Equal(t, "[REDACTED]", settingForLog("not a setting 'secret'", true, parser))
 	})
 }
 
@@ -2699,6 +2774,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		cfg.StrictTableACL = false
 	}
+	cfg.EnableTableACLDryRun = flags&enableTableACLDryRun > 0
 	if flags&disableOnlineDDL > 0 {
 		cfg.EnableOnlineDDL = false
 	} else {
@@ -3201,7 +3277,9 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 
 // TestExecProcKeepsReservedConn pins the scope of the post-CALL discard: on a
 // reserved or transaction connection the session belongs to the caller, and
-// closing it would destroy that caller's own SETs and temporary tables.
+// closing it would destroy that caller's own SETs and temporary tables. A
+// transaction's connection is discarded only once the transaction releases it
+// (see TestCallInTransactionDiscardsConnOnRelease).
 func TestExecProcKeepsReservedConn(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -3219,6 +3297,141 @@ func TestExecProcKeepsReservedConn(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, conn.IsClosed(), "a CALL on a reserved connection must keep the caller's own session")
 	assert.Zero(t, tsv.qe.conns.Metrics.DiscardedByCallerCount())
+}
+
+// TestCallInTransactionDiscardsConnOnRelease pins the fix for
+// vitessio/vitess#21063, the transaction twin of #21046: a procedure called
+// inside a transaction can leave session state behind on the transaction's
+// connection (a SET SESSION, a temporary table), which the pool cannot see, so
+// the connection is discarded when the transaction releases it rather than
+// recycled for the next transaction, however the transaction ends and whatever
+// the CALL's outcome. The CALL itself keeps the transaction's connection.
+func TestCallInTransactionDiscardsConnOnRelease(t *testing.T) {
+	query := "call test_proc()"
+	// fakesqldb does not track transactions, so the CALL's reply reports the
+	// open transaction MySQL would report; without it, the tablet would take
+	// the CALL for one that ended the transaction
+	inTx := &sqltypes.Result{StatusFlags: sqltypes.ServerStatusInTrans}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	setup := func(t *testing.T) (*fakesqldb.DB, *TabletServer) {
+		db := setUpQueryExecutorTest(t)
+		t.Cleanup(db.Close)
+		tsv := newTestTabletServer(t.Context(), noFlags, db)
+		t.Cleanup(tsv.StopService)
+		return db, tsv
+	}
+	discarded := func(tsv *TabletServer) int64 {
+		return tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount()
+	}
+	// The MySQL connection the CALL ran on must be gone from the server's side
+	// once the transaction ended, so no later transaction can be handed it.
+	callConnDiscarded := func(t *testing.T, db *fakesqldb.DB, tsv *TabletServer) {
+		t.Helper()
+		callConns := db.QueryConnIDs(query)
+		require.Len(t, callConns, 1, "the CALL must have run once")
+		require.EqualValues(t, 1, discarded(tsv), "the discarded connection must be counted")
+		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
+			30*time.Second, 10*time.Millisecond, "the connection a CALL ran on must be closed, not returned to the pool")
+	}
+
+	t.Run("CALL, then commit", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		db.AddQuery(query, inTx)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		_, err = tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.NoError(t, err)
+		assert.Zero(t, discarded(tsv), "the CALL keeps the transaction's connection")
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("streamed CALL, then rollback", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		db.AddQuery(query, inTx)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		err = tsv.StreamExecute(ctx, nil, target, query, nil, state.TransactionID, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+
+		_, err = tsv.Rollback(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("CALL returning rows, then commit", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		rows := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+		rows.StatusFlags = sqltypes.ServerStatusInTrans
+		db.AddQuery(query, rows)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		qr, err := tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("streamed CALL whose client went away", func(t *testing.T) {
+		// a failed stream closes the transaction's connection right away; that
+		// loss is not the discard policy's, so the release does not count it
+		ctx := t.Context()
+		db, tsv := setup(t)
+		rows := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+		rows.StatusFlags = sqltypes.ServerStatusInTrans
+		db.AddQuery(query, rows)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		err = tsv.StreamExecute(ctx, nil, target, query, nil, state.TransactionID, 0, nil, func(*sqltypes.Result) error { return errors.New("client went away") })
+		require.ErrorContains(t, err, "client went away")
+
+		// the stream released the closed connection as it returned, which ended
+		// the transaction, so there is nothing left to roll back
+		_, err = tsv.Rollback(ctx, target, state.TransactionID)
+		require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err), "the failed stream must have ended the transaction")
+		assert.Zero(t, discarded(tsv), "a connection already closed must not be counted as discarded")
+	})
+	t.Run("failed CALL, then commit", func(t *testing.T) {
+		// a procedure that dirtied the session and then failed leaves the same
+		// residue as one that succeeded, and the transaction stays usable
+		ctx := t.Context()
+		db, tsv := setup(t)
+		db.AddRejectedQuery(query, errors.New("procedure failed"))
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		_, err = tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.ErrorContains(t, err, "procedure failed")
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("a CALL that never reached MySQL keeps the connection", func(t *testing.T) {
+		// a missing bind variable fails the CALL before any statement is sent,
+		// so the session is untouched and the connection goes back to the pool
+		ctx := t.Context()
+		db, tsv := setup(t)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		_, err = tsv.Execute(ctx, nil, target, "call test_proc(:missing)", nil, state.TransactionID, 0, nil)
+		require.ErrorContains(t, err, "missing bind var")
+		assert.NotContains(t, db.QueryLog(), "call test_proc(", "nothing must have reached MySQL")
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		assert.Zero(t, discarded(tsv), "a CALL that was never sent must not cost the connection")
+	})
 }
 
 // TestExecProcClosesConnOnError verifies that a failed CALL on a reserved

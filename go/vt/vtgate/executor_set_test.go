@@ -634,6 +634,8 @@ func TestSetVar(t *testing.T) {
 	tcases := []struct {
 		sql string
 		rc  bool
+		// sent, when set, is the query the tablet must receive.
+		sent string
 	}{
 		{sql: "select 1 from user"},
 		{sql: "update user set col = 2"},
@@ -643,16 +645,28 @@ func TestSetVar(t *testing.T) {
 		{sql: "set autocommit = 0"},
 		{sql: "show create table user"}, // reserved connection should not be set.
 		{sql: "create table foo(bar bigint)", rc: true},
+		// USE is handled by VTGate and never reaches a tablet.
+		{sql: "use " + KsTestUnsharded},
+		// EXPLAIN carries the hint on the statement it wraps.
+		{sql: "explain select 1 from user", sent: "explain select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ 1 from `user`"},
+		{sql: "explain format=json update user set col = 2", sent: "explain format = json update /*+ SET_VAR(sql_mode = 'only_full_group_by') */ `user` set col = 2"},
+		// A VALUES statement cannot take the hint, so neither can its EXPLAIN.
+		{sql: "explain values row(1)", rc: true},
 	}
 
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			// reset reserved conn need.
 			session.SetReservedConn(false)
+			sbc.Queries = nil
 
 			_, err = executorExecSession(ctx, executor, session, tc.sql, map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
 			assert.Equal(t, tc.rc, session.InReservedConn())
+			if tc.sent != "" {
+				require.Len(t, sbc.Queries, 1)
+				assert.Equal(t, tc.sent, sbc.Queries[0].Sql)
+			}
 		})
 	}
 }

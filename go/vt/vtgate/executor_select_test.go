@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -31,7 +30,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
@@ -400,22 +398,23 @@ func TestSetSystemVariables(t *testing.T) {
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') SET_VAR(sql_safe_updates = '0') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
-	diffOpts := []cmp.Option{
-		cmp.Comparer(func(a, b proto.Message) bool {
-			return proto.Equal(a, b)
-		}),
-		cmp.Exporter(func(reflect.Type) bool {
-			return true
-		}),
+	utils.MustMatch(t, wantQueries, lookup.Queries)
+}
+
+// A statement may carry several optimizer hint comments; MySQL honors the first and
+// reads the rest as ordinary comments. The session's SET_VAR hint joins the first one
+// and the statement goes through instead of failing.
+func TestSetVarWithSeveralOptimizerHintComments(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{"sql_mode": "'only_full_group_by'"}})
+
+	_, err := executor.Execute(t.Context(), nil, "TestSelect", session, "select /*+ MAX_EXECUTION_TIME(100) */ /*+ NO_BKA(t) */ id from main1", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	require.False(t, session.InReservedConn())
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'only_full_group_by') */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
 	}
-	diff := cmp.Diff(wantQueries, lookup.Queries, diffOpts...)
-	if diff == "" {
-		return
-	}
-	// try again with rearranged SET_VAR hints
-	wantQueries[2].Sql = "select /*+ SET_VAR(sql_safe_updates = '0') SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`"
-	diff = cmp.Diff(wantQueries, lookup.Queries, diffOpts...)
-	assert.Empty(t, diff)
+	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
 
 func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {

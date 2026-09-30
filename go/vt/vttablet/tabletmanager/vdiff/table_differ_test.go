@@ -25,7 +25,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -34,9 +36,11 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type (
@@ -777,6 +781,243 @@ func TestGetSourcePKCols_FreshReorderedLayoutCheckpoints(t *testing.T) {
 	require.Len(t, sourceResult.Rows, 1)
 	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
 	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
+}
+
+// TestGetSourcePKCols_ExtendedTargetPK verifies that a target PK that is the
+// source key followed by more columns, as a target partitioned by created_at
+// requires, is accepted when the source key is unique: the source stream is
+// ordered by that key and has no ties on it, so it is also ordered by the
+// comparison key. The source checkpoint then holds the source key and the
+// target checkpoint the whole target PK, so a resumed diff still reports a
+// target row that shares the last source key but sorts after the checkpoint. The
+// all-columns substitute key need not be unique, so it is still rejected. With
+// more than one source shard the source key is unique only within each shard,
+// and a single source checkpoint applied to every shard could skip rows, so the
+// table restarts on resume instead.
+func TestGetSourcePKCols_ExtendedTargetPK(t *testing.T) {
+	targetFields := sqltypes.MakeTestFields("id|created_at|v", "int64|datetime|varchar")
+	newTableDiffer := func(ct *controller, tableName string) *tableDiffer {
+		targetTable := &tabletmanagerdatapb.TableDefinition{
+			Name:              tableName,
+			Columns:           []string{"id", "created_at", "v"},
+			PrimaryKeyColumns: []string{"id", "created_at"},
+			Fields:            targetFields,
+		}
+		return &tableDiffer{
+			wd:    &workflowDiffer{ct: ct},
+			table: targetTable,
+			tablePlan: &tablePlan{
+				table:       targetTable,
+				sourceQuery: fmt.Sprintf("select id, created_at, v from %s order by id asc, created_at asc", tableName),
+				compareCols: []compareColInfo{
+					{colIndex: 0, colName: "id", isPK: true},
+					{colIndex: 1, colName: "created_at", isPK: true},
+					{colIndex: 2, colName: "v"},
+				},
+				comparePKs: []compareColInfo{
+					{colIndex: 0, colName: "id", isPK: true},
+					{colIndex: 1, colName: "created_at", isPK: true},
+				},
+				pkCols: []int{0, 1},
+			},
+		}
+	}
+	setSourceTable := func(tvde *testVDiffEnv, tableName string, pkColumns []string) {
+		tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:              tableName,
+				Columns:           []string{"id", "created_at", "v"},
+				PrimaryKeyColumns: pkColumns,
+				Fields:            targetFields,
+			}},
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		tableName string
+		sourcePK  []string
+		// pke, when set, is the source table's primary key equivalent.
+		pke []string
+	}{
+		{name: "physical source pk", tableName: "ext_pk", sourcePK: []string{"id"}},
+		{name: "source primary key equivalent", tableName: "ext_pke", pke: []string{"id"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tvde := newTestVDiffEnv(t)
+			defer tvde.close()
+			ct := tvde.createController(t, 1)
+			setSourceTable(tvde, tc.tableName, tc.sourcePK)
+			if tc.pke != nil {
+				tvde.tmc.pkeResults[tc.tableName] = sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("column_name|index_name", "varchar|varchar"),
+					tc.pke[0]+"|uk_id",
+				)
+			}
+
+			td := newTableDiffer(ct, tc.tableName)
+			require.NoError(t, td.getSourcePKCols())
+			require.False(t, td.tablePlan.sourceCheckpointUnavailable)
+			require.Equal(t, []int{0}, td.tablePlan.sourcePkCols)
+
+			// The source resumes after id 7 and the target after (7, created_at).
+			row := []sqltypes.Value{
+				sqltypes.NewInt64(7),
+				sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2024-01-02 03:04:05")),
+				sqltypes.NewVarChar("x"),
+			}
+			lastPK := td.lastPKFromRow(row)
+			require.NotNil(t, lastPK.Source)
+			source := sqltypes.Proto3ToResult(lastPK.Source)
+			require.Len(t, source.Fields, 1)
+			require.Equal(t, "id", source.Fields[0].Name)
+			require.Equal(t, "7", source.Rows[0][0].ToString())
+			target := sqltypes.Proto3ToResult(lastPK.Target)
+			require.Len(t, target.Fields, 2)
+			require.Equal(t, "7", target.Rows[0][0].ToString())
+			require.Equal(t, "2024-01-02 03:04:05", target.Rows[0][1].ToString())
+		})
+	}
+
+	// A diff checkpointed at source row (6, earlier) is persisted, reloaded, and
+	// resumed over real streams. The source resumes after id 6 and the target
+	// after (6, earlier), so the target row (6, later), which has no source row,
+	// is still read and reported as extra rather than skipped.
+	t.Run("resume reports an extra target row that shares the last source key", func(t *testing.T) {
+		tvde := newTestVDiffEnv(t)
+		defer tvde.close()
+		ct := tvde.createController(t, 1)
+		// The controller's run loop finds no runnable vdiff and exits, closing
+		// done, which diff would take as a stop; wait for it and reopen done.
+		<-ct.done
+		ct.done = make(chan struct{})
+		ct.targetShardStreamer = &shardStreamer{tablet: tvde.vde.thisTablet, shard: tstenv.ShardName}
+
+		const sourceName, targetName = "ext_resume_src", "ext_resume_tgt"
+		for _, query := range []string{
+			fmt.Sprintf("create table %s.%s (id bigint not null, created_at datetime not null, v varchar(16), primary key (id))", vdiffDBName, sourceName),
+			fmt.Sprintf("create table %s.%s (id bigint not null, created_at datetime not null, v varchar(16), primary key (id, created_at))", vdiffDBName, targetName),
+			fmt.Sprintf("insert into %s.%s values (5, '2024-01-01 00:00:00', 'a'), (6, '2024-01-02 00:00:00', 'b'), (7, '2024-01-03 00:00:00', 'c')", vdiffDBName, sourceName),
+			fmt.Sprintf("insert into %s.%s values (5, '2024-01-01 00:00:00', 'a'), (6, '2024-01-02 00:00:00', 'b'), (6, '2024-02-01 00:00:00', 'x'), (7, '2024-01-03 00:00:00', 'c')", vdiffDBName, targetName),
+		} {
+			require.NoError(t, tstenv.Mysqld.ExecuteSuperQuery(t.Context(), query))
+		}
+		t.Cleanup(func() {
+			for _, name := range []string{sourceName, targetName} {
+				assert.NoError(t, tstenv.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("drop table if exists %s.%s", vdiffDBName, name)))
+			}
+		})
+		for name, pkColumns := range map[string][]int{sourceName: {0}, targetName: {0, 1}} {
+			tvde.se.SetTableForTests(&schema.Table{
+				Name:      sqlparser.NewIdentifierCS(name),
+				Fields:    targetFields,
+				PKColumns: pkColumns,
+			})
+		}
+		setSourceTable(tvde, sourceName, []string{"id"})
+
+		td := newTableDiffer(ct, targetName)
+		td.wd.collationEnv = collations.MySQL8()
+		td.wd.opts = tvde.opts
+		td.tablePlan.sourceQuery = "select id, created_at, v from " + sourceName
+		td.tablePlan.targetQuery = "select id, created_at, v from " + targetName
+		require.NoError(t, td.getSourcePKCols())
+		require.False(t, td.tablePlan.sourceCheckpointUnavailable)
+
+		// Persist the checkpoint taken at source row (6, earlier), then reload it
+		// as a resume does.
+		row := []sqltypes.Value{
+			sqltypes.NewInt64(6),
+			sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2024-01-02 00:00:00")),
+			sqltypes.NewVarChar("b"),
+		}
+		lastPKText, err := prototext.Marshal(td.lastPKFromRow(row))
+		require.NoError(t, err)
+		stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+			sqltypes.Int64BindVariable(ct.id),
+			sqltypes.StringBindVariable(targetName),
+		)
+		require.NoError(t, err)
+		// The report of the checkpointed run: rows 5 and (6, earlier) matched.
+		stateResult := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("lastpk|mismatch|report", "varbinary|int64|varbinary"),
+			string(lastPKText)+`|0|{"TableName":"`+targetName+`","ProcessedRows":2,"MatchingRows":2}`,
+		)
+		dbc := binlogplayer.NewMockDBClient(t)
+		dbc.ExpectRequest(stateQuery, stateResult, nil)
+		reloaded, err := td.wd.getTableLastPK(dbc, targetName)
+		require.NoError(t, err)
+		require.NotNil(t, reloaded)
+		td.lastSourcePK = reloaded.Source
+		td.lastTargetPK = reloaded.Target
+
+		// Resume both streams from the reloaded checkpoint and diff.
+		ct.dbClientFactory = func() binlogplayer.DBClient { return dbc }
+		dbc.ExpectRequest(stateQuery, stateResult, nil)
+		dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, nil)
+		require.NoError(t, td.startTargetDataStream(t.Context()))
+		require.NoError(t, td.startSourceDataStreams(t.Context()))
+		td.setupRowSorters()
+		dr, err := td.diff(t.Context(), &tabletmanagerdatapb.VDiffCoreOptions{MaxRows: 100, MaxExtraRowsToCompare: 100},
+			&tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10}, nil)
+		require.NoError(t, err)
+		td.wgShardStreamers.Wait()
+
+		require.Equal(t, int64(1), dr.ExtraRowsTarget, "the target row (6, later) must be reported as extra, not skipped")
+		require.Len(t, dr.ExtraRowsTargetDiffs, 1)
+		require.Equal(t, "6", dr.ExtraRowsTargetDiffs[0].Row["id"])
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.MismatchedRows)
+		require.Equal(t, int64(3), dr.MatchingRows, "rows 5 and (6, earlier) before the checkpoint and 7 after it")
+		dbc.Wait()
+	})
+
+	t.Run("all-columns substitute source key is rejected", func(t *testing.T) {
+		tvde := newTestVDiffEnv(t)
+		defer tvde.close()
+		ct := tvde.createController(t, 1)
+		// With no PK and no primary key equivalent, the source key is every
+		// source column, (id, created_at, v), which need not be unique. A target
+		// PK over those columns and a computed ym extends it.
+		setSourceTable(tvde, "ext_nokey", nil)
+
+		td := newTableDiffer(ct, "ext_nokey")
+		td.tablePlan.sourceQuery = "select id, created_at, v, date_format(created_at, '%Y%m') as ym from ext_nokey order by id asc, created_at asc, v asc, ym asc"
+		td.tablePlan.comparePKs = []compareColInfo{
+			{colIndex: 0, colName: "id", isPK: true},
+			{colIndex: 1, colName: "created_at", isPK: true},
+			{colIndex: 2, colName: "v", isPK: true},
+			{colIndex: 3, colName: "ym", isPK: true},
+		}
+		err := td.getSourcePKCols()
+		require.ErrorContains(t, err, "not unique")
+		require.Empty(t, td.tablePlan.sourcePkCols)
+	})
+
+	t.Run("more than one source shard restarts on resume", func(t *testing.T) {
+		tvde := newTestVDiffEnv(t)
+		defer tvde.close()
+		ct := tvde.createController(t, 1)
+		setSourceTable(tvde, "ext_shards", []string{"id"})
+		const otherShard = "80-"
+		other := tvde.addTablet(101, tstenv.KeyspaceName, otherShard, topodatapb.TabletType_PRIMARY)
+		t.Cleanup(func() {
+			require.NoError(t, tstenv.TopoServ.DeleteShard(context.Background(), tstenv.KeyspaceName, otherShard))
+		})
+		ct.sources[otherShard] = &migrationSource{
+			vrID:          2,
+			shardStreamer: &shardStreamer{tablet: other.tablet, shard: otherShard},
+		}
+
+		td := newTableDiffer(ct, "ext_shards")
+		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("id", "int64")}
+		td.lastTargetPK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("id|created_at", "int64|datetime")}
+		require.NoError(t, td.getSourcePKCols())
+		require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+		require.Empty(t, td.tablePlan.sourcePkCols)
+		require.Nil(t, td.lastSourcePK, "a stale source checkpoint must be discarded")
+		require.Nil(t, td.lastTargetPK, "a stale target checkpoint must be discarded")
+	})
 }
 
 // TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint verifies the upgrade guard.

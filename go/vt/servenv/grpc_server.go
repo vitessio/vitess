@@ -161,7 +161,7 @@ func RegisterGRPCServerFlags() {
 		utils.SetFlagStringVar(fs, &gRPCKey, "grpc-key", gRPCKey, "server private key to use for gRPC connections, requires grpc-cert, enables TLS")
 		utils.SetFlagStringVar(fs, &gRPCCA, "grpc-ca", gRPCCA, "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
 		utils.SetFlagStringVar(fs, &gRPCCRL, "grpc-crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
-		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
+		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port; plain-text connections are served unauthenticated, even with --grpc-ca")
 		utils.SetFlagStringVar(fs, &gRPCServerCA, "grpc-server-ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTime, "grpc-server-keepalive-time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTimeout, "grpc-server-keepalive-timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
@@ -233,7 +233,19 @@ func createGRPCServer() {
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+			// Optional TLS is for moving clients to TLS one at a time: the
+			// plain-text connections are served, unauthenticated, until the
+			// last client has moved and the flag is dropped. Say so plainly
+			// when a client CA is configured, since --grpc-ca then only holds
+			// for the TLS connections, and point at the stats that show the
+			// plain-text connections without claiming they prove that every
+			// client has moved: one that is offline or connects only now and
+			// then does not show in them.
+			if gRPCCA != "" {
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
+			} else {
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+			}
 			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
