@@ -657,3 +657,21 @@ func populateReparentJournal(ctx context.Context, primary *topodatapb.Tablet, ac
 	}
 	return tmc.PopulateReparentJournal(ctx, primary, time.Now().UnixNano(), actionName, primary.Alias, position)
 }
+
+// isGroupReplicationVoter returns whether the tablet is a voter of its shard's replication group:
+// the durability policy uses Group Replication and allows the tablet in the group, and the shard
+// record lists it among the voters, or lists no voter yet. When the shard record cannot be read, a
+// tablet that the policy allows in the group counts as a voter.
+func isGroupReplicationVoter(ctx context.Context, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
+	if !policy.IsGroupMember(durability, tablet) {
+		return false
+	}
+	shardCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	shardInfo, err := ts.GetShard(shardCtx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return true
+	}
+	voters := shardInfo.GetGroupReplicationVoters()
+	return len(voters) == 0 || policy.IsVoter(voters, tablet.Alias)
+}

@@ -43,6 +43,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestGetCheckAndRecoverFunctionCodeGroupReplication(t *testing.T) {
@@ -880,6 +881,59 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 				require.NoError(t, err)
 			}
 			assert.Equal(t, tt.wantVoters, readVoters(t))
+		})
+	}
+}
+
+// TestReconcileStaleTopoPrimaryGroupReplicationVoter reproduces NEW-3 of the Group Replication
+// failover audit: StaleTopoPrimary configured the default replication channel on an old primary
+// that is a voter of the shard's group, next to the group's own rejoin. Under a group replication
+// policy, a voter only gets its tablet type fixed; a tablet that is not a voter is still made an
+// asynchronous replica of the primary.
+func TestReconcileStaleTopoPrimaryGroupReplicationVoter(t *testing.T) {
+	tests := []struct {
+		name          string
+		staleIsVoter  bool
+		wantRepointed bool
+	}{
+		{name: "stale primary is a voter", staleIsVoter: true},
+		{name: "stale primary is not a voter", wantRepointed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			primary := recoveryTablet("zone1", 100, topodatapb.TabletType_PRIMARY)
+			primary.PrimaryTermStartTime = &vttimepb.Time{Seconds: 1000}
+			stale := recoveryTablet("zone2", 200, topodatapb.TabletType_PRIMARY)
+			stale.PrimaryTermStartTime = &vttimepb.Time{Seconds: 500}
+			other := recoveryTablet("zone2", 201, topodatapb.TabletType_REPLICA)
+			mockTMC := groupReplicationRecoveryTest(t, primary, stale, other)
+			if tt.staleIsVoter {
+				setVoters(t, primary, stale)
+			} else {
+				setVoters(t, primary, other)
+			}
+
+			mockTMC.EXPECT().DemotePrimary(gomock.Any(), sameTablet(stale), true).Return(&replicationdatapb.PrimaryStatus{}, nil)
+			repoints := 0
+			if tt.wantRepointed {
+				repoints = 1
+			}
+			mockTMC.EXPECT().SetReplicationSource(gomock.Any(), sameTablet(stale), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(nil).Times(repoints)
+
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              inst.StaleTopoPrimary,
+				AnalyzedInstanceAlias: stale.Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}
+			attempted, topologyRecovery, err := reconcileStaleTopoPrimary(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			require.NoError(t, err)
+			require.True(t, attempted)
+			require.NotNil(t, topologyRecovery)
+			updated, err := ts.GetTablet(t.Context(), stale.Alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, updated.Type)
 		})
 	}
 }

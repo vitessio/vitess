@@ -1679,6 +1679,14 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 			return
 		}
 
+		// A voter of a shard's replication group rejoins the group, which its tablet or
+		// GroupMemberNotOnline does. Configuring the default channel on it would start
+		// asynchronous replication next to its group membership; only the tablet type is fixed.
+		if isGroupReplicationVoter(ctx, durabilityPolicy, analyzedTablet) {
+			logger.Info("stale primary is a voter of the shard's replication group, not configuring asynchronous replication", slog.String("tablet", aliasString))
+			return
+		}
+
 		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
 
 		// Point the tablet's replication at the current primary. This also changes the tablet's type
