@@ -21,6 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+<<<<<<< HEAD
+||||||| parent of 6aef88b25e (test: deflake TestStartWrites in the semi-sync monitor (#21276))
+	"strconv"
+=======
+	"strconv"
+	"strings"
+>>>>>>> 6aef88b25e (test: deflake TestStartWrites in the semi-sync monitor (#21276))
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -811,15 +818,21 @@ func TestIsWriting(t *testing.T) {
 }
 
 func TestStartWrites(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
+	// Cleanups run in reverse order of registration, so the leak check runs
+	// after the monitor and the fake DB are closed.
+	t.Cleanup(func() { utils.EnsureNoLeaks(t) })
 	db, m := createFakeDBAndMonitor(t)
 	m.actionDelay = 10 * time.Millisecond
 	m.actionTimeout = 1 * time.Second
-	defer db.Close()
-	defer func() {
+	t.Cleanup(db.Close)
+	t.Cleanup(func() {
 		m.Close()
-		waitUntilWritingStopped(t, m)
-	}()
+		// waitUntilWritingStopped waits on t.Context(), which is already
+		// canceled by the time cleanups run.
+		require.Eventually(t, func() bool {
+			return !m.isWriting.Load()
+		}, 30*time.Second, 10*time.Millisecond, "writing did not stop")
+	})
 
 	// Set up semi-sync stats query to return blocked state (waiting sessions > 0, no progress).
 	// This is what isSemiSyncBlocked will check inside startWrites.
@@ -837,32 +850,62 @@ func TestStartWrites(t *testing.T) {
 	m.startWrites()
 	require.EqualValues(t, "", db.QueryLog())
 
+	// Block the INSERT so that the writes stay in progress until the test has
+	// seen them. Otherwise the first write can succeed, unblock the monitor and
+	// finish before the assertion below ever observes inProgressWriteCount > 0.
+	// The release is registered after the teardown above, so it runs first and
+	// a failing assertion cannot leave a write stuck inside BeforeFunc.
+	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	release := func() { unblockOnce.Do(func() { close(unblock) }) }
+	t.Cleanup(release)
+	db.SetBeforeFunc("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", func() {
+		<-unblock
+	})
+
 	// Now we set the monitor to be blocked.
 	m.setIsBlocked(true)
 
-	// Start writes and wait for them to complete.
-	m.startWrites()
+	// startWrites keeps going for as long as the monitor is blocked, so it runs
+	// in the background.
+	startWritesDone := make(chan struct{})
+	go func() {
+		defer close(startWritesDone)
+		m.startWrites()
+	}()
 
 	// Check that some writes are in progress.
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 2*time.Second, 5*time.Microsecond)
+	}, 30*time.Second, time.Millisecond)
 
-	// Verify the query log shows the writes were executed.
-	queryLog := db.QueryLog()
-	require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat")
+	// A write is counted before it reaches the server, so wait for the INSERT
+	// to show up in the query log. It is held there until release.
+	require.Eventually(t, func() bool {
+		return strings.Contains(db.QueryLog(), "insert into _vt.semisync_heartbeat")
+	}, 30*time.Second, time.Millisecond)
 
-	// Make the monitor unblocked. This should stop the writes.
+	// Make the monitor unblocked. This should stop the writes, even though the
+	// ones already sent have not come back yet.
 	m.setIsBlocked(false)
+	require.Eventually(t, func() bool {
+		select {
+		case <-startWritesDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "startWrites did not stop after the monitor was unblocked")
 
-	// Check that no writes are in progress anymore.
+	// Let the writes in flight finish, and check that none are left.
+	release()
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount == 0
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 }
 
 func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
