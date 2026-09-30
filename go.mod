@@ -24,6 +24,7 @@ require (
 	github.com/brianvoe/gofakeit/v7 v7.17.0
 	github.com/buger/jsonparser v1.6.1
 	github.com/cespare/xxhash/v2 v2.3.0
+	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
 	github.com/containerd/cgroups/v3 v3.1.3
 	github.com/dave/jennifer v1.7.1
 	github.com/dustin/go-humanize v1.0.1
@@ -137,7 +138,6 @@ require (
 	github.com/cilium/ebpf v0.22.0 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/containerd/log v0.2.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.7.0 // indirect

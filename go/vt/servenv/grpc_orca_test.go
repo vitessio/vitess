@@ -26,54 +26,60 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestOrcaCountingUnaryInterceptorCountsFailedCallsAsQueriesAndErrors(t *testing.T) {
-	orcaEgressMessages.Store(0)
-	orcaErrors.Store(0)
+func TestOrcaCountingInterceptorsCountQueriesAndErrors(t *testing.T) {
+	const (
+		vtgateExecute         = "/vtgateservice.Vitess/Execute"
+		vtgateVStream         = "/vtgateservice.Vitess/VStream"
+		healthCheck           = "/grpc.health.v1.Health/Check"
+		healthWatch           = "/grpc.health.v1.Health/Watch"
+		orcaStreamCoreMetrics = "/xds.service.orca.v3.OpenRcaService/StreamCoreMetrics"
+	)
+	errFailed := errors.New("failed")
 
-	succeed := func(context.Context, any) (any, error) { return "ok", nil }
-	fail := func(context.Context, any) (any, error) { return nil, errors.New("failed") }
-	for _, handler := range []grpc.UnaryHandler{succeed, succeed, fail} {
-		_, _ = orcaCountingUnaryInterceptor(t.Context(), nil, &grpc.UnaryServerInfo{}, handler)
+	tests := []struct {
+		name        string
+		fullMethod  string
+		stream      bool
+		sends       int
+		err         error
+		wantQueries int64
+		wantErrors  int64
+	}{
+		{name: "successful unary call counts one query", fullMethod: vtgateExecute, wantQueries: 1},
+		{name: "failed unary call counts a query and an error", fullMethod: vtgateExecute, err: errFailed, wantQueries: 1, wantErrors: 1},
+		{name: "successful stream counts every sent message", fullMethod: vtgateVStream, stream: true, sends: 3, wantQueries: 3},
+		{name: "failed stream counts sent messages plus a query and an error", fullMethod: vtgateVStream, stream: true, sends: 2, err: errFailed, wantQueries: 3, wantErrors: 1},
+		{name: "health check is not counted", fullMethod: healthCheck},
+		{name: "failed health check is not counted", fullMethod: healthCheck, err: errFailed},
+		{name: "health watch stream is not counted", fullMethod: healthWatch, stream: true, sends: 3, err: errFailed},
+		{name: "ORCA report stream is not counted", fullMethod: orcaStreamCoreMetrics, stream: true, sends: 3, err: errFailed},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orcaEgressMessages.Store(0)
+			orcaErrors.Store(0)
 
-	assert.EqualValues(t, 3, orcaEgressMessages.Load())
-	assert.EqualValues(t, 1, orcaErrors.Load())
-}
-
-func TestOrcaCountingStreamInterceptorCountsEverySentMessage(t *testing.T) {
-	orcaEgressMessages.Store(0)
-	orcaErrors.Store(0)
-
-	err := orcaCountingStreamInterceptor(nil, fakeSendServerStream{}, &grpc.StreamServerInfo{}, func(_ any, stream grpc.ServerStream) error {
-		for range 3 {
-			if err := stream.SendMsg("event"); err != nil {
-				return err
+			var err error
+			if tt.stream {
+				err = orcaCountingStreamInterceptor(nil, fakeSendServerStream{}, &grpc.StreamServerInfo{FullMethod: tt.fullMethod}, func(_ any, stream grpc.ServerStream) error {
+					for range tt.sends {
+						if err := stream.SendMsg("event"); err != nil {
+							return err
+						}
+					}
+					return tt.err
+				})
+			} else {
+				_, err = orcaCountingUnaryInterceptor(t.Context(), nil, &grpc.UnaryServerInfo{FullMethod: tt.fullMethod}, func(context.Context, any) (any, error) {
+					return nil, tt.err
+				})
 			}
-		}
-		return nil
-	})
 
-	require.NoError(t, err)
-	assert.EqualValues(t, 3, orcaEgressMessages.Load())
-	assert.EqualValues(t, 0, orcaErrors.Load())
-}
-
-func TestOrcaCountingStreamInterceptorCountsFailedStreamAsQueryAndError(t *testing.T) {
-	orcaEgressMessages.Store(0)
-	orcaErrors.Store(0)
-
-	err := orcaCountingStreamInterceptor(nil, fakeSendServerStream{}, &grpc.StreamServerInfo{}, func(_ any, stream grpc.ServerStream) error {
-		for range 2 {
-			if err := stream.SendMsg("event"); err != nil {
-				return err
-			}
-		}
-		return errors.New("failed")
-	})
-
-	require.Error(t, err)
-	assert.EqualValues(t, 3, orcaEgressMessages.Load())
-	assert.EqualValues(t, 1, orcaErrors.Load())
+			require.ErrorIs(t, err, tt.err)
+			assert.Equal(t, tt.wantQueries, orcaEgressMessages.Load())
+			assert.Equal(t, tt.wantErrors, orcaErrors.Load())
+		})
+	}
 }
 
 type fakeSendServerStream struct {
