@@ -400,6 +400,10 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
 		"4.5",
 	))
+	// The group replication plugin is not loaded.
+	db.AddQuery("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
+	))
 
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqld, nil)

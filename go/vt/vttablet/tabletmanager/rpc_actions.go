@@ -78,6 +78,11 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 		return err
 	}
 	defer tm.unlock()
+	if !rdonly {
+		if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+			return err
+		}
+	}
 	superRo, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
 	if err != nil {
 		return err
@@ -139,6 +144,14 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	// We don't want to allow multiple callers to claim a tablet as drained.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
+	}
+
+	// Only the group decides which member of a replication group is writable, so a group
+	// secondary cannot become PRIMARY. Check before the tablet record changes.
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+			return vterrors.Wrapf(err, "cannot change the tablet type to PRIMARY")
+		}
 	}
 
 	if err := tm.tmState.ChangeTabletType(ctx, tabletType, action); err != nil {
