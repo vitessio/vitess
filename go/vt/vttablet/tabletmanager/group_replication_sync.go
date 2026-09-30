@@ -41,8 +41,10 @@ import (
 //   - If the tablet is PRIMARY but MySQL is no longer the primary of a group with quorum, it
 //     demotes the tablet record to REPLICA. MySQL is left as it is: the group already made it
 //     read-only.
-//   - If the durability policy makes the tablet a member but MySQL is not in the group, it
-//     rejoins the group with exponential backoff. It never bootstraps a group.
+//   - If the durability policy uses Group Replication, the shard record lists the tablet as a
+//     voter of the group, and MySQL is not in the group, it rejoins the group with exponential
+//     backoff. It never bootstraps a group. It never makes a member leave its group either:
+//     removing a member that is no longer a voter is VTOrc's decision.
 //   - On a PRIMARY that is the group primary, it applies the effective semi-sync setting: a group
 //     with at least two ONLINE members supersedes semi-sync.
 //
@@ -53,6 +55,9 @@ type groupReplicationSync struct {
 
 	durability     policy.Durabler
 	durabilityRead time.Time
+
+	voters     []*topodatapb.TabletAlias
+	votersRead time.Time
 
 	lastState string
 	lastRole  string
@@ -149,7 +154,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
-	if s.shouldRejoin(status, durability, tablet) {
+	if s.shouldRejoin(ctx, status, durability, tablet) {
 		s.rejoin(ctx)
 	}
 }
@@ -322,13 +327,29 @@ func (s *groupReplicationSync) setTwoPCAllowed(allowed bool) {
 	s.twoPCAllowed = &allowed
 }
 
-// shouldRejoin returns whether the sync loop should make MySQL rejoin its group now.
-func (s *groupReplicationSync) shouldRejoin(status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
+// getVoters returns the voters of the shard's group from the shard record, cached for
+// groupReplicationVotersCacheTTL.
+func (s *groupReplicationSync) getVoters(ctx context.Context) ([]*topodatapb.TabletAlias, error) {
+	if !s.votersRead.IsZero() && time.Since(s.votersRead) < groupReplicationVotersCacheTTL {
+		return s.voters, nil
+	}
+	voters, err := s.tm.groupReplicationVoters(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.voters = voters
+	s.votersRead = time.Now()
+	return voters, nil
+}
+
+// shouldRejoin returns whether the sync loop should make MySQL rejoin its group now. Only a
+// tablet that the shard record lists as a voter rejoins.
+func (s *groupReplicationSync) shouldRejoin(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
 	if mysql.IsGroupMemberActive(status) {
 		s.rejoinBackoff = 0
 		return false
 	}
-	if !policy.IsGroupMember(durability, tablet) {
+	if !policy.IsGroupReplication(durability) {
 		return false
 	}
 	// A PRIMARY tablet whose MySQL is not in the group serves writes on its own, for example
@@ -339,7 +360,16 @@ func (s *groupReplicationSync) shouldRejoin(status *replicationdatapb.GroupRepli
 	if s.tm.groupReplicationRejoinSuspended.Load() || s.tm.IsBackupRunning() {
 		return false
 	}
-	return !time.Now().Before(s.nextRejoin)
+	if time.Now().Before(s.nextRejoin) {
+		return false
+	}
+	// The shard record is read last, and cached: most runs of the loop stop earlier.
+	voters, err := s.getVoters(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the voters of the group", slog.Any("error", err))
+		return false
+	}
+	return policy.IsVoter(voters, tablet.Alias)
 }
 
 // rejoin makes MySQL join its group, and backs off exponentially if it fails.

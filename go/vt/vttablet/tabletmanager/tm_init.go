@@ -38,6 +38,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"os"
@@ -52,6 +53,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -1194,14 +1196,30 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", nil
 	}
 
-	// A voting member of a group joins the group instead of replicating from the primary.
-	groupMember, err := tm.isGroupReplicationManaged(ctx, tabletType)
-	if err != nil {
-		return "", err
-	}
-	if groupMember {
-		tm.initializeGroupReplication(ctx)
-		return "", nil
+	if groupReplicationEnabled() {
+		// A voting member of a group joins the group instead of replicating from the primary.
+		voter, err := tm.isGroupReplicationVoter(ctx)
+		if err != nil {
+			return "", err
+		}
+		if voter {
+			tm.initializeGroupReplication(ctx)
+			return "", nil
+		}
+		// A tablet that is not a voter replicates asynchronously from the primary, unless its
+		// MySQL is still an active member of a group: configuring the default channel would
+		// break it, and removing a member from its group is VTOrc's decision.
+		status, err := tm.groupReplicationStatus(ctx)
+		if err != nil {
+			return "", err
+		}
+		if mysql.IsGroupMemberActive(status) {
+			log.Warn("MySQL is an active group replication member, but the tablet is not a voter of its shard's group: leaving its replication as it is",
+				slog.String("group", status.GroupName),
+				slog.String("state", status.MemberState),
+				slog.String("role", status.MemberRole))
+			return "", nil
+		}
 	}
 
 	// Read the shard to find the current primary, and its location.
