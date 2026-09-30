@@ -1389,6 +1389,58 @@ message MigrateCompleteResponse {
   repeated string dry_run_results = 2;
 }
 
+message MigrateReplicationModeRequest {
+  // Keyspace is the keyspace whose shards are converted.
+  string keyspace = 1;
+  // Shard restricts the conversion to one shard. When empty, every shard of the
+  // keyspace is converted.
+  string shard = 2;
+  // DurabilityPolicy is the target durability policy. A group replication policy
+  // (group_replication, group_replication_cross_cell) converts the shards from
+  // asynchronous replication to MySQL Group Replication; any other policy converts
+  // them back.
+  string durability_policy = 3;
+  // DryRun, when set, returns the plan without changing anything.
+  bool dry_run = 4;
+  // WaitTimeout bounds each wait of the conversion, for example for a member to
+  // become ONLINE or for the primary to change its semi-sync setting.
+  vttime.Duration wait_timeout = 5;
+}
+
+// ReplicationModeMigrationStep is one step of a replication mode conversion.
+message ReplicationModeMigrationStep {
+  // Action names the step, for example bootstrap_group, join_group,
+  // wait_semi_sync, set_replication_source, leave_group or set_durability_policy.
+  string action = 1;
+  // Tablet is the tablet the step acts on, if any.
+  topodata.TabletAlias tablet = 2;
+  // Description is a human readable description of the step.
+  string description = 3;
+  // Status is "planned" (dry run), "done", or "skipped" (the tablet was already in
+  // the desired state).
+  string status = 4;
+}
+
+// ReplicationModeMigrationShardResult is the outcome of a conversion for one shard.
+message ReplicationModeMigrationShardResult {
+  string shard = 1;
+  repeated ReplicationModeMigrationStep steps = 2;
+  // ReplicationMode is the replication mode of the shard after the conversion
+  // ("group_replication" or "async"), or the mode it would have after a dry run.
+  string replication_mode = 3;
+}
+
+message MigrateReplicationModeResponse {
+  string keyspace = 1;
+  repeated ReplicationModeMigrationShardResult shards = 2;
+  // DurabilityPolicy is the keyspace's durability policy after the conversion.
+  string durability_policy = 3;
+  // KeyspaceSteps are the keyspace-wide steps, such as updating the durability
+  // policy.
+  repeated ReplicationModeMigrationStep keyspace_steps = 4;
+  repeated logutil.Event events = 5;
+}
+
 message MountRegisterRequest {
   string topo_type = 1;
   string topo_server = 2;
