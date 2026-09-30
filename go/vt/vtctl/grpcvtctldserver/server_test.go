@@ -5034,29 +5034,17 @@ func TestEmergencyReparentShardRequiredPosition(t *testing.T) {
 func TestEmergencyReparentShardInvalidRequiredPosition(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct {
-		name     string
-		required string
-		want     string
-	}{
-		{name: "not a position", required: "not-a-position", want: `invalid required position: invalid MySQL 5.6 GTID set ("not-a-position")`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Leave topology and the tablet client nil. A reparent attempt panics,
-			// and the recovered error fails the message check below.
-			server := &VtctldServer{}
-			resp, err := server.EmergencyReparentShard(t.Context(), &vtctldatapb.EmergencyReparentShardRequest{
-				Keyspace:         "ks",
-				Shard:            "0",
-				RequiredPosition: tc.required,
-			})
-			require.ErrorContains(t, err, tc.want)
-			assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
-			assert.Nil(t, resp)
-		})
-	}
+	// Leave topology and the tablet client nil. A reparent attempt panics,
+	// and the recovered error fails the message check below.
+	server := &VtctldServer{}
+	resp, err := server.EmergencyReparentShard(t.Context(), &vtctldatapb.EmergencyReparentShardRequest{
+		Keyspace:         "ks",
+		Shard:            "0",
+		RequiredPosition: "not-a-position",
+	})
+	require.ErrorContains(t, err, `invalid required position: invalid MySQL 5.6 GTID set ("not-a-position")`)
+	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.Nil(t, resp)
 }
 
 // TestEmergencyReparentShardResponsePreservesReqOnEarlyFailure is a regression
