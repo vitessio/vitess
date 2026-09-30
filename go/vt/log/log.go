@@ -39,6 +39,8 @@ var (
 	ErrorDepth = func(depth int, msg string, attrs ...slog.Attr) { log(slog.LevelError, depth+1, msg, attrs...) }
 )
 
+// init sets up a default logger. This is to work around situations (like testing) where there is no explicit [Init]
+// call.
 func init() {
 	logger.Store(newLogger(slog.LevelInfo))
 }
@@ -57,6 +59,7 @@ func Enabled(level slog.Level) bool {
 	return l != nil && l.Enabled(context.Background(), level)
 }
 
+// log is a helper that logs with slog.
 func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	l := logger.Load()
 	if l == nil || !l.Enabled(context.Background(), level) {
