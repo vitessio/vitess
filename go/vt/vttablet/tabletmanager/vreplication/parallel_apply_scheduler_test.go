@@ -49,11 +49,9 @@ func TestApplySchedulerCommitParentOrder(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	// txn2 is enqueued first. Since it's the first hasCommitMeta transaction
-	// and the scheduler is idle, enqueue seeds lastCommittedSequence to
-	// txn2.commitParent (1). This makes txn2 immediately ready because
-	// commitParent (1) <= lastCommittedSequence (1). The scheduler dispatches
-	// in FIFO order, so txn2 goes first.
+	// Both have commit metadata and empty writesets. The scheduler dispatches
+	// in FIFO order, so txn2, enqueued first, goes first, and txn1 waits until
+	// txn2 has committed.
 	txn2 := &applyTxn{sequenceNumber: 2, commitParent: 1, hasCommitMeta: true}
 	txn1 := &applyTxn{sequenceNumber: 1, commitParent: 0, hasCommitMeta: true}
 
@@ -151,10 +149,9 @@ func TestApplySchedulerBlocksCommitMetaConflictingWritesets(t *testing.T) {
 	requireReadyTxn(t, s, txn2)
 }
 
-func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
+func TestApplySchedulerCommitMetaAfterMissingMeta(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
-	require.Equal(t, int64(0), s.lastCommittedSequence)
 
 	missing := &applyTxn{writeset: []uint64{100}}
 	meta := &applyTxn{sequenceNumber: 5, commitParent: 0, hasCommitMeta: true}
@@ -173,24 +170,6 @@ func TestApplySchedulerCommitMetaDoesNotAdvanceOnMissingMeta(t *testing.T) {
 	require.Equal(t, meta, got2)
 
 	require.NoError(t, s.markCommitted(got2))
-	require.Equal(t, int64(5), s.lastCommittedSequence)
-}
-
-func TestApplySchedulerSeedsCommitParentOnFirstMeta(t *testing.T) {
-	ctx := t.Context()
-	// The scheduler seeds lastCommittedSequence from the first hasCommitMeta
-	// transaction when the scheduler is completely idle (no pending, no inflight).
-	// Enqueue meta as the very first transaction to trigger seeding.
-	meta := &applyTxn{sequenceNumber: 6, commitParent: 5, hasCommitMeta: true}
-
-	s := newApplyScheduler(ctx)
-
-	require.NoError(t, s.enqueue(meta))
-
-	got, err := s.nextReady(ctx)
-	require.NoError(t, err)
-	require.Equal(t, meta, got)
-	require.Equal(t, int64(5), s.lastCommittedSequence)
 }
 
 func TestApplySchedulerWritesetBypassesCommitParent(t *testing.T) {
@@ -252,16 +231,16 @@ func TestApplySchedulerWritesetConflictStillBlocks(t *testing.T) {
 	requireReadyTxn(t, s, txn2)
 }
 
-func TestApplySchedulerEmptyWritesetFallsBackToCommitParent(t *testing.T) {
+func TestApplySchedulerEmptyWritesetWaitsForInflightCommitMeta(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	// When a hasCommitMeta transaction has an empty writeset (e.g., writeset
-	// build failed), it should fall back to commit-parent ordering.
+	// A hasCommitMeta transaction with an empty writeset (e.g., the writeset
+	// build failed) waits until no transaction with commit metadata is
+	// inflight.
 	txn1 := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true}
 	txn2 := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true}
 
-	// Seed lastCommittedSequence to 9 so txn1 is ready.
 	require.NoError(t, s.enqueue(txn1))
 	require.NoError(t, s.enqueue(txn2))
 
@@ -269,12 +248,10 @@ func TestApplySchedulerEmptyWritesetFallsBackToCommitParent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, txn1, got1)
 
-	// txn2 has commitParent=10 but lastCommittedSequence is still 9 (seeded).
-	// txn2's writeset is empty, so it falls back to commit-parent check.
+	// txn1 is inflight, so txn2 waits.
 	requireNoReadyTxn(t, s)
 
-	// After committing txn1, lastCommittedSequence advances to 10,
-	// making txn2 ready (commitParent 10 <= 10).
+	// Once txn1 has committed, txn2 is ready.
 	require.NoError(t, s.markCommitted(got1))
 
 	requireReadyTxn(t, s, txn2)
@@ -324,74 +301,41 @@ func TestApplySchedulerForceGlobalBlocksWritesets(t *testing.T) {
 	requireReadyTxn(t, s, conflict)
 }
 
-func TestApplySchedulerAdvanceCommittedSequenceUnblocks(t *testing.T) {
-	ctx := t.Context()
-	// Use a non-empty pending queue to prevent commit-parent seeding.
-	seed := &applyTxn{order: 1, noConflict: true}
-	meta := &applyTxn{order: 2, sequenceNumber: 6, commitParent: 5, hasCommitMeta: true}
-
-	s := newApplyScheduler(ctx)
-
-	require.NoError(t, s.enqueue(seed))
-	require.NoError(t, s.enqueue(meta))
-
-	got1, err := s.nextReady(ctx)
-	require.NoError(t, err)
-	require.Equal(t, seed, got1)
-	require.NoError(t, s.markCommitted(got1))
-
-	requireNoReadyTxn(t, s)
-
-	s.advanceCommittedSequence(5)
-
-	requireReadyTxn(t, s, meta)
-}
-
-func TestApplySchedulerAdvanceCommittedSequenceDoesNotBypassInflightMetaParent(t *testing.T) {
+// TestApplySchedulerCommitMetaWithEmptyWritesetReadyWhenIdle pins that a
+// transaction with commit metadata and an empty writeset becomes ready as soon
+// as nothing earlier is inflight, whether or not its commit parent's sequence
+// number was ever seen. Everything ordered before it has committed by then, so
+// its parent has too, and waiting for the parent's sequence number could wait
+// forever: a source transaction that ends in a Query COMMIT (e.g. a MyISAM
+// one) reaches the applier without commit metadata, so its sequence number is
+// never known.
+func TestApplySchedulerCommitMetaWithEmptyWritesetReadyWhenIdle(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	metaParent := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{1}}
-	metaChild := &applyTxn{order: 2, sequenceNumber: 12, commitParent: 11, hasCommitMeta: true}
+	withMeta := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{1}}
+	// Sequence 11 has no commit metadata.
+	withoutMeta := &applyTxn{order: 2, writeset: []uint64{2}}
+	// Its child has commit metadata and an empty writeset.
+	child := &applyTxn{order: 3, sequenceNumber: 12, commitParent: 11, hasCommitMeta: true}
 
-	require.NoError(t, s.enqueue(metaParent))
-	gotParent, err := s.nextReady(ctx)
+	require.NoError(t, s.enqueue(withMeta))
+	require.NoError(t, s.enqueue(withoutMeta))
+	require.NoError(t, s.enqueue(child))
+
+	got, err := s.nextReady(ctx)
 	require.NoError(t, err)
-	require.Equal(t, metaParent, gotParent)
-
-	require.NoError(t, s.enqueue(metaChild))
-	s.advanceCommittedSequence(11)
-
-	requireNoReadyTxn(t, s)
-
-	require.NoError(t, s.markCommitted(gotParent))
-
-	requireReadyTxn(t, s, metaChild)
-}
-
-func TestApplySchedulerMergedSequencesUnblockCommitParentChild(t *testing.T) {
-	ctx := t.Context()
-	s := newApplyScheduler(ctx)
-
-	batchedParent := &applyTxn{order: 1, writeset: []uint64{1}, mergedSequences: []int64{10}}
-	metaChild := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 10, hasCommitMeta: true}
-
-	require.NoError(t, s.enqueue(batchedParent))
-	require.NoError(t, s.enqueue(metaChild))
-
-	gotParent, err := s.nextReady(ctx)
+	require.Same(t, withMeta, got)
+	require.NoError(t, s.markCommitted(got))
+	got, err = s.nextReady(ctx)
 	require.NoError(t, err)
-	require.Same(t, batchedParent, gotParent)
-
+	require.Same(t, withoutMeta, got)
+	// The child waits while an earlier transaction is inflight...
 	requireNoReadyTxn(t, s)
+	require.NoError(t, s.markCommitted(got))
 
-	require.NoError(t, s.markCommitted(gotParent))
-
-	s.mu.Lock()
-	require.Equal(t, int64(10), s.lastCommittedSequence)
-	s.mu.Unlock()
-
-	requireReadyTxn(t, s, metaChild)
+	// ...and is ready once nothing is.
+	requireReadyTxn(t, s, child)
 }
 
 func TestApplySchedulerWaitForIdleReturnsWhenIdle(t *testing.T) {
@@ -918,88 +862,22 @@ func TestApplySchedulerForceGlobalWaitsForInflightAndThenBlocksAll(t *testing.T)
 	requireReadyTxn(t, s, row2)
 }
 
-// TestApplySchedulerClosedWithUnreachablePendingWorkErrors pins the abandoned
-// -work escape hatch: when the scheduler is closed while pending transactions
-// exist that can never become ready (nothing is inflight to advance the
-// scheduler state), nextReady must return errSchedulerAbandonedPendingWork —
-// not io.EOF (which would silently drop the pending suffix) and not block
-// forever (which would leak the worker).
-func TestApplySchedulerClosedWithUnreachablePendingWorkErrors(t *testing.T) {
+// TestApplySchedulerEmptyWritesetDoesNotWaitForInflightNoConflict pins that a
+// transaction with commit metadata and an empty writeset does not wait for an
+// inflight noConflict position save, even when the save is its commit parent:
+// the save changes no data, and the commitLoop still commits the two in order.
+func TestApplySchedulerEmptyWritesetDoesNotWaitForInflightNoConflict(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
 
-	// commitParent 0 skips enqueue's lastCommittedSequence seeding, keeping
-	// the watermark at 0.
-	first := &applyTxn{order: 1, sequenceNumber: 1, commitParent: 0, hasCommitMeta: true, writeset: []uint64{100}}
-	// Empty writeset -> commit-parent fallback; parent 99 is never reached.
-	stuck := &applyTxn{order: 2, sequenceNumber: 100, commitParent: 99, hasCommitMeta: true}
-	require.NoError(t, s.enqueue(first))
-	require.NoError(t, s.enqueue(stuck))
-
-	got, err := s.nextReady(ctx)
-	require.NoError(t, err)
-	require.Equal(t, first, got)
-	require.NoError(t, s.markCommitted(got))
-
-	// Nothing inflight, the pending txn is permanently blocked, and the
-	// scheduler is closed: workers must get the abandoned-work error.
-	require.Equal(t, io.EOF, s.close())
-	_, err = s.nextReady(ctx)
-	require.ErrorIs(t, err, errSchedulerAbandonedPendingWork)
-}
-
-// TestApplySchedulerClosedWaitsForInflightNoConflict pins that the
-// abandoned-pending-work check does NOT fire while a noConflict transaction
-// is dispatched but uncommitted: a noConflict position-save carrying commit
-// metadata advances lastCommittedSequence when it commits, which can unblock
-// the pending head. Erroring early would convert a clean stop-drain into a
-// spurious workflow restart.
-func TestApplySchedulerClosedWaitsForInflightNoConflict(t *testing.T) {
-	ctx := t.Context()
-	s := newApplyScheduler(ctx)
-
-	// Position-only save with metadata: its commit publishes sequence 99.
 	save := &applyTxn{order: 1, sequenceNumber: 99, commitParent: 0, hasCommitMeta: true, noConflict: true}
-	// Blocked on commit-parent 99 (empty writeset fallback).
-	stuck := &applyTxn{order: 2, sequenceNumber: 100, commitParent: 99, hasCommitMeta: true}
+	child := &applyTxn{order: 2, sequenceNumber: 100, commitParent: 99, hasCommitMeta: true}
 	require.NoError(t, s.enqueue(save))
-	require.NoError(t, s.enqueue(stuck))
+	require.NoError(t, s.enqueue(child))
 
 	got, err := s.nextReady(ctx)
 	require.NoError(t, err)
-	require.Equal(t, save, got)
+	require.Same(t, save, got)
 
-	require.Equal(t, io.EOF, s.close())
-
-	// A worker parks in nextReady. With the save still uncommitted it must
-	// WAIT, not return errSchedulerAbandonedPendingWork.
-	type result struct {
-		txn *applyTxn
-		err error
-	}
-	resCh := make(chan result, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		resCh <- result{txn, err}
-	}()
-	select {
-	case r := <-resCh:
-		t.Fatalf("nextReady returned early (txn=%v err=%v); it must wait for the inflight noConflict txn to commit", r.txn, r.err)
-	case <-time.After(2 * time.Second):
-	}
-
-	// Committing the save publishes sequence 99 and unblocks the head.
-	require.NoError(t, s.markCommitted(save))
-	select {
-	case r := <-resCh:
-		require.NoError(t, r.err)
-		require.Equal(t, stuck, r.txn)
-	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for the unblocked transaction to be dispatched")
-	}
-
-	// With nothing inflight and nothing pending, drain ends cleanly.
-	require.NoError(t, s.markCommitted(stuck))
-	_, err = s.nextReady(ctx)
-	require.ErrorIs(t, err, io.EOF)
+	requireReadyTxn(t, s, child)
 }

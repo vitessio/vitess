@@ -172,92 +172,7 @@ func TestReleaseApplyTxnNilPayload(t *testing.T) {
 	releaseApplyTxn(txn)
 }
 
-// ---------- scheduler gaps: advanceCommittedSequence, waitForIdle, close ----------
-
-func TestApplySchedulerAdvanceCommittedSequence(t *testing.T) {
-	ctx := testCtx(t)
-	s := newApplyScheduler(ctx)
-
-	// Initially zero
-	assert.Equal(t, int64(0), s.lastCommittedSequence)
-
-	// Advance to 5
-	s.advanceCommittedSequence(5)
-	s.mu.Lock()
-	assert.Equal(t, int64(5), s.lastCommittedSequence)
-	s.mu.Unlock()
-
-	// Advance to 10
-	s.advanceCommittedSequence(10)
-	s.mu.Lock()
-	assert.Equal(t, int64(10), s.lastCommittedSequence)
-	s.mu.Unlock()
-
-	// Lower value does not regress
-	s.advanceCommittedSequence(3)
-	s.mu.Lock()
-	assert.Equal(t, int64(10), s.lastCommittedSequence)
-	s.mu.Unlock()
-
-	// Zero is a no-op
-	s.advanceCommittedSequence(0)
-	s.mu.Lock()
-	assert.Equal(t, int64(10), s.lastCommittedSequence)
-	s.mu.Unlock()
-
-	// Negative is a no-op
-	s.advanceCommittedSequence(-1)
-	s.mu.Lock()
-	assert.Equal(t, int64(10), s.lastCommittedSequence)
-	s.mu.Unlock()
-}
-
-func TestApplySchedulerAdvanceUnblocksMeta(t *testing.T) {
-	ctx := testCtx(t)
-	s := newApplyScheduler(ctx)
-
-	// Enqueue a non-meta txn first AND keep it inflight so that when
-	// meta2 is enqueued, the seeding condition is NOT met (inflightMissingMeta > 0).
-	// This ensures lastCommittedSequence stays 0 and meta2 is blocked.
-	blocker := &applyTxn{order: 1, writeset: []uint64{100}}
-	require.NoError(t, s.enqueue(blocker))
-	gotBlocker, err := s.nextReady(ctx)
-	require.NoError(t, err)
-	require.Equal(t, blocker, gotBlocker)
-	// blocker is still inflight (inflightMissingMeta=1)
-
-	meta2 := &applyTxn{order: 2, sequenceNumber: 5, commitParent: 3, hasCommitMeta: true}
-	require.NoError(t, s.enqueue(meta2))
-
-	// meta2 has empty writeset, commitParent=3, lastCommittedSequence=0.
-	// Also blocked by inflightMissingMeta > 0 from the blocker.
-	readyCh := make(chan *applyTxn, 1)
-	go func() {
-		txn, err := s.nextReady(ctx)
-		if err == nil {
-			readyCh <- txn
-		}
-	}()
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
-
-	// Commit the blocker to clear inflightMissingMeta, but
-	// lastCommittedSequence is still 0 so meta2 stays blocked.
-	require.NoError(t, s.markCommitted(gotBlocker))
-
-	assert.Never(t, func() bool {
-		return len(readyCh) > 0
-	}, 50*time.Millisecond, 5*time.Millisecond)
-
-	// Now advance committed sequence to 3 — should unblock meta2
-	s.advanceCommittedSequence(3)
-
-	assert.Eventually(t, func() bool {
-		return len(readyCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
-}
+// ---------- scheduler gaps: waitForIdle, close ----------
 
 func TestApplySchedulerWaitForIdle(t *testing.T) {
 	ctx := testCtx(t)
@@ -1987,7 +1902,7 @@ func TestScheduleItems_ROWSQUERYOnlyTransactionIsEmpty(t *testing.T) {
 	scheduler.mu.Unlock()
 }
 
-func TestScheduleItems_EmptyTxnWithCommitMeta_AdvancesSequence(t *testing.T) {
+func TestScheduleItems_EmptyTxnWithCommitMeta_IsNotEnqueued(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
 	scheduler := newApplyScheduler(ctx)
@@ -2007,9 +1922,8 @@ func TestScheduleItems_EmptyTxnWithCommitMeta_AdvancesSequence(t *testing.T) {
 	err := vp.scheduleItems(ctx, scheduler, state, items)
 	require.NoError(t, err)
 
-	// Should have advanced the committed sequence to 7
 	scheduler.mu.Lock()
-	assert.Equal(t, int64(7), scheduler.lastCommittedSequence)
+	assert.Equal(t, 0, scheduler.pendingCount)
 	scheduler.mu.Unlock()
 }
 
@@ -5387,9 +5301,6 @@ func TestScheduleItems_BatchingMixedCommitMetaStaysMissingMeta(t *testing.T) {
 	assert.Len(t, got.payload.events, 2)
 	assert.NotNil(t, got.writeset)
 	require.NoError(t, scheduler.markCommitted(got))
-	scheduler.mu.Lock()
-	assert.Equal(t, int64(11), scheduler.lastCommittedSequence)
-	scheduler.mu.Unlock()
 }
 
 func TestScheduleItems_HeartbeatSetsMustSave(t *testing.T) {
@@ -5652,71 +5563,6 @@ func TestScheduleItems_FKRefsDisableBatchingForMixedCaseTargetTable(t *testing.T
 
 	assert.Len(t, got2.payload.events, 1)
 	assert.Equal(t, int64(2), got2.order)
-}
-
-func TestScheduleItems_BatchingMergedSequenceAdvanced(t *testing.T) {
-	vp, _ := testVPlayer(t)
-	ctx := testCtx(t)
-	scheduler := newApplyScheduler(ctx)
-	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
-
-	vp.tablePlans["t1"] = &TablePlan{
-		TargetName: "t1",
-		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
-		PKIndices:  []bool{true},
-	}
-	vp.tablePlansVersion.Store(1)
-
-	// Pre-advance the watermark so enqueue's idle-seeding path (which seeds
-	// lastCommittedSequence from the enqueued txn's commitParent) cannot
-	// mask the mergedSequences behavior this test pins.
-	scheduler.advanceCommittedSequence(9)
-
-	// Two transactions with commit meta — the first gets merged into the
-	// second's batch, so its sequence (10) must ride along in mergedSequences
-	// and publish only when the batch commits.
-	items := [][]*binlogdatapb.VEvent{{
-		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", SequenceNumber: 10, CommitParent: 9},
-		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
-			TableName:  "t1",
-			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
-		}, Timestamp: 100},
-		{Type: binlogdatapb.VEventType_COMMIT},
-		// Second txn
-		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6", SequenceNumber: 11, CommitParent: 10},
-		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
-			TableName:  "t1",
-			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("2"), Lengths: []int64{1}}}},
-		}, Timestamp: 200},
-		{Type: binlogdatapb.VEventType_COMMIT},
-	}}
-
-	err := vp.scheduleItems(ctx, scheduler, state, items)
-	require.NoError(t, err)
-
-	// The merged-away sequence must NOT be visible yet: publishing it at
-	// enqueue time would let an empty-writeset dependent with commitParent=10
-	// run before the batch containing sequence 10 has actually committed.
-	scheduler.mu.Lock()
-	seq := scheduler.lastCommittedSequence
-	scheduler.mu.Unlock()
-	assert.Equal(t, int64(9), seq)
-
-	// Both source transactions were batched into a single txn that carries
-	// the surviving commit meta (sequence 11) plus the merged-away sequence.
-	txn, err := scheduler.nextReady(ctx)
-	require.NoError(t, err)
-	require.Equal(t, int64(1), txn.order)
-	assert.Equal(t, int64(11), txn.sequenceNumber)
-	assert.Len(t, txn.payload.events, 2)
-	require.Equal(t, []int64{10}, txn.mergedSequences)
-
-	// Committing the batch publishes both its own and the merged sequence.
-	require.NoError(t, scheduler.markCommitted(txn))
-	scheduler.mu.Lock()
-	seq = scheduler.lastCommittedSequence
-	scheduler.mu.Unlock()
-	assert.Equal(t, int64(11), seq)
 }
 
 func TestScheduleItems_StopPosSetsMustSave(t *testing.T) {
@@ -6185,9 +6031,8 @@ func TestCommitLoop_MarksCommittedOnScheduler(t *testing.T) {
 	err := vp.commitLoop(ctx, scheduler, commitCh)
 	require.NoError(t, err)
 
-	// markCommitted should have advanced lastCommittedSequence
 	scheduler.mu.Lock()
-	assert.Equal(t, int64(7), scheduler.lastCommittedSequence)
+	assert.Equal(t, int64(1), scheduler.lastCommittedOrder)
 	scheduler.mu.Unlock()
 
 	// lastCommittedOrder should be 1
@@ -6535,7 +6380,6 @@ func TestCommitLoop_UpdatePosOnlyStopPosStateFailureKeepsTransactionOpen(t *test
 	scheduler.mu.Lock()
 	defer scheduler.mu.Unlock()
 	assert.Zero(t, scheduler.lastCommittedOrder)
-	assert.Zero(t, scheduler.lastCommittedSequence)
 	assert.Zero(t, scheduler.inflightGlobal)
 	assert.Zero(t, scheduler.inflightMissingMeta)
 	assert.Zero(t, scheduler.inflightCommitMeta)
@@ -6597,7 +6441,6 @@ func TestCommitLoop_WorkerStopPosStateFailureDoesNotCommit(t *testing.T) {
 	scheduler.mu.Lock()
 	defer scheduler.mu.Unlock()
 	assert.Zero(t, scheduler.lastCommittedOrder)
-	assert.Zero(t, scheduler.lastCommittedSequence)
 	assert.Zero(t, scheduler.inflightGlobal)
 	assert.Zero(t, scheduler.inflightMissingMeta)
 	assert.Zero(t, scheduler.inflightCommitMeta)
@@ -6658,7 +6501,6 @@ func TestCommitLoop_WorkerPosUpdateFailureDoesNotCommit(t *testing.T) {
 	scheduler.mu.Lock()
 	defer scheduler.mu.Unlock()
 	assert.Zero(t, scheduler.lastCommittedOrder)
-	assert.Zero(t, scheduler.lastCommittedSequence)
 	assert.Zero(t, scheduler.inflightGlobal)
 	assert.Zero(t, scheduler.inflightMissingMeta)
 	assert.Zero(t, scheduler.inflightCommitMeta)
@@ -6717,7 +6559,6 @@ func TestCommitLoop_WorkerCommitFailureKeepsTransactionOpen(t *testing.T) {
 	scheduler.mu.Lock()
 	defer scheduler.mu.Unlock()
 	assert.Zero(t, scheduler.lastCommittedOrder)
-	assert.Zero(t, scheduler.lastCommittedSequence)
 	assert.Zero(t, scheduler.inflightGlobal)
 	assert.Zero(t, scheduler.inflightMissingMeta)
 	assert.Zero(t, scheduler.inflightCommitMeta)
@@ -6774,7 +6615,6 @@ func TestCommitLoop_CommitOnlyEOFStillMarksCommitted(t *testing.T) {
 
 	scheduler.mu.Lock()
 	defer scheduler.mu.Unlock()
-	assert.Equal(t, int64(7), scheduler.lastCommittedSequence)
 	assert.Equal(t, int64(1), scheduler.lastCommittedOrder)
 	assert.Zero(t, scheduler.inflightGlobal)
 	assert.Zero(t, scheduler.inflightMissingMeta)

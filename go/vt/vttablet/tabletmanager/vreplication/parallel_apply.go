@@ -1194,11 +1194,9 @@ type parallelScheduleState struct {
 	// curPos is the GTID position from the most recent GTID event,
 	// recorded in _vt.vreplication when the transaction is committed.
 	curPos replication.Position
-	// curCommitParent is the source MySQL commit parent from the GTID event,
-	// used for commit-parent ordering when writeset is unavailable.
+	// curCommitParent is the source MySQL commit parent from the GTID event.
 	curCommitParent int64
-	// curSequence is the source MySQL sequence number from the GTID event,
-	// used to track lastCommittedSequence in the scheduler.
+	// curSequence is the source MySQL sequence number from the GTID event.
 	curSequence int64
 	// curHasCommitMeta is true when the current transaction's GTID event
 	// carried non-zero sequenceNumber or commitParent metadata.
@@ -1251,11 +1249,6 @@ type parallelScheduleState struct {
 	// merge into one mega-transaction. Set once based on the relay log
 	// max items and worker count.
 	maxBatchedCommits int
-	// mergedSequences tracks sequence numbers of transactions that were
-	// merged into the current batch. These are advanced in the scheduler
-	// when the batch is actually enqueued (not before), so that
-	// commit-parent dependencies aren't prematurely satisfied.
-	mergedSequences []int64
 	// ddlSeen is set to true when a DDL event is seen in the current fetch.
 	// The scheduleLoop checks this after scheduleItems returns and waits
 	// for the commitLoop to drain (so FK refs are refreshed) before
@@ -1500,19 +1493,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				}
 			}
 		}
-		// Attach any merged-away sequences to the txn so the scheduler can
-		// advance lastCommittedSequence for them when this batch actually
-		// commits (inside markCommitted), not now at enqueue time. Advancing
-		// at enqueue would satisfy commit-parent dependencies for later
-		// empty-writeset txns before the batch containing those sequences
-		// has actually committed.
-		if len(state.mergedSequences) > 0 {
-			txn.mergedSequences = append(txn.mergedSequences[:0], state.mergedSequences...)
-			state.mergedSequences = state.mergedSequences[:0]
-		}
-		if state.batchMissingCommitMeta && state.curHasCommitMeta && state.curSequence > 0 {
-			txn.mergedSequences = append(txn.mergedSequences, state.curSequence)
-		}
 		// Increment pendingFieldRefreshTables BEFORE scheduler.enqueue so the
 		// counter is visible to commitLoop's matching decrement (parallel_apply.go
 		// ~L2148-2160). Otherwise a worker could pick up this txn and commitLoop
@@ -1674,25 +1654,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						vp.serialMu.Lock()
 						vp.unsavedEvent = event
 						vp.serialMu.Unlock()
-						// Advance lastCommittedSequence immediately only when the
-						// empty transaction stays on the unsavedEvent path.
-						// Queued position saves publish their sequence on commit.
-						if state.curHasCommitMeta {
-							scheduler.advanceCommittedSequence(state.curSequence)
-						}
 					}
-					// Advance lastCommittedSequence immediately for this empty
-					// transaction. Empty txns have no data effects, so their
-					// commit-parent dependency is trivially satisfied. Deferring
-					// the advance (via mergedSequences) would deadlock: a later
-					// txn with commitParent=thisSequence and empty writeset would
-					// block forever waiting for lastCommittedSequence to reach
-					// its commitParent, but the deferred sequence only publishes
-					// when that later txn commits — a circular dependency.
-					//
-					// markCommitted() uses max() for lastCommittedSequence, so
-					// this early advance cannot regress the watermark when a
-					// later txn commits with a lower sequence number.
 					state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 					state.curRowOnly = false
 					state.curRowOnlySet = false
@@ -1758,15 +1720,6 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					}
 				}
 				if !state.curMustSave && !hasFKRefs && hasAnotherCommit(items, i, j+1) {
-					// Track merged sequence numbers so they can be advanced
-					// when the batch actually commits. We must NOT advance
-					// lastCommittedSequence here because the batch hasn't
-					// committed yet. Empty-writeset transactions that depend
-					// on commit-parent ordering would otherwise become
-					// runnable too early.
-					if state.curHasCommitMeta {
-						state.mergedSequences = append(state.mergedSequences, state.curSequence)
-					}
 					// Reset only metadata — keep accumulated events and
 					// rowOnly state. The next GTID will set new metadata.
 					state.curCommitParent = 0

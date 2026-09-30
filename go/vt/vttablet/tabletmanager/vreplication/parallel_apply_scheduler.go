@@ -25,8 +25,7 @@ import (
 
 // errSchedulerAbandonedPendingWork is returned by nextReady when the scheduler
 // is closed with pending work that can never become ready because nothing is
-// inflight to advance the scheduler's state (lastCommittedSequence, writeset,
-// inflight* counters). Workers surface this to their caller so the controller
+// inflight to advance the scheduler's state (writeset, inflight* counters). Workers surface this to their caller so the controller
 // retries the stream from the last saved position rather than silently
 // treating the abandoned pending work as "stream finished cleanly".
 var errSchedulerAbandonedPendingWork = errors.New("parallel apply scheduler closed with unreachable pending transactions")
@@ -37,12 +36,9 @@ type applyTxn struct {
 	// so that the position saved to _vt.vreplication only moves forward.
 	order int64
 	// sequenceNumber is the source MySQL binlog sequence number from the
-	// GTID event. Used to advance lastCommittedSequence after commit.
+	// GTID event.
 	sequenceNumber int64
 	// commitParent is the source MySQL commit parent from the GTID event.
-	// When the writeset is empty, the scheduler falls back to commit-parent
-	// ordering: the transaction is ready only when commitParent <=
-	// lastCommittedSequence.
 	commitParent int64
 	// hasCommitMeta is true when the GTID event carried non-zero
 	// sequenceNumber or commitParent. Transactions with and without
@@ -61,12 +57,6 @@ type applyTxn struct {
 	// Using uint64 hashes instead of strings eliminates per-txn heap allocations
 	// in the scheduler hot path, reducing GC pressure at high TPS.
 	writeset []uint64
-	// mergedSequences tracks sequence numbers of source transactions that
-	// were merged into this batched mega-transaction. They must be advanced
-	// in lastCommittedSequence only after this txn actually commits, so that
-	// later empty-writeset transactions whose commitParent references one of
-	// these sequences don't become runnable before the batch commits.
-	mergedSequences []int64
 	// payload carries the transaction's events and DB connection info.
 	// Pooled via applyTxnPayloadPool to reduce allocations.
 	payload *applyTxnPayload
@@ -100,11 +90,6 @@ type applyScheduler struct {
 	pending      []*applyTxn
 	pendingOff   int // offset into pending slice; entries before this index are consumed
 	pendingCount int // number of live (non-nil) entries in pending
-	// lastCommittedSequence is the highest source MySQL sequence number
-	// that has been committed. Used for commit-parent ordering: a
-	// transaction whose writeset is empty is ready only when its
-	// commitParent <= lastCommittedSequence.
-	lastCommittedSequence int64
 	// lastCommittedOrder is the highest transaction order number that
 	// has been committed, used for diagnostics.
 	lastCommittedOrder int64
@@ -131,8 +116,7 @@ type applyScheduler struct {
 	// inflightNoConflict counts dispatched-but-uncommitted noConflict
 	// transactions. They do not participate in conflict checking, but the
 	// abandoned-pending-work check must not fire while one is in flight:
-	// its markCommitted can advance lastCommittedSequence and unblock the
-	// pending head.
+	// its markCommitted can release state that unblocks the pending head.
 	inflightNoConflict int
 
 	// closed is set by close() to signal that no more transactions will
@@ -162,8 +146,7 @@ func newApplyScheduler(ctx context.Context) *applyScheduler {
 }
 
 // enqueue adds a transaction to the pending queue and signals one waiting
-// worker. On the first hasCommitMeta transaction, it seeds lastCommittedSequence
-// from commitParent so that subsequent commit-parent checks have a baseline.
+// worker.
 func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -181,9 +164,6 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 		if s.closed {
 			return io.EOF
 		}
-	}
-	if txn.hasCommitMeta && s.lastCommittedSequence == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && s.pendingCount == 0 && txn.commitParent > 0 {
-		s.lastCommittedSequence = txn.commitParent
 	}
 	s.pending = append(s.pending, txn)
 	s.pendingCount++
@@ -233,8 +213,8 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 			// becomes ready only after an inflight txn commits — in that
 			// case we keep waiting so the blocked pending txns unblock.
 			// But if nothing is inflight AND no pending txn is ready,
-			// nothing will ever advance lastCommittedSequence or release
-			// writeset/inflight counters, so workers would park forever.
+			// nothing will ever release writeset/inflight counters, so
+			// workers would park forever.
 			// Return a non-EOF error so the controller retries the stream
 			// from the last saved position instead of silently abandoning
 			// the pending work.
@@ -246,29 +226,14 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 	}
 }
 
-// markCommitted releases the transaction's inflight state and advances
-// lastCommittedSequence. Uses Broadcast when a global/missingMeta counter
-// drops to zero (multiple txns may unblock), Signal otherwise.
+// markCommitted releases the transaction's inflight state. Uses Broadcast
+// when a global/missingMeta counter drops to zero (multiple txns may unblock),
+// Signal otherwise.
 func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ctx.Err(); err != nil {
 		return err
-	}
-	if txn.hasCommitMeta && txn.sequenceNumber > s.lastCommittedSequence {
-		s.lastCommittedSequence = txn.sequenceNumber
-	}
-	// Advance any sequences that were batched (merged away) into this txn.
-	// These represent transactions whose events were merged into this batch
-	// but whose GTID sequence numbers must still become visible in
-	// lastCommittedSequence so that later empty-writeset commit-parent
-	// dependents can unblock. Doing this here (after commit) instead of at
-	// enqueue time preserves the invariant that commit-parent dependencies
-	// are only satisfied after the parent has actually committed.
-	for _, seq := range txn.mergedSequences {
-		if seq > s.lastCommittedSequence {
-			s.lastCommittedSequence = seq
-		}
 	}
 	if txn.order > 0 && txn.order > s.lastCommittedOrder {
 		s.lastCommittedOrder = txn.order
@@ -400,35 +365,25 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 			}
 		}
 		// When the transaction has a non-empty writeset, we use writeset-only
-		// conflict detection and skip the commit-parent dependency check. This
-		// is critical because the source MySQL may use COMMIT_ORDER dependency
+		// conflict detection and skip the commit-parent dependency. This is
+		// critical because the source MySQL may use COMMIT_ORDER dependency
 		// tracking, which produces a strict serial chain where every
 		// transaction's commitParent equals the immediately prior sequence
-		// number. Under COMMIT_ORDER, the commit-parent check alone would
-		// serialize ALL transactions regardless of whether their writesets
-		// actually conflict. With a valid writeset, the writeset conflict
-		// checks above are sufficient for correctness — the same approach
-		// MySQL uses internally with WRITESET dependency tracking.
-		//
-		// When the writeset is empty, we fall back to commit-parent ordering
-		// as the safety net.
+		// number. With a valid writeset, the writeset conflict checks above
+		// are sufficient for correctness — the same approach MySQL uses
+		// internally with WRITESET dependency tracking.
 		if len(txn.writeset) > 0 {
 			return true
 		}
-		if s.inflightCommitMeta > 0 {
-			return false
-		}
-		// NOTE: sequence_number/last_committed reset per binlog FILE on the
-		// source, while lastCommittedSequence only advances (max). After a
-		// binlog rotation the new file's small commitParent values compare
-		// against the old file's high watermark, making this check vacuously
-		// true. That is safe ONLY because of the inflightCommitMeta == 0
-		// gate above: with nothing inflight, every earlier-ordered txn has
-		// already committed, so the parent is durably applied regardless of
-		// what this comparison says. Do not remove that gate without
-		// rethinking rotation.
-		ready := txn.commitParent <= s.lastCommittedSequence
-		return ready
+		// With an empty writeset the transaction waits until nothing with
+		// commit metadata is inflight. Nothing without it is (checked above),
+		// and transactions are dispatched in order, so everything ordered
+		// before it has committed by then, its commit parent included. It
+		// does not compare its commit parent to the sequence numbers seen so
+		// far: a source transaction without commit metadata (e.g. one that
+		// ends in a Query COMMIT) never reports its sequence number, and the
+		// numbers restart with every binlog file.
+		return s.inflightCommitMeta == 0
 	}
 	if s.inflightCommitMeta > 0 {
 		return false
@@ -520,30 +475,6 @@ func (s *applyScheduler) releaseInflightLocked(txn *applyTxn) {
 			delete(s.inflightWriteset, key)
 		} else {
 			s.inflightWriteset[key] = count - 1
-		}
-	}
-}
-
-// advanceCommittedSequence advances lastCommittedSequence for transactions
-// that bypass the scheduler (e.g., empty transactions handled via unsavedEvent).
-// Without this, hasCommitMeta transactions whose commitParent references a
-// skipped empty transaction would be blocked forever because lastCommittedSequence
-// would never reach their commitParent value.
-func (s *applyScheduler) advanceCommittedSequence(seq int64) {
-	if seq <= 0 {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if seq > s.lastCommittedSequence {
-		s.lastCommittedSequence = seq
-		// Only wake waiters when there is pending work that could now be
-		// ready. During catch-up on a filtered shard this is called for
-		// every empty transaction (thousands/sec); an unconditional
-		// Broadcast would wake all N workers each time just to rescan an
-		// empty queue.
-		if s.pendingCount > 0 {
-			s.cond.Broadcast()
 		}
 	}
 }
