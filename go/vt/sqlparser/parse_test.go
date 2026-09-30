@@ -1247,8 +1247,10 @@ var validSQL = []struct {
 	input:  "select /*!* from*/ t",
 	output: "select * from t",
 }, {
+	// From MySQL 8.1, six digits followed by whitespace are a version
+	// (40.10.11), which is newer than the server, so the comment is skipped.
 	input:  "select /*!401011 from*/ t",
-	output: "select 1 from t",
+	output: "select t from dual",
 }, {
 	input: "select /* dual */ 1 from dual",
 }, {

@@ -2448,6 +2448,10 @@ type (
 		Expr            Expr
 		As              IdentifierCI
 		InputExpression string
+
+		// _name is what the parser recorded to name this expression's
+		// result-set column the way MySQL does. See MySQLColumnName.
+		_name columnNameInput
 	}
 
 	// Nextval defines the NEXT VALUE expression.

@@ -362,6 +362,31 @@ func (p *Parser) IsMySQL80AndAbove() bool {
 	return p.version >= "80000"
 }
 
+// commentVersionSatisfied reports whether the MySQL version is at least the
+// version of a versioned comment, given as Mmmdd or MMmmdd. A comment without a
+// version is always satisfied.
+func (p *Parser) commentVersionSatisfied(commentVersion string) bool {
+	if commentVersion == "" {
+		return true
+	}
+	comment, err := strconv.Atoi(commentVersion)
+	if err != nil {
+		return false
+	}
+	server, err := strconv.Atoi(p.version)
+	if err != nil {
+		return p.version >= commentVersion
+	}
+	return server >= comment
+}
+
+// supportsSixDigitCommentVersions reports whether versioned comments can carry
+// a 6-digit version (MMmmdd), which MySQL accepts from 8.1.0.
+func (p *Parser) supportsSixDigitCommentVersions() bool {
+	server, err := strconv.Atoi(p.version)
+	return err == nil && server >= 80100
+}
+
 func (p *Parser) SetTruncateErrLen(l int) {
 	p.truncateErrLen = l
 }

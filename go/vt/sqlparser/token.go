@@ -44,6 +44,10 @@ type Tokenizer struct {
 	partialDDL         Statement
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
+	// cppEdits records the versioned comments in the query, which MySQL's
+	// lexer changes when it copies the query into the buffer that column
+	// names are taken from.
+	cppEdits []cppEdit
 
 	Pos       int
 	buf       string
@@ -162,6 +166,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		// If inside a versioned comment and we've reached the closing */,
 		// skip past it and resume normal scanning.
 		if tkn.inVersionedComment && tkn.cur() == '*' && tkn.peek(1) == '/' {
+			tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: tkn.Pos, end: tkn.Pos + 2, kind: cppClose})
 			tkn.skip(2)
 			tkn.inVersionedComment = false
 			tkn.skipBlank()
@@ -731,7 +736,8 @@ func (tkn *Tokenizer) scanCommentType2() (int, string) {
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	start := tkn.Pos - 3
 
-	// Read up to 5 version digits inline.
+	// Read the version digits inline: 5 digits (Mmmdd), or, from MySQL 8.1.0,
+	// 6 digits (MMmmdd) followed by whitespace.
 	versionStart := tkn.Pos
 	for i := 0; i < 5 && isDigit(tkn.cur()); i++ {
 		tkn.skip(1)
@@ -741,11 +747,15 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		// Fewer than 5 digits: no version, digits are part of the content.
 		versionStr = ""
 		tkn.Pos = versionStart
+	} else if isDigit(tkn.cur()) && isSpace(tkn.peek(1)) && tkn.parser.supportsSixDigitCommentVersions() {
+		tkn.skip(1)
+		versionStr = tkn.buf[versionStart:tkn.Pos]
 	}
 
-	if tkn.parser.version >= versionStr {
+	if tkn.parser.commentVersionSatisfied(versionStr) {
 		// Version satisfied — Scan() will read inner tokens and detect
 		// the closing */ via the inVersionedComment flag.
+		tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: start, end: tkn.Pos, kind: cppOpen})
 		tkn.inVersionedComment = true
 		return 0, ""
 	}
@@ -775,6 +785,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		}
 		tkn.skip(1)
 	}
+	tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: start, end: tkn.Pos, kind: cppSkip})
 	return 0, ""
 }
 
@@ -820,4 +831,8 @@ func digitVal(ch uint16) int {
 
 func isDigit(ch uint16) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+func isSpace(ch uint16) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\v' || ch == '\f'
 }

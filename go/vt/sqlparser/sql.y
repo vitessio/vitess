@@ -5690,6 +5690,7 @@ select_expression:
         ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
       }
     }
+    ae.setColumnNameInput(yylex.(*Tokenizer), @1.start, @1.end, @2.end > @2.start)
     $$ = ae
   }
 | table_id '.' '*'
