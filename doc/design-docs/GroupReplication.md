@@ -199,30 +199,65 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
 
 ## Recommended topology
 
-- Three cells, one voting member per cell (group of 3), with `group_replication_cross_cell`. Or five members as 2-2-1 to survive two failures.
-- Additional REPLICA and RDONLY tablets as async replicas of the group primary, for read scaling.
+- Three cells, with one voting member per cell (a group of 3) under `group_replication_cross_cell`. Use five members as 2-2-1 to survive two failures.
+- Additional REPLICA tablets and all RDONLY tablets replicate asynchronously from the group primary, for read scaling. *In the prototype, every PRIMARY/REPLICA tablet is a voter* (see "Voter selection" below).
 - `group_replication_paxos_single_leader=ON` for WAN groups. It needs a full group restart to change, so set it at bootstrap.
-- `member_expel_timeout` 0–5s.
-- Flow control tuned so one slow member does not throttle the primary.
+- `group_replication_member_expel_timeout` of 0–5s.
+- Tune flow control so that one slow member does not throttle the primary.
+
+### Voter selection (follow-up)
+
+The prototype makes every PRIMARY and REPLICA tablet a voting member (`IsGroupMember` is "promotion rule is not MustNot"). With several REPLICA tablets per cell, that inflates the group: 6 members need 4 acknowledgements per commit, and flow control follows the slowest of the 6. Durability does not improve, because one member per cell already puts every commit in two cells.
+
+The intended shape is a fixed number of voters per cell, with the other REPLICA tablets as asynchronous replicas of the primary:
+
+1. **Voter selection with shard context.** The durability policy picks the voters, for example at most N per cell. The choice is deterministic (a tablet tag, or promotion rule then alias) so that vttablet and VTOrc agree on it.
+2. **Keeping the group at size.** A VTOrc analysis `GroupUnderReplicated` joins a healthy async replica from the same cell when a voter is gone for good.
+3. **Async source.** Async replicas keep replicating from the primary, as all Vitess replicas do today. Replicating from the local member would save cross-cell bandwidth, at the cost of lag and repointing when that member changes; MySQL's `SOURCE_CONNECTION_AUTO_FAILOVER` would handle the repointing.
+
+## Validation
+
+**Lab, raw MySQL 8.4.11:**
+- Bootstrapping a group on a live semi-sync primary and joining its replicas caused 0 failed writes.
+- `START GROUP_REPLICATION` is refused while the async channel runs.
+- A secondary with `super_read_only=OFF` accepts writes and replicates them to the group.
+- Semi-sync with Vitess's infinite timeout blocks all commits once the last acker leaves.
+- Stopping GR on the primary rejects commits for about 3–4s.
+
+**End-to-end** (`go/test/endtoend/reparent/grouprepl`: 3 cells, 1 REPLICA per cell plus 1 RDONLY, VTOrc and a buffering vtgate, continuous writes through vtgate):
+
+| Phase | Result |
+|---|---|
+| `MigrateReplicationMode` cross_cell → group_replication_cross_cell | 6s, 0 failed writes |
+| `PlannedReparentShard` (group_replication_set_as_primary) | 0.6s, 0 failed writes |
+| `kill -9` of the primary's mysqld | The group elected in about 21s with default expel settings. The new primary's tablet promoted itself within 5ms, writes resumed, and the old primary rejoined as a secondary. |
+| `MigrateReplicationMode` back to cross_cell | No data loss; vtgate buffered while the primary left its group |
 
 ## Prototype scope
 
 Implemented in this branch:
 - Durability policies and the replication-mode interface.
 - GR status in `FullStatus`, and the MySQL/mysqlctl primitives.
-- Default-channel-safe status queries.
+- Status queries that read only the default channel.
 - The `StartGroupReplication`/`StopGroupReplication` RPCs.
 - The tablet reconcile loop and GR-aware tablet RPCs.
-- PRS support.
+- PRS and ERS support.
 - VTOrc analyses and recoveries.
-- The migration command and its reverse.
+- `MigrateReplicationMode` in both directions.
 - An end-to-end test on MySQL 8.4.
 
-Left for follow-ups:
-- The ERS forced-quorum path.
-- `group_replication_force_members`.
+Known gaps, found while reviewing and testing the prototype:
+- ERS and PRS choose their path from the keyspace policy. A shard that has been converted while the keyspace policy is still async (the policy switches after the last shard) takes the async ERS path.
+- During the migration back, the primary re-enables semi-sync only after its group drops below two ONLINE members. That leaves up to one sync interval with neither group nor semi-sync durability. Enabling semi-sync while the group is still active would close this window; it is harmless when an acker is attached.
+- A tablet that changes to a non-member type (RDONLY, DRAINED) does not leave the group, and a join that would give one cell a majority is not refused (VTOrc only alerts).
+- Failover time is dominated by GR's failure detection (5s suspicion plus `member_expel_timeout`). The tunables should be exposed.
+- The member weight is applied only when a member joins.
+
+Follow-ups:
+- Voter selection (above).
+- ERS with forced quorum (`group_replication_force_members`).
 - Builtin-backup integration.
-- The MySQL communication stack (`communication_stack=MYSQL`), which 26.7 makes the default and which would remove the separate port.
-- Managed async failover for non-member replicas (`SOURCE_CONNECTION_AUTO_FAILOVER`).
+- The MySQL communication stack (`communication_stack=MYSQL`, the default from 26.7), which removes the separate port.
 - vtadmin and operator support.
 - Flow-control defaults.
+- A multi-shard migration test.
