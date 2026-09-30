@@ -55,7 +55,7 @@
           "Sharded": false
         },
         "TargetDestination": "KeyspaceID(00)",
-        "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
+        "FieldQuery": "select get_lock(:v1, :v2) as `get_lock(?, ?)` from dual where 1 != 1",
         "lock_func": [
           "get_lock(:v1, :v2)"
         ]

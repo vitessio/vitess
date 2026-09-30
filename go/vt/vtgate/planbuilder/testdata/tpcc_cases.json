@@ -854,8 +854,8 @@
           "Name": "main",
           "Sharded": true
         },
-        "FieldQuery": "select count(distinct s.s_i_id) from stock1 as s, order_line1 as ol where 1 != 1",
-        "Query": "select count(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity < 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id < 30 and ol.ol_o_id >= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
+        "FieldQuery": "select count(distinct s.s_i_id) as `COUNT(DISTINCT(s.s_i_id))` from stock1 as s, order_line1 as ol where 1 != 1",
+        "Query": "select count(distinct s.s_i_id) as `COUNT(DISTINCT(s.s_i_id))` from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity < 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id < 30 and ol.ol_o_id >= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
         "Values": [
           "12"
         ],

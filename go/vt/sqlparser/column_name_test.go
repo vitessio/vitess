@@ -233,3 +233,62 @@ func TestSixDigitVersionedComments(t *testing.T) {
 		})
 	}
 }
+
+func TestAliasColumnNames(t *testing.T) {
+	tests := []struct {
+		query string
+		want  string
+	}{{
+		// Expressions that vtgate prints differently get their MySQL names.
+		query: "select 1+1, count(*), COUNT(*), id, 'a', NULL from t",
+		want:  "select 1 + 1 as `1+1`, count(*), count(*) as `COUNT(*)`, id, 'a' as a, null as `NULL` from t",
+	}, {
+		// Aliases follow MySQL's rules too; an empty name cannot be an alias.
+		query: "select 1 as ' a', 2 as `😀`, ''",
+		want:  "select 1 as a, 2 as `?`, '' from dual",
+	}, {
+		// Planning rewrites subqueries, and names referenced by ORDER BY,
+		// GROUP BY and HAVING must resolve.
+		query: "select (select 1), count(*) from t having `count(*)` > 0",
+		want:  "select (select 1 from dual) as `(select 1)`, count(*) as `count(*)` from t having `count(*)` > 0",
+	}, {
+		// Columns of derived tables, CTEs and views are named too.
+		query: "with c as (select 'x') select * from (select 1+1) as d, c",
+		want:  "with c as (select 'x' as x from dual) select * from (select 1 + 1 as `1+1` from dual) as d, c",
+	}, {
+		query: "create view v as select 1+1",
+		want:  "create view v as select 1 + 1 as `1+1` from dual",
+	}, {
+		// A column reference into a derived table that MySQL materializes
+		// keeps its own spelling; one that MySQL merges takes the column's.
+		query: "select ID, x.ID from (select id from t limit 5) as x",
+		want:  "select ID as ID, x.ID as ID from (select id from t limit 5) as x",
+	}, {
+		query: "select ID from (select id from t) as x",
+		want:  "select ID from (select id from t) as x",
+	}, {
+		query: "select id from (select id from t limit 5) as x",
+		want:  "select id from (select id from t limit 5) as x",
+	}}
+	parser := NewTestParser()
+	for _, tc := range tests {
+		t.Run(tc.query, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.query)
+			require.NoError(t, err)
+			AliasColumnNames(stmt, ColumnNameEnv{})
+			assert.Equal(t, tc.want, String(stmt))
+		})
+	}
+}
+
+func TestRedactSQLQueryHidesRewrittenExpressions(t *testing.T) {
+	parser := NewTestParser()
+	for _, query := range []string{
+		"select concat('secret', last_insert_id())",
+		"select * from (select concat('secret', @@autocommit)) as t",
+	} {
+		redacted, err := parser.RedactSQLQuery(query)
+		require.NoError(t, err)
+		assert.NotContains(t, redacted, "secret", query)
+	}
+}

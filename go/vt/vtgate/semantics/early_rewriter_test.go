@@ -169,6 +169,11 @@ func TestExpandStar(t *testing.T) {
 		expSQL:   "select t1.b, t1.a, t1.c, t5.a from t1 join t5 on t1.b = t5.b",
 		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t5.a",
 	}, {
+		// Column names are case-insensitive, so USING (B) coalesces the b columns.
+		sql:      "select * from t1 join t5 using (B)",
+		expSQL:   "select t1.b, t1.a, t1.c, t5.a from t1 join t5 on t1.B = t5.B",
+		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t5.a",
+	}, {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
 		expSQL: "select t1.b, t1.a, t1.c, t5.a from t1 join t5 on t1.b = t5.b having t1.b = 12",
 	}, {

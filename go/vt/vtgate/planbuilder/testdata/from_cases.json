@@ -3212,8 +3212,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id + 1 from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select id + 1 from (select `user`.id, `user`.col from `user`) as t"
+            "FieldQuery": "select id + 1 as `id+1` from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id + 1 as `id+1` from (select `user`.id, `user`.col from `user`) as t"
           },
           {
             "OperatorType": "Route",
@@ -3352,8 +3352,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select i + 1 from (select `user`.id from `user` where 1 != 1) as t(i) where 1 != 1",
-            "Query": "select i + 1 from (select `user`.id from `user`) as t(i)"
+            "FieldQuery": "select i + 1 as `i+1` from (select `user`.id from `user` where 1 != 1) as t(i) where 1 != 1",
+            "Query": "select i + 1 as `i+1` from (select `user`.id from `user`) as t(i)"
           },
           {
             "OperatorType": "Route",

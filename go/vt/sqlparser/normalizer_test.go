@@ -61,7 +61,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// str val in select
 		in:      "select 'aa' from t",
-		outstmt: "select :bv1 /* VARCHAR */ from t",
+		outstmt: "select :bv1 /* VARCHAR */ as aa from t",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("aa"),
 		},
@@ -198,7 +198,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Ensure that hex notation bind vars work with collation based conversions
 		in:      "select convert(x'7b7d' using utf8mb4) from dual",
-		outstmt: "select convert(:bv1 /* HEXVAL */ using utf8mb4) from dual",
+		outstmt: "select convert(:bv1 /* HEXVAL */ using utf8mb4) as `convert(x'7b7d' using utf8mb4)` from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.HexValBindVariable([]byte("x'7B7D'")),
 		},
@@ -324,7 +324,7 @@ func TestNormalize(t *testing.T) {
 		},
 	}, { // EXPLAIN query will be normalized and not parameterized
 		in:      "explain select @x from t where v1 in (1, '2')",
-		outstmt: "explain select :__vtudvx as `@x` from t where v1 in (1, '2')",
+		outstmt: "explain select :__vtudvx from t where v1 in (1, '2')",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// NOT IN clause
@@ -336,7 +336,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Do not normalize cast/convert types
 		in:      `select CAST("test" AS CHAR(60))`,
-		outstmt: `select cast(:bv1 /* VARCHAR */ as CHAR(60)) from dual`,
+		outstmt: "select cast(:bv1 /* VARCHAR */ as CHAR(60)) as `CAST(\"test\" AS CHAR(60))` from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},
@@ -352,7 +352,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// BitNum should also be normalized
 		in:      `select b'1', 0b01, b'1010', 0b1111111`,
-		outstmt: `select :bv1 /* BITNUM */, :bv2 /* BITNUM */, :bv3 /* BITNUM */, :bv4 /* BITNUM */ from dual`,
+		outstmt: "select :bv1 /* BITNUM */ as `b'1'`, :bv2 /* BITNUM */ as `0b01`, :bv3 /* BITNUM */ as `b'1010'`, :bv4 /* BITNUM */ as `0b1111111` from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.BitNumBindVariable([]byte("0b1")),
 			"bv2": sqltypes.BitNumBindVariable([]byte("0b01")),
@@ -362,21 +362,21 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// DateVal should also be normalized
 		in:      `select date'2022-08-06'`,
-		outstmt: `select CAST(:bv1 AS DATE) from dual`,
+		outstmt: "select CAST(:bv1 AS DATE) as `date'2022-08-06'` from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
 		},
 	}, {
 		// TimeVal should also be normalized
 		in:      `select time'17:05:12'`,
-		outstmt: `select CAST(:bv1 AS TIME) from dual`,
+		outstmt: "select CAST(:bv1 AS TIME) as `time'17:05:12'` from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
 		},
 	}, {
 		// TimestampVal should also be normalized
 		in:      `select timestamp'2022-08-06 17:05:12'`,
-		outstmt: `select CAST(:bv1 AS DATETIME) from dual`,
+		outstmt: "select CAST(:bv1 AS DATETIME) as `timestamp'2022-08-06 17:05:12'` from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
@@ -406,13 +406,14 @@ func TestNormalize(t *testing.T) {
 			"id":  sqltypes.Int64BindVariable(10),
 		},
 	}, {
-		// we don't want to replace literals on the select expressions of a derived table
-		// these expressions can be referenced from the outside,
-		// and changing them to bindvars can change the meaning of the query
-		// example of problematic query: select tmp.`1` from (select 1) as tmp
+		// the select expressions of a derived table can be referenced from the
+		// outside by their names, for example: select tmp.`1` from (select 1) as tmp.
+		// A literal becomes a bind variable, and the alias keeps its name.
 		in:      `select * from (select 12) as t`,
-		outstmt: `select * from (select 12 from dual) as t`,
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "select * from (select :bv1 /* INT64 */ as `12` from dual) as t",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(12),
+		},
 	}, {
 		// HexVal and Int should not share a bindvar just because they have the same value
 		in:      `select * from t where v1 = x'31' and v2 = 31`,
@@ -441,7 +442,7 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		in:      "SELECT 1 WHERE (~ (1||0)) IS NULL",
-		outstmt: "select :bv1 /* INT64 */ from dual where ~(:bv1 /* INT64 */ or :bv2 /* INT64 */) is null",
+		outstmt: "select :bv1 /* INT64 */ as `1` from dual where ~(:bv1 /* INT64 */ or :bv2 /* INT64 */) is null",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.Int64BindVariable(0),
@@ -461,6 +462,7 @@ func TestNormalize(t *testing.T) {
 			bv := make(map[string]*querypb.BindVariable)
 			out, err := Normalize(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
+			AliasColumnNames(out.AST, ColumnNameEnv{})
 			assert.Equal(t, tc.outstmt, String(out.AST))
 			assert.Equal(t, tc.outbv, bv)
 		})
@@ -647,7 +649,7 @@ func TestRewrites(in *testing.T) {
 	}, {
 		// don't unnest solo columns
 		in:       "select 1 as foobar, (select foobar)",
-		expected: "select 1 as foobar, (select foobar from dual) from dual",
+		expected: "select 1 as foobar, (select foobar from dual) as `(select foobar)` from dual",
 	}, {
 		in:       "select id from user where database()",
 		expected: "select id from user where database()",
@@ -889,6 +891,9 @@ func TestRewrites(in *testing.T) {
 				nil,
 				&fakeViews{},
 			)
+			if err == nil {
+				AliasColumnNames(result.AST, ColumnNameEnv{})
+			}
 			require.NoError(err)
 
 			expected, err := parser.Parse(tc.expected)
@@ -993,6 +998,9 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 				nil,
 				&fakeViews{},
 			)
+			if err == nil {
+				AliasColumnNames(result.AST, ColumnNameEnv{})
+			}
 
 			require.NoError(err)
 
@@ -1054,6 +1062,9 @@ func TestRewritesSysVar(in *testing.T) {
 				nil,
 				&fakeViews{},
 			)
+			if err == nil {
+				AliasColumnNames(result.AST, ColumnNameEnv{})
+			}
 
 			require.NoError(err)
 
@@ -1083,7 +1094,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		expected: "SELECT 1 from sys.`test 24` as t",
 	}, {
 		in:       "SELECT 1, (select 1 from test) from x.y",
-		expected: "SELECT 1, (select 1 from sys.test) from x.y",
+		expected: "SELECT 1, (select 1 from sys.test) as `(select 1 from test)` from x.y",
 	}, {
 		in:       "SELECT 1 from (select 2 from test) t",
 		expected: "SELECT 1 from (select 2 from sys.test) t",
@@ -1117,6 +1128,9 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 				nil,
 				&fakeViews{},
 			)
+			if err == nil {
+				AliasColumnNames(result.AST, ColumnNameEnv{})
+			}
 
 			require.NoError(err)
 

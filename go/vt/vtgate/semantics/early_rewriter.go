@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1126,7 +1127,9 @@ func (e *expanderState) processColumnsFor(tbl TableInfo) error {
 outer:
 	// in this first loop we just find columns used in any JOIN USING used on this table
 	for _, col := range tbl.getColumns(true /* ignoreInvisibleCol */) {
-		ts, found := usingCols[col.Name]
+		// JOIN USING columns are recorded lowercased: column names are
+		// case-insensitive.
+		ts, found := usingCols[strings.ToLower(col.Name)]
 		if found {
 			for i, ts := range ts.Constituents() {
 				if ts == currTable {
@@ -1142,7 +1145,7 @@ outer:
 
 	// and this time around we are printing any columns not involved in any JOIN USING
 	for _, col := range tbl.getColumns(true /* ignoreInvisibleCol */) {
-		if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
+		if ts, found := usingCols[strings.ToLower(col.Name)]; found && currTable.IsSolvedBy(ts) {
 			continue
 		}
 

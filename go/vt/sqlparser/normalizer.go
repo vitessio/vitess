@@ -204,7 +204,9 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 
 // noteAliasedExprName tracks expressions without aliases to add alias if expression is rewritten
 func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
-	if node.As.NotEmpty() {
+	if node.As.NotEmpty() || node._name.parsed {
+		// AliasColumnNames names the select expressions that the parser
+		// created, after they are normalized.
 		return
 	}
 	var originalText string

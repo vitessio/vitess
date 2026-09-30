@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -230,6 +231,268 @@ func (ae *AliasedExpr) MySQLColumnName(env ColumnNameEnv) string {
 		return copyName(value, cs)
 	}
 	return copyName(applyCppEdits(in.text, in.edits), env.ClientCharset)
+}
+
+// AliasColumnNames gives an explicit alias to each select expression whose
+// column MySQL names differently from the SQL that vtgate sends for it, so
+// that the column keeps the name MySQL gives the expression as the query
+// spells it. This covers the result columns, and the columns of derived
+// tables, CTEs and views, which queries refer to by name. It is called after
+// the statement is normalized, and before the plan cache key is taken from
+// it: the aliases distinguish statements whose columns have different names.
+func AliasColumnNames(stmt Statement, env ColumnNameEnv) {
+	if ts, ok := stmt.(TableStatement); ok {
+		aliasSelectExprs(ts, env)
+	}
+	_ = Walk(func(node SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *AliasedTableExpr:
+			if dt, ok := node.Expr.(*DerivedTable); ok && len(node.Columns) == 0 {
+				aliasSelectExprs(dt.Select, env)
+			}
+		case *CommonTableExpr:
+			if len(node.Columns) == 0 {
+				aliasSelectExprs(node.Subquery, env)
+			}
+		case *CreateView:
+			if len(node.Columns) == 0 {
+				aliasSelectExprs(node.Select, env)
+			}
+		case *AlterView:
+			if len(node.Columns) == 0 {
+				aliasSelectExprs(node.Select, env)
+			}
+		}
+		return true, nil
+	}, stmt)
+}
+
+// aliasSelectExprs aliases the select expressions of the first query block of
+// a query expression, which name its columns.
+func aliasSelectExprs(ts TableStatement, env ColumnNameEnv) {
+	sel, err := GetFirstSelect(ts)
+	if err != nil || sel == nil {
+		return
+	}
+	referenced := referencedNames(ts)
+	var materialized map[string]TableStatement
+	for _, expr := range sel.SelectExprs.Exprs {
+		ae, ok := expr.(*AliasedExpr)
+		if !ok || !ae._name.parsed {
+			continue
+		}
+		if ae.As.NotEmpty() {
+			// MySQL's rules apply to aliases too: for example, leading
+			// spaces are removed.
+			if name := ae.MySQLColumnName(env); ae._name.aliased && name != "" && name != ae.As.String() {
+				ae.As = NewIdentifierCI(name)
+			}
+			continue
+		}
+		if ae._name.kind == nameColumn {
+			// MySQL names a column reference as typed, unless it reads a
+			// derived table or view that MySQL merges into the query: then
+			// the column takes the name it has there, as it does in vtgate.
+			if materialized == nil {
+				materialized = materializedTables(sel, ts)
+			}
+			col, ok := ae.Expr.(*ColName)
+			if !ok {
+				continue
+			}
+			if table := readsMaterializedTable(col, sel, materialized); table != nil && definedName(table, col.Name.String()) != col.Name.String() {
+				ae.As = NewIdentifierCI(ae.MySQLColumnName(env))
+			}
+			continue
+		}
+		name := ae.MySQLColumnName(env)
+		if name == "" {
+			// An empty name cannot be an alias.
+			continue
+		}
+		if name == String(ae.Expr) && !slices.Contains(referenced, strings.ToLower(name)) && !containsSubquery(ae.Expr) {
+			// MySQL names the SQL that vtgate sends the same way. Planning
+			// rewrites subqueries, and a column that the query refers to
+			// by name needs an alias for vtgate to resolve the reference.
+			continue
+		}
+		ae.As = NewIdentifierCI(name)
+	}
+}
+
+// referencedNames returns the lowercased names that the ORDER BY, GROUP BY and
+// HAVING clauses of a query expression refer to without a qualifier. MySQL
+// resolves them against the names of the select expressions.
+func referencedNames(ts TableStatement) []string {
+	var clauses []SQLNode
+	switch ts := ts.(type) {
+	case *Select:
+		clauses = []SQLNode{ts.OrderBy, ts.GroupBy, ts.Having}
+	case *Union:
+		clauses = []SQLNode{ts.OrderBy}
+	}
+	var names []string
+	for _, clause := range clauses {
+		_ = Walk(func(node SQLNode) (bool, error) {
+			switch node := node.(type) {
+			case *ColName:
+				if node.Qualifier.IsEmpty() {
+					names = append(names, node.Name.Lowered())
+				}
+			case *Subquery:
+				return false, nil
+			}
+			return true, nil
+		}, clause)
+	}
+	return names
+}
+
+// materializedTables returns the derived tables and CTEs in the FROM clause
+// of a query block that MySQL materializes, by their lowercased names.
+func materializedTables(sel *Select, ts TableStatement) map[string]TableStatement {
+	materialized := map[string]TableStatement{}
+	var with *With
+	switch ts := ts.(type) {
+	case *Select:
+		with = ts.With
+	case *Union:
+		with = ts.With
+	}
+	visit := func(node SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *AliasedTableExpr:
+			switch expr := node.Expr.(type) {
+			case *DerivedTable:
+				if !MySQLMergesDerivedTable(expr.Select) {
+					materialized[strings.ToLower(node.As.String())] = expr.Select
+				}
+			case TableName:
+				if cte := findCTE(with, expr); cte != nil && !MySQLMergesDerivedTable(cte.Subquery) {
+					name := node.As
+					if name.IsEmpty() {
+						name = expr.Name
+					}
+					materialized[strings.ToLower(name.String())] = cte.Subquery
+				}
+			}
+			return false, nil
+		case *Subquery:
+			return false, nil
+		}
+		return true, nil
+	}
+	for _, table := range sel.From {
+		_ = Walk(visit, table)
+	}
+	return materialized
+}
+
+// containsSubquery reports whether an expression contains a subquery.
+func containsSubquery(expr Expr) bool {
+	found := false
+	_ = Walk(func(node SQLNode) (bool, error) {
+		if _, ok := node.(*Subquery); ok {
+			found = true
+		}
+		return !found, nil
+	}, expr)
+	return found
+}
+
+// readsMaterializedTable returns the derived table or CTE that MySQL
+// materializes and that a column reference reads: the one that its qualifier
+// names, or the only table of the query block. It returns nil otherwise.
+func readsMaterializedTable(col *ColName, sel *Select, materialized map[string]TableStatement) TableStatement {
+	if !col.Qualifier.IsEmpty() {
+		if !col.Qualifier.Qualifier.IsEmpty() {
+			return nil
+		}
+		return materialized[strings.ToLower(col.Qualifier.Name.String())]
+	}
+	if len(sel.From) != 1 || len(materialized) != 1 {
+		return nil
+	}
+	if _, single := sel.From[0].(*AliasedTableExpr); !single {
+		return nil
+	}
+	for _, table := range materialized {
+		return table
+	}
+	return nil
+}
+
+// definedName returns the name of the column that a derived table or CTE
+// defines under the given name, which matches it case-insensitively, or the
+// name itself when it cannot tell.
+func definedName(table TableStatement, name string) string {
+	sel, err := GetFirstSelect(table)
+	if err != nil || sel == nil {
+		return name
+	}
+	for _, expr := range sel.SelectExprs.Exprs {
+		ae, ok := expr.(*AliasedExpr)
+		if !ok {
+			continue
+		}
+		if defined := ae.ColumnName(); strings.EqualFold(defined, name) {
+			return defined
+		}
+	}
+	return name
+}
+
+// findCTE returns the CTE that an unqualified table name refers to.
+func findCTE(with *With, name TableName) *CommonTableExpr {
+	if with == nil || !name.Qualifier.IsEmpty() {
+		return nil
+	}
+	for _, cte := range with.CTEs {
+		if cte.ID.String() == name.Name.String() {
+			return cte
+		}
+	}
+	return nil
+}
+
+// MySQLMergesDerivedTable reports whether MySQL can merge a derived table, CTE
+// or view with this query expression into the query that reads from it,
+// rather than materialize it. MySQL also materializes every derived table
+// when the optimizer switch derived_merge is off, and ones named by a
+// NO_MERGE hint.
+func MySQLMergesDerivedTable(stmt TableStatement) bool {
+	sel, ok := stmt.(*Select)
+	if !ok {
+		// Set operations are materialized.
+		return false
+	}
+	if sel.Distinct || sel.GroupBy != nil || sel.Having != nil || sel.Limit != nil || len(sel.Windows) > 0 {
+		return false
+	}
+	if len(sel.From) == 0 {
+		return false
+	}
+	if len(sel.From) == 1 {
+		if aliased, ok := sel.From[0].(*AliasedTableExpr); ok {
+			if name, ok := aliased.Expr.(TableName); ok && strings.EqualFold(name.Name.String(), "dual") && name.Qualifier.IsEmpty() {
+				return false
+			}
+		}
+	}
+	merges := true
+	for _, se := range sel.SelectExprs.Exprs {
+		_ = Walk(func(node SQLNode) (bool, error) {
+			switch node.(type) {
+			case AggrFunc, WindowFunc, *AssignmentExpr:
+				merges = false
+			case *Subquery:
+				// Subqueries have their own scope.
+				return false, nil
+			}
+			return merges, nil
+		}, se)
+	}
+	return merges
 }
 
 // maxAliasName is MAX_ALIAS_NAME in MySQL: the longest a column name can be,

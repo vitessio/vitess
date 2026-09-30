@@ -127,8 +127,11 @@ func TestColumnNames(t *testing.T) {
 					continue
 				}
 				found = append(found, key)
-				if !known[key] && !*updateKnown {
+				switch {
+				case !known[key] && !*updateKnown:
 					t.Errorf("%s: %q: MySQL returns %s, vtgate returns %s", c.ID, c.Query, describe(want), describe(got))
+				case *showKnown:
+					t.Logf("%s: %q: MySQL returns %s, vtgate returns %s", c.ID, c.Query, describe(want), describe(got))
 				}
 			}
 		})

@@ -583,8 +583,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select count(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select count(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
+        "FieldQuery": "select count(*) as `COUNT(*)` from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+        "Query": "select count(*) as `COUNT(*)` from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
         "SysTableTableName": "[table_name:'foo']",
         "SysTableTableSchema": "['performance_schema']"
       }

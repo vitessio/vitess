@@ -239,7 +239,7 @@ func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) 
 	}
 
 	if !canPush && differentExpr != nil {
-		panic(vterrors.VT12001("only one DISTINCT aggregation is allowed in a SELECT: " + sqlparser.String(differentExpr)))
+		panic(vterrors.VT12001("only one DISTINCT aggregation is allowed in a SELECT: " + sqlparser.String(differentExpr.Expr)))
 	}
 
 	return canPush, distinctExprs

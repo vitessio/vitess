@@ -326,8 +326,8 @@
               "Sharded": true
             },
             "Conditions": "v1=v2",
-            "FieldQuery": "select (select count(*) from user_extra where 1 != 1) from `user` where 1 != 1",
-            "Query": "select (select count(*) from user_extra where user_id = :v1) from `user` where id = :v2",
+            "FieldQuery": "select (select count(*) from user_extra where 1 != 1) as `(select count(*) from user_extra where user_id = ?)` from `user` where 1 != 1",
+            "Query": "select (select count(*) from user_extra where user_id = :v1) as `(select count(*) from user_extra where user_id = ?)` from `user` where id = :v2",
             "Values": [
               ":v2"
             ],
@@ -477,8 +477,8 @@
               "Sharded": true
             },
             "Conditions": "v1=v2",
-            "FieldQuery": "select (select count(*) from user_extra where 1 != 1) from `user` where 1 != 1",
-            "Query": "select (select count(*) from user_extra where user_id = :v1 and foo = `user`.bar) from `user` where id = :v2",
+            "FieldQuery": "select (select count(*) from user_extra where 1 != 1) as `(select count(*) from user_extra where user_id = ? and foo = user.bar)` from `user` where 1 != 1",
+            "Query": "select (select count(*) from user_extra where user_id = :v1 and foo = `user`.bar) as `(select count(*) from user_extra where user_id = ? and foo = user.bar)` from `user` where id = :v2",
             "Values": [
               ":v2"
             ],

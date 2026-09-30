@@ -53,6 +53,7 @@ var (
 	mysqlVersionKey string
 
 	updateKnown = flag.Bool("update-known", false, "rewrite known_divergences.txt with the divergences found")
+	showKnown   = flag.Bool("show-known", false, "log what MySQL and vtgate return for the known divergences")
 )
 
 func TestMain(m *testing.M) {

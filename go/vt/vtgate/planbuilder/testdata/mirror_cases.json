@@ -68,8 +68,8 @@
               "Name": "unsharded_dst1",
               "Sharded": false
             },
-            "FieldQuery": "select ifnull((select t1.id from t1 where 1 != 1), 0) from dual where 1 != 1",
-            "Query": "select ifnull((select t1.id from t1 where t1.id = 1), 0) from dual"
+            "FieldQuery": "select ifnull((select t1.id from t1 where 1 != 1), 0) as `ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)` from dual where 1 != 1",
+            "Query": "select ifnull((select t1.id from t1 where t1.id = 1), 0) as `ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)` from dual"
           }
         ]
       },

@@ -271,7 +271,7 @@ func TestJSONOutput(t *testing.T) {
     "ks_sharded/-40": {
         "MysqlQueries": [
             {
-                "SQL": "select 1 from ` + "`user`" + ` where id = 1 limit 10001 /* INT64 */",
+                "SQL": "select 1 as ` + "`1`" + ` from ` + "`user`" + ` where id = 1 limit 10001 /* INT64 */",
                 "Time": 1
             }
         ],
@@ -281,7 +281,7 @@ func TestJSONOutput(t *testing.T) {
                     "#maxLimit": "10001",
                     "vtg1": "1"
                 },
-                "SQL": "select :vtg1 /* INT64 */ from ` + "`user`" + ` where id = :vtg1 /* INT64 */",
+                "SQL": "select :vtg1 /* INT64 */ as ` + "`1`" + ` from ` + "`user`" + ` where id = :vtg1 /* INT64 */",
                 "Time": 1
             }
         ]

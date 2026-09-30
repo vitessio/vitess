@@ -1429,6 +1429,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 	stmt = rewriteASTResult.AST
+	sqlparser.AliasColumnNames(stmt, sqlparser.ColumnNameEnv{})
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
 	if rewriteASTResult.UpdateQueryFromAST && !preparedPlan {
 		query = sqlparser.String(stmt)
