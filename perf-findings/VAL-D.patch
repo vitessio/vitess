@@ -1,0 +1,747 @@
+diff --git a/go/test/valrepro/scripts/c.sh b/go/test/valrepro/scripts/c.sh
+new file mode 100644
+index 0000000000..006fcbb017
+--- /dev/null
++++ b/go/test/valrepro/scripts/c.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# c.sh ARGS: run the VAL-D copy of the cluster harness (BASE 40000) as the vt user.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=40000 NAME=c40000 \
++  VTDATAROOT=/home/vt/VAL-D/c40000 SHARDS=${SHARDS:-0} REPLICAS=${REPLICAS:-1} \
++  BIN=${BIN:-/home/vt/bin} DURABILITY=${DURABILITY:-none} TABLE_SIZE=${TABLE_SIZE:-1000} TABLES=${TABLES:-1} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/VAL-D/cluster.sh "$@"
+diff --git a/go/test/valrepro/scripts/runvt.sh b/go/test/valrepro/scripts/runvt.sh
+new file mode 100644
+index 0000000000..8f12ff86a0
+--- /dev/null
++++ b/go/test/valrepro/scripts/runvt.sh
+@@ -0,0 +1,10 @@
++#!/bin/bash
++# runvt.sh PKGDIR BINARY RUNREGEX LOG [extra args]: run a MySQL-backed test binary as vt,
++# write the full output to LOG and print the test result lines.
++PKG=$1; BINARY=$2; RE=$3; LOG=$4; shift 4
++cd "$PKG" || exit 1
++runuser -u vt -- env HOME=/home/vt VTROOT=/home/vt VT_MYSQL_ROOT=/usr VTDATAROOT=/home/vt/VAL-D/data \
++  PATH=/home/vt/bin:/usr/sbin:/usr/bin:/bin "$BINARY" -test.run "$RE" -test.v "$@" >"$LOG" 2>&1
++rc=$?
++grep -E -A12 "^(=== RUN|--- (FAIL|PASS)|FAIL|PASS|ok)|Error Trace|panic" "$LOG" | grep -vE "INF|WRN|ERR" | head -80
++echo "rc=$rc"
+diff --git a/go/test/valrepro/scripts/vtorc_failover.sh b/go/test/valrepro/scripts/vtorc_failover.sh
+new file mode 100644
+index 0000000000..d6c672b156
+--- /dev/null
++++ b/go/test/valrepro/scripts/vtorc_failover.sh
+@@ -0,0 +1,68 @@
++#!/bin/bash
++# vtorc_failover.sh TAG [vtorc flags...]
++# Bug #13 end-to-end: fresh 3-tablet semi_sync shard (BASE 40000) + VTOrc, kill -9 the primary's
++# vttablet+mysqld_safe+mysqld (host death), then report, relative to the kill:
++#   - VTOrc's DeadPrimary detection and ERS completion,
++#   - how long VTOrc keeps holding the shard lock (etcd lock key under the shard) after ERS,
++#   - VTOrc discovery calls to the dead primary that took >= 10 s.
++S=/tmp/claude-0/-home-user-vitess/d4e874e9-36db-544e-abf5-6cb4fd4871ca/scratchpad/VAL-D
++TAG=$1; shift
++D=/home/vt/VAL-D/c40000
++V="/home/vt/bin/vtctldclient --server localhost:40021"
++OUT=$S/out/$TAG; mkdir -p "$OUT"
++REPLICAS=2 DURABILITY=semi_sync bash $S/c.sh down >/dev/null 2>&1
++REPLICAS=2 DURABILITY=semi_sync bash $S/c.sh up >/dev/null 2>&1 || { echo "up failed"; exit 1; }
++setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt nohup /home/vt/bin/vtorc \
++  --topo-implementation etcd2 --topo-global-server-address localhost:40010 --topo-global-root /vitess/global \
++  --cell zone1 --port 40030 --log-format text --config-file-not-found-handling=ignore \
++  --sqlite-data-file $D/vtorc.db "$@" >$D/logs/vtorc.log 2>&1 </dev/null &
++echo $! >$D/vtorc.pid
++sleep 15; sleep "$(awk 'BEGIN{srand(); print rand()*6}')"
++
++PRIM=$($V GetTablets --keyspace sbtest --shard 0 | awk '$4=="primary"{print $1}')
++T=$D/vt_$(printf '%010d' $((10#${PRIM#zone1-})))
++# Poll the shard lock (etcd keys under the shard's locks dir) every 50 ms.
++(
++  prev=""
++  while :; do
++    k=$(etcdctl --endpoints localhost:40010 get --prefix --keys-only /vitess/global/keyspaces/sbtest/shards/0/locks 2>/dev/null | grep -c .)
++    [[ $k != "$prev" ]] && echo "$(date +%s.%N) $k" && prev=$k
++    sleep 0.05
++  done
++) >"$OUT/lock" &
++LP=$!
++sleep 1
++MPID=$(cat $T/mysql.pid)
++SAFE=$(ps -eo pid,args | awk -v f="$T/my.cnf" '$0 ~ "mysqld_safe" && index($0, f) {print $1}')
++TPID=$(ps -eo pid,args | awk -v p="--port $((40100 + 10#${PRIM#zone1-} - 100)) " '$0 ~ "vttablet" && index($0, p) {print $1}')
++T0=$(date +%s.%N)
++kill -9 $TPID $SAFE $MPID
++for _ in $(seq 1 600); do
++  NP=$($V GetTablets --keyspace sbtest --shard 0 2>/dev/null | awk '$4=="primary"{print $1}')
++  [[ -n $NP && $NP != "$PRIM" ]] && break
++  sleep 0.1
++done
++TNP=$(date +%s.%N)
++if [[ -n ${PRS:-} ]]; then
++  # An operator PRS right after the failover (needs the shard lock).
++  sleep 1
++  OTHER=$($V GetTablets --keyspace sbtest --shard 0 | awk -v p="$PRIM" -v n="$NP" '$1!=p && $1!=n {print $1}')
++  TP=$(date +%s.%N)
++  $V PlannedReparentShard sbtest/0 --new-primary "$OTHER" >"$OUT/prs" 2>&1; RC=$?
++  echo "  PRS to $OTHER issued at +$(echo "$TP - $T0" | bc)s rc=$RC took $(echo "$(date +%s.%N) - $TP" | bc)s: $(tail -1 "$OUT/prs" | cut -c1-150)"
++fi
++sleep 60
++kill $LP
++cp $D/logs/vtorc.log "$OUT/vtorc.log"
++rel() { echo "$1 - $T0" | bc; }
++ts() { date -d "$(echo "$1" | cut -c1-23)" +%s.%N; }
++echo "[$TAG] killed $PRIM at $(date -d @$T0 +%T.%3N); new primary $NP in topo at +$(rel $TNP)s"
++L=$OUT/vtorc.log
++line=$(grep -m1 -E "Analysis: DeadPrimary" $L); [[ -n $line ]] && echo "  DeadPrimary analysis     +$(rel "$(ts "$line")")s"
++line=$(grep -m1 "finished EmergencyReparentShard" $L); [[ -n $line ]] && echo "  ERS finished             +$(rel "$(ts "$line")")s"
++line=$(grep -m1 "Forcing refresh of all tablets post recovery" $L); [[ -n $line ]] && echo "  post-recovery refresh    +$(rel "$(ts "$line")")s"
++awk -v t0="$T0" '$1 >= t0 - 1 {printf "  shard lock keys=%s at %+.3fs\n", $2, $1 - t0}' "$OUT/lock"
++grep -E "exceeded InstancePollSeconds|Failed to discover" $L | grep "$PRIM" | while read -r l; do
++  echo "  +$(rel "$(ts "$l")")s $(echo "$l" | grep -oE "(took [0-9.]+s|Failed to discover [^ ]+ \(force: [a-z]+\))")"
++done
++kill "$(cat $D/vtorc.pid)" 2>/dev/null
+diff --git a/go/test/valrepro/vtgaterestart/main.go b/go/test/valrepro/vtgaterestart/main.go
+new file mode 100644
+index 0000000000..b80428c92a
+--- /dev/null
++++ b/go/test/valrepro/vtgaterestart/main.go
+@@ -0,0 +1,366 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++// vtgaterestart is the reproduction harness for bug #12 (vtgate took ~40 s to
++// route to a restarted tablet). It runs read (and optionally write) load
++// through vtgate at one tablet type, kills and restarts one vttablet (mysqld
++// is kept) several times, and reports per trial:
++//
++//   - down:    kill -> the old process is gone, plus the extra -down time;
++//   - serving: restart -> the new vttablet reports TabletStateName=SERVING;
++//   - route:   SERVING -> the first query through vtgate that succeeds after
++//     the outage (the vtgate-side delay the bug claims is ~40 s).
++//
++// It must run as root: it relaunches the vttablet with the exact argv,
++// environment, owner and log file of the process it kills.
++package main
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"flag"
++	"fmt"
++	"math/rand/v2"
++	"net/http"
++	"os"
++	"os/exec"
++	"sort"
++	"strconv"
++	"strings"
++	"sync"
++	"syscall"
++	"time"
++
++	_ "github.com/go-sql-driver/mysql"
++)
++
++type event struct {
++	start, end time.Time
++	err        string
++}
++
++var (
++	mu     sync.Mutex
++	events []event
++)
++
++func record(e event) {
++	mu.Lock()
++	events = append(events, e)
++	mu.Unlock()
++}
++
++func takeEvents() []event {
++	mu.Lock()
++	defer mu.Unlock()
++	evs := events
++	events = nil
++	return evs
++}
++
++func tabletState(web int) string {
++	client := http.Client{Timeout: 500 * time.Millisecond}
++	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/debug/vars", web))
++	if err != nil {
++		return ""
++	}
++	defer resp.Body.Close()
++	var vars struct {
++		TabletStateName string
++	}
++	if err := json.NewDecoder(resp.Body).Decode(&vars); err != nil {
++		return ""
++	}
++	return vars.TabletStateName
++}
++
++type proc struct {
++	exe       string
++	argv, env []string
++	log       string
++	uid, gid  uint32
++}
++
++func inspect(pid int) (*proc, error) {
++	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
++	if err != nil {
++		return nil, err
++	}
++	environ, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
++	if err != nil {
++		return nil, err
++	}
++	log, err := os.Readlink(fmt.Sprintf("/proc/%d/fd/1", pid))
++	if err != nil {
++		return nil, err
++	}
++	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
++	if err != nil {
++		return nil, err
++	}
++	var st syscall.Stat_t
++	if err := syscall.Stat(fmt.Sprintf("/proc/%d", pid), &st); err != nil {
++		return nil, err
++	}
++	split := func(b []byte) []string { return strings.Split(strings.TrimRight(string(b), "\x00"), "\x00") }
++	return &proc{exe: exe, argv: split(cmdline), env: split(environ), log: log, uid: st.Uid, gid: st.Gid}, nil
++}
++
++func (p *proc) start() error {
++	logf, err := os.OpenFile(p.log, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
++	if err != nil {
++		return err
++	}
++	cmd := exec.Command(p.exe, p.argv[1:]...)
++	cmd.Env = p.env
++	cmd.Stdout = logf
++	cmd.Stderr = logf
++	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Credential: &syscall.Credential{Uid: p.uid, Gid: p.gid}}
++	if err := cmd.Start(); err != nil {
++		return err
++	}
++	go func() {
++		_ = cmd.Wait()
++		logf.Close()
++	}()
++	return nil
++}
++
++// findPid returns the pid of the live process whose command line contains
++// match (pid files are not reliable across kill -9).
++func findPid(match string) (int, error) {
++	dirs, err := os.ReadDir("/proc")
++	if err != nil {
++		return 0, err
++	}
++	for _, d := range dirs {
++		pid, err := strconv.Atoi(d.Name())
++		if err != nil || !alive(pid) {
++			continue
++		}
++		b, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
++		if err != nil {
++			continue
++		}
++		args := strings.ReplaceAll(string(b), "\x00", " ")
++		if strings.Contains(args, "vttablet") && strings.Contains(args, match) {
++			return pid, nil
++		}
++	}
++	return 0, fmt.Errorf("no live process matches %q", match)
++}
++
++// alive reports whether pid exists and is not a zombie.
++func alive(pid int) bool {
++	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
++	if err != nil {
++		return false
++	}
++	s := string(b)
++	i := strings.LastIndexByte(s, ')')
++	return i >= 0 && i+2 < len(s) && s[i+2] != 'Z'
++}
++
++func main() {
++	dsn := flag.String("dsn", "root@tcp(127.0.0.1:40003)/sbtest@replica?timeout=2s&readTimeout=10s&writeTimeout=10s", "vtgate DSN; the database selects the tablet type")
++	write := flag.Bool("write", false, "run writes (the DSN must target the primary)")
++	threads := flag.Int("threads", 4, "load threads")
++	interval := flag.Duration("interval", 5*time.Millisecond, "per-thread query interval")
++	match := flag.String("match", "", "substring of the command line of the vttablet to restart, e.g. \"--port 40101 \"")
++	web := flag.Int("web", 0, "web port of that vttablet")
++	mode := flag.String("mode", "kill9", "kill9 (SIGKILL) or term (SIGTERM, graceful)")
++	down := flag.Duration("down", 0, "how long the vttablet stays down after its old process exited")
++	trials := flag.Int("trials", 5, "number of restarts")
++	settle := flag.Duration("settle", 5*time.Second, "error-free time required before each trial")
++	flag.Parse()
++
++	db, err := sql.Open("mysql", *dsn)
++	if err != nil {
++		panic(err)
++	}
++	db.SetMaxOpenConns(*threads * 2)
++	db.SetMaxIdleConns(*threads * 2)
++
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	var wg sync.WaitGroup
++	for range *threads {
++		wg.Go(func() {
++			t := time.NewTicker(*interval)
++			defer t.Stop()
++			for {
++				select {
++				case <-ctx.Done():
++					return
++				case <-t.C:
++				}
++				id := rand.IntN(1000) + 1
++				start := time.Now()
++				qctx, qcancel := context.WithTimeout(ctx, 5*time.Second)
++				var err error
++				if *write {
++					_, err = db.ExecContext(qctx, "insert into sbtest1(id, k, c, pad) values (?, 1, '', '') on duplicate key update k = k + 1", id)
++				} else {
++					var n int
++					err = db.QueryRowContext(qctx, "select count(*) from sbtest1 where id = ?", id).Scan(&n)
++				}
++				qcancel()
++				e := event{start: start, end: time.Now()}
++				if err != nil {
++					e.err = err.Error()
++				}
++				record(e)
++			}
++		})
++	}
++
++	fmt.Printf("# dsn=%s mode=%s down=%v threads=%d interval=%v\n", *dsn, *mode, *down, *threads, *interval)
++	fmt.Println("trial exit_s serving_s route_s outage_s errors first_error")
++	var routes []float64
++	for trial := 1; trial <= *trials; trial++ {
++		// Wait for an error-free window.
++		for {
++			takeEvents()
++			time.Sleep(*settle)
++			bad := 0
++			evs := takeEvents()
++			for _, e := range evs {
++				if e.err != "" {
++					bad++
++				}
++			}
++			if bad == 0 && len(evs) > 0 {
++				break
++			}
++			fmt.Printf("# waiting for an error-free window (%d/%d errors)\n", bad, len(evs))
++		}
++
++		pid, err := findPid(*match)
++		if err != nil {
++			panic(err)
++		}
++		p, err := inspect(pid)
++		if err != nil {
++			panic(err)
++		}
++		sig := syscall.SIGKILL
++		if *mode == "term" {
++			sig = syscall.SIGTERM
++		}
++		tKill := time.Now()
++		if err := syscall.Kill(pid, sig); err != nil {
++			panic(err)
++		}
++		for alive(pid) {
++			time.Sleep(5 * time.Millisecond)
++		}
++		tExit := time.Now()
++		time.Sleep(*down)
++		tStart := time.Now()
++		if err := p.start(); err != nil {
++			panic(err)
++		}
++		var tServing time.Time
++		for deadline := time.Now().Add(3 * time.Minute); time.Now().Before(deadline); {
++			if tabletState(*web) == "SERVING" {
++				tServing = time.Now()
++				break
++			}
++			time.Sleep(20 * time.Millisecond)
++		}
++		if tServing.IsZero() {
++			fmt.Printf("%d tablet not SERVING after 3m\n", trial)
++			os.Exit(1)
++		}
++		// Wait for the first success after the outage (at most 3 minutes).
++		var firstErr, firstOK time.Time
++		var nErr int
++		var firstErrMsg string
++		var evs []event
++		for deadline := time.Now().Add(3 * time.Minute); time.Now().Before(deadline) && firstOK.IsZero(); {
++			time.Sleep(20 * time.Millisecond)
++			evs = append(evs, takeEvents()...)
++			sort.Slice(evs, func(i, j int) bool { return evs[i].end.Before(evs[j].end) })
++			firstErr, firstOK, nErr, firstErrMsg = time.Time{}, time.Time{}, 0, ""
++			for _, e := range evs {
++				if e.end.Before(tKill) {
++					continue
++				}
++				if e.err != "" {
++					nErr++
++					if firstErr.IsZero() {
++						firstErr, firstErrMsg = e.end, e.err
++					}
++					continue
++				}
++				if !firstErr.IsZero() && e.start.After(firstErr) && firstOK.IsZero() {
++					firstOK = e.end
++				}
++			}
++			if firstErr.IsZero() && time.Since(tServing) > 5*time.Second {
++				break // no outage at all
++			}
++		}
++		if len(firstErrMsg) > 100 {
++			firstErrMsg = firstErrMsg[:100]
++		}
++		route, outage := 0.0, 0.0
++		if !firstErr.IsZero() {
++			route = firstOK.Sub(tServing).Seconds()
++			outage = firstOK.Sub(firstErr).Seconds()
++			routes = append(routes, route)
++		}
++		fmt.Printf("%d %.3f %.3f %.3f %.3f %d %q\n", trial, tExit.Sub(tKill).Seconds()+down.Seconds(), tServing.Sub(tStart).Seconds(), route, outage, nErr, firstErrMsg)
++		// Error classes, with the time of their first and last occurrence relative to the kill.
++		type class struct {
++			n           int
++			first, last time.Time
++		}
++		classes := map[string]*class{}
++		var keys []string
++		for _, e := range evs {
++			if e.err == "" || e.end.Before(tKill) {
++				continue
++			}
++			k := e.err
++			if i := strings.Index(k, "desc = "); i >= 0 {
++				k = k[i+len("desc = "):]
++			} else if i := strings.Index(k, "vttablet: "); i >= 0 {
++				k = k[i:]
++			}
++			if len(k) > 70 {
++				k = k[:70]
++			}
++			c, ok := classes[k]
++			if !ok {
++				c = &class{first: e.end}
++				classes[k] = c
++				keys = append(keys, k)
++			}
++			c.n++
++			c.last = e.end
++		}
++		for _, k := range keys {
++			c := classes[k]
++			fmt.Printf("#   %6d errors %7.3f..%7.3f s after kill: %s\n", c.n, c.first.Sub(tKill).Seconds(), c.last.Sub(tKill).Seconds(), k)
++		}
++	}
++	sort.Float64s(routes)
++	fmt.Printf("# route_s sorted: %v\n", routes)
++	cancel()
++	wg.Wait()
++}
+diff --git a/go/vt/vttablet/grpctmclient/fullstatus_failfast_test.go b/go/vt/vttablet/grpctmclient/fullstatus_failfast_test.go
+new file mode 100644
+index 0000000000..98e08befd8
+--- /dev/null
++++ b/go/vt/vttablet/grpctmclient/fullstatus_failfast_test.go
+@@ -0,0 +1,119 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package grpctmclient
++
++import (
++	"context"
++	"net"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"google.golang.org/grpc"
++
++	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
++	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
++	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++	"vitess.io/vitess/go/vt/topo"
++)
++
++// fullStatusServer is a minimal tablet manager that answers FullStatus.
++type fullStatusServer struct {
++	tabletmanagerservicepb.UnimplementedTabletManagerServer
++}
++
++func (fullStatusServer) FullStatus(context.Context, *tabletmanagerdatapb.FullStatusRequest) (*tabletmanagerdatapb.FullStatusResponse, error) {
++	return &tabletmanagerdatapb.FullStatusResponse{Status: &replicationdatapb.FullStatus{ServerId: 1}}, nil
++}
++
++// closedPort returns a localhost TCP port that nothing listens on, so a dial
++// gets "connection refused".
++func closedPort(t *testing.T) int32 {
++	lis, err := net.Listen("tcp", "127.0.0.1:0")
++	require.NoError(t, err)
++	port := int32(lis.Addr().(*net.TCPAddr).Port)
++	require.NoError(t, lis.Close())
++	return port
++}
++
++// maxFailFastDuration is how long FullStatus may take to report a tablet whose
++// gRPC port refuses connections. VTOrc calls FullStatus with a
++// topo.RemoteOperationTimeout (15 s) deadline; a refused connection must fail
++// well before that instead of waiting for the deadline.
++const maxFailFastDuration = 2 * time.Second
++
++// TestFullStatusFailsFastOnRefusedConnection is the validation test for bug #13
++// (VTOrc FullStatus hangs ~15 s on a refused connection). The tablet manager
++// client dials with WaitForReady, so an RPC to a dead vttablet (host alive,
++// port closed) blocks until the caller's deadline instead of failing with
++// Unavailable.
++func TestFullStatusFailsFastOnRefusedConnection(t *testing.T) {
++	client := NewClient()
++	t.Cleanup(client.Close)
++	tablet := &topodatapb.Tablet{
++		Hostname: "127.0.0.1",
++		PortMap:  map[string]int32{"grpc": closedPort(t)},
++	}
++
++	// Same deadline VTOrc uses (inst.fullStatus).
++	ctx, cancel := context.WithTimeout(t.Context(), topo.RemoteOperationTimeout)
++	defer cancel()
++	start := time.Now()
++	_, err := client.FullStatus(ctx, tablet)
++	elapsed := time.Since(start)
++	require.Error(t, err)
++	assert.Less(t, elapsed, maxFailFastDuration, "FullStatus to a refused port took %v (err: %v)", elapsed, err)
++}
++
++// TestFullStatusFailsFastAfterTabletDies covers the VTOrc scenario for bug #13:
++// VTOrc has a pooled connection to a healthy tablet, then the vttablet process
++// dies (kill -9). The next poll must fail fast rather than wait for the deadline.
++func TestFullStatusFailsFastAfterTabletDies(t *testing.T) {
++	lis, err := net.Listen("tcp", "127.0.0.1:0")
++	require.NoError(t, err)
++	port := int32(lis.Addr().(*net.TCPAddr).Port)
++	server := grpc.NewServer()
++	tabletmanagerservicepb.RegisterTabletManagerServer(server, fullStatusServer{})
++	go server.Serve(lis) // nolint:errcheck
++	t.Cleanup(server.Stop)
++
++	client := NewClient()
++	t.Cleanup(client.Close)
++	tablet := &topodatapb.Tablet{
++		Hostname: "127.0.0.1",
++		PortMap:  map[string]int32{"grpc": port},
++	}
++
++	ctx, cancel := context.WithTimeout(t.Context(), topo.RemoteOperationTimeout)
++	defer cancel()
++	status, err := client.FullStatus(ctx, tablet)
++	require.NoError(t, err)
++	require.EqualValues(t, 1, status.ServerId)
++
++	// The tablet process dies: its listener and connections go away.
++	server.Stop()
++
++	ctx2, cancel2 := context.WithTimeout(t.Context(), topo.RemoteOperationTimeout)
++	defer cancel2()
++	start := time.Now()
++	_, err = client.FullStatus(ctx2, tablet)
++	elapsed := time.Since(start)
++	require.Error(t, err)
++	assert.Less(t, elapsed, maxFailFastDuration, "FullStatus to a dead tablet took %v (err: %v)", elapsed, err)
++}
+diff --git a/go/vt/vttablet/tabletmanager/vdiff/stop_lock_wait_test.go b/go/vt/vttablet/tabletmanager/vdiff/stop_lock_wait_test.go
+new file mode 100644
+index 0000000000..1c7b889d3c
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vdiff/stop_lock_wait_test.go
+@@ -0,0 +1,141 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vdiff
++
++import (
++	"context"
++	"fmt"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/binlog/binlogplayer"
++	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
++	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
++	"vitess.io/vitess/go/vt/topo/memorytopo"
++	"vitess.io/vitess/go/vt/vttablet/tmclient"
++)
++
++// TestVDiffStopWhileWaitingForWorkflowLock is the validation test for bug #14
++// (`VDiff stop/delete` blocked ~7 minutes waiting for the workflow lock).
++//
++// Two VDiffs run on one target tablet, and the first one's workflow lock is
++// held elsewhere (in the original report: orphaned by a tablet restart, with a
++// 24 h lease). The first VDiff to reach tableDiffer.initialize takes the
++// engine-wide snapshotMu and retries LockName with backoff. The second one
++// blocks in snapshotMu.Lock(), which does not observe its context, even when it
++// diffs another workflow whose lock is free. Stopping the second VDiff (VDiff
++// stop, or VDiff delete, which calls controller.Stop() while holding the engine
++// mutex) must return promptly; on base it waits until the first VDiff gets its
++// workflow lock or is itself stopped.
++func TestVDiffStopWhileWaitingForWorkflowLock(t *testing.T) {
++	const (
++		keyspace       = "ks"
++		lockedWorkflow = "wf"
++	)
++	for name, secondWorkflow := range map[string]string{
++		"same workflow":  lockedWorkflow,
++		"other workflow": "wf2",
++	} {
++		t.Run(name, func(t *testing.T) {
++			ctx := t.Context()
++			ts := memorytopo.NewServer(ctx, "zone1")
++			t.Cleanup(ts.Close)
++			tablet := &topodatapb.Tablet{
++				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
++				Keyspace: keyspace,
++				Shard:    "0",
++				Type:     topodatapb.TabletType_PRIMARY,
++			}
++			dbClientFactory := func() binlogplayer.DBClient { return binlogplayer.NewMockDBClient(t) }
++			vde := NewTestEngine(ts, tablet, "vt_"+keyspace, dbClientFactory, func() tmclient.TabletManagerClient { return nil })
++
++			// Someone else holds the first workflow's lock for the whole test
++			// (e.g. an orphaned lock left behind by a tablet restart).
++			_, unlockWorkflow, err := ts.LockName(ctx, fmt.Sprintf("%s/%s", keyspace, lockedWorkflow), "orphan")
++			require.NoError(t, err)
++			t.Cleanup(func() {
++				var unlockErr error
++				unlockWorkflow(&unlockErr)
++			})
++
++			// startVDiff mimics engine.addController + controller.run up to the
++			// table differ's initialization: run() closes ct.done when it returns.
++			startVDiff := func(id int64, workflow string) *controller {
++				row := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|vdiff_uuid|workflow", "int64|varchar|varchar"),
++					fmt.Sprintf("%d|uuid-%d|%s", id, id, workflow)).Named().Row()
++				ct, err := newController(row, dbClientFactory, ts, vde, &tabletmanagerdatapb.VDiffOptions{})
++				require.NoError(t, err)
++				ctCtx, cancel := context.WithCancel(ctx)
++				ct.cancel = cancel
++				wd, err := newWorkflowDiffer(ct, ct.options, vde.collationEnv)
++				require.NoError(t, err)
++				td := newTableDiffer(wd, &tabletmanagerdatapb.TableDefinition{Name: "t1"}, "select * from t1")
++				go func() {
++					defer close(ct.done)
++					_ = td.initialize(ctCtx)
++				}()
++				return ct
++			}
++
++			// stopWithin calls ct.Stop() (what VDiff stop/delete do) and reports
++			// whether it returned within d.
++			stopWithin := func(ct *controller, d time.Duration) (chan struct{}, bool) {
++				stopped := make(chan struct{})
++				go func() {
++					ct.Stop()
++					close(stopped)
++				}()
++				select {
++				case <-stopped:
++					return stopped, true
++				case <-time.After(d):
++					return stopped, false
++				}
++			}
++
++			// VDiff 1 takes snapshotMu and waits for its workflow lock.
++			vdiff1 := startVDiff(1, lockedWorkflow)
++			require.Eventually(t, func() bool {
++				if vde.snapshotMu.TryLock() {
++					vde.snapshotMu.Unlock()
++					return false
++				}
++				return true
++			}, 30*time.Second, 10*time.Millisecond, "the first VDiff should be waiting for the workflow lock while holding snapshotMu")
++
++			// VDiff 2 queues behind it.
++			vdiff2 := startVDiff(2, secondWorkflow)
++
++			// Stopping VDiff 2 must not wait for VDiff 1's lock wait to end.
++			stopped2, ok := stopWithin(vdiff2, 10*time.Second)
++			assert.True(t, ok, "VDiff stop of a VDiff queued behind another VDiff's workflow-lock wait did not return within 10s")
++
++			// Stopping the VDiff that is itself retrying LockName is prompt.
++			_, ok = stopWithin(vdiff1, 10*time.Second)
++			assert.True(t, ok, "VDiff stop of the VDiff waiting in LockName did not return within 10s")
++			select {
++			case <-stopped2:
++			case <-time.After(30 * time.Second):
++				require.FailNow(t, "VDiff 2 did not stop even after VDiff 1 stopped")
++			}
++		})
++	}
++}
