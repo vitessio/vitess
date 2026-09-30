@@ -1314,6 +1314,13 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
+	// A former group member keeps the offline_mode that Group Replication's OFFLINE_MODE exit
+	// state action set: it is now an asynchronous replica of the shard primary.
+	if groupReplicationEnabled() {
+		if err := tm.liftOfflineMode(ctx, "MySQL replicates from the shard primary"); err != nil {
+			return "", err
+		}
+	}
 
 	return primaryStatus.Position, nil
 }

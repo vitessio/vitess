@@ -144,3 +144,26 @@ func (mysqld *Mysqld) SetGroupReplicationPrimary(ctx context.Context, memberUUID
 	}
 	return mysqld.ExecuteSuperQueryList(ctx, []string{cmd})
 }
+
+// IsOfflineMode returns whether offline_mode is ON.
+func (mysqld *Mysqld) IsOfflineMode(ctx context.Context) (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT @@global.offline_mode")
+	if err != nil {
+		return false, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading offline_mode: %v", qr.Rows)
+	}
+	v := qr.Rows[0][0].ToString()
+	return v == "1" || v == "ON", nil
+}
+
+// SetOfflineMode sets offline_mode. The dba user, which has CONNECTION_ADMIN, can still connect
+// while it is ON.
+func (mysqld *Mysqld) SetOfflineMode(ctx context.Context, on bool) error {
+	value := "OFF"
+	if on {
+		value = "ON"
+	}
+	return mysqld.ExecuteSuperQueryList(ctx, []string{"SET GLOBAL offline_mode = " + value})
+}

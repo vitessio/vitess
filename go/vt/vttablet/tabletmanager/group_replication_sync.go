@@ -176,6 +176,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	if mysql.IsGroupMemberActive(status) {
 		s.warmVoterServerUUIDs(ctx)
 	}
+	s.liftOfflineModeInGroup(ctx, status)
 
 	tablet := tm.Tablet()
 	switch {
@@ -202,6 +203,63 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	if s.shouldRejoin(ctx, status, durability, tablet) {
 		s.rejoin(ctx)
 	}
+}
+
+// liftOfflineModeInGroup clears offline_mode, which Group Replication's OFFLINE_MODE exit state
+// action sets when the member leaves its group involuntarily, once the member is ONLINE in the
+// shard's legitimate group again: in the recorded incarnation, with a majority of the listed voters
+// ONLINE in its view (MySQL's view quorum when no voter is listed). It is not lifted earlier: while
+// it is set, the tablet cannot serve stale reads, for example on a primary that its group left
+// behind, or on a member that a join left alone in a group of its own. A RECOVERING member is
+// still catching up.
+//
+// The primary of the recorded incarnation is the exception: it may hold fewer than a majority of
+// the voters right after a bootstrap, and the other voters recover from it, which MySQL refuses
+// while offline_mode is ON. Its tablet does not serve as the primary until the majority is back
+// (enforceVoterMajority), and as a replica it holds every transaction of the shard's group.
+func (s *groupReplicationSync) liftOfflineModeInGroup(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) {
+	tm := s.tm
+	if status.GetMemberState() != mysql.GroupMemberStateOnline {
+		return
+	}
+	on, err := tm.MysqlDaemon.IsOfflineMode(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read offline_mode", slog.Any("error", err))
+		return
+	}
+	if !on {
+		return
+	}
+	rec, err := s.getRecord(ctx, false)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the shard's group record, not clearing offline_mode", slog.Any("error", err))
+		return
+	}
+	legitimate := tm.legitimateGroup(ctx, rec, status, true)
+	if !canLiftOfflineMode(legitimate, status) {
+		return
+	}
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	// Check again under the lock: an RPC may have made MySQL leave its group in the meantime.
+	status, err = tm.groupReplicationStatus(ctx)
+	if err != nil || !canLiftOfflineMode(legitimate, status) {
+		return
+	}
+	if err := tm.liftOfflineMode(ctx, "MySQL is ONLINE in the shard's group"); err != nil {
+		log.Error("Group replication sync: failed to clear offline_mode", slog.Any("error", err))
+	}
+}
+
+// canLiftOfflineMode returns whether the member is ONLINE in the shard's legitimate group, with a
+// majority of the voters in its view, or is the primary of the recorded incarnation.
+func canLiftOfflineMode(legitimate *policy.LegitimateGroup, status *replicationdatapb.GroupReplicationStatus) bool {
+	if status.GetMemberState() != mysql.GroupMemberStateOnline || !legitimate.IsLegitimateMember(status) {
+		return false
+	}
+	return legitimate.HasVoterMajority(status) || (legitimate.Incarnation != "" && mysql.IsGroupPrimary(status))
 }
 
 // groupPrimaryLost returns whether MySQL was part of a group but is no longer its primary: it is
@@ -301,6 +359,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 		return
 	}
 	log.Info("Group replication sync: MySQL is the primary of its group, promoting the tablet to PRIMARY", slog.String("group", status.GroupName))
+	if err := tm.liftOfflineMode(ctx, "MySQL is the primary of the shard's group"); err != nil {
+		log.Error("Group replication sync: not promoting the tablet to PRIMARY", slog.Any("error", err))
+		return
+	}
 	s.setTwoPCAllowed(twoPCDurable(status, tm.isPrimarySideSemiSyncEnabled(ctx)))
 	// DBActionSetReadWrite redoes prepared transactions. MySQL is already writable.
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {

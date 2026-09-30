@@ -130,3 +130,29 @@ func TestStartGroupReplicationBootstrapTimeoutResetsFlag(t *testing.T) {
 	assert.Equal(t, 1, db.GetQueryCalledNum(bootstrapOn))
 	assert.Equal(t, 1, db.GetQueryCalledNum(bootstrapOff), "group_replication_bootstrap_group must be reset after a failed bootstrap")
 }
+
+// TestOfflineMode checks that the tablet reads offline_mode, which Group Replication's
+// OFFLINE_MODE exit state action sets, and clears it through the dba connection.
+func TestOfflineMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.offline_mode", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.offline_mode", "int64"), "1"))
+	db.AddQuery("SET GLOBAL offline_mode = OFF", &sqltypes.Result{})
+
+	on, err := mysqld.IsOfflineMode(t.Context())
+	require.NoError(t, err)
+	assert.True(t, on)
+
+	require.NoError(t, mysqld.SetOfflineMode(t.Context(), false))
+	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL offline_mode = OFF"))
+
+	db.AddQuery("SELECT @@global.offline_mode", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.offline_mode", "int64"), "0"))
+	on, err = mysqld.IsOfflineMode(t.Context())
+	require.NoError(t, err)
+	assert.False(t, on)
+}

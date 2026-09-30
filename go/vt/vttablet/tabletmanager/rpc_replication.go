@@ -896,6 +896,11 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if err := tm.checkLegitimatePrimaryToServe(ctx, groupStatus); err != nil {
 		return err
 	}
+	if mysql.IsGroupPrimary(groupStatus) {
+		if err := tm.liftOfflineMode(ctx, "MySQL is the primary of its group and serves again"); err != nil {
+			return err
+		}
+	}
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -1159,6 +1164,14 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return err
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
+			return err
+		}
+	}
+	// A former group member that left its group involuntarily keeps the offline_mode that the
+	// OFFLINE_MODE exit state action set. It now replicates from the shard primary, like any
+	// asynchronous replica, and its tablet cannot serve until the flag is cleared.
+	if groupReplicationEnabled() {
+		if err := tm.liftOfflineMode(ctx, "MySQL replicates from the shard primary"); err != nil {
 			return err
 		}
 	}

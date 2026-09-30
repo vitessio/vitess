@@ -78,6 +78,12 @@ type MysqlDaemon interface {
 	StartGroupReplication(ctx context.Context, bootstrap bool) error
 	StopGroupReplication(ctx context.Context) error
 	SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error
+	// IsOfflineMode returns whether offline_mode is ON. Group Replication's OFFLINE_MODE exit
+	// state action sets it when a member leaves its group involuntarily.
+	IsOfflineMode(ctx context.Context) (bool, error)
+	// SetOfflineMode sets offline_mode. While it is ON, MySQL refuses the connections of users
+	// without CONNECTION_ADMIN or SUPER, which are vttablet's app, allprivs and repl users.
+	SetOfflineMode(ctx context.Context, on bool) error
 	ResetReplicationParameters(ctx context.Context) error
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 	FlushBinaryLogs(ctx context.Context) (err error)

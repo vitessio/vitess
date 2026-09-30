@@ -334,8 +334,41 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		// The caller records the new group's incarnation in the shard record right after the
 		// bootstrap. Until then, the sync loop must not take the group for a foreign one.
 		tm.groupReplicationPeers.noteBootstrap(policy.GroupIncarnation(status.GetViewId()))
+		// The other voters join the new group with this member as their only donor, and MySQL
+		// refuses their recovery connections, as the replication user, while offline_mode is ON.
+		// The bootstrap has happened: a failure is left to the sync loop, which lifts offline_mode
+		// on the primary of the shard's group too.
+		if err := tm.liftOfflineMode(ctx, "MySQL bootstrapped the shard's group"); err != nil {
+			log.Warn("Failed to clear offline_mode after bootstrapping the group", slog.Any("error", err))
+		}
 	}
 	return status, nil
+}
+
+// liftOfflineMode clears offline_mode on the tablet's MySQL, if it is set.
+//
+// With group_replication_exit_state_action=OFFLINE_MODE, MySQL sets offline_mode, along with
+// super_read_only, when a member leaves its group involuntarily: unreachable_majority_timeout, an
+// expulsion, an applier or recovery error. MySQL then disconnects and refuses every connection of
+// a user without CONNECTION_ADMIN or SUPER, which are vttablet's app, allprivs and filtered users,
+// and the replication user; the tablet stops serving until the flag is cleared. This fences reads
+// on a member that is out of its group, without its tablet having to act, but MySQL never clears
+// the flag itself: not when the member rejoins, nor when it becomes the primary. Vitess clears it
+// once the member is back in the shard's legitimate group, when it bootstraps the group, and when
+// it makes MySQL the writable primary or an asynchronous replica of the shard primary.
+func (tm *TabletManager) liftOfflineMode(ctx context.Context, reason string) error {
+	on, err := tm.MysqlDaemon.IsOfflineMode(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read offline_mode")
+	}
+	if !on {
+		return nil
+	}
+	log.Info("Clearing offline_mode", slog.String("reason", reason))
+	if err := tm.MysqlDaemon.SetOfflineMode(ctx, false); err != nil {
+		return vterrors.Wrapf(err, "failed to clear offline_mode")
+	}
+	return nil
 }
 
 // mysqlErrGroupReplicationCommandOngoing is the MySQL error that refuses a change of the Group
@@ -601,6 +634,9 @@ func (tm *TabletManager) stopGroupReplicationLocked(ctx context.Context) (*repli
 		if err := tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to make the primary writable after it left its group")
 		}
+		if err := tm.liftOfflineMode(ctx, "the primary left its group and serves on its own"); err != nil {
+			return nil, err
+		}
 		if err := tm.fixPrimarySemiSyncFromPolicy(ctx); err != nil {
 			return nil, err
 		}
@@ -666,6 +702,9 @@ func (tm *TabletManager) promoteGroupMemberLocked(ctx context.Context, status *r
 		}
 	}
 	if err := tm.waitForGroupPrimaryWritable(ctx); err != nil {
+		return "", err
+	}
+	if err := tm.liftOfflineMode(ctx, "MySQL is promoted to the shard primary"); err != nil {
 		return "", err
 	}
 	status, err := tm.groupReplicationStatus(ctx)

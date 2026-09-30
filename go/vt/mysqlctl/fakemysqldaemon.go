@@ -138,6 +138,12 @@ type FakeMysqlDaemon struct {
 	// SetSuperReadOnlyError is used by SetSuperReadOnly.
 	SetSuperReadOnlyError error
 
+	// OfflineMode is the current value of offline_mode.
+	OfflineMode atomic.Bool
+
+	// SetOfflineModeError is returned by SetOfflineMode, if set.
+	SetOfflineModeError error
+
 	// SetSuperReadOnlyLockWaitTimeout records the lockWaitTimeout passed to the
 	// most recent SetSuperReadOnly call.
 	SetSuperReadOnlyLockWaitTimeout time.Duration
@@ -1032,6 +1038,20 @@ func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
 	}
 	fmd.SuperReadOnly.Store(true)
 	fmd.ReadOnly = true
+	return nil
+}
+
+// IsOfflineMode is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsOfflineMode(ctx context.Context) (bool, error) {
+	return fmd.OfflineMode.Load(), nil
+}
+
+// SetOfflineMode is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetOfflineMode(ctx context.Context, on bool) error {
+	if fmd.SetOfflineModeError != nil {
+		return fmd.SetOfflineModeError
+	}
+	fmd.OfflineMode.Store(on)
 	return nil
 }
 
