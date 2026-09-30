@@ -40,7 +40,7 @@ func TestOrcaCountingUnaryInterceptorCountsFailedCallsAsQueriesAndErrors(t *test
 	assert.EqualValues(t, 1, orcaErrors.Load())
 }
 
-func TestOrcaCountingStreamInterceptorCountsEverySentMessageAndStreamEnd(t *testing.T) {
+func TestOrcaCountingStreamInterceptorCountsEverySentMessage(t *testing.T) {
 	orcaEgressMessages.Store(0)
 	orcaErrors.Store(0)
 

@@ -26,9 +26,8 @@ import (
 // orcaEgressMessages counts gRPC messages sent since the last ORCA report, so
 // unary calls (one message each, i.e. QPS) and long-lived streams like VStream
 // are measured the same way. Every message counts equally regardless of cost,
-// health checks and ORCA reports included. Every call also counts once when it
-// ends, and once in orcaErrors if it ends with an error, so EPS/QPS is its
-// error rate.
+// health checks and ORCA reports included. Failed calls also count once here
+// and once in orcaErrors, so EPS/QPS is the error rate.
 var orcaEgressMessages atomic.Int64
 
 var orcaErrors atomic.Int64
