@@ -63,9 +63,18 @@ type testCluster struct {
 	rdonly *cluster.Vttablet
 }
 
+// vtorcConfig is the VTOrc configuration of the tests: it polls every second, like the
+// Vitess examples.
+var vtorcConfig = cluster.VTOrcConfiguration{
+	InstancePollTime:               "1s",
+	RecoveryPollDuration:           "1s",
+	TopoInformationRefreshDuration: "2s",
+}
+
 // setupCluster starts a shard with one REPLICA tablet in each of three cells, plus an
-// RDONLY tablet, using the recommended cross-cell semi-sync setup.
-func setupCluster(t *testing.T) *testCluster {
+// RDONLY tablet, using the recommended cross-cell semi-sync setup, and a VTOrc with the given
+// configuration.
+func setupCluster(t *testing.T, vtorcCfg cluster.VTOrcConfiguration) *testCluster {
 	clusterInstance := cluster.NewCluster(cells[0], "localhost")
 	t.Cleanup(clusterInstance.Teardown)
 	tc := &testCluster{LocalProcessCluster: clusterInstance}
@@ -134,11 +143,7 @@ func setupCluster(t *testing.T) *testCluster {
 	clusterInstance.VtgateProcess = *vtgate
 	require.NoError(t, clusterInstance.VtgateProcess.Setup())
 
-	vtorc := clusterInstance.NewVTOrcProcess(cluster.VTOrcConfiguration{
-		InstancePollTime:               "1s",
-		RecoveryPollDuration:           "1s",
-		TopoInformationRefreshDuration: "2s",
-	}, cells[0])
+	vtorc := clusterInstance.NewVTOrcProcess(vtorcCfg, cells[0])
 	require.NoError(t, vtorc.Setup())
 	clusterInstance.VTOrcProcesses = append(clusterInstance.VTOrcProcesses, vtorc)
 	return tc
@@ -287,7 +292,7 @@ func waitForRowCounts(t *testing.T, tc *testCluster, primary *cluster.Vttablet) 
 // TestGroupReplicationLifecycle converts a cross-cell semi-sync shard to Group Replication
 // online, fails over with PRS and by killing the primary, and converts it back.
 func TestGroupReplicationLifecycle(t *testing.T) {
-	tc := setupCluster(t)
+	tc := setupCluster(t, vtorcConfig)
 	primary := tc.voters[0]
 
 	t.Run("migrate from semi-sync to group replication without failing writes", func(t *testing.T) {
