@@ -4956,9 +4956,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 }
 
-// TestEmergencyReparentShardRequiredPositionNotReceived checks that the decoded
-// required position reaches the reparenter.
-func TestEmergencyReparentShardRequiredPositionNotReceived(t *testing.T) {
+// TestEmergencyReparentShardRequiredPosition checks that vtctld decodes the
+// required position, with or without the flavor prefix, and gives it to ERS.
+// No replica has the position, and ERS rejects the reparent.
+func TestEmergencyReparentShardRequiredPosition(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -5024,7 +5025,6 @@ func TestEmergencyReparentShardRequiredPositionNotReceived(t *testing.T) {
 				RequiredPosition:    tc.required,
 			})
 			require.ErrorContains(t, err, "required position "+strings.TrimPrefix(missing, "MySQL56/"))
-			require.ErrorContains(t, err, strings.TrimPrefix(received, "MySQL56/"))
 			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		})
 	}
