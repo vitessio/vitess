@@ -43,6 +43,7 @@ type DBClient interface {
 	IsClosed() bool
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
 	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
+	SetMultiStatements(on bool) error
 	SupportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
 
@@ -132,6 +133,25 @@ func (dc *dbClientImpl) IsClosed() bool {
 
 func (dc *dbClientImpl) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	return dc.dbConn.SupportsCapability(capability)
+}
+
+// SetMultiStatements is part of the DBClient interface. It turns the ability to
+// send several statements in a single query on or off for the underlying
+// connection.
+func (dc *dbClientImpl) SetMultiStatements(on bool) error {
+	// Asking for the state the connection is already in costs a round trip and
+	// gains nothing. A closed connection is a different matter: closing it
+	// leaves on record the capability it negotiated while it was alive, so what
+	// it remembers says nothing about what it can do, and answering from that
+	// would report a capability the caller does not have.
+	if !dc.dbConn.IsClosed() && on == (dc.dbConn.Capabilities&mysql.CapabilityClientMultiStatements != 0) {
+		return nil
+	}
+	if err := dc.dbConn.SetMultiStatements(on); err != nil {
+		dc.handleError(err)
+		return err
+	}
+	return nil
 }
 
 // LogError logs a message after truncating it to avoid spamming logs
