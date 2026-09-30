@@ -462,11 +462,11 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 #### <a id="ers-required-position"/>`EmergencyReparentShard` can require a position on the new primary</a>
 
-`EmergencyReparentShard` (ERS) can now require that the new primary has received a given position. A new `--required-position` flag, and a `required_position` field on the `EmergencyReparentShard` RPC, names that position. The new primary must have it applied or still in its relay log.
+`EmergencyReparentShard` (ERS) can now require that the new primary has a given position. A new `--required-position` flag and a new `required_position` field on the `EmergencyReparentShard` RPC name that position. At least one candidate must have received it, either applied or still in its relay log.
 
 Use this when you know a position that the new primary must not lose, for example the last `gtid_executed` of the failed primary. ERS compares the candidates only to each other. When every candidate lost the same received transactions, for example after a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, the candidates look fully applied, and ERS alone cannot see that they are behind.
 
-If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found.
+If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found. ERS does the check again after errant GTID detection. It fails in the same way if detection removes every candidate that has the position.
 
 The check supports MySQL GTID sets on MySQL GTID shards only. A position of another flavor fails with `INVALID_ARGUMENT` before ERS locks the shard. On a shard that does not use MySQL GTIDs, ERS fails with `INVALID_ARGUMENT` only after it stops replication and demotes a reachable primary. Do not use the flag on such a shard.
 
