@@ -17,9 +17,12 @@ limitations under the License.
 package policy
 
 import (
+	"sort"
+
 	"github.com/google/uuid"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -82,6 +85,9 @@ type GroupReplicationDurabler interface {
 	// RequiresCrossCellMajority returns whether a majority of the group must span more
 	// than one cell.
 	RequiresCrossCellMajority() bool
+	// MaxVotersPerCell returns how many voting members a cell may have. 0 means no limit
+	// other than MaxGroupReplicationMembers.
+	MaxVotersPerCell() int
 }
 
 // GetReplicationMode returns the replication mode of the durability policy.
@@ -202,6 +208,17 @@ func (d *durabilityGroupReplication) MemberWeight(tablet *topodatapb.Tablet) int
 	return MemberWeightForPromotionRule(d.PromotionRule(tablet))
 }
 
+// MaxVotersPerCell implements the GroupReplicationDurabler interface. The cross-cell policy
+// allows one voter per cell: every durable transaction then exists in two cells, and the
+// group stays small, which keeps commits fast. Other tablets of a cell replicate
+// asynchronously from the primary.
+func (d *durabilityGroupReplication) MaxVotersPerCell() int {
+	if d.crossCell {
+		return 1
+	}
+	return 0
+}
+
 // RequiresCrossCellMajority implements the GroupReplicationDurabler interface.
 func (d *durabilityGroupReplication) RequiresCrossCellMajority() bool {
 	return d.crossCell
@@ -222,4 +239,105 @@ func MemberWeightForPromotionRule(rule promotionrule.CandidatePromotionRule) int
 	default:
 		return 50
 	}
+}
+
+// VoterCandidate is a tablet of a shard, as seen by the component that selects the voting
+// members of the shard's group.
+type VoterCandidate struct {
+	Tablet *topodatapb.Tablet
+	// Active is true when the tablet's MySQL is an active member (ONLINE or RECOVERING) of the
+	// shard's group.
+	Active bool
+	// Failed is true when the tablet has been unreachable for longer than the caller's grace
+	// period. A failed voter is replaced; a voter that is only briefly unreachable, for
+	// example while it restarts, is kept.
+	Failed bool
+}
+
+// SelectVoters returns the voting members that a shard's group should have, sorted by alias.
+// It changes the current voters as little as possible:
+//
+//  1. A current voter is kept while it is eligible and has not failed, within the limit of its
+//     cell. The group primary is always kept.
+//  2. Active members come next, so that a tablet already in the group is preferred to one
+//     that would have to join.
+//  3. Free slots are filled with eligible, non-failed tablets, preferring a better promotion
+//     rule, then the lowest alias.
+//
+// Cells are limited to MaxVotersPerCell voters and the group to MaxGroupReplicationMembers.
+// groupPrimary is the alias of the group's primary, if known.
+func SelectVoters(durability GroupReplicationDurabler, current []*topodatapb.TabletAlias, groupPrimary *topodatapb.TabletAlias, candidates []VoterCandidate) []*topodatapb.TabletAlias {
+	byAlias := make(map[string]VoterCandidate, len(candidates))
+	for _, c := range candidates {
+		if c.Tablet == nil || c.Tablet.Alias == nil {
+			continue
+		}
+		byAlias[topoproto.TabletAliasString(c.Tablet.Alias)] = c
+	}
+
+	perCell := make(map[string]int)
+	chosen := make(map[string]bool)
+	var voters []*topodatapb.TabletAlias
+	add := func(c VoterCandidate) {
+		alias := topoproto.TabletAliasString(c.Tablet.Alias)
+		if chosen[alias] || len(voters) >= MaxGroupReplicationMembers {
+			return
+		}
+		if limit := durability.MaxVotersPerCell(); limit > 0 && perCell[c.Tablet.Alias.Cell] >= limit {
+			return
+		}
+		chosen[alias] = true
+		perCell[c.Tablet.Alias.Cell]++
+		voters = append(voters, c.Tablet.Alias)
+	}
+
+	// The group primary keeps its seat whatever else happens: removing it would force a
+	// failover.
+	if groupPrimary != nil {
+		if c, ok := byAlias[topoproto.TabletAliasString(groupPrimary)]; ok {
+			add(c)
+		}
+	}
+	for _, alias := range current {
+		c, ok := byAlias[topoproto.TabletAliasString(alias)]
+		if ok && !c.Failed && durability.IsGroupMember(c.Tablet) {
+			add(c)
+		}
+	}
+
+	var rest []VoterCandidate
+	for _, c := range byAlias {
+		if !c.Failed && durability.IsGroupMember(c.Tablet) {
+			rest = append(rest, c)
+		}
+	}
+	sort.Slice(rest, func(i, j int) bool {
+		a, b := rest[i], rest[j]
+		if a.Active != b.Active {
+			return a.Active
+		}
+		ra, rb := durability.PromotionRule(a.Tablet), durability.PromotionRule(b.Tablet)
+		if ra != rb {
+			return ra.BetterThan(rb)
+		}
+		return topoproto.TabletAliasString(a.Tablet.Alias) < topoproto.TabletAliasString(b.Tablet.Alias)
+	})
+	for _, c := range rest {
+		add(c)
+	}
+
+	sort.Slice(voters, func(i, j int) bool {
+		return topoproto.TabletAliasString(voters[i]) < topoproto.TabletAliasString(voters[j])
+	})
+	return voters
+}
+
+// IsVoter returns whether the alias is in the list of voters.
+func IsVoter(voters []*topodatapb.TabletAlias, alias *topodatapb.TabletAlias) bool {
+	for _, v := range voters {
+		if topoproto.TabletAliasEqual(v, alias) {
+			return true
+		}
+	}
+	return false
 }

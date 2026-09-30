@@ -273,6 +273,13 @@ message Shard {
 
   // VtorcState is the vtorc config/state for the shard.
   vtorcdata.Shard vtorc_state = 9;
+
+  // group_replication_voters are the tablets that are the voting members of the shard's
+  // MySQL Group Replication group, when its keyspace uses a Group Replication durability
+  // policy. Only the tablets listed here join the group; the other tablets replicate
+  // asynchronously from the primary. It is changed under the shard lock, by
+  // MigrateReplicationMode and by VTOrc.
+  repeated TabletAlias group_replication_voters = 10;
 }
 
 // A Keyspace contains data about a keyspace.

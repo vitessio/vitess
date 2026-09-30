@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func tablet(cell string, uid uint32, typ topodatapb.TabletType) *topodatapb.Tablet {
@@ -87,4 +88,93 @@ func TestGroupName(t *testing.T) {
 	assert.NotEqual(t, GroupName("commerce", "0"), GroupName("commerce", "-80"))
 	assert.NotEqual(t, GroupName("commerce", "0"), GroupName("customer", "0"))
 	assert.Len(t, GroupName("commerce", "0"), 36)
+}
+
+func aliases(tablets ...*topodatapb.Tablet) []*topodatapb.TabletAlias {
+	var out []*topodatapb.TabletAlias
+	for _, t := range tablets {
+		out = append(out, t.Alias)
+	}
+	return out
+}
+
+func TestSelectVoters(t *testing.T) {
+	crossCell, err := GetDurabilityPolicy(DurabilityGroupReplicationCrossCell)
+	require.NoError(t, err)
+	grCrossCell, _ := AsGroupReplication(crossCell)
+	plain, err := GetDurabilityPolicy(DurabilityGroupReplication)
+	require.NoError(t, err)
+	grPlain, _ := AsGroupReplication(plain)
+
+	z1a := tablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	z1b := tablet("zone1", 102, topodatapb.TabletType_REPLICA)
+	z1rdonly := tablet("zone1", 103, topodatapb.TabletType_RDONLY)
+	z2a := tablet("zone2", 201, topodatapb.TabletType_REPLICA)
+	z2b := tablet("zone2", 202, topodatapb.TabletType_REPLICA)
+	z3a := tablet("zone3", 301, topodatapb.TabletType_REPLICA)
+	all := func(mutate func(c *VoterCandidate)) []VoterCandidate {
+		var cs []VoterCandidate
+		for _, tb := range []*topodatapb.Tablet{z1a, z1b, z1rdonly, z2a, z2b, z3a} {
+			c := VoterCandidate{Tablet: tb}
+			if mutate != nil {
+				mutate(&c)
+			}
+			cs = append(cs, c)
+		}
+		return cs
+	}
+
+	t.Run("first selection picks one tablet per cell", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, nil, nil, all(nil))
+		assert.Equal(t, aliases(z1a, z2a, z3a), voters)
+	})
+
+	t.Run("the plain policy takes every eligible tablet", func(t *testing.T) {
+		voters := SelectVoters(grPlain, nil, nil, all(nil))
+		assert.Equal(t, aliases(z1a, z1b, z2a, z2b, z3a), voters)
+	})
+
+	t.Run("current voters are kept although a lower alias exists", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, aliases(z1a, z2b, z3a), nil, all(nil))
+		assert.Equal(t, aliases(z1a, z2b, z3a), voters)
+	})
+
+	t.Run("a briefly unreachable voter keeps its seat", func(t *testing.T) {
+		// Not failed yet: the caller's grace period has not expired.
+		voters := SelectVoters(grCrossCell, aliases(z1a, z2a, z3a), nil, all(nil))
+		assert.Equal(t, aliases(z1a, z2a, z3a), voters)
+	})
+
+	t.Run("a failed voter is replaced by a tablet of the same cell", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, aliases(z1a, z2a, z3a), nil, all(func(c *VoterCandidate) {
+			c.Failed = topoproto.TabletAliasEqual(c.Tablet.Alias, z2a.Alias)
+		}))
+		assert.Equal(t, aliases(z1a, z2b, z3a), voters)
+	})
+
+	t.Run("a cell without a replacement is left empty", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, aliases(z1a, z2a, z3a), nil, all(func(c *VoterCandidate) {
+			c.Failed = c.Tablet.Alias.Cell == "zone3"
+		}))
+		assert.Equal(t, aliases(z1a, z2a), voters)
+	})
+
+	t.Run("active members are preferred when filling a seat", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, nil, nil, all(func(c *VoterCandidate) {
+			c.Active = topoproto.TabletAliasEqual(c.Tablet.Alias, z1b.Alias)
+		}))
+		assert.Equal(t, aliases(z1b, z2a, z3a), voters)
+	})
+
+	t.Run("the group primary keeps its seat over the listed voter of its cell", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, aliases(z1a, z2a, z3a), z1b.Alias, all(func(c *VoterCandidate) {
+			c.Active = c.Tablet.Alias.Cell != "zone1" || topoproto.TabletAliasEqual(c.Tablet.Alias, z1b.Alias)
+		}))
+		assert.Equal(t, aliases(z1b, z2a, z3a), voters)
+	})
+
+	t.Run("tablets that cannot be promoted never vote", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, aliases(z1rdonly), nil, []VoterCandidate{{Tablet: z1rdonly, Active: true}})
+		assert.Empty(t, voters)
+	})
 }
