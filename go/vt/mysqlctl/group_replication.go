@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -26,6 +27,10 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+// bootstrapFlagResetTimeout bounds the reset of group_replication_bootstrap_group after a failed
+// bootstrap.
+const bootstrapFlagResetTimeout = 10 * time.Second
 
 // GroupReplicationStatus returns the MySQL Group Replication state of the server.
 func (mysqld *Mysqld) GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
@@ -95,8 +100,12 @@ func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool)
 	err = mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 	if err != nil && bootstrap {
 		// Never leave the bootstrap flag on: a later START GROUP_REPLICATION would create a
-		// second group.
-		if resetErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{"SET GLOBAL group_replication_bootstrap_group = OFF"}); resetErr != nil {
+		// second group. Reset it on a fresh connection and context: when ctx expired, the
+		// connection running START GROUP_REPLICATION was killed and ctx cannot run anything,
+		// but MySQL may still complete the killed statement, or a later one, as a bootstrap.
+		resetCtx, cancel := context.WithTimeout(context.Background(), bootstrapFlagResetTimeout)
+		defer cancel()
+		if resetErr := mysqld.ExecuteSuperQueryList(resetCtx, []string{"SET GLOBAL group_replication_bootstrap_group = OFF"}); resetErr != nil {
 			log.Warn(fmt.Sprintf("Failed to reset group_replication_bootstrap_group: %v", resetErr))
 		}
 	}
