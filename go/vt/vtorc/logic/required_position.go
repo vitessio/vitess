@@ -49,7 +49,7 @@ func storedPrimaryPosition(alias *topodatapb.TabletAlias) (replication.Position,
 
 	position, err := replication.ParsePosition(replication.Mysql56FlavorID, executedGtidSet)
 	if err != nil {
-		return replication.Position{}, fmt.Errorf("%w: %s: %v", errStoredSetNotMySQLGTID, topoproto.TabletAliasString(alias), err)
+		return replication.Position{}, fmt.Errorf("%w: %s has %q", errStoredSetNotMySQLGTID, topoproto.TabletAliasString(alias), executedGtidSet)
 	}
 
 	return position, nil
