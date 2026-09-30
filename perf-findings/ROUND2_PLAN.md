@@ -34,3 +34,12 @@ Prompted by the ~15x QPS gap to plain MySQL. Preliminary data is in HOP-OVERHEAD
 | 2 | V4-scale | Reshard fan-out (N targets), many streams/tables per tablet, idle overhead, switch-traffic outage remainder | 40000 | partial (fan-out + running-phase done) |
 | 3 | V5-vstream | VStream CDC through vtgate: events/s, vtgate CPU, multi-shard merge, copy+stream | 30000 | done |
 | 2b | V4b-scale-cont | SwitchTraffic outage timeline + A\/B, many tables (500-3000), many workflows per tablet, more coalescing rounds | 40000 | done |
+
+## Bug validation pass (brief: BRIEF-VAL.md; no fixes)
+
+| ID | Bugs (BUGS.md rank) | BASE | Status |
+|---|---|---|---|
+| VAL-A | #1 generated-column shifted values, #3 `select *` drops conversions, #22 nil ConvertCharset | 30000 | running |
+| VAL-B | #5 PAD SPACE end to end vs real MySQL, #26 Collation_binary.Hash panic, #28 counters invalid JSON | 40000 | running |
+| VAL-C | #16 throttler checkScope race, #19 FetchNext uncapped slices + consolidator over-count, #24 relay-log stall race, #4 parallel-insert-worker TZ end to end | 30000/20000 | running |
+| VAL-D | #12 vtgate 40 s routing after tablet restart, #13 VTOrc FullStatus hang, #14 VDiff stop/delete blocked | tbd | pending |
