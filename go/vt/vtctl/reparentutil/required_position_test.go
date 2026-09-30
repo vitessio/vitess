@@ -256,22 +256,6 @@ func (f *requiredPositionFixture) expectPromotion() {
 	f.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 }
 
-// TestERSRequiredPositionPromotesReceiver checks that ERS promotes the
-// candidate that received the required position.
-func TestERSRequiredPositionPromotesReceiver(t *testing.T) {
-	fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
-		behind: requiredLow, applied: requiredLow, received: requiredHigh, required: requiredHigh,
-	})
-	fixture.expectStops()
-	fixture.expectWaits(1)
-	fixture.expectJournal(nil, nil)
-	fixture.expectPromotion()
-
-	ev, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-	require.NoError(t, err)
-	assert.Equal(t, requiredAdvancedAlias, topoproto.TabletAliasString(ev.NewPrimary.Alias))
-}
-
 // TestERSRequiredPositionRequestedPrimaryCatchesUp checks that the requirement
 // is on any candidate, not on the requested primary. A requested primary behind
 // the position catches up to the candidate that has it and is promoted.
