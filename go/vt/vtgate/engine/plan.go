@@ -18,6 +18,7 @@ package engine
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -260,19 +261,25 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	s := fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	if pk.ColumnNameEnv != (sqlparser.ColumnNameEnv{}) {
+		s += fmt.Sprintf(", ClientCharset: %s, ConnectionCharset: %s", pk.ColumnNameEnv.ClientCharset, pk.ColumnNameEnv.ConnectionCharset)
+	}
+	return s
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
-	_, _ = hasher.WriteString(pk.CurrentKeyspace)
-	_, _ = hasher.WriteString(pk.Destination)
-	_, _ = hasher.WriteString(pk.SetVarComment)
-	_, _ = hasher.WriteString(pk.Query)
-	_, _ = hasher.WriteString(pk.ColumnNameEnv.ClientCharset)
-	_, _ = hasher.WriteString(pk.ColumnNameEnv.ConnectionCharset)
+	// Each string is prefixed with its length, so that keys whose strings
+	// only split the same bytes differently do not collide.
+	for _, str := range []string{pk.CurrentKeyspace, pk.Destination, pk.SetVarComment, pk.Query, pk.ColumnNameEnv.ClientCharset, pk.ColumnNameEnv.ConnectionCharset} {
+		var length [8]byte
+		binary.LittleEndian.PutUint64(length[:], uint64(len(str)))
+		_, _ = hasher.Write(length[:])
+		_, _ = hasher.WriteString(str)
+	}
 
 	var planKey theine.HashKey256
 	hasher.Sum(planKey[:0])

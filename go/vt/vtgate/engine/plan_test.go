@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -86,4 +87,24 @@ func TestPlanSwitcherRecordsExecutedBranch(t *testing.T) {
 	assert.False(t, isOptimized)
 	assert.Same(t, baseline, vc.ExecutedPrimitive())
 	assert.Equal(t, [][3]string{{"ks", "hash", "Scatter"}}, GetRoutingIndexes(vc.ExecutedPrimitive()))
+}
+
+// TestPlanKeyHashSeparatesFields checks that plan keys whose string fields
+// only split the same bytes differently get different hashes.
+func TestPlanKeyHashSeparatesFields(t *testing.T) {
+	pairs := [][2]PlanKey{{
+		{ColumnNameEnv: sqlparser.ColumnNameEnv{ClientCharset: "latin1"}},
+		{ColumnNameEnv: sqlparser.ColumnNameEnv{ConnectionCharset: "latin1"}},
+	}, {
+		{CurrentKeyspace: "ks", Destination: "-80"},
+		{CurrentKeyspace: "ks-", Destination: "80"},
+	}, {
+		{Query: "select 1", ColumnNameEnv: sqlparser.ColumnNameEnv{ClientCharset: "latin1"}},
+		{Query: "select 1latin1"},
+	}}
+	for _, pair := range pairs {
+		assert.NotEqual(t, pair[0].Hash(), pair[1].Hash(), "%s\n%s", pair[0].DebugString(), pair[1].DebugString())
+	}
+	key := PlanKey{Query: "select 1", ColumnNameEnv: sqlparser.ColumnNameEnv{ClientCharset: "latin1"}}
+	assert.Equal(t, key.Hash(), key.Hash())
 }
