@@ -133,6 +133,82 @@ func recordResumption(config *tls.Config) *bool {
 	return &resumed
 }
 
+// TestReadServerConfigRereadsFiles checks that ReadServerConfig picks
+// up a server certificate, key, client CA and CRL that were replaced
+// on disk, under the same paths, by ones from an unrelated CA.
+func TestReadServerConfigRereadsFiles(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+
+	live := t.TempDir()
+	cert, key, ca, crl, serverCA := path.Join(live, "cert.pem"), path.Join(live, "key.pem"), path.Join(live, "ca.pem"), path.Join(live, "crl.pem"), path.Join(live, "server-ca.pem")
+	install := func(certs tlstest.ClientServerKeyPairs) {
+		for dst, src := range map[string]string{cert: certs.ServerCert, key: certs.ServerKey, ca: certs.ClientCA, crl: certs.ClientCRL, serverCA: certs.ServerCA} {
+			b, err := os.ReadFile(src)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(dst, b, 0o600))
+		}
+	}
+	clientConfig := func(certs tlstest.ClientServerKeyPairs, cert, key string) *tls.Config {
+		config, err := ClientConfig(VerifyIdentity, cert, key, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		return config
+	}
+
+	install(oldCerts)
+	before, err := ReadServerConfig(cert, key, ca, crl, serverCA, tls.VersionTLS12)
+	require.NoError(t, err)
+
+	install(newCerts)
+	after, err := ReadServerConfig(cert, key, ca, crl, serverCA, tls.VersionTLS12)
+	require.NoError(t, err)
+
+	require.Equal(t, loadOneCert(t, newCerts.ServerCert).Raw, after.Certificates[0].Certificate[0])
+
+	res := handshake(t, after, clientConfig(newCerts, newCerts.ClientCert, newCerts.ClientKey))
+	require.NoError(t, res.clientErr)
+	require.NoError(t, res.serverErr)
+
+	res = handshake(t, before, clientConfig(newCerts, newCerts.ClientCert, newCerts.ClientKey))
+	require.Error(t, res.clientErr, "the config loaded before the files changed must still serve the old certificate")
+
+	res = handshake(t, after, clientConfig(oldCerts, oldCerts.ClientCert, oldCerts.ClientKey))
+	require.Error(t, res.serverErr, "a client of the old CA must not be accepted once the CA file changed")
+
+	res = handshake(t, after, clientConfig(newCerts, newCerts.RevokedClientCert, newCerts.RevokedClientKey))
+	require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+newCerts.RevokedClientName)
+}
+
+// TestReadServerConfigRereadsCAForCRLs checks that ReadServerConfig
+// holds the CRL against the CA certificates now on disk: once the CA
+// file grows to trust an intermediate that the configured CRL
+// revokes, no client chain may end at that intermediate.
+func TestReadServerConfigRereadsCAForCRLs(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	clientCA := loadOneCert(t, certs.ClientCA)
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, strings.TrimSuffix(filepath.Base(certs.ClientCA), "-cert.pem"))
+	rootPEM, err := os.ReadFile(path.Join(root, "ca-cert.pem"))
+	require.NoError(t, err)
+	clientCAPEM, err := os.ReadFile(certs.ClientCA)
+	require.NoError(t, err)
+	rootCRL := path.Join(root, "ca-crl.pem")
+
+	ca := path.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(ca, rootPEM, 0o600))
+	_, err = ReadServerConfig(certs.ServerCert, certs.ServerKey, ca, rootCRL, certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(ca, append(clientCAPEM, rootPEM...), 0o600))
+	serverConfig, err := ReadServerConfig(certs.ServerCert, certs.ServerKey, ca, rootCRL, certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+
+	clientConfig, err := ClientConfig(VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+	require.NoError(t, err)
+	res := handshake(t, serverConfig, clientConfig)
+	require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+clientCA.Subject.CommonName)
+}
+
 // TestClientConfigCRL checks the revocation of server certificates by
 // a client configured with a CRL, through real TLS handshakes: in
 // every SSL mode, on resumed sessions, and against the chain that the
