@@ -418,7 +418,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		if err != nil {
 			return err
 		}
-		return callback(result)
+		return replyInTransaction(c, result, callback)
 	}
 	key := strings.ToLower(query)
 	db.mu.Lock()

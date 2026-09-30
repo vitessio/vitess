@@ -660,8 +660,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// have left trailing resultsets or the final OK packet unread, or already be
 	// killed, and the client is gone, so we close rather than attempt a
 	// drain-and-recover — while a clean stream runs the post-stream safety
-	// checks. A stored procedure call on a pooled connection always costs the
-	// connection, whatever the outcome (see execCallProc).
+	// checks. A stored procedure call always costs the connection it ran on,
+	// whatever the outcome: a pooled one right away (see execCallProc), a
+	// transaction's one when the transaction releases it (see execProc).
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {

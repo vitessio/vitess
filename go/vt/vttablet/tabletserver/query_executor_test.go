@@ -3318,7 +3318,10 @@ func TestCallInTransactionDiscardsConnOnRelease(t *testing.T) {
 		err = tsv.StreamExecute(ctx, nil, target, query, nil, state.TransactionID, 0, nil, func(*sqltypes.Result) error { return errors.New("client went away") })
 		require.ErrorContains(t, err, "client went away")
 
-		_, _ = tsv.Rollback(ctx, target, state.TransactionID)
+		// the stream released the closed connection as it returned, which ended
+		// the transaction, so there is nothing left to roll back
+		_, err = tsv.Rollback(ctx, target, state.TransactionID)
+		require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err), "the failed stream must have ended the transaction")
 		assert.Zero(t, discarded(tsv), "a connection already closed must not be counted as discarded")
 	})
 	t.Run("failed CALL, then commit", func(t *testing.T) {
