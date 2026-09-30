@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -107,13 +108,35 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 	aliasString := topoproto.TabletAliasString(tablet.Alias)
 
 	// VTOrc's view of the group is up to --instance-poll-time old. Confirm that the member is
-	// still the group's primary before making its tablet the shard primary.
-	status, err := tabletFullStatus(ctx, tablet)
+	// still the primary of the shard's legitimate group before making its tablet the shard
+	// primary: the recorded incarnation, with a majority of the shard's voters in its view.
+	shardInfo, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return true, topologyRecovery, vterrors.Wrapf(err, "failed to read the status of %s", aliasString)
+		return true, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
 	}
-	if !mysql.IsGroupPrimary(status.GetGroupReplicationStatus()) {
-		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is no longer the primary of a group with quorum", aliasString)
+	tabletInfos, err := getShardTablets(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return true, topologyRecovery, err
+	}
+	statuses := readShardTabletStatuses(ctx, tabletInfos)
+	var status *replicationdatapb.FullStatus
+	for _, st := range statuses {
+		if topoproto.TabletAliasEqual(st.tablet.Alias, tablet.Alias) {
+			if st.err != nil {
+				return true, topologyRecovery, vterrors.Wrapf(st.err, "failed to read the status of %s", aliasString)
+			}
+			status = st.status
+		}
+	}
+	if status == nil {
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s is not a tablet of its shard", aliasString)
+	}
+	legitimate := legitimateGroupOf(shardInfo, statuses)
+	if !legitimate.IsLegitimatePrimary(status.GetGroupReplicationStatus()) {
+		gs := status.GetGroupReplicationStatus()
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"the MySQL of %s is not the primary of the shard's replication group (view %s, recorded incarnation %q, %d of %d voters ONLINE)",
+			aliasString, gs.GetViewId(), legitimate.Incarnation, legitimate.OnlineVoters(gs), len(legitimate.Voters))
 	}
 
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoting %s, the primary of the replication group, to shard primary", aliasString))
@@ -217,13 +240,42 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 
 	aliasString := topoproto.TabletAliasString(candidate.tablet.Alias)
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("bootstrapping the replication group on %s, which has the most advanced GTID set %s", aliasString, candidate.gtidSet))
-	if _, err := startGroupReplication(ctx, candidate.tablet, true); err != nil {
+	groupStatus, err := startGroupReplication(ctx, candidate.tablet, true)
+	if err != nil {
 		return true, topologyRecovery, vterrors.Wrapf(err, "failed to bootstrap the replication group on %s", aliasString)
 	}
 	bootstrapped = &inst.Instance{InstanceAlias: candidate.tablet.Alias}
+	// The new group is the shard's legitimate group: record its incarnation while the shard is
+	// still locked, before any other member joins it.
+	incarnation := policy.GroupIncarnation(groupStatus.GetViewId())
+	if incarnation == "" {
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bootstrapped the replication group on %s, but it reports no view id", aliasString)
+	}
+	if err := reparentutil.WriteGroupReplicationIncarnation(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, incarnation); err != nil {
+		return true, topologyRecovery, vterrors.Wrapf(err, "bootstrapped the replication group on %s, but failed to record its incarnation %s", aliasString, incarnation)
+	}
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("recorded the group incarnation %s", incarnation))
 	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, candidate.tablet.Alias, "bootstrapped the replication group")
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, aliasString))
 	return true, topologyRecovery, nil
+}
+
+// legitimateGroupOf returns the shard's legitimate replication group from its shard record. The
+// voters are identified in the members' views by the server_uuids that the statuses report, and
+// by the MySQL addresses of their tablet records.
+func legitimateGroupOf(shardInfo *topo.ShardInfo, statuses []*shardTabletStatus) *policy.LegitimateGroup {
+	tablets := make(map[string]*topodatapb.Tablet, len(statuses))
+	uuids := make(map[string]string, len(statuses))
+	for _, st := range statuses {
+		alias := topoproto.TabletAliasString(st.tablet.Alias)
+		tablets[alias] = st.tablet
+		if st.err == nil {
+			uuids[alias] = st.status.GetServerUuid()
+		} else if instance, _, err := inst.ReadInstance(st.tablet.Alias); err == nil && instance != nil {
+			uuids[alias] = instance.ServerUUID
+		}
+	}
+	return policy.NewLegitimateGroup(shardInfo.GetGroupReplicationIncarnation(), shardInfo.GetGroupReplicationVoters(), tablets, uuids)
 }
 
 // shardTabletStatus is the FullStatus of a tablet of a shard, or the error that reading it returned.
@@ -392,6 +444,9 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 	}
 
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
+	// Only the shard's legitimate group counts: a member of a group of another incarnation has
+	// no quorum and is no primary here, and the group primary holds a majority of the voters.
+	legitimate := legitimateGroupOf(shardInfo, statuses)
 	observations := make([]*inst.VoterObservation, len(statuses))
 	groupUp := false
 	for i, st := range statuses {
@@ -404,6 +459,12 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 			continue
 		}
 		observations[i] = inst.NewVoterObservation(st.tablet, st.status, "")
+		gs := st.status.GetGroupReplicationStatus()
+		if legitimate.IsForeignIncarnation(gs) {
+			observations[i].HasQuorum = false
+			observations[i].PrimaryUUID = ""
+		}
+		observations[i].GroupPrimary = observations[i].GroupPrimary && legitimate.IsLegitimatePrimary(gs)
 		if observations[i].Active && observations[i].HasQuorum {
 			groupUp = true
 		}

@@ -35,9 +35,14 @@ import (
 // group elects its primary on its own, for example after the primary failed; the sync loop is
 // how such a change reaches the topology within about one sync interval, without VTOrc:
 //
-//   - If MySQL is the ONLINE primary of a group with quorum and the tablet is not PRIMARY, it
+//   - If MySQL is the legitimate primary of the shard's group and the tablet is not PRIMARY, it
 //     promotes the tablet record. The new primary term makes the shard sync loop update the
-//     shard record, and vtgate follow.
+//     shard record, and vtgate follow. The primary is legitimate when it is the ONLINE primary of
+//     a group with quorum, in the group incarnation that the shard record lists, and a majority
+//     of the shard's listed voters are ONLINE in its view (see policy.LegitimateGroup).
+//   - If MySQL is an active member of a group of another incarnation than the one the shard
+//     record lists, it makes MySQL leave that group and suspends its own rejoins: such a group
+//     formed without Vitess and does not hold the shard's acknowledged transactions.
 //   - If the tablet is PRIMARY but MySQL is no longer the primary of a group with quorum, it
 //     demotes the tablet record to REPLICA. MySQL is left as it is: the group already made it
 //     read-only.
@@ -58,6 +63,13 @@ type groupReplicationSync struct {
 
 	voters     []*topodatapb.TabletAlias
 	votersRead time.Time
+
+	// record is the shard record's view of the shard's legitimate group, read at recordRead.
+	record     *shardGroupRecord
+	recordRead time.Time
+	// lastIllegitimateLog is when the loop last logged that it does not promote a group primary
+	// that is not legitimate.
+	lastIllegitimateLog time.Time
 
 	lastState string
 	lastRole  string
@@ -136,6 +148,11 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		return
 	}
 	s.logTransition(status)
+
+	if mysql.IsGroupMemberActive(status) && s.isForeignGroup(ctx, status) {
+		s.leaveForeignGroup(ctx)
+		return
+	}
 
 	tablet := tm.Tablet()
 	switch {
@@ -228,6 +245,31 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 	// Check again under the lock: an RPC may have changed the state in the meantime.
 	status, err := tm.groupReplicationStatus(ctx)
 	if err != nil || !mysql.IsGroupPrimary(status) || tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+		return
+	}
+	// Only the primary of the shard's legitimate group is followed. The shard record is read
+	// again: the group may have been bootstrapped, or its voters changed, a moment ago.
+	rec, err := s.getRecord(ctx, true)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the shard's group record, not promoting the tablet", slog.Any("error", err))
+		return
+	}
+	legitimate := tm.legitimateGroup(ctx, rec, status, true)
+	if legitimate.IsForeignIncarnation(status) {
+		tm.leaveForeignGroupLocked(ctx, status, rec.incarnation)
+		return
+	}
+	if !legitimate.IsLegitimatePrimary(status) {
+		if time.Since(s.lastIllegitimateLog) >= groupReplicationIllegitimateLogInterval {
+			s.lastIllegitimateLog = time.Now()
+			log.Warn("Group replication sync: MySQL is the primary of its group, but not of the shard's legitimate group: not promoting the tablet",
+				slog.String("group", status.GroupName),
+				slog.String("view_id", status.ViewId),
+				slog.String("recorded_incarnation", legitimate.Incarnation),
+				slog.Int("online_voters", legitimate.OnlineVoters(status)),
+				slog.Int("voters", len(legitimate.Voters)),
+				slog.Int("online_members", mysql.OnlineGroupMembers(status)))
+		}
 		return
 	}
 	log.Info("Group replication sync: MySQL is the primary of its group, promoting the tablet to PRIMARY", slog.String("group", status.GroupName))
@@ -325,6 +367,56 @@ func (s *groupReplicationSync) setTwoPCAllowed(allowed bool) {
 	}
 	s.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, allowed)
 	s.twoPCAllowed = &allowed
+}
+
+// getRecord returns the shard record's view of the shard's legitimate group, cached for
+// groupReplicationVotersCacheTTL unless fresh is set.
+func (s *groupReplicationSync) getRecord(ctx context.Context, fresh bool) (*shardGroupRecord, error) {
+	if !fresh && s.record != nil && time.Since(s.recordRead) < groupReplicationVotersCacheTTL {
+		return s.record, nil
+	}
+	rec, err := s.tm.readShardGroupRecord(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.record = rec
+	s.recordRead = time.Now()
+	return rec, nil
+}
+
+// isForeignGroup returns whether MySQL is an active member of a group of another incarnation
+// than the one the shard record lists, and that this tablet did not bootstrap a moment ago. A
+// mismatch with the cached record is confirmed with a fresh read before it counts.
+func (s *groupReplicationSync) isForeignGroup(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) bool {
+	incarnation := policy.GroupIncarnation(status.GetViewId())
+	if incarnation == "" || incarnation == s.tm.groupReplicationPeers.recentlyBootstrapped() {
+		return false
+	}
+	rec, err := s.getRecord(ctx, false)
+	if err != nil || rec.incarnation == "" || rec.incarnation == incarnation {
+		return false
+	}
+	rec, err = s.getRecord(ctx, true)
+	if err != nil {
+		return false
+	}
+	return rec.incarnation != "" && rec.incarnation != incarnation
+}
+
+// leaveForeignGroup makes MySQL leave a group that is not the shard's legitimate group, after
+// checking again under the action lock.
+func (s *groupReplicationSync) leaveForeignGroup(ctx context.Context) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !mysql.IsGroupMemberActive(status) || !s.isForeignGroup(ctx, status) {
+		return
+	}
+	s.twoPCAllowed = nil
+	tm.leaveForeignGroupLocked(ctx, status, s.record.incarnation)
 }
 
 // getVoters returns the voters of the shard's group from the shard record, cached for

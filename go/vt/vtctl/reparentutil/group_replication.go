@@ -121,14 +121,21 @@ func memberIsOnlineInView(view *replicationdatapb.GroupReplicationStatus, server
 // group_replication_set_as_primary; a tablet outside the group cannot be promoted while the
 // group is active, because the group's members would keep following the old primary.
 //
+// The group must be the shard's legitimate group (see policy.LegitimateGroup): its view belongs
+// to the incarnation recorded in the shard record, when one is recorded, and holds a majority of
+// the listed voters. A planned reparent never moves the shard to a group that formed on its own.
+//
 // Only a voter, a tablet listed in the shard record's voters, can be promoted: the other
 // tablets replicate asynchronously and are not members of the group. Swapping a non-voter in
 // for a voter is not supported yet. An empty list (voters not selected yet) skips this check.
 //
 // A shard that never had a primary is initialized with InitPrimary, which bootstraps the
 // group, so there is nothing to check. A shard whose primary is unknown can only promote an
-// ONLINE member of a group that has quorum.
-func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletManagerClient, shardInitialized bool, voters []*topodatapb.TabletAlias, currentPrimary, primaryElect *topodatapb.Tablet) error {
+// ONLINE member of the legitimate group.
+//
+// tablets are the tablets of the shard; the statuses of the voters among them identify the
+// voters in the group's view.
+func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletManagerClient, shardInitialized bool, incarnation string, voters []*topodatapb.TabletAlias, tablets []*topodatapb.Tablet, currentPrimary, primaryElect *topodatapb.Tablet) error {
 	if primaryElect == nil || (currentPrimary != nil && topoproto.TabletAliasEqual(currentPrimary.Alias, primaryElect.Alias)) {
 		return nil
 	}
@@ -141,23 +148,38 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 				"Promoting a tablet that is not a voter is not supported yet",
 			topoproto.TabletAliasString(primaryElect.Alias), votersString(voters))
 	}
-	if currentPrimary == nil {
-		electAlias := topoproto.TabletAliasString(primaryElect.Alias)
-		res := fetchFullStatus(ctx, tmc, primaryElect, topo.RemoteOperationTimeout)
-		if res.err != nil {
-			return vterrors.Wrapf(res.err, "cannot verify the group replication membership of primary-elect %v", electAlias)
+
+	// Read the current primary, the primary-elect and the voters.
+	toRead := []*topodatapb.Tablet{primaryElect}
+	if currentPrimary != nil {
+		toRead = append(toRead, currentPrimary)
+	}
+	for _, tablet := range tablets {
+		if policy.IsVoter(voters, tablet.Alias) && !slices.ContainsFunc(toRead, func(t *topodatapb.Tablet) bool { return topoproto.TabletAliasEqual(t.Alias, tablet.Alias) }) {
+			toRead = append(toRead, tablet)
 		}
-		if !res.isOnlineMember() || !res.groupStatus().HasQuorum {
+	}
+	statuses := fetchFullStatuses(ctx, tmc, toRead, topo.RemoteOperationTimeout)
+	legitimate := legitimateGroup(incarnation, voters, statuses)
+	electAlias := topoproto.TabletAliasString(primaryElect.Alias)
+	electStatus := statuses[electAlias]
+
+	if currentPrimary == nil {
+		if electStatus.err != nil {
+			return vterrors.Wrapf(electStatus.err, "cannot verify the group replication membership of primary-elect %v", electAlias)
+		}
+		gs := electStatus.groupStatus()
+		if !electStatus.isOnlineMember() || !gs.HasQuorum {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"primary-elect %v is not an ONLINE member of a replication group with quorum; the shard has no current primary to compare with", electAlias)
+		}
+		if err := checkLegitimateGroupView(legitimate, gs, electAlias); err != nil {
+			return err
 		}
 		return nil
 	}
 	primaryAlias := topoproto.TabletAliasString(currentPrimary.Alias)
-	electAlias := topoproto.TabletAliasString(primaryElect.Alias)
-
-	statuses := fetchFullStatuses(ctx, tmc, []*topodatapb.Tablet{currentPrimary, primaryElect}, topo.RemoteOperationTimeout)
-	primaryStatus, electStatus := statuses[primaryAlias], statuses[electAlias]
+	primaryStatus := statuses[primaryAlias]
 	if primaryStatus.err != nil {
 		return vterrors.Wrapf(primaryStatus.err, "cannot verify the group replication membership of current primary %v", primaryAlias)
 	}
@@ -169,6 +191,9 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 	if !primaryStatus.isActiveMember() {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"current primary %v is not an active member of a replication group; the shard's group must be running before a planned reparent (see MigrateReplicationMode)", primaryAlias)
+	}
+	if err := checkLegitimateGroupView(legitimate, primaryGroup, primaryAlias); err != nil {
+		return err
 	}
 	electGroup := electStatus.groupStatus()
 	if !electStatus.isOnlineMember() {
@@ -183,9 +208,90 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"primary-elect %v is a member of group %s, but current primary %v is a member of group %s", electAlias, electGroup.GroupName, primaryAlias, primaryGroup.GroupName)
 	}
+	if policy.GroupIncarnation(electGroup.ViewId) != policy.GroupIncarnation(primaryGroup.ViewId) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"primary-elect %v is in group incarnation %s, but current primary %v is in group incarnation %s", electAlias,
+			policy.GroupIncarnation(electGroup.ViewId), primaryAlias, policy.GroupIncarnation(primaryGroup.ViewId))
+	}
 	if !memberIsOnlineInView(primaryGroup, electStatus.status.ServerUuid) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"primary-elect %v is not an ONLINE member in the group view of current primary %v", electAlias, primaryAlias)
+	}
+	return nil
+}
+
+// checkLegitimateGroupView returns a FAILED_PRECONDITION error when the member's view is not a
+// view of the shard's legitimate group: another incarnation than the recorded one, or fewer than
+// a majority of the listed voters ONLINE.
+func checkLegitimateGroupView(legitimate *policy.LegitimateGroup, view *replicationdatapb.GroupReplicationStatus, alias string) error {
+	if legitimate.IsForeignIncarnation(view) || !legitimate.IsLegitimateMember(view) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"%v is in group incarnation %q, but the shard record's group incarnation is %q: it is not a member of the shard's replication group",
+			alias, policy.GroupIncarnation(view.GetViewId()), legitimate.Incarnation)
+	}
+	if !legitimate.HasVoterMajority(view) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"only %d of the %d voters of the shard are ONLINE in the group view of %v; a majority is needed",
+			legitimate.OnlineVoters(view), len(legitimate.Voters), alias)
+	}
+	return nil
+}
+
+// legitimateGroup returns the shard's legitimate replication group from the shard record's
+// incarnation and voters. The voters are identified in the members' views by the server_uuids
+// that the statuses report, and by the MySQL addresses of their tablet records.
+func legitimateGroup(incarnation string, voters []*topodatapb.TabletAlias, statuses map[string]*fullStatusResult) *policy.LegitimateGroup {
+	tablets := make(map[string]*topodatapb.Tablet, len(statuses))
+	uuids := make(map[string]string, len(statuses))
+	for alias, res := range statuses {
+		if res == nil {
+			continue
+		}
+		tablets[alias] = res.tablet
+		if res.err == nil && res.status != nil {
+			uuids[alias] = res.status.ServerUuid
+		}
+	}
+	return policy.NewLegitimateGroup(incarnation, voters, tablets, uuids)
+}
+
+// RecordGroupReplicationIncarnation records the incarnation of the group that the tablet's MySQL
+// is an active member of as the shard's legitimate group incarnation. Callers use it right after
+// they bootstrapped the shard's group on the tablet, while they still hold the shard lock, which
+// is re-checked first. It returns the recorded incarnation.
+func RecordGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, shard string, tablet *topodatapb.Tablet) (string, error) {
+	res := fetchFullStatus(ctx, tmc, tablet, topo.RemoteOperationTimeout)
+	if res.err != nil {
+		return "", vterrors.Wrapf(res.err, "cannot read the group incarnation of %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	gs := res.groupStatus()
+	incarnation := policy.GroupIncarnation(gs.GetViewId())
+	if !res.isActiveMember() || incarnation == "" {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %v is not an active member of a group with a view (state %s, view %q)",
+			topoproto.TabletAliasString(tablet.Alias), gs.GetMemberState(), gs.GetViewId())
+	}
+	if err := WriteGroupReplicationIncarnation(ctx, ts, keyspace, shard, incarnation); err != nil {
+		return "", err
+	}
+	return incarnation, nil
+}
+
+// WriteGroupReplicationIncarnation stores the incarnation of the shard's legitimate replication
+// group in the shard record; an empty incarnation clears it. The caller must hold the shard lock,
+// which is re-checked first.
+func WriteGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, keyspace, shard, incarnation string) error {
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		if si.GroupReplicationIncarnation == incarnation {
+			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+		}
+		si.GroupReplicationIncarnation = incarnation
+		return nil
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to store the group replication incarnation of shard %s/%s", keyspace, shard)
 	}
 	return nil
 }

@@ -73,6 +73,9 @@ var (
 	// groupReplicationVotersCacheTTL is how long the sync loop caches the voters of the shard's
 	// group, read from the shard record. It is only read when the loop considers a rejoin.
 	groupReplicationVotersCacheTTL = 5 * time.Second
+	// groupReplicationIllegitimateLogInterval limits how often the sync loop logs that it does not
+	// follow a group primary that is not legitimate.
+	groupReplicationIllegitimateLogInterval = 10 * time.Second
 )
 
 func registerGroupReplicationFlags(fs *pflag.FlagSet) {
@@ -265,7 +268,16 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 	} else if err := tm.joinGroupLocked(ctx, status, bootstrap); err != nil {
 		return nil, err
 	}
-	return tm.finishGroupJoinLocked(ctx)
+	status, err = tm.finishGroupJoinLocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if bootstrap {
+		// The caller records the new group's incarnation in the shard record right after the
+		// bootstrap. Until then, the sync loop must not take the group for a foreign one.
+		tm.groupReplicationPeers.noteBootstrap(policy.GroupIncarnation(status.GetViewId()))
+	}
+	return status, nil
 }
 
 // joinGroupLocked configures Group Replication and starts it on a MySQL that is not an active

@@ -70,6 +70,9 @@ type fakeGRTablet struct {
 	superReadOnly   bool
 	version         string
 	gtidMode        string
+	// incarnation overrides the incarnation of the group the member reports, to simulate a
+	// member alone in a group it formed on its own.
+	incarnation string
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -89,6 +92,9 @@ type fakeGRCluster struct {
 	tablets      map[string]*fakeGRTablet
 	tabletRecs   map[string]*topodatapb.Tablet
 	groupPrimary string
+	// incarnation is the incarnation of the group's view ids. Every bootstrap creates a new one.
+	incarnation   string
+	bootstrapSeqs int
 	// noQuorum makes every member report that its view has no quorum.
 	noQuorum   bool
 	calls      []string
@@ -214,6 +220,11 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 		}
 	}
 	gs.HasQuorum = !c.noQuorum && online > len(gs.Members)/2
+	incarnation := c.incarnation
+	if ft.incarnation != "" {
+		incarnation = ft.incarnation
+	}
+	gs.ViewId = incarnation + ":" + fmt.Sprint(len(gs.Members))
 	return gs
 }
 
@@ -276,6 +287,8 @@ func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topod
 			c.violations = append(c.violations, "bootstrapped a second group on "+ft.alias)
 		}
 		c.groupPrimary = ft.alias
+		c.bootstrapSeqs++
+		c.incarnation = fmt.Sprintf("%d", 1790000000+c.bootstrapSeqs)
 	} else if c.onlineMembers() == 0 {
 		return nil, errors.New("no group to join")
 	}
@@ -392,6 +405,8 @@ func (c *fakeGRCluster) InitPrimary(ctx context.Context, tablet *topodatapb.Tabl
 	ft.source = ""
 	ft.superReadOnly = false
 	c.groupPrimary = ft.alias
+	c.bootstrapSeqs++
+	c.incarnation = fmt.Sprintf("%d", 1790000000+c.bootstrapSeqs)
 	return "", nil
 }
 
@@ -494,6 +509,8 @@ func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec
 		tablets:    make(map[string]*fakeGRTablet),
 		tabletRecs: make(map[string]*topodatapb.Tablet),
 		failOnce:   make(map[string]bool),
+		// The incarnation of a group that the test makes active without a bootstrap.
+		incarnation: "1790000000",
 	}
 	var primary *topodatapb.Tablet
 	for _, spec := range specs {
@@ -587,6 +604,22 @@ func (c *fakeGRCluster) setVotersLocked(t *testing.T, voters []*topodatapb.Table
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+// setIncarnation stores the group incarnation in the shard record.
+func (c *fakeGRCluster) setIncarnation(t *testing.T, incarnation string) {
+	_, err := c.ts.UpdateShardFields(t.Context(), c.keyspace, "-", func(si *topo.ShardInfo) error {
+		si.GroupReplicationIncarnation = incarnation
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+// recordedIncarnation returns the group incarnation stored in the shard record.
+func (c *fakeGRCluster) recordedIncarnation(t *testing.T) string {
+	si, err := c.ts.GetShard(t.Context(), c.keyspace, "-")
+	require.NoError(t, err)
+	return si.GroupReplicationIncarnation
 }
 
 // setVoters stores the voters, given as alias strings, in the shard record.

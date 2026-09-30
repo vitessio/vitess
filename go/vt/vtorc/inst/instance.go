@@ -112,6 +112,12 @@ type Instance struct {
 	// active (ONLINE or RECOVERING), sorted. VTOrc uses them to tell whether a tablet that it
 	// cannot reach is still a member of its group.
 	GroupActiveMemberUUIDs []string
+	// GroupOnlineMemberUUIDs are the server_uuids of the members that this member sees as ONLINE,
+	// sorted. VTOrc counts the shard's voters among them.
+	GroupOnlineMemberUUIDs []string
+	// GroupViewID is the id of this member's view of its group. Its incarnation (the part before
+	// the ':') identifies the group.
+	GroupViewID string
 
 	LastSeenTimestamp    string
 	IsLastCheckValid     bool

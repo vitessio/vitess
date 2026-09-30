@@ -43,6 +43,8 @@ import (
 type groupReplicationView struct {
 	// groupName is the group_replication_group_name all quorum members agree on.
 	groupName string
+	// incarnation is the incarnation of the quorum members' view (see policy.GroupIncarnation).
+	incarnation string
 	// primaryUUID is the server_uuid of the group's primary, as seen by the quorum members.
 	primaryUUID string
 	// view is the membership view of one quorum member. All quorum members agree on the
@@ -52,11 +54,14 @@ type groupReplicationView struct {
 	primary *fullStatusResult
 }
 
-// findGroupWithQuorum looks for a reachable member of the shard's group whose view has
-// quorum, and returns what those members agree on. It fails when no reachable member has
-// quorum, or when the members that have quorum disagree about the group or its primary: ERS
-// must be certain about which primary it reconciles the topology with.
-func findGroupWithQuorum(statuses map[string]*fullStatusResult) (*groupReplicationView, error) {
+// findGroupWithQuorum looks for a reachable member of the shard's legitimate group whose view
+// has quorum, and returns what those members agree on. A member only counts when its view
+// belongs to the shard's recorded group incarnation and holds a majority of the shard's listed
+// voters (see policy.LegitimateGroup): a member alone in a group that it formed on its own has
+// quorum in its own view, but not the shard's acknowledged transactions. It fails when no
+// reachable member qualifies, or when the members that qualify disagree about the group or its
+// primary: ERS must be certain about which primary it reconciles the topology with.
+func findGroupWithQuorum(statuses map[string]*fullStatusResult, legitimate *policy.LegitimateGroup) (*groupReplicationView, error) {
 	var gv *groupReplicationView
 	for _, alias := range slices.Sorted(maps.Keys(statuses)) {
 		res := statuses[alias]
@@ -67,9 +72,12 @@ func findGroupWithQuorum(statuses map[string]*fullStatusResult) (*groupReplicati
 		if !gs.HasQuorum || gs.PrimaryUuid == "" {
 			continue
 		}
+		if !legitimate.IsLegitimateMember(gs) || !legitimate.HasVoterMajority(gs) {
+			continue
+		}
 		if gv == nil {
-			gv = &groupReplicationView{groupName: gs.GroupName, primaryUUID: gs.PrimaryUuid, view: gs}
-		} else if gv.groupName != gs.GroupName || gv.primaryUUID != gs.PrimaryUuid {
+			gv = &groupReplicationView{groupName: gs.GroupName, incarnation: policy.GroupIncarnation(gs.ViewId), primaryUUID: gs.PrimaryUuid, view: gs}
+		} else if gv.groupName != gs.GroupName || gv.incarnation != policy.GroupIncarnation(gs.ViewId) || gv.primaryUUID != gs.PrimaryUuid {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"the members of the replication group disagree about the group or its primary (%s/%s vs %s/%s at %v); the group membership is changing, retry EmergencyReparentShard",
 				gv.groupName, gv.primaryUUID, gs.GroupName, gs.PrimaryUuid, alias)
@@ -77,13 +85,13 @@ func findGroupWithQuorum(statuses map[string]*fullStatusResult) (*groupReplicati
 	}
 	if gv == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
-			"no reachable member of the replication group has quorum; the group cannot elect a primary. "+
+			"no reachable member of the replication group has quorum in the shard's legitimate group (its recorded incarnation, with a majority of the shard's voters ONLINE); the group cannot elect a primary. "+
 				"Restore enough members for a majority; forcing a new quorum (group_replication_force_members) is not supported by EmergencyReparentShard")
 	}
 	for _, alias := range slices.Sorted(maps.Keys(statuses)) {
 		res := statuses[alias]
 		if res.err == nil && res.status.ServerUuid == gv.primaryUUID {
-			if !res.isGroupPrimary() {
+			if !legitimate.IsLegitimatePrimary(res.groupStatus()) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 					"tablet %v is the primary of the replication group according to its members, but does not report itself as a primary with quorum; retry EmergencyReparentShard", alias)
 			}
@@ -102,7 +110,7 @@ func groupPromotionEligibility(res *fullStatusResult, gv *groupReplicationView, 
 	if res.err != nil {
 		return vterrors.Wrapf(res.err, "tablet %v is not reachable", alias)
 	}
-	if !res.isOnlineMember() || res.groupStatus().GroupName != gv.groupName || !memberIsOnlineInView(gv.view, res.status.ServerUuid) {
+	if !res.isOnlineMember() || res.groupStatus().GroupName != gv.groupName || policy.GroupIncarnation(res.groupStatus().ViewId) != gv.incarnation || !memberIsOnlineInView(gv.view, res.status.ServerUuid) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v is not an ONLINE member of the shard's replication group", alias)
 	}
 	if policy.PromotionRule(opts.durability, res.tablet) == promotionrule.MustNot {
@@ -235,7 +243,7 @@ func (erp *EmergencyReparenter) reparentShardLockedGroupReplication(ctx context.
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
-	gv, err := findGroupWithQuorum(statuses)
+	gv, err := findGroupWithQuorum(statuses, legitimateGroup(ev.ShardInfo.GroupReplicationIncarnation, ev.ShardInfo.GroupReplicationVoters, statuses))
 	if err != nil {
 		return err
 	}

@@ -985,6 +985,8 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 	fmd.GroupReplication.HasQuorum = true
 	if bootstrap {
 		fmd.GroupReplicationBootstrapped = true
+		// Every bootstrap creates a new incarnation of the group.
+		fmd.GroupReplication.ViewId = fmt.Sprintf("%d:1", 1790000000+fakeGroupIncarnations.Add(1))
 		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
 		fmd.GroupReplication.PrimaryUuid = uuid
 		fmd.GroupReplication.Members = nil
@@ -998,6 +1000,9 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 	fmd.setOwnGroupMemberLocked(fmd.GroupReplication.MemberState, fmd.GroupReplication.MemberRole)
 	return nil
 }
+
+// fakeGroupIncarnations numbers the group incarnations that fake daemons bootstrap.
+var fakeGroupIncarnations atomic.Int64
 
 // StopGroupReplication is part of the MysqlDaemon interface. Like MySQL, it leaves the member
 // super_read_only, and the member only sees itself afterwards.

@@ -83,6 +83,37 @@ func ActiveGroupMemberUUIDs(status *replicationdatapb.GroupReplicationStatus) []
 	return uuids
 }
 
+// OnlineGroupMemberUUIDs returns the sorted server_uuids of the members that a member sees as
+// ONLINE in its view of its group.
+func OnlineGroupMemberUUIDs(status *replicationdatapb.GroupReplicationStatus) []string {
+	var uuids []string
+	for _, m := range status.GetMembers() {
+		if m.GetMemberUuid() != "" && m.GetState() == mysql.GroupMemberStateOnline {
+			uuids = append(uuids, m.GetMemberUuid())
+		}
+	}
+	slices.Sort(uuids)
+	return uuids
+}
+
+// groupRowStatus rebuilds the group replication status of a member from what VTOrc stores about
+// it, as far as the legitimacy of its group needs it: its own state and role, its view id, and
+// the members it sees as ONLINE.
+func groupRowStatus(pluginActive bool, memberState, memberRole string, hasQuorum bool, primaryUUID, viewID string, onlineMemberUUIDs []string) *replicationdatapb.GroupReplicationStatus {
+	status := &replicationdatapb.GroupReplicationStatus{
+		PluginActive: pluginActive,
+		MemberState:  memberState,
+		MemberRole:   memberRole,
+		HasQuorum:    hasQuorum,
+		PrimaryUuid:  primaryUUID,
+		ViewId:       viewID,
+	}
+	for _, uuid := range onlineMemberUUIDs {
+		status.Members = append(status.Members, &replicationdatapb.GroupReplicationMember{MemberUuid: uuid, State: mysql.GroupMemberStateOnline})
+	}
+	return status
+}
+
 // splitGroupMemberUUIDs parses a comma-separated list of server_uuids, as stored in the database.
 func splitGroupMemberUUIDs(value string) []string {
 	if value == "" {
@@ -258,6 +289,11 @@ type groupReplicationRow struct {
 	primaryUUID  string
 	// activeMemberUUIDs are the members that the tablet's MySQL last saw as active.
 	activeMemberUUIDs []string
+	// status is the member's group replication status, as far as VTOrc stores it.
+	status *replicationdatapb.GroupReplicationStatus
+	// foreign is true when the member is active in a group of another incarnation than the one
+	// the shard record lists.
+	foreign bool
 }
 
 // groupReplicationShardState is the Group Replication state of a shard, aggregated over all of
@@ -265,6 +301,13 @@ type groupReplicationRow struct {
 type groupReplicationShardState struct {
 	// activeMembers is the number of reachable tablets whose MySQL is an active group member.
 	activeMembers uint
+	// legitimateActiveMembers is the number of reachable tablets whose MySQL is an active member
+	// of the shard's legitimate group (the recorded incarnation, if one is recorded) with quorum
+	// in its view: members that a voter can join.
+	legitimateActiveMembers uint
+	// foreignMembers are the tablets whose MySQL is active in a group of another incarnation than
+	// the one the shard record lists.
+	foreignMembers map[string]bool
 	// anyActive is true when any tablet, reachable or not, last reported an active member. An
 	// unreachable tablet that was a member may still be one, so a new group must not be
 	// bootstrapped.
@@ -303,12 +346,17 @@ type groupReplicationShardState struct {
 }
 
 // computeGroupReplicationShardState aggregates the Group Replication state of the tablets of a
-// shard.
-func computeGroupReplicationShardState(durability policy.Durabler, voters []*topodatapb.TabletAlias, rows []*groupReplicationRow, now time.Time) *groupReplicationShardState {
+// shard. Only the shard's legitimate group counts (see policy.LegitimateGroup): a member active
+// in a group of another incarnation than the recorded one neither has quorum nor is a primary
+// for VTOrc, and the group primary is the primary of a view that holds a majority of the
+// shard's voters.
+func computeGroupReplicationShardState(durability policy.Durabler, incarnation string, voters []*topodatapb.TabletAlias, rows []*groupReplicationRow, now time.Time) *groupReplicationShardState {
 	state := &groupReplicationShardState{
-		voters:        voters,
-		votingMembers: uint(len(voters)),
+		voters:         voters,
+		votingMembers:  uint(len(voters)),
+		foreignMembers: make(map[string]bool),
 	}
+	applyGroupLegitimacy(state, incarnation, voters, rows)
 	reachable := make(map[string]bool)
 	var onlineTablets []*topodatapb.Tablet
 	for _, row := range rows {
@@ -325,6 +373,9 @@ func computeGroupReplicationShardState(durability policy.Durabler, voters []*top
 			continue
 		}
 		state.activeMembers++
+		if !row.foreign && row.hasQuorum {
+			state.legitimateActiveMembers++
+		}
 		if row.online {
 			onlineTablets = append(onlineTablets, row.tablet)
 		}
@@ -351,6 +402,35 @@ func computeGroupReplicationShardState(durability policy.Durabler, voters []*top
 	}
 	computeGroupReplicationVoters(state, durability, rows, now)
 	return state
+}
+
+// applyGroupLegitimacy restricts the group primary and the quorum of the rows to the shard's
+// legitimate group. The voters are identified in the views by the server_uuids that VTOrc last
+// saw on their tablets, and by their MySQL addresses.
+func applyGroupLegitimacy(state *groupReplicationShardState, incarnation string, voters []*topodatapb.TabletAlias, rows []*groupReplicationRow) {
+	tablets := make(map[string]*topodatapb.Tablet, len(rows))
+	uuids := make(map[string]string, len(rows))
+	for _, row := range rows {
+		alias := topoproto.TabletAliasString(row.tablet.GetAlias())
+		tablets[alias] = row.tablet
+		uuids[alias] = row.serverUUID
+	}
+	legitimate := policy.NewLegitimateGroup(incarnation, voters, tablets, uuids)
+	for _, row := range rows {
+		if row.status == nil {
+			// The status is not known; only the view quorum applies.
+			continue
+		}
+		if legitimate.IsForeignIncarnation(row.status) {
+			row.foreign = true
+			row.groupPrimary = false
+			row.hasQuorum = false
+			row.primaryUUID = ""
+			state.foreignMembers[topoproto.TabletAliasString(row.tablet.GetAlias())] = true
+			continue
+		}
+		row.groupPrimary = row.groupPrimary && legitimate.IsLegitimatePrimary(row.status)
+	}
 }
 
 // computeGroupReplicationVoters decides whether the voters of the shard's group must be updated.
@@ -416,6 +496,9 @@ func applyGroupReplicationShardState(a *DetectionAnalysis, state *groupReplicati
 		return
 	}
 	a.ShardGroupActiveMembers = state.activeMembers
+	a.ShardGroupLegitimateActiveMembers = state.legitimateActiveMembers
+	a.IsGroupMemberForeign = state.foreignMembers[topoproto.TabletAliasString(a.AnalyzedInstanceAlias)]
+	a.IsLegitimateGroupPrimary = a.IsGroupPrimary && topoproto.TabletAliasEqual(state.primaryAlias, a.AnalyzedInstanceAlias)
 	a.ShardGroupQuorumMembers = state.quorumMembers
 	a.ShardGroupPrimaryAlias = state.primaryAlias
 	a.ShardGroupPrimaryUUID = state.primaryUUID
@@ -454,11 +537,14 @@ func matchGroupNotBootstrapped(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 }
 
 // matchGroupMemberNotOnline returns whether the analyzed tablet is a voter of its shard's group
-// but its MySQL is not an active member, while other tablets are. Tablets that are not voters
-// replicate asynchronously and keep the asynchronous replication analyses.
+// but its MySQL is not an active member, while other tablets are active members of the shard's
+// legitimate group with quorum in their view. Starting a join while no such group exists cannot
+// join anything: the join blocks until MySQL's join timeout, during which a bootstrap on the
+// member fails, and a member has been seen to form a group of its own. Tablets that are not
+// voters replicate asynchronously and keep the asynchronous replication analyses.
 func matchGroupMemberNotOnline(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 	return policy.IsGroupReplication(ca.durability) && a.IsGroupVoter &&
-		a.LastCheckValid && !a.IsGroupMemberActive && otherActiveGroupMembers(a) > 0
+		a.LastCheckValid && !a.IsGroupMemberActive && !a.IsGroupMemberForeign && a.ShardGroupLegitimateActiveMembers > 0
 }
 
 // matchGroupVotersOutOfDate returns whether the voters of the analyzed tablet's shard must be
@@ -468,24 +554,15 @@ func matchGroupVotersOutOfDate(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.isGroupVotersReporter
 }
 
-// otherActiveGroupMembers returns the number of reachable active members of the shard's group,
-// not counting the analyzed tablet.
-func otherActiveGroupMembers(a *DetectionAnalysis) uint {
-	if a.LastCheckValid && a.IsGroupMemberActive && a.ShardGroupActiveMembers > 0 {
-		return a.ShardGroupActiveMembers - 1
-	}
-	return a.ShardGroupActiveMembers
-}
-
-// matchGroupPrimaryNotInTopo returns whether the analyzed tablet's MySQL is the group primary
-// but the tablet is not the shard's topology primary, and that has been the case for longer
-// than the grace period during which the tablet is expected to promote itself.
+// matchGroupPrimaryNotInTopo returns whether the analyzed tablet's MySQL is the primary of the
+// shard's legitimate group but the tablet is not the shard's topology primary, and that has been
+// the case for longer than the grace period during which the tablet is expected to promote itself.
 //
 // While the durability policy does not use Group Replication, the shard may be in the middle of a
 // conversion, and the group only replaces the shard primary when that primary is a member too. A
 // group that runs next to a working primary outside of it is left alone.
 func matchGroupPrimaryNotInTopo(a *DetectionAnalysis, ca *clusterAnalysis, now time.Time) bool {
-	if !a.LastCheckValid || !a.IsGroupPrimary {
+	if !a.LastCheckValid || !a.IsLegitimateGroupPrimary {
 		return false
 	}
 	if !policy.IsGroupReplication(ca.durability) && a.shardReachableNonMemberPrimary {

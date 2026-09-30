@@ -596,8 +596,16 @@ type Shard struct {
 	// asynchronously from the primary. It is changed under the shard lock, by
 	// MigrateReplicationMode and by VTOrc.
 	GroupReplicationVoters []*TabletAlias `protobuf:"bytes,10,rep,name=group_replication_voters,json=groupReplicationVoters,proto3" json:"group_replication_voters,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// group_replication_incarnation identifies the shard's legitimate MySQL Group Replication
+	// group: the incarnation part of its view id (the part before the ':'), which MySQL keeps for
+	// as long as the group exists and changes when a group is bootstrapped. It is written under
+	// the shard lock by the component that bootstrapped the group (MigrateReplicationMode,
+	// PlannedReparentShard's initial promotion, VTOrc), and cleared when the shard is converted
+	// back to asynchronous replication. A member that reports another incarnation belongs to a
+	// group that Vitess did not create, and is never followed. Empty means unknown.
+	GroupReplicationIncarnation string `protobuf:"bytes,11,opt,name=group_replication_incarnation,json=groupReplicationIncarnation,proto3" json:"group_replication_incarnation,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *Shard) Reset() {
@@ -684,6 +692,13 @@ func (x *Shard) GetGroupReplicationVoters() []*TabletAlias {
 		return x.GroupReplicationVoters
 	}
 	return nil
+}
+
+func (x *Shard) GetGroupReplicationIncarnation() string {
+	if x != nil {
+		return x.GroupReplicationIncarnation
+	}
+	return ""
 }
 
 // A Keyspace contains data about a keyspace.
@@ -1879,7 +1894,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xe1\x06\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xa5\a\n" +
 	"\x05Shard\x12:\n" +
 	"\rprimary_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x12C\n" +
 	"\x17primary_term_start_time\x18\b \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x12/\n" +
@@ -1890,7 +1905,8 @@ const file_topodata_proto_rawDesc = "" +
 	"\vvtorc_state\x18\t \x01(\v2\x10.vtorcdata.ShardR\n" +
 	"vtorcState\x12O\n" +
 	"\x18group_replication_voters\x18\n" +
-	" \x03(\v2\x15.topodata.TabletAliasR\x16groupReplicationVoters\x1a\x9a\x01\n" +
+	" \x03(\v2\x15.topodata.TabletAliasR\x16groupReplicationVoters\x12B\n" +
+	"\x1dgroup_replication_incarnation\x18\v \x01(\tR\x1bgroupReplicationIncarnation\x1a\x9a\x01\n" +
 	"\vSourceShard\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\x05R\x03uid\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +

@@ -301,6 +301,8 @@ func TestPromoteGroupPrimary(t *testing.T) {
 	tests := []struct {
 		name        string
 		memberRole  string
+		viewID      string
+		incarnation string
 		wantErrCode vtrpcpb.Code
 	}{
 		{
@@ -312,11 +314,34 @@ func TestPromoteGroupPrimary(t *testing.T) {
 			memberRole:  mysql.GroupMemberRoleSecondary,
 			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
+		{
+			name:        "member is the primary of the recorded incarnation",
+			memberRole:  mysql.GroupMemberRolePrimary,
+			viewID:      "1790000001:4",
+			incarnation: "1790000001",
+		},
+		{
+			// S7d of the Group Replication failover audit: a member formed a new group on its own.
+			name:        "member is the primary of a group of another incarnation",
+			memberRole:  mysql.GroupMemberRolePrimary,
+			viewID:      "1799999999:1",
+			incarnation: "1790000001",
+			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			groupPrimary := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
-			mockTMC := groupReplicationRecoveryTest(t, recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY), groupPrimary)
+			oldPrimary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+			mockTMC := groupReplicationRecoveryTest(t, oldPrimary, groupPrimary)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(oldPrimary)).Return(nil, errors.New("unreachable"))
+			if tt.incarnation != "" {
+				_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+					si.GroupReplicationIncarnation = tt.incarnation
+					return nil
+				})
+				require.NoError(t, err)
+			}
 
 			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(groupPrimary)).Return(&replicationdatapb.FullStatus{
 				GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
@@ -324,6 +349,7 @@ func TestPromoteGroupPrimary(t *testing.T) {
 					MemberState:  mysql.GroupMemberStateOnline,
 					MemberRole:   tt.memberRole,
 					HasQuorum:    true,
+					ViewId:       tt.viewID,
 				},
 			}, nil)
 			promotions := 0
@@ -482,7 +508,7 @@ func TestBootstrapGroupReplication(t *testing.T) {
 				}
 				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).
 					DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
-						return &replicationdatapb.GroupReplicationStatus{}, nil
+						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil
 					}).Times(times)
 			}
 
@@ -492,7 +518,11 @@ func TestBootstrapGroupReplication(t *testing.T) {
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 			}
-			attempted, topologyRecovery, err := bootstrapGroupReplication(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			// VTOrc bootstraps a group under the shard lock.
+			lockedCtx, unlock, err := ts.LockShard(t.Context(), "ks", "0", "test")
+			require.NoError(t, err)
+			defer unlock(&err)
+			attempted, topologyRecovery, err := bootstrapGroupReplication(lockedCtx, analysisEntry, log.NewPrefixedLogger("test"))
 			require.True(t, attempted)
 			require.NotNil(t, topologyRecovery)
 			if tt.want == 0 {
@@ -504,6 +534,10 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, topologyRecovery.IsSuccessful)
 			assert.Equal(t, tt.want, topologyRecovery.SuccessorAlias.Uid)
+			// The bootstrapped group is recorded as the shard's legitimate group.
+			si, err := ts.GetShard(t.Context(), "ks", "0")
+			require.NoError(t, err)
+			assert.Equal(t, "1790000123", si.GroupReplicationIncarnation)
 		})
 	}
 }
@@ -565,7 +599,7 @@ func TestBootstrapGroupReplicationVoters(t *testing.T) {
 				if tablet.Alias.Uid == tt.want {
 					times = 1
 				}
-				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).Return(&replicationdatapb.GroupReplicationStatus{}, nil).Times(times)
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil).Times(times)
 			}
 
 			analysisEntry := &inst.DetectionAnalysis{
@@ -574,7 +608,11 @@ func TestBootstrapGroupReplicationVoters(t *testing.T) {
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 			}
-			attempted, topologyRecovery, err := bootstrapGroupReplication(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			// VTOrc bootstraps a group under the shard lock.
+			lockedCtx, unlock, err := ts.LockShard(t.Context(), "ks", "0", "test")
+			require.NoError(t, err)
+			defer unlock(&err)
+			attempted, topologyRecovery, err := bootstrapGroupReplication(lockedCtx, analysisEntry, log.NewPrefixedLogger("test"))
 			require.True(t, attempted)
 			require.NotNil(t, topologyRecovery)
 			if tt.want == 0 {

@@ -92,6 +92,9 @@ type InfoForRecoveryAnalysis struct {
 	GroupOnlineMembers                        uint
 	GroupActiveMemberUUIDs                    string
 	ShardGroupReplicationVoters               string
+	GroupOnlineMemberUUIDs                    string
+	GroupViewID                               string
+	ShardGroupReplicationIncarnation          string
 }
 
 func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
@@ -169,6 +172,9 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["gr_online_members"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.GroupOnlineMembers), 10), Valid: true}
 	rowMap["gr_active_member_uuids"] = sqlutils.CellData{String: info.GroupActiveMemberUUIDs, Valid: true}
 	rowMap["shard_group_replication_voters"] = sqlutils.CellData{String: info.ShardGroupReplicationVoters, Valid: true}
+	rowMap["gr_online_member_uuids"] = sqlutils.CellData{String: info.GroupOnlineMemberUUIDs, Valid: true}
+	rowMap["gr_view_id"] = sqlutils.CellData{String: info.GroupViewID, Valid: true}
+	rowMap["shard_group_replication_incarnation"] = sqlutils.CellData{String: info.ShardGroupReplicationIncarnation, Valid: true}
 	return rowMap
 }
 

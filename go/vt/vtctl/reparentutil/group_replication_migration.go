@@ -67,6 +67,8 @@ const (
 	MigrationActionKeepDurabilityPolicy   = "keep_durability_policy"
 	MigrationActionSetVoters              = "set_voters"
 	MigrationActionClearVoters            = "clear_voters"
+	MigrationActionSetIncarnation         = "set_incarnation"
+	MigrationActionClearIncarnation       = "clear_incarnation"
 	minimumGroupReplicationMembers        = 3
 	groupReplicationPortName              = "gr"
 	defaultReplicationModeMigrationWait   = 5 * time.Minute
@@ -143,6 +145,9 @@ type migrationShard struct {
 	// voters are the voting members of the group: the recorded voters, or, when converting
 	// to Group Replication, the voters the preflight selected.
 	voters []*topodatapb.TabletAlias
+	// recordedIncarnation is the group incarnation stored in the shard record when the shard
+	// was read.
+	recordedIncarnation string
 }
 
 // Migrate converts the requested shards of the keyspace to the replication mode of the
@@ -334,7 +339,7 @@ func (r *migrationRun) readShard(ctx context.Context, shard string) (*migrationS
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get tablet map for %s/%s", r.keyspace, shard)
 	}
-	s := &migrationShard{run: r, shard: shard, recordedVoters: si.GroupReplicationVoters, voters: si.GroupReplicationVoters}
+	s := &migrationShard{run: r, shard: shard, recordedVoters: si.GroupReplicationVoters, voters: si.GroupReplicationVoters, recordedIncarnation: si.GroupReplicationIncarnation}
 	for _, alias := range slices.Sorted(maps.Keys(tabletMap)) {
 		tablet := tabletMap[alias].Tablet
 		switch tablet.Type {
@@ -670,6 +675,20 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 		online++
 	}
 
+	// The group Vitess bootstrapped is the shard's legitimate group: record its incarnation, so
+	// that no component follows a group that a member forms on its own later.
+	if incarnation := policy.GroupIncarnation(s.status(primary).groupStatus().GetViewId()); incarnation != "" && incarnation == s.recordedIncarnation {
+		s.record(MigrationActionSetIncarnation, primary, MigrationStepSkipped, fmt.Sprintf("the shard record already lists the group incarnation %s", incarnation))
+	} else {
+		err := s.do(ctx, MigrationActionSetIncarnation, primary, fmt.Sprintf("record the incarnation of the group of primary %v in the shard record", primaryAlias), func(ctx context.Context) error {
+			_, err := RecordGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.m.tmc, s.run.keyspace, s.shard, primary)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	// The semi-sync ackers are the tablets replicating asynchronously from the primary with
 	// semi-sync. The primary needs semiSyncAcks of them while its semi-sync is enabled. A
 	// voter stops acking when it joins the group. An acker that is not a voter keeps acking
@@ -940,9 +959,20 @@ func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 		func(res *fullStatusResult) bool { return !res.status.SuperReadOnly && !res.status.ReadOnly })
 }
 
-// clearVoters removes the voters from the shard record once the last member left the group.
-// A shard converted to Group Replication again then selects its voters afresh.
+// clearVoters removes the voters and the group incarnation from the shard record once the last
+// member left the group. A shard converted to Group Replication again then selects its voters
+// afresh, and records the incarnation of its new group.
 func (s *migrationShard) clearVoters(ctx context.Context) error {
+	if s.recordedIncarnation == "" {
+		s.record(MigrationActionClearIncarnation, nil, MigrationStepSkipped, "the shard record lists no group incarnation")
+	} else {
+		err := s.do(ctx, MigrationActionClearIncarnation, nil, fmt.Sprintf("remove the group incarnation %s from the shard record", s.recordedIncarnation), func(ctx context.Context) error {
+			return WriteGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.keyspace, s.shard, "")
+		})
+		if err != nil {
+			return err
+		}
+	}
 	if len(s.recordedVoters) == 0 {
 		s.record(MigrationActionClearVoters, nil, MigrationStepSkipped, "the shard record lists no voters")
 		return nil

@@ -280,6 +280,15 @@ message Shard {
   // asynchronously from the primary. It is changed under the shard lock, by
   // MigrateReplicationMode and by VTOrc.
   repeated TabletAlias group_replication_voters = 10;
+
+  // group_replication_incarnation identifies the shard's legitimate MySQL Group Replication
+  // group: the incarnation part of its view id (the part before the ':'), which MySQL keeps for
+  // as long as the group exists and changes when a group is bootstrapped. It is written under
+  // the shard lock by the component that bootstrapped the group (MigrateReplicationMode,
+  // PlannedReparentShard's initial promotion, VTOrc), and cleared when the shard is converted
+  // back to asynchronous replication. A member that reports another incarnation belongs to a
+  // group that Vitess did not create, and is never followed. Empty means unknown.
+  string group_replication_incarnation = 11;
 }
 
 // A Keyspace contains data about a keyspace.

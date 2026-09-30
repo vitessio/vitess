@@ -236,7 +236,11 @@ func (pr *PlannedReparenter) preflightChecks(
 			currentPrimaryTablet = currentPrimary.Tablet
 		}
 		shardInitialized := ev.ShardInfo.PrimaryTermStartTime != nil
-		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, ev.ShardInfo.GroupReplicationVoters, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
+		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+		for _, info := range tabletMap {
+			tablets = append(tablets, info.Tablet)
+		}
+		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, ev.ShardInfo.GroupReplicationIncarnation, ev.ShardInfo.GroupReplicationVoters, tablets, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
 			return true, err
 		}
 	}
@@ -394,6 +398,16 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, policy.SemiSyncAckers(opts.durability, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
+	}
+
+	// InitPrimary bootstrapped the shard's group: record its incarnation as the shard's
+	// legitimate group, while the shard lock is still held.
+	if policy.IsGroupReplication(opts.durability) {
+		incarnation, err := RecordGroupReplicationIncarnation(ctx, pr.ts, pr.tmc, keyspace, shard, primaryElect)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "primary-elect tablet %v bootstrapped the replication group, but its incarnation could not be recorded; please re-run", primaryElectAliasStr)
+		}
+		pr.logger.Infof("recorded the replication group incarnation %s of shard %s/%s", incarnation, keyspace, shard)
 	}
 
 	if ctx.Err() == context.DeadlineExceeded {

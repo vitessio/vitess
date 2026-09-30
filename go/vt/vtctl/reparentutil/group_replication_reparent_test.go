@@ -299,6 +299,98 @@ func TestPlannedReparentGroupReplicationInitialPromotionStoresVoters(t *testing.
 	assert.Equal(t, []string{"InitPrimary(" + alias101 + ")"}, callsWithPrefix(c.mutatingCalls(), "InitPrimary"))
 	assert.Equal(t, "zone1-0000000101, zone2-0000000200, zone3-0000000300", c.votersAtInitPrimary)
 	assert.Equal(t, []string{alias101, alias200, alias300}, c.voters(t))
+	assert.Equal(t, "1790000001", c.recordedIncarnation(t), "the group InitPrimary bootstrapped is recorded as the shard's legitimate group")
+}
+
+// TestEmergencyReparentGroupReplicationFollowsOnlyLegitimateGroup checks that ERS does not follow
+// a member that is the ONLINE primary of a group with quorum in its own view, when that group is
+// not the shard's legitimate group: the member formed a new group incarnation on its own (S7d in
+// the Group Replication failover audit), or the group shrank below a majority of the shard's
+// voters. Without incarnation and voters in the shard record, the view quorum still decides.
+func TestEmergencyReparentGroupReplicationFollowsOnlyLegitimateGroup(t *testing.T) {
+	tests := []struct {
+		name        string
+		incarnation string
+		voters      []string
+		// memberIncarnation is the incarnation the lone member reports.
+		memberIncarnation string
+		wantPrimary       string
+	}{{
+		name:              "member alone in a new incarnation",
+		incarnation:       "1790000000",
+		voters:            []string{aliasP, alias101, alias200},
+		memberIncarnation: "1799999999",
+	}, {
+		name:              "member alone in the recorded incarnation",
+		incarnation:       "1790000000",
+		voters:            []string{aliasP, alias101, alias200},
+		memberIncarnation: "1790000000",
+	}, {
+		name:              "nothing recorded",
+		memberIncarnation: "1799999999",
+		wantPrimary:       alias200,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, ts := newFailedGroupShard(t)
+			// zone2's member is alone in its group: the others left it.
+			c.tablets[aliasP].member = false
+			c.tablets[alias101].member = false
+			c.tablets[alias200].incarnation = tt.memberIncarnation
+			c.setIncarnation(t, tt.incarnation)
+			c.setVoters(t, tt.voters...)
+			erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+
+			ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+			if tt.wantPrimary != "" {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantPrimary, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+			assert.Empty(t, c.mutatingCalls())
+		})
+	}
+}
+
+// TestPlannedReparentGroupReplicationRequiresLegitimateGroup checks that PRS refuses to switch
+// primaries inside a group that is not the shard's legitimate group.
+func TestPlannedReparentGroupReplicationRequiresLegitimateGroup(t *testing.T) {
+	t.Run("foreign incarnation", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
+		c.formGroup(t, "group_replication")
+		c.setIncarnation(t, "1780000000")
+		pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+
+		_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+			NewPrimaryAlias:     mustAlias(t, alias200),
+			WaitReplicasTimeout: 30 * time.Second,
+		})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, `is in group incarnation "1790000000", but the shard record's group incarnation is "1780000000"`)
+		assert.Empty(t, c.mutatingCalls())
+	})
+	t.Run("minority of the voters", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
+		c.formGroup(t, "group_replication")
+		c.setIncarnation(t, "1790000000")
+		require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+		// Two of the four voters left the group: the other two still have quorum in a view of two.
+		c.tablets[alias101].member = false
+		c.tablets[alias300].member = false
+		pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+
+		_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+			NewPrimaryAlias:     mustAlias(t, alias200),
+			WaitReplicasTimeout: 30 * time.Second,
+		})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "only 2 of the 4 voters of the shard are ONLINE")
+		assert.Empty(t, c.mutatingCalls())
+	})
 }
 
 // TestEmergencyReparentGroupReplicationRepointsNonVoters checks that ERS repoints a REPLICA

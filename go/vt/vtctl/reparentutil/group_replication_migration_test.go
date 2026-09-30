@@ -77,6 +77,8 @@ func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	assert.Empty(t, c.violationsSoFar())
 
 	assert.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+	// The group the migration bootstrapped is recorded as the shard's legitimate group.
+	assert.Equal(t, "1790000001", c.recordedIncarnation(t))
 	assert.Equal(t, []string{
 		"StartGroupReplication(" + aliasP + ", bootstrap)",
 		"StartGroupReplication(" + alias200 + ")",
@@ -106,6 +108,8 @@ func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	votersIdx := stepIdx(MigrationActionSetVoters, "")
 	require.GreaterOrEqual(t, votersIdx, 0)
 	assert.Less(t, votersIdx, stepIdx(MigrationActionBootstrapGroup, aliasP), "the voters must be stored before the group is bootstrapped")
+	assert.Less(t, stepIdx(MigrationActionBootstrapGroup, aliasP), stepIdx(MigrationActionSetIncarnation, aliasP), "the incarnation is recorded once the group exists")
+	assert.Less(t, stepIdx(MigrationActionSetIncarnation, aliasP), stepIdx(MigrationActionJoinGroup, alias200), "the incarnation is recorded before other members join")
 	waitIdx := stepIdx(MigrationActionWaitSemiSyncDisabled, aliasP)
 	require.GreaterOrEqual(t, waitIdx, 0)
 	assert.Less(t, waitIdx, stepIdx(MigrationActionSetReplicationSource, alias101),
@@ -351,6 +355,7 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
 	c.formGroup(t, "group_replication")
+	c.setIncarnation(t, "1790000000")
 	require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
 	m := newTestMigrator(c, ts)
 
@@ -359,6 +364,8 @@ func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
 	assert.Empty(t, c.violationsSoFar())
 	assert.Equal(t, "semi_sync", keyspaceDurability(t, ts))
 	assert.Empty(t, c.voters(t))
+	assert.Empty(t, c.recordedIncarnation(t), "the incarnation of the group that no longer exists is cleared")
+	assert.Equal(t, MigrationStepDone, stepStatuses(resp.Shards[0].Steps)[MigrationActionClearIncarnation])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.Shards[0].Steps)[MigrationActionClearVoters])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
 

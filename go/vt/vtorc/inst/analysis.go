@@ -227,6 +227,17 @@ type DetectionAnalysis struct {
 	// ShardGroupDesiredVoters are the voters that the shard's durability policy selects, when
 	// VTOrc may change them.
 	ShardGroupDesiredVoters []*topodatapb.TabletAlias
+	// ShardGroupLegitimateActiveMembers is the number of reachable tablets of the shard whose MySQL
+	// is an active member of the shard's legitimate group (the incarnation recorded in the shard
+	// record, if any) with quorum in its view.
+	ShardGroupLegitimateActiveMembers uint
+	// IsGroupMemberForeign is true when the analyzed tablet's MySQL is active in a group of
+	// another incarnation than the one the shard record lists.
+	IsGroupMemberForeign bool
+	// IsLegitimateGroupPrimary is true when the analyzed tablet's MySQL is the primary of the
+	// shard's legitimate group: the recorded incarnation, and a majority of the listed voters
+	// ONLINE in its view (see policy.LegitimateGroup).
+	IsLegitimateGroupPrimary bool
 	// IsGroupVoter is true when the analyzed tablet is a voter of its shard's group. Tablets that
 	// are not voters replicate asynchronously from the primary.
 	IsGroupVoter bool

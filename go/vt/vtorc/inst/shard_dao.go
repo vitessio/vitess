@@ -137,9 +137,10 @@ func SaveShard(shard *topo.ShardInfo) error {
 	}
 	_, err := db.ExecVTOrc(`
 		replace	into vitess_shard (
-			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent, group_replication_voters
+			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent, group_replication_voters,
+			group_replication_incarnation
 		) values (
-			?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?
 		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
@@ -147,6 +148,7 @@ func SaveShard(shard *topo.ShardInfo) error {
 		getShardPrimaryTermStartTime(shard),
 		disableEmergencyReparent,
 		formatGroupReplicationVoters(shard.GroupReplicationVoters),
+		shard.GroupReplicationIncarnation,
 	)
 	return err
 }

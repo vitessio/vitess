@@ -238,6 +238,11 @@ type TabletManager struct {
 	// its group until an explicit StartGroupReplication or StartReplication.
 	groupReplicationRejoinSuspended atomic.Bool
 
+	// groupReplicationPeers remembers what the tablet learned about the MySQL of the other
+	// tablets of its shard, to identify the shard's voters in its group's view, and the
+	// incarnation of the last group this tablet bootstrapped.
+	groupReplicationPeers groupReplicationPeers
+
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer

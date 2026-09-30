@@ -191,6 +191,7 @@ func (m *Shard) CloneVT() *Shard {
 	r.PrimaryAlias = m.PrimaryAlias.CloneVT()
 	r.KeyRange = m.KeyRange.CloneVT()
 	r.IsPrimaryServing = m.IsPrimaryServing
+	r.GroupReplicationIncarnation = m.GroupReplicationIncarnation
 	if rhs := m.PrimaryTermStartTime; rhs != nil {
 		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
 			r.PrimaryTermStartTime = vtpb.CloneVT()
@@ -1101,6 +1102,13 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.GroupReplicationIncarnation) > 0 {
+		i -= len(m.GroupReplicationIncarnation)
+		copy(dAtA[i:], m.GroupReplicationIncarnation)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.GroupReplicationIncarnation)))
+		i--
+		dAtA[i] = 0x5a
 	}
 	if len(m.GroupReplicationVoters) > 0 {
 		for iNdEx := len(m.GroupReplicationVoters) - 1; iNdEx >= 0; iNdEx-- {
@@ -2458,6 +2466,10 @@ func (m *Shard) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
+	}
+	l = len(m.GroupReplicationIncarnation)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -4471,6 +4483,38 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if err := m.GroupReplicationVoters[len(m.GroupReplicationVoters)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GroupReplicationIncarnation", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.GroupReplicationIncarnation = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
