@@ -76,8 +76,8 @@ func TestCheckRequiredPosition(t *testing.T) {
 	require.NoError(t, checkRequiredPosition(requiredPosition(t, requiredHigh), candidates, "candidate"))
 }
 
-// requiredPositionFixture holds an ERS setup with a lagging replica at index 0
-// and an advanced replica at index 1.
+// requiredPositionFixture holds an ERS setup with a behind replica at index 0,
+// an advanced replica at index 1, and an optional lagging replica at index 2.
 type requiredPositionFixture struct {
 	t       *testing.T
 	erp     *EmergencyReparenter
@@ -100,7 +100,7 @@ type requiredPositionFixture struct {
 
 // newRequiredPositionFixtureOptions holds the replica positions of a fixture.
 type newRequiredPositionFixtureOptions struct {
-	// behind is the executed and relay log position of the lagging replica.
+	// behind is the executed and relay log position of the behind replica.
 	behind string
 
 	// applied is the executed position of the advanced replica.
@@ -117,8 +117,8 @@ type newRequiredPositionFixtureOptions struct {
 	lagging string
 }
 
-// newRequiredPositionFixture builds two replicas and a mock tablet manager
-// client with no expectations. Each test declares the RPCs it allows.
+// newRequiredPositionFixture builds two or three replicas and a mock tablet
+// manager client with no expectations. Each test declares the RPCs it allows.
 func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOptions) *requiredPositionFixture {
 	t.Helper()
 
@@ -319,7 +319,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 			behind: requiredLow, applied: requiredHigh, received: requiredHigh, required: requiredHigh,
 		})
 		fixture.expectStops()
-		// One relay log wait on the advanced replica. The lagging replica has the
+		// One relay log wait on the advanced replica. The behind replica has the
 		// newer journal entry, and detection then removes the advanced one. ERS
 		// must fail before the rescue wait on the survivor.
 		fixture.expectWaits(1)
@@ -336,7 +336,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 			behind: requiredLow, applied: requiredHigh, received: requiredHigh, required: requiredHigh,
 		})
 		// The extra transactions of the advanced replica come from a foreign
-		// source UUID, and the lagging replica reaches journal count 2 only
+		// source UUID, and the behind replica reaches journal count 2 only
 		// after its rescue wait. The second detection pass then removes the
 		// advanced replica.
 		fixture.advanced.executed = requiredHigh
@@ -347,7 +347,7 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 		fixture.tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(requiredAdvancedAlias), gomock.Any()).
 			Return(foreign, nil)
 		// One relay log wait on the advanced replica, then the rescue wait on the
-		// lagging one.
+		// behind one.
 		fixture.expectWaits(2)
 		fixture.expectJournal(map[string]int32{requiredBehindAlias: 1, requiredAdvancedAlias: 2}, map[string]int32{requiredBehindAlias: 2})
 		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
