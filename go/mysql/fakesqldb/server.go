@@ -388,6 +388,9 @@ func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 
 // HandleQuery is the default implementation of the QueryHandler interface
 func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) (err error) {
+	// the transaction flag a previous reply set (see replyInTransaction) ends
+	// with that reply; nothing else sets it on a fakesqldb connection
+	c.StatusFlags &^= mysql.ServerStatusInTrans
 	defer func() {
 		if err != nil {
 			db.lastErrorMu.Lock()
@@ -404,7 +407,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		if err != nil {
 			return err
 		}
-		return callback(result)
+		return replyInTransaction(c, result, callback)
 	}
 	key := strings.ToLower(query)
 	db.mu.Lock()
@@ -449,7 +452,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		if f := result.BeforeFunc; f != nil {
 			f()
 		}
-		return callback(result.Result)
+		return replyInTransaction(c, result.Result, callback)
 	}
 
 	// Check query patterns from AddQueryPattern().
@@ -463,7 +466,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 			if pat.err != "" {
 				return errors.New(pat.err)
 			}
-			return callback(pat.result)
+			return replyInTransaction(c, pat.result, callback)
 		}
 	}
 
@@ -479,6 +482,20 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	log.Errorf("Query not found: %s", parser.TruncateForUI(query))
 
 	return err
+}
+
+// replyInTransaction sends a registered result. The server writes the status
+// flags of its connection, not the result's, so a result registered with
+// ServerStatusInTrans reports an open transaction by setting the flag on the
+// connection: a test can answer a statement the way MySQL answers it inside a
+// transaction, which fakesqldb does not track itself. The flag stays set until
+// the connection's next query (see HandleQuery), since the packet that ends a
+// result with rows is written after the handler returns.
+func replyInTransaction(c *mysql.Conn, result *sqltypes.Result, callback func(*sqltypes.Result) error) error {
+	if result != nil && result.StatusFlags&mysql.ServerStatusInTrans != 0 {
+		c.StatusFlags |= mysql.ServerStatusInTrans
+	}
+	return callback(result)
 }
 
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
