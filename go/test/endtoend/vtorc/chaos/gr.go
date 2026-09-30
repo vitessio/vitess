@@ -155,3 +155,11 @@ func (c *Chaos) grCheckInvariants(r *Report, p *Node) {
 		r.note("primary %s still has rpl_semi_sync_source_enabled=ON", p.Tablet.Alias)
 	}
 }
+
+// aliasOf returns the alias of the node's tablet, or <none>.
+func aliasOf(n *Node) string {
+	if n == nil {
+		return "<none>"
+	}
+	return n.Tablet.Alias
+}

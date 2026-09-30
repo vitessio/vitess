@@ -466,10 +466,3 @@ func TestS10GlobalTopoHangDuringERS(t *testing.T) {
 		s.Sleep(20*time.Second, "let old primary rejoin")
 	})
 }
-
-func aliasOf(n *Node) string {
-	if n == nil {
-		return "<none>"
-	}
-	return n.Tablet.Alias
-}
