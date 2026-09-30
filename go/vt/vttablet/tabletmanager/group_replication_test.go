@@ -574,6 +574,24 @@ func TestSetReplicationSourceOnGroupMember(t *testing.T) {
 	require.ErrorContains(t, err, "wrong input for WaitSourcePos")
 }
 
+// TestSetReplicationSourceRefusedOnGroupPrimary checks that a stale SetReplicationSource, for
+// example from a VTOrc acting on an old view, does not demote the tablet whose MySQL is the
+// primary of a group with quorum.
+func TestSetReplicationSourceRefusedOnGroupPrimary(t *testing.T) {
+	enableGroupReplication(t)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)))
+	parent := &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
+
+	err := tm.SetReplicationSource(t.Context(), parent, 0, "", false, false, 0)
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+}
+
 func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
 	enableGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)

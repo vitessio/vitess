@@ -1021,6 +1021,20 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// steps fail below.
 	// Note it is important to check for PRIMARY here so that we don't
 	// unintentionally change the type of RDONLY tablets
+	//
+	// A group replication member is checked first: while its MySQL is the primary of a group
+	// with quorum, another primary cannot have been promoted, so the request is stale (for
+	// example from a VTOrc or reparent acting on an old view). Changing the type would take
+	// the shard's only writable primary out of service until the group replication sync loop
+	// promotes it again.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupPrimary(groupStatus) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"cannot replicate from %v: MySQL is the primary of replication group %s", topoproto.TabletAliasString(parentAlias), groupStatus.GroupName)
+	}
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
@@ -1030,10 +1044,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 
 	// An active group replication member replicates through its group, never through the
 	// default channel.
-	groupStatus, err := tm.groupReplicationStatus(ctx)
-	if err != nil {
-		return err
-	}
 	if mysql.IsGroupMemberActive(groupStatus) {
 		return tm.setGroupMemberReplicationSourceLocked(ctx, groupStatus, parentAlias, timeCreatedNS, waitPosition, semiSync)
 	}
