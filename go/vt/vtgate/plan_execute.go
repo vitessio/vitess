@@ -76,6 +76,7 @@ func (e *Executor) newExecute(
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
+	e.seedSQLMode(safeSession)
 
 	var (
 		vs                 = e.VSchema()

@@ -41,10 +41,12 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	mysqlconfig "vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -214,6 +216,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "begin", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary", SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 0, sbclookup.CommitCount.Load(), "commit count")
 	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
@@ -223,13 +226,14 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	// commit.
 	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
-	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	_, err = executorExecSession(t.Context(), executor, session, "commit", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	assert.Truef(t, proto.Equal(session.Session, wantSession), "begin: %v, want %v", session.Session, wantSession)
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Load(), "commit count")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
@@ -244,10 +248,11 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.RollbackCount.Load(), "rollback count")
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
-	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from main1", 1)
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	assert.NotZero(t, logStats.CommitTime)
 	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
@@ -277,7 +282,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
-		Sql:           "select :__vtdbname as `database()` from dual",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ :__vtdbname as `database()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded/0@primary")},
 	}})
 }
@@ -294,6 +299,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "begin", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	commitCount := sbclookup.CommitCount.Load()
 	assert.Equalf(t, int64(0), commitCount, "want 0, got %d", commitCount)
@@ -306,10 +312,11 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "commit", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Load())
 
-	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
 	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
@@ -324,11 +331,12 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	rollbackCount := sbclookup.RollbackCount.Load()
 	assert.Equalf(t, int64(1), rollbackCount, "want 1, got %d", rollbackCount)
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
-	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from main1", 1)
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 }
@@ -366,6 +374,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 		Options:       oltpOptions,
 		SessionUUID:   "suuid",
 	}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.Zero(t, sbclookup.CommitCount.Load())
 	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
@@ -377,10 +386,11 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "commit", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions, SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Load())
 
-	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
 	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
@@ -395,6 +405,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions, SessionUUID: "suuid"}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.RollbackCount.Load())
 }
@@ -446,9 +457,10 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
 	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
+	delete(testSession.SystemVariables, sysvars.SQLMode.Name)
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
-	logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from main1", 1)
 	assert.Zerof(t, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.NotZerof(t, logStats.RowsReturned, "logstats: expected non-zero RowsReturned")
 
@@ -464,9 +476,10 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
+	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
-	logStats = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ main1 set id = 1", 1)
 	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
@@ -482,17 +495,19 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
 	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
+	delete(testSession.SystemVariables, sysvars.SQLMode.Name)
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	got, want = sbclookup.CommitCount.Load(), startCount
 	assert.Equalf(t, want, got, "Commit count: %d, want %d", got, want)
 
-	logStats = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
+	logStats = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ main1 set id = 1", 1)
 	assert.Zerof(t, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.NotZerof(t, logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
 	_, err = executorExecSession(ctx, executor, session, "commit", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary"}
+	assertSeededSQLMode(t, session)
 	assert.True(t, proto.Equal(session.Session, wantSession), "autocommit=1: %v, want %v", session.Session, wantSession)
 	got, want = sbclookup.CommitCount.Load(), startCount+1
 	assert.Equalf(t, want, got, "Commit count: %d, want %d", got, want)
@@ -510,6 +525,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "set autocommit=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary"}
+	assertSeededSQLMode(t, session)
 	assert.True(t, proto.Equal(session.Session, wantSession), "autocommit=1: %v, want %v", session.Session, wantSession)
 	got, want = sbclookup.CommitCount.Load(), startCount+1
 	assert.Equalf(t, want, got, "Commit count: %d, want %d", got, want)
@@ -1181,6 +1197,7 @@ func TestExecutorUse(t *testing.T) {
 		_, err := executorExecSession(ctx, executor, session, stmt, nil)
 		require.NoError(t, err)
 		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i], RowCount: -1}
+		assertSeededSQLMode(t, session)
 		utils.MustMatch(t, wantSession, session.Session, "session does not match")
 	}
 
@@ -1305,13 +1322,17 @@ func TestExecutorDDL(t *testing.T) {
 	stmts2 := []struct {
 		input  string
 		hasErr bool
+		// logged is the query as the query log records it, when it differs from input
+		logged string
 	}{
 		{input: "create table t1(id bigint primary key)", hasErr: false},
 		{input: "drop table t1", hasErr: false},
 		{input: "drop table t2", hasErr: true},
 		{input: "drop view t1", hasErr: false},
 		{input: "drop view t2", hasErr: true},
-		{input: "alter view t1 as select * from t1", hasErr: false},
+		// the view's query block carries the session's SET_VAR hint, like any other
+		// query block; MySQL does not keep it in the stored view definition
+		{input: "alter view t1 as select * from t1", hasErr: false, logged: "alter view t1 as select /*+ SET_VAR(sql_mode = '" + mysqlconfig.DefaultSQLMode + "') */ * from t1"},
 		{input: "alter view t2 as select * from t1", hasErr: true},
 	}
 
@@ -1326,7 +1347,11 @@ func TestExecutorDDL(t *testing.T) {
 				testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
 			} else {
 				require.NoError(t, err)
-				testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
+				logged := stmt.input
+				if stmt.logged != "" {
+					logged = stmt.logged
+				}
+				testQueryLog(t, executor, logChan, "TestExecute", "DDL", logged, 8)
 			}
 		})
 	}
@@ -1684,7 +1709,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := buildPlanKey(t.Context(), vc, sql, "")
+		h := buildPlanKey(t.Context(), vc, sql, vc.PrepareSetVarComment())
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	assert.NotNilf(t, plan, "plan not found for query: %s", sql)
@@ -1907,7 +1932,12 @@ func TestPassthroughDDL(t *testing.T) {
 	alterDDL := "/* leading */ alter table passthrough_ddl add column col bigint default 123 /* trailing */"
 	_, err := executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
+	// DDL cannot carry a SET_VAR hint, so it runs on a connection with the session's
+	// sql_mode applied through the connection settings.
 	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
 		Sql:           alterDDL,
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
@@ -1915,6 +1945,7 @@ func TestPassthroughDDL(t *testing.T) {
 	assert.Equalf(t, wantQueries, sbc2.Queries, "sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	sbc1.Queries = nil
 	sbc2.Queries = nil
+	wantQueries = wantQueries[1:]
 
 	// Force the query to go to only one shard. Normalization doesn't make any difference.
 	session.TargetString = "TestExecutor/40-60"
@@ -2391,7 +2422,7 @@ func TestExecutorVExplain(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t,
-		`[[VARCHAR("{\n\t\"OperatorType\": \"Route\",\n\t\"Variant\": \"Scatter\",\n\t\"Keyspace\": {\n\t\t\"Name\": \"TestExecutor\",\n\t\t\"Sharded\": true\n\t},\n\t\"FieldQuery\": \"select * from `+"`user`"+` where 1 != 1\",\n\t\"Query\": \"select * from `+"`user`"+`\"\n}")]]`,
+		`[[VARCHAR("{\n\t\"OperatorType\": \"Route\",\n\t\"Variant\": \"Scatter\",\n\t\"Keyspace\": {\n\t\t\"Name\": \"TestExecutor\",\n\t\t\"Sharded\": true\n\t},\n\t\"FieldQuery\": \"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `+"`user`"+` where 1 != 1\",\n\t\"Query\": \"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `+"`user`"+`\"\n}")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
@@ -2507,7 +2538,7 @@ func TestExecutorSavepointInTx(t *testing.T) {
 		Sql:           "release savepoint a",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select id from `user` where id = 1",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "savepoint b",
@@ -2539,7 +2570,7 @@ func TestExecutorSavepointInTx(t *testing.T) {
 		Sql:           "release savepoint b",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select id from `user` where id = 3",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
@@ -2547,11 +2578,11 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 3", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
 }
 
@@ -2562,9 +2593,6 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
-	sbc1.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
-	})
 	queries := []string{
 		"set sql_mode = ''",
 		"begin",
@@ -2584,7 +2612,6 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	emptyBV := map[string]*querypb.BindVariable{}
 
 	sbc1WantQueries := []*querypb.BoundQuery{
-		{Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV},
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
@@ -2600,7 +2627,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", 1)
@@ -2634,12 +2661,12 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	_, err = exec(executor, session, "select id from user where id = 3")
 	require.NoError(t, err)
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from `user` where id = 1",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from `user` where id = 3",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
@@ -2647,11 +2674,11 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 3", 1)
 }
 
 func TestExecutorCallProc(t *testing.T) {
@@ -2927,14 +2954,14 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			expectedQueries: [][]string{
 				{
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', time_zone = '+08:00'",
 					"set time_zone = '+08:00'",
-					"set time_zone = '+08:00'",
-					"insert into user_extra(user_id) values (1)",
-					"insert into user_extra(user_id) values (2)",
+					"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (1)",
+					"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (2)",
 				},
 				{
-					"set time_zone = '+08:00'",
-					"insert into user_extra(user_id) values (3)",
+					"set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', time_zone = '+08:00'",
+					"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (3)",
 				},
 			},
 		},

@@ -1,16 +1,16 @@
 ----------------------------------------------------------------------
 select * from user where email='null@void.com'
 
-1 ks_sharded/40-80: select * from `user` where email = 'null@void.com' limit 10001
+1 ks_sharded/40-80: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` where email = 'null@void.com' limit 10001
 
 ----------------------------------------------------------------------
 select * from user where id in (1,2,3,4,5,6,7,8)
 
-1 ks_sharded/40-80: select * from `user` where id in (1, 2, 3, 4, 5, 6, 7, 8) limit 10001
+1 ks_sharded/40-80: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` where id in (1, 2, 3, 4, 5, 6, 7, 8) limit 10001
 
 ----------------------------------------------------------------------
 insert into user (id, name) values (2, 'bob')
 
-1 ks_sharded/40-80: insert into `user`(id, `name`) values (2, 'bob')
+1 ks_sharded/40-80: insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, `name`) values (2, 'bob')
 
 ----------------------------------------------------------------------

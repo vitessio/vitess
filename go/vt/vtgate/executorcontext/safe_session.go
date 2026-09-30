@@ -721,6 +721,41 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 	return
 }
 
+// SeedSQLMode gives the session the given default sql_mode when it does not carry one
+// yet, the way MySQL copies the global sql_mode into a new session. Every query then
+// runs under the sql_mode VTGate reports to the client: through a SET_VAR query hint,
+// or through the connection settings when the backends cannot take SET_VAR hints
+// (canUseSetVar false), in which case the session needs a reserved connection.
+func (session *SafeSession) SeedSQLMode(defaultSQLMode string, canUseSetVar bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.SystemVariables == nil {
+		session.SystemVariables = make(map[string]string)
+	}
+	if _, ok := session.SystemVariables[sysvars.SQLMode.Name]; !ok {
+		session.SystemVariables[sysvars.SQLMode.Name] = sqltypes.EncodeStringSQL(defaultSQLMode)
+	}
+	if !canUseSetVar {
+		session.Session.InReservedConn = true
+	}
+}
+
+// SQLMode returns the session's sql_mode, decoded from the string literal the session
+// stores it as. A stored value that is not a string literal is returned as it is. The
+// second return value is false when the session carries no sql_mode.
+func (session *SafeSession) SQLMode() (string, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	value, ok := session.SystemVariables[sysvars.SQLMode.Name]
+	if !ok {
+		return "", false
+	}
+	if decoded, err := sqltypes.DecodeStringSQL(value); err == nil {
+		return decoded, true
+	}
+	return value, true
+}
+
 func (session *SafeSession) TimeZone() *time.Location {
 	session.mu.Lock()
 	zoneSQL, ok := session.SystemVariables["time_zone"]

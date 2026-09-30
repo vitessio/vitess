@@ -39,6 +39,7 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
+        - [VTGate owns the session's `sql_mode` (new `--sql-mode` flag)](#vtgate-sql-mode-session-default)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
@@ -431,6 +432,20 @@ VTGate already rejected `SET sql_mode = ...` statements that enable a mode the V
 - Constant values are validated at planning time, with no shard round trip. This includes constant expressions such as `CONCAT` over literals, and it applies also when `--enable-system-settings` is disabled. Non-constant expressions are validated at execution time, once their value is known.
 
 **Impact**: Clients that issue `SET sql_mode` with an unsupported mode now receive an error, also when the `SET` is a no-op that matches the backend's existing `sql_mode`. Clients that set mode names the backend MySQL would itself reject receive an error as well. Such sessions were already unreliable, because VTGate parses queries without honoring these modes.
+
+#### <a id="vtgate-sql-mode-session-default"/>VTGate owns the session's `sql_mode` (new `--sql-mode` flag)</a>
+
+VTGate now keeps each session's `sql_mode`, the way a MySQL server does. Previously, a session that never set `sql_mode` ran each query under whatever mode its backend was configured with, and `@@sql_mode` was read from one shard.
+
+- A new `--sql-mode` flag sets the mode every session starts with, as MySQL copies its global `sql_mode` into a new session. The flag is validated like a `SET sql_mode` statement. Its default is MySQL 8.x's default `sql_mode`.
+- VTGate answers `@@sql_mode` and `SHOW VARIABLES LIKE 'sql_mode'` from the session itself.
+- `SET sql_mode` is evaluated at VTGate. A part VTGate cannot compute, such as `RAND()`, is read from a shard. `SET sql_mode = DEFAULT` restores the `--sql-mode` value.
+- The session stores the value the way MySQL reports it: names uppercased, combination modes expanded, in MySQL's order.
+- Every query sent to the backends runs under the session's mode. A statement that can carry an optimizer hint gets a `SET_VAR(sql_mode = ...)` hint. Other statements, such as DDL, run on a connection with the session's settings applied, and a `SET sql_mode` also updates the connections the session already holds.
+
+The modes that change how SQL text is read are still rejected (see [the validation section](#vtgate-sql-mode-rejection)).
+
+**Impact**: Queries now run under the `sql_mode` VTGate reports to the client. Deployments whose backends run a global `sql_mode` other than MySQL's default should set `--sql-mode` to that value. Deployments that run with `--enable-system-settings=false` are not affected: there, VTGate leaves the `sql_mode` to the backends, as before. Clients that read `@@sql_mode` back see MySQL's form of the value instead of their own spelling. A mode that has `NO_ZERO_DATE`, `NO_ZERO_IN_DATE` or `ERROR_FOR_DIVISION_BY_ZERO` without a strict mode makes MySQL add warning 3135 to every query that carries it in a `SET_VAR` hint; with such a `--sql-mode`, this applies to every session.
 
 #### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
 

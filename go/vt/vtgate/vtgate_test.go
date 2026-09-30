@@ -583,14 +583,14 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		Sql:           "savepoint x",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
 		},
 	}}
 
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
-	wantQ[1].Sql = "insert into sp_tbl(user_id) values (:_user_id_1)"
+	wantQ[1].Sql = "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:_user_id_1)"
 	wantQ[1].BindVariables = map[string]*querypb.BindVariable{
 		"_user_id_1": sqltypes.Int64BindVariable(3),
 	}
@@ -608,7 +608,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		Sql:           "savepoint x",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into sp_tbl(user_id) values (:_user_id_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:_user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_1": sqltypes.Int64BindVariable(4),
 		},
@@ -623,7 +623,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	_, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (5)", nil, false)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
-		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(5),
 		},
@@ -632,10 +632,10 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 
 	testQueryLog(t, vtg.executor, logChan, "Execute", "BEGIN", "begin", 0)
 	testQueryLog(t, vtg.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
 	testQueryLog(t, vtg.executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
-	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
-	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, vtg.executor, logChan, "Execute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
 }
 
 func TestVSchemaVindexUnknownParams(t *testing.T) {

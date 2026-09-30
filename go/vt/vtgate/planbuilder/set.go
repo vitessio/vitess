@@ -247,6 +247,26 @@ func buildSetOpReservedConn(s setting) planFunc {
 	}
 }
 
+// buildSetOpSQLMode plans SET statements for the sql_mode system variable. The value is
+// evaluated at VTGate: references to @@sql_mode resolve to the session's current value,
+// so only expressions that read backend state are fetched from a shard, through the Set
+// primitive's input. DEFAULT restores the configured default the session started with.
+func buildSetOpSQLMode(s setting) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if !vschema.SysVarSetEnabled() {
+			return planSysVarCheckIgnore(expr, vschema, s.boolean)
+		}
+		if _, isDefault := expr.Expr.(*sqlparser.Default); isDefault {
+			expr = &sqlparser.SetExpr{Var: expr.Var, Expr: sqlparser.NewStrLiteral(vschema.DefaultSQLMode())}
+		}
+		evalExpr, err := ec.convert(expr.Expr, false /*boolean*/, true /*identifierAsString*/)
+		if err != nil {
+			return nil, err
+		}
+		return &engine.SysVarSQLMode{Expr: evalExpr}, nil
+	}
+}
+
 func provideAppliedCase(value string, storageCase sysvars.StorageCase) string {
 	switch storageCase {
 	case sysvars.SCUpper:

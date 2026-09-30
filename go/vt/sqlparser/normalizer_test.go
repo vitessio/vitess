@@ -1006,9 +1006,12 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 
 func TestRewritesSysVar(in *testing.T) {
 	tests := []testCaseSysVar{{
+		// a session without a sql_mode belongs to a deployment that leaves the
+		// sql_mode to the backends: the read is theirs to answer
 		in:       "select @x = @@sql_mode",
 		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
 	}, {
+		// the session's sql_mode is resolved at VTGate
 		in:       "select @x = @@sql_mode",
 		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
 		sysVar:   map[string]string{"sql_mode": "' '"},

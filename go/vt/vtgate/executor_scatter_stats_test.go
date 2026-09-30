@@ -77,7 +77,7 @@ func TestScatterStatsHttpWriting(t *testing.T) {
 
 		// Here we are checking that the template was executed correctly.
 		// If it wasn't, instead of html, we'll get an error message
-		require.Contains(t, recorder.Body.String(), "select * from `user` as u1 join `user` as u2 on u1.Id = u2.Id")
+		require.Contains(t, recorder.Body.String(), "select /*+ SET_VAR(sql_mode = &#39;ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION&#39;) */ * from `user` as u1 join `user` as u2 on u1.Id = u2.Id")
 		require.NoError(t, err)
 	})
 }

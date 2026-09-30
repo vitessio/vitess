@@ -79,7 +79,7 @@ func TestSimpleVexplainTrace(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -107,9 +107,9 @@ func TestSimpleVexplainTrace(t *testing.T) {
 			"AvgNumberOfRows": 16,
 			"MedianNumberOfRows": 16,
 			"ShardsQueried": 8,
-			"FieldQuery": "select count(*), col2, weight_string(col2) from music where 1 != 1 group by col2, weight_string(col2)",
+			"FieldQuery": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*), col2, weight_string(col2) from music where 1 != 1 group by col2, weight_string(col2)",
 			"OrderBy": "(1|2) ASC",
-			"Query": "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc"
+			"Query": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc"
 		}
 	]
 }`
@@ -149,7 +149,7 @@ func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
 
 	// The wrapped query must never be executed: each shard should only ever have
 	// received the EXPLAIN FORMAT=JSON form of the query.
-	wantQuery := "explain format = json select id from `user`"
+	wantQuery := "explain format = json select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`"
 	for shard, conn := range conns {
 		require.Len(t, conn.Queries, 1, "shard %s should receive exactly one query", shard)
 		assert.Equal(t, wantQuery, conn.Queries[0].Sql, "shard %s", shard)
@@ -279,7 +279,7 @@ func TestVExplainMySQLPlanTargetedSend(t *testing.T) {
 	for shard, conn := range conns {
 		if shard == targetShard {
 			require.Len(t, conn.Queries, 1, "target shard %s should receive exactly one query", shard)
-			assert.Equal(t, "explain format = json select id from `user`", conn.Queries[0].Sql)
+			assert.Equal(t, "explain format = json select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`", conn.Queries[0].Sql)
 		} else {
 			assert.Empty(t, conn.Queries, "non-target shard %s should receive no query", shard)
 		}

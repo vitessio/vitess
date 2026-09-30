@@ -38,7 +38,9 @@ import (
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
+	mysqlconfig "vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -98,14 +100,53 @@ const (
 )
 
 func init() {
-	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
+	registerExecutorFlags := func(fs *pflag.FlagSet) {
 		utils.SetFlagVar(fs, (*topoproto.TabletTypeFlag)(&defaultTabletType), "default-tablet-type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		utils.SetFlagVar(fs, &defaultSQLMode, "sql-mode", "The sql_mode every session starts with. The value is validated like a SET sql_mode statement.")
 	}
 
-	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
-	servenv.OnParseFor("vtgateclienttest", registerTabletTypeFlag)
-	servenv.OnParseFor("vtcombo", registerTabletTypeFlag)
-	servenv.OnParseFor("vtexplain", registerTabletTypeFlag)
+	servenv.OnParseFor("vtgate", registerExecutorFlags)
+	servenv.OnParseFor("vtgateclienttest", registerExecutorFlags)
+	servenv.OnParseFor("vtcombo", registerExecutorFlags)
+	servenv.OnParseFor("vtexplain", registerExecutorFlags)
+}
+
+// sqlModeFlag is a pflag.Value that validates a MySQL sql_mode list the same way a
+// SET sql_mode statement is validated, and stores it in canonical form.
+type sqlModeFlag struct {
+	mode string
+}
+
+func (s *sqlModeFlag) String() string { return s.mode }
+
+func (s *sqlModeFlag) Type() string { return "string" }
+
+func (s *sqlModeFlag) Set(v string) error {
+	mode, err := sqlmode.Validate(sqltypes.NewVarChar(v))
+	if err != nil {
+		return err
+	}
+	s.mode = mode.String()
+	return nil
+}
+
+var defaultSQLMode = sqlModeFlag{mode: mysqlconfig.DefaultSQLMode}
+
+// canUseSetVar returns whether queries can carry system variables in SET_VAR optimizer
+// hints, the preferred way to apply the session's sql_mode to backend queries. When it is
+// unavailable, the sql_mode travels through the connection settings instead.
+func (e *Executor) canUseSetVar() bool {
+	return e.vConfig.SetVarEnabled && e.env.Parser().IsMySQL80AndAbove()
+}
+
+// seedSQLMode gives the session its starting sql_mode, unless the deployment opted out of
+// vtgate-managed system settings via --enable-system-settings=false — those deployments
+// keep running queries under each backend's configured mode.
+func (e *Executor) seedSQLMode(safeSession *econtext.SafeSession) {
+	if e.config.SystemSettingsDisabled {
+		return
+	}
+	safeSession.SeedSQLMode(e.config.SQLMode, e.canUseSetVar())
 }
 
 // Executor is the engine that executes queries by utilizing
@@ -122,6 +163,14 @@ type (
 		PreventCrossKeyspaceReads bool
 		WarmingReadsPercent       int
 		QueryLogToFile            string
+		// SQLMode is the sql_mode every session starts with. Empty means the value of the
+		// --sql-mode flag (which defaults to config.DefaultSQLMode).
+		SQLMode string
+		// SystemSettingsDisabled reflects --enable-system-settings=false: the deployment
+		// opted out of vtgate-managed system settings, so sessions are not seeded with the
+		// default sql_mode and queries run under each backend's configured mode. The zero
+		// value preserves the default behavior (seeding enabled).
+		SystemSettingsDisabled bool
 	}
 
 	Executor struct {
@@ -197,6 +246,15 @@ func NewExecutor(
 	pv plancontext.PlannerVersion,
 	ddlConfig dynamicconfig.DDL,
 ) *Executor {
+	if eConfig.SQLMode == "" {
+		eConfig.SQLMode = defaultSQLMode.mode
+	} else {
+		mode, err := sqlmode.Validate(sqltypes.NewVarChar(eConfig.SQLMode))
+		if err != nil {
+			panic(fmt.Sprintf("bug: ExecutorConfig.SQLMode is invalid: %v", err))
+		}
+		eConfig.SQLMode = mode.String()
+	}
 	e := &Executor{
 		config:      eConfig,
 		exporter:    servenv.NewExporter(eConfig.Name, ""),
@@ -665,6 +723,8 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
+		case sysvars.SQLMode.Name:
+			bindVars[key] = sqltypes.StringBindVariable(vcursor.SQLMode())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
 				expr, err := e.env.Parser().ParseExpr(value)
@@ -1260,14 +1320,19 @@ func (e *Executor) fetchOrCreatePlan(
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
+	// The session's system variables are injected into queries as SET_VAR optimizer hints
+	// only when the backends can take them. A prepared statement's plan key is built from
+	// the query text before normalization, which rewrites the variables the session
+	// carries into bind variables, so the key takes the session's variables either way.
+	sessionSetVars := vcursor.PrepareSetVarComment()
 	var setVarComment string
-	if e.vConfig.SetVarEnabled {
-		setVarComment = vcursor.PrepareSetVarComment()
+	if e.canUseSetVar() {
+		setVarComment = sessionSetVars
 	}
 
 	var planKey engine.PlanKey
 	if preparedPlan {
-		planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+		planKey = buildPlanKey(ctx, vcursor, query, sessionSetVars)
 		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
 	}
 
@@ -1625,6 +1690,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
+	e.seedSQLMode(safeSession)
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	// Preparing a statement is session activity too — MySQL resets
 	// wait_timeout for COM_STMT_PREPARE — so it leases refreshes for the
@@ -1713,6 +1779,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		MaxMemoryRows: maxMemoryRows,
 
 		SetVarEnabled:         setVarEnabled,
+		SQLMode:               e.config.SQLMode,
 		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
 		EnableViews:           enableViews,
 		ForeignKeyMode:        fkMode(foreignKeyMode),

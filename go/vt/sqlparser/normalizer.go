@@ -630,12 +630,18 @@ func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 	}
 }
 
-// rewriteShowBasic handles the rewriting of SHOW statements, particularly for system variables.
+// rewriteShowBasic records the system variables a SHOW VARIABLES needs VTGate's values
+// of. The sql_mode is among them only when VTGate owns it.
 func (nz *normalizer) rewriteShowBasic(node *ShowBasic) {
-	if node.Command == VariableGlobal || node.Command == VariableSession {
-		for _, sysVar := range sysvars.GetInterestingVariables(node.Command == VariableGlobal) {
-			nz.bindVarNeeds.AddSysVar(sysVar)
+	if node.Command != VariableGlobal && node.Command != VariableSession {
+		return
+	}
+	owns := nz.sessionOwnsSQLMode()
+	for _, sysVar := range sysvars.GetInterestingVariables(node.Command == VariableGlobal) {
+		if sysVar == sysvars.SQLMode.Name && !owns {
+			continue
 		}
+		nz.bindVarNeeds.AddSysVar(sysVar)
 	}
 }
 
@@ -677,6 +683,15 @@ func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 	case SessionScope, NextTxScope, NoScope:
 		nz.sysVarRewrite(cursor, node)
 	}
+}
+
+// sessionOwnsSQLMode reports whether the session carries a sql_mode, which every
+// session VTGate manages the sql_mode of does from its first request on. A session
+// without one belongs to a deployment that leaves the sql_mode to the backends, and
+// its @@sql_mode reads are theirs to answer.
+func (nz *normalizer) sessionOwnsSQLMode() bool {
+	_, ok := nz.sysVars[sysvars.SQLMode.Name]
+	return ok
 }
 
 // inverseOp returns the inverse operator for a given comparison operator.
