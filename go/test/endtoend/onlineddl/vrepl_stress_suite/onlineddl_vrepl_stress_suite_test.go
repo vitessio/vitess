@@ -408,6 +408,10 @@ func mysqlParams() *mysql.ConnParams {
 	return evaluatedMysqlParams
 }
 
+// parallelReplicationWorkers runs the migrations with the parallel applier
+// when > 1. The suite runs in CI both with it and without.
+var parallelReplicationWorkers = flag.Int("vreplication-parallel-replication-workers", 1, "number of parallel replication workers for the migrations; <= 1 applies serially")
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -430,16 +434,19 @@ func TestMain(m *testing.M) {
 		// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
-		parallelWorkers := 4
-		txPoolSize := max(parallelWorkers, 100)
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
-			"--transaction-limit-per-user", "0.9",
-			"--vreplication-parallel-replication-workers", strconv.Itoa(parallelWorkers),
+		}
+		if *parallelReplicationWorkers > 1 {
+			txPoolSize := max(*parallelReplicationWorkers, 100)
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+				"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
+				"--transaction-limit-per-user", "0.9",
+				"--vreplication-parallel-replication-workers", strconv.Itoa(*parallelReplicationWorkers),
+			)
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
