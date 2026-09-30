@@ -524,7 +524,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// Check the required position before the rewait. The second detection
-		// pass can remove the only candidate that has it.
+		// pass or the skipped check above can leave only candidates that lack it.
 		if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "remaining candidate"); err != nil {
 			return err
 		}

@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,6 +84,10 @@ type requiredPositionFixture struct {
 	tmc     *tmcmock.MockTabletManagerClient
 	opts    EmergencyReparentOptions
 	tablets []*topodatapb.Tablet
+
+	// mu guards applied and the WaitForPosition call count. ERS waits on the
+	// leading candidates in parallel.
+	mu sync.Mutex
 
 	// applied records the tablets whose WaitForPosition succeeded. The
 	// reparent journal count of a tablet only advances once it applied.
@@ -200,6 +205,9 @@ func (f *requiredPositionFixture) expectWaits(n int) {
 	var calls int
 	f.tmc.EXPECT().WaitForPosition(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, tablet *topodatapb.Tablet, _ string) error {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+
 			calls++
 			if calls > n {
 				f.t.Errorf("WaitForPosition call %d on %s, want at most %d", calls, topoproto.TabletAliasString(tablet.Alias), n)
@@ -211,6 +219,9 @@ func (f *requiredPositionFixture) expectWaits(n int) {
 		}).
 		AnyTimes()
 	f.t.Cleanup(func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+
 		assert.Equal(f.t, n, calls, "WaitForPosition calls")
 	})
 }
@@ -222,6 +233,10 @@ func (f *requiredPositionFixture) expectJournal(before, after map[string]int32) 
 	f.tmc.EXPECT().ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, tablet *topodatapb.Tablet) (int32, error) {
 			alias := topoproto.TabletAliasString(tablet.Alias)
+
+			f.mu.Lock()
+			defer f.mu.Unlock()
+
 			if count, ok := after[alias]; ok && f.applied[alias] {
 				return count, nil
 			}
@@ -355,6 +370,32 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 
 		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
 		require.ErrorContains(t, err, "no remaining candidate received required position "+gtidSet(t, requiredHigh)+": most advanced received positions: "+requiredBehindAlias+"="+gtidSet(t, requiredLow))
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	})
+	t.Run("split-brain detection keeps only the leader that did not receive it", func(t *testing.T) {
+		behindSource := "4e11fa47-71ca-11e1-9e33-c80aa9429562"
+		behind := "MySQL56/" + behindSource + ":1-5," + requiredUUID + ":1-10"
+		advanced := "MySQL56/5e11fa47-71ca-11e1-9e33-c80aa9429562:1-3," + requiredUUID + ":1-20"
+		fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
+			behind: behind, applied: advanced, received: advanced, required: requiredHigh,
+		})
+
+		// Give the behind leader its extra transactions from its own source.
+		// Detection keeps it and removes the advanced leader. No candidate is
+		// starved, and the check before the rescue wait is skipped for the
+		// suspected split-brain.
+		behindStatus := stopStatus(replicaPositions{executed: behind, relay: behind})
+		behindStatus.After.SourceUuid = behindSource
+		fixture.tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(requiredBehindAlias), gomock.Any()).
+			Return(behindStatus, nil)
+		fixture.tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(requiredAdvancedAlias), gomock.Any()).
+			Return(stopStatus(fixture.advanced), nil)
+		fixture.expectWaits(2)
+		fixture.expectJournal(map[string]int32{requiredBehindAlias: 1, requiredAdvancedAlias: 1}, nil)
+		fixture.expectPromotion()
+
+		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
+		require.ErrorContains(t, err, "no remaining candidate received required position "+gtidSet(t, requiredHigh)+": most advanced received positions: "+requiredBehindAlias+"="+gtidSet(t, behind))
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 }
