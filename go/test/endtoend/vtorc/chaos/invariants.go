@@ -531,6 +531,10 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 			// The old primary may legitimately become primary again later (e.g. after a
 			// double failure); only look at writes issued before that.
 			backAt, back := o.FirstTopoPrimary(opts.OldPrimary.Tablet.Alias, at)
+			// Its vttablet reports the promotion before the shard record names it.
+			if promotedAt, ok := o.Repromoted(opts.OldPrimary.Idx, at); ok && (!back || promotedAt.Before(backAt)) {
+				backAt, back = promotedAt, true
+			}
 			var late []string
 			for _, rec := range w.Records() {
 				if !rec.Acked || !rec.Start.After(at) || (back && !rec.End.Before(backAt)) {

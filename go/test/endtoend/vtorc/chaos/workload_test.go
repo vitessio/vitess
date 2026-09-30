@@ -76,3 +76,22 @@ func TestComputeStatsRecoveredOutage(t *testing.T) {
 	require.Len(t, st.Outages, 1)
 	assert.Equal(t, 7*time.Second, st.Unavailable)
 }
+
+// TestObserverRepromoted checks that a vttablet that was demoted and then promoted again counts as
+// re-promoted from its last sample before the promotion, and that a primary that was never
+// demoted, like an isolated old primary, does not.
+func TestObserverRepromoted(t *testing.T) {
+	t0 := time.Now()
+	sample := func(secs float64, typ string) Sample {
+		return Sample{T: t0.Add(time.Duration(secs * float64(time.Second))), TypeOK: true, Type: typ}
+	}
+	o := &Observer{samples: [][]Sample{
+		{sample(1, "PRIMARY"), sample(2, "PRIMARY"), sample(3, "REPLICA"), sample(4, "REPLICA"), sample(5, "PRIMARY")},
+		{sample(1, "PRIMARY"), sample(2, "PRIMARY"), sample(3, "PRIMARY")},
+	}}
+	at, ok := o.Repromoted(0, t0.Add(1500*time.Millisecond))
+	require.True(t, ok)
+	assert.Equal(t, t0.Add(4*time.Second), at)
+	_, ok = o.Repromoted(1, t0)
+	assert.False(t, ok)
+}

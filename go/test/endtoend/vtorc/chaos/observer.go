@@ -290,6 +290,29 @@ func (o *Observer) FirstTopoPrimary(alias string, after time.Time) (time.Time, b
 	return time.Time{}, false
 }
 
+// Repromoted returns when node i's vttablet was promoted again after `after`: the time of its last
+// sample that reported another type than PRIMARY before a sample that reported PRIMARY. The shard
+// record follows a promotion asynchronously, so writes the re-promoted primary acknowledges can
+// precede the topo sample that names it. A primary that was never demoted is not re-promoted.
+func (o *Observer) Repromoted(i int, after time.Time) (time.Time, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var lastOther time.Time
+	for _, s := range o.samples[i] {
+		if !s.T.After(after) || !s.TypeOK {
+			continue
+		}
+		if s.Type != "PRIMARY" {
+			lastOther = s.T
+			continue
+		}
+		if !lastOther.IsZero() {
+			return lastOther, true
+		}
+	}
+	return time.Time{}, false
+}
+
 // SplitBrain is a period during which two tablets were both writable primaries.
 type SplitBrain struct {
 	A, B       string
