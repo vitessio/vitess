@@ -1065,14 +1065,8 @@ func (td *tableDiffer) getSourcePKCols() error {
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
-<<<<<<< HEAD
-			log.Infof("Using all columns as a substitute primary key for table %s", sourceTableName)
-||||||| parent of 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
-=======
 			sourceKeyUnique = false
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
->>>>>>> 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
+			log.Infof("Using all columns as a substitute primary key for table %s", sourceTableName)
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
 		}
 	}
@@ -1098,9 +1092,8 @@ func (td *tableDiffer) getSourcePKCols() error {
 		// would then skip the rows of other shards that share it with the last
 		// row diffed, so no resumable checkpoint is possible and any resume
 		// restarts the whole table.
-		log.Info("restarting table instead of resuming; its target primary key extends the source key, which is unique only within each of its source shards",
-			slog.String("table", td.table.Name),
-			slog.String("vdiff", td.wd.ct.uuid))
+		log.Infof("Restarting table %s in vdiff %s instead of resuming; its target primary key extends the source key, which is unique only within each of its source shards",
+			td.table.Name, td.wd.ct.uuid)
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil

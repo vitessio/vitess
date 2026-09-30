@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -24,17 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
-<<<<<<< HEAD
-||||||| parent of 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
-	"vitess.io/vitess/go/vt/vtgate/engine"
-=======
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
->>>>>>> 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
