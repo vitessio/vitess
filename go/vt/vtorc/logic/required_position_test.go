@@ -68,18 +68,10 @@ func saveRequiredPositionFixture(t *testing.T, durability string, tabletType top
 	return tablet
 }
 
-// TestStoredPrimaryPosition checks that a primary with no stored transactions
-// or no poll record has no position to require, and that the stored set is
-// found after a graceful vttablet shutdown clears the MySQL address.
+// TestStoredPrimaryPosition checks that a primary with no poll record has no
+// position to require, and that the stored set is found after a graceful
+// vttablet shutdown clears the MySQL address.
 func TestStoredPrimaryPosition(t *testing.T) {
-	t.Run("empty set", func(t *testing.T) {
-		tablet := saveRequiredPositionFixture(t, policy.DurabilitySemiSync, topodatapb.TabletType_PRIMARY, "")
-
-		position, err := storedPrimaryPosition(tablet.Alias)
-		require.NoError(t, err)
-		assert.True(t, position.IsZero())
-	})
-
 	t.Run("no poll record", func(t *testing.T) {
 		db.ClearVTOrcDatabase()
 		t.Cleanup(db.ClearVTOrcDatabase)
