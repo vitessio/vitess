@@ -104,7 +104,7 @@ jobs:
         
         # install vitess tester
         git init -q /tmp/vt
-        git -C /tmp/vt fetch -q --depth 1 https://github.com/vitessio/vt be988916e54ce657e4bdbefd10250ad73a490d0c
+        git -C /tmp/vt fetch -q --depth 1 https://github.com/vitessio/vt c19060cab8ac5a4d64e228778af287455ae7b43f
         git -C /tmp/vt checkout -q FETCH_HEAD
         (cd /tmp/vt && go install ./go/vt)
 
