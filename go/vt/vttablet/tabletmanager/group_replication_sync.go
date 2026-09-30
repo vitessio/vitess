@@ -425,10 +425,20 @@ const groupReplicationVoterMajorityLost = "replication group lost the majority o
 // the majority is back. MySQL is left alone. The check only applies under a group replication
 // policy with listed voters: during a migration, the group grows from a single member while the
 // primary keeps serving with semi-sync.
+//
+// The reason may also have been set outside of the loop, by a bootstrap on a PRIMARY tablet
+// (stopServingBeforeBootstrap). While the tablet is PRIMARY under a group replication policy but
+// its MySQL is not a group primary (for example while the bootstrap runs), the loop cannot tell
+// whether the majority is back and leaves the reason as it is: clearing it then let the tablet
+// serve the moment the bootstrap made MySQL the writable primary of a group of one.
 func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
 	tm := s.tm
+	current := tm.tmState.GroupReplicationNotServing()
 	reason := ""
-	if tablet.Type == topodatapb.TabletType_PRIMARY && policy.IsGroupReplication(durability) && mysql.IsGroupPrimary(status) {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && policy.IsGroupReplication(durability) {
+		if !mysql.IsGroupPrimary(status) {
+			return
+		}
 		lost, err := s.voterMajorityLost(ctx, status)
 		if err != nil {
 			log.Warn("Group replication sync: cannot check the voter majority of the group", slog.Any("error", err))
@@ -438,8 +448,6 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 			reason = groupReplicationVoterMajorityLost
 		}
 	}
-	// The reason may also have been set outside of the loop, by a bootstrap on a PRIMARY tablet.
-	current := tm.tmState.GroupReplicationNotServing()
 	if reason == "" && current == "" {
 		return
 	}

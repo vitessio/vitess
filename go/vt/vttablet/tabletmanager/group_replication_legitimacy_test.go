@@ -304,6 +304,31 @@ func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
 	assert.True(t, qsc.IsServing(), "the primary serves once a majority of the voters is back")
 }
 
+// TestGroupReplicationSyncKeepsNotServingDuringBootstrap reproduces a race of the S7d chaos
+// scenario: while a bootstrap ran on a PRIMARY tablet that had stopped serving for it, the sync
+// loop saw MySQL in the ERROR state, which is not a group primary, and made the tablet serve
+// again. The bootstrap then made MySQL the writable primary of a group of one, and a write was
+// acknowledged before the next run of the loop. The loop must leave the reason alone while it
+// cannot tell whether a majority of the voters is back.
+func TestGroupReplicationSyncKeepsNotServingDuringBootstrap(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	// The bootstrap RPC holds the action lock, and made the tablet stop serving.
+	require.NoError(t, tm.lock(ctx))
+	defer tm.unlock()
+	require.NoError(t, tm.tmState.SetGroupReplicationNotServing(ctx, groupReplicationVoterMajorityLost))
+	require.False(t, qsc.IsServing())
+	fmd.SetGroupReplicationStatus(&replicationdatapb.GroupReplicationStatus{
+		PluginActive: true, GroupName: policy.GroupName("ks", "0"), MemberState: mysql.GroupMemberStateError,
+	})
+
+	newGroupReplicationSync(tm).reconcile(ctx)
+	assert.False(t, qsc.IsServing(), "the loop must not make the tablet serve while its MySQL is not a group primary")
+}
+
 // TestUndoDemotePrimaryRequiresLegitimateGroupPrimary reproduces a run of the S7d chaos scenario:
 // VTOrc's PrimaryIsReadOnly recovery undid the demotion of a PRIMARY tablet whose MySQL was in the
 // ERROR state after its group lost its majority, and cleared super_read_only on it. Under a group
