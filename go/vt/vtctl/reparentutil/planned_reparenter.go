@@ -214,6 +214,20 @@ func (pr *PlannedReparenter) preflightChecks(
 	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
 	}
+
+	// Under a group replication policy, PromoteReplica switches the group's primary, which
+	// only works for an ONLINE member of the current primary's group. The FullStatus RPCs
+	// this needs are only made for group replication keyspaces.
+	if policy.IsGroupReplication(opts.durability) {
+		var currentPrimaryTablet *topodatapb.Tablet
+		if currentPrimary := FindCurrentPrimary(tabletMap, pr.logger); currentPrimary != nil {
+			currentPrimaryTablet = currentPrimary.Tablet
+		}
+		shardInitialized := ev.ShardInfo.PrimaryTermStartTime != nil
+		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
+			return true, err
+		}
+	}
 	ev.NewPrimary = newPrimaryTabletInfo.CloneVT()
 	return false, nil
 }

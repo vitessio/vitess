@@ -276,6 +276,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		prevPrimary = prevPrimaryInfo.Tablet
 	}
 
+	// A group replication shard elects its primary through the group, not through
+	// replication positions. It has its own path; see reparentShardLockedGroupReplication.
+	if policy.IsGroupReplication(opts.durability) {
+		return erp.reparentShardLockedGroupReplication(ctx, ev, keyspace, shard, prevPrimary, opts)
+	}
+
 	// read all the tablets and their information
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)

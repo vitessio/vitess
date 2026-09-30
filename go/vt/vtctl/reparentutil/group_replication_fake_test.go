@@ -1,0 +1,553 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package reparentutil
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+// fakeGRTablet is the simulated MySQL and vttablet state of one tablet.
+type fakeGRTablet struct {
+	alias string
+	cell  string
+	uuid  string
+	// primary marks the shard's topo primary. Its tablet loop enforces the effective
+	// semi-sync rule.
+	primary bool
+	// unreachable makes every RPC to the tablet fail.
+	unreachable bool
+	// member is set while the MySQL is an active member of the group. state overrides
+	// ONLINE for the member's own state.
+	member bool
+	state  string
+	// source is the alias of the async replication source, if the tablet replicates.
+	source          string
+	semiSyncReplica bool
+	// semiSyncPrimary is the primary's current rpl_semi_sync_source_enabled. The tablet
+	// loop updates it to the effective value after each FullStatus, so a change is only
+	// visible on the second poll.
+	semiSyncPrimary bool
+	superReadOnly   bool
+	version         string
+	gtidMode        string
+}
+
+// fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
+// replication, MySQL Group Replication, or a mix during a migration, with the tablet
+// behaviour described in doc/design-docs/GroupReplication.md. It records the calls that
+// change state, and records a violation whenever a step would make the primary's commits
+// block (the last semi-sync acker leaves while semi-sync is enabled) or a primary leave its
+// group without semi-sync while the policy requires it.
+type fakeGRCluster struct {
+	tmclient.TabletManagerClient
+
+	t        *testing.T
+	ts       *topo.Server
+	keyspace string
+
+	mu           sync.Mutex
+	tablets      map[string]*fakeGRTablet
+	tabletRecs   map[string]*topodatapb.Tablet
+	groupPrimary string
+	// noQuorum makes every member report that its view has no quorum.
+	noQuorum   bool
+	calls      []string
+	violations []string
+	// failOnce fails the named call ("StartGroupReplication(zone3-0000000300)") once.
+	failOnce   map[string]bool
+	schemaRows []string
+	queries    []string
+}
+
+func (c *fakeGRCluster) record(call string) error {
+	c.calls = append(c.calls, call)
+	if c.failOnce[call] {
+		delete(c.failOnce, call)
+		return fmt.Errorf("injected failure of %s", call)
+	}
+	return nil
+}
+
+func (c *fakeGRCluster) get(tablet *topodatapb.Tablet) (*fakeGRTablet, error) {
+	ft, ok := c.tablets[topoproto.TabletAliasString(tablet.Alias)]
+	if !ok {
+		return nil, fmt.Errorf("unknown tablet %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	if ft.unreachable {
+		return nil, fmt.Errorf("tablet %v is unreachable", ft.alias)
+	}
+	return ft, nil
+}
+
+func (c *fakeGRCluster) members() []*fakeGRTablet {
+	var members []*fakeGRTablet
+	for _, alias := range slices.Sorted(maps.Keys(c.tablets)) {
+		if ft := c.tablets[alias]; ft.member {
+			members = append(members, ft)
+		}
+	}
+	return members
+}
+
+func (c *fakeGRCluster) onlineMembers() int {
+	n := 0
+	for _, ft := range c.members() {
+		if !ft.unreachable && (ft.state == "" || ft.state == mysql.GroupMemberStateOnline) {
+			n++
+		}
+	}
+	return n
+}
+
+// policyNeedsSemiSync returns whether the keyspace policy requires the primary to use
+// semi-sync.
+func (c *fakeGRCluster) policyNeedsSemiSync(ft *fakeGRTablet) bool {
+	name, err := c.ts.GetKeyspaceDurability(c.t.Context(), c.keyspace)
+	require.NoError(c.t, err)
+	d, err := policy.GetDurabilityPolicy(name)
+	require.NoError(c.t, err)
+	return policy.SemiSyncAckers(d, c.tabletRecs[ft.alias]) > 0
+}
+
+// effectiveSemiSync is the tablet loop's rule: semi-sync is required if the policy needs it
+// and the tablet is not an active member of a group with at least two ONLINE members.
+func (c *fakeGRCluster) effectiveSemiSync(ft *fakeGRTablet) bool {
+	return ft.primary && c.policyNeedsSemiSync(ft) && !(ft.member && c.onlineMembers() >= 2)
+}
+
+// connectedAckers counts the async semi-sync replicas of the primary.
+func (c *fakeGRCluster) connectedAckers(exclude string) int {
+	n := 0
+	for _, ft := range c.tablets {
+		if ft.alias != exclude && !ft.member && !ft.unreachable && ft.semiSyncReplica && ft.source != "" && c.tablets[ft.source].primary {
+			n++
+		}
+	}
+	return n
+}
+
+func (c *fakeGRCluster) primaryTablet() *fakeGRTablet {
+	for _, ft := range c.tablets {
+		if ft.primary {
+			return ft
+		}
+	}
+	return nil
+}
+
+func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupReplicationStatus {
+	gs := &replicationdatapb.GroupReplicationStatus{
+		PluginActive: true,
+		GroupName:    policy.GroupName(c.keyspace, "-"),
+		MemberState:  mysql.GroupMemberStateOffline,
+	}
+	if !ft.member {
+		return gs
+	}
+	online := 0
+	for _, m := range c.members() {
+		state := mysql.GroupMemberStateOnline
+		switch {
+		case m.unreachable:
+			state = mysql.GroupMemberStateUnreachable
+		case m.state != "":
+			state = m.state
+		}
+		role := mysql.GroupMemberRoleSecondary
+		if m.alias == c.groupPrimary {
+			role = mysql.GroupMemberRolePrimary
+		}
+		gs.Members = append(gs.Members, &replicationdatapb.GroupReplicationMember{MemberUuid: m.uuid, State: state, Role: role})
+		if state == mysql.GroupMemberStateOnline {
+			online++
+			if role == mysql.GroupMemberRolePrimary {
+				gs.PrimaryUuid = m.uuid
+			}
+		}
+		if m == ft {
+			gs.MemberState = state
+			if state == mysql.GroupMemberStateOnline {
+				gs.MemberRole = role
+			}
+		}
+	}
+	gs.HasQuorum = !c.noQuorum && online > len(gs.Members)/2
+	return gs
+}
+
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft, err := c.get(tablet)
+	if err != nil {
+		return nil, err
+	}
+	fs := &replicationdatapb.FullStatus{
+		ServerUuid:                  ft.uuid,
+		Version:                     ft.version,
+		GtidMode:                    ft.gtidMode,
+		BinlogFormat:                "ROW",
+		SemiSyncPrimaryEnabled:      ft.semiSyncPrimary,
+		SemiSyncReplicaEnabled:      ft.semiSyncReplica,
+		SemiSyncWaitForReplicaCount: 1,
+		SuperReadOnly:               ft.superReadOnly,
+		ReadOnly:                    ft.superReadOnly,
+		GroupReplicationStatus:      c.groupStatus(ft),
+	}
+	if ft.source != "" {
+		src := c.tabletRecs[ft.source]
+		fs.ReplicationStatus = &replicationdatapb.Status{
+			SourceHost: src.MysqlHostname,
+			SourcePort: src.MysqlPort,
+			IoState:    int32(replication.ReplicationStateRunning),
+			SqlState:   int32(replication.ReplicationStateRunning),
+		}
+	}
+	// The tablet loop runs after the status was read.
+	if ft.primary {
+		ft.semiSyncPrimary = c.effectiveSemiSync(ft)
+	}
+	return fs, nil
+}
+
+// StartGroupReplication is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft, err := c.get(tablet)
+	if err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("StartGroupReplication(%s)", ft.alias)
+	if bootstrap {
+		name = fmt.Sprintf("StartGroupReplication(%s, bootstrap)", ft.alias)
+	}
+	if err := c.record(name); err != nil {
+		return nil, err
+	}
+	if ft.member {
+		return c.groupStatus(ft), nil
+	}
+	if bootstrap {
+		if len(c.members()) > 0 {
+			c.violations = append(c.violations, "bootstrapped a second group on "+ft.alias)
+		}
+		c.groupPrimary = ft.alias
+	} else if c.onlineMembers() == 0 {
+		return nil, errors.New("no group to join")
+	}
+	if !bootstrap && ft.semiSyncReplica {
+		if p := c.primaryTablet(); p != nil && p.semiSyncPrimary && c.connectedAckers(ft.alias) == 0 {
+			c.violations = append(c.violations, ft.alias+" joined as the last semi-sync acker while the primary had semi-sync enabled")
+		}
+	}
+	ft.member = true
+	ft.source = ""
+	ft.semiSyncReplica = false
+	return c.groupStatus(ft), nil
+}
+
+// StopGroupReplication is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) StopGroupReplication(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.GroupReplicationStatus, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft, err := c.get(tablet)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.record(fmt.Sprintf("StopGroupReplication(%s)", ft.alias)); err != nil {
+		return nil, err
+	}
+	if !ft.member {
+		return c.groupStatus(ft), nil
+	}
+	p := c.primaryTablet()
+	if ft.primary {
+		if c.policyNeedsSemiSync(ft) && !ft.semiSyncPrimary {
+			c.violations = append(c.violations, "the primary left its group without semi-sync")
+		}
+	} else if p != nil && c.policyNeedsSemiSync(p) && c.onlineMembers() <= 2 && c.connectedAckers("") == 0 {
+		c.violations = append(c.violations, ft.alias+" left the group while no semi-sync acker replicates from the primary")
+	}
+	ft.member = false
+	if c.groupPrimary == ft.alias {
+		c.groupPrimary = ""
+	}
+	// A PRIMARY tablet restores read-write; others stay super_read_only.
+	ft.superReadOnly = !ft.primary
+	return c.groupStatus(ft), nil
+}
+
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft, err := c.get(tablet)
+	if err != nil {
+		return err
+	}
+	if err := c.record(fmt.Sprintf("SetReplicationSource(%s, %s, semiSync=%v)", ft.alias, topoproto.TabletAliasString(parent), semiSync)); err != nil {
+		return err
+	}
+	if ft.member {
+		// On an active member, only the tablet type follows.
+		return nil
+	}
+	ft.source = topoproto.TabletAliasString(parent)
+	ft.semiSyncReplica = semiSync
+	return nil
+}
+
+// PromoteReplica is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft, err := c.get(tablet)
+	if err != nil {
+		return "", err
+	}
+	if err := c.record(fmt.Sprintf("PromoteReplica(%s)", ft.alias)); err != nil {
+		return "", err
+	}
+	if !ft.member {
+		c.violations = append(c.violations, "promoted non-member "+ft.alias)
+	}
+	c.groupPrimary = ft.alias
+	return "MySQL56/" + policy.GroupName(c.keyspace, "-") + ":1-100", nil
+}
+
+// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, pos string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.record(fmt.Sprintf("PopulateReparentJournal(%s)", topoproto.TabletAliasString(tablet.Alias)))
+}
+
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, err := c.get(tablet); err != nil {
+		return nil, err
+	}
+	return map[string]string{}, nil
+}
+
+// DemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return nil, c.record(fmt.Sprintf("DemotePrimary(%s)", topoproto.TabletAliasString(tablet.Alias)))
+}
+
+// PrimaryPosition is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return "", c.record(fmt.Sprintf("PrimaryPosition(%s)", topoproto.TabletAliasString(tablet.Alias)))
+}
+
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface. It answers the
+// schema check with schemaRows ("schema|table|engine").
+func (c *fakeGRCluster) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, err := c.get(tablet); err != nil {
+		return nil, err
+	}
+	c.queries = append(c.queries, string(req.Query))
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"), c.schemaRows...)
+	return sqltypes.ResultToProto3(result), nil
+}
+
+func (c *fakeGRCluster) mutatingCalls() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.calls)
+}
+
+func (c *fakeGRCluster) violationsSoFar() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.violations)
+}
+
+func (c *fakeGRCluster) tablet(alias string) *fakeGRTablet {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft := *c.tablets[alias]
+	return &ft
+}
+
+// fakeGRTabletSpec describes a tablet of a test shard.
+type fakeGRTabletSpec struct {
+	cell       string
+	uid        uint32
+	tabletType topodatapb.TabletType
+	noGRPort   bool
+}
+
+// newFakeGRCluster creates the keyspace "ks" with shard "-" in a memory topo, with the given
+// durability policy and tablets. The PRIMARY tablet is the shard primary; every other tablet
+// replicates asynchronously from it, with semi-sync if the policy says so. No group is active.
+func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec) (*fakeGRCluster, *topo.Server) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
+	t.Cleanup(ts.Close)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: durability}))
+	d, err := policy.GetDurabilityPolicy(durability)
+	require.NoError(t, err)
+
+	c := &fakeGRCluster{
+		t:          t,
+		ts:         ts,
+		keyspace:   "ks",
+		tablets:    make(map[string]*fakeGRTablet),
+		tabletRecs: make(map[string]*topodatapb.Tablet),
+		failOnce:   make(map[string]bool),
+	}
+	var primary *topodatapb.Tablet
+	for _, spec := range specs {
+		tablet := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: spec.cell, Uid: spec.uid},
+			Keyspace:      "ks",
+			Shard:         "-",
+			Type:          spec.tabletType,
+			Hostname:      fmt.Sprintf("host-%d", spec.uid),
+			MysqlHostname: fmt.Sprintf("mysql-%d", spec.uid),
+			MysqlPort:     3306,
+			PortMap:       map[string]int32{"vt": 15000, "grpc": 16000},
+		}
+		if !spec.noGRPort {
+			tablet.PortMap["gr"] = 33061
+		}
+		if spec.tabletType == topodatapb.TabletType_PRIMARY {
+			tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
+			primary = tablet
+		}
+		testutil.AddTablet(ctx, t, ts, tablet, &testutil.AddTabletOptions{AlsoSetShardPrimary: true})
+		alias := topoproto.TabletAliasString(tablet.Alias)
+		c.tabletRecs[alias] = tablet
+		c.tablets[alias] = &fakeGRTablet{
+			alias:    alias,
+			cell:     spec.cell,
+			uuid:     fmt.Sprintf("00000000-0000-0000-0000-%012d", spec.uid),
+			primary:  spec.tabletType == topodatapb.TabletType_PRIMARY,
+			version:  "8.4.11",
+			gtidMode: "ON",
+		}
+	}
+	require.NotNil(t, primary)
+	primaryAlias := topoproto.TabletAliasString(primary.Alias)
+	for alias, ft := range c.tablets {
+		if ft.primary {
+			ft.semiSyncPrimary = policy.SemiSyncAckers(d, primary) > 0
+			continue
+		}
+		ft.source = primaryAlias
+		ft.semiSyncReplica = policy.IsReplicaSemiSync(d, primary, c.tabletRecs[alias])
+		ft.superReadOnly = true
+	}
+	return c, ts
+}
+
+// formGroup makes every tablet the durability policy makes a voting member an ONLINE member
+// of a group whose primary is the shard primary, as after a migration.
+func (c *fakeGRCluster) formGroup(t *testing.T, groupPolicy string) {
+	d, err := policy.GetDurabilityPolicy(groupPolicy)
+	require.NoError(t, err)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for alias, ft := range c.tablets {
+		if !policy.IsGroupMember(d, c.tabletRecs[alias]) {
+			ft.semiSyncReplica = false
+			continue
+		}
+		ft.member = true
+		ft.source = ""
+		ft.semiSyncReplica = false
+		ft.semiSyncPrimary = false
+		if ft.primary {
+			c.groupPrimary = alias
+		}
+	}
+}
+
+func (c *fakeGRCluster) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = nil
+	c.violations = nil
+	c.queries = nil
+}
+
+func callsWithPrefix(calls []string, prefix string) []string {
+	var out []string
+	for _, call := range calls {
+		if strings.HasPrefix(call, prefix) {
+			out = append(out, call)
+		}
+	}
+	return out
+}
+
+const (
+	aliasP   = "zone1-0000000100"
+	alias101 = "zone1-0000000101"
+	alias102 = "zone1-0000000102"
+	alias200 = "zone2-0000000200"
+	alias300 = "zone3-0000000300"
+)
+
+// migrationTestShard is a primary in zone1, one replica in each of zone1, zone2 and zone3,
+// and an rdonly tablet in zone1.
+func migrationTestShard() []fakeGRTabletSpec {
+	return []fakeGRTabletSpec{
+		{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
+		{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+		{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+		{cell: "zone1", uid: 102, tabletType: topodatapb.TabletType_RDONLY},
+	}
+}
