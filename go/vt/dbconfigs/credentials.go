@@ -199,12 +199,15 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 	defer vcs.mu.Unlock()
 
 	if vcs.vaultCacheExpireTicker == nil {
-		vcs.vaultCacheExpireTicker = time.NewTicker(vaultCacheTTL)
+		ticker := time.NewTicker(vaultCacheTTL)
+		vcs.vaultCacheExpireTicker = ticker
 		go func() {
-			for range vcs.vaultCacheExpireTicker.C {
-				if vcs, ok := AllCredentialsServers["vault"].(*VaultCredentialsServer); ok {
-					vcs.cacheValid = false
-				}
+			for range ticker.C {
+				// cacheValid is also read and written by GetUserAndPassword
+				// while holding vcs.mu, so we must hold it here as well.
+				vcs.mu.Lock()
+				vcs.cacheValid = false
+				vcs.mu.Unlock()
 			}
 		}()
 	}
