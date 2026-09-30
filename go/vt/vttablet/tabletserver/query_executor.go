@@ -431,17 +431,11 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 
 		conn := txConn.UnderlyingDBConn()
-<<<<<<< HEAD
-		err = qre.execStreamSQL(conn, true, sql, streamCallback)
-||||||| parent of e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
-		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
-=======
 		if qre.plan.PlanID == p.PlanCallProc {
 			// see execProc: the procedure body may leave session state behind
 			txConn.MarkSessionDiverged()
 		}
-		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
->>>>>>> e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
+		err = qre.execStreamSQL(conn, true, sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
