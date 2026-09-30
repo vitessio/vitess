@@ -6926,8 +6926,33 @@ func TestCommitLoop_WorkerTxnCommitProtocol(t *testing.T) {
 		t.Fatal("commitLoop must signal the worker's done channel after committing")
 	}
 	scheduler.mu.Lock()
-	defer scheduler.mu.Unlock()
 	assert.Equal(t, int64(1), scheduler.lastCommittedOrder)
+	scheduler.mu.Unlock()
+
+	// A batching worker whose events were all skipped (e.g. statement DML on
+	// mysql.rds_* tables) never began a transaction. Its position still has
+	// to be saved, in a transaction of its own; batching the position update
+	// outside of one fails the same way on every retry.
+	t.Run("batching worker that never began a transaction", func(t *testing.T) {
+		scheduler := newApplyScheduler(ctx)
+		recording := &recordingDBClient{}
+		workerClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+		workerClient.maxBatchSize = 1024
+		require.False(t, workerClient.InTransaction)
+
+		commitCh := make(chan *applyTxn, 1)
+		commitCh <- &applyTxn{
+			order:   1,
+			payload: &applyTxnPayload{pos: pos, timestamp: 100, client: workerClient},
+			done:    make(chan struct{}, 1),
+		}
+		close(commitCh)
+
+		require.NoError(t, vp.commitLoop(ctx, scheduler, commitCh))
+		require.Len(t, recording.queries, 1)
+		assert.Contains(t, recording.queries[0], "update _vt.vreplication set pos=")
+		assert.False(t, workerClient.InTransaction)
+	})
 }
 
 // TestCommitLoop_WorkerStopPosSetsStateAndStops pins the stop-position path

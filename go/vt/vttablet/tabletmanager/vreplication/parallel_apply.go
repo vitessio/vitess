@@ -2244,6 +2244,14 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// multi-statement round-trip.
 		var posReached bool
 		if payload.client != nil && payload.query == nil && payload.commit == nil {
+			// A worker whose events were all skipped (e.g. statement DML on
+			// mysql.rds_* tables) never began a transaction; its position is
+			// still saved, in a transaction of its own.
+			if !payload.client.InTransaction {
+				if err := payload.client.Begin(); err != nil {
+					return err
+				}
+			}
 			if err := payload.client.AddQueryToTrxBatch(vp.generateUpdatePosQuery(payload.pos, payload.timestamp)); err != nil {
 				return err
 			}
