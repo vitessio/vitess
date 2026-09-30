@@ -17,7 +17,15 @@ limitations under the License.
 package servenv
 
 import (
+<<<<<<< HEAD
+||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
+	"context"
+=======
+	"bytes"
+	"context"
+>>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
 	"fmt"
+	"log/slog"
 	"net"
 	"testing"
 
@@ -25,7 +33,72 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/orca"
+<<<<<<< HEAD
+||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
+	"google.golang.org/protobuf/types/known/emptypb"
+=======
+	"google.golang.org/protobuf/types/known/emptypb"
+
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/tlstest"
+>>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
 )
+
+// TestGRPCServerOptionalTLSWarning checks what a server with optional TLS
+// warns about at startup. With a client CA it has to say that plain-text
+// connections are not authenticated, since --grpc-ca then only applies to the
+// TLS connections, and which stats show the plain-text connections without
+// claiming they prove that every client has moved; without a CA the plain
+// warning is enough.
+func TestGRPCServerOptionalTLSWarning(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	t.Cleanup(withTempVar(&gRPCCert, certs.ServerCert))
+	t.Cleanup(withTempVar(&gRPCKey, certs.ServerKey))
+	t.Cleanup(withTempVar(&gRPCEnableOptionalTLS, true))
+
+	for name, tc := range map[string]struct {
+		ca      string
+		want    []string
+		notWant []string
+	}{
+		"with a client CA": {
+			ca: certs.ClientCA,
+			want: []string{
+				"Plain-text connections will be accepted and are not authenticated",
+				"--grpc-ca only applies to TLS connections",
+				"GrpcOptionalTlsOpenConnections",
+				"GrpcOptionalTlsConnections",
+				"offline or connects only now and then",
+			},
+		},
+		"without a client CA": {
+			ca:      "",
+			want:    []string{"Optional TLS is active. Plain-text connections will be accepted"},
+			notWant: []string{"not authenticated", "--grpc-ca"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(withTempVar(&gRPCCA, tc.ca))
+			t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
+			t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
+			var logBuf bytes.Buffer
+			oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+			t.Cleanup(func() { log.SwapLogger(oldLogger) })
+
+			createGRPCServer()
+			require.NotNil(t, GRPCServer)
+			t.Cleanup(GRPCServer.Stop)
+
+			logged := logBuf.String()
+			for _, want := range tc.want {
+				assert.Contains(t, logged, want)
+			}
+			for _, notWant := range tc.notWant {
+				assert.NotContains(t, logged, notWant)
+			}
+		})
+	}
+}
 
 func TestEmpty(t *testing.T) {
 	interceptors := &serverInterceptorBuilder{}
