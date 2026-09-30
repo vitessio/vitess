@@ -1011,9 +1011,22 @@ func TestRewritesSysVar(in *testing.T) {
 		in:       "select @x = @@sql_mode",
 		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
 	}, {
-		// the session's sql_mode is resolved at VTGate
+		in:       "select @@global.sql_mode",
+		expected: "select @@global.sql_mode from dual",
+	}, {
+		// the session's sql_mode is resolved at the vtgate, and the global sql_mode
+		// is then the vtgate's configured default, never a backend's value
 		in:       "select @x = @@sql_mode",
 		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
+		sysVar:   map[string]string{"sql_mode": "' '"},
+	}, {
+		in:       "select @@global.sql_mode",
+		expected: "select :__vtglobal_sql_mode as `@@global.sql_mode` from dual",
+		sysVar:   map[string]string{"sql_mode": "' '"},
+	}, {
+		// other global variables are still resolved by the backend
+		in:       "select @@global.max_connections",
+		expected: "select @@global.max_connections from dual",
 		sysVar:   map[string]string{"sql_mode": "' '"},
 	}, {
 		in:       "SELECT @@tx_isolation",

@@ -725,6 +725,8 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		case sysvars.SQLMode.Name:
 			bindVars[key] = sqltypes.StringBindVariable(vcursor.SQLMode())
+		case sysvars.GlobalSQLMode:
+			bindVars[key] = sqltypes.StringBindVariable(e.config.SQLMode)
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
 				expr, err := e.env.Parser().ParseExpr(value)

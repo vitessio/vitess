@@ -52,7 +52,8 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 		if isShowVariables(stmt) {
 			// the shard reports its own values; substitute the ones VTGate owns, as for
 			// an untargeted session
-			plan.primitive = engine.NewReplaceVariables(plan.primitive)
+			global := stmt.Internal.(*sqlparser.ShowBasic).Command == sqlparser.VariableGlobal
+			plan.primitive = engine.NewReplaceVariables(plan.primitive, global)
 		}
 		return plan, nil
 	}
@@ -200,7 +201,7 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 	if err != nil {
 		return nil, err
 	}
-	plan = engine.NewReplaceVariables(plan)
+	plan = engine.NewReplaceVariables(plan, show.Command == sqlparser.VariableGlobal)
 	return plan, nil
 }
 

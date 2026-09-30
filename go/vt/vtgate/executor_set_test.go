@@ -699,7 +699,7 @@ func TestSQLModeFlag(t *testing.T) {
 
 // TestSetSQLModeExpressions pins how SET sql_mode handles the odder expressions MySQL
 // accepts, with every outcome verified against MySQL 8.0.46. Expressions VTGate can
-// compute itself — @@sql_mode, user variables, system variables the
+// compute itself — @@sql_mode, @@global.sql_mode, user variables, system variables the
 // session has set, literals of every kind — are evaluated locally. A sub-expression it
 // cannot compute, such as RAND() or a system variable the session never set, is
 // fetched from a shard with the session's @@sql_mode passed along; the result is then
@@ -715,6 +715,7 @@ func TestSetSQLModeExpressions(t *testing.T) {
 		err         string
 	}{
 		{expr: "@@sql_mode", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "@@global.sql_mode", stored: "'" + defaultMode + "'"},
 		{expr: "concat(@@sql_mode, ',ONLY_FULL_GROUP_BY')", stored: "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"},
 		{expr: "@x", stored: "'ONLY_FULL_GROUP_BY'"},
 		{expr: "concat(@@sql_mode, ',', @x)", stored: "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"},
@@ -829,9 +830,9 @@ func TestSetSQLModeDefaultExplicitlyEmpty(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
-	qr, err := executorExecSession(ctx, executor, session, "select @@sql_mode", nil)
+	qr, err := executorExecSession(ctx, executor, session, "select @@sql_mode, @@global.sql_mode", nil)
 	require.NoError(t, err)
-	assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("") VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
 	require.Equal(t, "''", session.SystemVariables[sysvars.SQLMode.Name])
 
 	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_ALL_TABLES'", nil)
@@ -861,6 +862,18 @@ func TestSessionDefaultSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, lookup.Queries)
 	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
+
+	// @@global.sql_mode is the configured default, never a backend's value
+	qr, err = executorExecSession(ctx, executor, session, "select @@global.sql_mode", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, `[[VARCHAR("STRICT_TRANS_TABLES,NO_ZERO_DATE")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// setting @@global.sql_mode's value restores the session default
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = @@global.sql_mode", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
 
 	// setting the session default's own value is a no-op: the seeded value is untouched
 	// and no reserved connection is needed
@@ -951,6 +964,16 @@ func TestSetVarShowVariables(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
 	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("ONLY_FULL_GROUP_BY")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// the global form reports the configured default the sessions start with, like
+	// @@global.sql_mode does
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
+	})
+	qr, err = executorExecSession(ctx, executor, session, "show global variables like 'sql_mode'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("`+mysqlconfig.DefaultSQLMode+`")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestShowVariablesTargetedSession checks that SHOW VARIABLES in a shard-targeted session
@@ -999,7 +1022,8 @@ func TestShowGlobalVariablesIgnoresSessionValues(t *testing.T) {
 				"version|8.0.40")})
 			qr, err := executorExecSession(ctx, executor, session, "show global variables", map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
-			assert.Equal(t, fmt.Sprintf(`[[VARCHAR("sql_mode") VARCHAR("STRICT_TRANS_TABLES")] [VARCHAR("sql_select_limit") VARCHAR("18446744073709551615")] [VARCHAR("version") VARCHAR(%q)]]`, servenv.AppVersion.MySQLVersion()), fmt.Sprintf("%v", qr.Rows))
+			// the global sql_mode is the configured default the sessions start with
+			assert.Equal(t, fmt.Sprintf(`[[VARCHAR("sql_mode") VARCHAR(%q)] [VARCHAR("sql_select_limit") VARCHAR("18446744073709551615")] [VARCHAR("version") VARCHAR(%q)]]`, mysqlconfig.DefaultSQLMode, servenv.AppVersion.MySQLVersion()), fmt.Sprintf("%v", qr.Rows))
 		})
 	}
 }

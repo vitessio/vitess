@@ -438,7 +438,7 @@ VTGate already rejected `SET sql_mode = ...` statements that enable a mode the V
 VTGate now keeps each session's `sql_mode`, the way a MySQL server does. Previously, a session that never set `sql_mode` ran each query under whatever mode its backend was configured with, and `@@sql_mode` was read from one shard.
 
 - A new `--sql-mode` flag sets the mode every session starts with, as MySQL copies its global `sql_mode` into a new session. The flag is validated like a `SET sql_mode` statement. Its default is MySQL 8.x's default `sql_mode`.
-- VTGate answers `@@sql_mode` and `SHOW VARIABLES LIKE 'sql_mode'` from the session itself.
+- VTGate answers `@@sql_mode`, `@@global.sql_mode`, and `SHOW [GLOBAL] VARIABLES LIKE 'sql_mode'` itself. The global value is the `--sql-mode` value.
 - `SET sql_mode` is evaluated at VTGate. A part VTGate cannot compute, such as `RAND()`, is read from a shard. `SET sql_mode = DEFAULT` restores the `--sql-mode` value.
 - The session stores the value the way MySQL reports it: names uppercased, combination modes expanded, in MySQL's order.
 - Every query sent to the backends runs under the session's mode. A statement that can carry an optimizer hint gets a `SET_VAR(sql_mode = ...)` hint. Other statements, such as DDL, run on a connection with the session's settings applied, and a `SET sql_mode` also updates the connections the session already holds.

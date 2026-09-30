@@ -631,17 +631,22 @@ func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 }
 
 // rewriteShowBasic records the system variables a SHOW VARIABLES needs VTGate's values
-// of. The sql_mode is among them only when VTGate owns it.
+// of. The sql_mode is among them only when VTGate owns it, and the global form reads the
+// configured default rather than the session's value.
 func (nz *normalizer) rewriteShowBasic(node *ShowBasic) {
 	if node.Command != VariableGlobal && node.Command != VariableSession {
 		return
 	}
+	global := node.Command == VariableGlobal
 	owns := nz.sessionOwnsSQLMode()
-	for _, sysVar := range sysvars.GetInterestingVariables(node.Command == VariableGlobal) {
+	for _, sysVar := range sysvars.GetInterestingVariables(global) {
 		if sysVar == sysvars.SQLMode.Name && !owns {
 			continue
 		}
 		nz.bindVarNeeds.AddSysVar(sysVar)
+	}
+	if global && owns {
+		nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
 	}
 }
 
@@ -680,13 +685,27 @@ func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 	switch node.Scope {
 	case VariableScope:
 		nz.udvRewrite(cursor, node)
+	case GlobalScope:
+		nz.globalSysVarRewrite(cursor, node)
 	case SessionScope, NextTxScope, NoScope:
 		nz.sysVarRewrite(cursor, node)
 	}
 }
 
+// globalSysVarRewrite replaces global system variables that the vtgate itself owns with
+// bind variables. The global sql_mode is the vtgate's configured default sql_mode when
+// the vtgate owns the session's sql_mode; a deployment that leaves the sql_mode to the
+// backends leaves the global one to them as well.
+func (nz *normalizer) globalSysVarRewrite(cursor *Cursor, node *Variable) {
+	if node.Name.Lowered() != sysvars.SQLMode.Name || !nz.sessionOwnsSQLMode() {
+		return
+	}
+	cursor.Replace(NewArgument("__vt" + sysvars.GlobalSQLMode))
+	nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
+}
+
 // sessionOwnsSQLMode reports whether the session carries a sql_mode, which every
-// session VTGate manages the sql_mode of does from its first request on. A session
+// session vtgate manages the sql_mode of does from its first request on. A session
 // without one belongs to a deployment that leaves the sql_mode to the backends, and
 // its @@sql_mode reads are theirs to answer.
 func (nz *normalizer) sessionOwnsSQLMode() bool {
