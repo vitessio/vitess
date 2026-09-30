@@ -615,6 +615,23 @@
         "limit-resources"
       ]
     },
+    "grouprepl": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/reparent/grouprepl"
+      ],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "ers_prs_newfeatures_heavy",
+      "Tags": [],
+      "Needs": [
+        "limit-resources"
+      ]
+    },
     "newfeatures": {
       "File": "unused.go",
       "Packages": [
