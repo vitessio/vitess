@@ -783,7 +783,7 @@ func (cached *ColumnRenames) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(176)
 	}
 	// field renames []vitess.io/vitess/go/vt/sqlparser.columnRename
 	{
@@ -791,6 +791,10 @@ func (cached *ColumnRenames) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.renames {
 			size += elem.CachedSize(false)
 		}
+	}
+	// field small [4]vitess.io/vitess/go/vt/sqlparser.columnRename
+	for _, elem := range cached.small {
+		size += elem.CachedSize(false)
 	}
 	// field unnamed []string
 	{

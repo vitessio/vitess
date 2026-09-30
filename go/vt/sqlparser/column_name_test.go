@@ -395,3 +395,73 @@ func TestColumnRenames(t *testing.T) {
 	assert.Equal(t, "", renames.Apply(fields)[0].Name)
 	assert.Equal(t, "1", renames.Apply(fields)[1].Name)
 }
+
+// BenchmarkAliasColumnNames measures the alias pass that vtgate runs on every
+// normalized statement.
+func BenchmarkAliasColumnNames(b *testing.B) {
+	parser := NewTestParser()
+	normalize := func(b *testing.B, query string) (Statement, map[string]*querypb.BindVariable) {
+		stmt, known, err := parser.Parse2(query)
+		require.NoError(b, err)
+		bindVars := map[string]*querypb.BindVariable{}
+		out, err := Normalize(stmt, NewReservedVars("vtg", known), bindVars, true, "ks", 0, "", map[string]string{}, nil, nil)
+		require.NoError(b, err)
+		return out.AST, bindVars
+	}
+	// run aliases clones of the statements, because the pass changes them.
+	run := func(b *testing.B, stmts []Statement, bindVars []map[string]*querypb.BindVariable) {
+		const batch = 1024
+		clones := make([]Statement, 0, batch)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for n := 0; n < b.N; {
+			b.StopTimer()
+			clones = clones[:0]
+			for i := 0; i < batch && n+i < b.N; i++ {
+				clones = append(clones, CloneStatement(stmts[(n+i)%len(stmts)]))
+			}
+			b.StartTimer()
+			for i, stmt := range clones {
+				AliasColumnNames(stmt, ColumnNameEnv{}, bindVars[(n+i)%len(stmts)])
+			}
+			n += len(clones)
+		}
+	}
+	for _, query := range []string{
+		"select id, name from user where id = 1",
+		"select id, count(*), 1+1, 'abc' from user where id = 1",
+		"select 1, 1+1, now()",
+		"select u.id, u.name, o.total from user as u join orders as o on u.id = o.uid where u.id = 5 order by o.total desc limit 10",
+		"select * from (select id, count(*) from t group by id) as x where id > 3",
+		"insert into t(a, b, c) values (1, 'x', now())",
+		"update t set a = a + 1 where id = 7",
+	} {
+		b.Run(query, func(b *testing.B) {
+			stmt, bindVars := normalize(b, query)
+			run(b, []Statement{stmt}, []map[string]*querypb.BindVariable{bindVars})
+		})
+	}
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		b.Run(trace, func(b *testing.B) {
+			var stmts []Statement
+			var bindVars []map[string]*querypb.BindVariable
+			for _, query := range loadQueries(b, trace) {
+				stmt, known, err := parser.Parse2(query)
+				if err != nil {
+					continue
+				}
+				bv := map[string]*querypb.BindVariable{}
+				out, err := Normalize(stmt, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+				if err != nil {
+					continue
+				}
+				stmts = append(stmts, out.AST)
+				bindVars = append(bindVars, bv)
+				if len(stmts) == 2000 {
+					break
+				}
+			}
+			run(b, stmts, bindVars)
+		})
+	}
+}

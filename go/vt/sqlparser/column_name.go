@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -272,7 +273,7 @@ func AliasColumnNames(stmt Statement, env ColumnNameEnv, bindVars map[string]*qu
 			unnamed = append(unnamed, generated.unnamed...)
 		}
 	}
-	_ = Walk(func(node SQLNode) (bool, error) {
+	walkColumnNames(func(node SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *AliasedTableExpr:
 			if dt, ok := node.Expr.(*DerivedTable); ok && len(node.Columns) == 0 {
@@ -348,6 +349,7 @@ func aliasSelectExprs(ts TableStatement, env ColumnNameEnv, of columnsOf, bindVa
 		})
 	})
 	var materialized map[string]TableStatement
+	materializedKnown := false
 	for i, expr := range sel.SelectExprs.Exprs {
 		ae, ok := expr.(*AliasedExpr)
 		if !ok || !ae._name.parsed {
@@ -370,8 +372,8 @@ func aliasSelectExprs(ts TableStatement, env ColumnNameEnv, of columnsOf, bindVa
 			// MySQL names a column reference as typed, unless it reads a
 			// derived table or view that MySQL merges into the query: then
 			// the column takes the name it has there, as it does in vtgate.
-			if materialized == nil {
-				materialized = materializedTables(sel, ts)
+			if !materializedKnown {
+				materialized, materializedKnown = materializedTables(sel, ts), true
 			}
 			col, ok := ae.Expr.(*ColName)
 			if !ok {
@@ -390,7 +392,7 @@ func aliasSelectExprs(ts TableStatement, env ColumnNameEnv, of columnsOf, bindVa
 			rename(i, name)
 			continue
 		}
-		if name == String(ae.Expr) && !isReferenced && !rewrittenByPlanning(ae.Expr) {
+		if !isReferenced && printsAs(ae.Expr, name) && !rewrittenByPlanning(ae.Expr) {
 			// MySQL names the SQL that vtgate sends the same way. A column
 			// that the query refers to by name needs an alias for vtgate to
 			// resolve the reference.
@@ -420,6 +422,90 @@ func aliasSelectExprs(ts TableStatement, env ColumnNameEnv, of columnsOf, bindVa
 	return renames
 }
 
+// walkColumnNames is Walk for the column name pass, which runs on every
+// statement. Visiting a node that is not a pointer, such as an identifier or
+// a table name, allocates. So it does not visit the children of column
+// references, stars and time functions, the aliases of select expressions,
+// the names of function calls, what a table expression holds other than a
+// derived table, the partitions, columns and row alias of an insert,
+// and the tuples of VALUES rows, none of which the pass looks at. It visits
+// the expressions in those rows, and every other node that Walk visits.
+func walkColumnNames(visit Visit, node SQLNode) {
+	var lean Visit
+	lean = func(node SQLNode) (bool, error) {
+		if kontinue, err := visit(node); !kontinue || err != nil {
+			return kontinue, err
+		}
+		switch node := node.(type) {
+		case *ColName, *StarExpr, *CurTimeFuncExpr:
+			return false, nil
+		case *AliasedExpr:
+			return false, Walk(lean, node.Expr)
+		case *FuncExpr:
+			for _, expr := range node.Exprs {
+				if err := Walk(lean, expr); err != nil {
+					return false, err
+				}
+			}
+			return false, nil
+		case *AliasedTableExpr:
+			// Only a derived table can hold other nodes the pass looks at.
+			if dt, ok := node.Expr.(*DerivedTable); ok {
+				return false, Walk(lean, dt)
+			}
+			return false, nil
+		case *Insert:
+			if node.Table != nil {
+				if err := Walk(lean, node.Table); err != nil {
+					return false, err
+				}
+			}
+			switch rows := node.Rows.(type) {
+			case nil:
+			case Values:
+				if _, err := lean(rows); err != nil {
+					return false, err
+				}
+			default:
+				if err := Walk(lean, rows); err != nil {
+					return false, err
+				}
+			}
+			if len(node.OnDup) > 0 {
+				return false, Walk(lean, node.OnDup)
+			}
+			return false, nil
+		case Values:
+			for _, row := range node {
+				for _, expr := range row {
+					if err := Walk(lean, expr); err != nil {
+						return false, err
+					}
+				}
+			}
+			return false, nil
+		}
+		return true, nil
+	}
+	_ = Walk(lean, node)
+}
+
+// exprPrinters are the buffers that printsAs prints expressions into.
+var exprPrinters = sync.Pool{New: func() any { return NewTrackedBuffer(nil) }}
+
+// printsAs reports whether String(expr) is name. It prints the expression
+// into a pooled buffer, because it runs on every statement.
+func printsAs(expr Expr, name string) bool {
+	buf := exprPrinters.Get().(*TrackedBuffer)
+	buf.Grow(len(name))
+	expr.FormatFast(buf)
+	equal := buf.String() == name
+	buf.Reset()
+	buf.bindLocations = buf.bindLocations[:0]
+	exprPrinters.Put(buf)
+	return equal
+}
+
 // containsBindVar reports whether an expression contains one of the bind
 // variables.
 func containsBindVar(expr Expr, bindVars map[string]*querypb.BindVariable) bool {
@@ -427,7 +513,7 @@ func containsBindVar(expr Expr, bindVars map[string]*querypb.BindVariable) bool 
 		return false
 	}
 	found := false
-	_ = Walk(func(node SQLNode) (bool, error) {
+	walkColumnNames(func(node SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *Argument:
 			_, found = bindVars[node.Name]
@@ -443,6 +529,8 @@ func containsBindVar(expr Expr, bindVars map[string]*querypb.BindVariable) bool 
 // rather than with aliases.
 type ColumnRenames struct {
 	renames []columnRename
+	// small holds the first renames, so that most statements allocate once.
+	small [4]columnRename
 	// exprs is the number of select expressions, and firstStar and lastStar
 	// are the positions of the first and last star among them, or -1.
 	exprs, firstStar, lastStar int
@@ -459,6 +547,7 @@ func newColumnRenames(ts TableStatement) *ColumnRenames {
 		return nil
 	}
 	renames := &ColumnRenames{exprs: len(sel.SelectExprs.Exprs), firstStar: -1, lastStar: -1}
+	renames.renames = renames.small[:0]
 	for i, expr := range sel.SelectExprs.Exprs {
 		if _, ok := expr.(*StarExpr); ok {
 			if renames.firstStar < 0 {
@@ -530,34 +619,53 @@ func (r *ColumnRenames) Apply(fields []*querypb.Field) []*querypb.Field {
 // HAVING clauses of a query expression refer to without a qualifier. MySQL
 // resolves them against the names of the select expressions.
 func referencedNames(ts TableStatement) []string {
-	var clauses []SQLNode
+	var names []string
+	visit := func(node SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *ColName:
+			if node.Qualifier.IsEmpty() {
+				names = append(names, node.Name.Lowered())
+			}
+		case *Subquery:
+			return false, nil
+		}
+		return true, nil
+	}
+	// The clauses are walked expression by expression, because boxing a
+	// clause that is not a pointer, such as ORDER BY, allocates.
+	walkOrderBy := func(orderBy OrderBy) {
+		for _, order := range orderBy {
+			walkColumnNames(visit, order.Expr)
+		}
+	}
 	switch ts := ts.(type) {
 	case *Select:
-		clauses = []SQLNode{ts.OrderBy, ts.GroupBy, ts.Having}
-	case *Union:
-		clauses = []SQLNode{ts.OrderBy}
-	}
-	var names []string
-	for _, clause := range clauses {
-		_ = Walk(func(node SQLNode) (bool, error) {
-			switch node := node.(type) {
-			case *ColName:
-				if node.Qualifier.IsEmpty() {
-					names = append(names, node.Name.Lowered())
-				}
-			case *Subquery:
-				return false, nil
+		walkOrderBy(ts.OrderBy)
+		if ts.GroupBy != nil {
+			for _, expr := range ts.GroupBy.Exprs {
+				walkColumnNames(visit, expr)
 			}
-			return true, nil
-		}, clause)
+		}
+		if ts.Having != nil {
+			walkColumnNames(visit, ts.Having.Expr)
+		}
+	case *Union:
+		walkOrderBy(ts.OrderBy)
 	}
 	return names
 }
 
 // materializedTables returns the derived tables and CTEs in the FROM clause
-// of a query block that MySQL materializes, by their lowercased names.
+// of a query block that MySQL materializes, by their lowercased names. It
+// returns nil when there are none.
 func materializedTables(sel *Select, ts TableStatement) map[string]TableStatement {
-	materialized := map[string]TableStatement{}
+	var materialized map[string]TableStatement
+	add := func(name string, table TableStatement) {
+		if materialized == nil {
+			materialized = map[string]TableStatement{}
+		}
+		materialized[name] = table
+	}
 	var with *With
 	switch ts := ts.(type) {
 	case *Select:
@@ -571,7 +679,7 @@ func materializedTables(sel *Select, ts TableStatement) map[string]TableStatemen
 			switch expr := node.Expr.(type) {
 			case *DerivedTable:
 				if !MySQLMergesDerivedTable(expr.Select) {
-					materialized[strings.ToLower(node.As.String())] = expr.Select
+					add(strings.ToLower(node.As.String()), expr.Select)
 				}
 			case TableName:
 				if cte := findCTE(with, expr); cte != nil && !MySQLMergesDerivedTable(cte.Subquery) {
@@ -579,7 +687,7 @@ func materializedTables(sel *Select, ts TableStatement) map[string]TableStatemen
 					if name.IsEmpty() {
 						name = expr.Name
 					}
-					materialized[strings.ToLower(name.String())] = cte.Subquery
+					add(strings.ToLower(name.String()), cte.Subquery)
 				}
 			}
 			return false, nil
@@ -589,7 +697,7 @@ func materializedTables(sel *Select, ts TableStatement) map[string]TableStatemen
 		return true, nil
 	}
 	for _, table := range sel.From {
-		_ = Walk(visit, table)
+		walkColumnNames(visit, table)
 	}
 	return materialized
 }
@@ -599,7 +707,7 @@ func materializedTables(sel *Select, ts TableStatement) map[string]TableStatemen
 // subqueries, NOT before a comparison, and comparisons of tuples.
 func rewrittenByPlanning(expr Expr) bool {
 	found := false
-	_ = Walk(func(node SQLNode) (bool, error) {
+	walkColumnNames(func(node SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *Subquery:
 			found = true
@@ -696,7 +804,7 @@ func MySQLMergesDerivedTable(stmt TableStatement) bool {
 	}
 	merges := true
 	for _, se := range sel.SelectExprs.Exprs {
-		_ = Walk(func(node SQLNode) (bool, error) {
+		walkColumnNames(func(node SQLNode) (bool, error) {
 			switch node.(type) {
 			case AggrFunc, WindowFunc, *AssignmentExpr:
 				merges = false
@@ -929,6 +1037,10 @@ var textFragmentParser = &Parser{}
 // introducer or N gives it, if any. MySQL names a text literal after its first
 // string only.
 func firstTextFragment(text string) (value, charset string) {
+	if len(text) >= 2 && text[0] == '\'' && text[len(text)-1] == '\'' && !strings.ContainsAny(text[1:len(text)-1], "'\\") {
+		// A single string without escapes, the most common text literal.
+		return text[1 : len(text)-1], ""
+	}
 	tkn := &Tokenizer{buf: text, parser: textFragmentParser}
 	for {
 		typ, val := tkn.Scan()
