@@ -1245,28 +1245,6 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 	return true, topologyRecovery, err
 }
 
-<<<<<<< HEAD
-// demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
-// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
-// to the current primary.
-func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-||||||| parent of c04e2b9f61 (vtorc: pass a heartbeat interval to `SetReplicationSource` only for `ReplicaMisconfigured` (#21251))
-// reconcileStaleTopoPrimary updates the type of a tablet in topology to REPLICA when the tablet has a stale type of
-// PRIMARY. This can often happen when the demotion step during an EmergencyReparentShard fails or partially fails, and
-// the old primary remains as PRIMARY in the topology (and potentially still writable). This recovery will additionally
-// attempt to demote and set up replication on the stale primary, but only on a best-effort basis, i.e. the recovery
-// will succeed as long as the tablet's type is updated to REPLICA in the topology.
-//
-// The reason the demotion and replication setup happen on a best-effort basis is due to the fact that a stale topo
-// primary usually appears when an EmergencyReparentShard expectedly fails to reach a failed or degraded primary, and
-// therefore can't demote it completely. This means that the demotion and replication setup are likely to fail here
-// as well, as the old primary is likely still in a failed or degraded state.
-//
-// In the case that the tablet's type is updated to REPLICA and the best-effort steps fail, and the tablet does
-// recover eventually, other recoveries will complete the process, such as ReplicaIsWritable to set read-only, or
-// NotConnectedToPrimary to set up replication correctly.
-func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-=======
 // fixReplicaHeartbeatInterval returns the heartbeat interval fixReplica passes to SetReplicationSource.
 //
 // A non-zero heartbeat interval makes SetReplicationSource run CHANGE REPLICATION SOURCE TO even when
@@ -1285,22 +1263,10 @@ func fixReplicaHeartbeatInterval(analysisEntry *inst.DetectionAnalysis) float64 
 	return float64(analysisEntry.ReplicaNetTimeout) / 2
 }
 
-// reconcileStaleTopoPrimary updates the type of a tablet in topology to REPLICA when the tablet has a stale type of
-// PRIMARY. This can often happen when the demotion step during an EmergencyReparentShard fails or partially fails, and
-// the old primary remains as PRIMARY in the topology (and potentially still writable). This recovery will additionally
-// attempt to demote and set up replication on the stale primary, but only on a best-effort basis, i.e. the recovery
-// will succeed as long as the tablet's type is updated to REPLICA in the topology.
-//
-// The reason the demotion and replication setup happen on a best-effort basis is due to the fact that a stale topo
-// primary usually appears when an EmergencyReparentShard expectedly fails to reach a failed or degraded primary, and
-// therefore can't demote it completely. This means that the demotion and replication setup are likely to fail here
-// as well, as the old primary is likely still in a failed or degraded state.
-//
-// In the case that the tablet's type is updated to REPLICA and the best-effort steps fail, and the tablet does
-// recover eventually, other recoveries will complete the process, such as ReplicaIsWritable to set read-only, or
-// NotConnectedToPrimary to set up replication correctly.
-func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
->>>>>>> c04e2b9f61 (vtorc: pass a heartbeat interval to `SetReplicationSource` only for `ReplicaMisconfigured` (#21251))
+// demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
+// been elected. It demotes the tablet, updates its type to REPLICA in the topology, and sets its replication source
+// to the current primary.
+func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	alias := analysisEntry.AnalyzedInstanceAlias
 
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
@@ -1327,96 +1293,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		return false, topologyRecovery, fmt.Errorf("failed to read instance: %w", err)
 	}
 
-<<<<<<< HEAD
 	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
-||||||| parent of c04e2b9f61 (vtorc: pass a heartbeat interval to `SetReplicationSource` only for `ReplicaMisconfigured` (#21251))
-	var wg sync.WaitGroup
-
-	// Make sure the best-effort steps complete or timeout before we return.
-	defer wg.Wait()
-
-	// On a best-effort basis, attempt to demote the tablet and configure replication concurrently
-	// with the topology type update below. Failures here will not fail the overall recovery.
-	wg.Go(func() {
-		// Demote the tablet, forcing it to become read-only and drop pending transactions.
-		if _, err := forceDemotePrimary(ctx, analyzedTablet); err != nil {
-			logger.Error("failed to demote stale primary", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
-
-		primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
-		if err != nil {
-			logger.Error("failed to find shard primary", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
-		if err != nil {
-			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
-
-		// Point the tablet's replication at the current primary. This also changes the tablet's type
-		// to REPLICA and attempts to update the topology.
-		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
-			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		logger.Info("successfully set replication source", slog.String("tablet", aliasString))
-	})
-
-	// Update the tablet's type directly in the topology to REPLICA.
-	_, err = changeTabletTypeInTopo(ctx, analyzedTablet, topodatapb.TabletType_REPLICA)
-=======
-	var wg sync.WaitGroup
-
-	// Make sure the best-effort steps complete or timeout before we return.
-	defer wg.Wait()
-
-	// On a best-effort basis, attempt to demote the tablet and configure replication concurrently
-	// with the topology type update below. Failures here will not fail the overall recovery.
-	wg.Go(func() {
-		// Demote the tablet, forcing it to become read-only and drop pending transactions.
-		if _, err := forceDemotePrimary(ctx, analyzedTablet); err != nil {
-			logger.Error("failed to demote stale primary", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		logger.Info("successfully demoted stale primary", slog.String("tablet", aliasString))
-
-		primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
-		if err != nil {
-			logger.Error("failed to find shard primary", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
-		if err != nil {
-			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
-
-		// Point the tablet's replication at the current primary. This also changes the tablet's type
-		// to REPLICA and attempts to update the topology. Like fixReplica, pass no heartbeat interval,
-		// so that a tablet that already replicates from the primary keeps its relay log.
-		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, 0); err != nil {
-			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
-			return
-		}
-
-		logger.Info("successfully set replication source", slog.String("tablet", aliasString))
-	})
-
-	// Update the tablet's type directly in the topology to REPLICA.
-	_, err = changeTabletTypeInTopo(ctx, analyzedTablet, topodatapb.TabletType_REPLICA)
->>>>>>> c04e2b9f61 (vtorc: pass a heartbeat interval to `SetReplicationSource` only for `ReplicaMisconfigured` (#21251))
 	if err != nil {
 		logger.Infof("Could not compute primary for %s/%s", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, fmt.Errorf("failed to find primary for shard: %w", err)
@@ -1442,8 +1319,9 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
 	}
 
-	// Set the instance's replication source to the current primary.
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
+	// Set the instance's replication source to the current primary. Like fixReplica, pass no heartbeat
+	// interval, so that a tablet that already replicates from the primary keeps its relay log.
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, 0)
 	if err != nil {
 		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
 	}
