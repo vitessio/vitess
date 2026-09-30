@@ -64,10 +64,13 @@ type Sample struct {
 	MySQLOK       bool
 	ReadOnly      bool
 	SuperReadOnly bool
-	GTID          string
-	TypeOK        bool
-	Type          string // tablet type as reported by the vttablet itself
-	GR            GRState
+	// OfflineMode is offline_mode, which Group Replication's OFFLINE_MODE exit state action sets:
+	// MySQL then refuses vttablet's app connections, so the tablet cannot serve.
+	OfflineMode bool
+	GTID        string
+	TypeOK      bool
+	Type        string // tablet type as reported by the vttablet itself
+	GR          GRState
 }
 
 // WritablePrimary is true when both mysqld accepts writes and the vttablet believes it is PRIMARY.
@@ -143,10 +146,10 @@ func (o *Observer) sampleNode(ctx context.Context, i int) {
 		wg.Go(func() {
 			qctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 			defer cancel()
-			var ro, sro int
-			err := n.db.QueryRowContext(qctx, "select @@global.read_only, @@global.super_read_only, @@global.gtid_executed").Scan(&ro, &sro, &s.GTID)
+			var ro, sro, offline int
+			err := n.db.QueryRowContext(qctx, "select @@global.read_only, @@global.super_read_only, @@global.offline_mode, @@global.gtid_executed").Scan(&ro, &sro, &offline, &s.GTID)
 			if err == nil {
-				s.MySQLOK, s.ReadOnly, s.SuperReadOnly = true, ro == 1, sro == 1
+				s.MySQLOK, s.ReadOnly, s.SuperReadOnly, s.OfflineMode = true, ro == 1, sro == 1, offline == 1
 				if o.c.gr {
 					s.GR = n.grStateCtx(qctx)
 				}
@@ -173,6 +176,9 @@ func describeSample(s Sample) string {
 	my := "mysql=DOWN"
 	if s.MySQLOK {
 		my = fmt.Sprintf("read_only=%v super_read_only=%v", s.ReadOnly, s.SuperReadOnly)
+		if s.OfflineMode {
+			my += " offline_mode=ON"
+		}
 	}
 	typ := "vttablet=DOWN"
 	if s.TypeOK {
@@ -276,6 +282,28 @@ func (o *Observer) FirstTopoChange(from string, after time.Time) (string, time.T
 		}
 	}
 	return "", time.Time{}, false
+}
+
+// FirstOtherGroupPrimary returns the first time after `after` that a node other than node i was
+// the ONLINE primary of a view with a majority of its members, as sampled.
+func (o *Observer) FirstOtherGroupPrimary(i int, after time.Time) (time.Time, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var first time.Time
+	for j, samples := range o.samples {
+		if j == i {
+			continue
+		}
+		for _, s := range samples {
+			if s.T.After(after) && s.GR.OK && s.GRCanCommit() {
+				if first.IsZero() || s.T.Before(first) {
+					first = s.T
+				}
+				break
+			}
+		}
+	}
+	return first, !first.IsZero()
 }
 
 // FirstTopoPrimary returns the first time after `after` the topo primary was `alias`.

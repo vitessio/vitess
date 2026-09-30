@@ -225,6 +225,12 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 			n.GRPort = ci.GetAndReservePort()
 			n.Tablet.VttabletProcess.ExtraArgs = append(n.Tablet.VttabletProcess.ExtraArgs,
 				"--group-replication-port", strconv.Itoa(n.GRPort))
+			// CHAOS_GR_EXIT_STATE_ACTION selects group_replication_exit_state_action
+			// (READ_ONLY, OFFLINE_MODE, ABORT_SERVER); unset keeps vttablet's default.
+			if action := os.Getenv("CHAOS_GR_EXIT_STATE_ACTION"); action != "" {
+				n.Tablet.VttabletProcess.ExtraArgs = append(n.Tablet.VttabletProcess.ExtraArgs,
+					"--group-replication-exit-state-action", action)
+			}
 			nf.SetPorts(n.Group, n.GRPort)
 		}
 	}

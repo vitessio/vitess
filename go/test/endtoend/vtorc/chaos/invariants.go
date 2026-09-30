@@ -309,11 +309,12 @@ func (c *Chaos) reportOldPrimaryServing(r *Report, w *Workload, o *Observer, opt
 	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return !writable(s) }); ok {
 		r.timing("old primary %s mysqld stopped being writable (read_only or down) at +%.2fs", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds())
 	}
+	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return s.MySQLOK && s.OfflineMode }); ok {
+		r.timing("old primary %s mysqld offline_mode ON (app connections refused) at +%.2fs", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds())
+	}
 	if opts.OldPrimaryUUID == "" {
 		return
 	}
-	var lastOld time.Time
-	oldReads, failed, total := 0, 0, 0
 	changeAt, changed := time.Time{}, false
 	if _, at, ok := o.FirstTopoChange(old.Tablet.Alias, opts.Fault); ok {
 		changeAt, changed = at, true
@@ -322,28 +323,64 @@ func (c *Chaos) reportOldPrimaryServing(r *Report, w *Workload, o *Observer, opt
 	if changed {
 		backAt, back = o.FirstTopoPrimary(old.Tablet.Alias, changeAt)
 	}
-	for _, rd := range w.Reads() {
-		if !rd.Start.After(opts.Fault) || (back && !rd.Start.Before(backAt)) {
-			continue
-		}
-		total++
-		if rd.Err != "" {
-			failed++
-			continue
-		}
-		if rd.UUID == opts.OldPrimaryUUID {
-			lastOld = rd.End
-			if changed && rd.Start.After(changeAt) {
-				oldReads++
-			}
+	// In Group Replication mode, the old primary's data is stale once another member is the
+	// primary of a view with a majority: that member commits writes the old primary never sees.
+	electedAt, elected := time.Time{}, false
+	if c.gr {
+		electedAt, elected = o.FirstOtherGroupPrimary(old.Idx, opts.Fault)
+		if elected {
+			r.timing("another member became the primary of a majority view at +%.2fs", electedAt.Sub(opts.Fault).Seconds())
 		}
 	}
-	if !lastOld.IsZero() {
-		r.timing("vtgate primary reads answered by the old primary until +%.2fs after the fault", lastOld.Sub(opts.Fault).Seconds())
+	rs := oldPrimaryReads(w.Reads(), opts.OldPrimaryUUID, opts.Fault, changeAt, changed, electedAt, elected, backAt, back)
+	if !rs.LastOld.IsZero() {
+		r.timing("vtgate primary reads answered by the old primary until +%.2fs after the fault", rs.LastOld.Sub(opts.Fault).Seconds())
 	} else {
 		r.timing("vtgate primary reads: none answered by the old primary after the fault")
 	}
-	r.outcome("vtgate primary reads after fault: %d, failed %d, answered by old primary after the topo primary changed: %d", total, failed, oldReads)
+	if !rs.LastStale.IsZero() {
+		r.timing("stale primary reads (old primary, after another member was elected): last at +%.2fs", rs.LastStale.Sub(opts.Fault).Seconds())
+	}
+	r.outcome("vtgate primary reads after fault: %d, failed %d, answered by old primary: %d, after another member was elected: %d, after the topo primary changed: %d",
+		rs.Total, rs.Failed, rs.Old, rs.Stale, rs.AfterTopoChange)
+}
+
+// primaryReadStats counts the primary reads of the workload after a fault.
+type primaryReadStats struct {
+	Total, Failed int
+	// Old reads were answered by the old primary; Stale ones started after another member was
+	// elected, AfterTopoChange ones after the shard record named another primary.
+	Old, Stale, AfterTopoChange int
+	LastOld, LastStale          time.Time
+}
+
+// oldPrimaryReads counts the reads that started after the fault, and before the old primary became
+// the topo primary again (back), by who answered them.
+func oldPrimaryReads(reads []ReadRecord, oldUUID string, fault, changeAt time.Time, changed bool, electedAt time.Time, elected bool, backAt time.Time, back bool) primaryReadStats {
+	var st primaryReadStats
+	for _, rd := range reads {
+		if !rd.Start.After(fault) || (back && !rd.Start.Before(backAt)) {
+			continue
+		}
+		st.Total++
+		if rd.Err != "" {
+			st.Failed++
+			continue
+		}
+		if rd.UUID != oldUUID {
+			continue
+		}
+		st.Old++
+		st.LastOld = rd.End
+		if elected && rd.Start.After(electedAt) {
+			st.Stale++
+			st.LastStale = rd.End
+		}
+		if changed && rd.Start.After(changeAt) {
+			st.AfterTopoChange++
+		}
+	}
+	return st
 }
 
 // CheckInvariants stops nothing; the caller must have stopped the workload and healed faults.

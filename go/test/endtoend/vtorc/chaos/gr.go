@@ -93,6 +93,11 @@ func (c *Chaos) grConvergenceProblems(p *Node) []string {
 		if !g.OK || g.State != "ONLINE" || g.PrimaryUUID != puuid || g.Online != len(c.Nodes) {
 			probs = append(probs, fmt.Sprintf("%s: %s primary=%s", n.Tablet.Alias, g, aliasOf(c.nodeByUUIDCached(g.PrimaryUUID))))
 		}
+		// An ONLINE member whose offline_mode was left ON cannot serve: MySQL refuses its
+		// vttablet's app connections.
+		if off, err := n.scalar("select @@global.offline_mode"); err != nil || off != "0" {
+			probs = append(probs, fmt.Sprintf("%s offline_mode=%s err=%v", n.Tablet.Alias, off, err))
+		}
 	}
 	return probs
 }

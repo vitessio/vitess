@@ -95,3 +95,49 @@ func TestObserverRepromoted(t *testing.T) {
 	_, ok = o.Repromoted(1, t0)
 	assert.False(t, ok)
 }
+
+// TestOldPrimaryReads checks how the primary reads after a fault are attributed: reads the old
+// primary answered after another member was elected are stale, and reads after the old primary
+// became the topo primary again are not counted.
+func TestOldPrimaryReads(t *testing.T) {
+	t0 := time.Now()
+	at := func(s float64) time.Time { return t0.Add(time.Duration(s * float64(time.Second))) }
+	read := func(s float64, uuid, err string) ReadRecord {
+		return ReadRecord{Start: at(s), End: at(s + 0.01), UUID: uuid, Err: err}
+	}
+	reads := []ReadRecord{
+		read(-1, "old", ""),    // before the fault
+		read(1, "old", ""),     // old primary, before the election
+		read(6, "old", ""),     // stale: after the election at +5
+		read(7, "", "timeout"), // failed
+		read(8, "old", ""),     // stale, and after the topo change at +7.5
+		read(9, "new", ""),     // new primary
+		read(30, "old", ""),    // the old primary is the topo primary again from +20
+	}
+	st := oldPrimaryReads(reads, "old", t0, at(7.5), true, at(5), true, at(20), true)
+	assert.Equal(t, 5, st.Total)
+	assert.Equal(t, 1, st.Failed)
+	assert.Equal(t, 3, st.Old)
+	assert.Equal(t, 2, st.Stale)
+	assert.Equal(t, 1, st.AfterTopoChange)
+	assert.Equal(t, at(8.01), st.LastStale)
+	assert.Equal(t, at(8.01), st.LastOld)
+}
+
+// TestObserverFirstOtherGroupPrimary checks that the election is when another node was first
+// sampled as the primary of a majority view: the old primary does not count, and neither does a
+// primary whose view lacks the majority.
+func TestObserverFirstOtherGroupPrimary(t *testing.T) {
+	t0 := time.Now()
+	sample := func(secs float64, role string, online, members int) Sample {
+		return Sample{T: t0.Add(time.Duration(secs * float64(time.Second))), GR: GRState{OK: true, State: "ONLINE", Role: role, Online: online, Members: members}}
+	}
+	o := &Observer{samples: [][]Sample{
+		{sample(1, "PRIMARY", 3, 3), sample(2, "PRIMARY", 1, 3)},
+		{sample(1, "SECONDARY", 3, 3), sample(6, "PRIMARY", 2, 2)},
+		{sample(1, "SECONDARY", 3, 3), sample(4, "PRIMARY", 1, 3), sample(7, "SECONDARY", 2, 2)},
+	}}
+	at, ok := o.FirstOtherGroupPrimary(0, t0)
+	require.True(t, ok)
+	assert.Equal(t, t0.Add(6*time.Second), at)
+}
