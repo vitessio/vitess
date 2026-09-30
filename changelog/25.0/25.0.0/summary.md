@@ -70,6 +70,7 @@
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Server TLS files reload without a restart](#tls-reload)
+        - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -642,9 +643,9 @@ A `CREATE TABLE` that vttablet's parser cannot fully parse is forwarded to MySQL
 
 A statement flagged this way now has the permissions the planner did derive checked first, so a caller lacking `ADMIN` on the table a partial `CREATE TABLE` creates is denied on that table by name, and a dry run records both that denial and the undetermined one.
 
-Connection settings — the SET statements vtgate attaches to a session's queries, and the pre-queries of a reservation — are applied to a connection with no table ACL check. Under strict table ACL, vttablet now rejects a setting whose expressions contain a subquery: settings carry constants, and vtgate only sends values. Without strict table ACL the setting is accepted as before, since there is nothing for the check to protect. To make settings constants for every session, a `SET` of a system variable in a targeted session (`use ks:-80`) is now evaluated once on the target shard, with the tablet checking the read, and the resulting value is what the session applies and stores, matching an untargeted session. Previously such a session stored the expression as written and re-evaluated it on every reserved connection; as a side effect, `SELECT @@var` after a non-constant targeted `SET` now returns the value instead of failing to evaluate the stored text. Each targeted `SET` costs one additional round trip to the shard.
+Connection settings — the SET statements vtgate attaches to a session's queries, and the pre-queries of a reservation — are applied to a connection with no table ACL check. Under strict table ACL, vttablet now rejects a setting whose expressions contain a subquery: settings carry constants, and vtgate only sends values. Without strict table ACL the setting is accepted as before, since there is nothing for the check to protect. With table ACL dry run (`--queryserver-config-enable-table-acl-dry-run`), the setting is accepted as well, as dry run lets through any request the table ACL would deny, and vttablet logs a throttled warning naming the setting that strict table ACL would reject (with `--sanitize-log-messages`, only the variables it sets). To make settings constants for every session, a `SET` of a system variable in a targeted session (`use ks:-80`) is now evaluated once on the target shard, with the tablet checking the read, and the resulting value is what the session applies and stores, matching an untargeted session. Previously such a session stored the expression as written and re-evaluated it on every reserved connection; as a side effect, `SELECT @@var` after a non-constant targeted `SET` now returns the value instead of failing to evaluate the stored text. Each targeted `SET` costs one additional round trip to the shard.
 
-**Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
+**Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL without dry run, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
@@ -809,3 +810,9 @@ New metrics, each labeled by `Server` (`grpc` or `mysql`):
 | `TLSCertNotAfter` | gauge | Unix time at which the certificate the server presents expires. |
 
 See [#21255](https://github.com/vitessio/vitess/pull/21255) for details.
+
+#### <a id="grpc-optional-tls-connections"/>Optional gRPC TLS: connections are counted by transport</a>
+
+A gRPC server started with `--grpc-enable-optional-tls` now reports its connections by transport, `tls` or `plaintext`, in two new stats: `GrpcOptionalTlsOpenConnections`, the connections currently open, and `GrpcOptionalTlsConnections`, the connections handshaken so far. Optional TLS serves plain-text connections unauthenticated so that clients can be moved to TLS one at a time, including when `--grpc-ca` is set, whose client certificate check only applies to the TLS connections. The stats are the evidence to check before dropping `--grpc-enable-optional-tls`: the first shows whether a plain-text client is connected right now, which matters because gRPC connections are long-lived and a client that connected long ago does not handshake again, and the second whether any has connected lately. Neither shows a client that is offline or connects only now and then, so they support the decision rather than prove it. A server that has both flags also says so in its startup warning now.
+
+See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.

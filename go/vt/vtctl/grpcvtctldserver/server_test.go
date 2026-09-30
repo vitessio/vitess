@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -14101,6 +14102,28 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		},
 	}
 
+	semanticSchemaLeft := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t",
+			Schema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			Type: tmutils.TableBaseTable,
+		}},
+	}
+
+	semanticSchemaRight := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t",
+			Schema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			Type: tmutils.TableBaseTable,
+		}},
+	}
+
 	// we need to run this on each test case or they will pollute each other
 	setupSchema := func(tablet *topodatapb.TabletAlias, schema *tabletmanagerdatapb.SchemaDefinition) {
 		tmc.GetSchemaResults[topoproto.TabletAliasString(tablet)] = struct {
@@ -14139,6 +14162,28 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Cell: "zone1",
 					Uid:  101,
 				}, schema1)
+			},
+		},
+		{
+			name: "semantically equivalent schemas",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				}, semanticSchemaLeft)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				}, semanticSchemaRight)
 			},
 		},
 		{

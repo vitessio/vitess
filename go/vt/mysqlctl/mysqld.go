@@ -1731,6 +1731,16 @@ func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.
 	}
 	defer conn.Close()
 
+	// A script is a batch of statements, so this is where the connection that
+	// runs one is given the ability to send a batch, whichever configuration it
+	// was built from. A caller that already negotiated the capability at
+	// handshake time is left alone rather than charged a round trip for it.
+	if conn.Capabilities&mysql.CapabilityClientMultiStatements == 0 {
+		if err := conn.SetMultiStatements(true); err != nil {
+			return err
+		}
+	}
+
 	_, more, err := conn.ExecuteFetchMulti(sql, -1, false)
 	if err != nil {
 		return err
