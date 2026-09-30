@@ -50,6 +50,12 @@ type StatefulConnection struct {
 	enforceTimeout bool
 	timeout        time.Duration
 	expiryTime     time.Time
+
+	// sessionDiverged is set once the connection's MySQL session may carry state
+	// that nothing the pool knows about describes, such as the session variables
+	// or temporary tables of a stored procedure called on it, and stays set: the
+	// connection must not return to the pool (see MarkSessionDiverged).
+	sessionDiverged bool
 }
 
 // Properties contains meta information about the connection
@@ -177,9 +183,25 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	if sc.pool != nil {
 		sc.pool.unregister(sc.ConnID, reason)
 	}
+	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
+		// The MySQL session carries state the pool cannot see or undo, and the
+		// pool would hand the connection to the next request as if it were
+		// fresh: discard it instead, and the pool opens a replacement and counts
+		// the loss. A tainted connection never returns to the pool, and one
+		// already closed, by a timeout or a failed stream, was lost for another
+		// reason and is not counted as discarded.
+		sc.dbConn.Discard()
+	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn(reason)
+}
+
+// MarkSessionDiverged records that the connection's MySQL session may carry
+// state the pool cannot see, so that the connection is discarded rather than
+// recycled when it is released.
+func (sc *StatefulConnection) MarkSessionDiverged() {
+	sc.sessionDiverged = true
 }
 
 // Renew the existing connection with new connection id.
