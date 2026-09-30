@@ -384,6 +384,55 @@ func TestStartGroupReplicationBootstrapStopsJoinWithoutGroup(t *testing.T) {
 	assert.Zero(t, stops)
 }
 
+// TestGroupReplicationSyncDemotesStalePrimary reproduces NEW-6 of the Group Replication failover
+// audit: the old primary's mysqld restarted, its member is OFFLINE, and its tablet stayed PRIMARY,
+// so vtgate kept routing to it (S7/S7b) and the tablet's own rejoin skipped it. Under a group
+// replication policy, a PRIMARY tablet that is a listed voter and whose MySQL is not in any group
+// is demoted to REPLICA, without touching MySQL. During a migration (a policy that does not use
+// Group Replication, or no voter listed), the primary serves outside of a group and stays PRIMARY.
+func TestGroupReplicationSyncDemotesStalePrimary(t *testing.T) {
+	tests := []struct {
+		name        string
+		durability  string
+		voters      []uint32
+		pluginOff   bool
+		wantDemoted bool
+	}{
+		{name: "voter restarted", durability: policy.DurabilityGroupReplication, voters: []uint32{1, 2, 3}, wantDemoted: true},
+		{name: "voter restarted without the plugin", durability: policy.DurabilityGroupReplication, voters: []uint32{1, 2, 3}, pluginOff: true, wantDemoted: true},
+		{name: "migration: policy is not group replication", durability: policy.DurabilitySemiSync, voters: []uint32{1, 2, 3}},
+		{name: "migration: no voter listed", durability: policy.DurabilityGroupReplication},
+		{name: "not a voter", durability: policy.DurabilityGroupReplication, voters: []uint32{2, 3}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enableGroupReplication(t)
+			ts := newGroupReplicationTopo(t, tt.durability)
+			setGroupReplicationVoters(t, ts, tt.voters...)
+			addPeerTablets(t, ts, 2, 3)
+			tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, newGRPeersTMC(), nil)
+			setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+			fmd.SetSuperReadOnlyError = errors.New("MySQL must be left alone")
+			status := groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOffline, ""))
+			status.PluginActive = !tt.pluginOff
+			fmd.SetGroupReplicationStatus(status)
+
+			newGroupReplicationSync(tm).reconcile(t.Context())
+			if tt.wantDemoted {
+				assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+				ti, err := ts.GetTablet(t.Context(), tm.tabletAlias)
+				require.NoError(t, err)
+				assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+			} else {
+				assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+			}
+			start, stop, _ := fmd.GroupReplicationCalls()
+			assert.Zero(t, stop)
+			assert.Zero(t, start, "no other member is active, so the demoted tablet does not join yet")
+		})
+	}
+}
+
 // tmStatus returns the group replication status of the fake daemon.
 func tmStatus(t *testing.T, fmd *mysqlctl.FakeMysqlDaemon) *replicationdatapb.GroupReplicationStatus {
 	t.Helper()

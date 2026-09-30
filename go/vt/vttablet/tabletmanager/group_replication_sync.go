@@ -45,7 +45,11 @@ import (
 //     formed without Vitess and does not hold the shard's acknowledged transactions.
 //   - If the tablet is PRIMARY but MySQL is no longer the primary of a group with quorum, it
 //     demotes the tablet record to REPLICA. MySQL is left as it is: the group already made it
-//     read-only.
+//     read-only. Under a group replication policy, a PRIMARY tablet that is a listed voter and
+//     whose MySQL is not in any group (OFFLINE, for example after mysqld restarted) is demoted
+//     too, so that vtgate stops routing to it and the tablet rejoins the group like any voter.
+//     This does not apply while the policy is not a group replication policy or no voter is
+//     listed: during a migration, the primary serves outside of a group.
 //   - If the durability policy uses Group Replication, the shard record lists the tablet as a
 //     voter of the group, and MySQL is not in the group, it rejoins the group with exponential
 //     backoff, but only while another tablet of the shard reports an active member of the shard's
@@ -182,6 +186,10 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
 	s.enforceVoterMajority(ctx, status, durability, tablet)
+	if s.isStalePrimary(ctx, status, durability, tablet) {
+		s.demoteStalePrimary(ctx, durability)
+		tablet = tm.Tablet()
+	}
 	if s.shouldRejoin(ctx, status, durability, tablet) {
 		s.rejoin(ctx)
 	}
@@ -309,6 +317,47 @@ func (s *groupReplicationSync) demote(ctx context.Context) {
 		slog.String("state", status.MemberState),
 		slog.String("role", status.MemberRole),
 		slog.Bool("has_quorum", status.HasQuorum))
+	s.twoPCAllowed = nil
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+		log.Error("Group replication sync: failed to demote the tablet to REPLICA", slog.Any("error", err))
+	}
+}
+
+// isStalePrimary returns whether the tablet is PRIMARY, although its MySQL is not in any group while
+// the shard's durability policy uses Group Replication and the shard record lists the tablet as a
+// voter. Such a tablet is left over from before its MySQL failed or restarted: the group elected
+// another primary, or will once a majority is back. A member in the ERROR state is handled by
+// groupPrimaryLost.
+func (s *groupReplicationSync) isStalePrimary(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
+	if tablet.Type != topodatapb.TabletType_PRIMARY || !policy.IsGroupReplication(durability) || status == nil {
+		return false
+	}
+	if status.PluginActive && status.MemberState != mysql.GroupMemberStateOffline {
+		return false
+	}
+	voters, err := s.getVoters(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the voters of the group", slog.Any("error", err))
+		return false
+	}
+	return policy.IsVoter(voters, tablet.Alias)
+}
+
+// demoteStalePrimary changes the type of a stale PRIMARY tablet to REPLICA, after checking again
+// under the action lock. MySQL is left as it is.
+func (s *groupReplicationSync) demoteStalePrimary(ctx context.Context, durability policy.Durabler) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !s.isStalePrimary(ctx, status, durability, tm.Tablet()) {
+		return
+	}
+	log.Warn("Group replication sync: the tablet is PRIMARY, but its MySQL is a voter that is not in its group, demoting the tablet to REPLICA",
+		slog.Bool("plugin_active", status.PluginActive),
+		slog.String("state", status.MemberState))
 	s.twoPCAllowed = nil
 	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 		log.Error("Group replication sync: failed to demote the tablet to REPLICA", slog.Any("error", err))
