@@ -3183,6 +3183,56 @@ func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.Migra
 	return resp, err
 }
 
+// MigrateReplicationMode is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MigrateReplicationMode(ctx context.Context, req *vtctldatapb.MigrateReplicationModeRequest) (resp *vtctldatapb.MigrateReplicationModeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MigrateReplicationMode")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
+	span.Annotate("dry_run", req.DryRun)
+
+	if req.Keyspace == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace is required")
+	}
+	if req.DurabilityPolicy == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy is required")
+	}
+	waitTimeout, _, err := protoutil.DurationFromProto(req.WaitTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	m := sync.Mutex{}
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
+	})
+
+	opts := reparentutil.MigrateReplicationModeOptions{
+		DurabilityPolicy: req.DurabilityPolicy,
+		DryRun:           req.DryRun,
+		WaitTimeout:      waitTimeout,
+	}
+	if req.Shard != "" {
+		opts.Shards = []string{req.Shard}
+	}
+	resp, err = reparentutil.NewReplicationModeMigrator(s.ts, s.tmc, logger).Migrate(ctx, req.Keyspace, opts)
+
+	m.Lock()
+	defer m.Unlock()
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
+
+	return resp, err
+}
+
 // MountRegister is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) MountRegister(ctx context.Context, req *vtctldatapb.MountRegisterRequest) (resp *vtctldatapb.MountRegisterResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountRegister")
@@ -3893,28 +3943,7 @@ func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtc
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
 
-	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
-	if lockErr != nil {
-		err = lockErr
-		return nil, err
-	}
-
-	defer unlock(&err)
-
-	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	policyValid := policy.CheckDurabilityPolicyExists(req.DurabilityPolicy)
-	if !policyValid {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
-		return nil, err
-	}
-
-	ki.DurabilityPolicy = req.DurabilityPolicy
-
-	err = s.ts.UpdateKeyspace(ctx, ki)
+	ki, err := reparentutil.SetKeyspaceDurabilityPolicy(ctx, s.ts, req.Keyspace, req.DurabilityPolicy)
 	if err != nil {
 		return nil, err
 	}

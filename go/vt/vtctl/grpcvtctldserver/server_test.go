@@ -11630,6 +11630,71 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 	}
 }
 
+func TestMigrateReplicationMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		req                *vtctldatapb.MigrateReplicationModeRequest
+		expectedCode       vtrpc.Code
+		expectedDurability string
+	}{
+		{
+			name:         "missing durability policy",
+			req:          &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1"},
+			expectedCode: vtrpc.Code_INVALID_ARGUMENT,
+		},
+		{
+			name:         "unknown durability policy",
+			req:          &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", DurabilityPolicy: "non-existent"},
+			expectedCode: vtrpc.Code_INVALID_ARGUMENT,
+		},
+		{
+			name:         "unknown shard",
+			req:          &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", Shard: "-80", DurabilityPolicy: policy.DurabilitySemiSync},
+			expectedCode: vtrpc.Code_NOT_FOUND,
+		},
+		{
+			// Converting to an asynchronous policy sets the keyspace policy first; the
+			// keyspace has no shards to convert.
+			name:               "to semi-sync without shards",
+			req:                &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", DurabilityPolicy: policy.DurabilitySemiSync},
+			expectedDurability: policy.DurabilitySemiSync,
+		},
+		{
+			name:               "dry run",
+			req:                &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", DurabilityPolicy: policy.DurabilitySemiSync, DryRun: true},
+			expectedDurability: policy.DurabilityNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks1", Keyspace: &topodatapb.Keyspace{}})
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			resp, err := vtctld.MigrateReplicationMode(ctx, tt.req)
+			if tt.expectedCode != vtrpc.Code_OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.expectedCode, vterrors.Code(err))
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedDurability, resp.DurabilityPolicy)
+			assert.NotEmpty(t, resp.Events)
+			durability, err := ts.GetKeyspaceDurability(ctx, "ks1")
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedDurability, durability)
+		})
+	}
+}
+
 func TestSetShardIsPrimaryServing(t *testing.T) {
 	t.Parallel()
 
