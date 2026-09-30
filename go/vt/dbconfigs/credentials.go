@@ -203,7 +203,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		ticker := time.NewTicker(vaultCacheTTL)
 		vcs.vaultCacheExpireTicker = ticker
 		go func() {
-			for range ticker.C {
+			if vcs, ok := AllCredentialsServers["vault"].(*VaultCredentialsServer); ok {
 				vcs.cacheValid.Store(false)
 			}
 		}()
