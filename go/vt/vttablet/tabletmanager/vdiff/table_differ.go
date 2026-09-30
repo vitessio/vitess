@@ -1142,7 +1142,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 	for _, f := range sourceTable.Fields {
 		sourceColTypes[strings.ToLower(f.Name)] = f.Type
 	}
-	extended, err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns, sourceKeyUnique, sourceColTypes)
+	extended, err := sourceOrderCoversComparisonKey(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns, sourceKeyUnique, sourceColTypes)
 	if err != nil {
 		return err
 	}
@@ -1233,7 +1233,7 @@ func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
 	return order
 }
 
-// comparisonKeyIsSourcePKPrefix returns an error unless the source stream, which
+// sourceOrderCoversComparisonKey returns an error unless the source stream, which
 // is ordered by the physical source PK, is also ordered by the columns the VDiff
 // merge sorter compares on (comparePKs, in comparison order). Each comparePK
 // indexes the SELECT list (shared with the source query), so its underlying
@@ -1249,7 +1249,7 @@ func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
 // columns, as for a target partitioned by a column outside the source PK: a
 // stream ordered by a unique key has no ties on it, so it is also ordered by any
 // key that starts with it. extended reports this second case.
-func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceKeyUnique bool, sourceColTypes map[string]querypb.Type) (extended bool, err error) {
+func sourceOrderCoversComparisonKey(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceKeyUnique bool, sourceColTypes map[string]querypb.Type) (extended bool, err error) {
 	pinned := equalityPinnedColumns(sourceSelect.Where, sourceColTypes)
 	effectivePK := make([]string, 0, len(sourcePKColumns))
 	for _, col := range sourcePKColumns {
@@ -1394,7 +1394,7 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 // PK definition order. allProjected is false (no error) when a PK column is not
 // projected as a physical column, in which case a resumable source checkpoint
 // cannot be built; merge-ordering correctness is enforced by the caller via
-// comparisonKeyIsSourcePKPrefix.
+// sourceOrderCoversComparisonKey.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
 	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {

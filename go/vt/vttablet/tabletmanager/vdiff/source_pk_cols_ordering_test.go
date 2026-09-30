@@ -246,7 +246,7 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			// A computed expression wrapped in CONVERT aliased back to the PK name
 			// is a derived value, not the physical column, so it is treated as not
 			// projected here. Merge-ordering safety is enforced by the caller's
-			// comparisonKeyIsSourcePKPrefix check.
+			// sourceOrderCoversComparisonKey check.
 			name:             "computed convert aliased to PK name is not projected",
 			sourceQuery:      "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
 			pkColumns:        []string{"c1"},
@@ -376,11 +376,12 @@ func TestSourcePKSelectIndices(t *testing.T) {
 	}
 }
 
-// TestComparisonKeyIsSourcePKPrefix verifies the merge-safety gate used for
-// subset-projection filters: the columns VDiff merge-sorts on (comparePKs) must
-// be an order-preserving prefix of the physical source PK, since the row streamer
-// always emits source rows ordered by that physical PK.
-func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
+// TestSourceOrderCoversComparisonKey verifies the merge-safety gate used for
+// subset-projection filters: the row streamer always emits source rows ordered
+// by the physical source PK, so the columns VDiff merge-sorts on (comparePKs)
+// must be an order-preserving prefix of that PK, or, when it is unique, that
+// whole PK followed by more columns.
+func TestSourceOrderCoversComparisonKey(t *testing.T) {
 	testCases := []struct {
 		name        string
 		sourceQuery string
@@ -586,7 +587,7 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 				comparePKs[i] = compareColInfo{colIndex: idx, isPK: true}
 			}
 
-			extended, err := comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns, !tc.nonUniqueSourceKey, tc.colTypes)
+			extended, err := sourceOrderCoversComparisonKey(sourceSelect, comparePKs, tc.sourcePKColumns, !tc.nonUniqueSourceKey, tc.colTypes)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -743,7 +744,7 @@ func TestComparisonKeyPrefixRejectionIsNonEphemeral(t *testing.T) {
 
 	// Compare on cid, but the physical source PK is (typ, cid): cid is not a
 	// prefix, so the plan is rejected.
-	_, rejectErr := comparisonKeyIsSourcePKPrefix(sel,
+	_, rejectErr := sourceOrderCoversComparisonKey(sel,
 		[]compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
 		[]string{"typ", "cid"}, true, nil)
 	require.Error(t, rejectErr)
