@@ -267,6 +267,15 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	groupReplicationFailoverGracePeriod = viperutil.Configure(
+		"group-replication-failover-grace-period",
+		viperutil.Options[time.Duration]{
+			FlagName: "group-replication-failover-grace-period",
+			Default:  30 * time.Second,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -300,6 +309,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("shard-tablet-health-freshness", shardTabletHealthFreshness.Default(), "Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer")
 	fs.Float64("shard-tablet-health-quorum-fraction", shardQuorumFraction.Default(), "Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous). Values below 1.0 make detection more tolerant of partial agreement, but give up the guarantee that a single fresh 'up' report vetoes the failover")
 	fs.Int("shard-tablet-health-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check")
+	fs.Duration("group-replication-failover-grace-period", groupReplicationFailoverGracePeriod.Default(), "How long VTOrc waits for a shard's MySQL replication group to elect a new primary on its own, when the primary fails and other tablets are active group members, before it runs an emergency reparent")
 
 	viperutil.BindFlags(
 		fs,
@@ -328,6 +338,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		shardTabletHealthFreshness,
 		shardQuorumFraction,
 		shardQuorumMinObservers,
+		groupReplicationFailoverGracePeriod,
 	)
 }
 
@@ -501,6 +512,17 @@ func GetShardQuorumFraction() float64 {
 // GetShardQuorumMinObservers returns the minimum eligible observers required to act.
 func GetShardQuorumMinObservers() int {
 	return shardQuorumMinObservers.Get()
+}
+
+// GetGroupReplicationFailoverGracePeriod returns how long VTOrc waits for a replication group to
+// elect a new primary on its own before it falls back to an emergency reparent.
+func GetGroupReplicationFailoverGracePeriod() time.Duration {
+	return groupReplicationFailoverGracePeriod.Get()
+}
+
+// SetGroupReplicationFailoverGracePeriod sets the value for the groupReplicationFailoverGracePeriod variable. This should only be used from tests.
+func SetGroupReplicationFailoverGracePeriod(v time.Duration) {
+	groupReplicationFailoverGracePeriod.Set(v)
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

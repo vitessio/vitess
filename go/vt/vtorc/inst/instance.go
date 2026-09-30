@@ -90,6 +90,25 @@ type Instance struct {
 	SemiSyncReplicaStatus              bool
 	SemiSyncBlocked                    bool
 
+	// GroupReplicationPluginActive is true when the MySQL Group Replication plugin is loaded
+	// and active. The other Group* fields are only meaningful when it is set.
+	GroupReplicationPluginActive bool
+	// GroupName is the configured group_replication_group_name. Transactions of the group
+	// carry it as their GTID UUID.
+	GroupName string
+	// GroupMemberState is this member's own state: ONLINE, RECOVERING, OFFLINE, ERROR or UNREACHABLE.
+	GroupMemberState string
+	// GroupMemberRole is this member's own role, PRIMARY or SECONDARY, while it is ONLINE.
+	GroupMemberRole string
+	// GroupPrimaryUUID is the server_uuid of the group's primary, as seen by this member.
+	GroupPrimaryUUID string
+	// GroupHasQuorum is true when a majority of the members in this member's view are reachable.
+	GroupHasQuorum bool
+	// GroupOnlineMembers is the number of ONLINE members in this member's view of the group.
+	GroupOnlineMembers uint
+	// GroupViewMembers is the number of members in this member's view of the group.
+	GroupViewMembers uint
+
 	LastSeenTimestamp    string
 	IsLastCheckValid     bool
 	IsUpToDate           bool
@@ -212,6 +231,18 @@ func (instance *Instance) ReplicationThreadsExist() bool {
 // SQLThreadUpToDate returns true when the instance had consumed all relay logs.
 func (instance *Instance) SQLThreadUpToDate() bool {
 	return instance.ReadBinlogCoordinates.Equals(&instance.ExecBinlogCoordinates)
+}
+
+// IsGroupMemberActive returns true when the instance is part of a MySQL Group Replication group,
+// either serving (ONLINE) or catching up (RECOVERING).
+func (instance *Instance) IsGroupMemberActive() bool {
+	return isGroupMemberActive(instance.GroupReplicationPluginActive, instance.GroupMemberState)
+}
+
+// IsGroupPrimary returns true when the instance is the writable primary of a MySQL Group
+// Replication group that has quorum.
+func (instance *Instance) IsGroupPrimary() bool {
+	return isGroupPrimary(instance.GroupReplicationPluginActive, instance.GroupMemberState, instance.GroupMemberRole, instance.GroupHasQuorum)
 }
 
 // UsingGTID returns true when this replica is currently replicating via GTID

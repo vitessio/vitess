@@ -84,6 +84,12 @@ const (
 	// could not be validated against the topology at startup (topology unreachable). Recovery
 	// is held until a subsequent refresh cycle completes validation.
 	RecoverySkipCellNoRecoveryUnvalidated
+	// RecoverySkipGroupReplicationGracePeriod is used while VTOrc waits for a shard's replication
+	// group to elect a new primary on its own, before it falls back to a reparent.
+	RecoverySkipGroupReplicationGracePeriod
+	// RecoverySkipGroupPrimaryAlive is used when VTOrc cannot reach the primary tablet, but the
+	// members of its replication group still see its MySQL as their primary.
+	RecoverySkipGroupPrimaryAlive
 )
 
 // String represents a RecoverySkip as a string.
@@ -103,6 +109,10 @@ func (rsc RecoverySkipCode) String() string {
 		return "CellNoRecovery"
 	case RecoverySkipCellNoRecoveryUnvalidated:
 		return "CellNoRecoveryUnvalidated"
+	case RecoverySkipGroupReplicationGracePeriod:
+		return "GroupReplicationGracePeriod"
+	case RecoverySkipGroupPrimaryAlive:
+		return "GroupPrimaryAlive"
 	default:
 		return "None"
 	}
@@ -172,6 +182,13 @@ const (
 	// reconcileStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
 	// PRIMARY in the topology and should be updated and demoted.
 	reconcileStaleTopoPrimaryFunc
+
+	// promoteGroupPrimaryFunc makes the tablet of a replication group's primary the shard primary.
+	promoteGroupPrimaryFunc
+	// startGroupReplicationFunc makes a voting member join its shard's replication group.
+	startGroupReplicationFunc
+	// bootstrapGroupReplicationFunc bootstraps a shard's replication group.
+	bootstrapGroupReplicationFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -703,17 +720,44 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
+		} else {
+			recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
+		}
+		recoveryFunc = recoverDeadPrimaryFunc
+	case inst.DeadPrimaryWithoutReplicas:
+		// The members of a replication group do not replicate from the primary through the
+		// default channel, so a shard whose tablets are all group members has no replicas in
+		// that sense. Such a shard is recovered like DeadPrimary once its group had the chance to
+		// elect a new primary. Without active members there is nothing to fail over to.
+		if analysisEntry.ShardGroupActiveMembers == 0 {
+			recoverySkipCode = RecoverySkipNoRecoveryAction
+			break
+		}
+		if !isERSEnabled(analysisEntry) {
+			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
+			recoverySkipCode = RecoverySkipERSDisabled
+		} else {
+			recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.IncapacitatedPrimary:
+		recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		recoveryFunc = recoverIncapacitatedPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
+		} else {
+			recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
+	case inst.GroupPrimaryNotInTopo:
+		recoveryFunc = promoteGroupPrimaryFunc
+	case inst.GroupMemberNotOnline:
+		recoveryFunc = startGroupReplicationFunc
+	case inst.GroupNotBootstrapped:
+		recoveryFunc = bootstrapGroupReplicationFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Info(fmt.Sprintf("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode))
@@ -723,6 +767,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.PrimaryHasPrimary:
 		recoveryFunc = recoverPrimaryHasPrimaryFunc
 	case inst.ClusterHasNoPrimary:
+		recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		recoveryFunc = fixPrimaryFunc
@@ -785,6 +830,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case reconcileStaleTopoPrimaryFunc:
 		return true
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc:
+		return true
 	default:
 		return false
 	}
@@ -821,6 +868,12 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return recoverErrantGTIDDetected
 	case reconcileStaleTopoPrimaryFunc:
 		return reconcileStaleTopoPrimary
+	case promoteGroupPrimaryFunc:
+		return promoteGroupPrimary
+	case startGroupReplicationFunc:
+		return startGroupReplicationOnMember
+	case bootstrapGroupReplicationFunc:
+		return bootstrapGroupReplication
 	default:
 		return nil
 	}
@@ -856,6 +909,12 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return RecoverErrantGTIDDetectedName
 	case reconcileStaleTopoPrimaryFunc:
 		return ReconcileStaleTopoPrimaryRecoveryName
+	case promoteGroupPrimaryFunc:
+		return PromoteGroupPrimaryRecoveryName
+	case startGroupReplicationFunc:
+		return StartGroupReplicationRecoveryName
+	case bootstrapGroupReplicationFunc:
+		return BootstrapGroupReplicationRecoveryName
 	default:
 		return ""
 	}
@@ -894,7 +953,7 @@ func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, anal
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case recoverDeadPrimaryFunc, recoverIncapacitatedPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
+	case recoverDeadPrimaryFunc, recoverIncapacitatedPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc, bootstrapGroupReplicationFunc:
 		return true
 	default:
 		return false
@@ -1116,14 +1175,18 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
 			logger.Info("Getting shard primary")
 			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
-			if err != nil {
+			switch {
+			case errors.Is(err, ErrNoPrimaryTablet) && checkAndRecoverFunctionCode == promoteGroupPrimaryFunc:
+				// The group primary's tablet is about to become the shard's only primary. The old
+				// primary's tablet may already have demoted itself.
+				logger.Info("Shard has no primary tablet")
+			case err != nil:
 				logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while finding the shard primary: %v",
 					analyzedInstanceAliasString, err))
 				return err
-			}
-			// We can skip the refresh if we know the tablet we are looking at is the primary tablet.
-			// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
-			if !topoproto.TabletAliasEqual(analysisEntry.AnalyzedInstanceAlias, primaryTablet.Alias) {
+			case !topoproto.TabletAliasEqual(analysisEntry.AnalyzedInstanceAlias, primaryTablet.Alias):
+				// We can skip the refresh if we know the tablet we are looking at is the primary tablet.
+				// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
 				logger.Info("Discovering primary instance")
 				DiscoverInstance(primaryTablet.Alias, true)
 			}

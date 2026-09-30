@@ -40,6 +40,7 @@ Flags:
       --emergency-reparent-on-primary-tablet-unreachable            Whether VTOrc should run an emergency reparent when the primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas
       --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
       --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
+      --group-replication-failover-grace-period duration            How long VTOrc waits for a shard's MySQL replication group to elect a new primary on its own, when the primary fails and other tablets are active group members, before it runs an emergency reparent (default 30s)
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)

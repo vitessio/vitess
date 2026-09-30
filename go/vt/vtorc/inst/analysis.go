@@ -63,6 +63,24 @@ const (
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
 	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
 
+	// GroupPrimaryNotInTopo describes a tablet whose MySQL is the ONLINE primary of its shard's
+	// replication group, with quorum, while the tablet is not the topology primary. The tablet
+	// normally promotes itself; VTOrc promotes it when it does not.
+	GroupPrimaryNotInTopo AnalysisCode = "GroupPrimaryNotInTopo"
+	// GroupMemberNotOnline describes a tablet that the durability policy makes a voting member
+	// of its shard's replication group, but whose MySQL is not an active member, while the
+	// group is active on other tablets.
+	GroupMemberNotOnline AnalysisCode = "GroupMemberNotOnline"
+	// GroupNotBootstrapped describes a shard whose durability policy uses Group Replication, but
+	// on which no tablet is an active member of the group, while all voting members are reachable.
+	GroupNotBootstrapped AnalysisCode = "GroupNotBootstrapped"
+	// GroupQuorumLost describes a shard whose group has active members, none of which has quorum.
+	// The group cannot commit. VTOrc does not act; forcing a new membership is an operator decision.
+	GroupQuorumLost AnalysisCode = "GroupQuorumLost"
+	// GroupCellMajority describes a shard with the group_replication_cross_cell durability policy
+	// whose ONLINE group members are in the majority in a single cell.
+	GroupCellMajority AnalysisCode = "GroupCellMajority"
+
 	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
 	// has been elected. VTOrc should demote this primary to a replica.
 	StaleTopoPrimary AnalysisCode = "StaleTopoPrimary"
@@ -163,7 +181,50 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
-	QuorumDetail                              *QuorumResult `json:",omitempty"`
+
+	// AnalyzedServerUUID is the server_uuid of the analyzed tablet's MySQL, as last seen.
+	AnalyzedServerUUID string
+	// GroupReplicationPluginActive, GroupMemberState, GroupMemberRole, GroupHasQuorum and
+	// GroupOnlineMembers are the MySQL Group Replication state of the analyzed tablet, as last seen.
+	GroupReplicationPluginActive bool
+	GroupMemberState             string
+	GroupMemberRole              string
+	GroupHasQuorum               bool
+	GroupOnlineMembers           uint
+	// IsGroupMemberActive is true when the analyzed tablet's MySQL is an ONLINE or RECOVERING
+	// member of a replication group. Such a tablet replicates through the group and not through
+	// the default replication channel.
+	IsGroupMemberActive bool
+	// IsGroupPrimary is true when the analyzed tablet's MySQL is the ONLINE primary of a group
+	// that has quorum.
+	IsGroupPrimary bool
+	// ShardGroupActiveMembers is the number of tablets of the shard that VTOrc reached on its
+	// last check and whose MySQL is an active group member.
+	ShardGroupActiveMembers uint
+	// ShardGroupQuorumMembers is the number of those active members that have quorum.
+	ShardGroupQuorumMembers uint
+	// ShardGroupPrimaryAlias is the tablet whose MySQL is the shard's group primary, if VTOrc
+	// reached it.
+	ShardGroupPrimaryAlias *topodatapb.TabletAlias
+	// ShardGroupPrimaryUUID is the server_uuid of the group primary, as reported by the reachable
+	// members that have quorum.
+	ShardGroupPrimaryUUID string
+	// ShardGroupVotingMembers is the number of tablets that the durability policy makes voting
+	// members of the shard's group.
+	ShardGroupVotingMembers uint
+	// ShardGroupUnreachableVotingMembers is the number of voting member tablets that VTOrc could
+	// not reach on its last check.
+	ShardGroupUnreachableVotingMembers uint
+	// ShardGroupCellMajority is the cell that holds a majority of the shard's ONLINE members, if any.
+	ShardGroupCellMajority string
+	// shardGroupAnyActive is true when any tablet of the shard, reachable or not, last reported
+	// an active member.
+	shardGroupAnyActive bool
+	// shardReachableNonMemberPrimary is true when VTOrc reached a PRIMARY tablet of the shard whose
+	// MySQL is not an active group member.
+	shardReachableNonMemberPrimary bool
+
+	QuorumDetail *QuorumResult `json:",omitempty"`
 }
 
 // hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
