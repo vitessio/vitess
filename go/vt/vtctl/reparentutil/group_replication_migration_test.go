@@ -62,10 +62,12 @@ func keyspaceDurability(t *testing.T, ts *topo.Server) string {
 	return durability
 }
 
-// TestMigrateReplicationModeToGroupReplication converts a semi-sync shard: the group is
-// bootstrapped on the primary, cross-cell replicas join first, the migrator waits for the
-// primary to disable semi-sync before the last semi-sync acker joins, the rdonly tablet stays
-// an async replica, and the keyspace policy is switched at the end.
+// TestMigrateReplicationModeToGroupReplication converts a semi-sync shard to the cross-cell
+// policy: the voters (one per cell, the primary among them) are stored in the shard record,
+// the group is bootstrapped on the primary, the cross-cell voters join, the zone1 replica
+// that is not a voter keeps acking until the primary disabled semi-sync and then replicates
+// asynchronously, the rdonly tablet stays an async replica, and the keyspace policy is
+// switched at the end.
 func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	m := newTestMigrator(c, ts)
@@ -74,19 +76,21 @@ func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 
+	assert.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
 	assert.Equal(t, []string{
 		"StartGroupReplication(" + aliasP + ", bootstrap)",
 		"StartGroupReplication(" + alias200 + ")",
 		"StartGroupReplication(" + alias300 + ")",
-		"StartGroupReplication(" + alias101 + ")",
 	}, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"))
-	for _, alias := range []string{aliasP, alias101, alias200, alias300} {
+	for _, alias := range []string{aliasP, alias200, alias300} {
 		assert.True(t, c.tablet(alias).member, "%s should be a member", alias)
 	}
-	rdonly := c.tablet(alias102)
-	assert.False(t, rdonly.member)
-	assert.Equal(t, aliasP, rdonly.source)
-	assert.False(t, rdonly.semiSyncReplica)
+	for _, alias := range []string{alias101, alias102} {
+		ft := c.tablet(alias)
+		assert.False(t, ft.member, alias)
+		assert.Equal(t, aliasP, ft.source, alias)
+		assert.False(t, ft.semiSyncReplica, alias)
+	}
 	assert.False(t, c.tablet(aliasP).semiSyncPrimary)
 
 	assert.Equal(t, "group_replication_cross_cell", keyspaceDurability(t, ts))
@@ -94,14 +98,19 @@ func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	require.Len(t, resp.Shards, 1)
 	assert.Equal(t, "group_replication", resp.Shards[0].ReplicationMode)
 	steps := resp.Shards[0].Steps
-	waitIdx := slices.IndexFunc(steps, func(s *vtctldatapb.ReplicationModeMigrationStep) bool {
-		return s.Action == MigrationActionWaitSemiSyncDisabled
-	})
-	joinIdx := slices.IndexFunc(steps, func(s *vtctldatapb.ReplicationModeMigrationStep) bool {
-		return s.Action == MigrationActionJoinGroup && topoproto.TabletAliasString(s.Tablet) == alias101
-	})
+	stepIdx := func(action, alias string) int {
+		return slices.IndexFunc(steps, func(s *vtctldatapb.ReplicationModeMigrationStep) bool {
+			return s.Action == action && (alias == "" || topoproto.TabletAliasString(s.Tablet) == alias)
+		})
+	}
+	votersIdx := stepIdx(MigrationActionSetVoters, "")
+	require.GreaterOrEqual(t, votersIdx, 0)
+	assert.Less(t, votersIdx, stepIdx(MigrationActionBootstrapGroup, aliasP), "the voters must be stored before the group is bootstrapped")
+	waitIdx := stepIdx(MigrationActionWaitSemiSyncDisabled, aliasP)
 	require.GreaterOrEqual(t, waitIdx, 0)
-	assert.Less(t, waitIdx, joinIdx, "the wait for semi-sync to be disabled must precede the join of the last acker")
+	assert.Less(t, waitIdx, stepIdx(MigrationActionSetReplicationSource, alias101),
+		"the wait for semi-sync to be disabled must precede turning semi-sync off on the acker that is not a voter")
+	assert.Equal(t, MigrationStepDone, stepStatuses(steps)[MigrationActionSetReplicationSource+" "+alias101])
 	assert.Equal(t, MigrationStepSkipped, stepStatuses(steps)[MigrationActionSetReplicationSource+" "+alias102])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
 
@@ -135,6 +144,57 @@ func TestMigrateReplicationModeDefersLastAcker(t *testing.T) {
 	}, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"))
 }
 
+// oneCellTwoReplicasShard is a primary in zone1, two replicas in zone2 and one in zone3.
+func oneCellTwoReplicasShard() []fakeGRTabletSpec {
+	return []fakeGRTabletSpec{
+		{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
+		{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		{cell: "zone2", uid: 201, tabletType: topodatapb.TabletType_REPLICA},
+		{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+	}
+}
+
+// TestMigrateReplicationModeOneVoterPerCell checks that under the cross-cell policy only one
+// of the two REPLICA tablets of a cell becomes a voter; the other one stays an asynchronous
+// replica of the primary, with semi-sync off.
+func TestMigrateReplicationModeOneVoterPerCell(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", oneCellTwoReplicasShard()...)
+	m := newTestMigrator(c, ts)
+
+	_, err := migrate(t, m, "group_replication_cross_cell", false)
+	require.NoError(t, err)
+	assert.Empty(t, c.violationsSoFar())
+	assert.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+	assert.Equal(t, []string{
+		"StartGroupReplication(" + aliasP + ", bootstrap)",
+		"StartGroupReplication(" + alias200 + ")",
+		"StartGroupReplication(" + alias300 + ")",
+	}, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"))
+	nonVoter := c.tablet(alias201)
+	assert.False(t, nonVoter.member)
+	assert.Equal(t, aliasP, nonVoter.source)
+	assert.False(t, nonVoter.semiSyncReplica)
+	assert.Equal(t, "group_replication_cross_cell", keyspaceDurability(t, ts))
+}
+
+// TestMigrateReplicationModeReusesVoters checks that a migration keeps the voters the shard
+// record already lists: zone2-0000000201 was listed, so it joins, and zone2-0000000200, which
+// would be chosen otherwise, stays an asynchronous replica.
+func TestMigrateReplicationModeReusesVoters(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", oneCellTwoReplicasShard()...)
+	c.setVoters(t, aliasP, alias201, alias300)
+	m := newTestMigrator(c, ts)
+
+	resp, err := migrate(t, m, "group_replication_cross_cell", false)
+	require.NoError(t, err)
+	assert.Empty(t, c.violationsSoFar())
+	assert.Equal(t, []string{aliasP, alias201, alias300}, c.voters(t))
+	assert.Equal(t, MigrationStepSkipped, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetVoters])
+	assert.True(t, c.tablet(alias201).member)
+	assert.False(t, c.tablet(alias200).member)
+	assert.Equal(t, aliasP, c.tablet(alias200).source)
+}
+
 // TestMigrateReplicationModeDryRun checks that a dry run reports the plan and changes nothing.
 func TestMigrateReplicationModeDryRun(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
@@ -148,6 +208,8 @@ func TestMigrateReplicationModeDryRun(t *testing.T) {
 	require.Len(t, resp.Shards, 1)
 	statuses := stepStatuses(resp.Shards[0].Steps)
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionBootstrapGroup+" "+aliasP])
+	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionSetVoters])
+	assert.Empty(t, c.voters(t))
 	for _, alias := range []string{alias101, alias200, alias300} {
 		assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionJoinGroup+" "+alias], alias)
 	}
@@ -232,14 +294,16 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 			errContain: "the group would have 2 voting members",
 		},
 		{
-			name:       "cell majority with cross-cell policy",
+			name:       "fewer than three cells with cross-cell policy",
 			durability: "group_replication_cross_cell",
 			specs: []fakeGRTabletSpec{
 				{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 				{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
 				{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+				{cell: "zone2", uid: 201, tabletType: topodatapb.TabletType_REPLICA},
 			},
-			errContain: "cell zone1 would hold a majority",
+			errContain: "the group would have 2 voting members (zone1-0000000100, zone2-0000000200) in cells zone1, zone2; at least 3 are required; " +
+				"group_replication_cross_cell allows one voter per cell",
 		},
 		{
 			name:       "old MySQL version",
@@ -281,17 +345,21 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 
 // TestMigrateReplicationModeFromGroupReplication converts a group back to semi-sync: the
 // policy changes first, the secondaries leave one by one and replicate from the primary with
-// semi-sync, the migrator waits for the primary to re-enable semi-sync, and the primary
-// leaves last and becomes writable. Running it again changes nothing.
+// semi-sync, the migrator waits for the primary to re-enable semi-sync, the primary leaves
+// last and becomes writable, and the voters are removed from the shard record. Running it
+// again changes nothing.
 func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
 	c.formGroup(t, "group_replication")
+	require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
 	m := newTestMigrator(c, ts)
 
 	resp, err := migrate(t, m, "semi_sync", false)
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 	assert.Equal(t, "semi_sync", keyspaceDurability(t, ts))
+	assert.Empty(t, c.voters(t))
+	assert.Equal(t, MigrationStepDone, stepStatuses(resp.Shards[0].Steps)[MigrationActionClearVoters])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
 
 	stops := callsWithPrefix(c.mutatingCalls(), "StopGroupReplication")
@@ -330,6 +398,8 @@ func TestMigrateReplicationModeFromGroupReplicationDryRun(t *testing.T) {
 	assert.Equal(t, "group_replication", keyspaceDurability(t, ts))
 	statuses := stepStatuses(resp.Shards[0].Steps)
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionLeaveGroup+" "+aliasP])
+	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionClearVoters])
+	assert.NotEmpty(t, c.voters(t))
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionWaitSemiSyncEnabled+" "+aliasP])
 	assert.Equal(t, MigrationStepPlanned, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
 }

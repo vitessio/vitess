@@ -97,6 +97,8 @@ type fakeGRCluster struct {
 	failOnce   map[string]bool
 	schemaRows []string
 	queries    []string
+	// votersAtInitPrimary are the voters the shard record listed when InitPrimary ran.
+	votersAtInitPrimary string
 }
 
 func (c *fakeGRCluster) record(call string) error {
@@ -364,6 +366,51 @@ func (c *fakeGRCluster) PopulateReparentJournal(ctx context.Context, tablet *top
 	return c.record(fmt.Sprintf("PopulateReparentJournal(%s)", topoproto.TabletAliasString(tablet.Alias)))
 }
 
+// InitPrimary is part of the tmclient.TabletManagerClient interface. Under a group
+// replication policy it bootstraps the group on the tablet; it records the voters that the
+// shard record listed at that moment.
+func (c *fakeGRCluster) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ft, err := c.get(tablet)
+	if err != nil {
+		return "", err
+	}
+	if err := c.record(fmt.Sprintf("InitPrimary(%s)", ft.alias)); err != nil {
+		return "", err
+	}
+	si, err := c.ts.GetShard(ctx, c.keyspace, "-")
+	if err != nil {
+		return "", err
+	}
+	c.votersAtInitPrimary = votersString(si.GroupReplicationVoters)
+	if len(c.members()) > 0 {
+		c.violations = append(c.violations, "bootstrapped a second group on "+ft.alias)
+	}
+	ft.primary = true
+	ft.member = true
+	ft.source = ""
+	ft.superReadOnly = false
+	c.groupPrimary = ft.alias
+	return "", nil
+}
+
+// ReplicationStatus is part of the tmclient.TabletManagerClient interface. The tablets of a
+// shard that never had a primary have no transactions.
+func (c *fakeGRCluster) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, err := c.get(tablet); err != nil {
+		return nil, err
+	}
+	return &replicationdatapb.Status{}, nil
+}
+
+// RefreshState is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 // GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
 func (c *fakeGRCluster) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
 	c.mu.Lock()
@@ -431,6 +478,7 @@ type fakeGRTabletSpec struct {
 // newFakeGRCluster creates the keyspace "ks" with shard "-" in a memory topo, with the given
 // durability policy and tablets. The PRIMARY tablet is the shard primary; every other tablet
 // replicates asynchronously from it, with semi-sync if the policy says so. No group is active.
+// Without a PRIMARY tablet, the shard never had a primary and no tablet replicates.
 func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec) (*fakeGRCluster, *topo.Server) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
@@ -478,7 +526,12 @@ func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec
 			gtidMode: "ON",
 		}
 	}
-	require.NotNil(t, primary)
+	if primary == nil {
+		for _, ft := range c.tablets {
+			ft.superReadOnly = true
+		}
+		return c, ts
+	}
 	primaryAlias := topoproto.TabletAliasString(primary.Alias)
 	for alias, ft := range c.tablets {
 		if ft.primary {
@@ -492,15 +545,28 @@ func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec
 	return c, ts
 }
 
-// formGroup makes every tablet the durability policy makes a voting member an ONLINE member
-// of a group whose primary is the shard primary, as after a migration.
+// formGroup selects the voters of the group policy, stores them in the shard record, and
+// makes them ONLINE members of a group whose primary is the shard primary, as after a
+// migration. The other tablets stay asynchronous replicas without semi-sync.
 func (c *fakeGRCluster) formGroup(t *testing.T, groupPolicy string) {
 	d, err := policy.GetDurabilityPolicy(groupPolicy)
 	require.NoError(t, err)
+	grd, ok := policy.AsGroupReplication(d)
+	require.True(t, ok)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	var candidates []policy.VoterCandidate
+	var primary *topodatapb.TabletAlias
 	for alias, ft := range c.tablets {
-		if !policy.IsGroupMember(d, c.tabletRecs[alias]) {
+		candidates = append(candidates, policy.VoterCandidate{Tablet: c.tabletRecs[alias]})
+		if ft.primary {
+			primary = c.tabletRecs[alias].Alias
+		}
+	}
+	voters := policy.SelectVoters(grd, nil, primary, candidates)
+	c.setVotersLocked(t, voters)
+	for alias, ft := range c.tablets {
+		if !policy.IsVoter(voters, c.tabletRecs[alias].Alias) {
 			ft.semiSyncReplica = false
 			continue
 		}
@@ -512,6 +578,38 @@ func (c *fakeGRCluster) formGroup(t *testing.T, groupPolicy string) {
 			c.groupPrimary = alias
 		}
 	}
+}
+
+// setVotersLocked stores the voters in the shard record.
+func (c *fakeGRCluster) setVotersLocked(t *testing.T, voters []*topodatapb.TabletAlias) {
+	_, err := c.ts.UpdateShardFields(t.Context(), c.keyspace, "-", func(si *topo.ShardInfo) error {
+		si.GroupReplicationVoters = voters
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+// setVoters stores the voters, given as alias strings, in the shard record.
+func (c *fakeGRCluster) setVoters(t *testing.T, aliases ...string) {
+	var voters []*topodatapb.TabletAlias
+	for _, alias := range aliases {
+		voters = append(voters, mustAlias(t, alias))
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setVotersLocked(t, voters)
+}
+
+// voters returns the voters stored in the shard record, as sorted alias strings.
+func (c *fakeGRCluster) voters(t *testing.T) []string {
+	si, err := c.ts.GetShard(t.Context(), c.keyspace, "-")
+	require.NoError(t, err)
+	var aliases []string
+	for _, v := range si.GroupReplicationVoters {
+		aliases = append(aliases, topoproto.TabletAliasString(v))
+	}
+	slices.Sort(aliases)
+	return aliases
 }
 
 func (c *fakeGRCluster) reset() {
@@ -537,6 +635,7 @@ const (
 	alias101 = "zone1-0000000101"
 	alias102 = "zone1-0000000102"
 	alias200 = "zone2-0000000200"
+	alias201 = "zone2-0000000201"
 	alias300 = "zone3-0000000300"
 )
 
