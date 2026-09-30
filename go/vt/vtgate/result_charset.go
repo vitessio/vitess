@@ -17,6 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
+	"unicode/utf8"
+
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -65,12 +68,21 @@ func encodeFieldNames(cs charset.Charset, fields []*querypb.Field) ([]*querypb.F
 		return fields, false
 	}
 	var encoded []*querypb.Field
+	// buf holds each converted name until it is copied to a string.
+	var buf []byte
 	for i, field := range fields {
-		name, nameOK := encodeName(cs, field.Name)
-		orgName, orgNameOK := encodeName(cs, field.OrgName)
-		table, tableOK := encodeName(cs, field.Table)
-		orgTable, orgTableOK := encodeName(cs, field.OrgTable)
-		database, databaseOK := encodeName(cs, field.Database)
+		// Every charset that character_set_results accepts encodes ASCII
+		// as ASCII, and names are nearly always ASCII.
+		if isASCII(field.Name) && isASCII(field.OrgName) && isASCII(field.Table) && isASCII(field.OrgTable) && isASCII(field.Database) {
+			continue
+		}
+		var nameOK, orgNameOK, tableOK, orgTableOK, databaseOK bool
+		var name, orgName, table, orgTable, database string
+		name, nameOK, buf = encodeName(cs, field.Name, buf)
+		orgName, orgNameOK, buf = encodeName(cs, field.OrgName, buf)
+		table, tableOK, buf = encodeName(cs, field.Table, buf)
+		orgTable, orgTableOK, buf = encodeName(cs, field.OrgTable, buf)
+		database, databaseOK, buf = encodeName(cs, field.Database, buf)
 		if nameOK && orgNameOK && tableOK && orgTableOK && databaseOK {
 			continue
 		}
@@ -88,26 +100,35 @@ func encodeFieldNames(cs charset.Charset, fields []*querypb.Field) ([]*querypb.F
 	return encoded, true
 }
 
-// encodeName converts a UTF-8 name to the given charset, replacing the
-// characters the charset cannot represent with '?'. It reports whether the
-// name is unchanged.
-func encodeName(cs charset.Charset, name string) (string, bool) {
-	ascii := true
-	for i := 0; i < len(name); i++ {
-		if name[i] >= 0x80 {
-			ascii = false
-			break
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
 		}
 	}
-	if ascii {
-		// Every charset that character_set_results accepts encodes ASCII
-		// as ASCII.
-		return name, true
+	return true
+}
+
+// encodeName converts a UTF-8 name to the given charset, replacing the
+// characters the charset cannot represent with '?'. It reports whether the
+// name is unchanged. buf is scratch space for the conversion: encodeName
+// returns it, possibly grown, for the next call to reuse.
+func encodeName(cs charset.Charset, name string, buf []byte) (string, bool, []byte) {
+	if isASCII(name) {
+		return name, true, buf
+	}
+	if buf == nil {
+		// The conversion needs room for at least one character.
+		buf = make([]byte, 0, max(64, 2*len(name)))
 	}
 	// A character that the charset cannot represent becomes '?', and is
-	// reported as an error, which MySQL ignores too.
-	out, _ := charset.ConvertFromUTF8(nil, cs, []byte(name))
-	return string(out), string(out) == name
+	// reported as an error, which MySQL ignores too. The conversion only
+	// reads the name.
+	out, _ := charset.ConvertFromUTF8(buf[:0], cs, hack.StringBytes(name))
+	if string(out) == name {
+		return name, true, out
+	}
+	return string(out), false, out
 }
 
 // encodeResult returns the result with its field metadata in the charset

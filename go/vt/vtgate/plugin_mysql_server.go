@@ -1799,16 +1799,30 @@ func (vh *vtgateHandler) Env() *vtenv.Environment {
 
 // encodingResults returns a callback that sends result set metadata to the
 // client in the charset that the session's character_set_results asks for.
+// It is for commands that run a single statement: only SET statements change
+// character_set_results, and they return no fields, so the charset that the
+// session has when the command starts is the one its results are sent in.
+// When that charset needs no conversion, the callback is returned as it is.
 func (vh *vtgateHandler) encodingResults(c *mysql.Conn, callback func(*sqltypes.Result) error) func(*sqltypes.Result) error {
+	cs := resultCharset(vh.Env().CollationEnv(), vh.session(c))
+	if cs == nil {
+		return callback
+	}
 	return func(qr *sqltypes.Result) error {
-		return callback(encodeResult(resultCharset(vh.Env().CollationEnv(), vh.session(c)), qr))
+		return callback(encodeResult(cs, qr))
 	}
 }
 
-// encodingResponses is encodingResults for multi-statement responses.
+// encodingResponses is encodingResults for multi-statement commands. A SET
+// statement can change character_set_results between the statements of such
+// a command, so the charset is looked up for each result that has fields.
 func (vh *vtgateHandler) encodingResponses(c *mysql.Conn, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 	return func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
-		qr.QueryResult = encodeResult(resultCharset(vh.Env().CollationEnv(), vh.session(c)), qr.QueryResult)
+		// Row packets that follow the fields of a streamed result have no
+		// fields to convert.
+		if qr.QueryResult != nil && len(qr.QueryResult.Fields) > 0 {
+			qr.QueryResult = encodeResult(resultCharset(vh.Env().CollationEnv(), vh.session(c)), qr.QueryResult)
+		}
 		return callback(qr, more, firstPacket)
 	}
 }

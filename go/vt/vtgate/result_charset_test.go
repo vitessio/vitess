@@ -22,10 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func TestResultCharset(t *testing.T) {
@@ -74,4 +76,48 @@ func TestEncodeResultNames(t *testing.T) {
 	ids := &sqltypes.Result{Fields: fields[:1]}
 	assert.Same(t, ids, encodeResult(latin1, ids))
 	assert.Same(t, qr, encodeResult(nil, qr))
+}
+
+// TestEncodingResponsesFollowSetInBatch checks that a multi-statement
+// command sends each result in the character_set_results that the session
+// has when the result is sent, which an earlier SET in the batch can change.
+func TestEncodingResponsesFollowSetInBatch(t *testing.T) {
+	vh := &vtgateHandler{vtg: &VTGate{executor: &Executor{env: vtenv.NewTestEnv()}}}
+	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{}}
+	c := &mysql.Conn{ClientData: session}
+	qr := &sqltypes.Result{Fields: []*querypb.Field{{Name: "é"}}}
+
+	var names []string
+	callback := vh.encodingResponses(c, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		names = append(names, qr.QueryResult.Fields[0].Name)
+		return nil
+	})
+	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: qr}, true, true))
+	// A SET character_set_results = latin1 in the batch.
+	session.CharacterSetResults = "latin1"
+	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: qr}, false, true))
+	assert.Equal(t, []string{"é", "\xe9"}, names)
+}
+
+// TestEncodingResultsSkipsUTF8 checks that single-statement commands wrap
+// their callback only when the session's character_set_results needs
+// converting.
+func TestEncodingResultsSkipsUTF8(t *testing.T) {
+	vh := &vtgateHandler{vtg: &VTGate{executor: &Executor{env: vtenv.NewTestEnv()}}}
+	session := &vtgatepb.Session{Options: &querypb.ExecuteOptions{}}
+	c := &mysql.Conn{ClientData: session}
+	qr := &sqltypes.Result{Fields: []*querypb.Field{{Name: "é"}}}
+
+	var got *sqltypes.Result
+	send := func(qr *sqltypes.Result) error {
+		got = qr
+		return nil
+	}
+	require.NoError(t, vh.encodingResults(c, send)(qr))
+	assert.Same(t, qr, got)
+
+	session.CharacterSetResults = "latin1"
+	require.NoError(t, vh.encodingResults(c, send)(qr))
+	assert.Equal(t, "\xe9", got.Fields[0].Name)
+	assert.Equal(t, "é", qr.Fields[0].Name)
 }
