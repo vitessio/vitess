@@ -113,17 +113,18 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 		storedSet  string
 		position   string
 
-		// warn is true when the flag is on and VTOrc has no stored set to require.
-		// The flag help promises a warning in the audit for that case.
-		warn bool
+		// level and audit are the level and a part of the one event that records
+		// the requirement or the reason for its absence.
+		level logutilpb.Level
+		audit string
 	}{
 		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
-		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid},
-		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
-		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, warn: true},
-		{name: "no stored set", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "", warn: true},
-		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", warn: true},
-		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", warn: true},
+		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid, level: logutilpb.Level_INFO, audit: "required position: " + requiredGtid},
+		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, level: logutilpb.Level_INFO, audit: "required position: none, the durability policy has no semi-sync"},
+		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, level: logutilpb.Level_WARNING, audit: "required position: none, the analyzed tablet zone1-0000000100 is not the primary"},
+		{name: "no stored set", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "", level: logutilpb.Level_WARNING, audit: "required position: none, VTOrc has no stored GTID set"},
+		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", level: logutilpb.Level_WARNING, audit: "required position: none, the stored GTID set is not a MySQL GTID set"},
+		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", level: logutilpb.Level_WARNING, audit: "required position: none, the stored GTID set is not a MySQL GTID set"},
 	}
 
 	for _, tt := range tests {
@@ -137,19 +138,14 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.position, replication.EncodePosition(position))
 
-			var warnings []string
-			for _, event := range logger.Events {
-				if event.Level == logutilpb.Level_WARNING {
-					warnings = append(warnings, event.Value)
-				}
-			}
-			if !tt.warn {
-				assert.Empty(t, warnings)
+			if !tt.flag {
+				assert.Empty(t, logger.Events)
 				return
 			}
-			require.Len(t, warnings, 1)
-			assert.Contains(t, warnings[0], "required position: none")
-			assert.Contains(t, warnings[0], "ERS runs without the requirement")
+
+			require.Len(t, logger.Events, 1)
+			assert.Equal(t, tt.level, logger.Events[0].Level)
+			assert.Contains(t, logger.Events[0].Value, tt.audit)
 		})
 	}
 }
