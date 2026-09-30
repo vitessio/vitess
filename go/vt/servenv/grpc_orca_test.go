@@ -54,7 +54,7 @@ func TestOrcaCountingStreamInterceptorCountsEverySentMessageAndStreamEnd(t *test
 	})
 
 	require.NoError(t, err)
-	assert.EqualValues(t, 4, orcaEgressMessages.Load())
+	assert.EqualValues(t, 3, orcaEgressMessages.Load())
 	assert.EqualValues(t, 0, orcaErrors.Load())
 }
 

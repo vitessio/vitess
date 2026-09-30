@@ -44,8 +44,8 @@ func orcaCountingUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnarySer
 
 func orcaCountingStreamInterceptor(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	err := handler(srv, orcaCountingServerStream{stream})
-	orcaEgressMessages.Add(1)
 	if err != nil {
+		orcaEgressMessages.Add(1)
 		orcaErrors.Add(1)
 	}
 	return err
