@@ -193,22 +193,13 @@ func TestVDiff2(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, customerTableModifiedPK)
 	// Set the sql_mode back to the default.
-<<<<<<< HEAD
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
-||||||| parent of 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
-	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
-	require.NoError(t, err)
-=======
-	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
-	require.NoError(t, err)
 	// Pre-create the datze table on the target keyspace partitioned by dt2. Every
 	// unique key of a partitioned table must include the partitioning column, so
 	// the primary key is (id,dt2) vs (id) on the source. This confirms that we are
 	// able to diff, and resume a diff of, a table whose target primary key extends
 	// its source primary key.
-	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, datzeTablePartitioned)
-	require.NoError(t, err)
->>>>>>> 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, datzeTablePartitioned)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -554,21 +545,9 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 		ogTime := time.Now() // The completed_at should be later than this after resuming
 
 		expectedNewRows := int64(0)
-<<<<<<< HEAD
-		if tc.resumeInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
-			expectedNewRows = int64(res.RowsAffected)
-||||||| parent of 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
-		if tc.resumeInsert != "" {
-			res, err := execVtgateQuery(vtgateConn, tc.sourceKs, tc.resumeInsert)
-			require.NoError(t, err)
-			expectedNewRows = int64(res.RowsAffected)
-=======
 		for _, insert := range tc.resumeInserts {
-			res, err := execVtgateQuery(vtgateConn, tc.sourceKs, insert)
-			require.NoError(t, err)
+			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, insert)
 			expectedNewRows += int64(res.RowsAffected)
->>>>>>> 57f0f2f76f (VDiff: accept a target primary key that extends a unique source key (#21275))
 		}
 		expectedRows := rowsCompared + expectedNewRows
 
