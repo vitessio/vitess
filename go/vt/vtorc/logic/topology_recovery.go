@@ -958,6 +958,28 @@ func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, anal
 	return tabletsToIgnore
 }
 
+// recoveryRunsWithoutShardPrimary returns whether a recovery that is not shard-wide can run while the
+// shard has no primary tablet. The other recoveries fix a tablet relative to the shard primary.
+func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case promoteGroupPrimaryFunc:
+		// The group primary's tablet is about to become the shard's only primary. The old
+		// primary's tablet may already have demoted itself.
+		return true
+	case updateGroupReplicationVotersFunc:
+		// The voters of a group that is not bootstrapped yet are selected before the shard has a
+		// primary.
+		return true
+	case startGroupReplicationFunc:
+		// A group that was just bootstrapped, or that lost the majority of its voters, only gets
+		// a primary tablet once enough voters have joined it: its primary is not followed before
+		// a majority of the voters is ONLINE in its view.
+		return true
+	default:
+		return false
+	}
+}
+
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
@@ -1184,13 +1206,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			logger.Info("Getting shard primary")
 			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 			switch {
-			case errors.Is(err, ErrNoPrimaryTablet) && checkAndRecoverFunctionCode == promoteGroupPrimaryFunc:
-				// The group primary's tablet is about to become the shard's only primary. The old
-				// primary's tablet may already have demoted itself.
-				logger.Info("Shard has no primary tablet")
-			case errors.Is(err, ErrNoPrimaryTablet) && checkAndRecoverFunctionCode == updateGroupReplicationVotersFunc:
-				// The voters of a group that is not bootstrapped yet are selected before the shard
-				// has a primary.
+			case errors.Is(err, ErrNoPrimaryTablet) && recoveryRunsWithoutShardPrimary(checkAndRecoverFunctionCode):
 				logger.Info("Shard has no primary tablet")
 			case err != nil:
 				logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while finding the shard primary: %v",

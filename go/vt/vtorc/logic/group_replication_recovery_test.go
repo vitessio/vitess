@@ -451,6 +451,20 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 	}
 }
 
+// TestGroupReplicationRecoveriesRunWithoutShardPrimary checks which recoveries that are not
+// shard-wide run while the shard has no primary tablet. GroupMemberNotOnline must: a group that
+// was just bootstrapped, or that lost the majority of its voters, only gets a primary tablet once
+// enough voters have joined it. In the S7d chaos runs, voters stayed out of their group for up to
+// 33s because VTOrc aborted every GroupMemberNotOnline with "no primary tablet found".
+func TestGroupReplicationRecoveriesRunWithoutShardPrimary(t *testing.T) {
+	assert.True(t, recoveryRunsWithoutShardPrimary(startGroupReplicationFunc))
+	assert.True(t, recoveryRunsWithoutShardPrimary(promoteGroupPrimaryFunc))
+	assert.True(t, recoveryRunsWithoutShardPrimary(updateGroupReplicationVotersFunc))
+	// Asynchronous replication is repaired relative to the shard primary.
+	assert.False(t, recoveryRunsWithoutShardPrimary(fixReplicaFunc))
+	assert.False(t, recoveryRunsWithoutShardPrimary(reconcileStaleTopoPrimaryFunc))
+}
+
 func TestBootstrapGroupReplication(t *testing.T) {
 	const (
 		groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
