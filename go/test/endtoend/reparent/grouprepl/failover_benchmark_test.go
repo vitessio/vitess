@@ -125,7 +125,21 @@ func killHost(t *testing.T, tablet *cluster.Vttablet) {
 	_ = tablet.VttabletProcess.Kill()
 }
 
+// freezeMysqld stops the tablet's mysqld without closing its connections, the way a hung disk
+// or a stuck kernel would: vttablet stays up, but MySQL answers nothing.
+func freezeMysqld(t *testing.T, tablet *cluster.Vttablet) {
+	dir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tablet.TabletUID))
+	data, err := os.ReadFile(path.Join(dir, "mysql.pid"))
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	require.NoError(t, err)
+	require.NoError(t, syscall.Kill(pid, syscall.SIGSTOP))
+	// Let the teardown stop mysqld.
+	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGCONT) })
+}
+
 type failoverResult struct {
+	scenario       string
 	mode           string
 	topo, write    time.Duration
 	ackedLost      int
@@ -155,79 +169,96 @@ func TestUnplannedFailoverTimes(t *testing.T) {
 		{"group_replication_cross_cell", vtorcConfig, true},
 	}
 
+	scenarios := []struct {
+		name  string
+		crash func(t *testing.T, tablet *cluster.Vttablet)
+	}{
+		{"host crash", killHost},
+		{"mysqld freeze", freezeMysqld},
+	}
+
 	var results []failoverResult
-	for _, mode := range modes {
-		for trial := 1; trial <= trials; trial++ {
-			t.Run(fmt.Sprintf("%s/%d", mode.name, trial), func(t *testing.T) {
-				tc := setupCluster(t, mode.vtorc)
-				primary := tc.voters[0]
-				if mode.groupReplication {
-					out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
-						"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
-					require.NoError(t, err, out)
-					waitForGroup(t, tc, primary)
-				}
-
-				w := startAckingWriter(t, tc)
-				// Let VTOrc discover the healthy shard and the writes reach a steady state.
-				time.Sleep(10 * time.Second)
-
-				killed := time.Now()
-				killHost(t, primary)
-
-				var newPrimary string
-				require.Eventually(t, func() bool {
-					newPrimary = shardPrimary(t, tc)
-					return newPrimary != "" && newPrimary != primary.Alias
-				}, 2*waitTimeout, 50*time.Millisecond)
-				topoTime := time.Since(killed)
-
-				var first ackedWrite
-				require.Eventually(t, func() bool {
-					var ok bool
-					first, ok = w.firstWriteStartedAfter(killed)
-					return ok
-				}, 2*waitTimeout, 50*time.Millisecond)
-				acked := w.stop()
-
-				// Every write acknowledged before the crash must be on the new primary.
-				var newPrimaryTablet *cluster.Vttablet
-				for _, v := range tc.voters {
-					if v.Alias == newPrimary {
-						newPrimaryTablet = v
+	for _, scenario := range scenarios {
+		for _, mode := range modes {
+			for trial := 1; trial <= trials; trial++ {
+				t.Run(fmt.Sprintf("%s/%s/%d", scenario.name, mode.name, trial), func(t *testing.T) {
+					tc := setupCluster(t, mode.vtorc)
+					primary := tc.voters[0]
+					if mode.groupReplication {
+						out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
+							"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
+						require.NoError(t, err, out)
+						waitForGroup(t, tc, primary)
 					}
-				}
-				require.NotNil(t, newPrimaryTablet)
-				qr, err := newPrimaryTablet.VttabletProcess.QueryTablet("select id from writes", keyspaceName, true)
-				require.NoError(t, err)
-				present := make(map[uint64]bool, len(qr.Rows))
-				for _, row := range qr.Rows {
-					id, err := row[0].ToCastUint64()
-					require.NoError(t, err)
-					present[id] = true
-				}
-				result := failoverResult{mode: mode.name, topo: topoTime, write: first.finished.Sub(killed)}
-				for _, a := range acked {
-					if a.finished.Before(killed) {
-						result.ackedBeforeCnt++
-						if !present[a.id] {
-							result.ackedLost++
+
+					w := startAckingWriter(t, tc)
+					// Let VTOrc discover the healthy shard and the writes reach a steady state.
+					time.Sleep(10 * time.Second)
+
+					scenario.crash(t, primary)
+					// Measure from the moment the crash is complete: writes sent before may still
+					// have reached the old primary.
+					killed := time.Now()
+
+					var newPrimary string
+					require.Eventually(t, func() bool {
+						newPrimary = shardPrimary(t, tc)
+						return newPrimary != "" && newPrimary != primary.Alias
+					}, 2*waitTimeout, 50*time.Millisecond)
+					topoTime := time.Since(killed)
+
+					var first ackedWrite
+					require.Eventually(t, func() bool {
+						var ok bool
+						first, ok = w.firstWriteStartedAfter(killed)
+						return ok
+					}, 2*waitTimeout, 50*time.Millisecond)
+					acked := w.stop()
+
+					// Every write acknowledged before the crash must be on the new primary.
+					var newPrimaryTablet *cluster.Vttablet
+					for _, v := range tc.voters {
+						if v.Alias == newPrimary {
+							newPrimaryTablet = v
 						}
 					}
-				}
-				assert.Zero(t, result.ackedLost, "acknowledged writes were lost")
-				t.Logf("%s: new primary %s in topo after %v, first write sent after the crash acknowledged after %v, %d/%d writes acknowledged before the crash lost",
-					mode.name, newPrimary, result.topo, result.write, result.ackedLost, result.ackedBeforeCnt)
-				results = append(results, result)
-			})
+					require.NotNil(t, newPrimaryTablet)
+					qr, err := newPrimaryTablet.VttabletProcess.QueryTablet("select id from writes", keyspaceName, true)
+					require.NoError(t, err)
+					present := make(map[uint64]bool, len(qr.Rows))
+					for _, row := range qr.Rows {
+						id, err := row[0].ToCastUint64()
+						require.NoError(t, err)
+						present[id] = true
+					}
+					result := failoverResult{scenario: scenario.name, mode: mode.name, topo: topoTime, write: first.finished.Sub(killed)}
+					for _, a := range acked {
+						if a.finished.Before(killed) {
+							result.ackedBeforeCnt++
+							if !present[a.id] {
+								result.ackedLost++
+							}
+						}
+					}
+					assert.Zero(t, result.ackedLost, "acknowledged writes were lost")
+					t.Logf("%s, %s: new primary %s in topo after %v, first write sent after the crash acknowledged after %v, %d/%d writes acknowledged before the crash lost",
+						scenario.name, mode.name, newPrimary, result.topo, result.write, result.ackedLost, result.ackedBeforeCnt)
+					results = append(results, result)
+				})
+			}
 		}
 	}
 
-	sort.SliceStable(results, func(i, j int) bool { return results[i].mode < results[j].mode })
+	sort.SliceStable(results, func(i, j int) bool {
+		if results[i].scenario != results[j].scenario {
+			return results[i].scenario < results[j].scenario
+		}
+		return results[i].mode < results[j].mode
+	})
 	var b strings.Builder
-	b.WriteString("\n| Mode | New primary in topo | First write after crash acknowledged | Acknowledged writes lost |\n|---|---|---|---|\n")
+	b.WriteString("\n| Scenario | Mode | New primary in topo | First write after crash acknowledged | Acknowledged writes lost |\n|---|---|---|---|---|\n")
 	for _, r := range results {
-		fmt.Fprintf(&b, "| %s | %.1fs | %.1fs | %d of %d |\n", r.mode, r.topo.Seconds(), r.write.Seconds(), r.ackedLost, r.ackedBeforeCnt)
+		fmt.Fprintf(&b, "| %s | %s | %.1fs | %.1fs | %d of %d |\n", r.scenario, r.mode, r.topo.Seconds(), r.write.Seconds(), r.ackedLost, r.ackedBeforeCnt)
 	}
 	t.Log(b.String())
 }
