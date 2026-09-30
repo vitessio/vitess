@@ -84,17 +84,16 @@ type cppEdit struct {
 }
 
 // columnNameInput is what the parser records about a select expression so
-// that the column can later be named the way MySQL names it.
+// that the column can later be named the way MySQL names it. It is kept small,
+// because every select expression has one.
 type columnNameInput struct {
-	// text is the query text of the expression, from the first byte of its
-	// first token to the last byte of its last token.
-	text string
-	// token is the identifier of a column reference, or the token of a number.
-	token string
-	// edits are the versioned-comment edits inside text, with offsets
-	// relative to text.
-	edits []cppEdit
-	kind  columnNameKind
+	// name is what the column is named after, depending on kind: the
+	// identifier of a column reference, the token of a number, or the query
+	// text of the expression, from the first byte of its first token to the
+	// last byte of its last token. For nameRaw, the versioned-comment edits
+	// inside the text are already applied.
+	name string
+	kind columnNameKind
 	// parsed is set for every select expression the parser creates.
 	parsed bool
 	// aliased is set when the query gave the expression an alias. The alias
@@ -124,25 +123,27 @@ func (ae *AliasedExpr) setColumnNameInput(tkn *Tokenizer, start, end int, aliase
 	if start < 0 || end > len(tkn.buf) || start > end {
 		return
 	}
-	in.text = tkn.buf[start:end]
-	for _, e := range tkn.cppEdits {
-		if e.start >= start && e.end <= end {
-			in.edits = append(in.edits, cppEdit{start: e.start - start, end: e.end - start, kind: e.kind})
-		}
-	}
-
+	text := tkn.buf[start:end]
 	switch expr := ae.Expr.(type) {
 	case *ColName:
 		in.kind = nameColumn
-		in.token = expr.Name.String()
+		in.name = expr.Name.String()
+		return
 	case *NullVal:
 		in.kind = nameNull
+		return
 	case *Argument:
-		if unwrapParensAndPlus(in.text) == "?" {
+		if unwrapParensAndPlus(text) == "?" {
 			in.kind = nameParam
+			return
 		}
 	case *Literal:
-		in.kind, in.token = literalNameKind(expr)
+		var token string
+		in.kind, token = literalNameKind(expr)
+		if in.kind != nameText && in.kind != nameRaw {
+			in.name = token
+			return
+		}
 	case *UnaryExpr:
 		if lit, ok := expr.Expr.(*Literal); ok && expr.Operator == NStringOp && lit.Type == StrVal {
 			in.kind = nameText
@@ -152,6 +153,10 @@ func (ae *AliasedExpr) setColumnNameInput(tkn *Tokenizer, start, end int, aliase
 			in.kind = nameText
 		}
 	}
+	if in.kind == nameRaw {
+		text = applyCppEdits(text, start, tkn.cppEdits)
+	}
+	in.name = text
 }
 
 // literalNameKind returns how MySQL names a literal, and the token the name is
@@ -218,19 +223,19 @@ func (ae *AliasedExpr) MySQLColumnName(env ColumnNameEnv) string {
 	switch in.kind {
 	case nameColumn:
 		if env.ClientCharset == "latin1" {
-			return cutAtNUL(identifierName(in.token, env))
+			return cutAtNUL(identifierName(in.name, env))
 		}
-		return cutAtNUL(in.token)
+		return cutAtNUL(in.name)
 	case nameInt, nameDecimal:
-		return cutAtNUL(in.token)
+		return cutAtNUL(in.name)
 	case nameNull:
 		return "NULL"
 	case nameParam:
 		return "?"
 	case nameUint, nameFloat:
-		return truncateUTF8(in.token, maxAliasName)
+		return truncateUTF8(in.name, maxAliasName)
 	case nameText:
-		value, cs := firstTextFragment(in.text)
+		value, cs := firstTextFragment(in.name)
 		if cs == "utf8mb3" {
 			// N'...' is converted to the national charset, utf8mb3.
 			value = toUTF8MB3(value, len(value))
@@ -239,7 +244,7 @@ func (ae *AliasedExpr) MySQLColumnName(env ColumnNameEnv) string {
 		}
 		return copyName(value, cs)
 	}
-	return copyName(applyCppEdits(in.text, in.edits), env.ClientCharset)
+	return copyName(in.name, env.ClientCharset)
 }
 
 // AliasColumnNames gives an explicit alias to each select expression whose
@@ -780,21 +785,36 @@ func stripLeadingNonGraphic(name string, cs string) string {
 // incomplete character at the end ends the text. It stops before the result
 // would exceed limit bytes.
 func toUTF8MB3(s string, limit int) string {
-	clean := true
-	for i := 0; i < len(s); i++ {
-		if s[i] >= 0x80 {
-			clean = false
-			break
+	// Up to the first character that becomes '?', the result is a prefix of s.
+	i := 0
+	for i < len(s) {
+		size := 1
+		if s[i] >= utf8.RuneSelf {
+			var r rune
+			r, size = utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && size <= 1 {
+				if !utf8.FullRuneInString(s[i:]) {
+					return s[:i]
+				}
+				break
+			}
+			if r > 0xFFFF {
+				break
+			}
 		}
+		if i+size > limit {
+			return s[:i]
+		}
+		i += size
 	}
-	if clean {
-		if len(s) > limit {
-			return s[:limit]
-		}
+	if i == len(s) {
 		return s
 	}
 
 	var b strings.Builder
+	b.Grow(max(0, min(len(s), limit)))
+	b.WriteString(s[:i])
+	s = s[i:]
 	for len(s) > 0 {
 		r, size := utf8.DecodeRuneInString(s)
 		if r == utf8.RuneError && size <= 1 && !utf8.FullRuneInString(s) {
@@ -820,8 +840,17 @@ func toUTF8MB3(s string, limit int) string {
 // latin1ToUTF8MB3 converts latin1 bytes to UTF-8, stopping before the result
 // would exceed limit bytes.
 func latin1ToUTF8MB3(s string, limit int) string {
+	ascii := 0
+	for ascii < len(s) && ascii < limit && s[ascii] < utf8.RuneSelf {
+		ascii++
+	}
+	if ascii == len(s) || ascii == limit {
+		// ASCII is the same in latin1 and UTF-8.
+		return s[:ascii]
+	}
 	var cs eightbit.Charset_latin1
 	var b strings.Builder
+	b.Grow(max(0, min(2*len(s), limit)))
 	var buf [utf8.UTFMax]byte
 	for i := 0; i < len(s); i++ {
 		r, _, _ := cs.DecodeRune([]byte{s[i]})
@@ -855,17 +884,20 @@ func cutAtNUL(s string) string {
 	return s
 }
 
-// applyCppEdits applies the versioned-comment edits to an expression's text,
-// giving the text as it is in MySQL's pre-processed buffer.
-func applyCppEdits(text string, edits []cppEdit) string {
-	if len(edits) == 0 {
-		return text
-	}
+// applyCppEdits applies the versioned-comment edits inside an expression's
+// text, giving the text as it is in MySQL's pre-processed buffer. start is the
+// offset of the text in the query, and edits are the edits of the whole query,
+// in query order, with offsets in the query.
+func applyCppEdits(text string, start int, edits []cppEdit) string {
+	end := start + len(text)
 	var b strings.Builder
 	pos := 0
 	for _, e := range edits {
-		b.WriteString(text[pos:e.start])
-		pos = e.end
+		if e.start < start || e.end > end {
+			continue
+		}
+		b.WriteString(text[pos : e.start-start])
+		pos = e.end - start
 		if e.kind != cppClose || pos >= len(text) || b.Len() == 0 {
 			continue
 		}
@@ -876,6 +908,10 @@ func applyCppEdits(text string, edits []cppEdit) string {
 			b.WriteByte(' ')
 		}
 	}
+	if pos == 0 {
+		// No edit is inside the text.
+		return text
+	}
 	b.WriteString(text[pos:])
 	return b.String()
 }
@@ -884,12 +920,16 @@ func isCppSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'
 }
 
+// textFragmentParser is the parser of the tokenizer that firstTextFragment
+// uses. The tokenizer only reads it.
+var textFragmentParser = &Parser{}
+
 // firstTextFragment returns the value of the first string of a text literal,
 // such as a for 'a' 'b', N'a' or _utf8mb4'a', and the charset that an
 // introducer or N gives it, if any. MySQL names a text literal after its first
 // string only.
 func firstTextFragment(text string) (value, charset string) {
-	tkn := &Tokenizer{buf: text, parser: &Parser{}}
+	tkn := &Tokenizer{buf: text, parser: textFragmentParser}
 	for {
 		typ, val := tkn.Scan()
 		switch typ {

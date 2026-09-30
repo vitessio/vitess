@@ -75,7 +75,7 @@ func (cached *AliasedExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(96)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -5801,16 +5801,10 @@ func (cached *columnNameInput) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(24)
 	}
-	// field text string
-	size += hack.RuntimeAllocSize(int64(len(cached.text)))
-	// field token string
-	size += hack.RuntimeAllocSize(int64(len(cached.token)))
-	// field edits []vitess.io/vitess/go/vt/sqlparser.cppEdit
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.edits)) * int64(24))
-	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }
 

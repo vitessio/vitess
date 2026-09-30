@@ -166,7 +166,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		// If inside a versioned comment and we've reached the closing */,
 		// skip past it and resume normal scanning.
 		if tkn.inVersionedComment && tkn.cur() == '*' && tkn.peek(1) == '/' {
-			tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: tkn.Pos, end: tkn.Pos + 2, kind: cppClose})
+			tkn.addCppEdit(tkn.Pos, tkn.Pos+2, cppClose)
 			tkn.skip(2)
 			tkn.inVersionedComment = false
 			tkn.skipBlank()
@@ -755,7 +755,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	if tkn.parser.commentVersionSatisfied(versionStr) {
 		// Version satisfied — Scan() will read inner tokens and detect
 		// the closing */ via the inVersionedComment flag.
-		tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: start, end: tkn.Pos, kind: cppOpen})
+		tkn.addCppEdit(start, tkn.Pos, cppOpen)
 		tkn.inVersionedComment = true
 		return 0, ""
 	}
@@ -785,7 +785,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		}
 		tkn.skip(1)
 	}
-	tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: start, end: tkn.Pos, kind: cppSkip})
+	tkn.addCppEdit(start, tkn.Pos, cppSkip)
 	return 0, ""
 }
 
@@ -831,6 +831,15 @@ func digitVal(ch uint16) int {
 
 func isDigit(ch uint16) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+// addCppEdit records a versioned-comment edit. An executed versioned comment
+// makes two edits, so the first edit makes room for a few.
+func (tkn *Tokenizer) addCppEdit(start, end int, kind cppEditKind) {
+	if tkn.cppEdits == nil {
+		tkn.cppEdits = make([]cppEdit, 0, 4)
+	}
+	tkn.cppEdits = append(tkn.cppEdits, cppEdit{start: start, end: end, kind: kind})
 }
 
 func isSpace(ch uint16) bool {
