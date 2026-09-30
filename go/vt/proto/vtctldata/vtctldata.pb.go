@@ -4347,8 +4347,9 @@ type EmergencyReparentShardRequest struct {
 	// RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
 	// that the new primary must have. This includes both applied transactions and
 	// received transactions still in the relay log. The reparent fails if no
-	// candidate has received it. The check supports MySQL GTID shards only. Empty
-	// means no requirement.
+	// candidate has received it. The check supports MySQL GTID shards only. On
+	// any other shard, the reparent fails only after it stops replication and
+	// demotes a reachable primary. Empty means no requirement.
 	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache

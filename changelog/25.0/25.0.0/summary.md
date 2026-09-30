@@ -466,7 +466,9 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 Use this when you know a position that the new primary must not lose, for example the last `gtid_executed` of the failed primary. ERS compares the candidates only to each other. When every candidate lost the same received transactions, for example after a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, the candidates look fully applied, and ERS alone cannot see that they are behind.
 
-If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found. The check supports MySQL GTID shards only. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
+If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found.
+
+The check supports MySQL GTID sets on MySQL GTID shards only. A position of another flavor fails with `INVALID_ARGUMENT` before ERS locks the shard. On a shard that does not use MySQL GTIDs, ERS fails with `INVALID_ARGUMENT` only after it stops replication and demotes a reachable primary. Do not use the flag on such a shard.
 
 The check runs in vtctld. An older vtctld ignores `--required-position` and runs ERS without it. Upgrade vtctld before relying on the flag.
 
