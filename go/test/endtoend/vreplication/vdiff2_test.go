@@ -53,7 +53,7 @@ type testCase struct {
 	retryInsert string
 	resume      bool // test resume functionality with this workflow
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
-	resumeInsert        string
+	resumeInserts       []string
 	stop                bool // test stop functionality with this workflow
 	testCLIErrors       bool // test CLI errors against this workflow (only needs to be done once)
 	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
@@ -61,6 +61,11 @@ type testCase struct {
 	extraVDiffFlags     map[string]string
 	vdiffCount          int64 // Keep track of the number of vdiffs created to test the stats
 }
+
+// datzeTablePartitioned is the datze table partitioned by dt2, with a primary
+// key on (id,dt2) vs (id).
+const datzeTablePartitioned = `create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp,
+	primary key (id, dt2), key (dt1)) partition by range columns (dt2) (partition p2022 values less than ('2023-01-01'), partition pmax values less than (maxvalue))`
 
 const (
 	sqlSimulateError = `update %s.vdiff as vd, %s.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
@@ -71,19 +76,25 @@ const (
 
 var testCases = []*testCase{
 	{
-		name:                "MoveTables/unsharded to two shards",
-		workflow:            "p1c2",
-		typ:                 "MoveTables",
-		sourceKs:            defaultSourceKs,
-		targetKs:            defaultTargetKs,
-		sourceShards:        "0",
-		targetShards:        "-80,80-",
-		tabletBaseID:        200,
-		tables:              "customer,Lead,Lead-1,nopk,ukTable",
-		autoRetryError:      true,
-		retryInsert:         `insert into customer(cid, name, typ) values(2005149100, 'Testy McTester', 'soho')`,
-		resume:              true,
-		resumeInsert:        `insert into customer(cid, name, typ) values(2005149200, 'Testy McTester (redux)', 'enterprise')`,
+		name:           "MoveTables/unsharded to two shards",
+		workflow:       "p1c2",
+		typ:            "MoveTables",
+		sourceKs:       defaultSourceKs,
+		targetKs:       defaultTargetKs,
+		sourceShards:   "0",
+		targetShards:   "-80,80-",
+		tabletBaseID:   200,
+		tables:         "customer,Lead,Lead-1,nopk,ukTable,datze",
+		autoRetryError: true,
+		retryInsert:    `insert into customer(cid, name, typ) values(2005149100, 'Testy McTester', 'soho')`,
+		resume:         true,
+		resumeInserts: []string{
+			`insert into customer(cid, name, typ) values(2005149200, 'Testy McTester (redux)', 'enterprise')`,
+			// datze has a target PK that extends its source PK, so on each target
+			// shard this resumes the source after the last id diffed on that shard
+			// and the target after that row's (id, dt2).
+			`insert into datze(id, dt2) values(7, '2023-06-01 00:00:00')`,
+		},
 		testCLIErrors:       true, // test for errors in the simplest workflow
 		testCLICreateWait:   true, // test wait on create feature against simplest workflow
 		testCLIFlagHandling: true, // test flag handling end-to-end against simplest workflow
@@ -103,7 +114,7 @@ var testCases = []*testCase{
 		autoRetryError: true,
 		retryInsert:    `insert into customer(cid, name, typ) values(2005149300, 'Testy McTester Jr', 'enterprise'), (2005149350, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(2005149400, 'Testy McTester III', 'enterprise')`,
+		resumeInserts:  []string{`insert into customer(cid, name, typ) values(2005149400, 'Testy McTester III', 'enterprise')`},
 		stop:           true,
 	},
 	{
@@ -118,7 +129,7 @@ var testCases = []*testCase{
 		autoRetryError: true,
 		retryInsert:    `insert into customer(cid, name, typ) values(2005149500, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(2005149600, 'Testy McTester V', 'enterprise'), (2005149650, 'Testy McTester VI', 'enterprise')`,
+		resumeInserts:  []string{`insert into customer(cid, name, typ) values(2005149600, 'Testy McTester V', 'enterprise'), (2005149650, 'Testy McTester VI', 'enterprise')`},
 		stop:           true,
 	},
 }
@@ -182,6 +193,12 @@ func TestVDiff2(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, customerTableModifiedPK)
 	// Set the sql_mode back to the default.
 	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	// Pre-create the datze table on the target keyspace partitioned by dt2. Every
+	// unique key of a partitioned table must include the partitioning column, so
+	// the primary key is (id,dt2) vs (id) on the source. This confirms that we are
+	// able to diff, and resume a diff of, a table whose target primary key extends
+	// its source primary key.
+	execVtgateQuery(t, vtgateConn, defaultTargetKs, datzeTablePartitioned)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -520,9 +537,9 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 		ogTime := time.Now() // The completed_at should be later than this after resuming
 
 		expectedNewRows := int64(0)
-		if tc.resumeInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
-			expectedNewRows = int64(res.RowsAffected)
+		for _, insert := range tc.resumeInserts {
+			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, insert)
+			expectedNewRows += int64(res.RowsAffected)
 		}
 		expectedRows := rowsCompared + expectedNewRows
 

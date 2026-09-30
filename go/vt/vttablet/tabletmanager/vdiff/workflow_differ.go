@@ -203,7 +203,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 // engine does not auto-retry it forever.
 func maxDiffDurationUnresumableError(tableName string) error {
 	return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
-		fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
+		fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because no resumable source checkpoint can be built for it (its filter does not project the full source primary key, or its target primary key extends a source key that is unique only within each source shard); increase or unset --max-diff-duration so it can complete within a single window",
 			tableName))
 }
 
@@ -282,8 +282,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 			return diffErr
 		}
 		if td.tablePlan.sourceCheckpointUnavailable {
-			// This table cannot be checkpointed because its filter does not
-			// project the full source primary key (see getSourcePKCols), so it
+			// This table cannot be checkpointed (see getSourcePKCols), so it
 			// cannot be resumed and every retry would restart from the beginning
 			// and hit the same timeout. We do not override the operator's
 			// --max-diff-duration bound (long-lived snapshots have real
