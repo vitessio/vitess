@@ -74,97 +74,127 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 		typeMismatchCols  []string
 		wantUniqueKeys    [][]string
 		wantMustSerialize bool
+		// wantSerializeTableWrites is true whenever the target has any UNIQUE
+		// secondary index, since InnoDB can take gap locks on it.
+		wantSerializeTableWrites bool
 	}{
 		{
 			// A unique-key column whose streamed and target collations
 			// differ: the hash equality no longer matches the uniqueness the
 			// target enforces, force serialization.
-			name:              "collation-mismatched unique secondary serializes",
-			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
-			identityCols:      []string{"id"},
-			mismatchCols:      []string{"email"},
-			wantMustSerialize: true,
+			name:                     "collation-mismatched unique secondary serializes",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:             []string{"id"},
+			mismatchCols:             []string{"email"},
+			wantMustSerialize:        true,
+			wantSerializeTableWrites: true,
 		},
 		{
 			// A unique-key column whose streamed and target column types
 			// differ: the target can normalize streamed-distinct values to
 			// the same stored value, so the hash equality no longer matches
 			// the uniqueness the target enforces, force serialization.
-			name:              "type-mismatched unique secondary serializes",
-			ddl:               "create table t1 (id int not null, amount decimal(10,2) not null, primary key(id), unique key uk_amount(amount))",
-			identityCols:      []string{"id"},
-			typeMismatchCols:  []string{"amount"},
-			wantMustSerialize: true,
+			name:                     "type-mismatched unique secondary serializes",
+			ddl:                      "create table t1 (id int not null, amount decimal(10,2) not null, primary key(id), unique key uk_amount(amount))",
+			identityCols:             []string{"id"},
+			typeMismatchCols:         []string{"amount"},
+			wantMustSerialize:        true,
+			wantSerializeTableWrites: true,
 		},
 		{
 			// A collation mismatch on a column outside every hashable unique
 			// key must not serialize: identity-covered keys emit no writeset
 			// key at all.
-			name:           "collation mismatch outside the unique keys is ignored",
-			ddl:            "create table t1 (id int not null, email varchar(64) not null, b varchar(64), primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
-			identityCols:   []string{"id"},
-			mismatchCols:   []string{"b"},
-			wantUniqueKeys: [][]string{{"email"}},
+			name:                     "collation mismatch outside the unique keys is ignored",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, b varchar(64), primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
+			identityCols:             []string{"id"},
+			mismatchCols:             []string{"b"},
+			wantUniqueKeys:           [][]string{{"email"}},
+			wantSerializeTableWrites: true,
 		},
 		{
 			// No usable identity but a unique-not-null secondary the
 			// PK-based writeset can't reason about: force serialization.
-			name:              "no identity with unique secondary",
-			ddl:               "create table t1 (id int, email varchar(64) not null, unique key uk_email(email))",
-			identityCols:      nil,
-			wantMustSerialize: true,
+			name:                     "no identity with unique secondary",
+			ddl:                      "create table t1 (id int, email varchar(64) not null, unique key uk_email(email))",
+			identityCols:             nil,
+			wantMustSerialize:        true,
+			wantSerializeTableWrites: true,
 		},
 		{
 			// Plain single-column unique secondary not covered by the
 			// identity: emit a writeset unique key, don't serialize.
-			name:           "plain unique secondary emits key",
-			ddl:            "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
-			identityCols:   []string{"id"},
-			wantUniqueKeys: [][]string{{"email"}},
+			name:                     "plain unique secondary emits key",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:             []string{"id"},
+			wantUniqueKeys:           [][]string{{"email"}},
+			wantSerializeTableWrites: true,
 		},
 		{
 			// Multi-column plain unique secondary: ordered column list.
-			name:           "composite unique secondary emits ordered key",
-			ddl:            "create table t1 (id int not null, a int not null, b int not null, primary key(id), unique key uk_ab(a, b))",
-			identityCols:   []string{"id"},
-			wantUniqueKeys: [][]string{{"a", "b"}},
+			name:                     "composite unique secondary emits ordered key",
+			ddl:                      "create table t1 (id int not null, a int not null, b int not null, primary key(id), unique key uk_ab(a, b))",
+			identityCols:             []string{"id"},
+			wantUniqueKeys:           [][]string{{"a", "b"}},
+			wantSerializeTableWrites: true,
 		},
 		{
 			// Unique secondary whose column set contains the identity can't
 			// create cross-identity conflicts: skip it (no key, no serialize).
-			name:         "unique secondary covering identity is skipped",
-			ddl:          "create table t1 (id int not null, b int not null, primary key(id), unique key uk_idb(id, b))",
-			identityCols: []string{"id"},
+			name:                     "unique secondary covering identity is skipped",
+			ddl:                      "create table t1 (id int not null, b int not null, primary key(id), unique key uk_idb(id, b))",
+			identityCols:             []string{"id"},
+			wantSerializeTableWrites: true,
 		},
 		{
 			// Prefix index on the unique secondary: uniqueness is over a
 			// derived value, force serialization.
-			name:              "prefix unique secondary serializes",
-			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email(8)))",
-			identityCols:      []string{"id"},
-			wantMustSerialize: true,
+			name:                     "prefix unique secondary serializes",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email(8)))",
+			identityCols:             []string{"id"},
+			wantMustSerialize:        true,
+			wantSerializeTableWrites: true,
 		},
 		{
 			// Expression/functional unique index: force serialization.
-			name:              "expression unique secondary serializes",
-			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email((lower(email))))",
-			identityCols:      []string{"id"},
-			wantMustSerialize: true,
+			name:                     "expression unique secondary serializes",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email((lower(email))))",
+			identityCols:             []string{"id"},
+			wantMustSerialize:        true,
+			wantSerializeTableWrites: true,
 		},
 		{
 			// PK does not match the chosen replication identity: the
 			// PK-based writeset key is unreliable, force serialization.
-			name:              "pk identity mismatch serializes",
-			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
-			identityCols:      []string{"email"},
-			wantMustSerialize: true,
+			name:                     "pk identity mismatch serializes",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:             []string{"email"},
+			wantMustSerialize:        true,
+			wantSerializeTableWrites: true,
 		},
 		{
 			// A mix: one hashable key plus one covered-by-identity key.
-			name:           "mixed hashable and covered keys",
-			ddl:            "create table t1 (id int not null, email varchar(64) not null, b int not null, primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
-			identityCols:   []string{"id"},
-			wantUniqueKeys: [][]string{{"email"}},
+			name:                     "mixed hashable and covered keys",
+			ddl:                      "create table t1 (id int not null, email varchar(64) not null, b int not null, primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
+			identityCols:             []string{"id"},
+			wantUniqueKeys:           [][]string{{"email"}},
+			wantSerializeTableWrites: true,
+		},
+		{
+			// A unique index that backs a foreign key is left out of the
+			// writeset keys, since the FK keys cover its values, but InnoDB
+			// takes gap locks on it like on any other unique index.
+			name:                     "unique index backing a foreign key serializes table writes",
+			ddl:                      "create table t1 (id int not null, ref int not null, primary key(id), unique key uk_ref(ref), constraint fk_ref foreign key (ref) references p(id))",
+			identityCols:             []string{"id"},
+			wantSerializeTableWrites: true,
+		},
+		{
+			// Non-unique secondary indexes take no gap locks for row image
+			// application under READ COMMITTED.
+			name:         "non-unique secondary index keeps table writes parallel",
+			ddl:          "create table t1 (id int not null, email varchar(64) not null, primary key(id), key k_email(email))",
+			identityCols: []string{"id"},
 		},
 	}
 
@@ -187,9 +217,10 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 					plan.WritesetTypeMismatchColumns[col] = struct{}{}
 				}
 			}
-			uniqueKeys, mustSerialize := writesetUniqueKeysFromSpec(plan, tableSpec)
+			uniqueKeys, mustSerialize, serializeTableWrites := writesetUniqueKeysFromSpec(plan, tableSpec)
 			assert.Equal(t, tc.wantMustSerialize, mustSerialize)
 			assert.Equal(t, tc.wantUniqueKeys, uniqueKeys)
+			assert.Equal(t, tc.wantSerializeTableWrites, serializeTableWrites)
 		})
 	}
 }

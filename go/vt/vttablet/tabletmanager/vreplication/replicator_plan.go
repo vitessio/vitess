@@ -380,6 +380,14 @@ type TablePlan struct {
 	// column names whose values get extra writeset keys (MySQL-WRITESET-style)
 	// so cross-row unique-value conflicts serialize against each other.
 	UniqueKeyColumns [][]string
+	// SerializeTableWrites means the target table has a UNIQUE secondary
+	// index. Under READ COMMITTED, InnoDB still takes gap locks on such an
+	// index when an INSERT finds a delete-marked entry with the same value,
+	// so writes to different rows can block each other, and with commits
+	// ordered by the commitLoop that wait can never resolve. Every write to
+	// the table gets a table-level writeset key, so its transactions never
+	// run concurrently with each other.
+	SerializeTableWrites bool
 	// HasUnsupportedWritesetMapping means the streamed FIELD layout cannot be
 	// mapped positionally back to target PK/FK columns for safe writeset hashing.
 	HasUnsupportedWritesetMapping bool

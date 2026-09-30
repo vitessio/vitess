@@ -548,21 +548,23 @@ func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, stateme
 			if option.IndexDefinition == nil || option.IndexDefinition.Info == nil || !option.IndexDefinition.Info.IsUnique() {
 				continue
 			}
-			uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, cachedPlan.TargetName, cachedPlan)
+			uniqueKeys, mustSerialize, serializeTableWrites, err := vp.vr.writesetUniqueKeys(ctx, cachedPlan.TargetName, cachedPlan)
 			if err != nil {
 				return false, err
 			}
 			return mustSerialize != cachedPlan.HasExtraUniqueSecondary ||
+				serializeTableWrites != cachedPlan.SerializeTableWrites ||
 				!uniqueKeyColumnsEqual(uniqueKeys, cachedPlan.UniqueKeyColumns), nil
 		case *sqlparser.DropKey:
 			if option.Type != sqlparser.NormalKeyType && option.Type != sqlparser.ConstraintType {
 				continue
 			}
-			uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, cachedPlan.TargetName, cachedPlan)
+			uniqueKeys, mustSerialize, serializeTableWrites, err := vp.vr.writesetUniqueKeys(ctx, cachedPlan.TargetName, cachedPlan)
 			if err != nil {
 				return false, err
 			}
 			return mustSerialize != cachedPlan.HasExtraUniqueSecondary ||
+				serializeTableWrites != cachedPlan.SerializeTableWrites ||
 				!uniqueKeyColumnsEqual(uniqueKeys, cachedPlan.UniqueKeyColumns), nil
 		}
 	}

@@ -170,7 +170,14 @@ func (w *applyWorker) bindFunctions() {
 		}
 	} else {
 		w.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			return vdbc.ExecuteWithRetry(ctx, sql)
+			// Unlike the serial vplayer, a worker must not retry a lock wait
+			// timeout or deadlock in place: the commitLoop commits in source
+			// order, so a later-ordered worker can hold a lock this worker
+			// waits on while itself waiting for this worker to commit. InnoDB
+			// cannot see that cycle, so an in-place retry would wait on it
+			// forever. Returning the error ends the run and the workflow
+			// restarts from the last committed position.
+			return vdbc.Execute(sql)
 		}
 		w.commit = func() error {
 			return vdbc.Commit()

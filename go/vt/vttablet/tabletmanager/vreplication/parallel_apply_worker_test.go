@@ -22,11 +22,13 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -254,6 +256,44 @@ func TestNewApplyWorker(t *testing.T) {
 	require.NotNil(t, worker)
 
 	worker.close()
+
+	// A worker must not retry a lock wait timeout or a deadlock in place. The
+	// commitLoop commits in source order, so a later-ordered worker can hold
+	// a lock (e.g. a unique index gap lock) that an earlier-ordered worker
+	// waits on while itself waiting for that earlier worker to commit. InnoDB
+	// cannot see that cycle, and retrying in place would wait on it forever.
+	// The error has to end the run so the workflow restarts.
+	for _, errNum := range []sqlerror.ErrorCode{sqlerror.ERLockWaitTimeout, sqlerror.ERLockDeadlock} {
+		t.Run(fmt.Sprintf("non-batching worker returns error %d without retrying", errNum), func(t *testing.T) {
+			// A copy: InitVReplicationConfigDefaults returns the shared defaults.
+			cfg := vttablet.GetDefaultVReplicationConfig()
+			cfg.ExperimentalFlags &^= vttablet.VReplicationExperimentalFlagVPlayerBatching
+			client := &failingDBClient{failOnQuery: map[string]error{
+				"insert into t": sqlerror.NewSQLError(errNum, sqlerror.SSUnknownSQLState, "lock"),
+			}}
+			vr := &vreplicator{
+				id:             1,
+				stats:          stats,
+				dbClient:       newVDBClient(client, stats, cfg.RelayLogMaxItems),
+				workflowConfig: cfg,
+				vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
+			}
+			worker, err := newApplyWorker(t.Context(), vr)
+			require.NoError(t, err)
+			t.Cleanup(worker.close)
+			require.False(t, worker.batchMode)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			start := time.Now()
+			_, err = worker.query(ctx, "insert into t values (1)")
+			require.Error(t, err)
+			sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+			require.True(t, ok, "expected a SQL error, got %v", err)
+			require.Equal(t, errNum, sqlErr.Num)
+			require.Less(t, time.Since(start), dbLockRetryDelay)
+		})
+	}
 }
 
 // TestNewApplyWorkerSmallMaxBatchSizeFallback tests the batch size fallback

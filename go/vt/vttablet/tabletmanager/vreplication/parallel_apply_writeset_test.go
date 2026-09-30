@@ -1953,6 +1953,27 @@ func TestBuildTxnWritesetUniqueKeySameValueDifferentIdentityConflicts(t *testing
 	require.NoError(t, err)
 	require.False(t, keySetsIntersect(sameValueA, differentValue),
 		"changes with different unique values must not conflict")
+
+	// Under READ COMMITTED, InnoDB still takes gap locks on a unique secondary
+	// index when an INSERT finds a delete-marked entry with the same value, so
+	// writes to different unique values of the same table can still block each
+	// other. When the plan says so, every write to the table conflicts with
+	// every other write to it, while writes to other tables stay independent.
+	plan.SerializeTableWrites = true
+	serializedA, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("1", "a@x")})
+	require.NoError(t, err)
+	serializedB, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("2", "b@x")})
+	require.NoError(t, err)
+	require.True(t, keySetsIntersect(serializedA, serializedB),
+		"writes to a table whose writes serialize must conflict")
+
+	otherPlan := uniqueKeyPlan()
+	otherPlan.TargetName = "t2"
+	otherPlans := map[string]*TablePlan{"t1": otherPlan}
+	otherTable, err := buildTxnWriteset(otherPlans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("2", "b@x")})
+	require.NoError(t, err)
+	require.False(t, keySetsIntersect(serializedA, otherTable),
+		"writes to another table must not conflict")
 }
 
 // TestBuildTxnWritesetUniqueKeyUpdateEmitsBothImages pins that an UPDATE moving
