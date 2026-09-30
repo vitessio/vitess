@@ -128,7 +128,11 @@ func setupCluster(t *testing.T) *testCluster {
 		"--buffer-max-failover-duration", "30s",
 		"--buffer-min-time-between-failovers", "1s",
 	)
-	require.NoError(t, clusterInstance.StartVtgate())
+	// vtgate must watch every cell: the group can elect a primary in any of them.
+	vtgate := clusterInstance.NewVtgateInstance()
+	vtgate.CellsToWatch = strings.Join(cells, ",")
+	clusterInstance.VtgateProcess = *vtgate
+	require.NoError(t, clusterInstance.VtgateProcess.Setup())
 
 	vtorc := clusterInstance.NewVTOrcProcess(cluster.VTOrcConfiguration{
 		InstancePollTime:               "1s",

@@ -278,6 +278,9 @@ func TestStartGroupReplicationBootstrapOnPrimary(t *testing.T) {
 	assert.False(t, fmd.ReadOnly)
 	assert.True(t, fmd.SemiSyncPrimaryEnabled, "bootstrapping must keep primary semi-sync")
 	require.NoError(t, fmd.CheckSuperQueryList())
+	// The primary serves while it bootstraps the group: redoing prepared transactions would
+	// restart the transaction engine and fail in-flight queries.
+	assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).MethodCalled["RedoPreparedTransactions"])
 
 	// Bootstrapping an active member would create a second group.
 	_, err = tm.StartGroupReplication(t.Context(), true)
@@ -372,10 +375,19 @@ func TestStopGroupReplicationRestoresReadWriteOnPrimary(t *testing.T) {
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 	_, err := tm.StartGroupReplication(t.Context(), true)
 	require.NoError(t, err)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	for len(qsc.StateChanges) > 0 {
+		<-qsc.StateChanges
+	}
 
 	status, err := tm.StopGroupReplication(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupMemberStateOffline, status.MemberState)
+	// MySQL rejects commits while the primary leaves its group, so the tablet stops serving
+	// first, which makes vtgate buffer writes, and serves again once MySQL is writable.
+	require.Len(t, qsc.StateChanges, 2)
+	assert.Equal(t, &tabletservermock.StateChange{Serving: false, TabletType: topodatapb.TabletType_PRIMARY}, <-qsc.StateChanges)
+	assert.Equal(t, &tabletservermock.StateChange{Serving: true, TabletType: topodatapb.TabletType_PRIMARY}, <-qsc.StateChanges)
 	assert.False(t, fmd.SuperReadOnly.Load())
 	assert.False(t, fmd.ReadOnly)
 	assert.True(t, fmd.SemiSyncPrimaryEnabled, "the primary applies the semi-sync setting of the policy")

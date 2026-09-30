@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -360,7 +362,11 @@ func (tm *TabletManager) finishGroupJoinLocked(ctx context.Context) (*replicatio
 	switch {
 	case mysql.IsGroupPrimary(status):
 		if tablet.Type == topodatapb.TabletType_PRIMARY {
-			if err := tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+			// The primary kept serving while it bootstrapped the group, and MySQL did not
+			// restart, so prepared transactions are intact: only clear the read-only flags if
+			// Group Replication left them set. Redoing prepared transactions would restart the
+			// transaction engine and fail in-flight queries.
+			if err := tm.setGroupPrimaryWritable(ctx); err != nil {
 				return nil, vterrors.Wrapf(err, "failed to make the group primary writable")
 			}
 			if mysql.GroupSupersedesSemiSync(status) && tm.isPrimarySideSemiSyncEnabled(ctx) {
@@ -449,13 +455,29 @@ func (tm *TabletManager) stopGroupReplicationLocked(ctx context.Context) (*repli
 	if !status.PluginActive || status.MemberState == mysql.GroupMemberStateOffline {
 		return status, nil
 	}
-	wasGroupPrimary := mysql.IsGroupPrimary(status)
+	tablet := tm.Tablet()
+	leavingPrimary := mysql.IsGroupPrimary(status) && tablet.Type == topodatapb.TabletType_PRIMARY
+	if leavingPrimary {
+		// While the primary leaves its group, MySQL rejects commits (the before_commit hook
+		// fails) and then turns read-only. Stop serving first, like DemotePrimary does, so that
+		// vtgate buffers writes instead of failing them.
+		log.Info("Group primary is leaving its group, disabling query service")
+		termStart := protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, termStart, false, "leaving the replication group"); err != nil {
+			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
+		}
+		defer func() {
+			if err := tm.QueryServiceControl.SetServingType(tablet.Type, termStart, true, ""); err != nil {
+				log.Warn(fmt.Sprintf("SetServingType(serving=true) failed after leaving the replication group: %v", err))
+			}
+		}()
+	}
 	log.Info("Stopping group replication", slog.String("group", status.GroupName), slog.String("state", status.MemberState), slog.String("role", status.MemberRole))
 	if err := tm.MysqlDaemon.StopGroupReplication(ctx); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to stop group replication")
 	}
 
-	if wasGroupPrimary && tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+	if leavingPrimary {
 		if err := tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to make the primary writable after it left its group")
 		}
@@ -464,6 +486,31 @@ func (tm *TabletManager) stopGroupReplicationLocked(ctx context.Context) (*repli
 		}
 	}
 	return tm.groupReplicationStatus(ctx)
+}
+
+// setGroupPrimaryWritable clears super_read_only and read_only on the primary of a group, if
+// they are set, without touching the query service.
+func (tm *TabletManager) setGroupPrimaryWritable(ctx context.Context) error {
+	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+		return err
+	}
+	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
+	if err != nil {
+		return err
+	}
+	if superReadOnly {
+		if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
+			return err
+		}
+	}
+	readOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
+	if err != nil {
+		return err
+	}
+	if readOnly {
+		return tm.MysqlDaemon.SetReadOnly(ctx, false)
+	}
+	return nil
 }
 
 // fixPrimarySemiSyncFromPolicy applies the primary semi-sync setting of the durability policy.
