@@ -29,5 +29,6 @@ func TestRegisterFlags_ParallelReplicationWorkersUsage(t *testing.T) {
 
 	flag := fs.Lookup("vreplication-parallel-replication-workers")
 	require.NotNil(t, flag)
-	require.NotContains(t, flag.Usage, "Experimental")
+	// The parallel applier is experimental, and the help text says so.
+	require.Contains(t, flag.Usage, "(Experimental)")
 }

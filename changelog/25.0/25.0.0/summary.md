@@ -97,9 +97,13 @@ See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal an
 > [!WARNING]
 > This feature is experimental.
 
-VReplication can now apply binlog events using multiple concurrent MySQL connections instead of a single serial connection. Set `--vreplication-parallel-replication-workers=N` (default `1` = serial, maximum `64`) on `vttablet`, or the `vreplication-parallel-replication-workers` per-workflow config override, to dispatch non-conflicting transactions to `N` worker goroutines during the replication (running) phase. Conflicts are detected with target-side writeset hashing (primary key, unique key, and foreign key values — similar to MySQL's own `WRITESET` dependency tracking), so it works regardless of the source's `binlog_transaction_dependency_tracking` setting. Commits remain strictly ordered, so the workflow position, lag metrics, and `WaitForPos` semantics are unchanged. Transactions the conflict detector cannot reason about (DDL, statement-based events, partial row images, prefix/expression unique indexes, and similar) fall back to serial application.
+VReplication can now apply binlog events using multiple concurrent MySQL connections instead of a single serial connection. Set `--vreplication-parallel-replication-workers=N` (default `1` = serial, maximum `64`) on `vttablet`, or the `vreplication-parallel-replication-workers` per-workflow config override, to dispatch non-conflicting transactions to `N` worker goroutines during the replication (running) phase. Conflicts are detected with target-side writeset hashing (primary key, unique key, and foreign key values — similar to MySQL's own `WRITESET` dependency tracking), so it works regardless of the source's `binlog_transaction_dependency_tracking` setting. Commits remain strictly ordered, so the workflow position, lag metrics, and `WaitForPos` semantics are unchanged. Transactions the conflict detector cannot reason about (DDL, statement-based events, partial row images, prefix/expression unique indexes, and similar) fall back to serial application. Writes to a table with a `UNIQUE` secondary index are applied one at a time, since InnoDB can take gap locks on such an index that the conflict detector cannot model; writes to other tables still run in parallel.
 
-Note that each worker holds two MySQL connections, so a workflow with `N` workers uses `2N+2` target-side connections.
+Note:
+
+- Each worker holds two MySQL connections, so a workflow with `N` workers uses `2N+1` target-side connections.
+- The `vttablet` flag applies to every workflow on the tablet, including the ones that run Online DDL migrations. When a migration's workflow uses parallel apply, its cut-over waits for the workflow to catch up before it renames the tables, in a new `post-lock: waiting for vreplication to catch up` stage.
+- Only set the `vreplication-parallel-replication-workers` per-workflow override once all of the workflow's target tablets run v25 or later: earlier versions reject the unknown key, and the workflow then fails to start.
 
 #### <a id="vtorc-quorum-unreachable-primary"/>VTOrc failover of an unreachable primary `vttablet` via replica quorum</a>
 
@@ -235,6 +239,8 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
+See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
 #### <a id="vreplication-unknown-event-error"/>Unknown `on-ddl` actions are now errors in the applier</a>
 
 The VReplication applier previously did nothing for a DDL when the workflow's `on-ddl` action was one it did not recognize. It now fails the workflow with an error instead. The applier still skips VStream event types it does not recognize, so that a target keeps replicating from a source on a newer version, except for the experimental parallel applier, which fails the workflow on them.
@@ -242,8 +248,6 @@ The VReplication applier previously did nothing for a DDL when the workflow's `o
 #### <a id="vreplication-source-overrides-allowlist"/>Workflow config overrides sent to source tablets are now allowlisted</a>
 
 When a workflow has per-workflow config overrides, the target now sends only the source-relevant subset (packet size, timeouts, experimental flags, and similar) to the source tablet's VStreamer instead of the full override map. This keeps newer target-only override keys from failing workflows whose source tablets run an older version that rejects unknown keys.
-
-See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 #### <a id="vreplication-vdiff-no-samples"/>`vdiff show --no-samples` strips the per-table row-sample report</a>
 
