@@ -1,0 +1,668 @@
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_rules_test.go b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_rules_test.go
+new file mode 100644
+index 0000000000..5501aa28d7
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vreplication/replicator_plan_rules_test.go
+@@ -0,0 +1,239 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vreplication
++
++import (
++	"fmt"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/bytes2"
++	"vitess.io/vitess/go/mysql/collations"
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/binlog/binlogplayer"
++	"vitess.io/vitess/go/vt/sqlparser"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++	vttablet "vitess.io/vitess/go/vt/vttablet/common"
++)
++
++// buildTestExecutionPlan builds the execution plan exactly as vcopier and
++// vplayer do: buildReplicatorPlan from the rule and the target's column info,
++// then buildExecutionPlan from the fields that the source sends.
++func buildTestExecutionPlan(t *testing.T, rule *binlogdatapb.Rule, targetColInfos []*ColumnInfo, sourceTable string, sourceFields []*querypb.Field) *TablePlan {
++	t.Helper()
++	vttablet.InitVReplicationConfigDefaults()
++	vr := &vreplicator{
++		workflowConfig: vttablet.DefaultVReplicationConfig,
++	}
++	colInfoMap := map[string][]*ColumnInfo{rule.Match: targetColInfos}
++	source := getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{rule}})
++	rp, err := vr.buildReplicatorPlan(source, colInfoMap, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
++	require.NoError(t, err)
++	tp, err := rp.buildExecutionPlan(&binlogdatapb.FieldEvent{TableName: sourceTable, Fields: sourceFields})
++	require.NoError(t, err)
++	return tp
++}
++
++// copyPhaseInsert returns the statement that the copy phase (vcopier) executes
++// for the given rows. A panic is reported as an error so that the test fails
++// instead of crashing the test binary.
++func copyPhaseInsert(tp *TablePlan, rows ...[]sqltypes.Value) (query string, err error) {
++	defer func() {
++		if x := recover(); x != nil {
++			err = fmt.Errorf("panic: %v", x)
++		}
++	}()
++	protoRows := make([]*querypb.Row, 0, len(rows))
++	for _, row := range rows {
++		protoRows = append(protoRows, sqltypes.RowToProto3(row))
++	}
++	_, err = tp.applyBulkInsert(&bytes2.Buffer{}, protoRows, func(sql string) (*sqltypes.Result, error) {
++		query = sql
++		return &sqltypes.Result{RowsAffected: uint64(len(rows))}, nil
++	}, 0)
++	return query, err
++}
++
++// runningPhaseInsert returns the statement that the running phase (vplayer)
++// executes for a single-row insert. A panic is reported as an error.
++func runningPhaseInsert(tp *TablePlan, row []sqltypes.Value) (query string, err error) {
++	defer func() {
++		if x := recover(); x != nil {
++			err = fmt.Errorf("panic: %v", x)
++		}
++	}()
++	_, err = tp.applyChange(&binlogdatapb.RowChange{After: sqltypes.RowToProto3(row)}, func(sql string) (*sqltypes.Result, error) {
++		query = sql
++		return &sqltypes.Result{RowsAffected: 1}, nil
++	})
++	return query, err
++}
++
++// TestExplicitColumnListWithTargetGeneratedColumnName covers an explicit column
++// list in which a *source* column has the same name as a column that is
++// GENERATED on the target. FieldsToSkip holds the target's generated columns,
++// but appendFromRow checks it against the source field names, so it skips a
++// field that the INSERT does bind and shifts every later value one position
++// to the left. Online DDL generates exactly such a rule for
++//
++//	ALTER TABLE t CHANGE COLUMN g h ..., ADD COLUMN g ... AS (...)
++//
++// (rename a column and keep its old name as a generated alias), whose filter
++// is "select `id` as `id`, `g` as `h`, `x` as `x` from `t`".
++func TestExplicitColumnListWithTargetGeneratedColumnName(t *testing.T) {
++	fields := []*querypb.Field{
++		{Name: "id", Type: querypb.Type_INT32},
++		{Name: "g", Type: querypb.Type_VARCHAR},
++		{Name: "x", Type: querypb.Type_VARCHAR},
++	}
++	row := []sqltypes.Value{sqltypes.NewInt32(1), sqltypes.NewVarChar("renamed-value"), sqltypes.NewVarChar("x-value")}
++
++	t.Run("online ddl: rename a column and add a generated column with its old name", func(t *testing.T) {
++		rule := &binlogdatapb.Rule{
++			Match:                        "dst",
++			Filter:                       "select `id` as `id`, `g` as `h`, `x` as `x` from `src`",
++			SourceUniqueKeyColumns:       "id",
++			TargetUniqueKeyColumns:       "id",
++			SourceUniqueKeyTargetColumns: "id",
++		}
++		colInfos := []*ColumnInfo{
++			{Name: "id", IsPK: true},
++			{Name: "h"},
++			{Name: "x"},
++			{Name: "g", IsGenerated: true},
++		}
++		tp := buildTestExecutionPlan(t, rule, colInfos, "src", fields)
++		want := "insert into dst(id,h,x) values (1,'renamed-value','x-value')"
++
++		// The running phase binds by name and gets it right.
++		got, err := runningPhaseInsert(tp, row)
++		require.NoError(t, err)
++		assert.Equal(t, want, got, "running phase")
++
++		// The copy phase must produce the same statement. On main it skips
++		// field "g" (because the target has a generated "g"), binds "x-value"
++		// into h, and then indexes past the end of the fields and panics.
++		got, err = copyPhaseInsert(tp, row)
++		require.NoError(t, err, "copy phase")
++		assert.Equal(t, want, got, "copy phase")
++	})
++
++	t.Run("materialize: the filter selects a column that is generated on the target", func(t *testing.T) {
++		rule := &binlogdatapb.Rule{
++			Match:  "dst",
++			Filter: "select id, g, x from src",
++		}
++		colInfos := []*ColumnInfo{
++			{Name: "id", IsPK: true},
++			{Name: "g", IsGenerated: true},
++			{Name: "x"},
++		}
++		tp := buildTestExecutionPlan(t, rule, colInfos, "src", fields)
++		// Either the generated column is skipped, as it is for "select *", or
++		// the copy fails with an error. It must not panic, and it must not bind
++		// the value of one column to another.
++		got, err := copyPhaseInsert(tp, row)
++		require.NotContains(t, fmt.Sprint(err), "panic", "copy phase")
++		if err == nil {
++			assert.Equal(t, "insert into dst(id,x) values (1,'x-value')", got, "copy phase")
++		}
++	})
++}
++
++// TestSelectStarRuleKeepsConversions checks that a "select *" rule applies the
++// rule's ConvertCharset and ConvertIntToEnum exactly like the equivalent
++// explicit column list does, in both the copy and the running phase.
++func TestSelectStarRuleKeepsConversions(t *testing.T) {
++	fields := []*querypb.Field{
++		{Name: "id", Type: querypb.Type_INT32},
++		{Name: "val", Type: querypb.Type_VARCHAR},
++		{Name: "e", Type: querypb.Type_INT32},
++	}
++	colInfos := []*ColumnInfo{
++		{Name: "id", IsPK: true},
++		{Name: "val"},
++		{Name: "e"},
++	}
++	// "é" is 0xC3 0xA9 in utf8mb4 and 0xE9 in latin1.
++	row := []sqltypes.Value{sqltypes.NewInt32(1), sqltypes.NewVarChar("é"), sqltypes.NewInt32(2)}
++	newRule := func(filter string) *binlogdatapb.Rule {
++		return &binlogdatapb.Rule{
++			Match:  "dst",
++			Filter: filter,
++			ConvertCharset: map[string]*binlogdatapb.CharsetConversion{
++				"val": {FromCharset: "utf8mb4", ToCharset: "latin1"},
++			},
++			ConvertIntToEnum: map[string]bool{"e": true},
++		}
++	}
++
++	explicit := buildTestExecutionPlan(t, newRule("select id, val, e from src"), colInfos, "src", fields)
++	star := buildTestExecutionPlan(t, newRule("select * from src"), colInfos, "src", fields)
++
++	wantCopy, err := copyPhaseInsert(explicit, row)
++	require.NoError(t, err)
++	wantRun, err := runningPhaseInsert(explicit, row)
++	require.NoError(t, err)
++	require.Equal(t, "insert into dst(id,val,e) values (1,'\xe9','2')", wantRun)
++
++	assert.Equal(t, explicit.ConvertCharset, star.ConvertCharset)
++	assert.Equal(t, explicit.ConvertIntToEnum, star.ConvertIntToEnum)
++	gotCopy, err := copyPhaseInsert(star, row)
++	require.NoError(t, err)
++	assert.Equal(t, wantCopy, gotCopy, "copy phase")
++	gotRun, err := runningPhaseInsert(star, row)
++	require.NoError(t, err)
++	assert.Equal(t, wantRun, gotRun, "running phase")
++}
++
++// TestNilCharsetConversionEntry checks that a ConvertCharset entry that maps a
++// column to nil does not crash the stream. No rule that is parsed from its
++// text or binary form can hold a nil entry (an empty value parses to an empty,
++// non-nil CharsetConversion), so this only guards in-process callers.
++func TestNilCharsetConversionEntry(t *testing.T) {
++	fields := []*querypb.Field{
++		{Name: "id", Type: querypb.Type_INT32},
++		{Name: "val", Type: querypb.Type_VARCHAR},
++	}
++	colInfos := []*ColumnInfo{
++		{Name: "id", IsPK: true},
++		{Name: "val"},
++	}
++	row := []sqltypes.Value{sqltypes.NewInt32(1), sqltypes.NewVarChar("abc")}
++	rule := &binlogdatapb.Rule{
++		Match:          "dst",
++		Filter:         "select id, val from src",
++		ConvertCharset: map[string]*binlogdatapb.CharsetConversion{"val": nil},
++	}
++	tp := buildTestExecutionPlan(t, rule, colInfos, "src", fields)
++
++	_, err := copyPhaseInsert(tp, row)
++	assert.NotContains(t, fmt.Sprint(err), "panic", "copy phase")
++	_, err = runningPhaseInsert(tp, row)
++	assert.NotContains(t, fmt.Sprint(err), "panic", "running phase")
++
++	// For comparison: the empty conversion that a rule parsed from text or
++	// binary holds instead is rejected with an error.
++	rule.ConvertCharset = map[string]*binlogdatapb.CharsetConversion{"val": {}}
++	tp = buildTestExecutionPlan(t, rule, colInfos, "src", fields)
++	_, err = copyPhaseInsert(tp, row)
++	assert.ErrorContains(t, err, "character set  not supported for column val")
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/vcopier_rules_test.go b/go/vt/vttablet/tabletmanager/vreplication/vcopier_rules_test.go
+new file mode 100644
+index 0000000000..0c04b1f499
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vreplication/vcopier_rules_test.go
+@@ -0,0 +1,182 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vreplication
++
++import (
++	"context"
++	"fmt"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/vt/binlog/binlogplayer"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++)
++
++// startCopyWorkflow creates a vreplication stream that copies and then
++// replicates, and deletes it when the test ends.
++func startCopyWorkflow(t *testing.T, rule *binlogdatapb.Rule) int {
++	t.Helper()
++	doNotLogDBQueries = true
++	bls := &binlogdatapb.BinlogSource{
++		Keyspace: env.KeyspaceName,
++		Shard:    env.ShardName,
++		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{rule}},
++		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
++	}
++	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
++	qr, err := playerEngine.Exec(query)
++	require.NoError(t, err)
++	t.Cleanup(func() {
++		// Deleting the stream stops its controller. If the controller is stuck,
++		// the engine stays locked and every later test would hang, so fail
++		// loudly instead.
++		done := make(chan error, 1)
++		go func() {
++			_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
++			done <- err
++		}()
++		select {
++		case err := <-done:
++			assert.NoError(t, err)
++		case <-time.After(30 * time.Second):
++			panic(fmt.Sprintf("%s: stream %d did not stop within 30s; its controller is stuck and the vreplication engine is locked", t.Name(), qr.InsertID))
++		}
++		drainDBQueries()
++		doNotLogDBQueries = false
++	})
++	return int(qr.InsertID)
++}
++
++// dropTablesOnCleanup drops the tables when the test ends. Cleanups run after
++// t.Context() is canceled, so this uses a background context.
++func dropTablesOnCleanup(t *testing.T, tables ...string) {
++	t.Helper()
++	t.Cleanup(func() {
++		for _, table := range tables {
++			assert.NoError(t, env.Mysqld.ExecuteSuperQuery(context.Background(), "drop table if exists "+table))
++		}
++	})
++}
++
++// assertEventuallyData waits for the query to return the wanted rows. On
++// failure it reports the stream's state and message, and returns false.
++func assertEventuallyData(t *testing.T, id int, query string, want [][]string) bool {
++	t.Helper()
++	var lastErr error
++	if assert.Eventually(t, func() bool {
++		lastErr = compareQueryResults(t, query, want, env.Mysqld.FetchSuperQuery)
++		return lastErr == nil
++	}, 30*time.Second, 100*time.Millisecond) {
++		return true
++	}
++	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf("select state, message from _vt.vreplication where id = %d", id))
++	require.NoError(t, err)
++	return assert.Fail(t, "target has incorrect data", "%v\nstream: %v", lastErr, qr.Rows)
++}
++
++// TestPlayerCopyExplicitListWithTargetGeneratedColumnName runs the rule that
++// Online DDL generates for
++//
++//	ALTER TABLE t CHANGE COLUMN g h varchar(64), ADD COLUMN g varchar(64) AS (concat(h, '!'))
++//
++// The source column g is renamed to h, and the target gets a new generated
++// column with the old name. The target's FieldsToSkip then holds "g", which
++// the copy phase wrongly matches against the source field "g".
++func TestPlayerCopyExplicitListWithTargetGeneratedColumnName(t *testing.T) {
++	defer deleteTablet(addTablet(100))
++	execStatements(t, []string{
++		"create table src_gen_rename(id int, g varchar(64), x varchar(64), primary key(id))",
++		"insert into src_gen_rename values (1, 'aaa', 'x1'), (2, 'bbb', 'x2')",
++		fmt.Sprintf("create table %s.dst_gen_rename(id int, h varchar(64), x varchar(64), g varchar(64) as (concat(h, '!')) virtual, primary key(id))", vrepldb),
++	})
++	dropTablesOnCleanup(t, "src_gen_rename", vrepldb+".dst_gen_rename")
++
++	id := startCopyWorkflow(t, &binlogdatapb.Rule{
++		Match:                        "dst_gen_rename",
++		Filter:                       "select `id` as `id`, `g` as `h`, `x` as `x` from `src_gen_rename`",
++		SourceUniqueKeyColumns:       "id",
++		TargetUniqueKeyColumns:       "id",
++		SourceUniqueKeyTargetColumns: "id",
++		ForceUniqueKey:               "PRIMARY",
++	})
++	query := fmt.Sprintf("select id, h, x, g from %s.dst_gen_rename order by id", vrepldb)
++
++	// Copy phase.
++	require.True(t, assertEventuallyData(t, id, query, [][]string{
++		{"1", "aaa", "x1", "aaa!"},
++		{"2", "bbb", "x2", "bbb!"},
++	}), "copy phase")
++
++	// Running phase: a single-row and a multi-row insert.
++	execStatements(t, []string{
++		"insert into src_gen_rename values (3, 'ccc', 'x3')",
++		"insert into src_gen_rename values (4, 'ddd', 'x4'), (5, 'eee', 'x5')",
++	})
++	assertEventuallyData(t, id, query, [][]string{
++		{"1", "aaa", "x1", "aaa!"},
++		{"2", "bbb", "x2", "bbb!"},
++		{"3", "ccc", "x3", "ccc!"},
++		{"4", "ddd", "x4", "ddd!"},
++		{"5", "eee", "x5", "eee!"},
++	})
++}
++
++// TestPlayerSelectStarRuleConvertsCharset checks that a rule's ConvertCharset
++// is applied whether the rule lists its columns or uses "select *". The source
++// column is utf8mb4 and the target column is latin1. Without the conversion
++// the utf8mb4 bytes of "é" (0xC3 0xA9) are written as two latin1 characters
++// ("Ã©"), without any error.
++func TestPlayerSelectStarRuleConvertsCharset(t *testing.T) {
++	for _, filter := range []string{
++		"select id, val from src_cs",
++		"select * from src_cs",
++	} {
++		t.Run(filter, func(t *testing.T) {
++			defer deleteTablet(addTablet(100))
++			execStatements(t, []string{
++				"create table src_cs(id int, val varchar(64) character set utf8mb4, primary key(id))",
++				"insert into src_cs values (1, 'café')",
++				fmt.Sprintf("create table %s.dst_cs(id int, val varchar(64) character set latin1, primary key(id))", vrepldb),
++			})
++			dropTablesOnCleanup(t, "src_cs", vrepldb+".dst_cs")
++
++			id := startCopyWorkflow(t, &binlogdatapb.Rule{
++				Match:  "dst_cs",
++				Filter: filter,
++				ConvertCharset: map[string]*binlogdatapb.CharsetConversion{
++					"val": {FromCharset: "utf8mb4", ToCharset: "latin1"},
++				},
++			})
++			query := "select id, val, hex(val) from " + vrepldb + ".dst_cs where id = %d"
++
++			// Copy phase.
++			assertEventuallyData(t, id, fmt.Sprintf(query, 1), [][]string{
++				{"1", "café", "636166E9"},
++			})
++
++			// Running phase.
++			execStatements(t, []string{"insert into src_cs values (2, 'naïve')"})
++			assertEventuallyData(t, id, fmt.Sprintf(query, 2), [][]string{
++				{"2", "naïve", "6E61EF7665"},
++			})
++		})
++	}
++}
+diff --git a/perf-findings/VAL-A-repro/cl.sh b/perf-findings/VAL-A-repro/cl.sh
+new file mode 100755
+index 0000000000..d6cc91aeda
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/cl.sh
+@@ -0,0 +1,4 @@
++#!/bin/bash
++# usage: cl.sh up|down|status
++cd /home/vt/perf
++exec runuser -u vt -- env HOME=/home/vt BASE=30000 SHARDS=0 TABLES=1 PATH=/home/vt/bin:/usr/sbin:/usr/bin:/bin /home/vt/perf/cluster.sh "$@"
+diff --git a/perf-findings/VAL-A-repro/onlineddl_filter_probe_test.go.txt b/perf-findings/VAL-A-repro/onlineddl_filter_probe_test.go.txt
+new file mode 100644
+index 0000000000..2b7a03c1d4
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/onlineddl_filter_probe_test.go.txt
+@@ -0,0 +1,102 @@
++package onlineddl
++
++import (
++	"fmt"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++	"google.golang.org/protobuf/encoding/protojson"
++	"google.golang.org/protobuf/encoding/prototext"
++	"google.golang.org/protobuf/proto"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++
++	"vitess.io/vitess/go/vt/schemadiff"
++	"vitess.io/vitess/go/vt/sqlparser"
++	"vitess.io/vitess/go/vt/vtenv"
++)
++
++func TestVALAScratchFilter(t *testing.T) {
++	venv := vtenv.NewTestEnv()
++	senv := schemadiff.NewTestEnv()
++	cases := []struct{ from, to, alter string }{
++		{
++			"create table t (id int primary key, g varchar(64), x varchar(64))",
++			"create table t (id int primary key, h varchar(64), x varchar(64), g varchar(64) as (concat(h,'!')) virtual)",
++			"alter table t change column g h varchar(64), add column g varchar(64) as (concat(h,'!')) virtual",
++		},
++		{
++			"create table t (id int primary key, g varchar(64), x varchar(64))",
++			"create table t (id int primary key, h varchar(64), x varchar(64), g varchar(64) as (concat(h,'!')) virtual)",
++			"alter table t rename column g to h, add column g varchar(64) as (concat(h,'!')) virtual",
++		},
++		{
++			"create table t (id int primary key, g varchar(64) charset utf8mb4, x varchar(64))",
++			"create table t (id int primary key, g varchar(64) charset latin1, x varchar(64))",
++			"alter table t modify column g varchar(64) charset latin1",
++		},
++		{
++			"create table t (id int primary key, a varchar(64))",
++			"create table t (id int primary key, b varchar(64))",
++			"alter table t rename column a to b",
++		},
++	}
++	for _, c := range cases {
++		from, err := schemadiff.NewCreateTableEntityFromSQL(senv, c.from)
++		require.NoError(t, err)
++		to, err := schemadiff.NewCreateTableEntityFromSQL(senv, c.to)
++		require.NoError(t, err)
++		stmt, err := sqlparser.NewTestParser().Parse(c.alter)
++		require.NoError(t, err)
++		v, err := NewVRepl(venv, "wf", "ks", "0", "db", from.CreateTable, to.CreateTable, stmt.(*sqlparser.AlterTable), false)
++		require.NoError(t, err)
++		require.NoError(t, v.analyzeAlter())
++		require.NoError(t, v.analyzeTables())
++		err = v.generateFilterQuery()
++		v.analyzeBinlogSource(t.Context())
++		fmt.Printf("ALTER: %s\n  filter=%q err=%v\n  rule=%v\n", c.alter, v.filterQuery, err, v.bls.Filter.Rules[0])
++	}
++}
++
++func TestVALAScratchNilCharset(t *testing.T) {
++	for _, txt := range []string{
++		`filter:{rules:{match:"t" filter:"select * from t" convert_charset:{key:"g"}}}`,
++		`filter:{rules:{match:"t" filter:"select * from t" convert_charset:{key:"g" value:{}}}}`,
++	} {
++		bls := &binlogdatapb.BinlogSource{}
++		err := prototext.Unmarshal([]byte(txt), bls)
++		v, ok := bls.GetFilter().GetRules()[0].ConvertCharset["g"]
++		fmt.Printf("prototext %q: err=%v ok=%v nil=%v\n", txt, err, ok, v == nil)
++		b, err := bls.MarshalVT()
++		require.NoError(t, err)
++		bls2 := &binlogdatapb.BinlogSource{}
++		require.NoError(t, bls2.UnmarshalVT(b))
++		v, ok = bls2.GetFilter().GetRules()[0].ConvertCharset["g"]
++		fmt.Printf("  vtproto roundtrip: ok=%v nil=%v\n", ok, v == nil)
++		bls3 := &binlogdatapb.BinlogSource{}
++		require.NoError(t, proto.Unmarshal(b, bls3))
++		v, ok = bls3.GetFilter().GetRules()[0].ConvertCharset["g"]
++		fmt.Printf("  proto roundtrip: ok=%v nil=%v\n", ok, v == nil)
++	}
++	bls4 := &binlogdatapb.BinlogSource{}
++	err := protojson.Unmarshal([]byte(`{"filter":{"rules":[{"match":"t","convertCharset":{"g":null}}]}}`), bls4)
++	fmt.Printf("json null value: err=%v\n", err)
++	if err == nil {
++		v, ok := bls4.GetFilter().GetRules()[0].ConvertCharset["g"]
++		fmt.Printf("  json null: ok=%v nil=%v\n", ok, v == nil)
++	}
++	// A Go map entry set to nil and then marshalled.
++	bls := &binlogdatapb.BinlogSource{Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t", ConvertCharset: map[string]*binlogdatapb.CharsetConversion{"g": nil}}}}}
++	txt, err := prototext.Marshal(bls)
++	fmt.Printf("prototext of nil entry: %q err=%v\n", txt, err)
++	b, err := bls.MarshalVT()
++	fmt.Printf("vtproto marshal of nil entry: err=%v\n", err)
++	bls2 := &binlogdatapb.BinlogSource{}
++	require.NoError(t, bls2.UnmarshalVT(b))
++	v, ok := bls2.GetFilter().GetRules()[0].ConvertCharset["g"]
++	fmt.Printf("  roundtrip nil entry: ok=%v nil=%v\n", ok, v == nil)
++	bls5 := &binlogdatapb.BinlogSource{}
++	require.NoError(t, prototext.Unmarshal(txt, bls5))
++	v, ok = bls5.GetFilter().GetRules()[0].ConvertCharset["g"]
++	fmt.Printf("  prototext roundtrip nil entry: ok=%v nil=%v\n", ok, v == nil)
++}
+diff --git a/perf-findings/VAL-A-repro/repro1.sh b/perf-findings/VAL-A-repro/repro1.sh
+new file mode 100755
+index 0000000000..c9b98b0c0b
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/repro1.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# BUGS #1 end-to-end: Online DDL that renames a column and adds a generated column with the old name.
++M="mysql -h 127.0.0.1 -P 30003 -u root sbtest"
++S="mysql -N -S /home/vt/perf/c30000/vt_0000000100/mysql.sock -u vt_dba"
++V="/home/vt/bin/vtctldclient --server localhost:30021"
++$M -e "drop table if exists vala_t; create table vala_t(id int primary key, g varchar(64), x varchar(64)); insert into vala_t values (1,'aaa','x1'),(2,'bbb','x2'),(3,'ccc','x3')"
++uuid=$($V ApplySchema --ddl-strategy vitess --sql "alter table vala_t change column g h varchar(64), add column g varchar(64) as (concat(h,'!')) virtual" sbtest | tail -1)
++echo "uuid=$uuid"
++for i in $(seq 1 ${WAIT:-45}); do
++  sleep 1
++done
++echo "--- schema_migrations"
++$S -e "select migration_status, rows_copied, progress, message, stage from _vt.schema_migrations where migration_uuid='$uuid'"
++echo "--- _vt.vreplication"
++$S -e "select id, workflow, state, message, rows_copied, left(source, 300) from _vt.vreplication"
++echo "--- shadow table"
++$S -e "select table_name from information_schema.tables where table_schema='vt_sbtest' and table_name like '_vt_vrp%'"
++echo "--- panic in vttablet log?"
++grep -h -n -i 'panic\|index out of range' /home/vt/perf/c30000/logs/vttablet*.log* 2>/dev/null | head -5
++echo "$uuid" > /tmp/claude-0/-home-user-vitess/d4e874e9-36db-544e-abf5-6cb4fd4871ca/scratchpad/vala_uuid
+diff --git a/perf-findings/VAL-A-repro/repro1b.sh b/perf-findings/VAL-A-repro/repro1b.sh
+new file mode 100755
+index 0000000000..49624da1b9
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/repro1b.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++M="mysql -h 127.0.0.1 -P 30003 -u root sbtest"
++S="mysql -N -S /home/vt/perf/c30000/vt_0000000100/mysql.sock -u vt_dba"
++uuid=$(cat /tmp/claude-0/-home-user-vitess/d4e874e9-36db-544e-abf5-6cb4fd4871ca/scratchpad/vala_uuid)
++echo "--- cancel (60s timeout)"
++time timeout 60 $M -e "alter vitess_migration '$uuid' cancel"; echo "cancel exit=$?"
++sleep 5
++$S -e "select migration_status, message from _vt.schema_migrations where migration_uuid='$uuid'"
++$S -e "select id, state, message from _vt.vreplication"
++echo "--- another online ddl on a different table (60s)"
++$M -e "drop table if exists vala_u; create table vala_u(id int primary key, a int); insert into vala_u values (1,1)"
++uuid2=$(/home/vt/bin/vtctldclient --server localhost:30021 ApplySchema --ddl-strategy vitess --sql "alter table vala_u add column b int" sbtest | tail -1)
++sleep 60
++$S -e "select migration_uuid, migration_status, message from _vt.schema_migrations where migration_uuid='$uuid2'"
++echo "--- vttablet goroutines stuck in controller.Stop / copyWorkQueue.close"
++curl -s "http://localhost:30100/debug/pprof/goroutine?debug=2" | grep -B2 -A12 'controller).Stop\|vcopierCopyWorkQueue).close' | head -60
+diff --git a/perf-findings/VAL-A-repro/repro1c.sh b/perf-findings/VAL-A-repro/repro1c.sh
+new file mode 100755
+index 0000000000..f3a7bb175a
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/repro1c.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++V="/home/vt/bin/vtctldclient --server localhost:30021"
++uuid=$(cat /tmp/claude-0/-home-user-vitess/d4e874e9-36db-544e-abf5-6cb4fd4871ca/scratchpad/vala_uuid)
++echo "--- GetWorkflows (read)"
++time timeout 60 $V GetWorkflows sbtest --include-logs=false | head -5; echo "exit=$?"
++echo "--- Workflow stop"
++time timeout 90 $V Workflow --keyspace sbtest stop --workflow "$uuid"; echo "exit=$?"
++echo "--- vttablet cmdline"
++pgrep -u vt -af 'vttablet.*30100' | head -2
+diff --git a/perf-findings/VAL-A-repro/repro1d.sh b/perf-findings/VAL-A-repro/repro1d.sh
+new file mode 100755
+index 0000000000..da12e8900b
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/repro1d.sh
+@@ -0,0 +1,17 @@
++#!/bin/bash
++S="mysql -N -S /home/vt/perf/c30000/vt_0000000100/mysql.sock -u vt_dba"
++pid=$(cat /home/vt/perf/c30000/vt_0000000100/vttablet.pid)
++echo "--- SIGTERM vttablet pid $pid"
++t0=$(date +%s)
++kill -TERM "$pid"
++for i in $(seq 1 120); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
++if kill -0 "$pid" 2>/dev/null; then echo "still alive after $(( $(date +%s) - t0 ))s; SIGKILL"; kill -9 "$pid"; sleep 1; else echo "exited after $(( $(date +%s) - t0 ))s"; fi
++grep -n -i 'shutdown\|onterm\|close' /home/vt/perf/c30000/logs/vttablet_100.log | tail -5
++echo "--- restart vttablet"
++cd /home/vt/perf
++runuser -u vt -- env HOME=/home/vt VTDATAROOT=/home/vt/perf/c30000 VT_MYSQL_ROOT=/usr PATH=/home/vt/bin:/usr/sbin:/usr/bin:/bin setsid nohup /home/vt/bin/vttablet --topo-implementation etcd2 --topo-global-server-address localhost:30010 --topo-global-root /vitess/global --tablet-path zone1-0000000100 --tablet-hostname localhost --init-keyspace sbtest --init-shard 0 --init-tablet-type replica --health-check-interval 5s --backup-storage-implementation file --file-backup-storage-root /home/vt/perf/c30000/backups --port 30100 --grpc-port 30200 --service-map grpc-queryservice,grpc-tabletmanager,grpc-updatestream --pid-file /home/vt/perf/c30000/vt_0000000100/vttablet.pid --heartbeat-on-demand-duration=5s --pprof-http --log-format text --config-file-not-found-handling=ignore --queryserver-config-pool-size 64 --queryserver-config-transaction-cap 128 > /home/vt/perf/c30000/logs/vttablet_100.restart.log 2>&1 < /dev/null &
++sleep 60
++echo "--- after restart"
++$S -e "select id, state, message, rows_copied from _vt.vreplication"
++$S -e "select migration_uuid, migration_status, rows_copied, message from _vt.schema_migrations order by id"
++curl -s "http://localhost:30100/debug/pprof/goroutine?debug=2" | grep -c 'appendFromRow'
+diff --git a/perf-findings/VAL-A-repro/repro_rename_column.sh b/perf-findings/VAL-A-repro/repro_rename_column.sh
+new file mode 100755
+index 0000000000..2f5639b86f
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/repro_rename_column.sh
+@@ -0,0 +1,15 @@
++#!/bin/bash
++# Side check: Online DDL (vitess strategy) with RENAME COLUMN.
++M="mysql -h 127.0.0.1 -P 30003 -u root sbtest"
++S="mysql -N -S /home/vt/perf/c30000/vt_0000000100/mysql.sock -u vt_dba"
++V="/home/vt/bin/vtctldclient --server localhost:30021"
++$M -e "drop table if exists vala_r; create table vala_r(id int primary key, a varchar(64)); insert into vala_r values (1,'one'),(2,'two')"
++uuid=$($V ApplySchema --ddl-strategy vitess --sql "alter table vala_r rename column a to b" sbtest 2>&1 | tail -1)
++echo "uuid=$uuid"
++for i in $(seq 1 90); do
++  st=$($S -e "select migration_status from _vt.schema_migrations where migration_uuid='$uuid'")
++  [[ $st == complete || $st == failed || $st == cancelled ]] && break
++  sleep 1
++done
++$S -e "select migration_status, message from _vt.schema_migrations where migration_uuid='$uuid'"
++$M -e "show create table vala_r\G; select * from vala_r"
+diff --git a/perf-findings/VAL-A-repro/runvt.sh b/perf-findings/VAL-A-repro/runvt.sh
+new file mode 100755
+index 0000000000..9854faad0b
+--- /dev/null
++++ b/perf-findings/VAL-A-repro/runvt.sh
+@@ -0,0 +1,4 @@
++#!/bin/bash
++# usage: runvt.sh <test regex> [extra args]
++cd /home/user/vitess/.claude/worktrees/agent-ac2e51d0786626b72/go/vt/vttablet/tabletmanager/vreplication
++exec runuser -u vt -- env HOME=/home/vt VTROOT=/home/vt VT_MYSQL_ROOT=/usr VTDATAROOT=/home/vt/VAL-A/data PATH=/home/vt/bin:/usr/sbin:/usr/bin:/bin /home/vt/VAL-A/x.test -test.run "$1" "${@:2}"
