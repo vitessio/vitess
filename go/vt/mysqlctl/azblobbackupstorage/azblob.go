@@ -185,15 +185,8 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 				}
 			},
 			ShouldLog: func(level pipeline.LogLevel) bool {
-				switch level {
-				case pipeline.LogFatal, pipeline.LogPanic, pipeline.LogError:
-					return log.Enabled(slog.LevelError)
-				case pipeline.LogWarning:
-					return log.Enabled(slog.LevelWarn)
-				case pipeline.LogInfo, pipeline.LogDebug:
-					return log.Enabled(slog.LevelDebug)
-				}
-				return false
+				// Emit SDK logs only at debug level. The SDK logs a full request dump for each slow or failed try.
+				return level != pipeline.LogNone && log.Enabled(slog.LevelDebug)
 			},
 		},
 	})
