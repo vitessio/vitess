@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -231,6 +232,22 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 		defer cancel()
 		if err := tm.tmState.ChangeTabletType(changeTypeCtx, tm.baseTabletType, DBActionNone); err != nil {
 			return vterrors.Wrapf(err, "failed to change type to %v", tm.baseTabletType)
+		}
+		return nil
+	}
+
+	// On an active group replication member, the group already moved the primary role and made
+	// MySQL read-only. Only the tablet type needs to follow.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		log.Info("MySQL is an active group replication member; updating tablet state only.")
+		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+		if err := tm.tmState.ChangeTabletType(changeTypeCtx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			return vterrors.Wrapf(err, "failed to change type to %v", topodatapb.TabletType_REPLICA)
 		}
 		return nil
 	}

@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -255,6 +256,19 @@ func (tm *TabletManager) StopReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
+	// On an active group replication member, replication is its membership in the group.
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if groupReplicationEnabled() {
+		tm.groupReplicationRejoinSuspended.Store(true)
+	}
+	if mysql.IsGroupMemberActive(status) {
+		_, err := tm.stopGroupReplicationLocked(ctx)
+		return err
+	}
+
 	return tm.stopReplicationLocked(ctx)
 }
 
@@ -309,6 +323,26 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 		return err
 	}
 	defer tm.unlock()
+
+	// On an active group replication member, or a tablet that the durability policy makes a
+	// member, replication is its membership in the group.
+	if groupReplicationEnabled() {
+		tm.groupReplicationRejoinSuspended.Store(false)
+	}
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	groupMember := mysql.IsGroupMemberActive(status)
+	if !groupMember {
+		if groupMember, err = tm.isGroupReplicationManaged(ctx, tm.Tablet().Type); err != nil {
+			return err
+		}
+	}
+	if groupMember {
+		_, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */)
+		return err
+	}
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -417,6 +451,23 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 	defer tm.unlock()
+
+	// In a keyspace that uses group replication, the primary is the member that bootstraps the
+	// shard's group. The caller holds the shard lock.
+	if groupReplicationEnabled() {
+		durability, err := tm.keyspaceDurability(ctx)
+		if err != nil {
+			return "", err
+		}
+		if policy.IsGroupReplication(durability) {
+			if err := tm.bootstrapGroupForInitPrimaryLocked(ctx); err != nil {
+				return "", vterrors.Wrapf(err, "failed to bootstrap the group")
+			}
+		}
+	}
+	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+		return "", err
+	}
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -609,11 +660,14 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	finishCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// Read the timeout before starting the goroutine, which may only run after DemotePrimary
+	// returned.
+	stallTimeout := 10 * topo.RemoteOperationTimeout
 	go func() {
 		select {
 		case <-finishCtx.Done():
 		// Finished running DemotePrimary. Nothing to do.
-		case <-time.After(10 * topo.RemoteOperationTimeout):
+		case <-time.After(stallTimeout):
 			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
 			// Collect more information and signal demote primary is indefinitely stalled.
 			log.Error("DemotePrimary seems to be stalled. Collecting more information.")
@@ -675,10 +729,22 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	log.Info("checking semi-sync status")
-	isSemiSyncBlocked, err := tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
+	// A group replication member does not use semi-sync: the group makes transactions durable,
+	// and it moves super_read_only itself when it switches primaries.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		return nil, err
+	}
+	groupMember := mysql.IsGroupMemberActive(groupStatus)
+	isSemiSyncBlocked := false
+	if groupMember {
+		log.Info("MySQL is an active group replication member, skipping the semi-sync steps")
+	} else {
+		log.Info("checking semi-sync status")
+		isSemiSyncBlocked, err = tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	log.Info(
@@ -721,7 +787,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 				}
 			}()
 		}
-	} else {
+	} else if !groupMember {
 		// If `force` is false, we're demoting this primary as part of a `PlannedReparentShard` operation,
 		// but we might be blocked on semi-sync ACKs.
 		//
@@ -773,7 +839,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
-	if tm.isPrimarySideSemiSyncEnabled(ctx) {
+	if !groupMember && tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
 		log.Info("disabling primary-side semi-sync")
 		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
@@ -817,6 +883,16 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	defer tm.unlock()
 
+	// A group replication member can only serve as the primary while it is the group primary.
+	// Check before anything changes.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) && !mysql.IsGroupPrimary(groupStatus) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: MySQL is no longer the primary of group %s (member %s %s)", groupStatus.GroupName, groupStatus.MemberState, groupStatus.MemberRole)
+	}
+
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
@@ -824,7 +900,8 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
-	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
+	// A group with at least two ONLINE members makes prepared transactions durable as well.
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, twoPCDurable(groupStatus, semiSyncAction == SemiSyncActionSet))
 
 	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
@@ -887,6 +964,16 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 		return err
 	}
 
+	// MySQL refuses RESET REPLICA ALL on an active group replication member, because it would
+	// also reset the channels of the group. Only reset the default channel there.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, []string{mysql.ResetDefaultReplicationChannelCommand()})
+	}
+
 	err = tm.MysqlDaemon.ResetReplicationParameters(ctx)
 	if err != nil {
 		return err
@@ -938,6 +1025,16 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
+	}
+
+	// An active group replication member replicates through its group, never through the
+	// default channel.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		return tm.setGroupMemberReplicationSourceLocked(ctx, groupStatus, parentAlias, timeCreatedNS, waitPosition, semiSync)
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -1201,6 +1298,16 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
+	// An active group replication member is promoted by the group, not by clearing its
+	// replication configuration.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return "", err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		return tm.promoteGroupMemberLocked(ctx, groupStatus, semiSyncAction)
+	}
+
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
 	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
@@ -1235,6 +1342,18 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
+		// An active group with at least two ONLINE members supersedes semi-sync. Semi-sync is
+		// then disabled rather than enabled: with an infinite timeout, it would block every
+		// commit as soon as the last replica acknowledging transactions has joined the group.
+		groupStatus, err := tm.groupReplicationStatus(ctx)
+		if err != nil {
+			return err
+		}
+		if mysql.GroupSupersedesSemiSync(groupStatus) {
+			log.Info("MySQL is a member of a group with at least two ONLINE members, disabling semi-sync instead of enabling it",
+				slog.String("group", groupStatus.GroupName))
+			return tm.fixSemiSync(ctx, tabletType, SemiSyncActionUnset)
+		}
 		if tm.SemiSyncMonitor != nil {
 			// We want to enable the semi-sync monitor only if the tablet is going to start
 			// expecting semi-sync ACKs.

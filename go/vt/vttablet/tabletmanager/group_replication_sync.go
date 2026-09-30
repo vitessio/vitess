@@ -1,0 +1,368 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package tabletmanager
+
+import (
+	"context"
+	"log/slog"
+	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+// groupReplicationSync makes the tablet follow the state of its MySQL's replication group. The
+// group elects its primary on its own, for example after the primary failed; the sync loop is
+// how such a change reaches the topology within about one sync interval, without VTOrc:
+//
+//   - If MySQL is the ONLINE primary of a group with quorum and the tablet is not PRIMARY, it
+//     promotes the tablet record. The new primary term makes the shard sync loop update the
+//     shard record, and vtgate follow.
+//   - If the tablet is PRIMARY but MySQL is no longer the primary of a group with quorum, it
+//     demotes the tablet record to REPLICA. MySQL is left as it is: the group already made it
+//     read-only.
+//   - If the durability policy makes the tablet a member but MySQL is not in the group, it
+//     rejoins the group with exponential backoff. It never bootstraps a group.
+//   - On a PRIMARY that is the group primary, it applies the effective semi-sync setting: a group
+//     with at least two ONLINE members supersedes semi-sync.
+//
+// Mutations take the action lock without waiting, so that the loop never queues behind a long
+// running RPC (a backup, a restore, a reparent); it retries on its next run instead.
+type groupReplicationSync struct {
+	tm *TabletManager
+
+	durability     policy.Durabler
+	durabilityRead time.Time
+
+	lastState string
+	lastRole  string
+
+	rejoinBackoff time.Duration
+	nextRejoin    time.Time
+
+	// twoPCAllowed is the last value the loop passed to SetTwoPCAllowed, if any.
+	twoPCAllowed *bool
+}
+
+func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
+	return &groupReplicationSync{tm: tm}
+}
+
+// startGroupReplicationSync starts the group replication sync loop if the tablet supports
+// Group Replication.
+func (tm *TabletManager) startGroupReplicationSync() {
+	if !groupReplicationEnabled() {
+		return
+	}
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	if tm._groupReplicationSyncCancel != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	tm._groupReplicationSyncCancel = cancel
+	tm._groupReplicationSyncDone = done
+
+	s := newGroupReplicationSync(tm)
+	go func() {
+		defer close(done)
+		s.run(ctx, groupReplicationSyncInterval)
+	}()
+}
+
+// stopGroupReplicationSync stops the group replication sync loop and waits for it to exit.
+func (tm *TabletManager) stopGroupReplicationSync() {
+	tm.mutex.Lock()
+	cancel := tm._groupReplicationSyncCancel
+	done := tm._groupReplicationSyncDone
+	tm._groupReplicationSyncCancel = nil
+	tm._groupReplicationSyncDone = nil
+	tm.mutex.Unlock()
+
+	if cancel != nil {
+		cancel()
+		<-done
+	}
+}
+
+func (s *groupReplicationSync) run(ctx context.Context, interval time.Duration) {
+	log.Info("Starting the group replication sync loop", slog.Duration("interval", interval))
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		stepCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		s.reconcile(stepCtx)
+		cancel()
+	}
+}
+
+// reconcile runs one iteration of the sync loop.
+func (s *groupReplicationSync) reconcile(ctx context.Context) {
+	tm := s.tm
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the group replication status", slog.Any("error", err))
+		return
+	}
+	s.logTransition(status)
+
+	tablet := tm.Tablet()
+	switch {
+	case mysql.IsGroupPrimary(status) && tablet.Type != topodatapb.TabletType_PRIMARY:
+		s.promote(ctx, tablet.Type)
+	case tablet.Type == topodatapb.TabletType_PRIMARY && groupPrimaryLost(status):
+		s.demote(ctx)
+	}
+
+	durability, err := s.getDurability(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the durability policy", slog.Any("error", err))
+		return
+	}
+	tablet = tm.Tablet()
+	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) {
+		s.enforceSemiSync(ctx, status, durability, tablet)
+	}
+	if s.shouldRejoin(status, durability, tablet) {
+		s.rejoin(ctx)
+	}
+}
+
+// groupPrimaryLost returns whether MySQL was part of a group but is no longer its primary: it is
+// an active member that is not the primary of a group with quorum, or it failed or was expelled.
+// A MySQL that left its group on purpose, or never joined one, is OFFLINE and has not lost
+// anything.
+func groupPrimaryLost(status *replicationdatapb.GroupReplicationStatus) bool {
+	if status == nil || !status.PluginActive {
+		return false
+	}
+	if status.MemberState == mysql.GroupMemberStateError {
+		return true
+	}
+	return mysql.IsGroupMemberActive(status) && !mysql.IsGroupPrimary(status)
+}
+
+// isTransitionalTabletType returns whether the tablet type belongs to an operation that owns
+// the tablet for now: the sync loop leaves such a tablet alone.
+func isTransitionalTabletType(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
+	case topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
+		return true
+	}
+	return false
+}
+
+func (s *groupReplicationSync) logTransition(status *replicationdatapb.GroupReplicationStatus) {
+	if status.MemberState == s.lastState && status.MemberRole == s.lastRole {
+		return
+	}
+	log.Info("Group replication sync: member state changed",
+		slog.String("group", status.GroupName),
+		slog.String("from_state", s.lastState),
+		slog.String("from_role", s.lastRole),
+		slog.String("state", status.MemberState),
+		slog.String("role", status.MemberRole),
+		slog.Bool("has_quorum", status.HasQuorum),
+		slog.Int("online_members", mysql.OnlineGroupMembers(status)))
+	s.lastState = status.MemberState
+	s.lastRole = status.MemberRole
+}
+
+func (s *groupReplicationSync) getDurability(ctx context.Context) (policy.Durabler, error) {
+	if s.durability != nil && time.Since(s.durabilityRead) < groupReplicationDurabilityCacheTTL {
+		return s.durability, nil
+	}
+	durability, err := s.tm.keyspaceDurability(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.durability = durability
+	s.durabilityRead = time.Now()
+	return durability, nil
+}
+
+// promote changes the tablet type to PRIMARY after the group made MySQL its primary.
+func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatapb.TabletType) {
+	tm := s.tm
+	if isTransitionalTabletType(tabletType) {
+		log.Warn("Group replication sync: MySQL is the group primary, but the tablet type does not allow promoting it",
+			slog.String("tablet_type", tabletType.String()))
+		return
+	}
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+
+	// Check again under the lock: an RPC may have changed the state in the meantime.
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !mysql.IsGroupPrimary(status) || tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+		return
+	}
+	log.Info("Group replication sync: MySQL is the primary of its group, promoting the tablet to PRIMARY", slog.String("group", status.GroupName))
+	s.setTwoPCAllowed(twoPCDurable(status, tm.isPrimarySideSemiSyncEnabled(ctx)))
+	// DBActionSetReadWrite redoes prepared transactions. MySQL is already writable.
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
+		log.Error("Group replication sync: failed to promote the tablet to PRIMARY", slog.Any("error", err))
+	}
+}
+
+// demote changes the tablet type from PRIMARY to REPLICA after MySQL lost the primary role in
+// its group.
+func (s *groupReplicationSync) demote(ctx context.Context) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !groupPrimaryLost(status) || tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
+		return
+	}
+	log.Warn("Group replication sync: MySQL is no longer the primary of its group, demoting the tablet to REPLICA",
+		slog.String("group", status.GroupName),
+		slog.String("state", status.MemberState),
+		slog.String("role", status.MemberRole),
+		slog.Bool("has_quorum", status.HasQuorum))
+	s.twoPCAllowed = nil
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+		log.Error("Group replication sync: failed to demote the tablet to REPLICA", slog.Any("error", err))
+	}
+}
+
+// enforceSemiSync applies the effective semi-sync setting on the primary: the durability policy
+// asks for semi-sync, and no group with at least two ONLINE members supersedes it. Semi-sync is
+// only enabled while a replica is connected to acknowledge transactions: with Vitess's infinite
+// semi-sync timeout, enabling it without one would block every commit, for example while a
+// member of a group of two restarts.
+func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
+	tm := s.tm
+	superseded := mysql.GroupSupersedesSemiSync(status)
+	want := policy.SemiSyncAckers(durability, tablet) > 0 && !superseded
+	enabled := tm.isPrimarySideSemiSyncEnabled(ctx)
+	if want && !enabled && !s.hasSemiSyncReplicas(ctx) {
+		want = false
+	}
+	if want == enabled && s.twoPCAllowed != nil && *s.twoPCAllowed == twoPCDurable(status, enabled) {
+		return
+	}
+
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	if tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
+		return
+	}
+	if want != enabled {
+		semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, want)
+		if err != nil {
+			log.Warn("Group replication sync: cannot change semi-sync", slog.Any("error", err))
+			return
+		}
+		log.Info("Group replication sync: changing primary semi-sync",
+			slog.Bool("enabled", want),
+			slog.Bool("superseded_by_group", superseded),
+			slog.Int("online_members", mysql.OnlineGroupMembers(status)))
+		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
+			log.Error("Group replication sync: failed to change semi-sync", slog.Any("error", err))
+			return
+		}
+		enabled = want
+	}
+	s.setTwoPCAllowed(twoPCDurable(status, enabled))
+}
+
+// hasSemiSyncReplicas returns whether at least one semi-sync replica is connected to the primary.
+func (s *groupReplicationSync) hasSemiSyncReplicas(ctx context.Context) bool {
+	vars, err := s.tm.MysqlDaemon.GetGlobalStatusVars(ctx, []string{"Rpl_semi_sync_source_clients", "Rpl_semi_sync_master_clients"})
+	if err != nil {
+		return false
+	}
+	for _, v := range vars {
+		if v != "" && v != "0" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *groupReplicationSync) setTwoPCAllowed(allowed bool) {
+	if s.twoPCAllowed != nil && *s.twoPCAllowed == allowed {
+		return
+	}
+	s.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, allowed)
+	s.twoPCAllowed = &allowed
+}
+
+// shouldRejoin returns whether the sync loop should make MySQL rejoin its group now.
+func (s *groupReplicationSync) shouldRejoin(status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
+	if mysql.IsGroupMemberActive(status) {
+		s.rejoinBackoff = 0
+		return false
+	}
+	if !policy.IsGroupMember(durability, tablet) {
+		return false
+	}
+	// A PRIMARY tablet whose MySQL is not in the group serves writes on its own, for example
+	// during a migration back to asynchronous replication. Joining would make it read-only.
+	if tablet.Type == topodatapb.TabletType_PRIMARY || isTransitionalTabletType(tablet.Type) {
+		return false
+	}
+	if s.tm.groupReplicationRejoinSuspended.Load() || s.tm.IsBackupRunning() {
+		return false
+	}
+	return !time.Now().Before(s.nextRejoin)
+}
+
+// rejoin makes MySQL join its group, and backs off exponentially if it fails.
+func (s *groupReplicationSync) rejoin(ctx context.Context) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+
+	log.Info("Group replication sync: MySQL is not in its group, joining it")
+	if _, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */); err != nil {
+		if s.rejoinBackoff == 0 {
+			s.rejoinBackoff = groupReplicationSyncInterval
+		} else {
+			s.rejoinBackoff = min(2*s.rejoinBackoff, groupReplicationMaxRejoinBackoff)
+		}
+		s.nextRejoin = time.Now().Add(s.rejoinBackoff)
+		log.Warn("Group replication sync: failed to join the group, backing off",
+			slog.Duration("backoff", s.rejoinBackoff),
+			slog.Any("error", err))
+		return
+	}
+	s.rejoinBackoff = 0
+	s.nextRejoin = time.Time{}
+}
