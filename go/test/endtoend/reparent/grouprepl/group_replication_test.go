@@ -304,10 +304,12 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, policy.DurabilityGroupReplicationCrossCell, ks.Keyspace.DurabilityPolicy)
 
-		// The group, not semi-sync, makes the primary's commits durable now.
+		// The group, not semi-sync, makes the primary's commits durable now. The primary is the
+		// group's only consensus leader.
 		status, err := fullStatus(t, tc, primary)
 		require.NoError(t, err)
 		assert.False(t, status.SemiSyncPrimaryEnabled)
+		assert.True(t, status.GroupReplicationStatus.PaxosSingleLeader)
 
 		// The RDONLY tablet is not a member; it replicates asynchronously from the primary.
 		status, err = fullStatus(t, tc, tc.rdonly)
@@ -334,6 +336,7 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 	t.Run("the group elects a new primary when the primary's mysqld dies", func(t *testing.T) {
 		w := startWriter(t, tc)
 		oldPrimary := primary
+		killed := time.Now()
 		killMysqld(t, oldPrimary)
 
 		var newPrimary *cluster.Vttablet
@@ -350,6 +353,11 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 			require.NoError(c, err)
 			assert.True(c, mysql.IsGroupPrimary(status.GroupReplicationStatus))
 		}, waitTimeout, pollInterval)
+		failover := time.Since(killed)
+		t.Logf("%s was the primary in topo %v after the old primary's mysqld was killed", newPrimary.Alias, failover)
+		// With group_replication_member_expel_timeout=0 the group replaces a failed primary
+		// about 7 seconds after it fails; with MySQL's default of 5 seconds it takes about 22.
+		assert.Less(t, failover, 15*time.Second)
 		primary = newPrimary
 
 		// Writes resume on the new primary.

@@ -983,9 +983,14 @@ type GroupReplicationStatus struct {
 	// single_primary_mode is the value of group_replication_single_primary_mode.
 	SinglePrimaryMode bool `protobuf:"varint,10,opt,name=single_primary_mode,json=singlePrimaryMode,proto3" json:"single_primary_mode,omitempty"`
 	// member_weight is the value of group_replication_member_weight.
-	MemberWeight  int32 `protobuf:"varint,11,opt,name=member_weight,json=memberWeight,proto3" json:"member_weight,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MemberWeight int32 `protobuf:"varint,11,opt,name=member_weight,json=memberWeight,proto3" json:"member_weight,omitempty"`
+	// paxos_single_leader is true when the group runs with a single consensus leader, the
+	// primary (group_replication_paxos_single_leader, as in effect for the group). A member
+	// whose setting differs from its group's cannot join, so joining members adopt this value.
+	// It is only meaningful while the member is active.
+	PaxosSingleLeader bool `protobuf:"varint,12,opt,name=paxos_single_leader,json=paxosSingleLeader,proto3" json:"paxos_single_leader,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GroupReplicationStatus) Reset() {
@@ -1095,6 +1100,13 @@ func (x *GroupReplicationStatus) GetMemberWeight() int32 {
 	return 0
 }
 
+func (x *GroupReplicationStatus) GetPaxosSingleLeader() bool {
+	if x != nil {
+		return x.PaxosSingleLeader
+	}
+	return false
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
@@ -1195,7 +1207,7 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x04port\x18\x03 \x01(\x05R\x04port\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x12\n" +
 	"\x04role\x18\x05 \x01(\tR\x04role\x12\x18\n" +
-	"\aversion\x18\x06 \x01(\tR\aversion\"\xcd\x03\n" +
+	"\aversion\x18\x06 \x01(\tR\aversion\"\xfd\x03\n" +
 	"\x16GroupReplicationStatus\x12#\n" +
 	"\rplugin_active\x18\x01 \x01(\bR\fpluginActive\x12\x1d\n" +
 	"\n" +
@@ -1211,7 +1223,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x18received_transaction_set\x18\t \x01(\tR\x16receivedTransactionSet\x12.\n" +
 	"\x13single_primary_mode\x18\n" +
 	" \x01(\bR\x11singlePrimaryMode\x12#\n" +
-	"\rmember_weight\x18\v \x01(\x05R\fmemberWeight*;\n" +
+	"\rmember_weight\x18\v \x01(\x05R\fmemberWeight\x12.\n" +
+	"\x13paxos_single_leader\x18\f \x01(\bR\x11paxosSingleLeader*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"

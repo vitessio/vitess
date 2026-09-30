@@ -58,8 +58,10 @@ var (
 	groupReplicationSyncInterval               = 1 * time.Second
 	groupReplicationConsistency                = "BEFORE_ON_PRIMARY_FAILOVER"
 	groupReplicationExitStateAction            = "READ_ONLY"
-	groupReplicationUnreachableMajorityTimeout = 10 * time.Second
+	groupReplicationUnreachableMajorityTimeout = 1 * time.Second
 	groupReplicationAutorejoinTries            = -1
+	groupReplicationMemberExpelTimeout         = time.Duration(0)
+	groupReplicationPaxosSingleLeader          = "ON"
 
 	// groupReplicationPollInterval is how often waits on the group replication state poll
 	// MySQL. It can be changed to speed up tests.
@@ -85,6 +87,10 @@ func registerGroupReplicationFlags(fs *pflag.FlagSet) {
 		"group_replication_unreachable_majority_timeout that the tablet applies before its MySQL starts Group Replication: how long a member that lost contact with the majority of its group waits before it leaves the group. 0 waits forever, a negative value keeps the server's setting.")
 	utils.SetFlagIntVar(fs, &groupReplicationAutorejoinTries, "group-replication-autorejoin-tries", groupReplicationAutorejoinTries,
 		"group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. A negative value keeps the server's setting.")
+	utils.SetFlagDurationVar(fs, &groupReplicationMemberExpelTimeout, "group-replication-member-expel-timeout", groupReplicationMemberExpelTimeout,
+		"group_replication_member_expel_timeout that the tablet applies before its MySQL starts Group Replication: how long the group waits, after its fixed 5 second failure detection, before it expels an unreachable member and elects a new primary if needed. With 0 a failed primary is replaced about 7 seconds after it fails; MySQL 8.4 takes about 22 seconds for any value from 1 to 10 seconds. The tablet rejoins an expelled member on its own. A negative value keeps the server's setting.")
+	utils.SetFlagStringVar(fs, &groupReplicationPaxosSingleLeader, "group-replication-paxos-single-leader", groupReplicationPaxosSingleLeader,
+		"group_replication_paxos_single_leader (ON or OFF) that the tablet applies when its MySQL bootstraps a group. With ON the primary is the group's only consensus leader, so a slow or failed secondary does not delay commits. A member that joins an existing group adopts the group's setting, since MySQL refuses members whose setting differs. Empty keeps the server's setting.")
 }
 
 func init() {
@@ -100,6 +106,14 @@ func groupReplicationEnabled() bool {
 func validateGroupReplicationFlags() error {
 	if groupReplicationPort < 0 || groupReplicationPort > 65535 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-port must be between 0 and 65535, got %d", groupReplicationPort)
+	}
+	switch groupReplicationPaxosSingleLeader {
+	case "", "ON", "OFF":
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-paxos-single-leader must be ON, OFF or empty, got %q", groupReplicationPaxosSingleLeader)
+	}
+	if groupReplicationMemberExpelTimeout > time.Hour {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-member-expel-timeout must be at most 1h, got %v", groupReplicationMemberExpelTimeout)
 	}
 	if groupReplicationEnabled() && groupReplicationSyncInterval <= 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-sync-interval must be positive, got %v", groupReplicationSyncInterval)
@@ -197,6 +211,11 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 		unreachableMajorityTimeout = int(groupReplicationUnreachableMajorityTimeout.Round(time.Second) / time.Second)
 	}
 
+	memberExpelTimeout := -1
+	if groupReplicationMemberExpelTimeout >= 0 {
+		memberExpelTimeout = int(groupReplicationMemberExpelTimeout.Round(time.Second) / time.Second)
+	}
+
 	return mysql.GroupReplicationConfig{
 		GroupName:                         policy.GroupName(tablet.Keyspace, tablet.Shard),
 		LocalAddress:                      netutil.JoinHostPort(host, int32(groupReplicationPort)),
@@ -206,7 +225,50 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 		ExitStateAction:                   groupReplicationExitStateAction,
 		UnreachableMajorityTimeoutSeconds: unreachableMajorityTimeout,
 		AutorejoinTries:                   groupReplicationAutorejoinTries,
+		MemberExpelTimeoutSeconds:         memberExpelTimeout,
+		PaxosSingleLeader:                 groupReplicationPaxosSingleLeader,
 	}, nil
+}
+
+// groupPaxosSingleLeader returns the group_replication_paxos_single_leader in effect for the
+// shard's group, as reported by an active member, preferring the shard primary. MySQL refuses a
+// joining member whose setting differs from its group's, so the flag only decides it for a
+// group that is bootstrapped. It returns false if no other tablet reports an active member.
+func (tm *TabletManager) groupPaxosSingleLeader(ctx context.Context) (string, bool) {
+	tablet := tm.Tablet()
+	tablets, err := tm.TopoServer.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+		log.Warn("Cannot read the tablets of the shard to find the group's paxos single leader setting", slog.Any("error", err))
+		return "", false
+	}
+	peers := make([]*topo.TabletInfo, 0, len(tablets))
+	for _, ti := range tablets {
+		if topoproto.TabletAliasEqual(ti.Alias, tablet.Alias) {
+			continue
+		}
+		peers = append(peers, ti)
+	}
+	sort.SliceStable(peers, func(i, j int) bool {
+		return peers[i].Type == topodatapb.TabletType_PRIMARY && peers[j].Type != topodatapb.TabletType_PRIMARY
+	})
+	groupName := policy.GroupName(tablet.Keyspace, tablet.Shard)
+	for _, peer := range peers {
+		peerCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		status, err := tm.tmc.FullStatus(peerCtx, peer.Tablet)
+		cancel()
+		if err != nil {
+			continue
+		}
+		gr := status.GetGroupReplicationStatus()
+		if !mysql.IsGroupMemberActive(gr) || gr.GroupName != groupName {
+			continue
+		}
+		if gr.PaxosSingleLeader {
+			return "ON", true
+		}
+		return "OFF", true
+	}
+	return "", false
 }
 
 // groupReplicationStatus returns the Group Replication state of the tablet's MySQL.
@@ -275,6 +337,11 @@ func (tm *TabletManager) joinGroupLocked(ctx context.Context, status *replicatio
 	cfg, err := tm.groupReplicationConfig(ctx, durability)
 	if err != nil {
 		return err
+	}
+	if !bootstrap {
+		if singleLeader, ok := tm.groupPaxosSingleLeader(ctx); ok {
+			cfg.PaxosSingleLeader = singleLeader
+		}
 	}
 
 	// A member that failed or was expelled keeps Group Replication running in the ERROR state,

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -226,7 +227,51 @@ func TestGroupReplicationConfig(t *testing.T) {
 		ExitStateAction:                   "READ_ONLY",
 		UnreachableMajorityTimeoutSeconds: 12,
 		AutorejoinTries:                   3,
+		MemberExpelTimeoutSeconds:         0,
+		PaxosSingleLeader:                 "ON",
 	}, cfg)
+}
+
+// groupStatusTMClient answers FullStatus with a fixed group replication status.
+type groupStatusTMClient struct {
+	tmclient.TabletManagerClient
+	status *replicationdatapb.GroupReplicationStatus
+}
+
+func (c *groupStatusTMClient) FullStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	return &replicationdatapb.FullStatus{GroupReplicationStatus: c.status}, nil
+}
+
+// TestStartGroupReplicationAdoptsGroupPaxosSingleLeader checks that a joining member takes
+// group_replication_paxos_single_leader from its group, since MySQL refuses a member whose
+// setting differs, while a member that bootstraps a group applies the flag.
+func TestStartGroupReplicationAdoptsGroupPaxosSingleLeader(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
+		Hostname: "tablet2", PortMap: map[string]int32{"gr": 33062},
+	}))
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
+		// The tablet joins its group at startup; let it fail so that the test starts clean.
+		fmd.StartGroupReplicationError = errors.New("no seed reachable")
+	})
+	fmd.StartGroupReplicationError = nil
+	// The group was bootstrapped with a single leader turned off, unlike the flag's default.
+	groupStatus := groupStatus("peer", groupMember("peer", mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary))
+	tm.tmc = &groupStatusTMClient{status: groupStatus}
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel, resetDefaultChannel}
+
+	_, err := tm.StartGroupReplication(ctx, false)
+	require.NoError(t, err)
+	assert.Equal(t, "OFF", fmd.GroupReplicationConfig.PaxosSingleLeader)
+
+	_, err = tm.StopGroupReplication(ctx)
+	require.NoError(t, err)
+	_, err = tm.StartGroupReplication(ctx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "ON", fmd.GroupReplicationConfig.PaxosSingleLeader, "a bootstrapped group takes the flag's setting")
 }
 
 func TestGroupReplicationRPCsRequirePort(t *testing.T) {

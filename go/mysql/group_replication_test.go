@@ -125,7 +125,11 @@ func TestGroupReplicationCommands(t *testing.T) {
 		Consistency:                       "BEFORE_ON_PRIMARY_FAILOVER",
 		UnreachableMajorityTimeoutSeconds: -1,
 		AutorejoinTries:                   -1,
+		MemberExpelTimeoutSeconds:         0,
+		PaxosSingleLeader:                 "ON",
 	})
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_expel_timeout = 0")
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_paxos_single_leader = 'ON'")
 	assert.Contains(t, cmds, "SET PERSIST group_replication_start_on_boot = OFF")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_group_seeds = 'h2:33061,h3:33061'")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_weight = 75")

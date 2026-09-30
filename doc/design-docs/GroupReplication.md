@@ -38,7 +38,7 @@ See the research notes linked from the PR for sources; the points that shape the
 
 - **Durability.** Lossless semi-sync (AFTER_SYNC) returns to the client after *one* eligible replica has written the event to its relay log. GR returns after a *majority* of the group agreed on the order of the transaction and certified it. Neither waits for the transaction to be applied on another server. With one member per cell in three cells, both cost roughly one round trip to the nearest other cell; `cross_cell` semi-sync and a 3-cell group have similar commit latency.
 - **Fencing.** Semi-sync has no membership: a partitioned primary keeps its binlog, and after an ERS its unacknowledged transactions become errant GTIDs; Vitess must fence it (`super_read_only`, tablet type, errant GTID detection). A GR primary that loses its majority cannot commit; its transactions block and are never certified, so it cannot diverge. `group_replication_unreachable_majority_timeout` bounds how long it blocks.
-- **Election.** Semi-sync needs an external agent (VTOrc) to promote. GR elects on its own within about `5s + group_replication_member_expel_timeout`, choosing by lowest version, then highest `group_replication_member_weight`, then lowest `server_uuid`. Vitess maps promotion rules onto member weights so that the group's choice matches Vitess's preferences.
+- **Election.** Semi-sync needs an external agent (VTOrc) to promote. GR elects on its own after a fixed 5s detection period plus the expulsion delay. On MySQL 8.4.11 that delay measured 1s with `group_replication_member_expel_timeout=0`, but 16s for any value from 1 to 10s. It chooses by lowest version, then highest `group_replication_member_weight`, then lowest `server_uuid`. Vitess maps promotion rules onto member weights so that the group's choice matches Vitess's preferences.
 - **Loss of majority.** Semi-sync keeps running as long as one eligible acker remains. GR stops accepting writes; only `group_replication_force_members` (an operator decision, split-brain risk) unblocks it. This is the main availability trade-off.
 - **Behaviour changes users see.** Every table needs a primary key; transactions above `group_replication_transaction_size_limit` (~143MB) are rolled back; one slow secondary throttles the primary through flow control; GTIDs use the group UUID instead of the server UUID.
 
@@ -85,7 +85,11 @@ Nothing new is stored in topo:
 - **Tunables** (vttablet flags, applied with `SET GLOBAL` before each start):
   - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
   - `exit_state_action`, default `READ_ONLY`.
-  - `unreachable_majority_timeout`, default 10s: a primary cut off from its majority errors out instead of blocking forever.
+  - `unreachable_majority_timeout`, default 1s: a primary cut off from its majority errors out instead of blocking forever.
+  - `member_expel_timeout`, default 0: the group replaces a failed primary about 7s after it fails. The tablet rejoins expelled members on its own, so an expulsion caused by a short stall is cheap.
+  - `paxos_single_leader`, default ON: the primary is the group's only consensus leader, so a slow or failed secondary does not delay commits. MySQL applies it when a group is bootstrapped, and refuses a joiner whose setting differs from the group's (verified on 8.4.11). The flag therefore decides bootstraps only; a joining tablet adopts the group's setting, which it reads from an active member's `FullStatus`.
+
+  These three defaults match Uber's RFC (#18648).
   - `autorejoin_tries`.
   - `group_replication_start_on_boot` is persisted OFF. vttablet decides when to join, as it does for async replication (`skip_replica_start`).
 - **Plugin.** It is loaded with `INSTALL PLUGIN` when needed. That survives restarts, needs no mysqld restart, and is not binlogged. Loading it through my.cnf (`plugin-load-add=group_replication.so`) is also supported.
@@ -201,8 +205,8 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
 
 - Three cells, with one voting member per cell (a group of 3) under `group_replication_cross_cell`. Use five members as 2-2-1 to survive two failures.
 - Additional REPLICA tablets and all RDONLY tablets replicate asynchronously from the group primary, for read scaling. *In the prototype, every PRIMARY/REPLICA tablet is a voter* (see "Voter selection" below).
-- `group_replication_paxos_single_leader=ON` for WAN groups. It needs a full group restart to change, so set it at bootstrap.
-- `group_replication_member_expel_timeout` of 0–5s.
+- `group_replication_paxos_single_leader=ON`, the vttablet default. It changes only when the group is bootstrapped again.
+- `group_replication_member_expel_timeout=0`, the vttablet default.
 - Tune flow control so that one slow member does not throttle the primary.
 
 ### Voter selection (follow-up)
@@ -230,7 +234,7 @@ The intended shape is a fixed number of voters per cell, with the other REPLICA 
 |---|---|
 | `MigrateReplicationMode` cross_cell → group_replication_cross_cell | 6s, 0 failed writes |
 | `PlannedReparentShard` (group_replication_set_as_primary) | 0.6s, 0 failed writes |
-| `kill -9` of the primary's mysqld | The group elected in about 21s with default expel settings. The new primary's tablet promoted itself within 5ms, writes resumed, and the old primary rejoined as a secondary. |
+| `kill -9` of the primary's mysqld | New primary in topo 6.6s after the kill (21.6s with MySQL's default `member_expel_timeout` of 5s). The new primary's tablet promoted itself within 5ms of the election, writes resumed, and the old primary rejoined as a secondary. |
 | `MigrateReplicationMode` back to cross_cell | No data loss; vtgate buffered while the primary left its group |
 
 ## Prototype scope
@@ -250,7 +254,7 @@ Known gaps, found while reviewing and testing the prototype:
 - ERS and PRS choose their path from the keyspace policy. A shard that has been converted while the keyspace policy is still async (the policy switches after the last shard) takes the async ERS path.
 - During the migration back, the primary re-enables semi-sync only after its group drops below two ONLINE members. That leaves up to one sync interval with neither group nor semi-sync durability. Enabling semi-sync while the group is still active would close this window; it is harmless when an acker is attached.
 - A tablet that changes to a non-member type (RDONLY, DRAINED) does not leave the group, and a join that would give one cell a majority is not refused (VTOrc only alerts).
-- Failover time is dominated by GR's failure detection (5s suspicion plus `member_expel_timeout`). The tunables should be exposed.
+- Failover time is bounded below by GR's fixed 5s failure detection.
 - The member weight is applied only when a member joins.
 
 Follow-ups:

@@ -54,7 +54,11 @@ const (
 	readGroupReplicationViewID = "SELECT VIEW_ID FROM performance_schema.replication_group_member_stats WHERE MEMBER_ID = @@global.server_uuid"
 	// The received transaction set of the applier channel includes the transactions this
 	// member has received from the group but not applied yet.
-	readGroupReplicationReceived = "SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status " +
+	// The single-leader capability of the group is what joining members must match; the
+	// member's own group_replication_paxos_single_leader only takes effect when a group is
+	// bootstrapped.
+	readGroupReplicationSingleLeader = "SELECT WRITE_CONSENSUS_SINGLE_LEADER_CAPABLE FROM performance_schema.replication_group_communication_information"
+	readGroupReplicationReceived     = "SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status " +
 		"WHERE CHANNEL_NAME = 'group_replication_applier'"
 )
 
@@ -98,6 +102,17 @@ func (c *Conn) GroupReplicationStatus() (*replicationdatapb.GroupReplicationStat
 	}
 	if len(qr.Rows) == 1 {
 		status.ViewId = qr.Rows[0][0].ToString()
+	}
+
+	if IsGroupMemberActive(status) {
+		qr, err = c.ExecuteFetch(readGroupReplicationSingleLeader, 1, false)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "failed to read the group communication information")
+		}
+		if len(qr.Rows) == 1 {
+			singleLeader, _ := qr.Rows[0][0].ToInt64()
+			status.PaxosSingleLeader = singleLeader == 1
+		}
 	}
 
 	qr, err = c.ExecuteFetch(readGroupReplicationReceived, 1, false)
@@ -192,6 +207,14 @@ type GroupReplicationConfig struct {
 	AutorejoinTries int
 	// IPAllowlist is group_replication_ip_allowlist. Empty keeps the server's setting.
 	IPAllowlist string
+	// MemberExpelTimeoutSeconds is group_replication_member_expel_timeout: how long the group
+	// waits, after the fixed 5 second detection period, before it expels an unreachable member.
+	// A negative value keeps the server's setting.
+	MemberExpelTimeoutSeconds int
+	// PaxosSingleLeader is group_replication_paxos_single_leader, ON or OFF. It takes effect
+	// when a group is bootstrapped, and a joining member must match its group's value. Empty
+	// keeps the server's setting.
+	PaxosSingleLeader string
 }
 
 // InstallGroupReplicationPluginCommand returns the statement that installs the Group
@@ -227,6 +250,12 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 	}
 	if cfg.AutorejoinTries >= 0 {
 		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_autorejoin_tries = %d", cfg.AutorejoinTries))
+	}
+	if cfg.MemberExpelTimeoutSeconds >= 0 {
+		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_member_expel_timeout = %d", cfg.MemberExpelTimeoutSeconds))
+	}
+	if cfg.PaxosSingleLeader != "" {
+		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_paxos_single_leader = %s", sqltypes.EncodeStringSQL(cfg.PaxosSingleLeader)))
 	}
 	if cfg.IPAllowlist != "" {
 		cmds = append(cmds, "SET GLOBAL group_replication_ip_allowlist = "+sqltypes.EncodeStringSQL(cfg.IPAllowlist))
