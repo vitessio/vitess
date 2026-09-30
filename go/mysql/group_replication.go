@@ -207,14 +207,6 @@ type GroupReplicationConfig struct {
 	AutorejoinTries int
 	// IPAllowlist is group_replication_ip_allowlist. Empty keeps the server's setting.
 	IPAllowlist string
-	// MemberExpelTimeoutSeconds is group_replication_member_expel_timeout: how long the group
-	// waits, after the fixed 5 second detection period, before it expels an unreachable member.
-	// A negative value keeps the server's setting.
-	MemberExpelTimeoutSeconds int
-	// PaxosSingleLeader is group_replication_paxos_single_leader, ON or OFF. It takes effect
-	// when a group is bootstrapped, and a joining member must match its group's value. Empty
-	// keeps the server's setting.
-	PaxosSingleLeader string
 }
 
 // InstallGroupReplicationPluginCommand returns the statement that installs the Group
@@ -238,6 +230,16 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		// The recovery channel authenticates as the replication user, which uses
 		// caching_sha2_password. Without TLS it needs the source's public key.
 		"SET GLOBAL group_replication_recovery_get_public_key = ON",
+		// Expel an unreachable member as soon as the fixed 5 second detection period ends. On
+		// MySQL 8.4 any timeout from 1 to 10 seconds delays the expulsion, and so the election
+		// of a new primary, by about 16 seconds. vttablet rejoins an expelled member on its own,
+		// so expelling a member that only stalled is cheap.
+		"SET GLOBAL group_replication_member_expel_timeout = 0",
+		// Make the primary the group's only consensus leader, so that a slow or failed
+		// secondary does not delay commits. MySQL applies the setting when a group is
+		// bootstrapped and refuses a member whose setting differs from its group's, so it must
+		// be the same everywhere.
+		"SET GLOBAL group_replication_paxos_single_leader = ON",
 	}
 	if cfg.Consistency != "" {
 		cmds = append(cmds, "SET GLOBAL group_replication_consistency = "+sqltypes.EncodeStringSQL(cfg.Consistency))
@@ -250,12 +252,6 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 	}
 	if cfg.AutorejoinTries >= 0 {
 		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_autorejoin_tries = %d", cfg.AutorejoinTries))
-	}
-	if cfg.MemberExpelTimeoutSeconds >= 0 {
-		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_member_expel_timeout = %d", cfg.MemberExpelTimeoutSeconds))
-	}
-	if cfg.PaxosSingleLeader != "" {
-		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_paxos_single_leader = %s", sqltypes.EncodeStringSQL(cfg.PaxosSingleLeader)))
 	}
 	if cfg.IPAllowlist != "" {
 		cmds = append(cmds, "SET GLOBAL group_replication_ip_allowlist = "+sqltypes.EncodeStringSQL(cfg.IPAllowlist))

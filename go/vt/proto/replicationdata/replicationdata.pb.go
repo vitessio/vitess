@@ -985,9 +985,8 @@ type GroupReplicationStatus struct {
 	// member_weight is the value of group_replication_member_weight.
 	MemberWeight int32 `protobuf:"varint,11,opt,name=member_weight,json=memberWeight,proto3" json:"member_weight,omitempty"`
 	// paxos_single_leader is true when the group runs with a single consensus leader, the
-	// primary (group_replication_paxos_single_leader, as in effect for the group). A member
-	// whose setting differs from its group's cannot join, so joining members adopt this value.
-	// It is only meaningful while the member is active.
+	// primary (group_replication_paxos_single_leader, as in effect for the group). Groups that
+	// Vitess bootstraps always do. It is only meaningful while the member is active.
 	PaxosSingleLeader bool `protobuf:"varint,12,opt,name=paxos_single_leader,json=paxosSingleLeader,proto3" json:"paxos_single_leader,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache

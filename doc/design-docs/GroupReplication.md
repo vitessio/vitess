@@ -86,12 +86,13 @@ Nothing new is stored in topo:
   - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
   - `exit_state_action`, default `READ_ONLY`.
   - `unreachable_majority_timeout`, default 1s: a primary cut off from its majority errors out instead of blocking forever.
-  - `member_expel_timeout`, default 0: the group replaces a failed primary about 7s after it fails. The tablet rejoins expelled members on its own, so an expulsion caused by a short stall is cheap.
-  - `paxos_single_leader`, default ON: the primary is the group's only consensus leader, so a slow or failed secondary does not delay commits. MySQL applies it when a group is bootstrapped, and refuses a joiner whose setting differs from the group's (verified on 8.4.11). The flag therefore decides bootstraps only; a joining tablet adopts the group's setting, which it reads from an active member's `FullStatus`.
-
-  These three defaults match Uber's RFC (#18648).
   - `autorejoin_tries`.
   - `group_replication_start_on_boot` is persisted OFF. vttablet decides when to join, as it does for async replication (`skip_replica_start`).
+- **Fixed settings.** Vitess always applies these two, because its design depends on them. They are not flags.
+  - `member_expel_timeout=0`. The group replaces a failed primary about 7s after it fails. On MySQL 8.4.11, any value from 1 to 10s delays the expulsion, and so the election, by about 16s. The tablet rejoins expelled members on its own, so an expulsion caused by a short stall is cheap.
+  - `paxos_single_leader=ON`. The primary is the group's only consensus leader, so a slow or failed secondary does not delay commits. MySQL applies it when a group is bootstrapped and refuses a joiner whose setting differs from the group's (verified on 8.4.11), so it must be the same on every member. A group that was not bootstrapped by Vitess with this setting cannot be joined; it has to be restarted from scratch first.
+
+  These settings, together with the `unreachable_majority_timeout` default of 1s, match Uber's RFC (#18648).
 - **Plugin.** It is loaded with `INSTALL PLUGIN` when needed. That survives restarts, needs no mysqld restart, and is not binlogged. Loading it through my.cnf (`plugin-load-add=group_replication.so`) is also supported.
 
 ### Tablet (vttablet) behaviour
@@ -205,8 +206,7 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
 
 - Three cells, with one voting member per cell (a group of 3) under `group_replication_cross_cell`. Use five members as 2-2-1 to survive two failures.
 - Additional REPLICA tablets and all RDONLY tablets replicate asynchronously from the group primary, for read scaling. *In the prototype, every PRIMARY/REPLICA tablet is a voter* (see "Voter selection" below).
-- `group_replication_paxos_single_leader=ON`, the vttablet default. It changes only when the group is bootstrapped again.
-- `group_replication_member_expel_timeout=0`, the vttablet default.
+- `group_replication_paxos_single_leader=ON` and `group_replication_member_expel_timeout=0` are always applied (see Fixed settings).
 - Tune flow control so that one slow member does not throttle the primary.
 
 ### Voter selection (follow-up)
