@@ -4083,6 +4083,7 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 
+	savedMysqld := vp.vr.mysqld
 	vp.vr.mysqld = nil
 
 	// The refreshed analysis is cached; a later FIELD reuses it (mysqld nil).
@@ -4090,6 +4091,29 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
+
+	// A FIELD whose fields changed, as after a source DDL under
+	// on-ddl=IGNORE, must not reuse the cached analysis: the unique key
+	// column now streams under a collation other than the target's, so its
+	// values can no longer be hashed as the target compares them and the
+	// table must serialize.
+	vp.vr.mysqld = savedMysqld
+	binCollation := uint32(collations.MySQL8().LookupByName("utf8mb4_bin"))
+	require.NotZero(t, binCollation)
+	require.NotEqual(t, targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR).Charset, binCollation)
+	changedFieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "email", Type: querypb.Type_VARCHAR, Charset: binCollation},
+			},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, changedFieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 }
 
 func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
