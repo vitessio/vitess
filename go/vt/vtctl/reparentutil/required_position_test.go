@@ -48,6 +48,7 @@ const (
 	requiredMissing       = "MySQL56/" + requiredUUID + ":1-30"
 	requiredBehindAlias   = "zone1-0000000101"
 	requiredAdvancedAlias = "zone1-0000000102"
+	requiredLaggingAlias  = "zone1-0000000103"
 )
 
 // gtidSet returns the GTID set of encoded without the flavor prefix, as the
@@ -89,6 +90,7 @@ type requiredPositionFixture struct {
 
 	behind   string
 	advanced replicaPositions
+	lagging  string
 }
 
 // newRequiredPositionFixtureOptions holds the replica positions of a fixture.
@@ -104,6 +106,10 @@ type newRequiredPositionFixtureOptions struct {
 
 	// required is the position ERS must require.
 	required string
+
+	// lagging is the executed and relay log position of an optional third
+	// replica. Empty means no third replica.
+	lagging string
 }
 
 // newRequiredPositionFixture builds two replicas and a mock tablet manager
@@ -119,6 +125,9 @@ func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOpt
 		{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA},
 		{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA},
 	}
+	if opts.lagging != "" {
+		tablets = append(tablets, &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 103}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA})
+	}
 	testutil.AddTablets(ctx, t, ts, nil, tablets...)
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityNone)
 
@@ -133,6 +142,7 @@ func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOpt
 		applied:  map[string]bool{},
 		behind:   opts.behind,
 		advanced: replicaPositions{executed: opts.applied, relay: opts.received},
+		lagging:  opts.lagging,
 	}
 }
 
@@ -175,6 +185,10 @@ func (f *requiredPositionFixture) expectStops() {
 		Return(stopStatus(replicaPositions{executed: f.behind, relay: f.behind}), nil)
 	f.tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(requiredAdvancedAlias), gomock.Any()).
 		Return(stopStatus(f.advanced), nil)
+	if f.lagging != "" {
+		f.tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(requiredLaggingAlias), gomock.Any()).
+			Return(stopStatus(replicaPositions{executed: f.lagging, relay: f.lagging}), nil)
+	}
 }
 
 // expectWaits allows n WaitForPosition calls, each of which succeeds and
@@ -351,17 +365,38 @@ func TestERSRequiredPositionFailsAfterSelection(t *testing.T) {
 func TestERSRequiredPositionKeepsDetectionErrors(t *testing.T) {
 	advanced := "MySQL56/5e11fa47-71ca-11e1-9e33-c80aa9429562:1-3," + requiredUUID + ":1-20"
 	behind := "MySQL56/4e11fa47-71ca-11e1-9e33-c80aa9429562:1-5," + requiredUUID + ":1-10"
-	fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
-		behind: behind, applied: advanced, received: advanced, required: requiredHigh,
-	})
-	fixture.expectStops()
-	fixture.tmc.EXPECT().WaitForPosition(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	fixture.expectJournal(map[string]int32{requiredBehindAlias: 1, requiredAdvancedAlias: 1}, nil)
-	fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
-	require.ErrorContains(t, err, "suspected split-brain")
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	t.Run("detection removes every candidate", func(t *testing.T) {
+		fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
+			behind: behind, applied: advanced, received: advanced, required: requiredHigh,
+		})
+		fixture.expectStops()
+		fixture.tmc.EXPECT().WaitForPosition(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		fixture.expectJournal(map[string]int32{requiredBehindAlias: 1, requiredAdvancedAlias: 1}, nil)
+		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
+		require.ErrorContains(t, err, "suspected split-brain")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	})
+
+	t.Run("detection removes both leaders and keeps a lagging replica", func(t *testing.T) {
+		fixture := newRequiredPositionFixture(t, newRequiredPositionFixtureOptions{
+			behind: behind, applied: advanced, received: advanced, required: requiredHigh,
+			lagging: "MySQL56/" + requiredUUID + ":1-5",
+		})
+		fixture.expectStops()
+		fixture.tmc.EXPECT().WaitForPosition(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		fixture.expectJournal(map[string]int32{requiredBehindAlias: 1, requiredAdvancedAlias: 1, requiredLaggingAlias: 1}, nil)
+		fixture.tmc.EXPECT().StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		// The lagging replica survives and lacks the position. The operator still
+		// needs the split-brain guidance, not the required position error.
+		_, err := fixture.erp.ReparentShard(t.Context(), "ks", "0", fixture.opts)
+		require.ErrorContains(t, err, "suspected split-brain")
+		require.NotContains(t, err.Error(), "required position")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	})
 }
 
 // TestERSRequiredPositionRejectsUnsupportedShards checks that a required
