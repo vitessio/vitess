@@ -103,10 +103,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@99fa7f0daf16db969f54a49139a14471e633e6e8 # HEAD
         
         # install vitess tester
-        git init -q /tmp/vt
-        git -C /tmp/vt fetch -q --depth 1 https://github.com/vitessio/vt c19060cab8ac5a4d64e228778af287455ae7b43f
-        git -C /tmp/vt checkout -q FETCH_HEAD
-        (cd /tmp/vt && go install ./go/vt)
+        go install github.com/vitessio/vt/go/vt@cee2a0631a4959284967bd5ea1268c1dcf4aa457
 
     - name: Setup launchable dependencies
       if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
