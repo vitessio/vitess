@@ -211,11 +211,10 @@ func TestValidateGroupReplicationFlags(t *testing.T) {
 
 func TestGroupReplicationConfig(t *testing.T) {
 	enableGroupReplication(t)
-	oldTimeout, oldTries := groupReplicationUnreachableMajorityTimeout, groupReplicationAutorejoinTries
+	oldTries := groupReplicationAutorejoinTries
 	t.Cleanup(func() {
-		groupReplicationUnreachableMajorityTimeout, groupReplicationAutorejoinTries = oldTimeout, oldTries
+		groupReplicationAutorejoinTries = oldTries
 	})
-	groupReplicationUnreachableMajorityTimeout = 12 * time.Second
 	groupReplicationAutorejoinTries = 3
 
 	ctx := t.Context()
@@ -245,14 +244,13 @@ func TestGroupReplicationConfig(t *testing.T) {
 	cfg, err := tm.groupReplicationConfig(ctx, durability)
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupReplicationConfig{
-		GroupName:                         policy.GroupName("ks", "0"),
-		LocalAddress:                      "localhost:33061",
-		Seeds:                             []string{"mysql2:33062", "tablet3:33063"},
-		MemberWeight:                      50,
-		Consistency:                       "BEFORE_ON_PRIMARY_FAILOVER",
-		ExitStateAction:                   "READ_ONLY",
-		UnreachableMajorityTimeoutSeconds: 12,
-		AutorejoinTries:                   3,
+		GroupName:       policy.GroupName("ks", "0"),
+		LocalAddress:    "localhost:33061",
+		Seeds:           []string{"mysql2:33062", "tablet3:33063"},
+		MemberWeight:    50,
+		Consistency:     "BEFORE_ON_PRIMARY_FAILOVER",
+		ExitStateAction: "READ_ONLY",
+		AutorejoinTries: 3,
 	}, cfg)
 }
 

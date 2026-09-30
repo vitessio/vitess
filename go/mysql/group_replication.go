@@ -194,9 +194,6 @@ type GroupReplicationConfig struct {
 	Consistency string
 	// ExitStateAction is group_replication_exit_state_action. Empty keeps the server's setting.
 	ExitStateAction string
-	// UnreachableMajorityTimeoutSeconds is group_replication_unreachable_majority_timeout.
-	// A negative value keeps the server's setting.
-	UnreachableMajorityTimeoutSeconds int
 	// AutorejoinTries is group_replication_autorejoin_tries. A negative value keeps the
 	// server's setting.
 	AutorejoinTries int
@@ -235,15 +232,18 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		// bootstrapped and refuses a member whose setting differs from its group's, so it must
 		// be the same everywhere.
 		"SET GLOBAL group_replication_paxos_single_leader = ON",
+		// A member that lost contact with the majority of its group rolls back its pending
+		// transactions and leaves the group 1 second after the others became unreachable, so
+		// that a partitioned primary stops accepting writes. With 0 it would stay writable,
+		// its commits blocked forever; a longer timeout only delays that fencing, since the
+		// majority elects a new primary as soon as the member is expelled.
+		"SET GLOBAL group_replication_unreachable_majority_timeout = 1",
 	}
 	if cfg.Consistency != "" {
 		cmds = append(cmds, "SET GLOBAL group_replication_consistency = "+sqltypes.EncodeStringSQL(cfg.Consistency))
 	}
 	if cfg.ExitStateAction != "" {
 		cmds = append(cmds, "SET GLOBAL group_replication_exit_state_action = "+sqltypes.EncodeStringSQL(cfg.ExitStateAction))
-	}
-	if cfg.UnreachableMajorityTimeoutSeconds >= 0 {
-		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_unreachable_majority_timeout = %d", cfg.UnreachableMajorityTimeoutSeconds))
 	}
 	if cfg.AutorejoinTries >= 0 {
 		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_autorejoin_tries = %d", cfg.AutorejoinTries))

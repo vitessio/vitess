@@ -193,7 +193,7 @@ Each change has a unit test that fails without it.
 
 Evaluated and not changed:
 
-- `--group-replication-unreachable-majority-timeout=0`, which keeps a member without majority in its group instead of leaving (so a group of two that loses its majority resumes on its own when the partition heals). One S7d run: 47.4s without acknowledged writes, longest gap 19.5s, and 3 violations: an isolated primary stays writable (`super_read_only=OFF`, commits block) while its tablet cannot reach the topology to demote itself. The default stays 1s.
+- `--group-replication-unreachable-majority-timeout=0` (a flag at the time; the setting is now fixed at 1s), which keeps a member without majority in its group instead of leaving (so a group of two that loses its majority resumes on its own when the partition heals). One S7d run: 47.4s without acknowledged writes, longest gap 19.5s, and 3 violations: an isolated primary stays writable (`super_read_only=OFF`, commits block) while its tablet cannot reach the topology to demote itself. The default stays 1s.
 - Aborting a join in progress when its group loses its majority: MySQL refuses the `STOP` while such a `START` runs (errno 3663).
 - Bootstrapping while a voter is unreachable or its status unreadable: that voter may hold acknowledged writes the others lack.
 

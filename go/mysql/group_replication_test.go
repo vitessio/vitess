@@ -118,13 +118,12 @@ func TestGroupReplicationCommands(t *testing.T) {
 	require.Error(t, err)
 
 	cmds := ConfigureGroupReplicationCommands(GroupReplicationConfig{
-		GroupName:                         "g",
-		LocalAddress:                      "h1:33061",
-		Seeds:                             []string{"h2:33061", "h3:33061"},
-		MemberWeight:                      75,
-		Consistency:                       "BEFORE_ON_PRIMARY_FAILOVER",
-		UnreachableMajorityTimeoutSeconds: -1,
-		AutorejoinTries:                   -1,
+		GroupName:       "g",
+		LocalAddress:    "h1:33061",
+		Seeds:           []string{"h2:33061", "h3:33061"},
+		MemberWeight:    75,
+		Consistency:     "BEFORE_ON_PRIMARY_FAILOVER",
+		AutorejoinTries: -1,
 	})
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_expel_timeout = 0")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_paxos_single_leader = ON")
@@ -132,5 +131,5 @@ func TestGroupReplicationCommands(t *testing.T) {
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_group_seeds = 'h2:33061,h3:33061'")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_weight = 75")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_consistency = 'BEFORE_ON_PRIMARY_FAILOVER'")
-	assert.NotContains(t, cmds, "SET GLOBAL group_replication_unreachable_majority_timeout = -1")
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_unreachable_majority_timeout = 1")
 }

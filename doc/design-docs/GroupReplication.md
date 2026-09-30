@@ -118,14 +118,15 @@ Apart from the voters and the group incarnation, nothing new is stored in topo:
 - **Tunables** (vttablet flags, applied with `SET GLOBAL` before each start):
   - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
   - `exit_state_action`, default `READ_ONLY`.
-  - `unreachable_majority_timeout`, default 1s: a primary cut off from its majority errors out instead of blocking forever.
   - `autorejoin_tries`, default 0. The tablet rejoins an expelled member itself, once the shard's legitimate group is active on another tablet. MySQL's own auto-rejoin does not check that: in the chaos tests an attempt blocked the member for about a minute (its status queries hung, and every change was refused) and could end in a group of its own.
   - `group_replication_start_on_boot` is persisted OFF. vttablet decides when to join, as it does for async replication (`skip_replica_start`).
-- **Fixed settings.** Vitess always applies these two, because its design depends on them. They are not flags.
+- **Fixed settings.** Vitess always applies these three, because its design depends on them. They are not flags.
   - `member_expel_timeout=0`. The group replaces a failed primary about 7s after it fails. On MySQL 8.4.11, any value from 1 to 10s delays the expulsion, and so the election, by about 16s. The tablet rejoins expelled members on its own, so an expulsion caused by a short stall is cheap.
   - `paxos_single_leader=ON`. The primary is the group's only consensus leader, so a slow or failed secondary does not delay commits. MySQL applies it when a group is bootstrapped and refuses a joiner whose setting differs from the group's (verified on 8.4.11), so it must be the same on every member. A group that was not bootstrapped by Vitess with this setting cannot be joined; it has to be restarted from scratch first.
 
-  These settings, together with the `unreachable_majority_timeout` default of 1s, match Uber's RFC (#18648).
+  - `unreachable_majority_timeout=1`. A member cut off from the majority of its group rolls back its pending transactions and leaves the group 1s after the others became unreachable, so a partitioned primary stops accepting writes without Vitess acting. With 0 it stays writable with its commits blocked forever (the chaos harness recorded split-brain violations); a longer timeout only delays fencing, since the majority elects a new primary as soon as the member is expelled. It does not replace the Vitess checks: a stale member alone in a new incarnation, or a primary whose group shrank through clean leaves, never sees an unreachable majority, and MySQL stays readable after it leaves (see Legitimate group and Group shrink).
+
+  These three settings match Uber's RFC (#18648).
 - **Plugin.** It is loaded with `INSTALL PLUGIN` when needed. That survives restarts, needs no mysqld restart, and is not binlogged. Loading it through my.cnf (`plugin-load-add=group_replication.so`) is also supported.
 
 ### Tablet (vttablet) behaviour
