@@ -119,7 +119,7 @@ func TestDownPrimary(t *testing.T) {
 			}
 		}
 
-		require.Fail(c, "primary is missing from database_instance")
+		assert.Fail(c, "primary is missing from database_instance")
 	}, 30*time.Second, time.Second)
 
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
