@@ -1070,6 +1070,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 
 // TestReconcileStaleTopoPrimary verifies that reconcileStaleTopoPrimary updates the topology record of a
 // stale primary tablet to REPLICA, regardless of whether the best-effort demotion RPC to the tablet succeeds.
+// After a successful demotion, it must point the tablet at the primary without a heartbeat interval, which
+// would make the tablet change the replication source even when it already replicates from the primary.
 func TestReconcileStaleTopoPrimary(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1202,10 +1204,15 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					}).
 					Times(1)
 
+				demotionSucceeds := tt.demotePrimaryDelay == 0 && tt.demotePrimaryErr == nil
+				setReplicationSourceCalls := 0
+				if demotionSucceeds {
+					setReplicationSourceCalls = 1
+				}
 				mockTMC.EXPECT().
-					SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					SetReplicationSource(gomock.Any(), gomock.Any(), primaryTablet.Alias, int64(0), "", true, false, float64(0)).
 					Return(nil).
-					AnyTimes()
+					Times(setReplicationSourceCalls)
 
 				tmc = mockTMC
 
@@ -1214,6 +1221,7 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					AnalyzedInstanceAlias: staleTablet.Alias,
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard,
+					ReplicaNetTimeout:     8,
 				}
 
 				logger := log.NewPrefixedLogger("test-stale-primary")
@@ -1543,4 +1551,75 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, activeRecoveries, "recovery row must be resolved after restartDirectReplicas returns")
 	})
+}
+
+// TestFixReplicaHeartbeatInterval checks that fixReplica passes a heartbeat interval to
+// SetReplicationSource only for ReplicaMisconfigured. A heartbeat interval makes the tablet change
+// the replication source even when it already replicates from the primary, which deletes the relay
+// log when the applier is stopped.
+func TestFixReplicaHeartbeatInterval(t *testing.T) {
+	testCases := []struct {
+		analysis          inst.AnalysisCode
+		heartbeatInterval float64
+	}{
+		{analysis: inst.ReplicationStopped, heartbeatInterval: 0},
+		{analysis: inst.ReplicaIsWritable, heartbeatInterval: 0},
+		{analysis: inst.ReplicaSemiSyncMustBeSet, heartbeatInterval: 0},
+		{analysis: inst.ReplicaSemiSyncMustNotBeSet, heartbeatInterval: 0},
+		{analysis: inst.NotConnectedToPrimary, heartbeatInterval: 0},
+		{analysis: inst.ConnectedToWrongPrimary, heartbeatInterval: 0},
+		{analysis: inst.ReplicaMisconfigured, heartbeatInterval: 4},
+	}
+	for _, tc := range testCases {
+		t.Run(string(tc.analysis), func(t *testing.T) {
+			db.ClearVTOrcDatabase()
+			t.Cleanup(db.ClearVTOrcDatabase)
+
+			keyspace, shard := "ks", "0"
+			primaryTablet := &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				MysqlHostname: "primary",
+				MysqlPort:     3306,
+				Keyspace:      keyspace,
+				Shard:         shard,
+				Type:          topodatapb.TabletType_PRIMARY,
+			}
+			replicaTablet := &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				MysqlHostname: "replica",
+				MysqlPort:     3306,
+				Keyspace:      keyspace,
+				Shard:         shard,
+				Type:          topodatapb.TabletType_REPLICA,
+			}
+			require.NoError(t, inst.SaveTablet(primaryTablet))
+			require.NoError(t, inst.SaveTablet(replicaTablet))
+			keyspaceInfo := &topo.KeyspaceInfo{
+				Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+			}
+			keyspaceInfo.SetKeyspaceName(keyspace)
+			require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+			mockController := gomock.NewController(t)
+			mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+			mockTMC.EXPECT().SetReadOnly(gomock.Any(), gomock.Any()).Return(nil)
+			mockTMC.EXPECT().
+				SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), int64(0), "", true, false, tc.heartbeatInterval).
+				Return(nil)
+			oldTMC := tmc
+			tmc = mockTMC
+			t.Cleanup(func() { tmc = oldTMC })
+
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              tc.analysis,
+				AnalyzedInstanceAlias: replicaTablet.Alias,
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard,
+				ReplicaNetTimeout:     8,
+			}
+			attempted, _, err := fixReplica(t.Context(), analysisEntry, log.NewPrefixedLogger("test-fix-replica"))
+			require.NoError(t, err)
+			assert.True(t, attempted)
+		})
+	}
 }
