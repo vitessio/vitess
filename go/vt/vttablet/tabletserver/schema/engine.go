@@ -397,7 +397,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Info("ReloadAtEx: found cached schema at " + replication.EncodePosition(pos))
+		log.Debug("ReloadAtEx: found cached schema at " + replication.EncodePosition(pos))
 		return nil
 	}
 	if err := se.reload(ctx, includeStats); err != nil {
@@ -588,7 +588,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			continue
 		}
 
-		log.V(2).Info("Reading schema for table: " + tableName)
+		log.Debug("Reading schema for table: " + tableName)
 		tableType := row[1].String()
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv(),
 			se.env.Config().TrackSchemaVersions)

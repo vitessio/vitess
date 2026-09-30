@@ -19,9 +19,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 )
 
 var configFile string
@@ -31,13 +29,9 @@ func Main() *cobra.Command {
 		Use:  "rulesctl",
 		Args: cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			_flag.TrickGlog()
-
 			if err := log.Init(cmd.Flags()); err != nil {
 				return err
 			}
-
-			logutil.PurgeLogs()
 
 			return nil
 		},

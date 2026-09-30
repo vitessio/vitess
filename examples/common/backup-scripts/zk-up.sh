@@ -31,7 +31,7 @@ for zkid in $zkids; do
     echo "    $VTDATAROOT/$zkdir"
     action='start'
   fi
-  zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp $action \
+  zkctl --zk.myid $zkid --zk.cfg $zkcfg $action \
     > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
   pids[$zkid]=$!
 done

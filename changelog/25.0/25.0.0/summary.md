@@ -10,6 +10,7 @@
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
+        - [`glog` logging removed](#glog-removed)
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
@@ -112,6 +113,29 @@ Note that in this scenario the old primary's MySQL keeps running, and because it
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="glog-removed"/>`glog` logging removed</a>
+
+Vitess now uses structured logging exclusively. The deprecated `glog` backend, its command-line flags,
+`log.Flush`, and `log.V` have been removed.
+
+The following flags have been removed from all binaries.
+
+- `--log-structured`
+- `--log-rotate-max-size`
+- `--logtostderr`, `--alsologtostderr`, `--stderrthreshold`
+- `--log_dir`, `--log_link`, `--log_backtrace_at`
+- `--v`, `--vmodule`, `--logbuflevel`
+- `--keep-logs`, `--keep-logs-by-mtime`, `--purge-logs-interval`
+
+In `vtctldclient`, `-v` is now the shorthand for `--version`, matching the other binaries.
+
+**Migration**: remove the flags above from startup arguments. Use `--log-level=debug` for debug logs and
+`--log-format=text` for human-readable output. Logs are written to stderr, so redirect or collect stderr to keep them
+in files.
+
+**Impact**: binaries will fail to start when passed a removed logging flag. Go callers must replace `log.V` with
+`log.Debug` and remove calls to `log.Flush`.
 
 #### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
 
