@@ -154,22 +154,53 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 	}
 }
 
-// TestRequiredPositionAbortCountsAsAttempted checks that an ERS recovery that
-// aborts because it cannot read the requirement reports the recovery as
-// attempted, so the caller counts it as a failed recovery.
+// TestRequiredPositionAbortCountsAsAttempted checks that an ERS recovery aborts
+// when it cannot read its requirement, and that it reports the recovery as
+// attempted. The caller counts an attempted recovery with an error as failed.
 func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
-	db.ClearVTOrcDatabase()
-	t.Cleanup(db.ClearVTOrcDatabase)
-	config.SetEmergencyReparentRequirePrimaryPosition(true)
-	t.Cleanup(func() { config.SetEmergencyReparentRequirePrimaryPosition(false) })
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) *topodatapb.TabletAlias
+		wantErr string
+	}{
+		{
+			name: "durability read error",
+			setup: func(t *testing.T) *topodatapb.TabletAlias {
+				// Save the primary without a keyspace row. The durability read then fails.
+				alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{Alias: alias, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "0"}))
+				return alias
+			},
+			wantErr: "cannot read the durability policy of keyspace ks",
+		},
+		{
+			name: "stored set read error",
+			setup: func(t *testing.T) *topodatapb.TabletAlias {
+				tablet := saveRequiredPositionFixture(t, policy.DurabilitySemiSync, topodatapb.TabletType_PRIMARY, requiredGtid)
 
-	// Save the primary without a keyspace row. The durability read then fails.
-	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
-	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{Alias: alias, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "0"}))
-	entry := &inst.DetectionAnalysis{AnalyzedInstanceAlias: alias, Analysis: inst.DeadPrimary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
-	require.NoError(t, InsertRecoveryDetection(entry))
+				// Drop the table of stored sets. The stored set read then fails.
+				_, err := db.ExecVTOrc("DROP TABLE database_instance")
+				require.NoError(t, err)
+				return tablet.Alias
+			},
+			wantErr: "cannot read the stored GTID set of zone1-0000000100",
+		},
+	}
 
-	recoveryAttempted, _, err := runEmergencyReparentOp(t.Context(), entry, "RecoverDeadPrimary", false, log.NewPrefixedLogger("test"))
-	require.ErrorContains(t, err, "cannot read the durability policy of keyspace ks")
-	assert.True(t, recoveryAttempted)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db.ClearVTOrcDatabase()
+			t.Cleanup(db.ClearVTOrcDatabase)
+			config.SetEmergencyReparentRequirePrimaryPosition(true)
+			t.Cleanup(func() { config.SetEmergencyReparentRequirePrimaryPosition(false) })
+
+			alias := tt.setup(t)
+			entry := &inst.DetectionAnalysis{AnalyzedInstanceAlias: alias, Analysis: inst.DeadPrimary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
+			require.NoError(t, InsertRecoveryDetection(entry))
+
+			recoveryAttempted, _, err := runEmergencyReparentOp(t.Context(), entry, "RecoverDeadPrimary", false, log.NewPrefixedLogger("test"))
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.True(t, recoveryAttempted)
+		})
+	}
 }
