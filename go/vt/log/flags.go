@@ -38,7 +38,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 }
 
 // Init configures the logger.
-func Init(_ *pflag.FlagSet) error {
+func Init() error {
 	var level slog.Level
 	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
 		return fmt.Errorf("log: invalid --log-level %q: %w", logLevel, err)

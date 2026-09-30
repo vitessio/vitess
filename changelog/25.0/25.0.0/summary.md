@@ -144,7 +144,8 @@ The `/debug/flushlogs` HTTP endpoint is removed from all binaries.
 in files.
 
 **Impact**: binaries will fail to start when passed a removed logging flag. Go callers must replace `log.V` with
-`log.Debug` and remove calls to `log.Flush`, `logutil.Flush`, and `logutil.OnFlush`.
+`log.Debug`, replace `log.Init(fs)` with `log.Init()`, and remove calls to `log.Flush`, `logutil.Flush`, and
+`logutil.OnFlush`.
 
 #### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
 

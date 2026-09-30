@@ -304,7 +304,7 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
-	if err := log.Init(fs); err != nil {
+	if err := log.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
@@ -361,7 +361,7 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 // viper infrastructure. It matches the signature of cobra's (Pre|Post)RunE-type
 // functions.
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
-	if err := log.Init(cmd.Flags()); err != nil {
+	if err := log.Init(); err != nil {
 		return err
 	}
 
@@ -408,7 +408,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
-	if err := log.Init(fs); err != nil {
+	if err := log.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}

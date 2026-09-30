@@ -58,7 +58,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := log.Init(cmd.Flags()); err != nil {
+			if err := log.Init(); err != nil {
 				return err
 			}
 
