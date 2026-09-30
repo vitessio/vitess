@@ -52,7 +52,6 @@ func main() {
 	acl.RegisterFlags(command.Root.PersistentFlags())
 
 	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
-	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
 		log.Error(fmt.Sprint(err))
 		exit.Return(1)
