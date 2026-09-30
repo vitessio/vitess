@@ -416,8 +416,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	// have left trailing resultsets or the final OK packet unread, or already be
 	// killed, and the client is gone, so we close rather than attempt a
 	// drain-and-recover — while a clean stream runs the post-stream safety
-	// checks. A stored procedure call on a pooled connection always costs the
-	// connection, whatever the outcome (see execCallProc).
+	// checks. A stored procedure call always costs the connection it ran on,
+	// whatever the outcome: a pooled one right away (see execCallProc), a
+	// transaction's one when the transaction releases it (see execProc).
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
 		if err != nil {
@@ -431,7 +432,17 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 
 		conn := txConn.UnderlyingDBConn()
+<<<<<<< HEAD
 		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+||||||| parent of e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
+		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
+=======
+		if qre.plan.PlanID == p.PlanCallProc {
+			// see execProc: the procedure body may leave session state behind
+			txConn.MarkSessionDiverged()
+		}
+		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
+>>>>>>> e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
@@ -1142,6 +1153,12 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	if err != nil {
 		return nil, err
 	}
+	// A procedure body can leave session state behind that the statement's plan
+	// cannot see (a SET SESSION, SET NAMES, a temporary table), whatever the
+	// CALL's outcome. A pooled connection is discarded after a CALL for that
+	// reason (see execCallProc); a transaction's connection is discarded when the
+	// transaction releases it, rather than recycled for the next one.
+	conn.MarkSessionDiverged()
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, rewriteOUTParamError(err)

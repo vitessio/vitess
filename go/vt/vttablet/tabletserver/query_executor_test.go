@@ -2542,7 +2542,9 @@ func TestExecCallProcDiscardsConn(t *testing.T) {
 
 // TestExecProcKeepsReservedConn pins the scope of the post-CALL discard: on a
 // reserved or transaction connection the session belongs to the caller, and
-// closing it would destroy that caller's own SETs and temporary tables.
+// closing it would destroy that caller's own SETs and temporary tables. A
+// transaction's connection is discarded only once the transaction releases it
+// (see TestCallInTransactionDiscardsConnOnRelease).
 func TestExecProcKeepsReservedConn(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -2561,3 +2563,456 @@ func TestExecProcKeepsReservedConn(t *testing.T) {
 	assert.False(t, conn.IsClosed(), "a CALL on a reserved connection must keep the caller's own session")
 	assert.Zero(t, tsv.qe.conns.Metrics.DiscardedByCallerCount())
 }
+<<<<<<< HEAD
+||||||| parent of e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
+
+// TestExecProcClosesConnOnError verifies that a failed CALL on a reserved
+// connection closes that connection. A stored procedure can start a
+// transaction that Vitess does not track; since a reserved-connection timeout
+// now kills only the query (KILL QUERY) and leaves the connection open, the
+// connection must be closed on any CALL error so no untracked transaction (and
+// its locks) survives to be kept alive by the heartbeat.
+func TestExecProcClosesConnOnError(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	// Reserve a connection. The real caller unlocks it after the CALL returns;
+	// once closed, Unlock releases it from the pool so shutdown can drain.
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+	require.False(t, conn.IsClosed())
+
+	// A CALL that the server rejects.
+	query := "call test_proc()"
+	db.AddRejectedQuery(query, errors.New("procedure failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, query, conn.ReservedID())
+	require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+	_, err = qre.execProc(conn)
+	require.Error(t, err)
+	require.True(t, conn.IsClosed(), "a reserved connection must be closed when its CALL fails, so no untracked transaction survives")
+
+	// Inside a Vitess-tracked transaction the hazard does not exist: a query
+	// timeout still kills the whole connection (ExecOnce insideTxn), so no
+	// untracked in-proc transaction can outlive it. A benign CALL error — a
+	// SIGNAL from the procedure, a typo'd name — must therefore leave the
+	// transaction usable, exactly as it does on a direct MySQL connection.
+	txConn, _, _, err := tsv.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	require.NoError(t, err)
+	defer txConn.Release(tx.TxRollback)
+	require.True(t, txConn.IsInTransaction())
+
+	qreTx := newTestQueryExecutor(ctx, tsv, query, txConn.ReservedID())
+	_, err = qreTx.execProc(txConn)
+	require.Error(t, err)
+	require.False(t, txConn.IsClosed(), "a benign CALL error inside a tracked transaction must not destroy the transaction")
+}
+
+// TestExecStreamSQLTimeoutConnFateByPlan verifies the streaming stateful path
+// shares the buffered path's timeout decision: a timed-out safe statement
+// (reads) keeps the reserved connection (KILL QUERY only), while a statement
+// whose interruption could leave unrecorded session state (SET) loses the
+// whole connection — otherwise a half-applied streaming SET would survive on a
+// connection the temp-table keepalive then pins alive.
+func TestExecStreamSQLTimeoutConnFateByPlan(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(t.Context(), noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+	db.AddQueryPattern(`kill \d+`, &sqltypes.Result{})
+	db.AddQuery(resetLastIDQuery, &sqltypes.Result{})
+
+	cases := []struct {
+		sql               string
+		keepsConn         bool
+		fetchLastInsertID bool
+	}{
+		{"select 1", true, false},
+		{"set @@sql_mode = ''", false, false},
+		// A safe plan carrying fetch_last_insert_id still loses the
+		// connection: MySQL retains a last_insert_id(expr) assignment after
+		// KILL QUERY, and the error return skips the post-exec fetch that
+		// keeps the vtgate session in sync with the connection.
+		{"select last_insert_id(42)", false, true},
+		// DML normally keeps the connection (rows roll back atomically), but
+		// a mutating lock function reached through DML can be granted or
+		// released just as the kill lands — lock state the session never
+		// recorded — so the connection is lost.
+		{"update test_table set name = 1 where get_lock('foo', 10) = 1", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.sql, func(t *testing.T) {
+			db.AddQuery(tc.sql, &sqltypes.Result{})
+			db.SetBeforeFunc(tc.sql, func() {
+				// Outlasts the context deadline so the statement is interrupted.
+				time.Sleep(1 * time.Second)
+			})
+
+			conn, err := tsv.te.txPool.scp.NewConn(t.Context(), &querypb.ExecuteOptions{}, nil)
+			require.NoError(t, err)
+			defer conn.Unlock()
+
+			execCtx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+			qre := newTestQueryExecutorStreaming(execCtx, tsv, tc.sql, conn.ReservedID())
+			if tc.fetchLastInsertID {
+				if qre.options == nil {
+					qre.options = &querypb.ExecuteOptions{}
+				}
+				qre.options.FetchLastInsertId = true
+			}
+			err = qre.execStreamSQL(conn.UnderlyingDBConn(), true /* isStateful */, false /* insideTxn */, tc.sql, func(*sqltypes.Result) error { return nil })
+			require.Error(t, err)
+			if tc.keepsConn {
+				require.False(t, conn.IsClosed(), "a timed-out safe streaming statement must keep its connection")
+			} else {
+				require.True(t, conn.IsClosed(), "a timed-out unsafe streaming statement must lose its connection")
+			}
+		})
+	}
+}
+
+// TestPlanKeepsConnOnTimeout pins which plan types may keep their stateful
+// connection when a timeout kills only the query: reads and DML (whose kill
+// leaves no session state behind), and nothing else — a killed SET or lock
+// function can leave session state the session never recorded, which the
+// temp-table keepalive would then preserve indefinitely.
+func TestPlanKeepsConnOnTimeout(t *testing.T) {
+	safe := []planbuilder.PlanType{
+		planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanSelectNoLimit, planbuilder.PlanShow,
+		planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage,
+		planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit,
+	}
+	for _, id := range safe {
+		assert.True(t, planKeepsConnOnTimeout(id), "%s must keep its connection on a query timeout", id)
+	}
+	unsafe := []planbuilder.PlanType{
+		planbuilder.PlanSet, planbuilder.PlanSelectLockFunc, planbuilder.PlanCallProc,
+		planbuilder.PlanDDL, planbuilder.PlanLoad, planbuilder.PlanFlush,
+		planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin, planbuilder.PlanUnlockTables,
+	}
+	for _, id := range unsafe {
+		assert.False(t, planKeepsConnOnTimeout(id), "%s must lose its connection on a query timeout", id)
+	}
+
+	// fetch_last_insert_id overrides a safe plan: the killed statement can
+	// retain a last_insert_id on the connection that the skipped post-exec
+	// fetch never reported to the vtgate session.
+	qre := &QueryExecutor{
+		plan:    &TabletPlan{Plan: &planbuilder.Plan{PlanID: planbuilder.PlanSelect}},
+		options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	}
+	assert.False(t, qre.keepsConnOnTimeout(), "fetch_last_insert_id must lose the connection on a query timeout")
+	qre.options.FetchLastInsertId = false
+	assert.True(t, qre.keepsConnOnTimeout(), "a safe plan without fetch_last_insert_id keeps the connection")
+
+	// A mutating lock function in DML overrides the plan type the same way:
+	// the rows roll back under KILL QUERY but the lock grant or release can
+	// race the kill, leaving lock state the session never recorded.
+	qre = &QueryExecutor{
+		plan:    &TabletPlan{Plan: &planbuilder.Plan{PlanID: planbuilder.PlanUpdate, KillsConnOnTimeout: true}},
+		options: &querypb.ExecuteOptions{},
+	}
+	assert.False(t, qre.keepsConnOnTimeout(), "DML with a mutating lock function must lose the connection on a query timeout")
+}
+=======
+
+// TestCallInTransactionDiscardsConnOnRelease pins the fix for
+// vitessio/vitess#21063, the transaction twin of #21046: a procedure called
+// inside a transaction can leave session state behind on the transaction's
+// connection (a SET SESSION, a temporary table), which the pool cannot see, so
+// the connection is discarded when the transaction releases it rather than
+// recycled for the next transaction, however the transaction ends and whatever
+// the CALL's outcome. The CALL itself keeps the transaction's connection.
+func TestCallInTransactionDiscardsConnOnRelease(t *testing.T) {
+	query := "call test_proc()"
+	// fakesqldb does not track transactions, so the CALL's reply reports the
+	// open transaction MySQL would report; without it, the tablet would take
+	// the CALL for one that ended the transaction
+	inTx := &sqltypes.Result{StatusFlags: sqltypes.ServerStatusInTrans}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	setup := func(t *testing.T) (*fakesqldb.DB, *TabletServer) {
+		db := setUpQueryExecutorTest(t)
+		t.Cleanup(db.Close)
+		tsv := newTestTabletServer(t.Context(), noFlags, db)
+		t.Cleanup(tsv.StopService)
+		return db, tsv
+	}
+	discarded := func(tsv *TabletServer) int64 {
+		return tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount()
+	}
+	// The MySQL connection the CALL ran on must be gone from the server's side
+	// once the transaction ended, so no later transaction can be handed it.
+	callConnDiscarded := func(t *testing.T, db *fakesqldb.DB, tsv *TabletServer) {
+		t.Helper()
+		callConns := db.QueryConnIDs(query)
+		require.Len(t, callConns, 1, "the CALL must have run once")
+		require.EqualValues(t, 1, discarded(tsv), "the discarded connection must be counted")
+		require.Eventually(t, func() bool { return !db.IsConnectionOpen(callConns[0]) },
+			30*time.Second, 10*time.Millisecond, "the connection a CALL ran on must be closed, not returned to the pool")
+	}
+
+	t.Run("CALL, then commit", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		db.AddQuery(query, inTx)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		_, err = tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.NoError(t, err)
+		assert.Zero(t, discarded(tsv), "the CALL keeps the transaction's connection")
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("streamed CALL, then rollback", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		db.AddQuery(query, inTx)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		err = tsv.StreamExecute(ctx, nil, target, query, nil, state.TransactionID, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+
+		_, err = tsv.Rollback(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("CALL returning rows, then commit", func(t *testing.T) {
+		ctx := t.Context()
+		db, tsv := setup(t)
+		rows := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+		rows.StatusFlags = sqltypes.ServerStatusInTrans
+		db.AddQuery(query, rows)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		qr, err := tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("streamed CALL whose client went away", func(t *testing.T) {
+		// a failed stream closes the transaction's connection right away; that
+		// loss is not the discard policy's, so the release does not count it
+		ctx := t.Context()
+		db, tsv := setup(t)
+		rows := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+		rows.StatusFlags = sqltypes.ServerStatusInTrans
+		db.AddQuery(query, rows)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		err = tsv.StreamExecute(ctx, nil, target, query, nil, state.TransactionID, 0, nil, func(*sqltypes.Result) error { return errors.New("client went away") })
+		require.ErrorContains(t, err, "client went away")
+
+		// the stream released the closed connection as it returned, which ended
+		// the transaction, so there is nothing left to roll back
+		_, err = tsv.Rollback(ctx, target, state.TransactionID)
+		require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err), "the failed stream must have ended the transaction")
+		assert.Zero(t, discarded(tsv), "a connection already closed must not be counted as discarded")
+	})
+	t.Run("failed CALL, then commit", func(t *testing.T) {
+		// a procedure that dirtied the session and then failed leaves the same
+		// residue as one that succeeded, and the transaction stays usable
+		ctx := t.Context()
+		db, tsv := setup(t)
+		db.AddRejectedQuery(query, errors.New("procedure failed"))
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		_, err = tsv.Execute(ctx, nil, target, query, nil, state.TransactionID, 0, nil)
+		require.ErrorContains(t, err, "procedure failed")
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		callConnDiscarded(t, db, tsv)
+	})
+	t.Run("a CALL that never reached MySQL keeps the connection", func(t *testing.T) {
+		// a missing bind variable fails the CALL before any statement is sent,
+		// so the session is untouched and the connection goes back to the pool
+		ctx := t.Context()
+		db, tsv := setup(t)
+		state, err := tsv.Begin(ctx, nil, target, nil)
+		require.NoError(t, err)
+
+		_, err = tsv.Execute(ctx, nil, target, "call test_proc(:missing)", nil, state.TransactionID, 0, nil)
+		require.ErrorContains(t, err, "missing bind var")
+		assert.NotContains(t, db.QueryLog(), "call test_proc(", "nothing must have reached MySQL")
+
+		_, err = tsv.Commit(ctx, target, state.TransactionID)
+		require.NoError(t, err)
+		assert.Zero(t, discarded(tsv), "a CALL that was never sent must not cost the connection")
+	})
+}
+
+// TestExecProcClosesConnOnError verifies that a failed CALL on a reserved
+// connection closes that connection. A stored procedure can start a
+// transaction that Vitess does not track; since a reserved-connection timeout
+// now kills only the query (KILL QUERY) and leaves the connection open, the
+// connection must be closed on any CALL error so no untracked transaction (and
+// its locks) survives to be kept alive by the heartbeat.
+func TestExecProcClosesConnOnError(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	// Reserve a connection. The real caller unlocks it after the CALL returns;
+	// once closed, Unlock releases it from the pool so shutdown can drain.
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+	require.False(t, conn.IsClosed())
+
+	// A CALL that the server rejects.
+	query := "call test_proc()"
+	db.AddRejectedQuery(query, errors.New("procedure failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, query, conn.ReservedID())
+	require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+	_, err = qre.execProc(conn)
+	require.Error(t, err)
+	require.True(t, conn.IsClosed(), "a reserved connection must be closed when its CALL fails, so no untracked transaction survives")
+
+	// Inside a Vitess-tracked transaction the hazard does not exist: a query
+	// timeout still kills the whole connection (ExecOnce insideTxn), so no
+	// untracked in-proc transaction can outlive it. A benign CALL error — a
+	// SIGNAL from the procedure, a typo'd name — must therefore leave the
+	// transaction usable, exactly as it does on a direct MySQL connection.
+	txConn, _, _, err := tsv.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	require.NoError(t, err)
+	defer txConn.Release(tx.TxRollback)
+	require.True(t, txConn.IsInTransaction())
+
+	qreTx := newTestQueryExecutor(ctx, tsv, query, txConn.ReservedID())
+	_, err = qreTx.execProc(txConn)
+	require.Error(t, err)
+	require.False(t, txConn.IsClosed(), "a benign CALL error inside a tracked transaction must not destroy the transaction")
+}
+
+// TestExecStreamSQLTimeoutConnFateByPlan verifies the streaming stateful path
+// shares the buffered path's timeout decision: a timed-out safe statement
+// (reads) keeps the reserved connection (KILL QUERY only), while a statement
+// whose interruption could leave unrecorded session state (SET) loses the
+// whole connection — otherwise a half-applied streaming SET would survive on a
+// connection the temp-table keepalive then pins alive.
+func TestExecStreamSQLTimeoutConnFateByPlan(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(t.Context(), noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+	db.AddQueryPattern(`kill \d+`, &sqltypes.Result{})
+	db.AddQuery(resetLastIDQuery, &sqltypes.Result{})
+
+	cases := []struct {
+		sql               string
+		keepsConn         bool
+		fetchLastInsertID bool
+	}{
+		{"select 1", true, false},
+		{"set @@sql_mode = ''", false, false},
+		// A safe plan carrying fetch_last_insert_id still loses the
+		// connection: MySQL retains a last_insert_id(expr) assignment after
+		// KILL QUERY, and the error return skips the post-exec fetch that
+		// keeps the vtgate session in sync with the connection.
+		{"select last_insert_id(42)", false, true},
+		// DML normally keeps the connection (rows roll back atomically), but
+		// a mutating lock function reached through DML can be granted or
+		// released just as the kill lands — lock state the session never
+		// recorded — so the connection is lost.
+		{"update test_table set name = 1 where get_lock('foo', 10) = 1", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.sql, func(t *testing.T) {
+			db.AddQuery(tc.sql, &sqltypes.Result{})
+			db.SetBeforeFunc(tc.sql, func() {
+				// Outlasts the context deadline so the statement is interrupted.
+				time.Sleep(1 * time.Second)
+			})
+
+			conn, err := tsv.te.txPool.scp.NewConn(t.Context(), &querypb.ExecuteOptions{}, nil)
+			require.NoError(t, err)
+			defer conn.Unlock()
+
+			execCtx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+			qre := newTestQueryExecutorStreaming(execCtx, tsv, tc.sql, conn.ReservedID())
+			if tc.fetchLastInsertID {
+				if qre.options == nil {
+					qre.options = &querypb.ExecuteOptions{}
+				}
+				qre.options.FetchLastInsertId = true
+			}
+			err = qre.execStreamSQL(conn.UnderlyingDBConn(), true /* isStateful */, false /* insideTxn */, tc.sql, func(*sqltypes.Result) error { return nil })
+			require.Error(t, err)
+			if tc.keepsConn {
+				require.False(t, conn.IsClosed(), "a timed-out safe streaming statement must keep its connection")
+			} else {
+				require.True(t, conn.IsClosed(), "a timed-out unsafe streaming statement must lose its connection")
+			}
+		})
+	}
+}
+
+// TestPlanKeepsConnOnTimeout pins which plan types may keep their stateful
+// connection when a timeout kills only the query: reads and DML (whose kill
+// leaves no session state behind), and nothing else — a killed SET or lock
+// function can leave session state the session never recorded, which the
+// temp-table keepalive would then preserve indefinitely.
+func TestPlanKeepsConnOnTimeout(t *testing.T) {
+	safe := []planbuilder.PlanType{
+		planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanSelectNoLimit, planbuilder.PlanShow,
+		planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage,
+		planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit,
+	}
+	for _, id := range safe {
+		assert.True(t, planKeepsConnOnTimeout(id), "%s must keep its connection on a query timeout", id)
+	}
+	unsafe := []planbuilder.PlanType{
+		planbuilder.PlanSet, planbuilder.PlanSelectLockFunc, planbuilder.PlanCallProc,
+		planbuilder.PlanDDL, planbuilder.PlanLoad, planbuilder.PlanFlush,
+		planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin, planbuilder.PlanUnlockTables,
+	}
+	for _, id := range unsafe {
+		assert.False(t, planKeepsConnOnTimeout(id), "%s must lose its connection on a query timeout", id)
+	}
+
+	// fetch_last_insert_id overrides a safe plan: the killed statement can
+	// retain a last_insert_id on the connection that the skipped post-exec
+	// fetch never reported to the vtgate session.
+	qre := &QueryExecutor{
+		plan:    &TabletPlan{Plan: &planbuilder.Plan{PlanID: planbuilder.PlanSelect}},
+		options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	}
+	assert.False(t, qre.keepsConnOnTimeout(), "fetch_last_insert_id must lose the connection on a query timeout")
+	qre.options.FetchLastInsertId = false
+	assert.True(t, qre.keepsConnOnTimeout(), "a safe plan without fetch_last_insert_id keeps the connection")
+
+	// A mutating lock function in DML overrides the plan type the same way:
+	// the rows roll back under KILL QUERY but the lock grant or release can
+	// race the kill, leaving lock state the session never recorded.
+	qre = &QueryExecutor{
+		plan:    &TabletPlan{Plan: &planbuilder.Plan{PlanID: planbuilder.PlanUpdate, KillsConnOnTimeout: true}},
+		options: &querypb.ExecuteOptions{},
+	}
+	assert.False(t, qre.keepsConnOnTimeout(), "DML with a mutating lock function must lose the connection on a query timeout")
+}
+>>>>>>> e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))

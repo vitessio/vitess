@@ -49,7 +49,59 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
+<<<<<<< HEAD
 	expiryTime     time.Time
+||||||| parent of e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
+	lastUsed       time.Time
+
+	// holdsTempTables and keepAliveManaged select the timer the connection
+	// killer enforces (see effectiveTimeout). Like tainted, they are written
+	// while holding the connection and read by the pool's filters under its
+	// lock, so they need no locking of their own.
+	//
+	// holdsTempTables is set when a temporary-table DDL executes on the
+	// connection. keepAliveManaged is set when a vtgate keepalive touch
+	// refreshes the connection. Both are sticky by design.
+	holdsTempTables  bool
+	keepAliveManaged bool
+
+	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
+	// captured when its first temporary-table DDL runs and re-captured after
+	// a SET wait_timeout on the connection. mysqld fixed the session value
+	// when the connection's thread started, so it — not the current global —
+	// is the deadline mysqld actually enforces on this connection. Zero until
+	// captured (fall back to the pool's global mirror). Written under the
+	// same exclusive-execution discipline as the marks above.
+	sessionWaitTimeout time.Duration
+=======
+	lastUsed       time.Time
+
+	// holdsTempTables and keepAliveManaged select the timer the connection
+	// killer enforces (see effectiveTimeout). Like tainted, they are written
+	// while holding the connection and read by the pool's filters under its
+	// lock, so they need no locking of their own.
+	//
+	// holdsTempTables is set when a temporary-table DDL executes on the
+	// connection. keepAliveManaged is set when a vtgate keepalive touch
+	// refreshes the connection. Both are sticky by design.
+	holdsTempTables  bool
+	keepAliveManaged bool
+
+	// sessionDiverged is set once the connection's MySQL session may carry state
+	// that nothing the pool knows about describes, such as the session variables
+	// or temporary tables of a stored procedure called on it, and stays set: the
+	// connection must not return to the pool (see MarkSessionDiverged).
+	sessionDiverged bool
+
+	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
+	// captured when its first temporary-table DDL runs and re-captured after
+	// a SET wait_timeout on the connection. mysqld fixed the session value
+	// when the connection's thread started, so it — not the current global —
+	// is the deadline mysqld actually enforces on this connection. Zero until
+	// captured (fall back to the pool's global mirror). Written under the
+	// same exclusive-execution discipline as the marks above.
+	sessionWaitTimeout time.Duration
+>>>>>>> e5e0091d44 (VTTablet: discard a transaction's connection after a CALL ran on it (#21256))
 }
 
 // Properties contains meta information about the connection
@@ -177,9 +229,25 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	if sc.pool != nil {
 		sc.pool.unregister(sc.ConnID, reason)
 	}
+	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
+		// The MySQL session carries state the pool cannot see or undo, and the
+		// pool would hand the connection to the next request as if it were
+		// fresh: discard it instead, and the pool opens a replacement and counts
+		// the loss. A tainted connection never returns to the pool, and one
+		// already closed, by a timeout or a failed stream, was lost for another
+		// reason and is not counted as discarded.
+		sc.dbConn.Discard()
+	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn(reason)
+}
+
+// MarkSessionDiverged records that the connection's MySQL session may carry
+// state the pool cannot see, so that the connection is discarded rather than
+// recycled when it is released.
+func (sc *StatefulConnection) MarkSessionDiverged() {
+	sc.sessionDiverged = true
 }
 
 // Renew the existing connection with new connection id.
