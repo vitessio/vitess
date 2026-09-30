@@ -65,8 +65,10 @@ func runScenario(t *testing.T, name string, opts Options, body func(s *Scenario)
 	s := &Scenario{Chaos: c, R: &Report{Name: name}}
 	s.OldPrimary = c.topoPrimary()
 	c.Log.Add("scenario", "start; primary="+s.OldPrimary.Tablet.Alias)
+	s.check.OldPrimaryUUID = s.OldPrimary.serverUUID()
 	s.O = c.StartObserver()
 	s.W = c.StartWorkload(4, 40*time.Millisecond)
+	s.W.StartReader(c.CI.VtgateProcess.MySQLServerPort, 100*time.Millisecond)
 	s.Sleep(5*time.Second, "baseline load")
 
 	body(s)

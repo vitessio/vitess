@@ -67,11 +67,24 @@ type Sample struct {
 	GTID          string
 	TypeOK        bool
 	Type          string // tablet type as reported by the vttablet itself
+	GR            GRState
 }
 
 // WritablePrimary is true when both mysqld accepts writes and the vttablet believes it is PRIMARY.
 func (s Sample) WritablePrimary() bool {
+	if s.GR.OK && !s.GRCanCommit() {
+		// A Group Replication member that is not the primary of a view with a majority
+		// cannot commit, even with read_only=OFF (e.g. a minority primary until
+		// group_replication_unreachable_majority_timeout makes it leave).
+		return false
+	}
 	return s.MySQLOK && !s.ReadOnly && s.TypeOK && s.Type == "PRIMARY"
+}
+
+// GRCanCommit reports whether the member's own view lets it commit: it is the ONLINE primary
+// and a majority of the members in its view are ONLINE.
+func (s Sample) GRCanCommit() bool {
+	return s.GR.State == "ONLINE" && s.GR.Role == "PRIMARY" && 2*s.GR.Online > s.GR.Members
 }
 
 // TopoSample records the shard primary in the global topo.
@@ -134,6 +147,9 @@ func (o *Observer) sampleNode(ctx context.Context, i int) {
 			err := n.db.QueryRowContext(qctx, "select @@global.read_only, @@global.super_read_only, @@global.gtid_executed").Scan(&ro, &sro, &s.GTID)
 			if err == nil {
 				s.MySQLOK, s.ReadOnly, s.SuperReadOnly = true, ro == 1, sro == 1
+				if o.c.gr {
+					s.GR = n.grStateCtx(qctx)
+				}
 			}
 		})
 		s.Type, s.TypeOK = o.tabletType(n)
@@ -162,7 +178,36 @@ func describeSample(s Sample) string {
 	if s.TypeOK {
 		typ = "vttablet=" + s.Type
 	}
+	if s.GR.OK {
+		my += " " + s.GR.String()
+	}
 	return typ + " " + my
+}
+
+// FirstAfter returns the first sample of node i taken after `after` for which pred holds.
+func (o *Observer) FirstAfter(i int, after time.Time, pred func(Sample) bool) (Sample, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, s := range o.samples[i] {
+		if s.T.After(after) && pred(s) {
+			return s, true
+		}
+	}
+	return Sample{}, false
+}
+
+// LastBefore returns the last sample of node i taken in (after, before) for which pred holds.
+func (o *Observer) LastBefore(i int, after, before time.Time, pred func(Sample) bool) (Sample, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var res Sample
+	ok := false
+	for _, s := range o.samples[i] {
+		if s.T.After(after) && s.T.Before(before) && pred(s) {
+			res, ok = s, true
+		}
+	}
+	return res, ok
 }
 
 func (o *Observer) tabletType(n *Node) (string, bool) {

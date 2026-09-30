@@ -25,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,7 +63,10 @@ type Node struct {
 	Group     string // tablet group (mysqld + vttablet)
 	OrcGroup  string
 	EtcdGroup string
-	db        *sql.DB // unix socket connection used by the observer/invariants
+	// GRPort is the group communication port of the tablet's MySQL (--group-replication-port),
+	// in Group Replication mode.
+	GRPort int
+	db     *sql.DB // unix socket connection used by the observer/invariants
 }
 
 // Socket returns the path of the tablet's mysqld unix socket.
@@ -99,6 +103,12 @@ type Chaos struct {
 	vtgateDB *sql.DB
 
 	stoppedMu sync.Mutex
+
+	uuidMu sync.Mutex
+	uuids  map[string]*Node
+
+	// gr is set once the shard runs Group Replication (GRMode, after the migration).
+	gr bool
 }
 
 // NewChaos builds the reference deployment:
@@ -190,6 +200,8 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 
 	// Tablets.
 	ci.VtTabletExtraArgs = append([]string{"--lock-tables-timeout", "5s"}, opts.TabletExtraArgs...)
+	// Extra vttablet flags for a whole run, e.g. "--group-replication-autorejoin-tries 0".
+	ci.VtTabletExtraArgs = append(ci.VtTabletExtraArgs, strings.Fields(os.Getenv("CHAOS_TABLET_EXTRA_ARGS"))...)
 	if os.Getenv("CHAOS_VTTABLET_HEARTBEAT") == "1" {
 		// Vitess replication heartbeats, as most production deployments run them.
 		ci.VtTabletExtraArgs = append(ci.VtTabletExtraArgs, "--heartbeat-enable", "--heartbeat-interval", "1s")
@@ -207,6 +219,14 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 		n.Tablet.MysqlctlProcess.Binary = path.Join(dir, "mysqlctl")
 		n.Tablet.VttabletProcess.Binary = path.Join(dir, "vttablet")
 		nf.SetPorts(n.Group, n.Tablet.MySQLPort, n.Tablet.GrpcPort, n.Tablet.HTTPPort)
+		if GRMode() {
+			// Every tablet gets a group communication port; it belongs to the tablet's
+			// network group, so partitions cut the group's traffic too.
+			n.GRPort = ci.GetAndReservePort()
+			n.Tablet.VttabletProcess.ExtraArgs = append(n.Tablet.VttabletProcess.ExtraArgs,
+				"--group-replication-port", strconv.Itoa(n.GRPort))
+			nf.SetPorts(n.Group, n.GRPort)
+		}
 	}
 	var procs []*exec.Cmd
 	for _, n := range c.Nodes {
@@ -271,8 +291,52 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 	}, 60*time.Second, time.Second)
 
 	c.WaitHealthy(90 * time.Second)
+	if GRMode() {
+		c.migrateToGroupReplication(primary)
+		c.WaitHealthy(90 * time.Second)
+	}
 	c.Log.Add("setup", "cluster ready; primary="+primary.Tablet.Alias)
 	return c
+}
+
+// GRMode reports whether the scenarios run with MySQL Group Replication:
+// CHAOS_DURABILITY=group_replication_cross_cell (or group_replication). The cluster is set up
+// with cross_cell semi-sync as usual and then converted online with MigrateReplicationMode.
+func GRMode() bool {
+	return strings.HasPrefix(os.Getenv("CHAOS_DURABILITY"), "group_replication")
+}
+
+// migrateToGroupReplication converts the running semi-sync shard to Group Replication and
+// waits until the group has formed: every tablet is an ONLINE voter and the primary is the
+// group's primary.
+func (c *Chaos) migrateToGroupReplication(primary *Node) {
+	durability := os.Getenv("CHAOS_DURABILITY")
+	start := time.Now()
+	out, err := c.CI.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode", "--durability-policy", durability, keyspaceName)
+	require.NoError(c.t, err, out)
+	c.Log.Add("setup", fmt.Sprintf("MigrateReplicationMode --durability-policy %s took %.1fs", durability, time.Since(start).Seconds()))
+	require.Eventually(c.t, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		si, err := c.Ts.GetShard(ctx, keyspaceName, shardName)
+		if err != nil || len(si.GroupReplicationVoters) != len(c.Nodes) {
+			return false
+		}
+		ks, err := c.Ts.GetKeyspace(ctx, keyspaceName)
+		if err != nil || ks.DurabilityPolicy != durability {
+			return false
+		}
+		puuid := primary.serverUUID()
+		for _, n := range c.Nodes {
+			gs := n.grState()
+			if gs.State != "ONLINE" || gs.PrimaryUUID != puuid || gs.Online != len(c.Nodes) {
+				return false
+			}
+		}
+		return true
+	}, 90*time.Second, 500*time.Millisecond, "group replication did not form")
+	c.Log.Add("setup", fmt.Sprintf("group formed after %.1fs", time.Since(start).Seconds()))
+	c.gr = true
 }
 
 // wrappers creates, for the given cgroup leaf, shell wrappers that move themselves into the

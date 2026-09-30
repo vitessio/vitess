@@ -33,6 +33,10 @@ import (
 func (n *Node) query(q string, args ...any) ([]map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	return n.queryCtx(ctx, q, args...)
+}
+
+func (n *Node) queryCtx(ctx context.Context, q string, args ...any) ([]map[string]string, error) {
 	rows, err := n.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -179,6 +183,10 @@ func (c *Chaos) convergenceProblems() (*Node, []string) {
 		if sro, err := n.scalar("select @@global.super_read_only"); err != nil || sro != "1" {
 			probs = append(probs, fmt.Sprintf("%s super_read_only=%s err=%v", n.Tablet.Alias, sro, err))
 		}
+		if c.gr {
+			// Group members replicate through the group's channels, not the default one.
+			continue
+		}
 		rs, err := n.replicaStatus()
 		if err != nil || rs == nil {
 			probs = append(probs, fmt.Sprintf("%s: no replica status (%v)", n.Tablet.Alias, err))
@@ -188,6 +196,9 @@ func (c *Chaos) convergenceProblems() (*Node, []string) {
 			probs = append(probs, fmt.Sprintf("%s: replicating from port %s io=%s sql=%s io_err=%q sql_err=%q", n.Tablet.Alias,
 				rs["Source_Port"], rs["Replica_IO_Running"], rs["Replica_SQL_Running"], rs["Last_IO_Error"], rs["Last_SQL_Error"]))
 		}
+	}
+	if c.gr {
+		probs = append(probs, c.grConvergenceProblems(p)...)
 	}
 	return p, probs
 }
@@ -217,6 +228,9 @@ func (c *Chaos) WaitHealthy(timeout time.Duration) {
 	p, probs, _ := c.WaitConverged(timeout)
 	if len(probs) > 0 {
 		c.t.Fatalf("cluster not healthy: %v", probs)
+	}
+	if c.gr {
+		return
 	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -276,6 +290,60 @@ type CheckOptions struct {
 	OldPrimary      *Node
 	// ExpectNoFailover makes a primary change a violation.
 	ExpectNoFailover bool
+	// OldPrimaryUUID is the old primary's server_uuid, read before the fault.
+	OldPrimaryUUID string
+}
+
+// reportOldPrimaryServing reports how long the old primary kept acting as the primary after
+// the fault: its vttablet reporting PRIMARY, its mysqld writable, and vtgate routing primary
+// reads to it.
+func (c *Chaos) reportOldPrimaryServing(r *Report, w *Workload, o *Observer, opts CheckOptions) {
+	old := opts.OldPrimary
+	isPrimary := func(s Sample) bool { return s.TypeOK && s.Type == "PRIMARY" }
+	writable := func(s Sample) bool { return s.MySQLOK && !s.ReadOnly }
+	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return !isPrimary(s) }); ok {
+		r.timing("old primary %s vttablet stopped reporting PRIMARY at +%.2fs (%s)", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds(), describeSample(s))
+	} else {
+		r.timing("old primary %s vttablet reported PRIMARY for the whole scenario", old.Tablet.Alias)
+	}
+	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return !writable(s) }); ok {
+		r.timing("old primary %s mysqld stopped being writable (read_only or down) at +%.2fs", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds())
+	}
+	if opts.OldPrimaryUUID == "" {
+		return
+	}
+	var lastOld time.Time
+	oldReads, failed, total := 0, 0, 0
+	changeAt, changed := time.Time{}, false
+	if _, at, ok := o.FirstTopoChange(old.Tablet.Alias, opts.Fault); ok {
+		changeAt, changed = at, true
+	}
+	backAt, back := time.Time{}, false
+	if changed {
+		backAt, back = o.FirstTopoPrimary(old.Tablet.Alias, changeAt)
+	}
+	for _, rd := range w.Reads() {
+		if !rd.Start.After(opts.Fault) || (back && !rd.Start.Before(backAt)) {
+			continue
+		}
+		total++
+		if rd.Err != "" {
+			failed++
+			continue
+		}
+		if rd.UUID == opts.OldPrimaryUUID {
+			lastOld = rd.End
+			if changed && rd.Start.After(changeAt) {
+				oldReads++
+			}
+		}
+	}
+	if !lastOld.IsZero() {
+		r.timing("vtgate primary reads answered by the old primary until +%.2fs after the fault", lastOld.Sub(opts.Fault).Seconds())
+	} else {
+		r.timing("vtgate primary reads: none answered by the old primary after the fault")
+	}
+	r.outcome("vtgate primary reads after fault: %d, failed %d, answered by old primary after the topo primary changed: %d", total, failed, oldReads)
 }
 
 // CheckInvariants stops nothing; the caller must have stopped the workload and healed faults.
@@ -298,6 +366,10 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 			} else {
 				r.timing("topo shard primary never changed from %s", opts.OldPrimary.Tablet.Alias)
 			}
+			c.reportOldPrimaryServing(r, w, o, opts)
+		}
+		if !st.FirstFailAfter.IsZero() {
+			r.timing("first failed write started at +%.2fs", st.FirstFailAfter.Sub(opts.Fault).Seconds())
 		}
 	}
 
@@ -476,6 +548,10 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 	}
 	r.note("rows on primary by committing server: %v", srcCount)
 
+	if c.gr {
+		c.grCheckInvariants(r, p)
+		return
+	}
 	// Semi-sync configuration for cross_cell (every tablet is in a different cell, so both
 	// replicas must be semi-sync ackers and the primary must require an ack).
 	pv := p.variables("rpl_semi_sync_%enabled")

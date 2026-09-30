@@ -44,6 +44,7 @@ type Workload struct {
 	next    atomic.Int64
 	mu      sync.Mutex
 	recs    []WriteRecord
+	reads   []ReadRecord
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	log     *EventLog
@@ -108,6 +109,56 @@ func (w *Workload) Stop() {
 	w.cancel()
 	w.wg.Wait()
 	w.db.Close()
+}
+
+// ReadRecord is one primary read through vtgate, and the server that answered it.
+type ReadRecord struct {
+	Start, End time.Time
+	UUID       string
+	Err        string
+}
+
+// StartReader reads @@global.server_uuid through vtgate (from the PRIMARY, vtgate's default)
+// every interval, to measure which mysqld vtgate routes primary traffic to.
+func (w *Workload) StartReader(port int, interval time.Duration) {
+	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s?timeout=1s&readTimeout=2s&writeTimeout=2s&interpolateParams=true", port, keyspaceName))
+	if err != nil {
+		return
+	}
+	db.SetMaxOpenConns(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	prev := w.cancel
+	w.cancel = func() { cancel(); prev() }
+	w.wg.Go(func() {
+		defer db.Close()
+		tick := time.NewTicker(interval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+			rec := ReadRecord{Start: time.Now()}
+			qctx, qcancel := context.WithTimeout(context.Background(), 2*time.Second)
+			err := db.QueryRowContext(qctx, fmt.Sprintf("select @@global.server_uuid from %s limit 1", tableName)).Scan(&rec.UUID)
+			qcancel()
+			rec.End = time.Now()
+			if err != nil {
+				rec.Err = err.Error()
+			}
+			w.mu.Lock()
+			w.reads = append(w.reads, rec)
+			w.mu.Unlock()
+		}
+	})
+}
+
+// Reads returns the primary reads.
+func (w *Workload) Reads() []ReadRecord {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]ReadRecord(nil), w.reads...)
 }
 
 func (w *Workload) Records() []WriteRecord {
