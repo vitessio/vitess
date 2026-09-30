@@ -1187,7 +1187,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported vevent type: %v", event.Type)
+		// Skip event types this version does not know, as earlier versions
+		// did, so that a target keeps replicating from a newer source that
+		// sends a new type. The parallel applier's scheduler fails closed on
+		// them instead.
+		log.Warn("Skipping unsupported vevent type",
+			slog.String("workflow", vp.vr.WorkflowName),
+			slog.String("type", event.Type.String()),
+		)
 	}
 
 	return nil

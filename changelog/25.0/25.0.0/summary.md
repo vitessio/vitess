@@ -23,7 +23,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
-        - [Unknown VStream event types are now hard errors in the applier](#vreplication-unknown-event-error)
+        - [Unknown `on-ddl` actions are now errors in the applier](#vreplication-unknown-event-error)
         - [Workflow config overrides sent to source tablets are now allowlisted](#vreplication-source-overrides-allowlist)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
@@ -235,9 +235,9 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
-#### <a id="vreplication-unknown-event-error"/>Unknown VStream event types are now hard errors in the applier</a>
+#### <a id="vreplication-unknown-event-error"/>Unknown `on-ddl` actions are now errors in the applier</a>
 
-The VReplication applier previously ignored VStream event types it did not recognize. It now fails the workflow with an error for unknown event types (and unknown `on-ddl` actions), failing closed instead of silently skipping events. All event types produced by supported Vitess versions are handled; this only affects streams from sources emitting event types unknown to the target's version.
+The VReplication applier previously did nothing for a DDL when the workflow's `on-ddl` action was one it did not recognize. It now fails the workflow with an error instead. The applier still skips VStream event types it does not recognize, so that a target keeps replicating from a source on a newer version, except for the experimental parallel applier, which fails the workflow on them.
 
 #### <a id="vreplication-source-overrides-allowlist"/>Workflow config overrides sent to source tablets are now allowlisted</a>
 

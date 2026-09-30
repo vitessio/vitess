@@ -4898,6 +4898,11 @@ func TestScheduleItems_UnknownVEventTypeFailsFast(t *testing.T) {
 	}})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported vevent type")
+
+	// The serial applier keeps skipping unknown event types, so a target
+	// keeps replicating from a newer source that sends a type it does not
+	// know, as in earlier versions.
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType(12345)}, false))
 }
 
 func TestScheduleItems_InsertStatementEventDoesNotFailFast(t *testing.T) {
