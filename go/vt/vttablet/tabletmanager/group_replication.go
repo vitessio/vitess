@@ -528,6 +528,25 @@ func (tm *TabletManager) waitForGroupMemberOnline(ctx context.Context) (*replica
 	}
 }
 
+// waitUntilNotGroupPrimary waits until the tablet's MySQL is no longer the primary of its group,
+// and returns its status then. It fails with FAILED_PRECONDITION when ctx ends first.
+func (tm *TabletManager) waitUntilNotGroupPrimary(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	for {
+		status, err := tm.groupReplicationStatus(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !mysql.IsGroupPrimary(status) {
+			return status, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL is still the primary of replication group %s: %v", status.GroupName, ctx.Err())
+		case <-time.After(groupReplicationPollInterval):
+		}
+	}
+}
+
 // waitForGroupPrimaryWritable waits until the tablet's MySQL is the primary of its group and
 // Group Replication has lifted super_read_only.
 func (tm *TabletManager) waitForGroupPrimaryWritable(ctx context.Context) error {

@@ -617,6 +617,35 @@ func TestSetReplicationSourceRefusedOnGroupPrimary(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 }
 
+// TestSetReplicationSourceWaitsForGroupPrimarySwitch checks that a reparent's SetReplicationSource
+// on the old primary succeeds although its member is still the group primary when the request
+// arrives: PlannedReparentShard repoints the tablets while the primary-elect's PromoteReplica
+// switches the group's primary, which the old primary's member applies a moment later.
+func TestSetReplicationSourceWaitsForGroupPrimarySwitch(t *testing.T) {
+	enableGroupReplication(t)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)))
+	parent := &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
+
+	switched := make(chan struct{})
+	go func() {
+		defer close(switched)
+		time.Sleep(50 * time.Millisecond)
+		fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
+			groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary),
+			groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)))
+	}()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	require.NoError(t, tm.SetReplicationSource(ctx, parent, time.Now().UnixNano(), "", false, false, 0))
+	<-switched
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+}
+
 func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
 	enableGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)

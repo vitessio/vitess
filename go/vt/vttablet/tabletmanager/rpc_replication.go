@@ -1027,13 +1027,23 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// example from a VTOrc or reparent acting on an old view). Changing the type would take
 	// the shard's only writable primary out of service until the group replication sync loop
 	// promotes it again.
+	//
+	// A reparent that records a reparent journal entry (timeCreatedNS) is the exception: a
+	// PlannedReparentShard repoints the other tablets while the primary-elect's PromoteReplica
+	// switches the group's primary, so the old primary's member can still be the group primary
+	// for a moment. Wait until the group moved the primary away from it.
 	groupStatus, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		return err
 	}
 	if mysql.IsGroupPrimary(groupStatus) {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"cannot replicate from %v: MySQL is the primary of replication group %s", topoproto.TabletAliasString(parentAlias), groupStatus.GroupName)
+		if timeCreatedNS == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"cannot replicate from %v: MySQL is the primary of replication group %s", topoproto.TabletAliasString(parentAlias), groupStatus.GroupName)
+		}
+		if groupStatus, err = tm.waitUntilNotGroupPrimary(ctx); err != nil {
+			return vterrors.Wrapf(err, "cannot replicate from %v", topoproto.TabletAliasString(parentAlias))
+		}
 	}
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
