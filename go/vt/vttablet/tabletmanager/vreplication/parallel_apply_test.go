@@ -1086,7 +1086,9 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 	vp.vr.workflowConfig.ExperimentalFlags = 0
 	vp.canAcceptStmtEvents = true
 
-	workerApplyErr := errors.New("worker apply failed")
+	// A terminal error: its code has to survive the parallel applier so the
+	// controller does not retry it.
+	workerApplyErr := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "worker apply failed")
 	mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
 	mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
@@ -1115,6 +1117,8 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 
 	err := vp.applyEventsParallel(ctx, relay)
 	require.ErrorContains(t, err, workerApplyErr.Error())
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.True(t, isUnrecoverableError(err))
 }
 
 type blockingBatchDBClient struct {

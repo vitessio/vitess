@@ -1035,15 +1035,8 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		}
 		realErrs = append(realErrs, err)
 	}
-drainApplyErrs:
-	for {
-		select {
-		case err := <-applyErr:
-			classifyErr(err)
-		default:
-			break drainApplyErrs
-		}
-	}
+	// Drain the worker errors first: a worker's failure is the root cause of
+	// the errors its teardown then raises in the commitLoop.
 drainWorkerErrs:
 	for {
 		select {
@@ -1053,8 +1046,23 @@ drainWorkerErrs:
 			break drainWorkerErrs
 		}
 	}
-	if len(realErrs) > 0 {
-		return errors.Join(realErrs...)
+drainApplyErrs:
+	for {
+		select {
+		case err := <-applyErr:
+			classifyErr(err)
+		default:
+			break drainApplyErrs
+		}
+	}
+	switch len(realErrs) {
+	case 0:
+	case 1:
+		return realErrs[0]
+	default:
+		// Keep the first error's code: the controller decides from it
+		// whether the error is terminal, and errors.Join hides it.
+		return vterrors.Errorf(vterrors.Code(realErrs[0]), "%v", errors.Join(realErrs...))
 	}
 	// Convert io.EOF (stop position reached) and context.Canceled (shutdown)
 	// to nil. fetchAndApply's caller treats nil from applyEventsParallel
