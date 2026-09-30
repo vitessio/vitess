@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -253,6 +254,21 @@ func TestGroupReplicationConfig(t *testing.T) {
 		UnreachableMajorityTimeoutSeconds: 12,
 		AutorejoinTries:                   3,
 	}, cfg)
+}
+
+// TestGroupReplicationDisablesAutorejoinByDefault checks that the tablet turns MySQL's own
+// auto-rejoin off unless told otherwise: an auto-rejoin attempt does not check whether the shard's
+// group is active, blocks the member for about a minute (S7d in
+// doc/failover-audit/GroupReplication.md) and can end in a group of its own. The tablet rejoins
+// expelled members itself.
+func TestGroupReplicationDisablesAutorejoinByDefault(t *testing.T) {
+	fs := pflag.NewFlagSet("vttablet", pflag.ContinueOnError)
+	registerGroupReplicationFlags(fs)
+	flag := fs.Lookup("group-replication-autorejoin-tries")
+	require.NotNil(t, flag)
+	assert.Equal(t, "0", flag.DefValue)
+	assert.Contains(t, mysql.ConfigureGroupReplicationCommands(mysql.GroupReplicationConfig{AutorejoinTries: groupReplicationAutorejoinTries}),
+		"SET GLOBAL group_replication_autorejoin_tries = 0")
 }
 
 func TestGroupReplicationRPCsRequirePort(t *testing.T) {

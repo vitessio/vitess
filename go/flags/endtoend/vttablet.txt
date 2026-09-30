@@ -168,7 +168,7 @@ Flags:
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
-      --group-replication-autorejoin-tries int                           group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. A negative value keeps the server's setting. (default -1)
+      --group-replication-autorejoin-tries int                           group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. The default 0 leaves rejoins to the tablet, which only rejoins while the shard's group is active on another tablet. A negative value keeps the server's setting.
       --group-replication-consistency string                             group_replication_consistency that the tablet applies before its MySQL starts Group Replication. Empty keeps the server's setting. (default "BEFORE_ON_PRIMARY_FAILOVER")
       --group-replication-exit-state-action string                       group_replication_exit_state_action that the tablet applies before its MySQL starts Group Replication. Empty keeps the server's setting. (default "READ_ONLY")
       --group-replication-port int                                       Port on which the group communication engine of this tablet's MySQL listens for MySQL Group Replication (group_replication_local_address). It is published in the tablet record. 0 disables Group Replication support on this tablet.

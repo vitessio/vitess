@@ -62,7 +62,11 @@ var (
 	groupReplicationConsistency                = "BEFORE_ON_PRIMARY_FAILOVER"
 	groupReplicationExitStateAction            = "READ_ONLY"
 	groupReplicationUnreachableMajorityTimeout = 1 * time.Second
-	groupReplicationAutorejoinTries            = -1
+	// groupReplicationAutorejoinTries is 0 by default: the sync loop rejoins an expelled member
+	// once the shard's legitimate group is active elsewhere. MySQL's own auto-rejoin does not
+	// check that: an attempt blocks the member for about a minute, refuses every change
+	// meanwhile, and can end in a group of its own.
+	groupReplicationAutorejoinTries = 0
 
 	// groupReplicationPollInterval is how often waits on the group replication state poll
 	// MySQL. It can be changed to speed up tests.
@@ -105,7 +109,7 @@ func registerGroupReplicationFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &groupReplicationUnreachableMajorityTimeout, "group-replication-unreachable-majority-timeout", groupReplicationUnreachableMajorityTimeout,
 		"group_replication_unreachable_majority_timeout that the tablet applies before its MySQL starts Group Replication: how long a member that lost contact with the majority of its group waits before it leaves the group. 0 waits forever, a negative value keeps the server's setting.")
 	utils.SetFlagIntVar(fs, &groupReplicationAutorejoinTries, "group-replication-autorejoin-tries", groupReplicationAutorejoinTries,
-		"group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. A negative value keeps the server's setting.")
+		"group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. The default 0 leaves rejoins to the tablet, which only rejoins while the shard's group is active on another tablet. A negative value keeps the server's setting.")
 }
 
 func init() {
