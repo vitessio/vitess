@@ -142,11 +142,13 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	}
 
 	err = runFullStatusQuery(ctx, conn, "group replication status", func() error {
-		grStatus, queryErr := conn.Conn.GroupReplicationStatus()
-		if queryErr == nil && grStatus.PluginActive {
-			status.GroupReplicationStatus = grStatus
-		}
-		return queryErr
+		return mysqld.executeWithContext(ctx, conn, "group replication status", func() error {
+			grStatus, queryErr := conn.Conn.GroupReplicationStatus()
+			if queryErr == nil && grStatus.PluginActive {
+				status.GroupReplicationStatus = grStatus
+			}
+			return queryErr
+		})
 	})
 	if err != nil {
 		return nil, err

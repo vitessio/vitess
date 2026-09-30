@@ -180,8 +180,9 @@ message GroupReplicationStatus {
   bool single_primary_mode = 10;
   // member_weight is the value of group_replication_member_weight.
   int32 member_weight = 11;
-  // paxos_single_leader is true when the group runs with a single consensus leader, the
-  // primary (group_replication_paxos_single_leader, as in effect for the group). Groups that
-  // Vitess bootstraps always do. It is only meaningful while the member is active.
+  // paxos_single_leader is the member's group_replication_paxos_single_leader. MySQL refuses a
+  // joiner whose setting differs from its group's, and Vitess sets it on every member before it
+  // starts Group Replication, so on an active member of a group that Vitess bootstrapped it is
+  // the group's setting: a single consensus leader, the primary.
   bool paxos_single_leader = 12;
 }

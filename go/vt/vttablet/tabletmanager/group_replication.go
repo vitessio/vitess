@@ -78,6 +78,8 @@ var (
 	// groupReplicationIllegitimateLogInterval limits how often the sync loop logs that it does not
 	// follow a group primary that is not legitimate, or does not join a group.
 	groupReplicationIllegitimateLogInterval = 10 * time.Second
+	// groupReplicationStatusTimeout bounds every read of the group replication status.
+	groupReplicationStatusTimeout = 10 * time.Second
 	// groupReplicationRejoinGateInterval is how long the sync loop waits before it checks again
 	// whether the shard's group is active on another tablet, when it was not.
 	groupReplicationRejoinGateInterval = 2 * time.Second
@@ -221,7 +223,15 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 }
 
 // groupReplicationStatus returns the Group Replication state of the tablet's MySQL.
+//
+// The read is bounded by groupReplicationStatusTimeout, whatever the caller's context: the status
+// queries must never hold the action lock for long. A member that was expelled after a freeze has
+// been seen to never answer a query on the group communication engine (S2 in
+// doc/failover-audit/GroupReplication.md); a DemotePrimary that waited for it held the action
+// lock forever, and every later RPC timed out.
 func (tm *TabletManager) groupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, groupReplicationStatusTimeout)
+	defer cancel()
 	status, err := tm.MysqlDaemon.GroupReplicationStatus(ctx)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to read the group replication status")

@@ -32,14 +32,26 @@ import (
 // bootstrap.
 const bootstrapFlagResetTimeout = 10 * time.Second
 
-// GroupReplicationStatus returns the MySQL Group Replication state of the server.
+// GroupReplicationStatus returns the MySQL Group Replication state of the server. The queries
+// are bounded by ctx: when it expires, the connection is killed and closed, so that a query that
+// the server does not answer cannot hold the caller, for example a tablet RPC holding the action
+// lock, forever.
 func (mysqld *Mysqld) GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return conn.Conn.GroupReplicationStatus()
+	var status *replicationdatapb.GroupReplicationStatus
+	err = mysqld.executeWithContext(ctx, conn, "group replication status", func() error {
+		var queryErr error
+		status, queryErr = conn.Conn.GroupReplicationStatus()
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return status, nil
 }
 
 // ConfigureGroupReplication installs the Group Replication plugin if it is not loaded yet
@@ -52,7 +64,12 @@ func (mysqld *Mysqld) ConfigureGroupReplication(ctx context.Context, cfg mysql.G
 	}
 	defer conn.Recycle()
 
-	status, err := conn.Conn.GroupReplicationStatus()
+	var status *replicationdatapb.GroupReplicationStatus
+	err = mysqld.executeWithContext(ctx, conn, "group replication status", func() error {
+		var queryErr error
+		status, queryErr = conn.Conn.GroupReplicationStatus()
+		return queryErr
+	})
 	if err != nil {
 		return err
 	}

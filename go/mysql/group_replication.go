@@ -47,18 +47,23 @@ const (
 
 const (
 	readGroupReplicationPlugin = "SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'"
-	readGroupReplicationVars   = "SELECT @@global.server_uuid AS server_uuid, @@global.group_replication_group_name AS group_name, " +
-		"@@global.group_replication_single_primary_mode AS single_primary_mode, @@global.group_replication_member_weight AS member_weight"
+	// The member's group_replication_paxos_single_leader is reported rather than the group's
+	// WRITE_CONSENSUS_SINGLE_LEADER_CAPABLE: reading performance_schema.
+	// replication_group_communication_information waits on the group communication engine, and
+	// on a member that was expelled after a freeze it waited forever while holding a lock that the
+	// member's own rejoin needed, which wedged the member in ERROR (S2 in
+	// doc/failover-audit/GroupReplication.md). Vitess sets the variable before every start, and
+	// MySQL refuses a joiner whose setting differs from its group's, so on the members of a group
+	// that Vitess bootstrapped both agree.
+	readGroupReplicationVars = "SELECT @@global.server_uuid AS server_uuid, @@global.group_replication_group_name AS group_name, " +
+		"@@global.group_replication_single_primary_mode AS single_primary_mode, @@global.group_replication_member_weight AS member_weight, " +
+		"@@global.group_replication_paxos_single_leader AS paxos_single_leader"
 	readGroupReplicationMembers = "SELECT MEMBER_ID, MEMBER_HOST, MEMBER_PORT, MEMBER_STATE, MEMBER_ROLE, MEMBER_VERSION " +
 		"FROM performance_schema.replication_group_members WHERE MEMBER_ID != '' ORDER BY MEMBER_ID"
 	readGroupReplicationViewID = "SELECT VIEW_ID FROM performance_schema.replication_group_member_stats WHERE MEMBER_ID = @@global.server_uuid"
 	// The received transaction set of the applier channel includes the transactions this
 	// member has received from the group but not applied yet.
-	// The single-leader capability of the group is what joining members must match; the
-	// member's own group_replication_paxos_single_leader only takes effect when a group is
-	// bootstrapped.
-	readGroupReplicationSingleLeader = "SELECT WRITE_CONSENSUS_SINGLE_LEADER_CAPABLE FROM performance_schema.replication_group_communication_information"
-	readGroupReplicationReceived     = "SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status " +
+	readGroupReplicationReceived = "SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status " +
 		"WHERE CHANNEL_NAME = 'group_replication_applier'"
 )
 
@@ -87,6 +92,7 @@ func (c *Conn) GroupReplicationStatus() (*replicationdatapb.GroupReplicationStat
 		status.GroupName = row.AsString("group_name", "")
 		status.SinglePrimaryMode = row.AsBool("single_primary_mode", false)
 		status.MemberWeight = int32(row.AsInt64("member_weight", 0))
+		status.PaxosSingleLeader = row.AsBool("paxos_single_leader", false)
 	}
 
 	qr, err = c.ExecuteFetch(readGroupReplicationMembers, 100, false)
@@ -102,17 +108,6 @@ func (c *Conn) GroupReplicationStatus() (*replicationdatapb.GroupReplicationStat
 	}
 	if len(qr.Rows) == 1 {
 		status.ViewId = qr.Rows[0][0].ToString()
-	}
-
-	if IsGroupMemberActive(status) {
-		qr, err = c.ExecuteFetch(readGroupReplicationSingleLeader, 1, false)
-		if err != nil {
-			return nil, vterrors.Wrapf(err, "failed to read the group communication information")
-		}
-		if len(qr.Rows) == 1 {
-			singleLeader, _ := qr.Rows[0][0].ToInt64()
-			status.PaxosSingleLeader = singleLeader == 1
-		}
 	}
 
 	qr, err = c.ExecuteFetch(readGroupReplicationReceived, 1, false)

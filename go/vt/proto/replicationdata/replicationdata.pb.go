@@ -984,9 +984,10 @@ type GroupReplicationStatus struct {
 	SinglePrimaryMode bool `protobuf:"varint,10,opt,name=single_primary_mode,json=singlePrimaryMode,proto3" json:"single_primary_mode,omitempty"`
 	// member_weight is the value of group_replication_member_weight.
 	MemberWeight int32 `protobuf:"varint,11,opt,name=member_weight,json=memberWeight,proto3" json:"member_weight,omitempty"`
-	// paxos_single_leader is true when the group runs with a single consensus leader, the
-	// primary (group_replication_paxos_single_leader, as in effect for the group). Groups that
-	// Vitess bootstraps always do. It is only meaningful while the member is active.
+	// paxos_single_leader is the member's group_replication_paxos_single_leader. MySQL refuses a
+	// joiner whose setting differs from its group's, and Vitess sets it on every member before it
+	// starts Group Replication, so on an active member of a group that Vitess bootstrapped it is
+	// the group's setting: a single consensus leader, the primary.
 	PaxosSingleLeader bool `protobuf:"varint,12,opt,name=paxos_single_leader,json=paxosSingleLeader,proto3" json:"paxos_single_leader,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
