@@ -1476,6 +1476,34 @@ func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *to
 	return vterrors.FromGRPC(err)
 }
 
+// StartGroupReplication is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.StartGroupReplication(ctx, &tabletmanagerdatapb.StartGroupReplicationRequest{Bootstrap: bootstrap})
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return response.Status, nil
+}
+
+// StopGroupReplication is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StopGroupReplication(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.GroupReplicationStatus, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.StopGroupReplication(ctx, &tabletmanagerdatapb.StopGroupReplicationRequest{})
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return response.Status, nil
+}
+
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)

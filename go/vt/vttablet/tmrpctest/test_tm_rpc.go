@@ -1352,6 +1352,49 @@ func (fra *fakeRPCTM) ResetReplicationParameters(ctx context.Context) error {
 	return nil
 }
 
+var testGroupReplicationStatus = &replicationdatapb.GroupReplicationStatus{
+	PluginActive: true,
+	GroupName:    "8a94f357-aab4-11df-86ab-c80aa9429562",
+	MemberState:  "ONLINE",
+	MemberRole:   "PRIMARY",
+	HasQuorum:    true,
+}
+
+func (fra *fakeRPCTM) StartGroupReplication(ctx context.Context, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+	if fra.panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	compare(fra.t, "StartGroupReplication bootstrap", bootstrap, true)
+	return testGroupReplicationStatus, nil
+}
+
+func tmRPCTestStartGroupReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	status, err := client.StartGroupReplication(ctx, tablet, true)
+	compareError(t, "StartGroupReplication", err, status, testGroupReplicationStatus)
+}
+
+func tmRPCTestStartGroupReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.StartGroupReplication(ctx, tablet, true)
+	expectHandleRPCPanic(t, "StartGroupReplication", true /*verbose*/, err)
+}
+
+func (fra *fakeRPCTM) StopGroupReplication(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	if fra.panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	return testGroupReplicationStatus, nil
+}
+
+func tmRPCTestStopGroupReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	status, err := client.StopGroupReplication(ctx, tablet)
+	compareError(t, "StopGroupReplication", err, status, testGroupReplicationStatus)
+}
+
+func tmRPCTestStopGroupReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.StopGroupReplication(ctx, tablet)
+	expectHandleRPCPanic(t, "StopGroupReplication", true /*verbose*/, err)
+}
+
 func tmRPCTestResetReplicationParameters(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ResetReplicationParameters(ctx, tablet)
 	compareError(t, "ResetReplicationParameters", err, true, testResetReplicationParametersCalled)
@@ -1645,6 +1688,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestReplicaWasPromoted(ctx, t, client, tablet)
 	tmRPCTestReplicaWasRestarted(ctx, t, client, tablet)
 	tmRPCTestResetReplicationParameters(ctx, t, client, tablet)
+	tmRPCTestStartGroupReplication(ctx, t, client, tablet)
+	tmRPCTestStopGroupReplication(ctx, t, client, tablet)
 
 	// Backup / restore related methods
 	tmRPCTestBackup(ctx, t, client, tablet)
@@ -1707,6 +1752,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromotedPanic(ctx, t, client, tablet)
 	tmRPCTestResetReplicationParametersPanic(ctx, t, client, tablet)
+	tmRPCTestStartGroupReplicationPanic(ctx, t, client, tablet)
+	tmRPCTestStopGroupReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasRestartedPanic(ctx, t, client, tablet)
 	// Backup / restore related methods
 	tmRPCTestBackupPanic(ctx, t, client, tablet)

@@ -136,4 +136,48 @@ message FullStatus {
   // liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
   // uses it to form a quorum before failing over an unreachable primary vttablet.
   repeated ShardPeerHealth shard_peer_health = 26;
+  // group_replication_status is set when the MySQL Group Replication plugin is loaded.
+  GroupReplicationStatus group_replication_status = 27;
+}
+
+// GroupReplicationMember is one member of a MySQL Group Replication group, as seen by the
+// reporting member (performance_schema.replication_group_members).
+message GroupReplicationMember {
+  // member_uuid is the member's server_uuid.
+  string member_uuid = 1;
+  string host = 2;
+  int32 port = 3;
+  // state is ONLINE, RECOVERING, OFFLINE, ERROR or UNREACHABLE.
+  string state = 4;
+  // role is PRIMARY or SECONDARY.
+  string role = 5;
+  string version = 6;
+}
+
+// GroupReplicationStatus is the MySQL Group Replication state of a tablet's MySQL.
+message GroupReplicationStatus {
+  // plugin_active is true when the group_replication plugin is installed and active.
+  bool plugin_active = 1;
+  // group_name is the configured group_replication_group_name.
+  string group_name = 2;
+  // member_state is this member's own state: ONLINE, RECOVERING, OFFLINE, ERROR or UNREACHABLE.
+  string member_state = 3;
+  // member_role is this member's own role: PRIMARY or SECONDARY. It is empty if the member
+  // is not ONLINE.
+  string member_role = 4;
+  // primary_uuid is the server_uuid of the group's primary, as seen by this member.
+  string primary_uuid = 5;
+  // view_id identifies the group membership view that this member is part of.
+  string view_id = 6;
+  // members is the group membership as seen by this member.
+  repeated GroupReplicationMember members = 7;
+  // has_quorum is true when a majority of the members in this member's view are reachable.
+  bool has_quorum = 8;
+  // received_transaction_set is the GTID set this member has received from the group,
+  // including transactions that are not applied yet.
+  string received_transaction_set = 9;
+  // single_primary_mode is the value of group_replication_single_primary_mode.
+  bool single_primary_mode = 10;
+  // member_weight is the value of group_replication_member_weight.
+  int32 member_weight = 11;
 }

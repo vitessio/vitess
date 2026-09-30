@@ -71,6 +71,13 @@ type MysqlDaemon interface {
 	SemiSyncStatus(ctx context.Context) (source, replica bool)
 	SemiSyncReplicationStatus(ctx context.Context) (bool, error)
 	IsSemiSyncBlocked(ctx context.Context) (bool, error)
+
+	// Group Replication related methods
+	GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error)
+	ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error
+	StartGroupReplication(ctx context.Context, bootstrap bool) error
+	StopGroupReplication(ctx context.Context) error
+	SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error
 	ResetReplicationParameters(ctx context.Context) error
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 	FlushBinaryLogs(ctx context.Context) (err error)

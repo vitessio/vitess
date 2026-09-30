@@ -1,0 +1,228 @@
+# MySQL Group Replication as a first-class replication mode
+
+Status: prototype / RFC. Related: [#18648](https://github.com/vitessio/vitess/issues/18648) (Uber's "consensus" RFC), [#13300](https://github.com/vitessio/vitess/issues/13300) (removal of the experimental VTGR).
+
+## Goals
+
+- A shard can replicate with MySQL Group Replication (GR) in single-primary mode instead of asynchronous replication plus semi-sync, selected with a **durability policy**, just like `semi_sync` or `cross_cell` today.
+- Every existing operational tool keeps working with the same semantics: `PlannedReparentShard`, `EmergencyReparentShard`, VTOrc, backups/restores, `vtctldclient GetFullStatus`, vtgate buffering. No second orchestrator.
+- An existing semi-sync shard can be converted to GR **online**, one tablet at a time, with durability preserved at every step, and converted back.
+- GR's guarantees are used, not re-implemented: the group fences a partitioned primary, elects a new primary without an external agent, and never lets a member diverge.
+
+## Non-goals
+
+- Multi-primary mode. Vitess routes writes to a single primary; multi-primary adds certification conflicts for no gain.
+- InnoDB Cluster / MySQL Shell / MySQL Router. Vitess already provides routing (vtgate) and topology (topo).
+- More than 9 voting members per shard (a MySQL limit). Additional tablets replicate asynchronously from the group.
+
+## Why VTGR failed, and what is different
+
+VTGR was a separate daemon per tablet host that talked MySQL protocol, duplicated VTOrc's control loop, turned every replication RPC into a silent no-op (the `MysqlGR` flavor), and left PRS/ERS semantics undefined. Nobody ran it in production.
+
+This design instead makes GR a **replication mode inside the existing control plane**:
+
+| Concern | Where it lives | Mechanism |
+|---|---|---|
+| Choose GR | keyspace durability policy | `group_replication`, `group_replication_cross_cell` |
+| MySQL primitives | `go/mysql`, `mysqlctl.MysqlDaemon` | `GroupReplicationStatus`, `ConfigureGroupReplication`, `StartGroupReplication`, `StopGroupReplication`, `SetGroupReplicationPrimary` |
+| Observability | `FullStatus.group_replication_status` | VTOrc, `GetFullStatus` |
+| Membership lifecycle | vttablet (tabletmanager) | tablet derives its GR config from topo; RPCs `StartGroupReplication`/`StopGroupReplication` |
+| Topology follows the group | vttablet reconcile loop + VTOrc | tablet promotes/demotes its own record when its group role changes |
+| Planned switchover | PRS | same orchestration; tablet implements `PromoteReplica` with `group_replication_set_as_primary()` |
+| Unplanned failover | the group itself + ERS/VTOrc | group elects; Vitess reconciles topo; ERS handles loss of quorum only when explicitly asked |
+| Migration | `vtctldclient MigrateReplicationMode` (reparentutil) | ordered, idempotent, shard-locked steps |
+
+## Semi-sync vs Group Replication (summary)
+
+See the research notes linked from the PR for sources; the points that shape the design:
+
+- **Durability.** Lossless semi-sync (AFTER_SYNC) returns to the client after *one* eligible replica has written the event to its relay log. GR returns after a *majority* of the group agreed on the order of the transaction and certified it. Neither waits for the transaction to be applied on another server. With one member per cell in three cells, both cost roughly one round trip to the nearest other cell; `cross_cell` semi-sync and a 3-cell group have similar commit latency.
+- **Fencing.** Semi-sync has no membership: a partitioned primary keeps its binlog, and after an ERS its unacknowledged transactions become errant GTIDs; Vitess must fence it (`super_read_only`, tablet type, errant GTID detection). A GR primary that loses its majority cannot commit; its transactions block and are never certified, so it cannot diverge. `group_replication_unreachable_majority_timeout` bounds how long it blocks.
+- **Election.** Semi-sync needs an external agent (VTOrc) to promote. GR elects on its own within about `5s + group_replication_member_expel_timeout`, choosing by lowest version, then highest `group_replication_member_weight`, then lowest `server_uuid`. Vitess maps promotion rules onto member weights so that the group's choice matches Vitess's preferences.
+- **Loss of majority.** Semi-sync keeps running as long as one eligible acker remains. GR stops accepting writes; only `group_replication_force_members` (an operator decision, split-brain risk) unblocks it. This is the main availability trade-off.
+- **Behaviour changes users see.** Every table needs a primary key; transactions above `group_replication_transaction_size_limit` (~143MB) are rolled back; one slow secondary throttles the primary through flow control; GTIDs use the group UUID instead of the server UUID.
+
+## Architecture
+
+### Durability policy and replication mode
+
+`policy.Durabler` stays unchanged, so out-of-tree policies keep compiling. A policy can additionally implement:
+
+```go
+type ReplicationModer interface { ReplicationMode() ReplicationMode }       // Async | GroupReplication
+type GroupReplicationDurabler interface {
+    Durabler; ReplicationModer
+    IsGroupMember(*topodatapb.Tablet) bool      // voting member vs async replica of the group
+    MemberWeight(*topodatapb.Tablet) int        // group_replication_member_weight
+    RequiresCrossCellMajority() bool
+}
+```
+
+Two policies are registered:
+
+- `group_replication`: PRIMARY and REPLICA tablets are voting members; other types replicate asynchronously from the group's primary. `SemiSyncAckers()` is 0.
+- `group_replication_cross_cell`: the same, but no single cell may hold a majority of the voting members. Every durable transaction then exists in two cells, which is the GR equivalent of `cross_cell`. VTOrc reports a violation, and a join that would create one is refused.
+
+### Principle: the observed MySQL state decides the behaviour, the policy decides the goal
+
+Every tablet reports whether its MySQL is an active member of a group (`ONLINE`/`RECOVERING`). Tablet RPCs dispatch on that observed state, not on the policy:
+
+- On an active member, replication RPCs have GR meaning. `SetReplicationSource` never touches the default channel; `PromoteReplica` calls `group_replication_set_as_primary`.
+- On a non-member, they keep their asynchronous meaning, even if the keyspace policy says GR. Those are the async replicas of the group, or tablets that are not converted yet.
+
+The policy only defines the target: who should be a member, with which weight, and whether semi-sync is still required. This makes the half-migrated states of an online conversion well defined.
+
+Corollary: **an active group with at least two ONLINE members supersedes semi-sync.** On such a primary neither the tablet nor VTOrc demands semi-sync, whatever the policy says. This rule is what lets a keyspace be converted shard by shard while its policy is still `semi_sync`.
+
+### Group configuration, derived from topo
+
+Nothing new is stored in topo:
+
+- **Group name.** A UUIDv5 of `keyspace/shard` in a fixed Vitess namespace, the same on every tablet of the shard. After a reshard the new shards get new groups automatically.
+- **Local address.** `<mysql hostname>:<--group-replication-port>`. The tablet publishes the port in its tablet record as `port_map["gr"]`. The default is off; the flag enables GR support on the tablet.
+- **Seeds.** The `gr` addresses of the other PRIMARY/REPLICA tablets of the shard, read from topo each time the tablet (re)joins.
+- **Credentials.** Distributed recovery authenticates as the existing replication user (`START GROUP_REPLICATION USER=…, PASSWORD=…`, never stored), with `group_replication_recovery_get_public_key=ON` or TLS.
+- **Tunables** (vttablet flags, applied with `SET GLOBAL` before each start):
+  - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
+  - `exit_state_action`, default `READ_ONLY`.
+  - `unreachable_majority_timeout`, default 10s: a primary cut off from its majority errors out instead of blocking forever.
+  - `autorejoin_tries`.
+  - `group_replication_start_on_boot` is persisted OFF. vttablet decides when to join, as it does for async replication (`skip_replica_start`).
+- **Plugin.** It is loaded with `INSTALL PLUGIN` when needed. That survives restarts, needs no mysqld restart, and is not binlogged. Loading it through my.cnf (`plugin-load-add=group_replication.so`) is also supported.
+
+### Tablet (vttablet) behaviour
+
+- **Startup** (`initializeReplication`). If the policy makes this tablet a voting member:
+  1. Configure GR and `START GROUP_REPLICATION` (join, never bootstrap).
+  2. If the join fails because no member is reachable, retry in the background. Bootstrapping is never done from startup: two tablets could each create a group.
+  3. `checkPrimaryShip` does not trust a stale PRIMARY record. The tablet starts as REPLICA, and the reconcile loop makes it PRIMARY if its MySQL is the group primary.
+
+  Non-members replicate asynchronously from the shard primary, as today.
+- **Reconcile loop.** Every `--group-replication-sync-interval` (default 1s) the tablet reads its GR status:
+  - If the member is ONLINE, PRIMARY and has quorum, and the tablet is not PRIMARY: promote the tablet record (`ChangeTabletType(PRIMARY)`). This yields a new `PrimaryTermStartTime`; the shard record follows through `shardSyncLoop`, and vtgate follows the new term.
+  - If the tablet is PRIMARY but the member is not the group primary, or has lost quorum: demote the record to REPLICA and stop serving. vtgate buffers or fails fast exactly as for a PRS.
+  - If the member should be in the group but is `OFFLINE` or `ERROR`, and it is not in a backup or restore: rejoin with backoff. GR itself refuses a member with extra transactions.
+
+  This is how an unplanned failover elected by the group reaches Vitess within about a second, without VTOrc.
+- **RPCs on an active member:**
+
+  | RPC | GR behaviour |
+  |---|---|
+  | `InitPrimary` | Bootstrap the group on this tablet (shard must have no active member; caller holds the shard lock), then as today. |
+  | `PromoteReplica` | `group_replication_set_as_primary(own uuid)`; wait for role PRIMARY and `super_read_only=OFF`; change type. No `RESET REPLICA ALL`. |
+  | `DemotePrimary` | Stop serving and set `super_read_only`, as today; skip the semi-sync steps. |
+  | `UndoDemotePrimary` | Only if the member is still the group primary. |
+  | `SetReplicationSource` | No-op for the default channel; wait for the reparent journal or position; fix the tablet type. |
+  | `StartReplication` / `StopReplication` | Join or leave the group. |
+  | `SetReadWrite` (`read_only=OFF`) | **Refused unless the member is the group primary.** A GR secondary with `super_read_only=OFF` accepts writes and replicates them to the group; this was verified in the lab. |
+  | `StartGroupReplication(bootstrap)` / `StopGroupReplication` (new) | Explicit membership control, used by VTOrc and the migration. `StartGroupReplication` first stops the async channel and afterwards clears it (`RESET REPLICA ALL`): GR refuses to start while the channel runs, and a leftover channel can be resurrected later. |
+- **Semi-sync.** `fixSemiSync` treats an active group with at least two ONLINE members as sufficient durability. It then disables semi-sync and does not open the semi-sync monitor.
+
+### PlannedReparentShard
+
+The orchestration is unchanged. The GR meaning comes from the tablet RPCs:
+
+1. Preflight: the new primary must be an ONLINE member of the same group as the current primary. A non-member cannot be promoted while the group is active.
+2. `DemotePrimary(old)` stops serving, so vtgate buffers.
+3. `WaitForPosition(new, pos)`.
+4. `PromoteReplica(new)` runs `group_replication_set_as_primary`. GR moves `super_read_only` and waits for in-flight transactions.
+5. `SetReplicationSource` on the other members is a journal wait. Non-member async replicas are re-pointed as today.
+6. `PopulateReparentJournal(new)`.
+
+### EmergencyReparentShard
+
+The group fails over by itself when a majority survives. ERS in GR mode must uphold the rules in `EmergencyReparentShard.md`: certainty, time-bound stages, shard lock re-checks, reparent journal, and no errant GTIDs.
+
+1. Lock the shard and collect `FullStatus` from all tablets, time-bound.
+2. If a reachable member reports that it is ONLINE, PRIMARY and has quorum, the group has already elected. Promote that tablet in topo (`PromoteReplica`, which is only a type change there) and write the reparent journal. If `--new-primary` names another member, follow with a PRS-style switch. Non-members are re-pointed.
+3. If no reachable member has quorum, ERS fails, unless the operator passes `--group-replication-force-quorum` (not implemented in the prototype). That choice needs a human, like `--allow-split-brain-promotion`: it would pick the member with the most advanced *received* GTID set and use `group_replication_force_members`.
+
+### VTOrc
+
+VTOrc keeps its single loop. Discovery reads `FullStatus.group_replication_status`, and analysis gains GR codes:
+
+| Analysis | Condition | Recovery |
+|---|---|---|
+| `GroupPrimaryNotInTopo` | A member is the ONLINE group primary with quorum, but its tablet is not the topo primary (for example, the tablet-local loop failed). | `PromoteReplica` on that tablet (type change) plus journal. |
+| `GroupMemberNotOnline` | The policy wants the tablet in the group, and it is OFFLINE or ERROR. | `StartGroupReplication(bootstrap=false)`. |
+| `GroupNotBootstrapped` | GR policy, no member of the shard is active, and all voting tablets are reachable. | `InitPrimary` (bootstrap) on the tablet with the most advanced GTID set, under the shard lock. |
+| `GroupQuorumLost` | Members are reachable, but none has quorum. | None; alert (ERS with an explicit force flag is the operator path). |
+| `GroupCellMajority` | `group_replication_cross_cell`, and one cell holds a majority of the ONLINE members. | None; alert. |
+
+For tablets that are active members, the async analyses are suppressed:
+- `ReplicationStopped`
+- `NotConnectedToPrimary`
+- `ConnectedToWrongPrimary`
+- `ReplicaMisconfigured`
+- `PrimaryHasPrimary`
+- the semi-sync `*MustBeSet` / `*MustNotBeSet` codes
+- `PrimaryIsReadOnly` while the member is not the group primary
+
+`DeadPrimary` in a shard whose members are active does not run ERS right away: the group elects on its own. VTOrc waits for `--group-replication-failover-grace-period` (default 30s) for `GroupPrimaryNotInTopo` to appear, and only then falls back to the ERS path described above.
+
+### Other components
+
+- **Lag.** Heartbeat-based lag (`--heartbeat-enable`) works unchanged. The polling tracker must not rely on the default channel on GR members.
+- **Status queries.** The MySQL flavors now read `SHOW REPLICA STATUS FOR CHANNEL ''` and filter `replication_connection_configuration` on `CHANNEL_NAME = ''`. On a GR member the plugin's own channels (`group_replication_applier`, `group_replication_recovery`) show up in those tables and used to break parsing (`query returned 2 rows`).
+- **Backups.**
+  - Online engines (xtrabackup, mysqlshell, clone) work on a member as is.
+  - The builtin engine stops mysqld. The tablet leaves the group for the duration and rejoins afterwards through the reconcile loop.
+  - A tablet restored from a backup joins with incremental recovery as long as the donors still have the binlogs, otherwise with clone.
+- **Errant GTIDs.** Transactions of the group carry the group name as their UUID, which is identical on every member. VTOrc's errant GTID detection must compare against the group primary's executed set, including the group UUID. GR refuses to admit a member that has extra transactions anyway.
+- **`sql_log_bin=0` writes** (`ExecuteFetchAsDBA --disable-binlogs`, TableGC purge, `ApplySchemaChange` without replication) create silent divergence under GR exactly as under async replication. No new risk, but worth documenting.
+- **Schema requirements.** A preflight refuses the conversion when a user table lacks a primary key (or non-null unique key) or is not InnoDB. After conversion, `sql_require_primary_key=ON` is recommended. All `_vt` sidecar tables already have primary keys.
+
+## Migration: semi-sync → Group Replication, online
+
+`vtctldclient MigrateReplicationMode --durability-policy group_replication_cross_cell <keyspace>[/<shard>]` runs the steps below for each shard, under the shard lock. Every step is idempotent, so the command can be re-run after a failure; `--dry-run` prints the plan. The keyspace durability policy is switched only after every shard is converted.
+
+The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrapping and joining caused **0 failed writes**.
+
+1. **Preflight.**
+   - All tablets reachable; GTID mode ON; ROW binlog format.
+   - MySQL ≥ 8.0.27; 8.4 is recommended because of its defaults (`BEFORE_ON_PRIMARY_FAILOVER`, `OFFLINE_MODE`, certification GC).
+   - At most 9 voting members.
+   - Every user table has a primary key and is InnoDB.
+   - Every voting tablet has a `gr` port.
+   - `cross_cell` placement is satisfiable.
+2. **Bootstrap on the current primary** (`StartGroupReplication(bootstrap=true)`). Writes continue. Semi-sync stays enabled, and the async replicas keep acknowledging.
+3. **Join the voting replicas one by one** (`StartGroupReplication`). Each one stops its async channel, recovers incrementally from a donor, and becomes ONLINE. Cross-cell replicas join first, so the group gets a cross-cell majority as early as possible.
+4. **Disable semi-sync on the primary as soon as the group has two ONLINE members,** and before the last semi-sync acker leaves its async channel. With Vitess's infinite semi-sync timeout, losing the last acker blocks every commit; the lab reproduced this. From this point, the group's majority provides durability. The "group supersedes semi-sync" rule makes the tablet and VTOrc agree.
+5. Non-voting tablets stay async replicas of the primary, with semi-sync off.
+6. After all shards are converted, set the keyspace durability policy. VTOrc then manages membership.
+
+### Rollback: Group Replication → semi-sync
+
+1. Set the keyspace durability policy back to the semi-sync policy. Nothing changes immediately, because the active groups supersede semi-sync.
+2. For each secondary: `StopGroupReplication`, then `SetReplicationSource(primary, semiSync=true)`. The primary enables semi-sync as soon as it has an eligible acker, and before its group shrinks below two ONLINE members.
+3. On the primary: stop serving (vtgate buffers), `StopGroupReplication`, clear `super_read_only`, and serve again. GR sets `super_read_only` when it stops. The lab measured about 4s of rejected writes without buffering; with the PRS-style buffering this becomes a short stall.
+
+## Recommended topology
+
+- Three cells, one voting member per cell (group of 3), with `group_replication_cross_cell`. Or five members as 2-2-1 to survive two failures.
+- Additional REPLICA and RDONLY tablets as async replicas of the group primary, for read scaling.
+- `group_replication_paxos_single_leader=ON` for WAN groups. It needs a full group restart to change, so set it at bootstrap.
+- `member_expel_timeout` 0–5s.
+- Flow control tuned so one slow member does not throttle the primary.
+
+## Prototype scope
+
+Implemented in this branch:
+- Durability policies and the replication-mode interface.
+- GR status in `FullStatus`, and the MySQL/mysqlctl primitives.
+- Default-channel-safe status queries.
+- The `StartGroupReplication`/`StopGroupReplication` RPCs.
+- The tablet reconcile loop and GR-aware tablet RPCs.
+- PRS support.
+- VTOrc analyses and recoveries.
+- The migration command and its reverse.
+- An end-to-end test on MySQL 8.4.
+
+Left for follow-ups:
+- The ERS forced-quorum path.
+- `group_replication_force_members`.
+- Builtin-backup integration.
+- The MySQL communication stack (`communication_stack=MYSQL`), which 26.7 makes the default and which would remove the separate port.
+- Managed async failover for non-member replicas (`SOURCE_CONNECTION_AUTO_FAILOVER`).
+- vtadmin and operator support.
+- Flow-control defaults.

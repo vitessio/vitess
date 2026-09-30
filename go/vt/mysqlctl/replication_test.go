@@ -157,7 +157,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 	defer testMysqld.Close()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "test sql error|test io error"))
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "test sql error|test io error"))
 
 	err = WaitForReplicationStart(t.Context(), testMysqld, 2)
 	assert.ErrorContains(t, err, "Last_SQL_Error: test sql error, Last_IO_Error: test io error")
@@ -465,7 +465,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			defer db.Close()
 			db.AddQuery("SELECT 1", &sqltypes.Result{})
 			if testCase.status != nil {
-				db.AddQuery("SHOW REPLICA STATUS", testCase.status)
+				db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", testCase.status)
 			}
 			if testCase.rejectedQuery == readDurability {
 				db.AddRejectedQuery(readDurability, testCase.rejectedError)
@@ -508,7 +508,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			assert.Equal(t, testCase.wantStop, db.GetQueryCalledNum(stopIOThread))
 			assert.Equal(t, testCase.wantStopSQL, db.GetQueryCalledNum(stopSQLThread))
 			if testCase.inherited != nil {
-				assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the takeover path must not re-probe the replication status")
+				assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS FOR CHANNEL ''"), "the takeover path must not re-probe the replication status")
 				assert.Zero(t, db.GetQueryCalledNum(readDurability), "the takeover path must not re-read the durability settings")
 			}
 		})
@@ -534,7 +534,7 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 		}
 	}
 
-	showReplicaStatus := "SHOW REPLICA STATUS"
+	showReplicaStatus := "SHOW REPLICA STATUS FOR CHANNEL ''"
 	stoppedStatus := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|No|No",
@@ -661,7 +661,7 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 // must converge once mysqld accepts connections again.
 func TestRestoreRetriesConnectUntilMysqldReturns(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -784,7 +784,7 @@ func TestRestoreBoundsConnectRetries(t *testing.T) {
 // and leave replication stopped.
 func TestRestoreRetriesStatusRead(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -907,7 +907,7 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -930,7 +930,7 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 	db.AddRejectedQuery(stopSQLThread, sqlerror.NewSQLError(sqlerror.ERStopReplicaSQLThreadTimeout, sqlerror.SSUnknownSQLState, "STOP REPLICA SQL_THREAD timed out"))
 	db.AddQueryPattern("kill .*", &sqltypes.Result{})
 	db.SetBeforeFunc(startSQLThread, func() {
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|Yes|Yes",
 		))
@@ -962,7 +962,7 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 	// mysqld accepts connections again and the pending stop settles: the
 	// replacement restoration must exist and converge the inherited state.
 	db.DisableConnFail()
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|No",
 	))
@@ -979,7 +979,7 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 // whole budget, holding Close's bounded wait with it.
 func TestRestoreStopsWhenNoLongerReplica(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -1028,7 +1028,7 @@ func TestRestoreRetriesSettingsRestore(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|No|No",
 	))
@@ -1079,7 +1079,7 @@ func TestRestoreRetriesSettingsRestore(t *testing.T) {
 // budget.
 func TestRestoreRetriesSettingsWhenThreadsAlreadyConverged(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -1211,7 +1211,7 @@ func TestRestoreRetriesSettingsWhenThreadStartUnavailable(t *testing.T) {
 // land on -- and clobber the configuration of -- a newly promoted primary.
 func TestRestoreStopsSettingsWhenPromotedMidRestore(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -1280,7 +1280,7 @@ func TestRestoreReconnectsWhenSettingsRestoreLosesConnection(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|No|No",
 	))
@@ -1425,7 +1425,7 @@ func TestShutdownRestoresReplicaAfterLatePreparation(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -1490,7 +1490,7 @@ func TestCloseWaitsForPendingReplicaRestore(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -1564,7 +1564,7 @@ func TestRestoreSurvivesClosedPools(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -1590,13 +1590,13 @@ func TestRestoreSurvivesClosedPools(t *testing.T) {
 	release := make(chan struct{})
 	db.SetBeforeFunc(stopSQLThread, func() {
 		<-release
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|No|No",
 		))
 	})
 	db.SetBeforeFunc(startReplication, func() {
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|Yes|Yes",
 		))
@@ -1638,7 +1638,7 @@ func TestRestoreSurvivesClosedPools(t *testing.T) {
 // (fast-failing on its cancelled context) never will.
 func TestTakeoverTimeoutHandsOffToReplacementRestore(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
 		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
 		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
@@ -1777,7 +1777,7 @@ func TestShutdownCancelledDuringPreparationSkipsShutdown(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -1865,7 +1865,7 @@ func TestShutdownIdempotentWhenStoppedWhileQueued(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -1930,7 +1930,7 @@ func TestShutdownWaitHonorsCancellation(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2038,7 +2038,7 @@ func TestShutdownInitiatedFailureKeepsFence(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2115,7 +2115,7 @@ func TestShutdownProceedsWhenFlockSetupFails(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2190,7 +2190,7 @@ func TestShutdownSerializesAcrossMysqldInstances(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2279,7 +2279,7 @@ func TestShutdownReleasesFlockWhenNothingPending(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2364,7 +2364,7 @@ func TestConcurrentShutdownAttemptsSerialize(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2386,7 +2386,7 @@ func TestConcurrentShutdownAttemptsSerialize(t *testing.T) {
 	db.AddRejectedQuery(stopSQLThread, sqlerror.NewSQLError(sqlerror.ERStopReplicaSQLThreadTimeout, sqlerror.SSUnknownSQLState, "STOP REPLICA SQL_THREAD timed out"))
 	db.AddQueryPattern("kill .*", &sqltypes.Result{})
 	db.SetBeforeFunc(startSQLThread, func() {
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|Yes|Yes",
 		))
@@ -2453,7 +2453,7 @@ func TestConcurrentShutdownAttemptsSerialize(t *testing.T) {
 	assert.Equal(t, 1, db.GetQueryCalledNum(readDurability), "attempt B must inherit the state, not re-capture it")
 
 	// The pending stop settles: B's restoration converges the replica.
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|No",
 	))
@@ -2490,7 +2490,7 @@ func TestShutdownRetryTakesOverRestoreWithBlockedStop(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2514,13 +2514,13 @@ func TestShutdownRetryTakesOverRestoreWithBlockedStop(t *testing.T) {
 	release := make(chan struct{})
 	db.SetBeforeFunc(stopSQLThread, func() {
 		<-release
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|No|No",
 		))
 	})
 	db.SetBeforeFunc(startReplication, func() {
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|Yes|Yes",
 		))
@@ -2585,7 +2585,7 @@ func TestShutdownRetryRefencesDuringPendingRestore(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2607,7 +2607,7 @@ func TestShutdownRetryRefencesDuringPendingRestore(t *testing.T) {
 	db.AddRejectedQuery(stopSQLThread, sqlerror.NewSQLError(sqlerror.ERStopReplicaSQLThreadTimeout, sqlerror.SSUnknownSQLState, "STOP REPLICA SQL_THREAD timed out"))
 	db.AddQueryPattern("kill .*", &sqltypes.Result{})
 	db.SetBeforeFunc(startSQLThread, func() {
-		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 			"source|Yes|Yes",
 		))
@@ -2642,7 +2642,7 @@ func TestShutdownRetryRefencesDuringPendingRestore(t *testing.T) {
 
 	// The pending stop finally settles: the retry's restoration restarts the
 	// applier and converges to the true prior state.
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|No",
 	))
@@ -2668,7 +2668,7 @@ func TestShutdownSkipsRestoreForPreMutationHang(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2730,7 +2730,7 @@ func TestPreparationSkipsStopsAfterDeadline(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2808,7 +2808,7 @@ func TestPreparationTreatsLostStopResponseAsInterrupted(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	))
@@ -2852,7 +2852,7 @@ func TestPreparationTreatsLostStopResponseAsInterrupted(t *testing.T) {
 // restart the thread.
 func TestRestoreReconcilesInterruptedStop(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -2937,7 +2937,7 @@ func TestRestoreReconcilesInterruptedStop(t *testing.T) {
 // then start it -- so the restart brings the monitor back with it.
 func TestRestoreCyclesReceiverAfterMonitorTimeout(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -3005,7 +3005,7 @@ func TestRestoreCyclesReceiverAfterMonitorTimeout(t *testing.T) {
 // recovery (e.g. VTOrc).
 func TestRestoreConvergesWhenInterruptedStopNeverSettles(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -3068,7 +3068,7 @@ func TestRestoreConvergesWhenInterruptedStopNeverSettles(t *testing.T) {
 // caught here as extra status polls and a cycle stop.
 func TestRestoreDiscardsPendingStopsWhenNoThreadsWereRunning(t *testing.T) {
 	const (
-		showReplicaStatus   = "SHOW REPLICA STATUS"
+		showReplicaStatus   = "SHOW REPLICA STATUS FOR CHANNEL ''"
 		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
 		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
 		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
@@ -3195,7 +3195,7 @@ func TestDirectExecutorsUnblockWhenKillFails(t *testing.T) {
 	})
 
 	t.Run("showReplicationStatusDirectContext", func(t *testing.T) {
-		_, _, testMysqld := newBlockedDB(t, "SHOW REPLICA STATUS")
+		_, _, testMysqld := newBlockedDB(t, "SHOW REPLICA STATUS FOR CHANNEL ''")
 		conn, err := testMysqld.GetDbaConnection(t.Context())
 		require.NoError(t, err)
 		defer conn.Close()
@@ -3250,13 +3250,13 @@ func TestShutdownSkipsPreparationForZeroTimeout(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.True(t, shutdownCalled, "the shutdown itself must still run")
-	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the preparation must not run with a zero timeout")
+	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS FOR CHANNEL ''"), "the preparation must not run with a zero timeout")
 
 	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() (bool, error) {
 		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError, "a failing shutdown's error must pass through unchanged")
-	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the preparation must not run with a zero timeout")
+	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS FOR CHANNEL ''"), "the preparation must not run with a zero timeout")
 }
 
 func TestGetMysqlPort(t *testing.T) {
@@ -3343,7 +3343,7 @@ func TestReplicationStatus(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
@@ -3352,7 +3352,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.ReplicationLagUnknown)
 
-	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", &sqltypes.Result{})
 	res, err = testMysqld.ReplicationStatus(t.Context())
 	require.Error(t, err)
 	assert.False(t, res.ReplicationLagUnknown)

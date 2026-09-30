@@ -268,6 +268,15 @@ type TabletManagerClient interface {
 	// ResetReplicationParameters resets the replica replication parameters
 	ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error
 
+	// StartGroupReplication makes the tablet's MySQL join its shard's MySQL Group
+	// Replication group. With bootstrap set, it creates a new group instead; the caller
+	// must hold the shard lock and must have verified that the group is not active anywhere.
+	StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error)
+
+	// StopGroupReplication makes the tablet's MySQL leave its shard's MySQL Group
+	// Replication group.
+	StopGroupReplication(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.GroupReplicationStatus, error)
+
 	// SetReplicationSource tells a tablet to start replicating from the
 	// passed in tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).

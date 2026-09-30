@@ -52,7 +52,11 @@ func (m *TableDefinition) CloneVT() *TableDefinition {
 	if rhs := m.Fields; rhs != nil {
 		tmpContainer := make([]*query.Field, len(rhs))
 		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
+			if vtpb, ok := interface{}(v).(interface{ CloneVT() *query.Field }); ok {
+				tmpContainer[k] = vtpb.CloneVT()
+			} else {
+				tmpContainer[k] = proto.Clone(v).(*query.Field)
+			}
 		}
 		r.Fields = tmpContainer
 	}
@@ -780,11 +784,17 @@ func (m *ExecuteQueryRequest) CloneVT() *ExecuteQueryRequest {
 	r := new(ExecuteQueryRequest)
 	r.DbName = m.DbName
 	r.MaxRows = m.MaxRows
-	r.CallerId = m.CallerId.CloneVT()
 	if rhs := m.Query; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
 		r.Query = tmpBytes
+	}
+	if rhs := m.CallerId; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vtrpc.CallerID }); ok {
+			r.CallerId = vtpb.CloneVT()
+		} else {
+			r.CallerId = proto.Clone(rhs).(*vtrpc.CallerID)
+		}
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -802,7 +812,13 @@ func (m *ExecuteQueryResponse) CloneVT() *ExecuteQueryResponse {
 		return (*ExecuteQueryResponse)(nil)
 	}
 	r := new(ExecuteQueryResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -845,7 +861,13 @@ func (m *ExecuteFetchAsDbaResponse) CloneVT() *ExecuteFetchAsDbaResponse {
 		return (*ExecuteFetchAsDbaResponse)(nil)
 	}
 	r := new(ExecuteFetchAsDbaResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -916,7 +938,11 @@ func (m *ExecuteMultiFetchAsDbaResponse) CloneVT() *ExecuteMultiFetchAsDbaRespon
 	if rhs := m.Results; rhs != nil {
 		tmpContainer := make([]*query.QueryResult, len(rhs))
 		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
+			if vtpb, ok := interface{}(v).(interface{ CloneVT() *query.QueryResult }); ok {
+				tmpContainer[k] = vtpb.CloneVT()
+			} else {
+				tmpContainer[k] = proto.Clone(v).(*query.QueryResult)
+			}
 		}
 		r.Results = tmpContainer
 	}
@@ -960,7 +986,13 @@ func (m *ExecuteFetchAsAllPrivsResponse) CloneVT() *ExecuteFetchAsAllPrivsRespon
 		return (*ExecuteFetchAsAllPrivsResponse)(nil)
 	}
 	r := new(ExecuteFetchAsAllPrivsResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -999,7 +1031,13 @@ func (m *ExecuteFetchAsAppResponse) CloneVT() *ExecuteFetchAsAppResponse {
 		return (*ExecuteFetchAsAppResponse)(nil)
 	}
 	r := new(ExecuteFetchAsAppResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1036,7 +1074,13 @@ func (m *GetUnresolvedTransactionsResponse) CloneVT() *GetUnresolvedTransactions
 	if rhs := m.Transactions; rhs != nil {
 		tmpContainer := make([]*query.TransactionMetadata, len(rhs))
 		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
+			if vtpb, ok := interface{}(v).(interface {
+				CloneVT() *query.TransactionMetadata
+			}); ok {
+				tmpContainer[k] = vtpb.CloneVT()
+			} else {
+				tmpContainer[k] = proto.Clone(v).(*query.TransactionMetadata)
+			}
 		}
 		r.Transactions = tmpContainer
 	}
@@ -1073,7 +1117,15 @@ func (m *ReadTransactionResponse) CloneVT() *ReadTransactionResponse {
 		return (*ReadTransactionResponse)(nil)
 	}
 	r := new(ReadTransactionResponse)
-	r.Transaction = m.Transaction.CloneVT()
+	if rhs := m.Transaction; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *query.TransactionMetadata
+		}); ok {
+			r.Transaction = vtpb.CloneVT()
+		} else {
+			r.Transaction = proto.Clone(rhs).(*query.TransactionMetadata)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1181,7 +1233,15 @@ func (m *MysqlHostMetricsResponse) CloneVT() *MysqlHostMetricsResponse {
 		return (*MysqlHostMetricsResponse)(nil)
 	}
 	r := new(MysqlHostMetricsResponse)
-	r.HostMetrics = m.HostMetrics.CloneVT()
+	if rhs := m.HostMetrics; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *mysqlctl.HostMetricsResponse
+		}); ok {
+			r.HostMetrics = vtpb.CloneVT()
+		} else {
+			r.HostMetrics = proto.Clone(rhs).(*mysqlctl.HostMetricsResponse)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1214,7 +1274,15 @@ func (m *ReplicationStatusResponse) CloneVT() *ReplicationStatusResponse {
 		return (*ReplicationStatusResponse)(nil)
 	}
 	r := new(ReplicationStatusResponse)
-	r.Status = m.Status.CloneVT()
+	if rhs := m.Status; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.Status
+		}); ok {
+			r.Status = vtpb.CloneVT()
+		} else {
+			r.Status = proto.Clone(rhs).(*replicationdata.Status)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1247,7 +1315,15 @@ func (m *PrimaryStatusResponse) CloneVT() *PrimaryStatusResponse {
 		return (*PrimaryStatusResponse)(nil)
 	}
 	r := new(PrimaryStatusResponse)
-	r.Status = m.Status.CloneVT()
+	if rhs := m.Status; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.PrimaryStatus
+		}); ok {
+			r.Status = vtpb.CloneVT()
+		} else {
+			r.Status = proto.Clone(rhs).(*replicationdata.PrimaryStatus)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1583,7 +1659,13 @@ func (m *VReplicationExecResponse) CloneVT() *VReplicationExecResponse {
 		return (*VReplicationExecResponse)(nil)
 	}
 	r := new(VReplicationExecResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1670,8 +1752,14 @@ func (m *PopulateReparentJournalRequest) CloneVT() *PopulateReparentJournalReque
 	r := new(PopulateReparentJournalRequest)
 	r.TimeCreatedNs = m.TimeCreatedNs
 	r.ActionName = m.ActionName
-	r.PrimaryAlias = m.PrimaryAlias.CloneVT()
 	r.ReplicationPosition = m.ReplicationPosition
+	if rhs := m.PrimaryAlias; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *topodata.TabletAlias }); ok {
+			r.PrimaryAlias = vtpb.CloneVT()
+		} else {
+			r.PrimaryAlias = proto.Clone(rhs).(*topodata.TabletAlias)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1737,10 +1825,16 @@ func (m *InitReplicaRequest) CloneVT() *InitReplicaRequest {
 		return (*InitReplicaRequest)(nil)
 	}
 	r := new(InitReplicaRequest)
-	r.Parent = m.Parent.CloneVT()
 	r.ReplicationPosition = m.ReplicationPosition
 	r.TimeCreatedNs = m.TimeCreatedNs
 	r.SemiSync = m.SemiSync
+	if rhs := m.Parent; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *topodata.TabletAlias }); ok {
+			r.Parent = vtpb.CloneVT()
+		} else {
+			r.Parent = proto.Clone(rhs).(*topodata.TabletAlias)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1790,7 +1884,15 @@ func (m *DemotePrimaryResponse) CloneVT() *DemotePrimaryResponse {
 		return (*DemotePrimaryResponse)(nil)
 	}
 	r := new(DemotePrimaryResponse)
-	r.PrimaryStatus = m.PrimaryStatus.CloneVT()
+	if rhs := m.PrimaryStatus; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.PrimaryStatus
+		}); ok {
+			r.PrimaryStatus = vtpb.CloneVT()
+		} else {
+			r.PrimaryStatus = proto.Clone(rhs).(*replicationdata.PrimaryStatus)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1899,6 +2001,89 @@ func (m *ResetReplicationParametersResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
+func (m *StartGroupReplicationRequest) CloneVT() *StartGroupReplicationRequest {
+	if m == nil {
+		return (*StartGroupReplicationRequest)(nil)
+	}
+	r := new(StartGroupReplicationRequest)
+	r.Bootstrap = m.Bootstrap
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *StartGroupReplicationRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *StartGroupReplicationResponse) CloneVT() *StartGroupReplicationResponse {
+	if m == nil {
+		return (*StartGroupReplicationResponse)(nil)
+	}
+	r := new(StartGroupReplicationResponse)
+	if rhs := m.Status; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.GroupReplicationStatus
+		}); ok {
+			r.Status = vtpb.CloneVT()
+		} else {
+			r.Status = proto.Clone(rhs).(*replicationdata.GroupReplicationStatus)
+		}
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *StartGroupReplicationResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *StopGroupReplicationRequest) CloneVT() *StopGroupReplicationRequest {
+	if m == nil {
+		return (*StopGroupReplicationRequest)(nil)
+	}
+	r := new(StopGroupReplicationRequest)
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *StopGroupReplicationRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *StopGroupReplicationResponse) CloneVT() *StopGroupReplicationResponse {
+	if m == nil {
+		return (*StopGroupReplicationResponse)(nil)
+	}
+	r := new(StopGroupReplicationResponse)
+	if rhs := m.Status; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.GroupReplicationStatus
+		}); ok {
+			r.Status = vtpb.CloneVT()
+		} else {
+			r.Status = proto.Clone(rhs).(*replicationdata.GroupReplicationStatus)
+		}
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *StopGroupReplicationResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
 func (m *FullStatusRequest) CloneVT() *FullStatusRequest {
 	if m == nil {
 		return (*FullStatusRequest)(nil)
@@ -1920,7 +2105,15 @@ func (m *FullStatusResponse) CloneVT() *FullStatusResponse {
 		return (*FullStatusResponse)(nil)
 	}
 	r := new(FullStatusResponse)
-	r.Status = m.Status.CloneVT()
+	if rhs := m.Status; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.FullStatus
+		}); ok {
+			r.Status = vtpb.CloneVT()
+		} else {
+			r.Status = proto.Clone(rhs).(*replicationdata.FullStatus)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1937,12 +2130,18 @@ func (m *SetReplicationSourceRequest) CloneVT() *SetReplicationSourceRequest {
 		return (*SetReplicationSourceRequest)(nil)
 	}
 	r := new(SetReplicationSourceRequest)
-	r.Parent = m.Parent.CloneVT()
 	r.TimeCreatedNs = m.TimeCreatedNs
 	r.ForceStartReplication = m.ForceStartReplication
 	r.WaitPosition = m.WaitPosition
 	r.SemiSync = m.SemiSync
 	r.HeartbeatInterval = m.HeartbeatInterval
+	if rhs := m.Parent; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *topodata.TabletAlias }); ok {
+			r.Parent = vtpb.CloneVT()
+		} else {
+			r.Parent = proto.Clone(rhs).(*topodata.TabletAlias)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1975,7 +2174,13 @@ func (m *ReplicaWasRestartedRequest) CloneVT() *ReplicaWasRestartedRequest {
 		return (*ReplicaWasRestartedRequest)(nil)
 	}
 	r := new(ReplicaWasRestartedRequest)
-	r.Parent = m.Parent.CloneVT()
+	if rhs := m.Parent; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *topodata.TabletAlias }); ok {
+			r.Parent = vtpb.CloneVT()
+		} else {
+			r.Parent = proto.Clone(rhs).(*topodata.TabletAlias)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2025,7 +2230,15 @@ func (m *StopReplicationAndGetStatusResponse) CloneVT() *StopReplicationAndGetSt
 		return (*StopReplicationAndGetStatusResponse)(nil)
 	}
 	r := new(StopReplicationAndGetStatusResponse)
-	r.Status = m.Status.CloneVT()
+	if rhs := m.Status; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *replicationdata.StopReplicationStatus
+		}); ok {
+			r.Status = vtpb.CloneVT()
+		} else {
+			r.Status = proto.Clone(rhs).(*replicationdata.StopReplicationStatus)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2076,7 +2289,6 @@ func (m *BackupRequest_InitSQL) CloneVT() *BackupRequest_InitSQL {
 		return (*BackupRequest_InitSQL)(nil)
 	}
 	r := new(BackupRequest_InitSQL)
-	r.Timeout = m.Timeout.CloneVT()
 	r.FailOnError = m.FailOnError
 	if rhs := m.Queries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -2087,6 +2299,13 @@ func (m *BackupRequest_InitSQL) CloneVT() *BackupRequest_InitSQL {
 		tmpContainer := make([]topodata.TabletType, len(rhs))
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
+	}
+	if rhs := m.Timeout; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Duration }); ok {
+			r.Timeout = vtpb.CloneVT()
+		} else {
+			r.Timeout = proto.Clone(rhs).(*vttime.Duration)
+		}
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2108,11 +2327,17 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.AllowPrimary = m.AllowPrimary
 	r.IncrementalFromPos = m.IncrementalFromPos
 	r.UpgradeSafe = m.UpgradeSafe
-	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
 	r.InitSql = m.InitSql.CloneVT()
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
 		r.BackupEngine = &tmpVal
+	}
+	if rhs := m.MysqlShutdownTimeout; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Duration }); ok {
+			r.MysqlShutdownTimeout = vtpb.CloneVT()
+		} else {
+			r.MysqlShutdownTimeout = proto.Clone(rhs).(*vttime.Duration)
+		}
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2130,7 +2355,13 @@ func (m *BackupResponse) CloneVT() *BackupResponse {
 		return (*BackupResponse)(nil)
 	}
 	r := new(BackupResponse)
-	r.Event = m.Event.CloneVT()
+	if rhs := m.Event; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *logutil.Event }); ok {
+			r.Event = vtpb.CloneVT()
+		} else {
+			r.Event = proto.Clone(rhs).(*logutil.Event)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2147,10 +2378,22 @@ func (m *RestoreFromBackupRequest) CloneVT() *RestoreFromBackupRequest {
 		return (*RestoreFromBackupRequest)(nil)
 	}
 	r := new(RestoreFromBackupRequest)
-	r.BackupTime = m.BackupTime.CloneVT()
 	r.RestoreToPos = m.RestoreToPos
 	r.DryRun = m.DryRun
-	r.RestoreToTimestamp = m.RestoreToTimestamp.CloneVT()
+	if rhs := m.BackupTime; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.BackupTime = vtpb.CloneVT()
+		} else {
+			r.BackupTime = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
+	if rhs := m.RestoreToTimestamp; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.RestoreToTimestamp = vtpb.CloneVT()
+		} else {
+			r.RestoreToTimestamp = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
 	if rhs := m.AllowedBackupEngines; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -2172,7 +2415,13 @@ func (m *RestoreFromBackupResponse) CloneVT() *RestoreFromBackupResponse {
 		return (*RestoreFromBackupResponse)(nil)
 	}
 	r := new(RestoreFromBackupResponse)
-	r.Event = m.Event.CloneVT()
+	if rhs := m.Event; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *logutil.Event }); ok {
+			r.Event = vtpb.CloneVT()
+		} else {
+			r.Event = proto.Clone(rhs).(*logutil.Event)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2200,7 +2449,13 @@ func (m *CreateVReplicationWorkflowRequest) CloneVT() *CreateVReplicationWorkflo
 	if rhs := m.BinlogSource; rhs != nil {
 		tmpContainer := make([]*binlogdata.BinlogSource, len(rhs))
 		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
+			if vtpb, ok := interface{}(v).(interface {
+				CloneVT() *binlogdata.BinlogSource
+			}); ok {
+				tmpContainer[k] = vtpb.CloneVT()
+			} else {
+				tmpContainer[k] = proto.Clone(v).(*binlogdata.BinlogSource)
+			}
 		}
 		r.BinlogSource = tmpContainer
 	}
@@ -2230,7 +2485,13 @@ func (m *CreateVReplicationWorkflowResponse) CloneVT() *CreateVReplicationWorkfl
 		return (*CreateVReplicationWorkflowResponse)(nil)
 	}
 	r := new(CreateVReplicationWorkflowResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2304,7 +2565,13 @@ func (m *DeleteVReplicationWorkflowResponse) CloneVT() *DeleteVReplicationWorkfl
 		return (*DeleteVReplicationWorkflowResponse)(nil)
 	}
 	r := new(DeleteVReplicationWorkflowResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2437,19 +2704,51 @@ func (m *ReadVReplicationWorkflowResponse_Stream) CloneVT() *ReadVReplicationWor
 	}
 	r := new(ReadVReplicationWorkflowResponse_Stream)
 	r.Id = m.Id
-	r.Bls = m.Bls.CloneVT()
 	r.Pos = m.Pos
 	r.StopPos = m.StopPos
 	r.MaxTps = m.MaxTps
 	r.MaxReplicationLag = m.MaxReplicationLag
-	r.TimeUpdated = m.TimeUpdated.CloneVT()
-	r.TransactionTimestamp = m.TransactionTimestamp.CloneVT()
 	r.State = m.State
 	r.Message = m.Message
 	r.RowsCopied = m.RowsCopied
-	r.TimeHeartbeat = m.TimeHeartbeat.CloneVT()
-	r.TimeThrottled = m.TimeThrottled.CloneVT()
 	r.ComponentThrottled = m.ComponentThrottled
+	if rhs := m.Bls; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface {
+			CloneVT() *binlogdata.BinlogSource
+		}); ok {
+			r.Bls = vtpb.CloneVT()
+		} else {
+			r.Bls = proto.Clone(rhs).(*binlogdata.BinlogSource)
+		}
+	}
+	if rhs := m.TimeUpdated; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.TimeUpdated = vtpb.CloneVT()
+		} else {
+			r.TimeUpdated = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
+	if rhs := m.TransactionTimestamp; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.TransactionTimestamp = vtpb.CloneVT()
+		} else {
+			r.TransactionTimestamp = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
+	if rhs := m.TimeHeartbeat; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.TimeHeartbeat = vtpb.CloneVT()
+		} else {
+			r.TimeHeartbeat = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
+	if rhs := m.TimeThrottled; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.TimeThrottled = vtpb.CloneVT()
+		} else {
+			r.TimeThrottled = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2568,8 +2867,14 @@ func (m *VDiffResponse) CloneVT() *VDiffResponse {
 	}
 	r := new(VDiffResponse)
 	r.Id = m.Id
-	r.Output = m.Output.CloneVT()
 	r.VdiffUuid = m.VdiffUuid
+	if rhs := m.Output; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Output = vtpb.CloneVT()
+		} else {
+			r.Output = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2675,8 +2980,20 @@ func (m *VDiffTableLastPK) CloneVT() *VDiffTableLastPK {
 		return (*VDiffTableLastPK)(nil)
 	}
 	r := new(VDiffTableLastPK)
-	r.Target = m.Target.CloneVT()
-	r.Source = m.Source.CloneVT()
+	if rhs := m.Target; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Target = vtpb.CloneVT()
+		} else {
+			r.Target = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
+	if rhs := m.Source; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Source = vtpb.CloneVT()
+		} else {
+			r.Source = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2735,7 +3052,11 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 	if rhs := m.FilterRules; rhs != nil {
 		tmpContainer := make([]*binlogdata.Rule, len(rhs))
 		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
+			if vtpb, ok := interface{}(v).(interface{ CloneVT() *binlogdata.Rule }); ok {
+				tmpContainer[k] = vtpb.CloneVT()
+			} else {
+				tmpContainer[k] = proto.Clone(v).(*binlogdata.Rule)
+			}
 		}
 		r.FilterRules = tmpContainer
 	}
@@ -2755,7 +3076,13 @@ func (m *UpdateVReplicationWorkflowResponse) CloneVT() *UpdateVReplicationWorkfl
 		return (*UpdateVReplicationWorkflowResponse)(nil)
 	}
 	r := new(UpdateVReplicationWorkflowResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2811,7 +3138,13 @@ func (m *UpdateVReplicationWorkflowsResponse) CloneVT() *UpdateVReplicationWorkf
 		return (*UpdateVReplicationWorkflowsResponse)(nil)
 	}
 	r := new(UpdateVReplicationWorkflowsResponse)
-	r.Result = m.Result.CloneVT()
+	if rhs := m.Result; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *query.QueryResult }); ok {
+			r.Result = vtpb.CloneVT()
+		} else {
+			r.Result = proto.Clone(rhs).(*query.QueryResult)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2973,8 +3306,14 @@ func (m *GetThrottlerStatusResponse_MetricHealth) CloneVT() *GetThrottlerStatusR
 		return (*GetThrottlerStatusResponse_MetricHealth)(nil)
 	}
 	r := new(GetThrottlerStatusResponse_MetricHealth)
-	r.LastHealthyAt = m.LastHealthyAt.CloneVT()
 	r.SecondsSinceLastHealthy = m.SecondsSinceLastHealthy
+	if rhs := m.LastHealthyAt; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.LastHealthyAt = vtpb.CloneVT()
+		} else {
+			r.LastHealthyAt = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2991,8 +3330,14 @@ func (m *GetThrottlerStatusResponse_RecentApp) CloneVT() *GetThrottlerStatusResp
 		return (*GetThrottlerStatusResponse_RecentApp)(nil)
 	}
 	r := new(GetThrottlerStatusResponse_RecentApp)
-	r.CheckedAt = m.CheckedAt.CloneVT()
 	r.ResponseCode = m.ResponseCode
+	if rhs := m.CheckedAt; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.CheckedAt = vtpb.CloneVT()
+		} else {
+			r.CheckedAt = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3045,7 +3390,13 @@ func (m *GetThrottlerStatusResponse) CloneVT() *GetThrottlerStatusResponse {
 	if rhs := m.ThrottledApps; rhs != nil {
 		tmpContainer := make(map[string]*topodata.ThrottledAppRule, len(rhs))
 		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
+			if vtpb, ok := interface{}(v).(interface {
+				CloneVT() *topodata.ThrottledAppRule
+			}); ok {
+				tmpContainer[k] = vtpb.CloneVT()
+			} else {
+				tmpContainer[k] = proto.Clone(v).(*topodata.ThrottledAppRule)
+			}
 		}
 		r.ThrottledApps = tmpContainer
 	}
@@ -3277,12 +3628,24 @@ func (m *TableDefinition) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	}
 	if len(m.Fields) > 0 {
 		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.Fields[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
+			if vtmsg, ok := interface{}(m.Fields[iNdEx]).(interface {
+				MarshalToSizedBufferVT([]byte) (int, error)
+			}); ok {
+				size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			} else {
+				encoded, err := proto.Marshal(m.Fields[iNdEx])
+				if err != nil {
+					return 0, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x42
 		}
@@ -5023,12 +5386,24 @@ func (m *ExecuteQueryRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CallerId != nil {
-		size, err := m.CallerId.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.CallerId).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.CallerId)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
@@ -5085,12 +5460,24 @@ func (m *ExecuteQueryResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5210,12 +5597,24 @@ func (m *ExecuteFetchAsDbaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5395,12 +5794,24 @@ func (m *ExecuteMultiFetchAsDbaResponse) MarshalToSizedBufferVT(dAtA []byte) (in
 	}
 	if len(m.Results) > 0 {
 		for iNdEx := len(m.Results) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.Results[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
+			if vtmsg, ok := interface{}(m.Results[iNdEx]).(interface {
+				MarshalToSizedBufferVT([]byte) (int, error)
+			}); ok {
+				size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			} else {
+				encoded, err := proto.Marshal(m.Results[iNdEx])
+				if err != nil {
+					return 0, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -5501,12 +5912,24 @@ func (m *ExecuteFetchAsAllPrivsResponse) MarshalToSizedBufferVT(dAtA []byte) (in
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5589,12 +6012,24 @@ func (m *ExecuteFetchAsAppResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5671,12 +6106,24 @@ func (m *GetUnresolvedTransactionsResponse) MarshalToSizedBufferVT(dAtA []byte) 
 	}
 	if len(m.Transactions) > 0 {
 		for iNdEx := len(m.Transactions) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.Transactions[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
+			if vtmsg, ok := interface{}(m.Transactions[iNdEx]).(interface {
+				MarshalToSizedBufferVT([]byte) (int, error)
+			}); ok {
+				size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			} else {
+				encoded, err := proto.Marshal(m.Transactions[iNdEx])
+				if err != nil {
+					return 0, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -5755,12 +6202,24 @@ func (m *ReadTransactionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Transaction != nil {
-		size, err := m.Transaction.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Transaction).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Transaction)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -6015,12 +6474,24 @@ func (m *MysqlHostMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.HostMetrics != nil {
-		size, err := m.HostMetrics.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.HostMetrics).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.HostMetrics)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -6091,12 +6562,24 @@ func (m *ReplicationStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Status != nil {
-		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Status).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Status)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -6167,12 +6650,24 @@ func (m *PrimaryStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Status != nil {
-		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Status).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Status)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -6918,12 +7413,24 @@ func (m *VReplicationExecResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -7129,12 +7636,24 @@ func (m *PopulateReparentJournalRequest) MarshalToSizedBufferVT(dAtA []byte) (in
 		dAtA[i] = 0x22
 	}
 	if m.PrimaryAlias != nil {
-		size, err := m.PrimaryAlias.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.PrimaryAlias).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.PrimaryAlias)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -7310,12 +7829,24 @@ func (m *InitReplicaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 	}
 	if m.Parent != nil {
-		size, err := m.Parent.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Parent).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Parent)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -7429,12 +7960,24 @@ func (m *DemotePrimaryResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.PrimaryStatus != nil {
-		size, err := m.PrimaryStatus.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.PrimaryStatus).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.PrimaryStatus)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -7649,6 +8192,192 @@ func (m *ResetReplicationParametersResponse) MarshalToSizedBufferVT(dAtA []byte)
 	return len(dAtA) - i, nil
 }
 
+func (m *StartGroupReplicationRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StartGroupReplicationRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *StartGroupReplicationRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Bootstrap {
+		i--
+		if m.Bootstrap {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *StartGroupReplicationResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StartGroupReplicationResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *StartGroupReplicationResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Status != nil {
+		if vtmsg, ok := interface{}(m.Status).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Status)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *StopGroupReplicationRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StopGroupReplicationRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *StopGroupReplicationRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *StopGroupReplicationResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StopGroupReplicationResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *StopGroupReplicationResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Status != nil {
+		if vtmsg, ok := interface{}(m.Status).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Status)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *FullStatusRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -7713,12 +8442,24 @@ func (m *FullStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Status != nil {
-		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Status).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Status)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -7794,12 +8535,24 @@ func (m *SetReplicationSourceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		dAtA[i] = 0x10
 	}
 	if m.Parent != nil {
-		size, err := m.Parent.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Parent).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Parent)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -7870,12 +8623,24 @@ func (m *ReplicaWasRestartedRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Parent != nil {
-		size, err := m.Parent.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Parent).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Parent)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -7984,12 +8749,24 @@ func (m *StopReplicationAndGetStatusResponse) MarshalToSizedBufferVT(dAtA []byte
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Status != nil {
-		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Status).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Status)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -8120,12 +8897,24 @@ func (m *BackupRequest_InitSQL) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		dAtA[i] = 0x20
 	}
 	if m.Timeout != nil {
-		size, err := m.Timeout.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Timeout).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Timeout)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -8203,12 +8992,24 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x3a
 	}
 	if m.MysqlShutdownTimeout != nil {
-		size, err := m.MysqlShutdownTimeout.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.MysqlShutdownTimeout).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.MysqlShutdownTimeout)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x32
 	}
@@ -8285,12 +9086,24 @@ func (m *BackupResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Event != nil {
-		size, err := m.Event.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Event).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Event)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -8337,12 +9150,24 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		}
 	}
 	if m.RestoreToTimestamp != nil {
-		size, err := m.RestoreToTimestamp.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.RestoreToTimestamp).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.RestoreToTimestamp)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
@@ -8364,12 +9189,24 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		dAtA[i] = 0x12
 	}
 	if m.BackupTime != nil {
-		size, err := m.BackupTime.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.BackupTime).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.BackupTime)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -8407,12 +9244,24 @@ func (m *RestoreFromBackupResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Event != nil {
-		size, err := m.Event.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Event).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Event)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -8533,12 +9382,24 @@ func (m *CreateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 	}
 	if len(m.BinlogSource) > 0 {
 		for iNdEx := len(m.BinlogSource) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.BinlogSource[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
+			if vtmsg, ok := interface{}(m.BinlogSource[iNdEx]).(interface {
+				MarshalToSizedBufferVT([]byte) (int, error)
+			}); ok {
+				size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			} else {
+				encoded, err := proto.Marshal(m.BinlogSource[iNdEx])
+				if err != nil {
+					return 0, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 		}
@@ -8584,12 +9445,24 @@ func (m *CreateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -8757,12 +9630,24 @@ func (m *DeleteVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -9092,22 +9977,46 @@ func (m *ReadVReplicationWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []
 		dAtA[i] = 0x72
 	}
 	if m.TimeThrottled != nil {
-		size, err := m.TimeThrottled.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.TimeThrottled).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.TimeThrottled)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x6a
 	}
 	if m.TimeHeartbeat != nil {
-		size, err := m.TimeHeartbeat.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.TimeHeartbeat).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.TimeHeartbeat)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x62
 	}
@@ -9129,22 +10038,46 @@ func (m *ReadVReplicationWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []
 		dAtA[i] = 0x48
 	}
 	if m.TransactionTimestamp != nil {
-		size, err := m.TransactionTimestamp.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.TransactionTimestamp).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.TransactionTimestamp)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x42
 	}
 	if m.TimeUpdated != nil {
-		size, err := m.TimeUpdated.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.TimeUpdated).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.TimeUpdated)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x3a
 	}
@@ -9173,12 +10106,24 @@ func (m *ReadVReplicationWorkflowResponse_Stream) MarshalToSizedBufferVT(dAtA []
 		dAtA[i] = 0x1a
 	}
 	if m.Bls != nil {
-		size, err := m.Bls.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Bls).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Bls)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -9541,12 +10486,24 @@ func (m *VDiffResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1a
 	}
 	if m.Output != nil {
-		size, err := m.Output.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Output).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Output)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -9891,22 +10848,46 @@ func (m *VDiffTableLastPK) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Source != nil {
-		size, err := m.Source.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Source).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Source)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
 	if m.Target != nil {
-		size, err := m.Target.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Target).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Target)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -9945,12 +10926,24 @@ func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 	}
 	if len(m.FilterRules) > 0 {
 		for iNdEx := len(m.FilterRules) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.FilterRules[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
+			if vtmsg, ok := interface{}(m.FilterRules[iNdEx]).(interface {
+				MarshalToSizedBufferVT([]byte) (int, error)
+			}); ok {
+				size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			} else {
+				encoded, err := proto.Marshal(m.FilterRules[iNdEx])
+				if err != nil {
+					return 0, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x52
 		}
@@ -10076,12 +11069,24 @@ func (m *UpdateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -10199,12 +11204,24 @@ func (m *UpdateVReplicationWorkflowsResponse) MarshalToSizedBufferVT(dAtA []byte
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Result != nil {
-		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.Result).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.Result)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -10656,12 +11673,24 @@ func (m *GetThrottlerStatusResponse_MetricHealth) MarshalToSizedBufferVT(dAtA []
 		dAtA[i] = 0x10
 	}
 	if m.LastHealthyAt != nil {
-		size, err := m.LastHealthyAt.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.LastHealthyAt).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.LastHealthyAt)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -10704,12 +11733,24 @@ func (m *GetThrottlerStatusResponse_RecentApp) MarshalToSizedBufferVT(dAtA []byt
 		dAtA[i] = 0x18
 	}
 	if m.CheckedAt != nil {
-		size, err := m.CheckedAt.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.CheckedAt).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.CheckedAt)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -10807,12 +11848,24 @@ func (m *GetThrottlerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		for k := range m.ThrottledApps {
 			v := m.ThrottledApps[k]
 			baseI := i
-			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
+			if vtmsg, ok := interface{}(v).(interface {
+				MarshalToSizedBufferVT([]byte) (int, error)
+			}); ok {
+				size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			} else {
+				encoded, err := proto.Marshal(v)
+				if err != nil {
+					return 0, err
+				}
+				i -= len(encoded)
+				copy(dAtA[i:], encoded)
+				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 			i -= len(k)
@@ -11416,7 +12469,13 @@ func (m *TableDefinition) SizeVT() (n int) {
 	}
 	if len(m.Fields) > 0 {
 		for _, e := range m.Fields {
-			l = e.SizeVT()
+			if size, ok := interface{}(e).(interface {
+				SizeVT() int
+			}); ok {
+				l = size.SizeVT()
+			} else {
+				l = proto.Size(e)
+			}
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -12019,7 +13078,13 @@ func (m *ExecuteQueryRequest) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxRows))
 	}
 	if m.CallerId != nil {
-		l = m.CallerId.SizeVT()
+		if size, ok := interface{}(m.CallerId).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.CallerId)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12033,7 +13098,13 @@ func (m *ExecuteQueryResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12077,7 +13148,13 @@ func (m *ExecuteFetchAsDbaResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12146,7 +13223,13 @@ func (m *ExecuteMultiFetchAsDbaResponse) SizeVT() (n int) {
 	_ = l
 	if len(m.Results) > 0 {
 		for _, e := range m.Results {
-			l = e.SizeVT()
+			if size, ok := interface{}(e).(interface {
+				SizeVT() int
+			}); ok {
+				l = size.SizeVT()
+			} else {
+				l = proto.Size(e)
+			}
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -12185,7 +13268,13 @@ func (m *ExecuteFetchAsAllPrivsResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12216,7 +13305,13 @@ func (m *ExecuteFetchAsAppResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12244,7 +13339,13 @@ func (m *GetUnresolvedTransactionsResponse) SizeVT() (n int) {
 	_ = l
 	if len(m.Transactions) > 0 {
 		for _, e := range m.Transactions {
-			l = e.SizeVT()
+			if size, ok := interface{}(e).(interface {
+				SizeVT() int
+			}); ok {
+				l = size.SizeVT()
+			} else {
+				l = proto.Size(e)
+			}
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -12273,7 +13374,13 @@ func (m *ReadTransactionResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Transaction != nil {
-		l = m.Transaction.SizeVT()
+		if size, ok := interface{}(m.Transaction).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Transaction)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12365,7 +13472,13 @@ func (m *MysqlHostMetricsResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.HostMetrics != nil {
-		l = m.HostMetrics.SizeVT()
+		if size, ok := interface{}(m.HostMetrics).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.HostMetrics)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12389,7 +13502,13 @@ func (m *ReplicationStatusResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Status != nil {
-		l = m.Status.SizeVT()
+		if size, ok := interface{}(m.Status).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Status)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12413,7 +13532,13 @@ func (m *PrimaryStatusResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Status != nil {
-		l = m.Status.SizeVT()
+		if size, ok := interface{}(m.Status).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Status)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12659,7 +13784,13 @@ func (m *VReplicationExecResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12734,7 +13865,13 @@ func (m *PopulateReparentJournalRequest) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.PrimaryAlias != nil {
-		l = m.PrimaryAlias.SizeVT()
+		if size, ok := interface{}(m.PrimaryAlias).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.PrimaryAlias)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.ReplicationPosition)
@@ -12785,7 +13922,13 @@ func (m *InitReplicaRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Parent != nil {
-		l = m.Parent.SizeVT()
+		if size, ok := interface{}(m.Parent).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Parent)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.ReplicationPosition)
@@ -12832,7 +13975,13 @@ func (m *DemotePrimaryResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.PrimaryStatus != nil {
-		l = m.PrimaryStatus.SizeVT()
+		if size, ok := interface{}(m.PrimaryStatus).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.PrimaryStatus)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12902,6 +14051,69 @@ func (m *ResetReplicationParametersResponse) SizeVT() (n int) {
 	return n
 }
 
+func (m *StartGroupReplicationRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Bootstrap {
+		n += 2
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *StartGroupReplicationResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Status != nil {
+		if size, ok := interface{}(m.Status).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Status)
+		}
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *StopGroupReplicationRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *StopGroupReplicationResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Status != nil {
+		if size, ok := interface{}(m.Status).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Status)
+		}
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
 func (m *FullStatusRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -12919,7 +14131,13 @@ func (m *FullStatusResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Status != nil {
-		l = m.Status.SizeVT()
+		if size, ok := interface{}(m.Status).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Status)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -12933,7 +14151,13 @@ func (m *SetReplicationSourceRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Parent != nil {
-		l = m.Parent.SizeVT()
+		if size, ok := interface{}(m.Parent).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Parent)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.TimeCreatedNs != 0 {
@@ -12973,7 +14197,13 @@ func (m *ReplicaWasRestartedRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Parent != nil {
-		l = m.Parent.SizeVT()
+		if size, ok := interface{}(m.Parent).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Parent)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13010,7 +14240,13 @@ func (m *StopReplicationAndGetStatusResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Status != nil {
-		l = m.Status.SizeVT()
+		if size, ok := interface{}(m.Status).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Status)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13064,7 +14300,13 @@ func (m *BackupRequest_InitSQL) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
 	}
 	if m.Timeout != nil {
-		l = m.Timeout.SizeVT()
+		if size, ok := interface{}(m.Timeout).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Timeout)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.FailOnError {
@@ -13098,7 +14340,13 @@ func (m *BackupRequest) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.MysqlShutdownTimeout != nil {
-		l = m.MysqlShutdownTimeout.SizeVT()
+		if size, ok := interface{}(m.MysqlShutdownTimeout).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.MysqlShutdownTimeout)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.InitSql != nil {
@@ -13116,7 +14364,13 @@ func (m *BackupResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Event != nil {
-		l = m.Event.SizeVT()
+		if size, ok := interface{}(m.Event).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Event)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13130,7 +14384,13 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.BackupTime != nil {
-		l = m.BackupTime.SizeVT()
+		if size, ok := interface{}(m.BackupTime).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.BackupTime)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.RestoreToPos)
@@ -13141,7 +14401,13 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 		n += 2
 	}
 	if m.RestoreToTimestamp != nil {
-		l = m.RestoreToTimestamp.SizeVT()
+		if size, ok := interface{}(m.RestoreToTimestamp).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.RestoreToTimestamp)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if len(m.AllowedBackupEngines) > 0 {
@@ -13161,7 +14427,13 @@ func (m *RestoreFromBackupResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Event != nil {
-		l = m.Event.SizeVT()
+		if size, ok := interface{}(m.Event).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Event)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13180,7 +14452,13 @@ func (m *CreateVReplicationWorkflowRequest) SizeVT() (n int) {
 	}
 	if len(m.BinlogSource) > 0 {
 		for _, e := range m.BinlogSource {
-			l = e.SizeVT()
+			if size, ok := interface{}(e).(interface {
+				SizeVT() int
+			}); ok {
+				l = size.SizeVT()
+			} else {
+				l = proto.Size(e)
+			}
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -13230,7 +14508,13 @@ func (m *CreateVReplicationWorkflowResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13289,7 +14573,13 @@ func (m *DeleteVReplicationWorkflowResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13405,7 +14695,13 @@ func (m *ReadVReplicationWorkflowResponse_Stream) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.Id))
 	}
 	if m.Bls != nil {
-		l = m.Bls.SizeVT()
+		if size, ok := interface{}(m.Bls).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Bls)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.Pos)
@@ -13423,11 +14719,23 @@ func (m *ReadVReplicationWorkflowResponse_Stream) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxReplicationLag))
 	}
 	if m.TimeUpdated != nil {
-		l = m.TimeUpdated.SizeVT()
+		if size, ok := interface{}(m.TimeUpdated).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.TimeUpdated)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.TransactionTimestamp != nil {
-		l = m.TransactionTimestamp.SizeVT()
+		if size, ok := interface{}(m.TransactionTimestamp).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.TransactionTimestamp)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.State != 0 {
@@ -13441,11 +14749,23 @@ func (m *ReadVReplicationWorkflowResponse_Stream) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.RowsCopied))
 	}
 	if m.TimeHeartbeat != nil {
-		l = m.TimeHeartbeat.SizeVT()
+		if size, ok := interface{}(m.TimeHeartbeat).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.TimeHeartbeat)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.TimeThrottled != nil {
-		l = m.TimeThrottled.SizeVT()
+		if size, ok := interface{}(m.TimeThrottled).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.TimeThrottled)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.ComponentThrottled)
@@ -13594,7 +14914,13 @@ func (m *VDiffResponse) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.Id))
 	}
 	if m.Output != nil {
-		l = m.Output.SizeVT()
+		if size, ok := interface{}(m.Output).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Output)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.VdiffUuid)
@@ -13726,11 +15052,23 @@ func (m *VDiffTableLastPK) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Target != nil {
-		l = m.Target.SizeVT()
+		if size, ok := interface{}(m.Target).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Target)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.Source != nil {
-		l = m.Source.SizeVT()
+		if size, ok := interface{}(m.Source).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Source)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13789,7 +15127,13 @@ func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 	}
 	if len(m.FilterRules) > 0 {
 		for _, e := range m.FilterRules {
-			l = e.SizeVT()
+			if size, ok := interface{}(e).(interface {
+				SizeVT() int
+			}); ok {
+				l = size.SizeVT()
+			} else {
+				l = proto.Size(e)
+			}
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -13804,7 +15148,13 @@ func (m *UpdateVReplicationWorkflowResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -13854,7 +15204,13 @@ func (m *UpdateVReplicationWorkflowsResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Result != nil {
-		l = m.Result.SizeVT()
+		if size, ok := interface{}(m.Result).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.Result)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -14031,7 +15387,13 @@ func (m *GetThrottlerStatusResponse_MetricHealth) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.LastHealthyAt != nil {
-		l = m.LastHealthyAt.SizeVT()
+		if size, ok := interface{}(m.LastHealthyAt).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.LastHealthyAt)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.SecondsSinceLastHealthy != 0 {
@@ -14048,7 +15410,13 @@ func (m *GetThrottlerStatusResponse_RecentApp) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.CheckedAt != nil {
-		l = m.CheckedAt.SizeVT()
+		if size, ok := interface{}(m.CheckedAt).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.CheckedAt)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.ResponseCode != 0 {
@@ -14143,7 +15511,13 @@ func (m *GetThrottlerStatusResponse) SizeVT() (n int) {
 			_ = v
 			l = 0
 			if v != nil {
-				l = v.SizeVT()
+				if size, ok := interface{}(v).(interface {
+					SizeVT() int
+				}); ok {
+					l = size.SizeVT()
+				} else {
+					l = proto.Size(v)
+				}
 			}
 			l += 1 + protohelpers.SizeOfVarint(uint64(l))
 			mapEntrySize := 1 + len(k) + protohelpers.SizeOfVarint(uint64(len(k))) + l
@@ -14581,8 +15955,16 @@ func (m *TableDefinition) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Fields = append(m.Fields, &query.Field{})
-			if err := m.Fields[len(m.Fields)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Fields[len(m.Fields)-1]).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Fields[len(m.Fields)-1]); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -18395,8 +19777,16 @@ func (m *ExecuteQueryRequest) UnmarshalVT(dAtA []byte) error {
 			if m.CallerId == nil {
 				m.CallerId = &vtrpc.CallerID{}
 			}
-			if err := m.CallerId.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.CallerId).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CallerId); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -18482,8 +19872,16 @@ func (m *ExecuteQueryResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -18765,8 +20163,16 @@ func (m *ExecuteFetchAsDbaResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -19195,8 +20601,16 @@ func (m *ExecuteMultiFetchAsDbaResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Results = append(m.Results, &query.QueryResult{})
-			if err := m.Results[len(m.Results)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Results[len(m.Results)-1]).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Results[len(m.Results)-1]); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -19438,8 +20852,16 @@ func (m *ExecuteFetchAsAllPrivsResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -19629,8 +21051,16 @@ func (m *ExecuteFetchAsAppResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -19784,8 +21214,16 @@ func (m *GetUnresolvedTransactionsResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Transactions = append(m.Transactions, &query.TransactionMetadata{})
-			if err := m.Transactions[len(m.Transactions)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Transactions[len(m.Transactions)-1]).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Transactions[len(m.Transactions)-1]); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -19954,8 +21392,16 @@ func (m *ReadTransactionResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Transaction == nil {
 				m.Transaction = &query.TransactionMetadata{}
 			}
-			if err := m.Transaction.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Transaction).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Transaction); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -20495,8 +21941,16 @@ func (m *MysqlHostMetricsResponse) UnmarshalVT(dAtA []byte) error {
 			if m.HostMetrics == nil {
 				m.HostMetrics = &mysqlctl.HostMetricsResponse{}
 			}
-			if err := m.HostMetrics.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.HostMetrics).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.HostMetrics); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -20633,8 +22087,16 @@ func (m *ReplicationStatusResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Status == nil {
 				m.Status = &replicationdata.Status{}
 			}
-			if err := m.Status.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Status).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Status); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -20771,8 +22233,16 @@ func (m *PrimaryStatusResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Status == nil {
 				m.Status = &replicationdata.PrimaryStatus{}
 			}
-			if err := m.Status.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Status).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Status); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -22129,8 +23599,16 @@ func (m *VReplicationExecResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -22574,8 +24052,16 @@ func (m *PopulateReparentJournalRequest) UnmarshalVT(dAtA []byte) error {
 			if m.PrimaryAlias == nil {
 				m.PrimaryAlias = &topodata.TabletAlias{}
 			}
-			if err := m.PrimaryAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.PrimaryAlias).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PrimaryAlias); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 4:
@@ -22865,8 +24351,16 @@ func (m *InitReplicaRequest) UnmarshalVT(dAtA []byte) error {
 			if m.Parent == nil {
 				m.Parent = &topodata.TabletAlias{}
 			}
-			if err := m.Parent.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Parent).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Parent); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -23145,8 +24639,16 @@ func (m *DemotePrimaryResponse) UnmarshalVT(dAtA []byte) error {
 			if m.PrimaryStatus == nil {
 				m.PrimaryStatus = &replicationdata.PrimaryStatus{}
 			}
-			if err := m.PrimaryStatus.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.PrimaryStatus).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PrimaryStatus); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -23497,6 +24999,318 @@ func (m *ResetReplicationParametersResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *StartGroupReplicationRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StartGroupReplicationRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StartGroupReplicationRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Bootstrap", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Bootstrap = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StartGroupReplicationResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StartGroupReplicationResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StartGroupReplicationResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Status == nil {
+				m.Status = &replicationdata.GroupReplicationStatus{}
+			}
+			if unmarshal, ok := interface{}(m.Status).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Status); err != nil {
+					return err
+				}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StopGroupReplicationRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StopGroupReplicationRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StopGroupReplicationRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StopGroupReplicationResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StopGroupReplicationResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StopGroupReplicationResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Status == nil {
+				m.Status = &replicationdata.GroupReplicationStatus{}
+			}
+			if unmarshal, ok := interface{}(m.Status).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Status); err != nil {
+					return err
+				}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *FullStatusRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -23609,8 +25423,16 @@ func (m *FullStatusResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Status == nil {
 				m.Status = &replicationdata.FullStatus{}
 			}
-			if err := m.Status.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Status).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Status); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -23696,8 +25518,16 @@ func (m *SetReplicationSourceRequest) UnmarshalVT(dAtA []byte) error {
 			if m.Parent == nil {
 				m.Parent = &topodata.TabletAlias{}
 			}
-			if err := m.Parent.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Parent).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Parent); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -23936,8 +25766,16 @@ func (m *ReplicaWasRestartedRequest) UnmarshalVT(dAtA []byte) error {
 			if m.Parent == nil {
 				m.Parent = &topodata.TabletAlias{}
 			}
-			if err := m.Parent.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Parent).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Parent); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -24144,8 +25982,16 @@ func (m *StopReplicationAndGetStatusResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Status == nil {
 				m.Status = &replicationdata.StopReplicationStatus{}
 			}
-			if err := m.Status.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Status).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Status); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -24486,8 +26332,16 @@ func (m *BackupRequest_InitSQL) UnmarshalVT(dAtA []byte) error {
 			if m.Timeout == nil {
 				m.Timeout = &vttime.Duration{}
 			}
-			if err := m.Timeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Timeout).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Timeout); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 4:
@@ -24717,8 +26571,16 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			if m.MysqlShutdownTimeout == nil {
 				m.MysqlShutdownTimeout = &vttime.Duration{}
 			}
-			if err := m.MysqlShutdownTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.MysqlShutdownTimeout).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.MysqlShutdownTimeout); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 7:
@@ -24840,8 +26702,16 @@ func (m *BackupResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Event == nil {
 				m.Event = &logutil.Event{}
 			}
-			if err := m.Event.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Event).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Event); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -24927,8 +26797,16 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 			if m.BackupTime == nil {
 				m.BackupTime = &vttime.Time{}
 			}
-			if err := m.BackupTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.BackupTime).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.BackupTime); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -25015,8 +26893,16 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 			if m.RestoreToTimestamp == nil {
 				m.RestoreToTimestamp = &vttime.Time{}
 			}
-			if err := m.RestoreToTimestamp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.RestoreToTimestamp).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.RestoreToTimestamp); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 5:
@@ -25134,8 +27020,16 @@ func (m *RestoreFromBackupResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Event == nil {
 				m.Event = &logutil.Event{}
 			}
-			if err := m.Event.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Event).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Event); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -25251,8 +27145,16 @@ func (m *CreateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.BinlogSource = append(m.BinlogSource, &binlogdata.BinlogSource{})
-			if err := m.BinlogSource[len(m.BinlogSource)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.BinlogSource[len(m.BinlogSource)-1]).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.BinlogSource[len(m.BinlogSource)-1]); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 3:
@@ -25588,8 +27490,16 @@ func (m *CreateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -26006,8 +27916,16 @@ func (m *DeleteVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -26751,8 +28669,16 @@ func (m *ReadVReplicationWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error
 			if m.Bls == nil {
 				m.Bls = &binlogdata.BinlogSource{}
 			}
-			if err := m.Bls.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Bls).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Bls); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 3:
@@ -26889,8 +28815,16 @@ func (m *ReadVReplicationWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error
 			if m.TimeUpdated == nil {
 				m.TimeUpdated = &vttime.Time{}
 			}
-			if err := m.TimeUpdated.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.TimeUpdated).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TimeUpdated); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 8:
@@ -26925,8 +28859,16 @@ func (m *ReadVReplicationWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error
 			if m.TransactionTimestamp == nil {
 				m.TransactionTimestamp = &vttime.Time{}
 			}
-			if err := m.TransactionTimestamp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.TransactionTimestamp).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TransactionTimestamp); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 9:
@@ -27031,8 +28973,16 @@ func (m *ReadVReplicationWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error
 			if m.TimeHeartbeat == nil {
 				m.TimeHeartbeat = &vttime.Time{}
 			}
-			if err := m.TimeHeartbeat.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.TimeHeartbeat).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TimeHeartbeat); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 13:
@@ -27067,8 +29017,16 @@ func (m *ReadVReplicationWorkflowResponse_Stream) UnmarshalVT(dAtA []byte) error
 			if m.TimeThrottled == nil {
 				m.TimeThrottled = &vttime.Time{}
 			}
-			if err := m.TimeThrottled.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.TimeThrottled).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TimeThrottled); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 14:
@@ -28156,8 +30114,16 @@ func (m *VDiffResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Output == nil {
 				m.Output = &query.QueryResult{}
 			}
-			if err := m.Output.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Output).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Output); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 3:
@@ -29021,8 +30987,16 @@ func (m *VDiffTableLastPK) UnmarshalVT(dAtA []byte) error {
 			if m.Target == nil {
 				m.Target = &query.QueryResult{}
 			}
-			if err := m.Target.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Target).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Target); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -29057,8 +31031,16 @@ func (m *VDiffTableLastPK) UnmarshalVT(dAtA []byte) error {
 			if m.Source == nil {
 				m.Source = &query.QueryResult{}
 			}
-			if err := m.Source.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Source).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Source); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -29527,8 +31509,16 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.FilterRules = append(m.FilterRules, &binlogdata.Rule{})
-			if err := m.FilterRules[len(m.FilterRules)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.FilterRules[len(m.FilterRules)-1]).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.FilterRules[len(m.FilterRules)-1]); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -29614,8 +31604,16 @@ func (m *UpdateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -29922,8 +31920,16 @@ func (m *UpdateVReplicationWorkflowsResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Result == nil {
 				m.Result = &query.QueryResult{}
 			}
-			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.Result).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Result); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -31032,8 +33038,16 @@ func (m *GetThrottlerStatusResponse_MetricHealth) UnmarshalVT(dAtA []byte) error
 			if m.LastHealthyAt == nil {
 				m.LastHealthyAt = &vttime.Time{}
 			}
-			if err := m.LastHealthyAt.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.LastHealthyAt).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.LastHealthyAt); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -31138,8 +33152,16 @@ func (m *GetThrottlerStatusResponse_RecentApp) UnmarshalVT(dAtA []byte) error {
 			if m.CheckedAt == nil {
 				m.CheckedAt = &vttime.Time{}
 			}
-			if err := m.CheckedAt.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.CheckedAt).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CheckedAt); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 3:
@@ -31967,8 +33989,16 @@ func (m *GetThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 						return io.ErrUnexpectedEOF
 					}
 					mapvalue = &topodata.ThrottledAppRule{}
-					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
-						return err
+					if unmarshal, ok := interface{}(mapvalue).(interface {
+						UnmarshalVT([]byte) error
+					}); ok {
+						if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
+							return err
+						}
+					} else {
+						if err := proto.Unmarshal(dAtA[iNdEx:postmsgIndex], mapvalue); err != nil {
+							return err
+						}
 					}
 					iNdEx = postmsgIndex
 				} else {

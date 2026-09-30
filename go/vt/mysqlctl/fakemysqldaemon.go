@@ -226,6 +226,19 @@ type FakeMysqlDaemon struct {
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
+	// GroupReplication is returned by GroupReplicationStatus. StartGroupReplication,
+	// StopGroupReplication and SetGroupReplicationPrimary update it.
+	GroupReplication *replicationdatapb.GroupReplicationStatus
+
+	// GroupReplicationConfig is the last configuration passed to ConfigureGroupReplication.
+	GroupReplicationConfig mysql.GroupReplicationConfig
+
+	// GroupReplicationBootstrapped is set when StartGroupReplication bootstrapped a group.
+	GroupReplicationBootstrapped bool
+
+	// GroupReplicationError is returned by the group replication methods, if set.
+	GroupReplicationError error
+
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
 
@@ -905,4 +918,102 @@ func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
 	}
 
 	return errors.New("no read locks acquired yet")
+}
+
+// GroupReplicationStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return nil, fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil {
+		return &replicationdatapb.GroupReplicationStatus{}, nil
+	}
+	return fmd.GroupReplication.CloneVT(), nil
+}
+
+// ConfigureGroupReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	fmd.GroupReplicationConfig = cfg
+	if fmd.GroupReplication == nil {
+		fmd.GroupReplication = &replicationdatapb.GroupReplicationStatus{MemberState: mysql.GroupMemberStateOffline}
+	}
+	fmd.GroupReplication.PluginActive = true
+	fmd.GroupReplication.GroupName = cfg.GroupName
+	fmd.GroupReplication.SinglePrimaryMode = true
+	fmd.GroupReplication.MemberWeight = int32(cfg.MemberWeight)
+	return nil
+}
+
+// StartGroupReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap bool) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil || !fmd.GroupReplication.PluginActive {
+		return errors.New("group replication plugin is not loaded")
+	}
+	fmd.GroupReplication.MemberState = mysql.GroupMemberStateOnline
+	fmd.GroupReplication.HasQuorum = true
+	if bootstrap {
+		fmd.GroupReplicationBootstrapped = true
+		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
+		fmd.GroupReplication.PrimaryUuid = fmd.ServerUUID
+		fmd.SuperReadOnly.Store(false)
+		fmd.ReadOnly = false
+	} else {
+		fmd.GroupReplication.MemberRole = mysql.GroupMemberRoleSecondary
+		fmd.SuperReadOnly.Store(true)
+		fmd.ReadOnly = true
+	}
+	return nil
+}
+
+// StopGroupReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication != nil {
+		fmd.GroupReplication.MemberState = mysql.GroupMemberStateOffline
+		fmd.GroupReplication.MemberRole = ""
+		fmd.GroupReplication.PrimaryUuid = ""
+		fmd.GroupReplication.HasQuorum = false
+	}
+	fmd.SuperReadOnly.Store(true)
+	fmd.ReadOnly = true
+	return nil
+}
+
+// SetGroupReplicationPrimary is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil || fmd.GroupReplication.MemberState != mysql.GroupMemberStateOnline {
+		return errors.New("member is not ONLINE in a group")
+	}
+	fmd.GroupReplication.PrimaryUuid = memberUUID
+	if memberUUID == fmd.ServerUUID {
+		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
+		fmd.SuperReadOnly.Store(false)
+		fmd.ReadOnly = false
+	} else {
+		fmd.GroupReplication.MemberRole = mysql.GroupMemberRoleSecondary
+		fmd.SuperReadOnly.Store(true)
+		fmd.ReadOnly = true
+	}
+	return nil
 }

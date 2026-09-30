@@ -866,6 +866,21 @@ func (mr *MockTabletManagerClientMockRecorder) Sleep(ctx, tablet, duration any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sleep", reflect.TypeOf((*MockTabletManagerClient)(nil).Sleep), ctx, tablet, duration)
 }
 
+// StartGroupReplication mocks base method.
+func (m *MockTabletManagerClient) StartGroupReplication(ctx context.Context, tablet *topodata.Tablet, bootstrap bool) (*replicationdata.GroupReplicationStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartGroupReplication", ctx, tablet, bootstrap)
+	ret0, _ := ret[0].(*replicationdata.GroupReplicationStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StartGroupReplication indicates an expected call of StartGroupReplication.
+func (mr *MockTabletManagerClientMockRecorder) StartGroupReplication(ctx, tablet, bootstrap any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartGroupReplication", reflect.TypeOf((*MockTabletManagerClient)(nil).StartGroupReplication), ctx, tablet, bootstrap)
+}
+
 // StartReplication mocks base method.
 func (m *MockTabletManagerClient) StartReplication(ctx context.Context, tablet *topodata.Tablet, semiSync bool) error {
 	m.ctrl.T.Helper()
@@ -892,6 +907,21 @@ func (m *MockTabletManagerClient) StartReplicationUntilAfter(ctx context.Context
 func (mr *MockTabletManagerClientMockRecorder) StartReplicationUntilAfter(ctx, tablet, position, duration any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartReplicationUntilAfter", reflect.TypeOf((*MockTabletManagerClient)(nil).StartReplicationUntilAfter), ctx, tablet, position, duration)
+}
+
+// StopGroupReplication mocks base method.
+func (m *MockTabletManagerClient) StopGroupReplication(ctx context.Context, tablet *topodata.Tablet) (*replicationdata.GroupReplicationStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopGroupReplication", ctx, tablet)
+	ret0, _ := ret[0].(*replicationdata.GroupReplicationStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StopGroupReplication indicates an expected call of StopGroupReplication.
+func (mr *MockTabletManagerClientMockRecorder) StopGroupReplication(ctx, tablet any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopGroupReplication", reflect.TypeOf((*MockTabletManagerClient)(nil).StopGroupReplication), ctx, tablet)
 }
 
 // StopReplication mocks base method.

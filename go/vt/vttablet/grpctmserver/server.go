@@ -641,6 +641,22 @@ func (s *server) ResetReplicationParameters(ctx context.Context, request *tablet
 	return response, s.tm.ResetReplicationParameters(ctx)
 }
 
+func (s *server) StartGroupReplication(ctx context.Context, request *tabletmanagerdatapb.StartGroupReplicationRequest) (response *tabletmanagerdatapb.StartGroupReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "StartGroupReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.StartGroupReplicationResponse{}
+	response.Status, err = s.tm.StartGroupReplication(ctx, request.Bootstrap)
+	return response, err
+}
+
+func (s *server) StopGroupReplication(ctx context.Context, request *tabletmanagerdatapb.StopGroupReplicationRequest) (response *tabletmanagerdatapb.StopGroupReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "StopGroupReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.StopGroupReplicationResponse{}
+	response.Status, err = s.tm.StopGroupReplication(ctx)
+	return response, err
+}
+
 func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanagerdatapb.SetReplicationSourceRequest) (response *tabletmanagerdatapb.SetReplicationSourceResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "SetReplicationSource", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

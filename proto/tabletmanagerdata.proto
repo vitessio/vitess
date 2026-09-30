@@ -522,6 +522,27 @@ message ResetReplicationParametersRequest {
 message ResetReplicationParametersResponse {
 }
 
+message StartGroupReplicationRequest {
+  // bootstrap creates a new group of which the tablet is the only member and the primary,
+  // instead of joining the shard's existing group. The caller must hold the shard lock and
+  // must have verified that no member of the shard's group is active: bootstrapping while
+  // the group exists elsewhere splits the shard.
+  bool bootstrap = 1;
+}
+
+message StartGroupReplicationResponse {
+  // status is the tablet's group replication status after it started group replication.
+  replicationdata.GroupReplicationStatus status = 1;
+}
+
+message StopGroupReplicationRequest {
+}
+
+message StopGroupReplicationResponse {
+  // status is the tablet's group replication status after it left the group.
+  replicationdata.GroupReplicationStatus status = 1;
+}
+
 message FullStatusRequest {
 }
 

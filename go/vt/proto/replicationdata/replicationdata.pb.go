@@ -643,8 +643,10 @@ type FullStatus struct {
 	// liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
 	// uses it to form a quorum before failing over an unreachable primary vttablet.
 	ShardPeerHealth []*ShardPeerHealth `protobuf:"bytes,26,rep,name=shard_peer_health,json=shardPeerHealth,proto3" json:"shard_peer_health,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// group_replication_status is set when the MySQL Group Replication plugin is loaded.
+	GroupReplicationStatus *GroupReplicationStatus `protobuf:"bytes,27,opt,name=group_replication_status,json=groupReplicationStatus,proto3" json:"group_replication_status,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *FullStatus) Reset() {
@@ -859,6 +861,240 @@ func (x *FullStatus) GetShardPeerHealth() []*ShardPeerHealth {
 	return nil
 }
 
+func (x *FullStatus) GetGroupReplicationStatus() *GroupReplicationStatus {
+	if x != nil {
+		return x.GroupReplicationStatus
+	}
+	return nil
+}
+
+// GroupReplicationMember is one member of a MySQL Group Replication group, as seen by the
+// reporting member (performance_schema.replication_group_members).
+type GroupReplicationMember struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// member_uuid is the member's server_uuid.
+	MemberUuid string `protobuf:"bytes,1,opt,name=member_uuid,json=memberUuid,proto3" json:"member_uuid,omitempty"`
+	Host       string `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
+	Port       int32  `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	// state is ONLINE, RECOVERING, OFFLINE, ERROR or UNREACHABLE.
+	State string `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	// role is PRIMARY or SECONDARY.
+	Role          string `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
+	Version       string `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GroupReplicationMember) Reset() {
+	*x = GroupReplicationMember{}
+	mi := &file_replicationdata_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GroupReplicationMember) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupReplicationMember) ProtoMessage() {}
+
+func (x *GroupReplicationMember) ProtoReflect() protoreflect.Message {
+	mi := &file_replicationdata_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupReplicationMember.ProtoReflect.Descriptor instead.
+func (*GroupReplicationMember) Descriptor() ([]byte, []int) {
+	return file_replicationdata_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GroupReplicationMember) GetMemberUuid() string {
+	if x != nil {
+		return x.MemberUuid
+	}
+	return ""
+}
+
+func (x *GroupReplicationMember) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *GroupReplicationMember) GetPort() int32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *GroupReplicationMember) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GroupReplicationMember) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *GroupReplicationMember) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+// GroupReplicationStatus is the MySQL Group Replication state of a tablet's MySQL.
+type GroupReplicationStatus struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// plugin_active is true when the group_replication plugin is installed and active.
+	PluginActive bool `protobuf:"varint,1,opt,name=plugin_active,json=pluginActive,proto3" json:"plugin_active,omitempty"`
+	// group_name is the configured group_replication_group_name.
+	GroupName string `protobuf:"bytes,2,opt,name=group_name,json=groupName,proto3" json:"group_name,omitempty"`
+	// member_state is this member's own state: ONLINE, RECOVERING, OFFLINE, ERROR or UNREACHABLE.
+	MemberState string `protobuf:"bytes,3,opt,name=member_state,json=memberState,proto3" json:"member_state,omitempty"`
+	// member_role is this member's own role: PRIMARY or SECONDARY. It is empty if the member
+	// is not ONLINE.
+	MemberRole string `protobuf:"bytes,4,opt,name=member_role,json=memberRole,proto3" json:"member_role,omitempty"`
+	// primary_uuid is the server_uuid of the group's primary, as seen by this member.
+	PrimaryUuid string `protobuf:"bytes,5,opt,name=primary_uuid,json=primaryUuid,proto3" json:"primary_uuid,omitempty"`
+	// view_id identifies the group membership view that this member is part of.
+	ViewId string `protobuf:"bytes,6,opt,name=view_id,json=viewId,proto3" json:"view_id,omitempty"`
+	// members is the group membership as seen by this member.
+	Members []*GroupReplicationMember `protobuf:"bytes,7,rep,name=members,proto3" json:"members,omitempty"`
+	// has_quorum is true when a majority of the members in this member's view are reachable.
+	HasQuorum bool `protobuf:"varint,8,opt,name=has_quorum,json=hasQuorum,proto3" json:"has_quorum,omitempty"`
+	// received_transaction_set is the GTID set this member has received from the group,
+	// including transactions that are not applied yet.
+	ReceivedTransactionSet string `protobuf:"bytes,9,opt,name=received_transaction_set,json=receivedTransactionSet,proto3" json:"received_transaction_set,omitempty"`
+	// single_primary_mode is the value of group_replication_single_primary_mode.
+	SinglePrimaryMode bool `protobuf:"varint,10,opt,name=single_primary_mode,json=singlePrimaryMode,proto3" json:"single_primary_mode,omitempty"`
+	// member_weight is the value of group_replication_member_weight.
+	MemberWeight  int32 `protobuf:"varint,11,opt,name=member_weight,json=memberWeight,proto3" json:"member_weight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GroupReplicationStatus) Reset() {
+	*x = GroupReplicationStatus{}
+	mi := &file_replicationdata_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GroupReplicationStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupReplicationStatus) ProtoMessage() {}
+
+func (x *GroupReplicationStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_replicationdata_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupReplicationStatus.ProtoReflect.Descriptor instead.
+func (*GroupReplicationStatus) Descriptor() ([]byte, []int) {
+	return file_replicationdata_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GroupReplicationStatus) GetPluginActive() bool {
+	if x != nil {
+		return x.PluginActive
+	}
+	return false
+}
+
+func (x *GroupReplicationStatus) GetGroupName() string {
+	if x != nil {
+		return x.GroupName
+	}
+	return ""
+}
+
+func (x *GroupReplicationStatus) GetMemberState() string {
+	if x != nil {
+		return x.MemberState
+	}
+	return ""
+}
+
+func (x *GroupReplicationStatus) GetMemberRole() string {
+	if x != nil {
+		return x.MemberRole
+	}
+	return ""
+}
+
+func (x *GroupReplicationStatus) GetPrimaryUuid() string {
+	if x != nil {
+		return x.PrimaryUuid
+	}
+	return ""
+}
+
+func (x *GroupReplicationStatus) GetViewId() string {
+	if x != nil {
+		return x.ViewId
+	}
+	return ""
+}
+
+func (x *GroupReplicationStatus) GetMembers() []*GroupReplicationMember {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+func (x *GroupReplicationStatus) GetHasQuorum() bool {
+	if x != nil {
+		return x.HasQuorum
+	}
+	return false
+}
+
+func (x *GroupReplicationStatus) GetReceivedTransactionSet() string {
+	if x != nil {
+		return x.ReceivedTransactionSet
+	}
+	return ""
+}
+
+func (x *GroupReplicationStatus) GetSinglePrimaryMode() bool {
+	if x != nil {
+		return x.SinglePrimaryMode
+	}
+	return false
+}
+
+func (x *GroupReplicationStatus) GetMemberWeight() int32 {
+	if x != nil {
+		return x.MemberWeight
+	}
+	return 0
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
@@ -917,7 +1153,7 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x19consecutive_ping_failures\x18\x02 \x01(\x03R\x17consecutivePingFailures\x12>\n" +
 	"\x14last_successful_ping\x18\x03 \x01(\v2\f.vttime.TimeR\x12lastSuccessfulPing\x12<\n" +
 	"\x13last_attempted_ping\x18\x04 \x01(\v2\f.vttime.TimeR\x11lastAttemptedPing\x12T\n" +
-	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\x9c\n" +
+	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\xff\n" +
 	"\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
@@ -950,7 +1186,32 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x11semi_sync_blocked\x18\x18 \x01(\bR\x0fsemiSyncBlocked\x125\n" +
 	"\vtablet_type\x18\x19 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
 	"tabletType\x12L\n" +
-	"\x11shard_peer_health\x18\x1a \x03(\v2 .replicationdata.ShardPeerHealthR\x0fshardPeerHealth*;\n" +
+	"\x11shard_peer_health\x18\x1a \x03(\v2 .replicationdata.ShardPeerHealthR\x0fshardPeerHealth\x12a\n" +
+	"\x18group_replication_status\x18\x1b \x01(\v2'.replicationdata.GroupReplicationStatusR\x16groupReplicationStatus\"\xa5\x01\n" +
+	"\x16GroupReplicationMember\x12\x1f\n" +
+	"\vmember_uuid\x18\x01 \x01(\tR\n" +
+	"memberUuid\x12\x12\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12\x12\n" +
+	"\x04port\x18\x03 \x01(\x05R\x04port\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\x12\x12\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\x12\x18\n" +
+	"\aversion\x18\x06 \x01(\tR\aversion\"\xcd\x03\n" +
+	"\x16GroupReplicationStatus\x12#\n" +
+	"\rplugin_active\x18\x01 \x01(\bR\fpluginActive\x12\x1d\n" +
+	"\n" +
+	"group_name\x18\x02 \x01(\tR\tgroupName\x12!\n" +
+	"\fmember_state\x18\x03 \x01(\tR\vmemberState\x12\x1f\n" +
+	"\vmember_role\x18\x04 \x01(\tR\n" +
+	"memberRole\x12!\n" +
+	"\fprimary_uuid\x18\x05 \x01(\tR\vprimaryUuid\x12\x17\n" +
+	"\aview_id\x18\x06 \x01(\tR\x06viewId\x12A\n" +
+	"\amembers\x18\a \x03(\v2'.replicationdata.GroupReplicationMemberR\amembers\x12\x1d\n" +
+	"\n" +
+	"has_quorum\x18\b \x01(\bR\thasQuorum\x128\n" +
+	"\x18received_transaction_set\x18\t \x01(\tR\x16receivedTransactionSet\x12.\n" +
+	"\x13single_primary_mode\x18\n" +
+	" \x01(\bR\x11singlePrimaryMode\x12#\n" +
+	"\rmember_weight\x18\v \x01(\x05R\fmemberWeight*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
@@ -968,37 +1229,41 @@ func file_replicationdata_proto_rawDescGZIP() []byte {
 }
 
 var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_replicationdata_proto_goTypes = []any{
-	(StopReplicationMode)(0),      // 0: replicationdata.StopReplicationMode
-	(*Status)(nil),                // 1: replicationdata.Status
-	(*Configuration)(nil),         // 2: replicationdata.Configuration
-	(*StopReplicationStatus)(nil), // 3: replicationdata.StopReplicationStatus
-	(*PrimaryStatus)(nil),         // 4: replicationdata.PrimaryStatus
-	(*ShardPeerHealth)(nil),       // 5: replicationdata.ShardPeerHealth
-	(*FullStatus)(nil),            // 6: replicationdata.FullStatus
-	(*topodata.TabletAlias)(nil),  // 7: topodata.TabletAlias
-	(*vttime.Time)(nil),           // 8: vttime.Time
-	(*vttime.Duration)(nil),       // 9: vttime.Duration
-	(topodata.TabletType)(0),      // 10: topodata.TabletType
+	(StopReplicationMode)(0),       // 0: replicationdata.StopReplicationMode
+	(*Status)(nil),                 // 1: replicationdata.Status
+	(*Configuration)(nil),          // 2: replicationdata.Configuration
+	(*StopReplicationStatus)(nil),  // 3: replicationdata.StopReplicationStatus
+	(*PrimaryStatus)(nil),          // 4: replicationdata.PrimaryStatus
+	(*ShardPeerHealth)(nil),        // 5: replicationdata.ShardPeerHealth
+	(*FullStatus)(nil),             // 6: replicationdata.FullStatus
+	(*GroupReplicationMember)(nil), // 7: replicationdata.GroupReplicationMember
+	(*GroupReplicationStatus)(nil), // 8: replicationdata.GroupReplicationStatus
+	(*topodata.TabletAlias)(nil),   // 9: topodata.TabletAlias
+	(*vttime.Time)(nil),            // 10: vttime.Time
+	(*vttime.Duration)(nil),        // 11: vttime.Duration
+	(topodata.TabletType)(0),       // 12: topodata.TabletType
 }
 var file_replicationdata_proto_depIdxs = []int32{
 	1,  // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
 	1,  // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
-	7,  // 2: replicationdata.ShardPeerHealth.tablet_alias:type_name -> topodata.TabletAlias
-	8,  // 3: replicationdata.ShardPeerHealth.last_successful_ping:type_name -> vttime.Time
-	8,  // 4: replicationdata.ShardPeerHealth.last_attempted_ping:type_name -> vttime.Time
-	9,  // 5: replicationdata.ShardPeerHealth.time_since_last_attempted_ping:type_name -> vttime.Duration
+	9,  // 2: replicationdata.ShardPeerHealth.tablet_alias:type_name -> topodata.TabletAlias
+	10, // 3: replicationdata.ShardPeerHealth.last_successful_ping:type_name -> vttime.Time
+	10, // 4: replicationdata.ShardPeerHealth.last_attempted_ping:type_name -> vttime.Time
+	11, // 5: replicationdata.ShardPeerHealth.time_since_last_attempted_ping:type_name -> vttime.Duration
 	1,  // 6: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
 	4,  // 7: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
 	2,  // 8: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
-	10, // 9: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
+	12, // 9: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
 	5,  // 10: replicationdata.FullStatus.shard_peer_health:type_name -> replicationdata.ShardPeerHealth
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	8,  // 11: replicationdata.FullStatus.group_replication_status:type_name -> replicationdata.GroupReplicationStatus
+	7,  // 12: replicationdata.GroupReplicationStatus.members:type_name -> replicationdata.GroupReplicationMember
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_replicationdata_proto_init() }
@@ -1012,7 +1277,7 @@ func file_replicationdata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_replicationdata_proto_rawDesc), len(file_replicationdata_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

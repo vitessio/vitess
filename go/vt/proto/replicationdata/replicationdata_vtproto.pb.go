@@ -128,11 +128,35 @@ func (m *ShardPeerHealth) CloneVT() *ShardPeerHealth {
 		return (*ShardPeerHealth)(nil)
 	}
 	r := new(ShardPeerHealth)
-	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.ConsecutivePingFailures = m.ConsecutivePingFailures
-	r.LastSuccessfulPing = m.LastSuccessfulPing.CloneVT()
-	r.LastAttemptedPing = m.LastAttemptedPing.CloneVT()
-	r.TimeSinceLastAttemptedPing = m.TimeSinceLastAttemptedPing.CloneVT()
+	if rhs := m.TabletAlias; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *topodata.TabletAlias }); ok {
+			r.TabletAlias = vtpb.CloneVT()
+		} else {
+			r.TabletAlias = proto.Clone(rhs).(*topodata.TabletAlias)
+		}
+	}
+	if rhs := m.LastSuccessfulPing; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.LastSuccessfulPing = vtpb.CloneVT()
+		} else {
+			r.LastSuccessfulPing = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
+	if rhs := m.LastAttemptedPing; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
+			r.LastAttemptedPing = vtpb.CloneVT()
+		} else {
+			r.LastAttemptedPing = proto.Clone(rhs).(*vttime.Time)
+		}
+	}
+	if rhs := m.TimeSinceLastAttemptedPing; rhs != nil {
+		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Duration }); ok {
+			r.TimeSinceLastAttemptedPing = vtpb.CloneVT()
+		} else {
+			r.TimeSinceLastAttemptedPing = proto.Clone(rhs).(*vttime.Duration)
+		}
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -174,6 +198,7 @@ func (m *FullStatus) CloneVT() *FullStatus {
 	r.DiskStalled = m.DiskStalled
 	r.SemiSyncBlocked = m.SemiSyncBlocked
 	r.TabletType = m.TabletType
+	r.GroupReplicationStatus = m.GroupReplicationStatus.CloneVT()
 	if rhs := m.ShardPeerHealth; rhs != nil {
 		tmpContainer := make([]*ShardPeerHealth, len(rhs))
 		for k, v := range rhs {
@@ -189,6 +214,61 @@ func (m *FullStatus) CloneVT() *FullStatus {
 }
 
 func (m *FullStatus) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *GroupReplicationMember) CloneVT() *GroupReplicationMember {
+	if m == nil {
+		return (*GroupReplicationMember)(nil)
+	}
+	r := new(GroupReplicationMember)
+	r.MemberUuid = m.MemberUuid
+	r.Host = m.Host
+	r.Port = m.Port
+	r.State = m.State
+	r.Role = m.Role
+	r.Version = m.Version
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *GroupReplicationMember) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *GroupReplicationStatus) CloneVT() *GroupReplicationStatus {
+	if m == nil {
+		return (*GroupReplicationStatus)(nil)
+	}
+	r := new(GroupReplicationStatus)
+	r.PluginActive = m.PluginActive
+	r.GroupName = m.GroupName
+	r.MemberState = m.MemberState
+	r.MemberRole = m.MemberRole
+	r.PrimaryUuid = m.PrimaryUuid
+	r.ViewId = m.ViewId
+	r.HasQuorum = m.HasQuorum
+	r.ReceivedTransactionSet = m.ReceivedTransactionSet
+	r.SinglePrimaryMode = m.SinglePrimaryMode
+	r.MemberWeight = m.MemberWeight
+	if rhs := m.Members; rhs != nil {
+		tmpContainer := make([]*GroupReplicationMember, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Members = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *GroupReplicationStatus) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -656,32 +736,68 @@ func (m *ShardPeerHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.TimeSinceLastAttemptedPing != nil {
-		size, err := m.TimeSinceLastAttemptedPing.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.TimeSinceLastAttemptedPing).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.TimeSinceLastAttemptedPing)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
 	if m.LastAttemptedPing != nil {
-		size, err := m.LastAttemptedPing.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.LastAttemptedPing).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.LastAttemptedPing)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
 	if m.LastSuccessfulPing != nil {
-		size, err := m.LastSuccessfulPing.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.LastSuccessfulPing).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.LastSuccessfulPing)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -691,12 +807,24 @@ func (m *ShardPeerHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 	}
 	if m.TabletAlias != nil {
-		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+		if vtmsg, ok := interface{}(m.TabletAlias).(interface {
+			MarshalToSizedBufferVT([]byte) (int, error)
+		}); ok {
+			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		} else {
+			encoded, err := proto.Marshal(m.TabletAlias)
+			if err != nil {
+				return 0, err
+			}
+			i -= len(encoded)
+			copy(dAtA[i:], encoded)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -732,6 +860,18 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.GroupReplicationStatus != nil {
+		size, err := m.GroupReplicationStatus.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xda
 	}
 	if len(m.ShardPeerHealth) > 0 {
 		for iNdEx := len(m.ShardPeerHealth) - 1; iNdEx >= 0; iNdEx-- {
@@ -974,6 +1114,201 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *GroupReplicationMember) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GroupReplicationMember) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *GroupReplicationMember) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Version) > 0 {
+		i -= len(m.Version)
+		copy(dAtA[i:], m.Version)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Version)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Role) > 0 {
+		i -= len(m.Role)
+		copy(dAtA[i:], m.Role)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Role)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.State) > 0 {
+		i -= len(m.State)
+		copy(dAtA[i:], m.State)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.State)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.Port != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Port))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.Host) > 0 {
+		i -= len(m.Host)
+		copy(dAtA[i:], m.Host)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Host)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.MemberUuid) > 0 {
+		i -= len(m.MemberUuid)
+		copy(dAtA[i:], m.MemberUuid)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.MemberUuid)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GroupReplicationStatus) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GroupReplicationStatus) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *GroupReplicationStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MemberWeight != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.MemberWeight))
+		i--
+		dAtA[i] = 0x58
+	}
+	if m.SinglePrimaryMode {
+		i--
+		if m.SinglePrimaryMode {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
+	}
+	if len(m.ReceivedTransactionSet) > 0 {
+		i -= len(m.ReceivedTransactionSet)
+		copy(dAtA[i:], m.ReceivedTransactionSet)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ReceivedTransactionSet)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if m.HasQuorum {
+		i--
+		if m.HasQuorum {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
+	if len(m.Members) > 0 {
+		for iNdEx := len(m.Members) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Members[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0x3a
+		}
+	}
+	if len(m.ViewId) > 0 {
+		i -= len(m.ViewId)
+		copy(dAtA[i:], m.ViewId)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ViewId)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.PrimaryUuid) > 0 {
+		i -= len(m.PrimaryUuid)
+		copy(dAtA[i:], m.PrimaryUuid)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.PrimaryUuid)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.MemberRole) > 0 {
+		i -= len(m.MemberRole)
+		copy(dAtA[i:], m.MemberRole)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.MemberRole)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.MemberState) > 0 {
+		i -= len(m.MemberState)
+		copy(dAtA[i:], m.MemberState)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.MemberState)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.GroupName) > 0 {
+		i -= len(m.GroupName)
+		copy(dAtA[i:], m.GroupName)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.GroupName)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.PluginActive {
+		i--
+		if m.PluginActive {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *Status) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -1146,22 +1481,46 @@ func (m *ShardPeerHealth) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.TabletAlias != nil {
-		l = m.TabletAlias.SizeVT()
+		if size, ok := interface{}(m.TabletAlias).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.TabletAlias)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.ConsecutivePingFailures != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ConsecutivePingFailures))
 	}
 	if m.LastSuccessfulPing != nil {
-		l = m.LastSuccessfulPing.SizeVT()
+		if size, ok := interface{}(m.LastSuccessfulPing).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.LastSuccessfulPing)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.LastAttemptedPing != nil {
-		l = m.LastAttemptedPing.SizeVT()
+		if size, ok := interface{}(m.LastAttemptedPing).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.LastAttemptedPing)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.TimeSinceLastAttemptedPing != nil {
-		l = m.TimeSinceLastAttemptedPing.SizeVT()
+		if size, ok := interface{}(m.TimeSinceLastAttemptedPing).(interface {
+			SizeVT() int
+		}); ok {
+			l = size.SizeVT()
+		} else {
+			l = proto.Size(m.TimeSinceLastAttemptedPing)
+		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -1264,6 +1623,95 @@ func (m *FullStatus) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
+	}
+	if m.GroupReplicationStatus != nil {
+		l = m.GroupReplicationStatus.SizeVT()
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *GroupReplicationMember) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.MemberUuid)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.Host)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.Port != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Port))
+	}
+	l = len(m.State)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.Role)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.Version)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *GroupReplicationStatus) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.PluginActive {
+		n += 2
+	}
+	l = len(m.GroupName)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.MemberState)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.MemberRole)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.PrimaryUuid)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.ViewId)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.Members) > 0 {
+		for _, e := range m.Members {
+			l = e.SizeVT()
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	if m.HasQuorum {
+		n += 2
+	}
+	l = len(m.ReceivedTransactionSet)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.SinglePrimaryMode {
+		n += 2
+	}
+	if m.MemberWeight != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.MemberWeight))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -2449,8 +2897,16 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -2504,8 +2960,16 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.LastSuccessfulPing == nil {
 				m.LastSuccessfulPing = &vttime.Time{}
 			}
-			if err := m.LastSuccessfulPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.LastSuccessfulPing).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.LastSuccessfulPing); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 4:
@@ -2540,8 +3004,16 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.LastAttemptedPing == nil {
 				m.LastAttemptedPing = &vttime.Time{}
 			}
-			if err := m.LastAttemptedPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.LastAttemptedPing).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.LastAttemptedPing); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		case 5:
@@ -2576,8 +3048,16 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.TimeSinceLastAttemptedPing == nil {
 				m.TimeSinceLastAttemptedPing = &vttime.Duration{}
 			}
-			if err := m.TimeSinceLastAttemptedPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if unmarshal, ok := interface{}(m.TimeSinceLastAttemptedPing).(interface {
+				UnmarshalVT([]byte) error
+			}); ok {
+				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TimeSinceLastAttemptedPing); err != nil {
+					return err
+				}
 			}
 			iNdEx = postIndex
 		default:
@@ -3292,6 +3772,628 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 27:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GroupReplicationStatus", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.GroupReplicationStatus == nil {
+				m.GroupReplicationStatus = &GroupReplicationStatus{}
+			}
+			if err := m.GroupReplicationStatus.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GroupReplicationMember) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GroupReplicationMember: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GroupReplicationMember: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MemberUuid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MemberUuid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Host", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Host = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Port", wireType)
+			}
+			m.Port = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Port |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.State = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Role", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Role = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Version = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GroupReplicationStatus) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GroupReplicationStatus: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GroupReplicationStatus: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PluginActive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.PluginActive = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GroupName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.GroupName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MemberState", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MemberState = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MemberRole", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MemberRole = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryUuid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PrimaryUuid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ViewId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ViewId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Members", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Members = append(m.Members, &GroupReplicationMember{})
+			if err := m.Members[len(m.Members)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HasQuorum", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.HasQuorum = bool(v != 0)
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReceivedTransactionSet", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ReceivedTransactionSet = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SinglePrimaryMode", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SinglePrimaryMode = bool(v != 0)
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MemberWeight", wireType)
+			}
+			m.MemberWeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MemberWeight |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

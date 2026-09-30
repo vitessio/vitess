@@ -313,6 +313,16 @@ func (client *FakeTabletManagerClient) ResetReplicationParameters(ctx context.Co
 	return nil
 }
 
+// StartGroupReplication is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+	return &replicationdatapb.GroupReplicationStatus{}, nil
+}
+
+// StopGroupReplication is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) StopGroupReplication(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.GroupReplicationStatus, error) {
+	return &replicationdatapb.GroupReplicationStatus{}, nil
+}
+
 // ReplicaWasRestarted is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ReplicaWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return nil

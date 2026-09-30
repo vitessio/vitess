@@ -141,6 +141,17 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 		return nil, err
 	}
 
+	err = runFullStatusQuery(ctx, conn, "group replication status", func() error {
+		grStatus, queryErr := conn.Conn.GroupReplicationStatus()
+		if queryErr == nil && grStatus.PluginActive {
+			status.GroupReplicationStatus = grStatus
+		}
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = runFullStatusQuery(ctx, conn, "replication configuration", func() error {
 		var queryErr error
 		status.ReplicationConfiguration, queryErr = conn.Conn.ReplicationConfiguration(variables.ReplicaNetTimeout)
