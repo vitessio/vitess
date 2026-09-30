@@ -28,13 +28,13 @@ import (
 )
 
 var (
-	logLevel  string
-	logFormat string
+	logLevel  = "info"
+	logFormat = "json"
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&logLevel, "log-level", "info", "minimum log level (debug, info, warn, error)")
-	fs.StringVar(&logFormat, "log-format", "json", "log output format: json for machine-readable JSON, text for human-readable colored output")
+	fs.StringVar(&logLevel, "log-level", logLevel, "minimum log level (debug, info, warn, error)")
+	fs.StringVar(&logFormat, "log-format", logFormat, "log output format: json for machine-readable JSON, text for human-readable colored output")
 }
 
 // Init configures the logger.
