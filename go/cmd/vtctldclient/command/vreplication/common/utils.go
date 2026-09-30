@@ -245,6 +245,18 @@ func ParseConfigOverrides(overrides []string) (map[string]string, error) {
 		}
 		configOverrides[key] = value
 	}
+	// Validate the values too: a stored invalid value keeps the workflow's
+	// stream from starting. An empty value removes the override, so it is
+	// not validated.
+	values := make(map[string]string, len(configOverrides))
+	for key, value := range configOverrides {
+		if strings.TrimSpace(value) != "" {
+			values[key] = value
+		}
+	}
+	if _, err := vttablet.NewVReplicationConfig(values); err != nil {
+		return nil, err
+	}
 	return configOverrides, nil
 }
 

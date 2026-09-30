@@ -52,7 +52,7 @@ func (s *overrideCaptureServer) WorkflowUpdate(_ context.Context, req *vtctldata
 }
 
 func TestVtctldclientConfigOverrideRequestsIncludeParallelReplicationWorkers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	server := &overrideCaptureServer{}
@@ -104,5 +104,42 @@ func TestVtctldclientConfigOverrideRequestsIncludeParallelReplicationWorkers(t *
 		require.NotNil(t, server.workflowUpdateReq)
 		require.NotNil(t, server.workflowUpdateReq.TabletRequest)
 		require.Equal(t, "9", server.workflowUpdateReq.TabletRequest.ConfigOverrides["vreplication-parallel-replication-workers"])
+	})
+
+	// An invalid value is rejected before the request is sent: once stored,
+	// it would keep the workflow's stream from starting.
+	t.Run("WorkflowUpdate rejects an out-of-range value", func(t *testing.T) {
+		server.workflowUpdateReq = nil
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"Workflow",
+			"--keyspace", "target",
+			"update",
+			"--workflow", "wf1",
+			"--config-overrides", "vreplication-parallel-replication-workers=65",
+		}
+
+		err := command.Root.Execute()
+		require.ErrorContains(t, err, "must be at most")
+		require.Nil(t, server.workflowUpdateReq)
+	})
+
+	// An empty value removes the override, so it is not validated.
+	t.Run("WorkflowUpdate accepts an empty value", func(t *testing.T) {
+		server.workflowUpdateReq = nil
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"Workflow",
+			"--keyspace", "target",
+			"update",
+			"--workflow", "wf1",
+			"--config-overrides", "vreplication-parallel-replication-workers=",
+		}
+
+		err := command.Root.Execute()
+		require.NoError(t, err)
+		require.NotNil(t, server.workflowUpdateReq)
 	})
 }
