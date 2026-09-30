@@ -1625,8 +1625,9 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
 
 		// Point the tablet's replication at the current primary. This also changes the tablet's type
-		// to REPLICA and attempts to update the topology.
-		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
+		// to REPLICA and attempts to update the topology. Like fixReplica, pass no heartbeat interval,
+		// so that a tablet that already replicates from the primary keeps its relay log.
+		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, 0); err != nil {
 			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
 			return
 		}

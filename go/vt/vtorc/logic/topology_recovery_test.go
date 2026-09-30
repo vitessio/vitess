@@ -1093,6 +1093,8 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 
 // TestReconcileStaleTopoPrimary verifies that reconcileStaleTopoPrimary updates the topology record of a
 // stale primary tablet to REPLICA, regardless of whether the best-effort demotion RPC to the tablet succeeds.
+// After a successful demotion, it must point the tablet at the primary without a heartbeat interval, which
+// would make the tablet change the replication source even when it already replicates from the primary.
 func TestReconcileStaleTopoPrimary(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1225,10 +1227,15 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					}).
 					Times(1)
 
+				demotionSucceeds := tt.demotePrimaryDelay == 0 && tt.demotePrimaryErr == nil
+				setReplicationSourceCalls := 0
+				if demotionSucceeds {
+					setReplicationSourceCalls = 1
+				}
 				mockTMC.EXPECT().
-					SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					SetReplicationSource(gomock.Any(), gomock.Any(), primaryTablet.Alias, int64(0), "", true, false, float64(0)).
 					Return(nil).
-					AnyTimes()
+					Times(setReplicationSourceCalls)
 
 				tmc = mockTMC
 
@@ -1237,6 +1244,7 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					AnalyzedInstanceAlias: staleTablet.Alias,
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard,
+					ReplicaNetTimeout:     8,
 				}
 
 				logger := log.NewPrefixedLogger("test-stale-primary")
