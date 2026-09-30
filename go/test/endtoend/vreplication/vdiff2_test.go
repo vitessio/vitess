@@ -92,8 +92,9 @@ var testCases = []*testCase{
 		resume:         true,
 		resumeInserts: []string{
 			`insert into customer(cid, name, typ) values(2005149200, 'Testy McTester (redux)', 'enterprise')`,
-			// datze has a target PK that extends its source PK, so this resumes
-			// the source after id 6 and the target after (6, dt2).
+			// datze has a target PK that extends its source PK, so on each target
+			// shard this resumes the source after the last id diffed on that shard
+			// and the target after that row's (id, dt2).
 			`insert into datze(id, dt2) values(7, '2023-06-01 00:00:00')`,
 		},
 		testCLIErrors:       true, // test for errors in the simplest workflow
