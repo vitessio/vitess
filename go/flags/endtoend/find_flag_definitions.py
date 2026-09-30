@@ -25,7 +25,6 @@ def find_flag_definitions():
     
     # Group flags by category
     flag_groups = {
-        'logging': [],
         'backup_restore': [],
         'stats_monitoring': [],
         'database': [],
@@ -94,7 +93,6 @@ def print_migration_plan():
     
     # Priority order for groups
     priority_order = [
-        ('logging', 'Logging flags'),
         ('timeout', 'Timeout and deadline flags'),
         ('backup_restore', 'Backup and restore flags'),
         ('database', 'Database connection flags'),
