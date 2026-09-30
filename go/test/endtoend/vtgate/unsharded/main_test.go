@@ -379,6 +379,23 @@ func TestCallProcedureSessionResidue(t *testing.T) {
 		utils.Exec(t, conn, "CALL dirty_session()")
 		assertClean(t, "streaming CALL")
 	})
+	t.Run("inside a transaction", func(t *testing.T) {
+		// A CALL inside a transaction runs on the transaction's connection, which
+		// the transaction pool takes back at commit (vitessio/vitess#21063). The
+		// probes run in transactions of their own, so they draw from that pool;
+		// it hands out the most recently returned connection first, so the first
+		// probe would land on the CALL's connection if it were recycled.
+		utils.Exec(t, conn, "begin")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		utils.Exec(t, conn, "commit")
+		for i := range 20 {
+			utils.Exec(t, conn, "begin")
+			qr := utils.Exec(t, conn, probe)
+			utils.Exec(t, conn, "commit")
+			require.Equal(t, baseline.Rows, qr.Rows, "transaction %d after the CALL must see the backend's defaults, not the procedure's session residue", i)
+		}
+		assertClean(t, "CALL inside a transaction")
+	})
 	t.Run("a session setting is in effect on the settings pool after a CALL", func(t *testing.T) {
 		// A vtgate session SET is applied to every pooled connection the session
 		// borrows, so it must be in effect on the fresh connection the pool hands
