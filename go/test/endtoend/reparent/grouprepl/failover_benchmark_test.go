@@ -182,13 +182,15 @@ func TestUnplannedFailoverTimes(t *testing.T) {
 		for _, mode := range modes {
 			for trial := 1; trial <= trials; trial++ {
 				t.Run(fmt.Sprintf("%s/%s/%d", scenario.name, mode.name, trial), func(t *testing.T) {
-					tc := setupCluster(t, mode.vtorc)
-					primary := tc.voters[0]
+					opts := defaultClusterOptions()
+					opts.vtorc = mode.vtorc
+					tc := setupCluster(t, opts)
+					primary := tc.replicas[0]
 					if mode.groupReplication {
 						out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
 							"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
 						require.NoError(t, err, out)
-						waitForGroup(t, tc, primary)
+						waitForGroup(t, tc, primary, tc.replicas)
 					}
 
 					w := startAckingWriter(t, tc)
@@ -217,7 +219,7 @@ func TestUnplannedFailoverTimes(t *testing.T) {
 
 					// Every write acknowledged before the crash must be on the new primary.
 					var newPrimaryTablet *cluster.Vttablet
-					for _, v := range tc.voters {
+					for _, v := range tc.replicas {
 						if v.Alias == newPrimary {
 							newPrimaryTablet = v
 						}

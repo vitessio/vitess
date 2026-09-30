@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,10 +58,26 @@ var cells = []string{"zone1", "zone2", "zone3"}
 
 type testCluster struct {
 	*cluster.LocalProcessCluster
-	// voters are the REPLICA-type tablets, one per cell, that become group members.
-	voters []*cluster.Vttablet
-	// rdonly replicates asynchronously from the primary in both modes.
+	// replicas are the REPLICA-type tablets. replicas[0] is the first primary.
+	replicas []*cluster.Vttablet
+	// rdonly, if set, replicates asynchronously from the primary in both modes.
 	rdonly *cluster.Vttablet
+}
+
+// clusterOptions describe the shard a test starts.
+type clusterOptions struct {
+	vtorc          cluster.VTOrcConfiguration
+	vtorcExtraArgs []string
+	// replicaCells has the cell of every REPLICA tablet, in order.
+	replicaCells []string
+	// rdonly adds an RDONLY tablet in the first cell.
+	rdonly bool
+}
+
+// defaultClusterOptions is the recommended layout: one REPLICA tablet in each of three cells,
+// plus an RDONLY tablet.
+func defaultClusterOptions() clusterOptions {
+	return clusterOptions{vtorc: vtorcConfig, replicaCells: cells, rdonly: true}
 }
 
 // vtorcConfig is the VTOrc configuration of the tests: it polls every second, like the
@@ -71,10 +88,8 @@ var vtorcConfig = cluster.VTOrcConfiguration{
 	TopoInformationRefreshDuration: "2s",
 }
 
-// setupCluster starts a shard with one REPLICA tablet in each of three cells, plus an
-// RDONLY tablet, using the recommended cross-cell semi-sync setup, and a VTOrc with the given
-// configuration.
-func setupCluster(t *testing.T, vtorcCfg cluster.VTOrcConfiguration) *testCluster {
+// setupCluster starts a shard with the given layout, using cross-cell semi-sync, and a VTOrc.
+func setupCluster(t *testing.T, opts clusterOptions) *testCluster {
 	clusterInstance := cluster.NewCluster(cells[0], "localhost")
 	t.Cleanup(clusterInstance.Teardown)
 	tc := &testCluster{LocalProcessCluster: clusterInstance}
@@ -85,13 +100,17 @@ func setupCluster(t *testing.T, vtorcCfg cluster.VTOrcConfiguration) *testCluste
 	}
 
 	var tablets []*cluster.Vttablet
-	for i, cell := range cells {
-		tablet := clusterInstance.NewVttabletInstance("replica", 100*(i+1)+1, cell)
-		tc.voters = append(tc.voters, tablet)
+	perCell := make(map[string]int)
+	for _, cell := range opts.replicaCells {
+		perCell[cell]++
+		tablet := clusterInstance.NewVttabletInstance("replica", 100*(slices.Index(cells, cell)+1)+perCell[cell], cell)
+		tc.replicas = append(tc.replicas, tablet)
 		tablets = append(tablets, tablet)
 	}
-	tc.rdonly = clusterInstance.NewVttabletInstance("rdonly", 102, cells[0])
-	tablets = append(tablets, tc.rdonly)
+	if opts.rdonly {
+		tc.rdonly = clusterInstance.NewVttabletInstance("rdonly", 190, cells[0])
+		tablets = append(tablets, tc.rdonly)
+	}
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock-tables-timeout", "5s",
@@ -127,8 +146,8 @@ func setupCluster(t *testing.T, vtorcCfg cluster.VTOrcConfiguration) *testCluste
 	for _, tablet := range tablets {
 		require.NoError(t, tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}))
 	}
-	require.NoError(t, clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cells[0], tc.voters[0].TabletUID))
-	_, err = tc.voters[0].VttabletProcess.QueryTablet(schemaSQL, keyspaceName, true)
+	require.NoError(t, clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cells[0], tc.replicas[0].TabletUID))
+	_, err = tc.replicas[0].VttabletProcess.QueryTablet(schemaSQL, keyspaceName, true)
 	require.NoError(t, err)
 
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
@@ -143,7 +162,8 @@ func setupCluster(t *testing.T, vtorcCfg cluster.VTOrcConfiguration) *testCluste
 	clusterInstance.VtgateProcess = *vtgate
 	require.NoError(t, clusterInstance.VtgateProcess.Setup())
 
-	vtorc := clusterInstance.NewVTOrcProcess(vtorcCfg, cells[0])
+	vtorc := clusterInstance.NewVTOrcProcess(opts.vtorc, cells[0])
+	vtorc.ExtraArgs = append(vtorc.ExtraArgs, opts.vtorcExtraArgs...)
 	require.NoError(t, vtorc.Setup())
 	clusterInstance.VTOrcProcesses = append(clusterInstance.VTOrcProcesses, vtorc)
 	return tc
@@ -170,22 +190,40 @@ func shardPrimary(t *testing.T, tc *testCluster) string {
 	return topoproto.TabletAliasString(shard.Shard.PrimaryAlias)
 }
 
+func shardVoters(t *testing.T, tc *testCluster) []string {
+	shard, err := tc.VtctldClientProcess.GetShard(keyspaceName, shardName)
+	require.NoError(t, err)
+	var voters []string
+	for _, alias := range shard.Shard.GroupReplicationVoters {
+		voters = append(voters, topoproto.TabletAliasString(alias))
+	}
+	return voters
+}
+
+func aliasesOf(tablets []*cluster.Vttablet) []string {
+	var aliases []string
+	for _, tablet := range tablets {
+		aliases = append(aliases, tablet.Alias)
+	}
+	return aliases
+}
+
 func tabletType(t *testing.T, tc *testCluster, tablet *cluster.Vttablet) topodatapb.TabletType {
 	tab, err := tc.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
 	return tab.Type
 }
 
-// waitForGroup waits until every voter is an ONLINE member of one group whose primary is
-// the given tablet, and the topology agrees.
-func waitForGroup(t *testing.T, tc *testCluster, primary *cluster.Vttablet) {
+// waitForGroup waits until the given tablets are the voters in the shard record and ONLINE
+// members of one group whose primary is the given tablet, and the topology agrees.
+func waitForGroup(t *testing.T, tc *testCluster, primary *cluster.Vttablet, members []*cluster.Vttablet) {
 	t.Helper()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		primaryStatus, err := fullStatus(t, tc, primary)
 		require.NoError(c, err)
 		require.NotNil(c, primaryStatus.GroupReplicationStatus)
 		assert.True(c, mysql.IsGroupPrimary(primaryStatus.GroupReplicationStatus), "primary %s is not the group primary: %v", primary.Alias, primaryStatus.GroupReplicationStatus)
-		for _, voter := range tc.voters {
+		for _, voter := range members {
 			status, err := fullStatus(t, tc, voter)
 			require.NoError(c, err)
 			require.NotNil(c, status.GroupReplicationStatus, voter.Alias)
@@ -194,6 +232,7 @@ func waitForGroup(t *testing.T, tc *testCluster, primary *cluster.Vttablet) {
 			assert.Equal(c, policy.GroupName(keyspaceName, shardName), status.GroupReplicationStatus.GroupName, voter.Alias)
 		}
 		assert.Equal(c, primary.Alias, shardPrimary(t, tc))
+		assert.ElementsMatch(c, aliasesOf(members), shardVoters(t, tc))
 		assert.Equal(c, topodatapb.TabletType_PRIMARY, tabletType(t, tc, primary))
 	}, waitTimeout, pollInterval)
 }
@@ -281,7 +320,11 @@ func waitForRowCounts(t *testing.T, tc *testCluster, primary *cluster.Vttablet) 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		want, err := rowCount(t, primary)
 		require.NoError(c, err)
-		for _, tablet := range append(append([]*cluster.Vttablet{}, tc.voters...), tc.rdonly) {
+		tablets := append([]*cluster.Vttablet{}, tc.replicas...)
+		if tc.rdonly != nil {
+			tablets = append(tablets, tc.rdonly)
+		}
+		for _, tablet := range tablets {
 			got, err := rowCount(t, tablet)
 			require.NoError(c, err)
 			assert.Equal(c, want, got, tablet.Alias)
@@ -292,15 +335,15 @@ func waitForRowCounts(t *testing.T, tc *testCluster, primary *cluster.Vttablet) 
 // TestGroupReplicationLifecycle converts a cross-cell semi-sync shard to Group Replication
 // online, fails over with PRS and by killing the primary, and converts it back.
 func TestGroupReplicationLifecycle(t *testing.T) {
-	tc := setupCluster(t, vtorcConfig)
-	primary := tc.voters[0]
+	tc := setupCluster(t, defaultClusterOptions())
+	primary := tc.replicas[0]
 
 	t.Run("migrate from semi-sync to group replication without failing writes", func(t *testing.T) {
 		w := startWriter(t, tc)
 		out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
 			"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
 		require.NoError(t, err, out)
-		waitForGroup(t, tc, primary)
+		waitForGroup(t, tc, primary, tc.replicas)
 		ok, fail, lastErr := w.stop()
 		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
 		assert.Positive(t, ok)
@@ -327,9 +370,9 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 
 	t.Run("planned reparent switches the group primary", func(t *testing.T) {
 		w := startWriter(t, tc)
-		newPrimary := tc.voters[1]
+		newPrimary := tc.replicas[1]
 		require.NoError(t, tc.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, newPrimary.Alias))
-		waitForGroup(t, tc, newPrimary)
+		waitForGroup(t, tc, newPrimary, tc.replicas)
 		primary = newPrimary
 		ok, fail, lastErr := w.stop()
 		// vtgate buffers writes while the primary switches.
@@ -348,7 +391,7 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			alias := shardPrimary(t, tc)
 			assert.NotEqual(c, oldPrimary.Alias, alias)
-			for _, voter := range tc.voters {
+			for _, voter := range tc.replicas {
 				if voter.Alias == alias {
 					newPrimary = voter
 				}
@@ -372,7 +415,7 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 
 		// mysqld_safe restarts the killed mysqld, and the old primary's tablet makes it rejoin
 		// the group as a secondary.
-		waitForGroup(t, tc, primary)
+		waitForGroup(t, tc, primary, tc.replicas)
 		waitForRowCounts(t, tc, primary)
 	})
 
@@ -383,7 +426,7 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 		require.NoError(t, err, out)
 
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			for _, voter := range tc.voters {
+			for _, voter := range tc.replicas {
 				status, err := fullStatus(t, tc, voter)
 				require.NoError(c, err)
 				assert.False(c, mysql.IsGroupMemberActive(status.GroupReplicationStatus), voter.Alias)
