@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -78,6 +79,10 @@ var (
 	// groupReplicationIllegitimateLogInterval limits how often the sync loop logs that it does not
 	// follow a group primary that is not legitimate, or does not join a group.
 	groupReplicationIllegitimateLogInterval = 10 * time.Second
+	// groupReplicationJoinTimeout bounds a join that the sync loop starts. MySQL keeps running a
+	// START GROUP_REPLICATION whose client gave up, so the loop waits for it rather than leave it
+	// running in the background.
+	groupReplicationJoinTimeout = 1 * time.Minute
 	// groupReplicationStatusTimeout bounds every read of the group replication status.
 	groupReplicationStatusTimeout = 10 * time.Second
 	// groupReplicationRejoinGateInterval is how long the sync loop waits before it checks again
@@ -163,6 +168,25 @@ func groupReplicationSeeds(self *topodatapb.TabletAlias, tablets map[string]*top
 	return seeds
 }
 
+// preferSeeds moves the preferred seeds to the front of the seeds, keeping the order of both. A
+// joining member contacts its seeds in order: the members that were just seen active in the
+// shard's legitimate group come first, rather than members that may be leaving, or in a group of
+// their own.
+func preferSeeds(seeds, preferred []string) []string {
+	ordered := make([]string, 0, len(seeds))
+	for _, seed := range seeds {
+		if slices.Contains(preferred, seed) {
+			ordered = append(ordered, seed)
+		}
+	}
+	for _, seed := range seeds {
+		if !slices.Contains(preferred, seed) {
+			ordered = append(ordered, seed)
+		}
+	}
+	return ordered
+}
+
 // keyspaceDurability returns the durability policy of the tablet's keyspace.
 func (tm *TabletManager) keyspaceDurability(ctx context.Context) (policy.Durabler, error) {
 	keyspace := tm.Tablet().Keyspace
@@ -213,7 +237,7 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 	return mysql.GroupReplicationConfig{
 		GroupName:                         policy.GroupName(tablet.Keyspace, tablet.Shard),
 		LocalAddress:                      netutil.JoinHostPort(host, int32(groupReplicationPort)),
-		Seeds:                             groupReplicationSeeds(tablet.Alias, tablets),
+		Seeds:                             preferSeeds(groupReplicationSeeds(tablet.Alias, tablets), tm.groupReplicationPeers.activeSeeds()),
 		MemberWeight:                      weight,
 		Consistency:                       groupReplicationConsistency,
 		ExitStateAction:                   groupReplicationExitStateAction,
@@ -289,13 +313,14 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL is %s in group %s, but the group of shard %s/%s is %s", status.MemberState, status.GroupName, tablet.Keyspace, tablet.Shard, groupName)
 		}
 	} else if err := tm.joinGroupLocked(ctx, status, bootstrap); err != nil {
-		if !bootstrap || !isGroupReplicationCommandOngoing(err) {
+		if !isGroupReplicationCommandOngoing(err) {
 			return nil, err
 		}
 		// A START GROUP_REPLICATION is still in progress, for example the join of an RPC whose
-		// context expired: MySQL refuses any change until it ends, which can take minutes when no
-		// group exists. Stop it, then bootstrap.
-		log.Warn("A START GROUP_REPLICATION is in progress, stopping it before the bootstrap", slog.Any("error", err))
+		// context expired: MySQL keeps running it, and refuses any change until it ends, which can
+		// take minutes when no group exists. Such a join has been seen to end in a group of its
+		// own. Stop it, then start again: a bootstrap, or a join that the caller decided on now.
+		log.Warn("A START GROUP_REPLICATION is in progress, stopping it before starting again", slog.Bool("bootstrap", bootstrap), slog.Any("error", err))
 		if status, err = tm.stopOngoingGroupStartLocked(ctx); err != nil {
 			return nil, err
 		}

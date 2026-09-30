@@ -330,6 +330,36 @@ func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
 	start, _, _ = fmd.GroupReplicationCalls()
 	assert.Equal(t, 1, start)
 	assert.False(t, fmd.GroupReplicationBootstrapped)
+	// The joining member contacts the active member of the shard's group first.
+	assert.Equal(t, []string{"mysql3:33063", "mysql2:33062"}, fmd.GroupReplicationConfig.Seeds)
+}
+
+// TestStartGroupReplicationJoinStopsOngoingStart checks that a join on a member on which an
+// earlier START GROUP_REPLICATION is still in progress stops it and starts again. MySQL keeps
+// running a START whose client gave up, refuses any change meanwhile (errno 3724), and such a
+// START has been seen to end in a group of its own (S7d after the legitimacy fixes).
+func TestStartGroupReplicationJoinStopsOngoingStart(t *testing.T) {
+	enableGroupReplication(t)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	fmd.ConfigureGroupReplicationErrors = []error{
+		sqlerror.NewSQLError(mysqlErrGroupReplicationCommandOngoing, sqlerror.SSUnknownSQLState, "This option cannot be set while START or STOP GROUP_REPLICATION is ongoing."),
+	}
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+
+	status, err := tm.StartGroupReplication(t.Context(), false)
+	require.NoError(t, err)
+	assert.Equal(t, mysql.GroupMemberStateOnline, status.MemberState)
+	assert.False(t, fmd.GroupReplicationBootstrapped)
+	_, stops, _ := fmd.GroupReplicationCalls()
+	assert.Equal(t, 1, stops, "the ongoing START must be stopped first")
+}
+
+func TestPreferSeeds(t *testing.T) {
+	seeds := []string{"a:1", "b:1", "c:1"}
+	assert.Equal(t, []string{"c:1", "a:1", "b:1"}, preferSeeds(seeds, []string{"c:1"}))
+	assert.Equal(t, []string{"b:1", "c:1", "a:1"}, preferSeeds(seeds, []string{"c:1", "b:1", "x:1"}))
+	assert.Equal(t, seeds, preferSeeds(seeds, nil))
 }
 
 // TestStartGroupReplicationBootstrapStopsOngoingStart checks that a bootstrap succeeds on a member

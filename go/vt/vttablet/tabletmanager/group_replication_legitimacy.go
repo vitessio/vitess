@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -54,6 +55,32 @@ type groupReplicationPeers struct {
 	// bootstrapped, at bootstrappedAt.
 	bootstrappedIncarnation string
 	bootstrappedAt          time.Time
+	// legitimateSeeds are the group replication addresses of the peers that were last seen as
+	// active members of the shard's legitimate group, at legitimateSeedsAt.
+	legitimateSeeds   []string
+	legitimateSeedsAt time.Time
+}
+
+// groupReplicationLegitimateSeedsTTL is how long a join prefers the peers that were last seen as
+// active members of the shard's legitimate group.
+const groupReplicationLegitimateSeedsTTL = 30 * time.Second
+
+func (p *groupReplicationPeers) setActiveSeeds(seeds []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.legitimateSeeds = seeds
+	p.legitimateSeedsAt = time.Now()
+}
+
+// activeSeeds returns the peers that were seen as active members of the shard's legitimate group
+// within groupReplicationLegitimateSeedsTTL.
+func (p *groupReplicationPeers) activeSeeds() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if time.Since(p.legitimateSeedsAt) > groupReplicationLegitimateSeedsTTL {
+		return nil
+	}
+	return p.legitimateSeeds
 }
 
 func (p *groupReplicationPeers) serverUUID(alias string) string {
@@ -223,16 +250,23 @@ func (tm *TabletManager) legitimateGroupActiveElsewhere(ctx context.Context, rec
 	if primary != nil {
 		for _, status := range tm.peerFullStatuses(ctx, []*topodatapb.Tablet{primary}) {
 			if isActiveLegitimatePeer(legitimate, groupName, status) {
+				tm.groupReplicationPeers.setActiveSeeds([]string{groupReplicationAddress(primary)})
 				return true
 			}
 		}
 	}
-	for _, status := range tm.peerFullStatuses(ctx, others) {
+	var seeds []string
+	for alias, status := range tm.peerFullStatuses(ctx, others) {
 		if isActiveLegitimatePeer(legitimate, groupName, status) {
-			return true
+			seeds = append(seeds, groupReplicationAddress(rec.tablets[alias]))
 		}
 	}
-	return false
+	if len(seeds) == 0 {
+		return false
+	}
+	slices.Sort(seeds)
+	tm.groupReplicationPeers.setActiveSeeds(seeds)
+	return true
 }
 
 // checkLegitimateGroupToJoin returns an error unless another tablet of the shard reports an

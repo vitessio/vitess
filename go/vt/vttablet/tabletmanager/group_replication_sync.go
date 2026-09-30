@@ -93,6 +93,9 @@ type groupReplicationSync struct {
 
 	// twoPCAllowed is the last value the loop passed to SetTwoPCAllowed, if any.
 	twoPCAllowed *bool
+
+	// loopCtx is the context of the loop, which ends when the loop stops.
+	loopCtx context.Context
 }
 
 func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
@@ -139,6 +142,7 @@ func (tm *TabletManager) stopGroupReplicationSync() {
 
 func (s *groupReplicationSync) run(ctx context.Context, interval time.Duration) {
 	log.Info("Starting the group replication sync loop", slog.Duration("interval", interval))
+	s.loopCtx = ctx
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -614,7 +618,15 @@ func (s *groupReplicationSync) rejoin(ctx context.Context) {
 	defer tm.unlock()
 
 	log.Info("Group replication sync: MySQL is not in its group, joining it")
-	if _, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */); err != nil {
+	// A join includes the distributed recovery, and MySQL keeps running a START whose client gave
+	// up: wait for it longer than one step of the loop.
+	joinBase := s.loopCtx
+	if joinBase == nil {
+		joinBase = ctx
+	}
+	joinCtx, cancel := context.WithTimeout(joinBase, groupReplicationJoinTimeout)
+	defer cancel()
+	if _, err := tm.startGroupReplicationLocked(joinCtx, false /* bootstrap */); err != nil {
 		if s.rejoinBackoff == 0 {
 			s.rejoinBackoff = groupReplicationSyncInterval
 		} else {
