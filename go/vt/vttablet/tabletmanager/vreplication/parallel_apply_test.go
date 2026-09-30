@@ -6079,41 +6079,79 @@ func TestCommitLoop_UpdatesLag(t *testing.T) {
 }
 
 func TestCommitLoop_UpdatePosOnlyKeepsLaterUnsavedEvent(t *testing.T) {
-	ctx := testCtx(t)
-	vp, mockDB := testVPlayer(t)
-	scheduler := newApplyScheduler(ctx)
-
-	mockDB.AddInvariant("update _vt.vreplication set pos=", &sqltypes.Result{})
-	mockDB.AddInvariant("commit", &sqltypes.Result{})
-	mockDB.AddInvariant("begin", &sqltypes.Result{})
-
-	pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
-	require.NoError(t, err)
-
-	laterUnsaved := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 200}
-	vp.serialMu.Lock()
-	vp.unsavedEvent = laterUnsaved
-	vp.serialMu.Unlock()
-
-	commitCh := make(chan *applyTxn, 1)
-	commitCh <- &applyTxn{
-		order: 1,
-		payload: &applyTxnPayload{
-			pos:           pos,
-			timestamp:     100,
-			commitOnly:    true,
-			updatePosOnly: true,
+	// The scheduleLoop can record a later empty transaction as the unsaved
+	// event while an earlier position save waits in the commitLoop. Saving
+	// the earlier position must neither forget the later event nor refresh
+	// the idle timer behind it, or an idle stream keeps its saved position
+	// at the earlier one. That holds for every commit-only save, including
+	// the ones an OTHER event or an ignored DDL makes.
+	tests := []struct {
+		name    string
+		payload func(pos replication.Position) *applyTxnPayload
+	}{
+		{
+			name: "position-only save",
+			payload: func(pos replication.Position) *applyTxnPayload {
+				return &applyTxnPayload{pos: pos, timestamp: 100, commitOnly: true, updatePosOnly: true}
+			},
 		},
-		done: make(chan struct{}),
+		{
+			name: "OTHER event",
+			payload: func(pos replication.Position) *applyTxnPayload {
+				return &applyTxnPayload{
+					pos: pos, timestamp: 100, commitOnly: true, mustSave: true,
+					events: []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_OTHER, Timestamp: 100}},
+				}
+			},
+		},
+		{
+			name: "ignored DDL",
+			payload: func(pos replication.Position) *applyTxnPayload {
+				return &applyTxnPayload{
+					pos: pos, timestamp: 100, commitOnly: true,
+					events: []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t1 add column c int", Timestamp: 100}},
+				}
+			},
+		},
 	}
-	close(commitCh)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := testCtx(t)
+			vp, mockDB := testVPlayer(t)
+			scheduler := newApplyScheduler(ctx)
 
-	err = vp.commitLoop(ctx, scheduler, commitCh)
-	require.NoError(t, err)
+			mockDB.AddInvariant("update _vt.vreplication set pos=", &sqltypes.Result{})
+			mockDB.AddInvariant("commit", &sqltypes.Result{})
+			mockDB.AddInvariant("begin", &sqltypes.Result{})
 
-	vp.serialMu.Lock()
-	defer vp.serialMu.Unlock()
-	require.Same(t, laterUnsaved, vp.unsavedEvent)
+			pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+			require.NoError(t, err)
+
+			laterPos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+			require.NoError(t, err)
+			laterUnsaved := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 200}
+			lastSaved := time.Now().Add(-time.Minute)
+			vp.serialMu.Lock()
+			// The scheduleLoop has already moved the position on to the
+			// later empty transaction.
+			vp.pos = laterPos
+			vp.unsavedEvent = laterUnsaved
+			vp.timeLastSaved = lastSaved
+			vp.serialMu.Unlock()
+
+			commitCh := make(chan *applyTxn, 1)
+			commitCh <- &applyTxn{order: 1, payload: tc.payload(pos), done: make(chan struct{})}
+			close(commitCh)
+
+			err = vp.commitLoop(ctx, scheduler, commitCh)
+			require.NoError(t, err)
+
+			vp.serialMu.Lock()
+			defer vp.serialMu.Unlock()
+			require.Same(t, laterUnsaved, vp.unsavedEvent)
+			require.Equal(t, lastSaved, vp.timeLastSaved)
+		})
+	}
 }
 
 func TestCommitLoop_UpdatePosOnlyDoesNotRefreshIdleTimerBehindLaterUnsavedEvent(t *testing.T) {

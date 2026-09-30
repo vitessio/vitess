@@ -2411,6 +2411,18 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			return nil
 		}
 
+		// The event's position save (updatePos) clears vp.unsavedEvent and
+		// refreshes the idle timer, but by now the scheduleLoop may have
+		// recorded a later empty transaction as the unsaved event. Keep it,
+		// and the timer, as commitWorkerTxn does, or an idle stream keeps
+		// its saved position at this earlier event.
+		if laterUnsaved, lastSaved := vp.unsavedEvent, vp.timeLastSaved; laterUnsaved != nil {
+			defer func() {
+				vp.unsavedEvent = laterUnsaved
+				vp.timeLastSaved = lastSaved
+			}()
+		}
+
 		// Temporarily swap pos for the main connection's updatePos call.
 		prevPos := vp.pos
 		if !payload.pos.IsZero() {
