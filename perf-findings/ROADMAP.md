@@ -8,6 +8,24 @@ Each item is ranked on four things:
 
 Evidence for each item is in the report named in the right-hand column (all under `perf-findings/`). Effort: S is under ~1 day plus review, M is days to a couple of weeks, and L is a multi-week project.
 
+## Upstream tracking (searched 2026-09-30; full table in `ISSUES-D.md`)
+
+Most items have no issue or PR upstream. The ones that do:
+- **Wave 2 #10 (raw MySQL rows over gRPC):** [PR #20215](https://github.com/vitessio/vitess/pull/20215) and [PR #19620](https://github.com/vitessio/vitess/pull/19620) were **closed unmerged by the stale bot**, not rejected. Open issue [#17172](https://github.com/vitessio/vitess/issues/17172) tracks the idea. Reopening them is the cheapest restart.
+- **Wave 1 #7 (big/scatter reads):** open [PR #20952](https://github.com/vitessio/vitess/pull/20952) (pre-sorted merge, for [#20951](https://github.com/vitessio/vitess/issues/20951)). [PR #20670](https://github.com/vitessio/vitess/pull/20670) did F08's MergeSort batching and was closed as stale.
+- **R10 / R14 (VStream running phase):** open [#18273](https://github.com/vitessio/vitess/issues/18273) (remove the deep row clone), and open [PR #21289](https://github.com/vitessio/vitess/pull/21289) for [#21287](https://github.com/vitessio/vitess/issues/21287) (format the GTID once). Nothing covers the keyrange pre-filter.
+- **R16:** [PR #19535](https://github.com/vitessio/vitess/pull/19535) is open and under review.
+- **R18 (shared binlog reader):** open [#7437](https://github.com/vitessio/vitess/issues/7437) since 2021, no PR.
+- **Related:**
+  - draft [PR #21257](https://github.com/vitessio/vitess/pull/21257) is a SIMD proof of concept overlapping F02, F03 and F20;
+  - [#4302](https://github.com/vitessio/vitess/issues/4302), [#16244](https://github.com/vitessio/vitess/issues/16244) and [#3929](https://github.com/vitessio/vitess/issues/3929) cover GOMAXPROCS, GOGC and gRPC windows;
+  - [#7802](https://github.com/vitessio/vitess/issues/7802) proposes zstd backups;
+  - [#19735](https://github.com/vitessio/vitess/issues/19735) is the VDiff3 RFC;
+  - [#8056](https://github.com/vitessio/vitess/issues/8056) discusses parallel multi-table copy;
+  - [PR #20313](https://github.com/vitessio/vitess/pull/20313) (merged) sets stream workers to GOMAXPROCS, and P1 builds on it.
+
+24 items have no tracking found: Wave 1–3 #3, #4, #6, #8, #14, #15, #17, #18, #19, the ops guidance, the Online DDL review tick, VDiff `--wait`, and R2–R4, R6, R7, R9, R12, R13, R17 and R20–R22. The search was rate-limited, so the lower-ranked items got only one or two queries.
+
 ## Fixed waits: long-running vs time-critical operations
 
 Many findings removed fixed waits or polled faster. They are NOT all equal: VReplication workflows (MoveTables, Reshard, Online DDL, VDiff on large tables) and continuous loops (VTOrc, health checks, heartbeats) run for days or forever, and polling faster there burns resources for the whole duration and across the whole fleet. Cutover windows (SwitchTraffic, failover steps) last seconds, and every millisecond is user-visible downtime.
