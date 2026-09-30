@@ -239,6 +239,16 @@ type FakeMysqlDaemon struct {
 	// GroupReplicationError is returned by the group replication methods, if set.
 	GroupReplicationError error
 
+	// StartGroupReplicationError is returned by StartGroupReplication, if set.
+	StartGroupReplicationError error
+
+	// GroupReplicationStartCalls, GroupReplicationStopCalls and SetGroupReplicationPrimaryCalls
+	// count the calls to the respective methods. Use GroupReplicationCalls to read them while
+	// the daemon is in use.
+	GroupReplicationStartCalls      int
+	GroupReplicationStopCalls       int
+	SetGroupReplicationPrimaryCalls int
+
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
 
@@ -951,22 +961,33 @@ func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg m
 	return nil
 }
 
-// StartGroupReplication is part of the MysqlDaemon interface.
+// StartGroupReplication is part of the MysqlDaemon interface. The member becomes ONLINE; with
+// bootstrap it is the only member and the writable primary, otherwise it joins the members
+// already in GroupReplication.Members as a read-only secondary.
 func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap bool) error {
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
+	fmd.GroupReplicationStartCalls++
 	if fmd.GroupReplicationError != nil {
 		return fmd.GroupReplicationError
+	}
+	if fmd.StartGroupReplicationError != nil {
+		return fmd.StartGroupReplicationError
 	}
 	if fmd.GroupReplication == nil || !fmd.GroupReplication.PluginActive {
 		return errors.New("group replication plugin is not loaded")
 	}
+	if mysql.IsGroupMemberActive(fmd.GroupReplication) {
+		return errors.New("group replication is already running")
+	}
+	uuid := fmd.serverUUIDLocked()
 	fmd.GroupReplication.MemberState = mysql.GroupMemberStateOnline
 	fmd.GroupReplication.HasQuorum = true
 	if bootstrap {
 		fmd.GroupReplicationBootstrapped = true
 		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
-		fmd.GroupReplication.PrimaryUuid = fmd.ServerUUID
+		fmd.GroupReplication.PrimaryUuid = uuid
+		fmd.GroupReplication.Members = nil
 		fmd.SuperReadOnly.Store(false)
 		fmd.ReadOnly = false
 	} else {
@@ -974,13 +995,16 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 		fmd.SuperReadOnly.Store(true)
 		fmd.ReadOnly = true
 	}
+	fmd.setOwnGroupMemberLocked(fmd.GroupReplication.MemberState, fmd.GroupReplication.MemberRole)
 	return nil
 }
 
-// StopGroupReplication is part of the MysqlDaemon interface.
+// StopGroupReplication is part of the MysqlDaemon interface. Like MySQL, it leaves the member
+// super_read_only, and the member only sees itself afterwards.
 func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
+	fmd.GroupReplicationStopCalls++
 	if fmd.GroupReplicationError != nil {
 		return fmd.GroupReplicationError
 	}
@@ -989,31 +1013,88 @@ func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
 		fmd.GroupReplication.MemberRole = ""
 		fmd.GroupReplication.PrimaryUuid = ""
 		fmd.GroupReplication.HasQuorum = false
+		fmd.GroupReplication.Members = nil
+		fmd.setOwnGroupMemberLocked(mysql.GroupMemberStateOffline, "")
 	}
 	fmd.SuperReadOnly.Store(true)
 	fmd.ReadOnly = true
 	return nil
 }
 
-// SetGroupReplicationPrimary is part of the MysqlDaemon interface.
+// SetGroupReplicationPrimary is part of the MysqlDaemon interface. Like MySQL, it fails if the
+// member is already the primary.
 func (fmd *FakeMysqlDaemon) SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error {
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
+	fmd.SetGroupReplicationPrimaryCalls++
 	if fmd.GroupReplicationError != nil {
 		return fmd.GroupReplicationError
 	}
 	if fmd.GroupReplication == nil || fmd.GroupReplication.MemberState != mysql.GroupMemberStateOnline {
 		return errors.New("member is not ONLINE in a group")
 	}
+	if fmd.GroupReplication.PrimaryUuid == memberUUID {
+		return errors.New("the requested member is already the current group primary")
+	}
 	fmd.GroupReplication.PrimaryUuid = memberUUID
-	if memberUUID == fmd.ServerUUID {
-		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
+	role := mysql.GroupMemberRoleSecondary
+	if memberUUID == fmd.serverUUIDLocked() {
+		role = mysql.GroupMemberRolePrimary
 		fmd.SuperReadOnly.Store(false)
 		fmd.ReadOnly = false
 	} else {
-		fmd.GroupReplication.MemberRole = mysql.GroupMemberRoleSecondary
 		fmd.SuperReadOnly.Store(true)
 		fmd.ReadOnly = true
 	}
+	fmd.GroupReplication.MemberRole = role
+	for _, m := range fmd.GroupReplication.Members {
+		switch m.MemberUuid {
+		case memberUUID:
+			m.Role = mysql.GroupMemberRolePrimary
+		default:
+			m.Role = mysql.GroupMemberRoleSecondary
+		}
+	}
 	return nil
+}
+
+// SetGroupReplicationStatus replaces the group replication status, for tests that need a
+// particular view of the group. It is safe to call while the daemon is in use.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationStatus(status *replicationdatapb.GroupReplicationStatus) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplication = status
+}
+
+// GroupReplicationCalls returns how many times StartGroupReplication, StopGroupReplication and
+// SetGroupReplicationPrimary were called. It is safe to call while the daemon is in use.
+func (fmd *FakeMysqlDaemon) GroupReplicationCalls() (start, stop, setPrimary int) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.GroupReplicationStartCalls, fmd.GroupReplicationStopCalls, fmd.SetGroupReplicationPrimaryCalls
+}
+
+func (fmd *FakeMysqlDaemon) serverUUIDLocked() string {
+	if fmd.ServerUUID != "" {
+		return fmd.ServerUUID
+	}
+	return "00000000-0000-0000-0000-000000000000"
+}
+
+// setOwnGroupMemberLocked updates this member's own row in the membership list, adding it if
+// needed.
+func (fmd *FakeMysqlDaemon) setOwnGroupMemberLocked(state, role string) {
+	uuid := fmd.serverUUIDLocked()
+	for _, m := range fmd.GroupReplication.Members {
+		if m.MemberUuid == uuid {
+			m.State = state
+			m.Role = role
+			return
+		}
+	}
+	fmd.GroupReplication.Members = append(fmd.GroupReplication.Members, &replicationdatapb.GroupReplicationMember{
+		MemberUuid: uuid,
+		State:      state,
+		Role:       role,
+	})
 }

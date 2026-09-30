@@ -115,7 +115,7 @@ func TestGroupReplicationCommands(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "SELECT group_replication_set_as_primary('uuid-1')", cmd)
 	_, err = SetGroupPrimaryCommand("")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	cmds := ConfigureGroupReplicationCommands(GroupReplicationConfig{
 		GroupName:                         "g",

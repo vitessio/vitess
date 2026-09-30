@@ -208,19 +208,19 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		"SET PERSIST group_replication_start_on_boot = OFF",
 		"SET GLOBAL group_replication_single_primary_mode = ON",
 		"SET GLOBAL group_replication_enforce_update_everywhere_checks = OFF",
-		fmt.Sprintf("SET GLOBAL group_replication_group_name = %s", sqltypes.EncodeStringSQL(cfg.GroupName)),
-		fmt.Sprintf("SET GLOBAL group_replication_local_address = %s", sqltypes.EncodeStringSQL(cfg.LocalAddress)),
-		fmt.Sprintf("SET GLOBAL group_replication_group_seeds = %s", sqltypes.EncodeStringSQL(strings.Join(cfg.Seeds, ","))),
+		"SET GLOBAL group_replication_group_name = " + sqltypes.EncodeStringSQL(cfg.GroupName),
+		"SET GLOBAL group_replication_local_address = " + sqltypes.EncodeStringSQL(cfg.LocalAddress),
+		"SET GLOBAL group_replication_group_seeds = " + sqltypes.EncodeStringSQL(strings.Join(cfg.Seeds, ",")),
 		fmt.Sprintf("SET GLOBAL group_replication_member_weight = %d", cfg.MemberWeight),
 		// The recovery channel authenticates as the replication user, which uses
 		// caching_sha2_password. Without TLS it needs the source's public key.
 		"SET GLOBAL group_replication_recovery_get_public_key = ON",
 	}
 	if cfg.Consistency != "" {
-		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_consistency = %s", sqltypes.EncodeStringSQL(cfg.Consistency)))
+		cmds = append(cmds, "SET GLOBAL group_replication_consistency = "+sqltypes.EncodeStringSQL(cfg.Consistency))
 	}
 	if cfg.ExitStateAction != "" {
-		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_exit_state_action = %s", sqltypes.EncodeStringSQL(cfg.ExitStateAction)))
+		cmds = append(cmds, "SET GLOBAL group_replication_exit_state_action = "+sqltypes.EncodeStringSQL(cfg.ExitStateAction))
 	}
 	if cfg.UnreachableMajorityTimeoutSeconds >= 0 {
 		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_unreachable_majority_timeout = %d", cfg.UnreachableMajorityTimeoutSeconds))
@@ -229,7 +229,7 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_autorejoin_tries = %d", cfg.AutorejoinTries))
 	}
 	if cfg.IPAllowlist != "" {
-		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_ip_allowlist = %s", sqltypes.EncodeStringSQL(cfg.IPAllowlist)))
+		cmds = append(cmds, "SET GLOBAL group_replication_ip_allowlist = "+sqltypes.EncodeStringSQL(cfg.IPAllowlist))
 	}
 	return cmds
 }
