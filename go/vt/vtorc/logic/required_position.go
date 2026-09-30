@@ -89,7 +89,7 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 	}
 
 	if err != nil {
-		logger.Errorf("required position: cannot read it, aborting ERS: %v", err)
+		logger.Errorf("required position: aborting ERS: %v", err)
 		return replication.Position{}, err
 	}
 
