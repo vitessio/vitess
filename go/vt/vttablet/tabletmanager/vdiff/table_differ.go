@@ -1246,9 +1246,10 @@ func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
 // The comparison key may be an order-preserving prefix of the source PK. When
 // the source key is unique (a physical PK or a primary key equivalent, not the
 // all-columns substitute), it may also be the whole source key followed by more
-// columns, as for a target partitioned by a column outside the source PK: a
-// stream ordered by a unique key has no ties on it, so it is also ordered by any
-// key that starts with it. extended reports this second case.
+// columns, physical or computed, as for a target partitioned by a column outside
+// the source PK: a stream ordered by a unique key has no ties on it, so it is
+// also ordered by any key that starts with it. extended reports this second
+// case.
 func sourceOrderCoversComparisonKey(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceKeyUnique bool, sourceColTypes map[string]querypb.Type) (extended bool, err error) {
 	pinned := equalityPinnedColumns(sourceSelect.Where, sourceColTypes)
 	effectivePK := make([]string, 0, len(sourcePKColumns))
@@ -1288,8 +1289,17 @@ func sourceOrderCoversComparisonKey(sourceSelect *sqlparser.Select, comparePKs [
 		}
 		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
 		if !ok {
-			return false, unsupportedFilter("vdiff does not support this filter: the comparison key includes a non-physical column, so the source stream is not sorted by the compared columns: %s",
-				sqlparser.String(sourceSelect))
+			// Past the whole source key, a computed column (e.g. a target
+			// partitioned on date_format(created_at, '%Y%m')) extends it like
+			// any other: the source key already orders the stream, so the
+			// extra column never decides it. Within the source key's ranks
+			// it would have to match a physical source key column.
+			if len(effectiveCompare) < len(effectivePK) {
+				return false, unsupportedFilter("vdiff does not support this filter: the comparison key includes a non-physical column, so the source stream is not sorted by the compared columns: %s",
+					sqlparser.String(sourceSelect))
+			}
+			effectiveCompare = append(effectiveCompare, sqlparser.String(aliasedExpr.Expr))
+			continue
 		}
 		if _, isPinned := pinned[strings.ToLower(colName)]; isPinned {
 			continue

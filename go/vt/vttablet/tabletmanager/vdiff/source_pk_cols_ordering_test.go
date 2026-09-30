@@ -435,6 +435,36 @@ func TestSourceOrderCoversComparisonKey(t *testing.T) {
 			wantExtended:        true,
 		},
 		{
+			// A target partitioned on a computed column, e.g. PK (id, ym) with ym
+			// projected as date_format(created_at, '%Y%m'). The unique source PK
+			// (id) already orders the stream with no ties, so the extra column does
+			// not have to be a physical one.
+			name:                "computed column extending a unique source pk is allowed",
+			sourceQuery:         "select id, date_format(created_at, '%Y%m') as ym, v from t order by id asc, ym asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id"},
+			wantExtended:        true,
+		},
+		{
+			// A computed column within the source PK's ranks is still rejected: the
+			// stream is not ordered by it.
+			name:                "computed column before the end of the source pk is rejected",
+			sourceQuery:         "select id, date_format(created_at, '%Y%m') as ym, v from t order by id asc, ym asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id", "created_at"},
+			wantErr:             true,
+		},
+		{
+			// A computed column extending a non-unique source key is rejected, as
+			// ties on that key leave the order of the extra column undetermined.
+			name:                "computed column extending a non-unique source key is rejected",
+			sourceQuery:         "select id, date_format(created_at, '%Y%m') as ym from t order by id asc, ym asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id"},
+			nonUniqueSourceKey:  true,
+			wantErr:             true,
+		},
+		{
 			// The all-columns substitute key need not be unique, so ties on it are
 			// possible and a stream ordered by it is not ordered by a longer key.
 			name:                "comparison key extending a non-unique source key is rejected",
