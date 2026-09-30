@@ -439,11 +439,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// Check the required position before the rescue wait. The first detection
-		// pass can remove the only candidate that has it. Skip the check when the
-		// pass removed every candidate or a split-brain is suspected. The checks
-		// below report those causes, and the split-brain guidance is what lets the
-		// operator pick the leader that has the position.
-		if len(validCandidates) > 0 && len(suspectedSplitBrainCandidates) == 0 {
+		// pass can remove the only candidate that has it. Skip the check while a
+		// split-brain is suspected. The split-brain error lists the leaders, and
+		// one of them can have the position.
+		if len(suspectedSplitBrainCandidates) == 0 {
 			if err := checkRequiredPosition(opts.RequiredPosition, validCandidates, "remaining candidate"); err != nil {
 				return err
 			}
