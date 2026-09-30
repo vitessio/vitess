@@ -96,9 +96,20 @@ A group should be small: every commit waits for a majority of the voting members
 - **Replacement.** A voter that is unreachable for longer than `--group-replication-voter-replacement-grace-period` (VTOrc flag, default 1m) is considered failed. VTOrc's analysis `GroupVotersOutOfDate` then selects the voters again, with the current list and the group's primary, and stores the new list; the new voter's tablet joins the group, and the old one becomes an asynchronous replica when it comes back. A voter that is only briefly unreachable, for example while it restarts, keeps its seat.
 - **Promotion.** Only a voter can become the primary. Swapping a non-voter in for a voter as part of a planned reparent is future work.
 
+### The legitimate group
+
+Group Replication decides which member is the primary, and Vitess follows it. But Vitess must only follow the shard's **legitimate** group, and must not create the conditions for a new one. The chaos tests found that a member that had just left its group, and was made to join again while the other members were leaving too, ended up alone in a new group: MySQL installed a view of a new *incarnation* (the part of the view id before the `:`) that contained only this member, which was ONLINE, PRIMARY and had quorum in its view of one. The tablet promoted itself, and every transaction that only the other members held was lost (`doc/failover-audit/GroupReplication.md`, NEW-1).
+
+- **Incarnation.** `Shard.group_replication_incarnation` records the incarnation of the shard's group. MySQL keeps it for as long as the group exists, and every bootstrap creates a new one. Whoever bootstraps a group records it under the shard lock, right after the bootstrap: `MigrateReplicationMode`, the initial promotion of `PlannedReparentShard` (and `InitShardPrimary`), and VTOrc's `BootstrapGroupReplication`. The reverse migration clears it with the voters. An empty value means unknown (a group bootstrapped before incarnations were recorded); only the voter rule below applies then.
+- **Legitimate primary** (`policy.LegitimateGroup`). A member is the primary that Vitess follows when it is the ONLINE primary of a group with quorum in its own view, its view belongs to the recorded incarnation (if one is recorded), and a **majority of the listed voters are ONLINE in its view**. Voters are found in a view by the `server_uuid` of their MySQL (from `FullStatus`) or by the MySQL address of their tablet record (`MEMBER_HOST`/`MEMBER_PORT`; MySQL reports its own hostname, which need not match the tablet record). With no voter listed, MySQL's own view quorum applies, as before.
+- **Where it applies.** The tablet's reconcile loop only promotes a legitimate primary. VTOrc's `GroupPrimaryNotInTopo`, its `PromoteGroupPrimary` recovery, its notion of the group's primary for voter selection (`GroupVotersOutOfDate`), ERS's search for the group's quorum, and the PRS preflight all use the same rule.
+- **Foreign incarnation.** A member that is active in a group of another incarnation than the recorded one does not hold the shard's acknowledged transactions. Its tablet makes it leave that group (`STOP GROUP_REPLICATION`; MySQL stays `super_read_only`), demotes itself if it was PRIMARY, and suspends its own rejoins. VTOrc's `GroupMemberNotOnline`, whose `StartGroupReplication` lifts the suspension, only acts once the legitimate group is active on another tablet. A tablet that bootstrapped a group itself trusts its incarnation for a minute (`groupReplicationBootstrapGrace`), until the component that asked for the bootstrap has recorded it; a mismatch with the cached shard record is always confirmed with a fresh read.
+- **Joining.** A tablet (at startup and in its reconcile loop) and VTOrc (`GroupMemberNotOnline`) only start a join while another tablet of the shard reports an active member of the legitimate group with quorum in its view. The tablet asks its peers' `FullStatus` with a 2s timeout, the shard primary first. A `START GROUP_REPLICATION` with no group to join cannot join anything: it blocks until MySQL's join timeout, and MySQL refuses a bootstrap on the same member meanwhile (`errno 3724`), which starved VTOrc's bootstrap (NEW-2 of the audit). Such joins are also where members formed groups of their own. MySQL keeps running a `START` whose client gave up, so the reconcile loop waits up to a minute for the joins it starts, and any join or bootstrap first stops a `START` still in progress. A joining member contacts first the peers that were just seen active in the legitimate group (`group_replication_group_seeds` order).
+- **Group shrink fails closed.** MySQL's view quorum counts only the members still in the view: after the other voters left the group (an expulsion, a clean shutdown, `unreachable_majority_timeout`), a primary alone in its view has quorum and keeps committing, and those commits exist on one voter only. Under a group replication policy with listed voters, a PRIMARY tablet whose group view holds fewer than a majority of the voters stops serving (reason `replication group lost the majority of its voters`), keeps its type so that vtgate buffers, leaves MySQL alone, and serves again once the majority is back. This is the same trade-off as a semi-sync primary without an acker: writes block rather than become durable on a single server. It does not apply during a migration (the policy is not a group replication policy yet), when the group grows from one member while the primary keeps serving with semi-sync.
+
 ### Group configuration, derived from topo
 
-Apart from the voters, nothing new is stored in topo:
+Apart from the voters and the group incarnation, nothing new is stored in topo:
 
 - **Group name.** A UUIDv5 of `keyspace/shard` in a fixed Vitess namespace, the same on every tablet of the shard. After a reshard the new shards get new groups automatically.
 - **Local address.** `<mysql hostname>:<--group-replication-port>`. The tablet publishes the port in its tablet record as `port_map["gr"]`. The default is off; the flag enables GR support on the tablet.
@@ -108,7 +119,7 @@ Apart from the voters, nothing new is stored in topo:
   - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
   - `exit_state_action`, default `READ_ONLY`.
   - `unreachable_majority_timeout`, default 1s: a primary cut off from its majority errors out instead of blocking forever.
-  - `autorejoin_tries`.
+  - `autorejoin_tries`, default 0. The tablet rejoins an expelled member itself, once the shard's legitimate group is active on another tablet. MySQL's own auto-rejoin does not check that: in the chaos tests an attempt blocked the member for about a minute (its status queries hung, and every change was refused) and could end in a group of its own.
   - `group_replication_start_on_boot` is persisted OFF. vttablet decides when to join, as it does for async replication (`skip_replica_start`).
 - **Fixed settings.** Vitess always applies these two, because its design depends on them. They are not flags.
   - `member_expel_timeout=0`. The group replaces a failed primary about 7s after it fails. On MySQL 8.4.11, any value from 1 to 10s delays the expulsion, and so the election, by about 16s. The tablet rejoins expelled members on its own, so an expulsion caused by a short stall is cheap.
@@ -126,9 +137,12 @@ Apart from the voters, nothing new is stored in topo:
 
   Tablets that are not voters replicate asynchronously from the shard primary, as today.
 - **Reconcile loop.** Every `--group-replication-sync-interval` (default 1s) the tablet reads its GR status:
-  - If the member is ONLINE, PRIMARY and has quorum, and the tablet is not PRIMARY: promote the tablet record (`ChangeTabletType(PRIMARY)`). This yields a new `PrimaryTermStartTime`; the shard record follows through `shardSyncLoop`, and vtgate follows the new term.
+  - If the member is the legitimate primary (see "The legitimate group"), and the tablet is not PRIMARY: promote the tablet record (`ChangeTabletType(PRIMARY)`). This yields a new `PrimaryTermStartTime`; the shard record follows through `shardSyncLoop`, and vtgate follows the new term.
+  - If the member is active in a group of another incarnation than the recorded one: leave that group and suspend the tablet's own rejoins.
   - If the tablet is PRIMARY but the member is not the group primary, or has lost quorum: demote the record to REPLICA and stop serving. vtgate buffers or fails fast exactly as for a PRS.
-  - If the tablet is a voter but its member is `OFFLINE` or `ERROR`, and it is not in a backup or restore: rejoin with backoff. GR itself refuses a member with extra transactions.
+  - If the tablet is PRIMARY and its group view holds fewer than a majority of the listed voters: stop serving, keep the type, serve again once the majority is back (group replication policy only).
+  - If the tablet is PRIMARY, a listed voter under a group replication policy, and its member is not in any group (`OFFLINE`, for example after mysqld restarted): demote the record to REPLICA without touching MySQL, so that vtgate stops routing to it and the next step rejoins it.
+  - If the tablet is a voter but its member is `OFFLINE` or `ERROR`, and it is not in a backup or restore: rejoin with backoff, but only while another tablet reports an active member of the legitimate group. GR itself refuses a member with extra transactions.
 
   This is how an unplanned failover elected by the group reaches Vitess within about a second, without VTOrc.
 - **RPCs on an active member:**
@@ -139,31 +153,31 @@ Apart from the voters, nothing new is stored in topo:
   | `PromoteReplica` | `group_replication_set_as_primary(own uuid)`; wait for role PRIMARY and `super_read_only=OFF`; change type. No `RESET REPLICA ALL`. |
   | `DemotePrimary` | Stop serving and set `super_read_only`, as today; skip the semi-sync steps. |
   | `UndoDemotePrimary` | Only if the member is still the group primary. |
-  | `SetReplicationSource` | No-op for the default channel; wait for the reparent journal or position; fix the tablet type. |
+  | `SetReplicationSource` | No-op for the default channel; wait for the reparent journal or position; fix the tablet type. Refused on the group primary, whose request can only be stale, except for a reparent's request (with a reparent journal entry): PRS repoints the old primary while the primary-elect switches the group's primary, so it waits until the group moved the primary away. |
   | `StartReplication` / `StopReplication` | Join or leave the group. |
   | `SetReadWrite` (`read_only=OFF`) | **Refused unless the member is the group primary.** A GR secondary with `super_read_only=OFF` accepts writes and replicates them to the group; this was verified in the lab. |
-  | `StartGroupReplication(bootstrap)` / `StopGroupReplication` (new) | Explicit membership control, used by VTOrc and the migration. `StartGroupReplication` first stops the async channel and afterwards clears it (`RESET REPLICA ALL`): GR refuses to start while the channel runs, and a leftover channel can be resurrected later. |
+  | `StartGroupReplication(bootstrap)` / `StopGroupReplication` (new) | Explicit membership control, used by VTOrc and the migration. `StartGroupReplication` first stops the async channel and afterwards clears it (`RESET REPLICA ALL`): GR refuses to start while the channel runs, and a leftover channel can be resurrected later. A bootstrap suspends the tablet's rejoins while it runs, and stops a `START GROUP_REPLICATION` still in progress (`errno 3724`, or a member RECOVERING without any ONLINE member) first. |
 - **Semi-sync.** `fixSemiSync` treats an active group with at least two ONLINE members as sufficient durability. It then disables semi-sync and does not open the semi-sync monitor.
 
 ### PlannedReparentShard
 
 The orchestration is unchanged. The GR meaning comes from the tablet RPCs:
 
-1. Preflight: the new primary must be a listed voter and an ONLINE member of the same group as the current primary; otherwise PRS fails with `FAILED_PRECONDITION` and names the voters. A tablet that is not a voter cannot be promoted while the group is active; swapping it in for a voter is future work. Without `--new-primary`, the election only considers the voters.
+1. Preflight: the new primary must be a listed voter and an ONLINE member of the same group, and incarnation, as the current primary, and that group must be the shard's legitimate group (the recorded incarnation, a majority of the voters ONLINE); otherwise PRS fails with `FAILED_PRECONDITION` and names the voters. A tablet that is not a voter cannot be promoted while the group is active; swapping it in for a voter is future work. Without `--new-primary`, the election only considers the voters.
 2. `DemotePrimary(old)` stops serving, so vtgate buffers.
 3. `WaitForPosition(new, pos)`.
 4. `PromoteReplica(new)` runs `group_replication_set_as_primary`. GR moves `super_read_only` and waits for in-flight transactions.
 5. `SetReplicationSource` on the other members is a journal wait. The async replicas are re-pointed as today.
 6. `PopulateReparentJournal(new)`.
 
-The initial promotion of a shard that never had a primary selects the voters, with the primary-elect among them, and stores them in the shard record under the shard lock before `InitPrimary` bootstraps the group.
+The initial promotion of a shard that never had a primary selects the voters, with the primary-elect among them, and stores them in the shard record under the shard lock before `InitPrimary` bootstraps the group. Once `InitPrimary` returns, it records the new group's incarnation.
 
 ### EmergencyReparentShard
 
 The group fails over by itself when a majority survives. ERS in GR mode must uphold the rules in `EmergencyReparentShard.md`: certainty, time-bound stages, shard lock re-checks, reparent journal, and no errant GTIDs.
 
 1. Lock the shard and collect `FullStatus` from all tablets, time-bound.
-2. If a reachable member reports that it is ONLINE, PRIMARY and has quorum, the group has already elected. Promote that tablet in topo (`PromoteReplica`, which is only a type change there) and write the reparent journal. If `--new-primary` names another member, follow with a PRS-style switch. Tablets that are not voters are re-pointed as async replicas; voters that are not active are left to rejoin the group.
+2. If a reachable member reports that it is ONLINE, PRIMARY and has quorum, in the shard's legitimate group (recorded incarnation, majority of the voters ONLINE in its view), the group has already elected. Promote that tablet in topo (`PromoteReplica`, which is only a type change there) and write the reparent journal. If `--new-primary` names another member, follow with a PRS-style switch. Tablets that are not voters are re-pointed as async replicas; voters that are not active are left to rejoin the group.
 3. If no reachable member has quorum, ERS fails, unless the operator passes `--group-replication-force-quorum` (not implemented in the prototype). That choice needs a human, like `--allow-split-brain-promotion`: it would pick the member with the most advanced *received* GTID set and use `group_replication_force_members`.
 
 ### VTOrc
@@ -172,9 +186,9 @@ VTOrc keeps its single loop. Discovery reads `FullStatus.group_replication_statu
 
 | Analysis | Condition | Recovery |
 |---|---|---|
-| `GroupPrimaryNotInTopo` | A member is the ONLINE group primary with quorum, but its tablet is not the topo primary (for example, the tablet-local loop failed). | `PromoteReplica` on that tablet (type change) plus journal. |
-| `GroupMemberNotOnline` | The tablet is a voter, and it is OFFLINE or ERROR. | `StartGroupReplication(bootstrap=false)`. |
-| `GroupNotBootstrapped` | GR policy, no member of the shard is active, and all voters are reachable. | `InitPrimary` (bootstrap) on the tablet with the most advanced GTID set, under the shard lock. |
+| `GroupPrimaryNotInTopo` | A member is the legitimate primary of the shard's group, but its tablet is not the topo primary (for example, the tablet-local loop failed). | Confirm with fresh statuses, then `PromoteReplica` on that tablet (type change) plus journal. |
+| `GroupMemberNotOnline` | The tablet is a voter, it is OFFLINE or ERROR, and another tablet is an active member of the legitimate group with quorum. | Confirm with fresh statuses, then `StartGroupReplication(bootstrap=false)`. |
+| `GroupNotBootstrapped` | GR policy, no member of the shard is active, and all voters are reachable. | `StartGroupReplication(bootstrap=true)` on the voter with the most advanced GTID set, under the shard lock, then record the new group's incarnation. |
 | `GroupVotersOutOfDate` | The voters `SelectVoters` would choose differ from the shard record, for example because a voter has been unreachable for longer than `--group-replication-voter-replacement-grace-period` (default 1m). | Select the voters again (`SelectVoters` with the current list and the group's primary) and store them under the shard lock. |
 | `GroupQuorumLost` | Members are reachable, but none has quorum. | None; alert (ERS with an explicit force flag is the operator path). |
 | `GroupCellMajority` | `group_replication_cross_cell`, and one cell holds a majority of the ONLINE members. | None; alert. |
@@ -188,12 +202,17 @@ For tablets that are active members, the async analyses are suppressed:
 - the semi-sync `*MustBeSet` / `*MustNotBeSet` codes
 - `PrimaryIsReadOnly` while the member is not the group primary
 
+`StaleTopoPrimary` (a PRIMARY tablet with an older term than the shard's primary) only fixes the tablet type of a listed voter under a group replication policy: the voter rejoins its group, and configuring the default channel on it would start asynchronous replication next to the group (NEW-3 of the audit). Other tablets are still made asynchronous replicas.
+
+A voter that `GroupMemberNotOnline` applies to is not analyzed for `ClusterHasNoPrimary` or `PrimaryTabletDeleted`, which outrank it: a group that lost the majority of its voters has no primary that a reparent could follow, and only gets one once its voters rejoin. The failovers are still analyzed on the group's members.
+
 `DeadPrimary` in a shard whose members are active does not run ERS right away: the group elects on its own. VTOrc waits for `--group-replication-failover-grace-period` (default 30s) for `GroupPrimaryNotInTopo` to appear, and only then falls back to the ERS path described above.
 
 ### Other components
 
 - **Lag.** Heartbeat-based lag (`--heartbeat-enable`) works unchanged. The polling tracker must not rely on the default channel on GR members.
 - **Status queries.** The MySQL flavors now read `SHOW REPLICA STATUS FOR CHANNEL ''` and filter `replication_connection_configuration` on `CHANNEL_NAME = ''`. On a GR member the plugin's own channels (`group_replication_applier`, `group_replication_recovery`) show up in those tables and used to break parsing (`query returned 2 rows`).
+- **Group Replication status.** It is read from `performance_schema.replication_group_members`, `replication_group_member_stats` (view id), `replication_connection_status` (received set) and the member's variables, including `group_replication_paxos_single_leader`. It does not read `replication_group_communication_information`: on a member expelled after a freeze, that query never returned and held a lock that the member's own rejoin needed, which wedged the member in ERROR (NEW-5 of the audit). The reads run with the caller's context, and the tablet bounds every read by 10s, so that a status query cannot hold the action lock indefinitely.
 - **Backups.**
   - Online engines (xtrabackup, mysqlshell, clone) work on a member as is.
   - The builtin engine stops mysqld. The tablet leaves the group for the duration and rejoins afterwards through the reconcile loop.
@@ -215,7 +234,7 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
    - Every user table has a primary key and is InnoDB.
    - Every voter has a `gr` port.
 2. **Store the voters** in the shard record.
-3. **Bootstrap on the current primary** (`StartGroupReplication(bootstrap=true)`). Writes continue. Semi-sync stays enabled, and the async replicas keep acknowledging.
+3. **Bootstrap on the current primary** (`StartGroupReplication(bootstrap=true)`), and **record the group's incarnation** in the shard record. Writes continue. Semi-sync stays enabled, and the async replicas keep acknowledging.
 4. **Join the other voters one by one** (`StartGroupReplication`). Each one stops its async channel, recovers incrementally from a donor, and becomes ONLINE. Cross-cell voters join first, so the group gets a cross-cell majority as early as possible.
 5. **Disable semi-sync on the primary as soon as the group has two ONLINE members,** and before the last semi-sync acker leaves its async channel. With Vitess's infinite semi-sync timeout, losing the last acker blocks every commit; the lab reproduced this. Ackers that are not voters keep acknowledging until this point, so they count as remaining ackers while the voters join. From this point, the group's majority provides durability. The "group supersedes semi-sync" rule makes the tablet and VTOrc agree.
 6. Every other tablet becomes, or stays, an async replica of the primary, with semi-sync off. A tablet that is an active member but not a voter leaves the group first.
@@ -226,7 +245,7 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
 1. Set the keyspace durability policy back to the semi-sync policy. Nothing changes immediately, because the active groups supersede semi-sync.
 2. For each secondary: `StopGroupReplication`, then `SetReplicationSource(primary, semiSync=true)`. The primary enables semi-sync as soon as it has an eligible acker, and before its group shrinks below two ONLINE members.
 3. On the primary: stop serving (vtgate buffers), `StopGroupReplication`, clear `super_read_only`, and serve again. GR sets `super_read_only` when it stops. The lab measured about 4s of rejected writes without buffering; with the PRS-style buffering this becomes a short stall.
-4. Clear the voters in the shard record once the last member left the group. A later conversion selects them afresh.
+4. Clear the voters and the group incarnation in the shard record once the last member left the group. A later conversion selects them afresh and records the incarnation of its new group.
 
 ## Recommended topology
 
@@ -285,6 +304,7 @@ Known gaps, found while reviewing and testing the prototype:
 - A voter that changes to a non-eligible type (RDONLY, DRAINED) does not leave the group until VTOrc replaces it in the voter list.
 - PRS cannot promote a tablet that is not a voter; it fails and names the voters. Swapping a non-voter in for a voter as part of the reparent is future work.
 - Failover time is bounded below by GR's fixed 5s failure detection.
+- A join that is in progress when the group it joins loses its majority ends, in MySQL 8.4.11, with the joiner alone in a new group incarnation. Vitess never follows such a group and its tablet leaves it, but the member then needs another join. After a total loss of the majority, members can stay in ERROR, or not answer status queries, for up to a minute while their communication engine exits, and the group is only bootstrapped again once every voter is readable.
 - The member weight is applied only when a member joins.
 
 Follow-ups:
