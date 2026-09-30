@@ -128,6 +128,13 @@ The following flags have been removed from all binaries.
 - `--v`, `--vmodule`, `--logbuflevel`
 - `--keep-logs`, `--keep-logs-by-mtime`, `--purge-logs-interval`
 
+The [v24 release notes](../../24.0/24.0.0/summary.md#structured-logging) announced the removal of `glog` in v25.
+Some of the flags above did not show a deprecation warning in v24.
+
+- `--log-structured`, `--log-rotate-max-size`, `--keep-logs`, `--keep-logs-by-mtime`, and `--purge-logs-interval` on
+  all binaries
+- All `glog` flags on `vtctldclient` and `vtctlclient`
+
 In `vtctldclient`, `-v` is now the shorthand for `--version`, matching the other binaries.
 
 **Migration**: remove the flags above from startup arguments. Use `--log-level=debug` for debug logs and
