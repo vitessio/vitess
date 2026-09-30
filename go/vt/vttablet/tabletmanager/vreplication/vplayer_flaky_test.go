@@ -4068,12 +4068,14 @@ func TestPlayerStalls(t *testing.T) {
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	oldIdleTimeout := idleTimeout
 	defer func() {
 		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
 		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
+		idleTimeout = oldIdleTimeout
 	}()
 
 	// Shorten the deadline for the test. It only needs to comfortably exceed
@@ -4083,6 +4085,14 @@ func TestPlayerStalls(t *testing.T) {
 	vreplicationMinimumHeartbeatUpdateInterval = 2
 	// So each relay log batch will be a single statement transaction.
 	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
+	// The filter matches no tables, so the source's row events, including
+	// the vplayer's own writes to _vt.vreplication, reach the vplayer as
+	// empty transactions. Their position is saved once idleTimeout has
+	// passed since the last save, which also resets the heartbeat count.
+	// Don't save it during the test, so that the heartbeat recording is
+	// the only write to _vt.vreplication that the row locks taken in the
+	// heartbeat subtest can block.
+	idleTimeout = time.Hour
 
 	// Don't retry the workflow if it goes into the error state.
 	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Minute
@@ -4195,16 +4205,12 @@ func TestPlayerStalls(t *testing.T) {
 				// the subtest: teardown deletes from the locked table and
 				// would otherwise hang until the test timeout.
 				defer releaseLocks()
-				// Wait until a heartbeat recording attempt (or the position
-				// update it is part of) fails on the row locks held by the
-				// preFunc connection, rather than sleeping a fixed multiple of
-				// the heartbeat interval.
+				// Wait until a heartbeat recording attempt fails on the row
+				// locks held by the preFunc connection, rather than sleeping a
+				// fixed multiple of the heartbeat interval.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
 					log.Flush()
-					logMessage := logger.String()
-					assert.True(c, strings.Contains(logMessage, failedToRecordHeartbeatMsg) ||
-						strings.Contains(logMessage, "Lock wait timeout exceeded"),
-						"expected log message not found")
+					assert.Contains(c, logger.String(), failedToRecordHeartbeatMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				// The vplayer also records the failure in the vreplication
 				// record's message column, but that update is blocked by the
@@ -4224,8 +4230,6 @@ func TestPlayerStalls(t *testing.T) {
 				}
 				drainDBQueries()
 			},
-			// Nothing should get replicated because of the exclusing row locks
-			// held in the other connection from our preFunc.
 		},
 	}
 

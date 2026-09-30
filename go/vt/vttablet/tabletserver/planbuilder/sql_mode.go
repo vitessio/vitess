@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -45,13 +46,14 @@ import (
 // it does for clients that send the hint to it directly. The hint's effect on execution
 // is a vtgate concern.
 
-// ValidateSettingsSQLMode mirrors BuildSettingQuery's sql_mode validation for settings
-// that are applied without going through BuildSettingQuery — a true reservation executes
-// its settings directly on the tainted connection. Like BuildSettingQuery, every setting
-// must parse as a SET statement, and sql_mode values must be constants: the settings
-// paths apply their statements with no verification afterwards, so a value that cannot
-// be judged upfront is rejected rather than applied unchecked.
-func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error {
+// ValidateSettingsSQLMode mirrors BuildSettingQuery's validation for settings that are
+// applied without going through BuildSettingQuery — a true reservation executes its
+// settings directly on the tainted connection. Like BuildSettingQuery, every setting
+// must parse as a SET statement, with no subquery when rejectSubqueries is set (see
+// rejectSettingSubqueries), and sql_mode values must be constants: the settings paths
+// apply their statements with no verification afterwards, so a value that cannot be
+// judged upfront is rejected rather than applied unchecked.
+func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
@@ -61,11 +63,59 @@ func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error 
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
 		}
+		if rejectSubqueries {
+			if err := rejectSettingSubqueries(set, setting); err != nil {
+				return err
+			}
+		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// rejectSettingSubqueries refuses a connection setting whose expressions embed
+// a subquery. A setting is applied to the connection with no table ACL check,
+// so the tables a subquery reads would go unchecked. Settings carry constants:
+// vtgate evaluates a SET's expression on a shard, where the tablet checks it
+// like any read, and sends the value. The check only runs where strict table
+// ACL is enforced, not in a dry run: without enforcement there is nothing for
+// it to protect, and a vtgate from before the value was sent still sends a
+// targeted session's SET expression as written, which would break for nothing.
+func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
+	if hasSubquery(set) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
+	}
+	return nil
+}
+
+// SettingWithSubquery returns the first of the connection settings whose
+// expressions embed a subquery, which strict table ACL refuses (see
+// rejectSettingSubqueries), or "" when there is none. A setting that does not
+// parse as a SET statement is skipped: the settings validation reports it.
+func SettingWithSubquery(settings []string, parser *sqlparser.Parser) string {
+	for _, setting := range settings {
+		stmt, err := parser.Parse(setting)
+		if err != nil {
+			continue
+		}
+		if set, ok := stmt.(*sqlparser.Set); ok && hasSubquery(set) {
+			return setting
+		}
+	}
+	return ""
+}
+
+func hasSubquery(set *sqlparser.Set) bool {
+	var found bool
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			found = true
+		}
+		return !found, nil
+	}, set)
+	return found
 }
 
 // validateConstantSetExprsSQLMode is validateSetExprsSQLMode for the settings paths,
@@ -100,9 +150,12 @@ func validateSetStatementSQLMode(set *sqlparser.Set) (verify bool, err error) {
 }
 
 // validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant value
-// fails sqlmode.Validate. Assignments whose value is not a constant cannot be judged here;
-// for those it returns verify=true, asking the executor to read back and validate the
-// applied value after the statement runs.
+// fails sqlmode.Validate. A constant is a literal or an unquoted mode name: MySQL accepts
+// `SET sql_mode = TRADITIONAL` as `SET sql_mode = 'TRADITIONAL'`, and the parser yields
+// the unquoted name as a bare, unqualified column name. A qualified name is rejected the
+// way MySQL rejects it (see constantSQLModeValue). Assignments whose value is not a
+// constant cannot be judged here; for those it returns verify=true, asking the executor to
+// read back and validate the applied value after the statement runs.
 func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
@@ -114,13 +167,11 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 			// the global scope is the operator's domain, not a vtgate session's
 			continue
 		}
-		lit, ok := expr.Expr.(*sqlparser.Literal)
-		if !ok {
-			verify = true
-			continue
-		}
-		value, err := sqlparser.LiteralToValue(lit)
+		value, ok, err := constantSQLModeValue(expr.Expr)
 		if err != nil {
+			return false, err
+		}
+		if !ok {
 			verify = true
 			continue
 		}
@@ -129,4 +180,25 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 		}
 	}
 	return verify, nil
+}
+
+// constantSQLModeValue returns the value of a constant sql_mode expression: a literal, or
+// an unquoted mode name, which MySQL accepts as the equivalent string. A qualified name is
+// never a mode name: MySQL rejects it as the wrong argument type, whatever the qualifier,
+// and so does this, with MySQL's error. Any other expression is not a constant.
+func constantSQLModeValue(expr sqlparser.Expr) (value sqltypes.Value, ok bool, err error) {
+	switch node := expr.(type) {
+	case *sqlparser.Literal:
+		value, err := sqlparser.LiteralToValue(node)
+		if err != nil {
+			return sqltypes.Value{}, false, nil
+		}
+		return value, true, nil
+	case *sqlparser.ColName:
+		if !node.Qualifier.IsEmpty() {
+			return sqltypes.Value{}, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", sysvars.SQLMode.Name)
+		}
+		return sqltypes.NewVarChar(node.Name.String()), true, nil
+	}
+	return sqltypes.Value{}, false, nil
 }

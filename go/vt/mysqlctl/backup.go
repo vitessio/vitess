@@ -572,10 +572,11 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 			}
 		}()
 	}
-	// The tainted variant discards the connection afterwards: operator-supplied
-	// queries may change session state (e.g. sql_mode) that must not leak into
-	// the pooled connections Vitess uses for its own SQL.
-	if err := params.Mysqld.ExecuteSuperQueryListTainted(initCtx, params.InitSQL.Queries); err != nil {
+	// Each entry is operator written SQL and may hold several statements.
+	// The connection is discarded afterwards: operator-supplied queries may change
+	// session state (e.g. sql_mode) that must not leak into the pooled connections
+	// Vitess uses for its own SQL.
+	if err := params.Mysqld.ExecuteSuperQueryListMulti(initCtx, params.InitSQL.Queries); err != nil {
 		if params.InitSQL.FailOnError {
 			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)
 		}

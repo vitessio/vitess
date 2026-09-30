@@ -622,6 +622,14 @@ func executeQueryWithContext(ctx context.Context, dbConn *mysql.Conn, query stri
 // executeMultiQuery will retry the given multi query up to 10 times with a small sleep in between each try.
 // This allows the tests to be more robust in the face of transient failures.
 func executeMultiQuery(dbConn *mysql.Conn, query string) (err error) {
+	// This is the only helper here that sends a batch, so it is the one that
+	// asks for the capability rather than every connection the tests open. Both
+	// callers close the connection when they return, so it never outlives the
+	// batch it was needed for.
+	if err := dbConn.SetMultiStatements(true); err != nil {
+		return err
+	}
+
 	retries := 10
 	retryDelay := 1 * time.Second
 	for i := range retries {
