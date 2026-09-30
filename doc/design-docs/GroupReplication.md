@@ -102,7 +102,7 @@ Apart from the voters, nothing new is stored in topo:
 
 - **Group name.** A UUIDv5 of `keyspace/shard` in a fixed Vitess namespace, the same on every tablet of the shard. After a reshard the new shards get new groups automatically.
 - **Local address.** `<mysql hostname>:<--group-replication-port>`. The tablet publishes the port in its tablet record as `port_map["gr"]`. The default is off; the flag enables GR support on the tablet.
-- **Seeds.** The `gr` addresses of the other voters of the shard, read from topo each time the tablet (re)joins.
+- **Seeds.** The `gr` addresses of the other tablets of the shard that publish a `gr` port, read from topo each time the tablet (re)joins. Non-voters are harmless seeds: a joiner only needs one reachable member.
 - **Credentials.** Distributed recovery authenticates as the existing replication user (`START GROUP_REPLICATION USER=…, PASSWORD=…`, never stored), with `group_replication_recovery_get_public_key=ON` or TLS.
 - **Tunables** (vttablet flags, applied with `SET GLOBAL` before each start):
   - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
