@@ -26,8 +26,8 @@ import (
 )
 
 // validateRequiredPositionFlavor returns an INVALID_ARGUMENT error if required
-// is set but is not a non-empty MySQL56 position. An empty set would silently
-// disable the check.
+// is set and is not a MySQL GTID position or is an empty GTID set. An empty
+// set would disable the check.
 func validateRequiredPositionFlavor(required replication.Position) error {
 	if required.GTIDSet == nil {
 		return nil
@@ -44,9 +44,9 @@ func validateRequiredPositionFlavor(required replication.Position) error {
 	return nil
 }
 
-// validateRequiredPosition returns an INVALID_ARGUMENT error if required is set
-// on a shard that is not MySQL GTID based.
-func validateRequiredPosition(required replication.Position, isGTIDBased bool) error {
+// validateRequiredPositionShard returns an INVALID_ARGUMENT error if required
+// is set on a shard that is not MySQL GTID based.
+func validateRequiredPositionShard(required replication.Position, isGTIDBased bool) error {
 	if required.GTIDSet == nil {
 		return nil
 	}

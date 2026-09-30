@@ -320,7 +320,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	if err := validateRequiredPosition(opts.RequiredPosition, isGTIDBased); err != nil {
+	if err := validateRequiredPositionShard(opts.RequiredPosition, isGTIDBased); err != nil {
 		return err
 	}
 
