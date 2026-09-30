@@ -302,6 +302,13 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	if err := reparentutil.WriteGroupReplicationIncarnation(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, incarnation); err != nil {
 		return true, topologyRecovery, vterrors.Wrapf(err, "bootstrapped the replication group on %s, but failed to record its incarnation %s", aliasString, incarnation)
 	}
+	// Until VTOrc refreshes its copy of the shard record, its analysis would take the new group
+	// for a foreign one, and not make the other voters join it.
+	if shardInfo, err := ts.GetShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard); err == nil {
+		if err := inst.SaveShard(shardInfo); err != nil {
+			logger.Warn("failed to save the shard record", slog.Any("error", err))
+		}
+	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("recorded the group incarnation %s", incarnation))
 	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, candidate.tablet.Alias, "bootstrapped the replication group")
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, aliasString))

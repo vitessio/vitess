@@ -586,10 +586,14 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, topologyRecovery.IsSuccessful)
 			assert.Equal(t, tt.want, topologyRecovery.SuccessorAlias.Uid)
-			// The bootstrapped group is recorded as the shard's legitimate group.
+			// The bootstrapped group is recorded as the shard's legitimate group, in the topology
+			// and in VTOrc's own copy, which its analysis uses right away.
 			si, err := ts.GetShard(t.Context(), "ks", "0")
 			require.NoError(t, err)
 			assert.Equal(t, "1790000123", si.GroupReplicationIncarnation)
+			incarnation, err := inst.ReadShardGroupReplicationIncarnation("ks", "0")
+			require.NoError(t, err)
+			assert.Equal(t, "1790000123", incarnation)
 		})
 	}
 }

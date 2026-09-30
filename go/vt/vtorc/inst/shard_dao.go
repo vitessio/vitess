@@ -179,6 +179,32 @@ func ReadShardGroupReplicationVoters(keyspaceName, shardName string) ([]*topodat
 	return voters, nil
 }
 
+// ReadShardGroupReplicationIncarnation reads the incarnation of the shard's replication group, as
+// recorded in the shard record.
+func ReadShardGroupReplicationIncarnation(keyspaceName, shardName string) (string, error) {
+	query := `SELECT
+			group_replication_incarnation
+		FROM
+			vitess_shard
+		WHERE
+			keyspace = ?
+			AND shard = ?`
+	incarnation := ""
+	shardFound := false
+	err := db.QueryVTOrc(query, sqlutils.Args(keyspaceName, shardName), func(row sqlutils.RowMap) error {
+		shardFound = true
+		incarnation = row.GetString("group_replication_incarnation")
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !shardFound {
+		return "", ErrShardNotFound
+	}
+	return incarnation, nil
+}
+
 // formatGroupReplicationVoters formats the voting members of a shard's replication group to be
 // stored in the database.
 func formatGroupReplicationVoters(voters []*topodatapb.TabletAlias) string {
