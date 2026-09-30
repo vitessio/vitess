@@ -73,7 +73,8 @@ type EmergencyReparentOptions struct {
 	// RequiredPosition is the minimum combined position that the promoted tablet
 	// must have. This includes both applied transactions and received transactions
 	// still in the relay log. The zero value means no requirement. An empty GTID
-	// set is rejected.
+	// set is rejected. Only MySQL GTID shards are supported, and the shard type is
+	// checked after replication is stopped and a reachable primary is demoted.
 	RequiredPosition replication.Position
 
 	// Private options managed internally. We use value passing to avoid leaking
