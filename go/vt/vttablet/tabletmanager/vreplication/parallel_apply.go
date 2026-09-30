@@ -2374,12 +2374,20 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		if dbClient == nil {
 			dbClient = vp.activeDBClient()
 		}
-		activeCommitClient.Store(dbClient)
-		defer activeCommitClient.Store(nil)
-		// Recheck after publishing; see the matching comment in
-		// commitWorkerTxn for the missed-cancellation window this closes.
-		if err := ctx.Err(); err != nil {
-			return err
+		// A DDL cannot commit atomically with its position, and mysqld
+		// finishes a statement whose client has gone away, so closing the
+		// connection mid-DDL would leave the DDL applied without its
+		// position and the restarted workflow would fail replaying it. Like
+		// the serial vplayer, let a DDL finish: only publish the connection
+		// for the transactional commits.
+		if !(len(payload.events) > 0 && payload.events[0].Type == binlogdatapb.VEventType_DDL) {
+			activeCommitClient.Store(dbClient)
+			defer activeCommitClient.Store(nil)
+			// Recheck after publishing; see the matching comment in
+			// commitWorkerTxn for the missed-cancellation window this closes.
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 		}
 		vp.serialMu.Lock()
 		defer vp.serialMu.Unlock()

@@ -1287,6 +1287,97 @@ func TestCommitLoopCancelUnblocksBlockedCommit(t *testing.T) {
 	}
 }
 
+// closeTrackingDBClient records whether its connection was closed.
+type closeTrackingDBClient struct {
+	recordingDBClient
+	closed atomic.Bool
+}
+
+func (c *closeTrackingDBClient) Close() { c.closed.Store(true) }
+
+// TestCommitLoopCancelLetsDDLFinish pins the opposite of
+// TestCommitLoopCancelUnblocksBlockedCommit for a DDL. A DDL cannot commit
+// atomically with its position, and mysqld finishes a statement whose client
+// has gone away, so closing the main connection mid-DDL on cancellation would
+// leave the DDL applied without its position; the restarted workflow would
+// replay it and fail on it (e.g. with a duplicate column error, which ends the
+// workflow). Like the serial vplayer, the commitLoop has to let the DDL finish
+// and save its position.
+func TestCommitLoopCancelLetsDDLFinish(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	scheduler := newApplyScheduler(ctx)
+
+	mainClient := &closeTrackingDBClient{}
+	vp.dbClient = newVDBClient(mainClient, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	// The FK metadata refresh after an executed DDL reads on the main
+	// connection too.
+	vp.vr.dbClient = vp.dbClient
+
+	ddlEntered := make(chan struct{})
+	releaseDDL := make(chan struct{})
+	var queriesMu sync.Mutex
+	var queries []string
+	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		queriesMu.Lock()
+		queries = append(queries, sql)
+		queriesMu.Unlock()
+		if strings.HasPrefix(sql, "alter table") {
+			close(ddlEntered)
+			<-releaseDDL
+		}
+		return &sqltypes.Result{}, nil
+	}
+
+	pos, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	txn := acquireApplyTxn()
+	txn.order = 1
+	txn.forceGlobal = true
+	txn.payload = &applyTxnPayload{
+		commitOnly: true,
+		pos:        pos,
+		events: []*binlogdatapb.VEvent{{
+			Type:      binlogdatapb.VEventType_DDL,
+			Statement: "alter table t1 add column c int",
+			Timestamp: 100,
+		}},
+	}
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+	close(commitCh)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- vp.commitLoop(ctx, scheduler, commitCh)
+	}()
+
+	select {
+	case <-ddlEntered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting for the commitLoop to run the DDL")
+	}
+
+	cancel()
+	assert.Never(t, mainClient.closed.Load, time.Second, 10*time.Millisecond,
+		"the main connection must not be closed while a DDL runs on it")
+	close(releaseDDL)
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "commitLoop did not return after the DDL finished")
+	}
+	queriesMu.Lock()
+	defer queriesMu.Unlock()
+	require.Len(t, queries, 2)
+	assert.Contains(t, queries[1], "update _vt.vreplication set pos=", "the DDL's position must be saved")
+}
+
 // TestCommitLoopSpentCancellationNeverTouchesConnection pins the terminal
 // state a missed-cancellation race would leave behind: the commitLoop's
 // one-shot cancellation callback already spent (fired with no published
