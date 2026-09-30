@@ -429,11 +429,12 @@ func registerOrca() (stop func()) {
 		lastReport := time.Now()
 		for {
 			select {
-			case now := <-ticker.C:
+			case <-ticker.C:
 				recorder.SetCPUUtilization(getCpuUsage())
 				recorder.SetMemoryUtilization(getMemoryUsage())
 				// gRPC's default weighted round robin (gRFC A58) weights
 				// backends by qps / (cpu + eps/qps * errorUtilizationPenalty).
+				now := time.Now()
 				elapsed := now.Sub(lastReport).Seconds()
 				recorder.SetQPS(float64(orcaEgressMessages.Swap(0)) / elapsed)
 				recorder.SetEPS(float64(orcaErrors.Swap(0)) / elapsed)
