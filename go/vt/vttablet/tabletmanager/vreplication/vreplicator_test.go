@@ -213,6 +213,17 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 			identityCols: []string{"id"},
 		},
 		{
+			// A prefix unique index over a foreign key's column is left out of
+			// the writeset keys along with the FK-backing indexes, and the FK
+			// keys do not cover it (a prefix index cannot back the FK). A
+			// unique index only constrains its own table, so the table's
+			// writes serializing covers it.
+			name:                     "prefix unique index next to a foreign key serializes table writes",
+			ddl:                      "create table t1 (id int not null, name varchar(64) not null, primary key(id), unique key uk_name(name(10)), constraint fk_name foreign key (name) references p(name))",
+			identityCols:             []string{"id"},
+			wantSerializeTableWrites: true,
+		},
+		{
 			// Non-unique secondary indexes take no gap locks for row image
 			// application under READ COMMITTED.
 			name:         "non-unique secondary index keeps table writes parallel",
