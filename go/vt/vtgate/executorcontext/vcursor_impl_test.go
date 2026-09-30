@@ -435,3 +435,31 @@ func (f fakeObserver) Observe(*sqltypes.Result) {
 }
 
 var _ ResultsObserver = (*fakeObserver)(nil)
+
+// TestPrepareSetVarCommentSortsVariables checks that the SET_VAR hint lists the
+// session's variables sorted by name, on every rendering, skipping the variables
+// that SET_VAR cannot carry.
+func TestPrepareSetVarCommentSortsVariables(t *testing.T) {
+	safeSession := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{
+		"sql_safe_updates":        "1",
+		"unique_checks":           "0",
+		"sql_mode":                "'ANSI'",
+		"max_execution_time":      "100",
+		"big_tables":              "1",
+		"join_buffer_size":        "262144",
+		"sort_buffer_size":        "262144",
+		"group_concat_max_len":    "4096",
+		"div_precision_increment": "6",
+		"max_tmp_tables":          "1", // not settable through SET_VAR
+		"autocommit":              "1", // handled by vtgate itself
+	}})
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+	require.NoError(t, err)
+
+	want := "SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) " +
+		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) " +
+		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0)"
+	for range 100 {
+		require.Equal(t, want, vc.PrepareSetVarComment())
+	}
+}
