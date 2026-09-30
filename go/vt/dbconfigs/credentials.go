@@ -29,6 +29,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -158,7 +159,7 @@ type VaultCredentialsServer struct {
 	vaultClient            *vaultapi.Client
 	// We use a separate valid flag to allow invalidating the cache
 	// without destroying it, in case Vault is temp down.
-	cacheValid bool
+	cacheValid atomic.Bool
 }
 
 // GetUserAndPassword is part of the CredentialsServer interface
@@ -203,16 +204,12 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		vcs.vaultCacheExpireTicker = ticker
 		go func() {
 			for range ticker.C {
-				// cacheValid is also read and written by GetUserAndPassword
-				// while holding vcs.mu, so we must hold it here as well.
-				vcs.mu.Lock()
-				vcs.cacheValid = false
-				vcs.mu.Unlock()
+				vcs.cacheValid.Store(false)
 			}
 		}()
 	}
 
-	if vcs.cacheValid && vcs.dbCredsCache != nil {
+	if vcs.cacheValid.Load() && vcs.dbCredsCache != nil {
 		if vcs.dbCredsCache[user] == nil {
 			log.Error(fmt.Sprintf("Vault cache is valid, but user %s unknown in cache, will retry", user))
 			return "", "", ErrUnknownUser
@@ -299,7 +296,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 	log.Info("Vault client status: " + vcs.vaultClient.GetStatus())
 
 	vcs.dbCredsCache = dbCreds
-	vcs.cacheValid = true
+	vcs.cacheValid.Store(true)
 	return user, dbCreds[user][0], nil
 }
 

@@ -25,8 +25,8 @@ import (
 
 // TestVaultCredentialsServerCacheExpiryRace exercises the cache expiry
 // goroutine concurrently with GetUserAndPassword. It is meant to be run with
-// the race detector (go test -race): the expiry goroutine must hold vcs.mu
-// when it clears cacheValid.
+// the race detector (go test -race): access to cacheValid from the expiry
+// goroutine must be synchronized with GetUserAndPassword.
 func TestVaultCredentialsServerCacheExpiryRace(t *testing.T) {
 	vcs, ok := AllCredentialsServers["vault"].(*VaultCredentialsServer)
 	require.True(t, ok)
@@ -42,12 +42,12 @@ func TestVaultCredentialsServerCacheExpiryRace(t *testing.T) {
 			vcs.vaultCacheExpireTicker = nil
 		}
 		vcs.dbCredsCache = nil
-		vcs.cacheValid = false
+		vcs.cacheValid.Store(false)
 	})
 
 	vcs.mu.Lock()
 	vcs.dbCredsCache = map[string][]string{"user": {"pass"}}
-	vcs.cacheValid = true
+	vcs.cacheValid.Store(true)
 	vcs.mu.Unlock()
 
 	deadline := time.Now().Add(100 * time.Millisecond)
