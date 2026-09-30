@@ -1266,7 +1266,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		})
 	}
 
-	shouldWaitForParallelApply, err := shouldPreBufferWaitForParallelApply(s)
+	shouldWaitForParallelApply, err := migrationUsesParallelApply(s)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed parsing vreplication workflow options before pre-buffer wait")
 	}
@@ -1319,8 +1319,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		}
 
 		if shouldWaitForParallelApply {
-			// With writes blocked on the original table, the stream can catch up without a queued
-			// RENAME holding conflicting metadata locks on the shadow table.
+			// With the parallel applier, wait for the stream to catch up before
+			// queuing the RENAME rather than after, as the serial path does. Waiting
+			// with the RENAME queued stalled in stress tests with the parallel
+			// applier; the mechanism is not pinned down (the queued RENAME only
+			// waits on the locked sentry table, since it takes its metadata locks
+			// in name order). Either order is correct: LOCK TABLES ... WRITE waits
+			// for the writes to the original table to commit, so this position
+			// covers all of them.
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "post-lock: waiting for vreplication to catch up")
 			preRenamePos, err := e.primaryPosition(ctx)
 			if err != nil {
@@ -1378,12 +1384,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed reading vreplication table after locking")
 	}
 
-	// The parallel-apply pre-rename wait happens in-lock in the production
-	// branch above, so the post-lock wait is redundant there. The test-suite
-	// branch has no queued RENAME (and therefore no MDL conflict to avoid)
-	// but also never performed the in-lock wait, so it must still wait here —
-	// otherwise StopVReplication below can fire before the stream has caught
-	// up to postWritesPos and the cutover loses tail writes.
+	// With the parallel applier, the production branch above already waited
+	// for the stream to catch up before queuing the RENAME, so this wait is
+	// redundant there. The test-suite branch never did that wait, so it must
+	// still wait here — otherwise StopVReplication below can fire before the
+	// stream has caught up to postWritesPos and the cutover loses tail writes.
 	if !shouldWaitForParallelApply || isVreplicationTestSuite {
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-lock pos: %v", replication.EncodePosition(postWritesPos))
 		if err := waitForPos(s, postWritesPos, onlineDDL.CutOverThreshold); err != nil {
@@ -1479,14 +1484,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	// deferred function will re-enable writes now
 }
 
-// shouldPreBufferWaitForParallelApply reports whether the VReplication
-// stream backing this migration runs with parallel apply enabled (>1
-// worker), taking workflow-level config overrides into account. The
-// cut-over path consults this because parallel apply introduces a
-// reorder buffer that must drain cleanly before tables can be swapped;
-// the serial applier has no such buffer and does not need the extra
-// wait.
-func shouldPreBufferWaitForParallelApply(s *VReplStream) (bool, error) {
+// migrationUsesParallelApply reports whether the VReplication stream backing
+// this migration runs with parallel apply enabled (>1 worker), taking
+// workflow-level config overrides into account. The cut-over waits for the
+// stream to catch up before queuing the RENAME when it does.
+func migrationUsesParallelApply(s *VReplStream) (bool, error) {
 	workers := vttablet.InitVReplicationConfigDefaults().ParallelReplicationWorkers
 	if s == nil || s.options == "" {
 		return workers > 1, nil

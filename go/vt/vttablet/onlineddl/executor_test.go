@@ -612,7 +612,7 @@ func TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables(t *testing.
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=@lock_wait_timeout")
 }
 
-func TestShouldPreBufferWaitForParallelApply(t *testing.T) {
+func TestMigrationUsesParallelApply(t *testing.T) {
 	config := vttablet.InitVReplicationConfigDefaults()
 	savedParallelWorkers := config.ParallelReplicationWorkers
 	t.Cleanup(func() {
@@ -620,17 +620,17 @@ func TestShouldPreBufferWaitForParallelApply(t *testing.T) {
 	})
 
 	config.ParallelReplicationWorkers = 1
-	shouldWait, err := shouldPreBufferWaitForParallelApply(nil)
+	shouldWait, err := migrationUsesParallelApply(nil)
 	require.NoError(t, err)
 	require.False(t, shouldWait)
 
 	config.ParallelReplicationWorkers = 2
-	shouldWait, err = shouldPreBufferWaitForParallelApply(nil)
+	shouldWait, err = migrationUsesParallelApply(nil)
 	require.NoError(t, err)
 	require.True(t, shouldWait)
 }
 
-func TestShouldPreBufferWaitForParallelApplyPrefersWorkflowOverride(t *testing.T) {
+func TestMigrationUsesParallelApplyPrefersWorkflowOverride(t *testing.T) {
 	config := vttablet.InitVReplicationConfigDefaults()
 	savedParallelWorkers := config.ParallelReplicationWorkers
 	t.Cleanup(func() {
@@ -643,12 +643,12 @@ func TestShouldPreBufferWaitForParallelApplyPrefersWorkflowOverride(t *testing.T
 	stream.bls = &binlogdatapb.BinlogSource{}
 	stream.options = `{"config":{"vreplication-parallel-replication-workers":"2"}}`
 
-	shouldWait, err := shouldPreBufferWaitForParallelApply(stream)
+	shouldWait, err := migrationUsesParallelApply(stream)
 	require.NoError(t, err)
 	require.True(t, shouldWait)
 }
 
-func TestShouldPreBufferWaitForParallelApplyRejectsInvalidWorkflowOverride(t *testing.T) {
+func TestMigrationUsesParallelApplyRejectsInvalidWorkflowOverride(t *testing.T) {
 	config := vttablet.InitVReplicationConfigDefaults()
 	savedParallelWorkers := config.ParallelReplicationWorkers
 	t.Cleanup(func() {
@@ -661,12 +661,12 @@ func TestShouldPreBufferWaitForParallelApplyRejectsInvalidWorkflowOverride(t *te
 	stream.bls = &binlogdatapb.BinlogSource{}
 	stream.options = `{"config":{"vreplication-parallel-replication-workers":"not-an-int"}}`
 
-	_, err := shouldPreBufferWaitForParallelApply(stream)
+	_, err := migrationUsesParallelApply(stream)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "invalid value for vreplication-parallel-replication-workers")
 }
 
-func TestShouldPreBufferWaitForParallelApplyIgnoresUnknownWorkflowOverrideKeys(t *testing.T) {
+func TestMigrationUsesParallelApplyIgnoresUnknownWorkflowOverrideKeys(t *testing.T) {
 	config := vttablet.InitVReplicationConfigDefaults()
 	savedParallelWorkers := config.ParallelReplicationWorkers
 	t.Cleanup(func() {
@@ -679,7 +679,7 @@ func TestShouldPreBufferWaitForParallelApplyIgnoresUnknownWorkflowOverrideKeys(t
 	stream.bls = &binlogdatapb.BinlogSource{}
 	stream.options = `{"config":{"user":"admin","password":"secret"}}`
 
-	shouldWait, err := shouldPreBufferWaitForParallelApply(stream)
+	shouldWait, err := migrationUsesParallelApply(stream)
 	require.NoError(t, err)
 	require.True(t, shouldWait)
 }
