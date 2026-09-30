@@ -36,8 +36,8 @@ import (
 
 const requiredGtid = "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100"
 
-// saveRequiredPositionFixture stores a keyspace, a tablet record and a poll
-// record for the primary.
+// saveRequiredPositionFixture stores a keyspace with durability, a tablet
+// record of type tabletType, and a poll record with executedGtidSet.
 func saveRequiredPositionFixture(t *testing.T, durability string, tabletType topodatapb.TabletType, executedGtidSet string) *topodatapb.Tablet {
 	t.Helper()
 
