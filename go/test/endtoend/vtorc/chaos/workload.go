@@ -49,6 +49,8 @@ type Workload struct {
 	wg      sync.WaitGroup
 	log     *EventLog
 	failing atomic.Bool
+	// stopped is when Stop was called: the end of the scenario for availability metrics.
+	stopped time.Time
 }
 
 // StartWorkload starts `workers` writers each issuing one INSERT per `interval`.
@@ -106,6 +108,9 @@ func (w *Workload) run(ctx context.Context, worker int, interval time.Duration) 
 
 // Stop stops the writers and waits for in-flight writes to finish (bounded by their timeouts).
 func (w *Workload) Stop() {
+	w.mu.Lock()
+	w.stopped = time.Now()
+	w.mu.Unlock()
 	w.cancel()
 	w.wg.Wait()
 	w.db.Close()
@@ -169,19 +174,51 @@ func (w *Workload) Records() []WriteRecord {
 	return r
 }
 
-// Stats summarizes the workload.
+// outageThreshold is the shortest interval without an acknowledged write that counts as an outage
+// in WorkloadStats.Unavailable. The writers issue about 100 writes per second in total, so a
+// healthy primary acknowledges one every few tens of milliseconds.
+const outageThreshold = time.Second
+
+// Outage is an interval without any acknowledged write.
+type Outage struct {
+	From, To time.Time
+	// Ongoing is set when the outage lasted until the writers stopped: To is then the time the
+	// writers were stopped, not an acknowledged write.
+	Ongoing bool
+}
+
+// Duration is the length of the outage.
+func (o Outage) Duration() time.Duration { return o.To.Sub(o.From) }
+
+// WorkloadStats summarizes the workload.
 type WorkloadStats struct {
 	Total, Acked, Failed int
 	// LongestGap is the longest period without any acked write completing, and when it happened.
+	// A period that lasted until the writers stopped counts (GapOngoing), measured up to Stopped.
 	LongestGap       time.Duration
 	GapFrom, GapTo   time.Time
+	GapOngoing       bool
 	FirstFailAfter   time.Time // first failed write started after the fault
 	FirstAckAfterGap time.Time
+	// Outages are the periods of at least outageThreshold without an acked write, including one
+	// still ongoing when the writers stopped, and Unavailable is their total length.
+	Outages     []Outage
+	Unavailable time.Duration
+	Stopped     time.Time
 }
 
 func (w *Workload) Stats(fault time.Time) WorkloadStats {
-	recs := w.Records()
-	var st WorkloadStats
+	w.mu.Lock()
+	stopped := w.stopped
+	w.mu.Unlock()
+	return computeStats(w.Records(), fault, stopped)
+}
+
+// computeStats computes the workload statistics of recs. stopped is when the writers were stopped
+// (zero if they were not): an interval without an acked write that was still going on then counts
+// as a gap and an outage, ending at stopped.
+func computeStats(recs []WriteRecord, fault, stopped time.Time) WorkloadStats {
+	st := WorkloadStats{Stopped: stopped}
 	var ends []time.Time
 	for _, r := range recs {
 		st.Total++
@@ -196,11 +233,33 @@ func (w *Workload) Stats(fault time.Time) WorkloadStats {
 		}
 	}
 	sort.Slice(ends, func(i, j int) bool { return ends[i].Before(ends[j]) })
+	var gaps []Outage
 	for i := 1; i < len(ends); i++ {
-		if g := ends[i].Sub(ends[i-1]); g > st.LongestGap {
-			st.LongestGap, st.GapFrom, st.GapTo = g, ends[i-1], ends[i]
+		gaps = append(gaps, Outage{From: ends[i-1], To: ends[i]})
+	}
+	if !stopped.IsZero() {
+		// The writers stopped during an outage: it lasted from the last acked write (or the
+		// fault, if no write was ever acked) until the writers stopped.
+		last := fault
+		if len(ends) > 0 {
+			last = ends[len(ends)-1]
+		}
+		if !last.IsZero() && stopped.After(last) {
+			gaps = append(gaps, Outage{From: last, To: stopped, Ongoing: true})
 		}
 	}
-	st.FirstAckAfterGap = st.GapTo
+	for _, g := range gaps {
+		d := g.Duration()
+		if d > st.LongestGap {
+			st.LongestGap, st.GapFrom, st.GapTo, st.GapOngoing = d, g.From, g.To, g.Ongoing
+		}
+		if d >= outageThreshold {
+			st.Outages = append(st.Outages, g)
+			st.Unavailable += d
+		}
+	}
+	if !st.GapOngoing {
+		st.FirstAckAfterGap = st.GapTo
+	}
 	return st
 }

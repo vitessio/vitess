@@ -355,8 +355,22 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 	st := w.Stats(opts.Fault)
 	r.outcome("writes: total=%d acked=%d failed/unknown=%d", st.Total, st.Acked, st.Failed)
 	if !opts.Fault.IsZero() {
-		r.timing("longest write gap: %.2fs (from +%.2fs to +%.2fs relative to fault)", st.LongestGap.Seconds(),
-			st.GapFrom.Sub(opts.Fault).Seconds(), st.GapTo.Sub(opts.Fault).Seconds())
+		ongoing := ""
+		if st.GapOngoing {
+			ongoing = ", still ongoing when the writers stopped"
+		}
+		r.timing("longest write gap: %.2fs (from +%.2fs to +%.2fs relative to fault%s)", st.LongestGap.Seconds(),
+			st.GapFrom.Sub(opts.Fault).Seconds(), st.GapTo.Sub(opts.Fault).Seconds(), ongoing)
+		var outages []string
+		for _, o := range st.Outages {
+			s := fmt.Sprintf("%.1fs at +%.1fs", o.Duration().Seconds(), o.From.Sub(opts.Fault).Seconds())
+			if o.Ongoing {
+				s += " (ongoing at stop)"
+			}
+			outages = append(outages, s)
+		}
+		r.timing("unavailable (no acked write for >= %v): %.2fs in total, %d outages [%s]; writers stopped at +%.2fs",
+			outageThreshold, st.Unavailable.Seconds(), len(st.Outages), strings.Join(outages, ", "), st.Stopped.Sub(opts.Fault).Seconds())
 		if opts.OldPrimary != nil {
 			if np, at, ok := o.FirstTopoChange(opts.OldPrimary.Tablet.Alias, opts.Fault); ok {
 				r.timing("topo shard primary changed to %s at +%.2fs", np, at.Sub(opts.Fault).Seconds())
