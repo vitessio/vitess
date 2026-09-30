@@ -64,11 +64,10 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 		return replication.Position{}, nil
 	}
 
-	// Skip a recovery analyzed on a replica. PrimaryTabletDeleted is the only
-	// ERS recovery that does this, and it runs after ForgetInstance dropped the
-	// primary's stored row.
+	// Skip the requirement when the analyzed tablet is not the primary. Its
+	// stored set does not hold the primary's transactions.
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		logger.Warningf("required position: none, the primary's tablet record was deleted and VTOrc has no stored GTID set for it, ERS runs without the requirement")
+		logger.Warningf("required position: none, the analyzed tablet %s is not the primary and VTOrc has no stored GTID set for the failed primary, ERS runs without the requirement", topoproto.TabletAliasString(tablet.Alias))
 		return replication.Position{}, nil
 	}
 
