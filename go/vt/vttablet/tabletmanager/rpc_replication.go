@@ -324,8 +324,9 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	defer tm.unlock()
 
-	// On an active group replication member, or a tablet that the durability policy makes a
-	// member, replication is its membership in the group.
+	// On an active group replication member, or a tablet that the shard record lists as a
+	// voter of its group, replication is its membership in the group. Any other tablet
+	// replicates asynchronously.
 	if groupReplicationEnabled() {
 		tm.groupReplicationRejoinSuspended.Store(false)
 	}
@@ -335,7 +336,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	groupMember := mysql.IsGroupMemberActive(status)
 	if !groupMember {
-		if groupMember, err = tm.isGroupReplicationManaged(ctx, tm.Tablet().Type); err != nil {
+		if groupMember, err = tm.isGroupReplicationVoter(ctx); err != nil {
 			return err
 		}
 	}

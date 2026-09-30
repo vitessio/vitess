@@ -70,6 +70,9 @@ var (
 	// groupReplicationDurabilityCacheTTL is how long the sync loop caches the keyspace
 	// durability policy.
 	groupReplicationDurabilityCacheTTL = 10 * time.Second
+	// groupReplicationVotersCacheTTL is how long the sync loop caches the voters of the shard's
+	// group, read from the shard record. It is only read when the loop considers a rejoin.
+	groupReplicationVotersCacheTTL = 5 * time.Second
 )
 
 func registerGroupReplicationFlags(fs *pflag.FlagSet) {
@@ -589,10 +592,27 @@ func (tm *TabletManager) bootstrapGroupForInitPrimaryLocked(ctx context.Context)
 	return tm.waitForGroupPrimaryWritable(ctx)
 }
 
-// isGroupReplicationManaged returns whether the tablet should be a voting member of its shard's
-// group: the keyspace durability policy uses Group Replication, makes a tablet of the given type
-// a member, and the tablet has a group replication port.
-func (tm *TabletManager) isGroupReplicationManaged(ctx context.Context, tabletType topodatapb.TabletType) (bool, error) {
+// groupReplicationVoters returns the voting members of the tablet's shard's group, as recorded
+// in the shard record.
+func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodatapb.TabletAlias, error) {
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+	return si.GetGroupReplicationVoters(), nil
+}
+
+// isGroupReplicationVoter returns whether the tablet should be a voting member of its shard's
+// group: the tablet has a group replication port, the keyspace durability policy uses Group
+// Replication, and the shard record lists the tablet among the group's voters. The voters are
+// selected by MigrateReplicationMode, PlannedReparentShard and VTOrc; an empty list means that
+// they have not been selected yet, and makes no tablet a voter.
+//
+// This decides the automatic membership of the tablet: joining at startup, rejoining in the
+// sync loop, and StartReplication. The explicit StartGroupReplication and StopGroupReplication
+// RPCs do not depend on it.
+func (tm *TabletManager) isGroupReplicationVoter(ctx context.Context) (bool, error) {
 	if !groupReplicationEnabled() {
 		return false, nil
 	}
@@ -600,9 +620,14 @@ func (tm *TabletManager) isGroupReplicationManaged(ctx context.Context, tabletTy
 	if err != nil {
 		return false, err
 	}
-	tablet := tm.Tablet()
-	tablet.Type = tabletType
-	return policy.IsGroupMember(durability, tablet), nil
+	if !policy.IsGroupReplication(durability) {
+		return false, nil
+	}
+	voters, err := tm.groupReplicationVoters(ctx)
+	if err != nil {
+		return false, err
+	}
+	return policy.IsVoter(voters, tm.tabletAlias), nil
 }
 
 // setGroupMemberReplicationSourceLocked implements SetReplicationSource on an active group
