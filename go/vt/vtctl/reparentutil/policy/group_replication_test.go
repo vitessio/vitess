@@ -81,3 +81,10 @@ func TestCellHoldsMajority(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "zone1", cell)
 }
+
+func TestGroupName(t *testing.T) {
+	assert.Equal(t, GroupName("commerce", "0"), GroupName("commerce", "0"))
+	assert.NotEqual(t, GroupName("commerce", "0"), GroupName("commerce", "-80"))
+	assert.NotEqual(t, GroupName("commerce", "0"), GroupName("customer", "0"))
+	assert.Len(t, GroupName("commerce", "0"), 36)
+}

@@ -17,6 +17,8 @@ limitations under the License.
 package policy
 
 import (
+	"github.com/google/uuid"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
@@ -111,6 +113,16 @@ func IsGroupMember(durability Durabler, tablet *topodatapb.Tablet) bool {
 		return false
 	}
 	return grd.IsGroupMember(tablet)
+}
+
+// groupNameNamespace is the UUIDv5 namespace of Vitess group replication group names.
+var groupNameNamespace = uuid.MustParse("6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41")
+
+// GroupName returns the group_replication_group_name of a shard. It is derived from the
+// keyspace and shard names, so every tablet of the shard computes the same name without
+// coordination, and the shards created by a reshard get new groups.
+func GroupName(keyspace, shard string) string {
+	return uuid.NewSHA1(groupNameNamespace, []byte(keyspace+"/"+shard)).String()
 }
 
 // CellHoldsMajority returns the name of a cell that holds a majority of the given voting
