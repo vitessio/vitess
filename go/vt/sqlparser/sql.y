@@ -1424,6 +1424,10 @@ set_expression:
   {
     $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
   }
+| set_variable '=' BINARY
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("binary")}
+  }
 | set_variable '=' expression
   {
     $$ = &SetExpr{Var: $1, Expr: $3}

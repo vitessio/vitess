@@ -70,6 +70,9 @@ func (m *Session) CloneVT() *Session {
 	r.QueryTimeout = m.QueryTimeout
 	r.MigrationContext = m.MigrationContext
 	r.ErrorUntilRollback = m.ErrorUntilRollback
+	r.CharacterSetClient = m.CharacterSetClient
+	r.CharacterSetConnection = m.CharacterSetConnection
+	r.CharacterSetResults = m.CharacterSetResults
 	if rhs := m.ShardSessions; rhs != nil {
 		tmpContainer := make([]*Session_ShardSession, len(rhs))
 		for k, v := range rhs {
@@ -736,6 +739,33 @@ func (m *Session) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.CharacterSetResults) > 0 {
+		i -= len(m.CharacterSetResults)
+		copy(dAtA[i:], m.CharacterSetResults)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.CharacterSetResults)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xfa
+	}
+	if len(m.CharacterSetConnection) > 0 {
+		i -= len(m.CharacterSetConnection)
+		copy(dAtA[i:], m.CharacterSetConnection)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.CharacterSetConnection)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xf2
+	}
+	if len(m.CharacterSetClient) > 0 {
+		i -= len(m.CharacterSetClient)
+		copy(dAtA[i:], m.CharacterSetClient)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.CharacterSetClient)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xea
 	}
 	if m.ErrorUntilRollback {
 		i--
@@ -2650,6 +2680,18 @@ func (m *Session) SizeVT() (n int) {
 	if m.ErrorUntilRollback {
 		n += 3
 	}
+	l = len(m.CharacterSetClient)
+	if l > 0 {
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.CharacterSetConnection)
+	if l > 0 {
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.CharacterSetResults)
+	if l > 0 {
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -4527,6 +4569,102 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ErrorUntilRollback = bool(v != 0)
+		case 29:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CharacterSetClient", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CharacterSetClient = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 30:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CharacterSetConnection", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CharacterSetConnection = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 31:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CharacterSetResults", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CharacterSetResults = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

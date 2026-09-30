@@ -68,6 +68,9 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+		// ColumnNameEnv holds the session charsets that the names of the
+		// plan's columns depend on.
+		ColumnNameEnv sqlparser.ColumnNameEnv
 	}
 )
 
@@ -268,6 +271,8 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)
 	_, _ = hasher.WriteString(pk.Query)
+	_, _ = hasher.WriteString(pk.ColumnNameEnv.ClientCharset)
+	_, _ = hasher.WriteString(pk.ColumnNameEnv.ConnectionCharset)
 
 	var planKey theine.HashKey256
 	hasher.Sum(planKey[:0])

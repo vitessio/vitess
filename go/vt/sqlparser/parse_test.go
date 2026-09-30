@@ -1429,6 +1429,12 @@ var validSQL = []struct {
 }, {
 	input: "set character_set_results = utf8",
 }, {
+	input:  "set character_set_results = binary, @@session.character_set_client = BINARY",
+	output: "set character_set_results = 'binary', @@character_set_client = 'binary'",
+}, {
+	input:  "set @a = binary 'x'",
+	output: "set @a = convert('x', binary)",
+}, {
 	input:  "set @@session.autocommit = true",
 	output: "set @@autocommit = true",
 }, {

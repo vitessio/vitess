@@ -233,6 +233,10 @@ type (
 		SetMigrationContext(string)
 		GetMigrationContext() string
 
+		// SetCharacterSets sets the charsets that the session's column names
+		// depend on. A nil charset is left unchanged.
+		SetCharacterSets(client, connection, results *string)
+
 		GetSessionUUID() string
 
 		SetSessionEnableSystemSettings(context.Context, bool) error

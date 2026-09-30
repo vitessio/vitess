@@ -162,6 +162,16 @@ message Session {
   string migration_context = 27;
 
   bool error_until_rollback = 28;
+
+  // character_set_client, character_set_connection and character_set_results
+  // are the charsets that the client set with its handshake, SET NAMES,
+  // SET CHARACTER SET or the system variables of the same names. vtgate
+  // gives result columns their names, and sends the names to MySQL protocol
+  // clients, according to them. Empty means utf8mb4, and a
+  // character_set_results of binary means that names are sent as they are.
+  string character_set_client = 29;
+  string character_set_connection = 30;
+  string character_set_results = 31;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.

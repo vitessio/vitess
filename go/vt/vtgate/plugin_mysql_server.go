@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -1068,6 +1069,7 @@ func startSpanFromPrepare(ctx context.Context, prepare *mysql.PrepareData, label
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	callback = vh.encodingResults(c, callback)
 	session := vh.session(c)
 	if c.IsShuttingDown() && !session.InTransaction {
 		c.MarkForClose()
@@ -1135,6 +1137,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 
 // ComQueryMulti is a newer version of ComQuery that supports running multiple queries in a single call.
 func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	callback = vh.encodingResponses(c, callback)
 	session := vh.session(c)
 	if c.IsShuttingDown() && !session.InTransaction {
 		c.MarkForClose()
@@ -1369,10 +1372,12 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 	if err != nil {
 		return nil, 0, err
 	}
+	fld, _ = encodeFieldNames(resultCharset(vh.Env().CollationEnv(), session), fld)
 	return fld, paramsCount, nil
 }
 
 func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	callback = vh.encodingResults(c, callback)
 	ctx, cancel := context.WithCancel(context.Background())
 	c.UpdateCancelCtx(cancel)
 
@@ -1792,6 +1797,22 @@ func (vh *vtgateHandler) Env() *vtenv.Environment {
 	return vh.vtg.executor.env
 }
 
+// encodingResults returns a callback that sends result set metadata to the
+// client in the charset that the session's character_set_results asks for.
+func (vh *vtgateHandler) encodingResults(c *mysql.Conn, callback func(*sqltypes.Result) error) func(*sqltypes.Result) error {
+	return func(qr *sqltypes.Result) error {
+		return callback(encodeResult(resultCharset(vh.Env().CollationEnv(), vh.session(c)), qr))
+	}
+}
+
+// encodingResponses is encodingResults for multi-statement responses.
+func (vh *vtgateHandler) encodingResponses(c *mysql.Conn, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+	return func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		qr.QueryResult = encodeResult(resultCharset(vh.Env().CollationEnv(), vh.session(c)), qr.QueryResult)
+		return callback(qr, more, firstPacket)
+	}
+}
+
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
@@ -1811,6 +1832,14 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
+		}
+		// The handshake sets the charsets of the connection, as SET NAMES
+		// does.
+		if c.CharacterSet != collations.Unknown {
+			cs := handshakeCharset(vh.Env().CollationEnv(), c)
+			session.CharacterSetClient = cs
+			session.CharacterSetConnection = cs
+			session.CharacterSetResults = cs
 		}
 		c.ClientData = session
 	}

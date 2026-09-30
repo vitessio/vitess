@@ -1429,7 +1429,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 	stmt = rewriteASTResult.AST
-	sqlparser.AliasColumnNames(stmt, sqlparser.ColumnNameEnv{})
+	sqlparser.AliasColumnNames(stmt, vcursor.SafeSession.ColumnNameEnv())
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
 	if rewriteASTResult.UpdateQueryFromAST && !preparedPlan {
 		query = sqlparser.String(stmt)
@@ -1460,6 +1460,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
+		ColumnNameEnv:   vcursor.SafeSession.ColumnNameEnv(),
 	}
 }
 
@@ -1793,7 +1794,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 			// Attempt to build NULL field types for the statement in case planning fails,
 			// allowing the client to proceed with preparing the statement even without a valid execution plan.
 			// Hoping that an optimized plan can be built later when parameter values are available.
-			flds, paramCount, success := buildNullFieldTypes(stmt)
+			flds, paramCount, success := buildNullFieldTypes(stmt, safeSession.ColumnNameEnv())
 			if success {
 				return flds, paramCount, nil
 			}
@@ -1824,7 +1825,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 }
 
 // buildNullFieldTypes builds a list of NULL field types for the given statement.
-func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
+func buildNullFieldTypes(stmt sqlparser.Statement, env sqlparser.ColumnNameEnv) ([]*querypb.Field, uint16, bool) {
 	sel, ok := stmt.(sqlparser.SelectStatement)
 	if !ok {
 		return nil, countArguments(stmt), true
@@ -1834,7 +1835,7 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 		// *sqlparser.StarExpr is not supported in this context.
 		if ae, ok := expr.(*sqlparser.AliasedExpr); ok {
 			fields = append(fields, &querypb.Field{
-				Name: ae.ColumnName(),
+				Name: ae.MySQLColumnName(env),
 				Type: querypb.Type_NULL_TYPE,
 			})
 			continue

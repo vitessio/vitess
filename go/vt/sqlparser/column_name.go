@@ -209,10 +209,15 @@ func (ae *AliasedExpr) MySQLColumnName(env ColumnNameEnv) string {
 		return ae.ColumnName()
 	}
 	if in.aliased {
-		return aliasName(ae.As.String())
+		return aliasName(ae.As.String(), env)
 	}
 	switch in.kind {
-	case nameColumn, nameInt, nameDecimal:
+	case nameColumn:
+		if env.ClientCharset == "latin1" {
+			return cutAtNUL(identifierName(in.token, env))
+		}
+		return cutAtNUL(in.token)
+	case nameInt, nameDecimal:
 		return cutAtNUL(in.token)
 	case nameNull:
 		return "NULL"
@@ -499,12 +504,24 @@ func MySQLMergesDerivedTable(stmt TableStatement) bool {
 // in bytes.
 const maxAliasName = 256
 
-// aliasName applies MySQL's rules to an explicit alias: characters outside the
-// Basic Multilingual Plane become '?' when the alias is converted to utf8mb3,
-// leading non-graphic characters are removed, and the name is truncated to
-// 256 bytes.
-func aliasName(alias string) string {
-	return copyName(toUTF8MB3(alias, len(alias)), "utf8mb3")
+// aliasName applies MySQL's rules to an explicit alias: it is converted from
+// the client charset to utf8mb3, leading non-graphic characters are removed,
+// and the name is truncated to 256 bytes.
+func aliasName(alias string, env ColumnNameEnv) string {
+	return copyName(identifierName(alias, env), "utf8mb3")
+}
+
+// identifierName converts an identifier from the client charset to utf8mb3,
+// as MySQL's lexer does: for a utf8mb4 client, characters outside the Basic
+// Multilingual Plane become '?'.
+func identifierName(name string, env ColumnNameEnv) string {
+	switch env.ClientCharset {
+	case "latin1":
+		return latin1ToUTF8MB3(name, 3*len(name))
+	case "utf8mb3", "utf8":
+		return name
+	}
+	return toUTF8MB3(name, len(name))
 }
 
 // copyName is MySQL's Name_string::copy, followed by the NUL cut that happens

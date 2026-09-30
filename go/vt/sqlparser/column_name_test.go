@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"strings"
@@ -24,6 +25,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 )
 
 type columnNameCase struct {
@@ -59,34 +64,77 @@ func TestMySQLColumnNameCorpus(t *testing.T) {
 			if strings.HasPrefix(version, "8.0.") && c.MySQL80 != nil {
 				want = c.MySQL80
 			}
-			exprs := textNamedSelectExprs(parser, c, want)
+			env, results, ok := corpusSession(c.Setup)
+			if !ok {
+				continue
+			}
+			exprs := textNamedSelectExprs(parser, c, want, results != nil)
 			if exprs == nil {
 				continue
 			}
 			checked++
-			var got []string
+			var got, gotHex []string
 			for _, ae := range exprs {
-				got = append(got, ae.MySQLColumnName(ColumnNameEnv{}))
+				name := ae.MySQLColumnName(env)
+				if results != nil {
+					// MySQL converts the names to character_set_results
+					// when it sends them.
+					encoded, _ := charset.ConvertFromUTF8(nil, results, []byte(name))
+					name = string(encoded)
+				}
+				got = append(got, name)
+				gotHex = append(gotHex, hex.EncodeToString([]byte(name)))
 			}
-			assert.Equal(t, want.Names, got, "%s %s: %s", version, c.ID, c.Query)
+			if want.NamesHex != nil {
+				assert.Equal(t, want.NamesHex, gotHex, "%s %s: %s", version, c.ID, c.Query)
+			} else {
+				assert.Equal(t, want.Names, got, "%s %s: %s", version, c.ID, c.Query)
+			}
 		}
 		t.Logf("MySQL %s: checked %d cases", version, checked)
 	}
 }
 
+// corpusSession returns the charsets that the setup of a corpus case sets:
+// the ones MySQL names the columns with, and the one it converts the names
+// to, or nil when it sends them as they are. It reports false when the setup
+// changes other session settings that names depend on.
+func corpusSession(setup []string) (ColumnNameEnv, charset.Charset, bool) {
+	var env ColumnNameEnv
+	results := ""
+	for _, stmt := range setup {
+		stmt = strings.ToLower(stmt)
+		switch {
+		case strings.HasPrefix(stmt, "set @"):
+		case stmt == "set names latin1":
+			env = ColumnNameEnv{ClientCharset: "latin1", ConnectionCharset: "latin1"}
+			results = "latin1"
+		case strings.HasPrefix(stmt, "set character_set_results = "):
+			results = strings.TrimPrefix(stmt, "set character_set_results = ")
+		default:
+			return env, nil, false
+		}
+	}
+	switch results {
+	case "", "utf8mb4", "utf8mb3", "binary", "null":
+		return env, nil, true
+	}
+	coll := colldata.Lookup(collations.MySQL8().DefaultCollationForCharset(results))
+	if coll == nil {
+		return env, nil, false
+	}
+	return env, coll.Charset(), true
+}
+
 // textNamedSelectExprs returns the select expressions of a corpus case whose
 // names MySQL derives from the query text alone. It returns nil when a case
 // does not qualify: when it depends on the schema (stars, and references into
-// derived tables, CTEs, views or information_schema), on session settings, or
-// on syntax the parser does not support.
-func textNamedSelectExprs(parser *Parser, c columnNameCase, want *columnNameResult) []*AliasedExpr {
-	if want == nil || want.Error != "" || want.NamesHex != nil {
+// derived tables, CTEs, views or information_schema), or on syntax the parser
+// does not support. Names that are not valid UTF-8 qualify only when they
+// were converted to another charset.
+func textNamedSelectExprs(parser *Parser, c columnNameCase, want *columnNameResult, converted bool) []*AliasedExpr {
+	if want == nil || want.Error != "" || (want.NamesHex != nil && !converted) {
 		return nil
-	}
-	for _, stmt := range c.Setup {
-		if !strings.HasPrefix(strings.ToLower(stmt), "set @") {
-			return nil
-		}
 	}
 	stmt, err := parser.Parse(c.Query)
 	if err != nil {
@@ -160,6 +208,7 @@ func TestMySQLColumnName(t *testing.T) {
 		{name: "unsigned integers are truncated to 256 bytes", query: "select " + strings.Repeat("0", 300) + "18446744073709551615", want: []string{strings.Repeat("0", 256)}},
 		{name: "aliases are truncated to 256 bytes", query: "select 1 as `" + strings.Repeat("b", 300) + "`", want: []string{strings.Repeat("b", 256)}},
 		{name: "a utf8mb3 connection keeps characters outside the BMP", query: "select '😀', concat('😀')", env: ColumnNameEnv{ClientCharset: "utf8mb3", ConnectionCharset: "utf8mb3"}, want: []string{"😀", "concat('😀')"}},
+		{name: "a latin1 client's identifiers and text are read as latin1", query: "select '😀', 1 as `😀`, concat('é')", env: ColumnNameEnv{ClientCharset: "latin1", ConnectionCharset: "latin1"}, want: []string{"ðŸ˜€", "ðŸ˜€", "concat('Ã©')"}},
 		{name: "a utf8mb3 client truncates raw text to 256 bytes", query: "select concat('" + strings.Repeat("a", 300) + "')", env: ColumnNameEnv{ClientCharset: "utf8mb3"}, want: []string{"concat('" + strings.Repeat("a", 248)}},
 	}
 	parser, err := New(Options{MySQLServerVersion: "8.4.6"})

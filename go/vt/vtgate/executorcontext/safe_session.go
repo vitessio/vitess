@@ -919,6 +919,36 @@ func (session *SafeSession) GetMigrationContext() string {
 	return session.MigrationContext
 }
 
+// SetCharacterSets sets the charsets that the session's column names depend
+// on. A nil charset is left unchanged.
+func (session *SafeSession) SetCharacterSets(client, connection, results *string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if client != nil {
+		session.CharacterSetClient = *client
+	}
+	if connection != nil {
+		session.CharacterSetConnection = *connection
+	}
+	if results != nil {
+		session.CharacterSetResults = *results
+	}
+}
+
+// ColumnNameEnv returns the session settings that MySQL's column names
+// depend on.
+func (session *SafeSession) ColumnNameEnv() sqlparser.ColumnNameEnv {
+	if session == nil {
+		return sqlparser.ColumnNameEnv{}
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return sqlparser.ColumnNameEnv{
+		ClientCharset:     session.CharacterSetClient,
+		ConnectionCharset: session.CharacterSetConnection,
+	}
+}
+
 // GetSessionUUID returns the SessionUUID value.
 func (session *SafeSession) GetSessionUUID() string {
 	session.mu.Lock()

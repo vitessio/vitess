@@ -248,6 +248,10 @@ func (t *noopVCursor) GetDDLStrategy() string {
 	return ""
 }
 
+func (t *noopVCursor) SetCharacterSets(client, connection, results *string) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetMigrationContext(migrationContext string) {
 	panic("implement me")
 }

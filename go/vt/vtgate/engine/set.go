@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -541,11 +542,21 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		}
 		switch strings.ToLower(str) {
 		case "", "utf8", "utf8mb4", "latin1", "default":
-			// do nothing
-			break
+			cs := sessionCharset(vcursor, strings.ToLower(str))
+			if svss.Name == sysvars.Names.Name {
+				vcursor.Session().SetCharacterSets(&cs, &cs, &cs)
+			} else {
+				// SET CHARACTER SET sets the connection charset to that
+				// of the database.
+				database := ""
+				vcursor.Session().SetCharacterSets(&cs, &database, &cs)
+			}
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", str)
 		}
+	case sysvars.CharacterSetClient.Name, sysvars.CharacterSetConnection.Name,
+		sysvars.CharacterSetResults.Name, sysvars.CollationConnection.Name:
+		return svss.setCharacterSet(env, vcursor)
 	case sysvars.ReadAfterWriteGTID.Name:
 		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
@@ -620,6 +631,79 @@ func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv, vcursor 
 	}
 
 	return v.ToString(), nil
+}
+
+// setCharacterSet records the charset that character_set_client,
+// character_set_connection, character_set_results or collation_connection is
+// set to. The variables are not set on the tablets, which always use their
+// own charset: vtgate uses the charsets to name result columns, and to send
+// the names to the client.
+func (svss *SysVarSetAware) setCharacterSet(env *evalengine.ExpressionEnv, vcursor VCursor) error {
+	value, err := env.Evaluate(svss.Expr)
+	if err != nil {
+		return err
+	}
+	v := value.Value(vcursor.ConnCollation())
+	collationEnv := vcursor.Environment().CollationEnv()
+	var cs string
+	switch {
+	case v.IsNull():
+		if svss.Name != sysvars.CharacterSetResults.Name {
+			// MySQL rejects this, but vtgate always ignored it.
+			return nil
+		}
+		// Names are sent as they are, as with binary.
+		cs = "binary"
+	case v.IsIntegral():
+		// The variables can be set to the ID of a collation.
+		id, err := v.ToInt64()
+		if err != nil {
+			return err
+		}
+		cs = collationEnv.LookupCharsetName(collations.ID(id))
+	case v.IsText() || v.IsBinary():
+		name := strings.ToLower(v.ToString())
+		if svss.Name == sysvars.CollationConnection.Name {
+			cs = collationEnv.LookupCharsetName(collationEnv.LookupByName(name))
+		} else {
+			cs = name
+		}
+	default:
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, v.Type().String())
+	}
+	if cs == "" || collationEnv.LookupByCharset(normalizeCharset(collationEnv, cs)) == nil {
+		// vtgate used to accept any value for these variables, and still
+		// does, but it keeps the charsets it knows.
+		return nil
+	}
+	cs = sessionCharset(vcursor, cs)
+	switch svss.Name {
+	case sysvars.CharacterSetClient.Name:
+		vcursor.Session().SetCharacterSets(&cs, nil, nil)
+	case sysvars.CharacterSetResults.Name:
+		vcursor.Session().SetCharacterSets(nil, nil, &cs)
+	default:
+		vcursor.Session().SetCharacterSets(nil, &cs, nil)
+	}
+	return nil
+}
+
+// sessionCharset returns the name the session stores for a charset: its
+// canonical name, or empty for utf8mb4, the default.
+func sessionCharset(vcursor VCursor, cs string) string {
+	cs = normalizeCharset(vcursor.Environment().CollationEnv(), cs)
+	switch cs {
+	case "", "default", "utf8mb4":
+		return ""
+	}
+	return cs
+}
+
+func normalizeCharset(env *collations.Environment, cs string) string {
+	if alias, ok := env.CharsetAlias(cs); ok {
+		return alias
+	}
+	return cs
 }
 
 func (svss *SysVarSetAware) setBoolSysVar(ctx context.Context, env *evalengine.ExpressionEnv, setter func(context.Context, bool) error) error {

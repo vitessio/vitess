@@ -1370,6 +1370,11 @@ func (vc *VCursorImpl) GetDDLStrategy() string {
 	return vc.SafeSession.GetDDLStrategy()
 }
 
+// SetCharacterSets implements the SessionActions interface
+func (vc *VCursorImpl) SetCharacterSets(client, connection, results *string) {
+	vc.SafeSession.SetCharacterSets(client, connection, results)
+}
+
 // SetMigrationContext implements the SessionActions interface
 func (vc *VCursorImpl) SetMigrationContext(migrationContext string) {
 	vc.SafeSession.SetMigrationContext(migrationContext)

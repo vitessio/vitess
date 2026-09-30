@@ -188,12 +188,42 @@ func TestExecutorSet(t *testing.T) {
 		err: "VT05006: unknown system variable '@@foo = 1'",
 	}, {
 		in:  "set names utf8",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetClient: "utf8mb3", CharacterSetConnection: "utf8mb3", CharacterSetResults: "utf8mb3"},
+	}, {
+		in:  "set names latin1",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetClient: "latin1", CharacterSetConnection: "latin1", CharacterSetResults: "latin1"},
+	}, {
+		in:  "set names latin1, names default",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set names ascii",
 		err: "charset/name ascii is not supported",
 	}, {
 		in:  "set charset utf8",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetClient: "utf8mb3", CharacterSetResults: "utf8mb3"},
+	}, {
+		in:  "set character_set_results = latin1",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetResults: "latin1"},
+	}, {
+		in:  "set character_set_results = NULL",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetResults: "binary"},
+	}, {
+		in:  "set character_set_results = binary",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetResults: "binary"},
+	}, {
+		in:  "set character_set_results = 'utf8mb4'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results = 'abcd'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_client = ascii, character_set_connection = 'latin1'",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetClient: "ascii", CharacterSetConnection: "latin1"},
+	}, {
+		in:  "set collation_connection = latin1_swedish_ci",
+		out: &vtgatepb.Session{Autocommit: true, CharacterSetConnection: "latin1"},
+	}, {
+		in:  "set character_set_client = NULL",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character set default",

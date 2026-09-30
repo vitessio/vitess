@@ -66,6 +66,10 @@ var (
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
 	Names                       = SystemVariable{Name: "names", Default: utf8mb4, IdentifierAsString: true}
+	CharacterSetClient          = SystemVariable{Name: "character_set_client", Default: utf8mb4, IdentifierAsString: true}
+	CharacterSetConnection      = SystemVariable{Name: "character_set_connection", Default: utf8mb4, IdentifierAsString: true}
+	CharacterSetResults         = SystemVariable{Name: "character_set_results", Default: utf8mb4, IdentifierAsString: true}
+	CollationConnection         = SystemVariable{Name: "collation_connection", Default: "'utf8mb4_0900_ai_ci'", IdentifierAsString: true}
 	SessionUUID                 = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
 	SkipQueryPlanCache          = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
 	Socket                      = SystemVariable{Name: "socket", Default: off}
@@ -105,6 +109,10 @@ var (
 		Workload,
 		Charset,
 		Names,
+		CharacterSetClient,
+		CharacterSetConnection,
+		CharacterSetResults,
+		CollationConnection,
 		SessionUUID,
 		MigrationContext,
 		SessionEnableSystemSettings,
@@ -243,13 +251,9 @@ var (
 		// as long as they have the same value as the underlying database
 		{Name: "binlog_format"},
 		{Name: "block_encryption_mode"},
-		{Name: "character_set_client"},
-		{Name: "character_set_connection"},
 		{Name: "character_set_database"},
 		{Name: "character_set_filesystem"},
-		{Name: "character_set_results"},
 		{Name: "character_set_server"},
-		{Name: "collation_connection"},
 		{Name: "collation_database"},
 		{Name: "collation_server"},
 		{Name: "completion_type"},

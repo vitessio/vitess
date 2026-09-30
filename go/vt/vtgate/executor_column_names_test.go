@@ -51,6 +51,40 @@ func TestColumnNamesOfConstantSelects(t *testing.T) {
 	assert.Equal(t, []string{"2", "2 + 2", "d", "f", "NULL"}, fieldNames(qr.Fields))
 }
 
+// TestColumnNamesFollowTheClientCharset checks that vtgate reads the select
+// expressions of a client that set a latin1 charset as latin1, as MySQL does.
+func TestColumnNamesFollowTheClientCharset(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := &vtgatepb.Session{TargetString: "@primary"}
+
+	qr, err := executorExec(ctx, executor, session, "select 'é', 1 as `😀`", nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"é", "?"}, fieldNames(qr.Fields))
+
+	_, err = executorExec(ctx, executor, session, "set names latin1", nil)
+	require.NoError(t, err)
+	qr, err = executorExec(ctx, executor, session, "select 'é', 1 as `😀`", nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Ã©", "ðŸ˜€"}, fieldNames(qr.Fields))
+}
+
+// TestPreparedColumnNamesFollowTheClientCharset checks that sessions with
+// different charsets do not share prepared plans, which are cached by the
+// statement text and carry the column names.
+func TestPreparedColumnNamesFollowTheClientCharset(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	utf8Session := &vtgatepb.Session{TargetString: "@primary"}
+	latin1Session := &vtgatepb.Session{TargetString: "@primary", CharacterSetClient: "latin1", CharacterSetConnection: "latin1", CharacterSetResults: "latin1"}
+
+	fields, _, err := executorPrepare(ctx, executor, utf8Session, "select 'é' from dual")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"é"}, fieldNames(fields))
+
+	fields, _, err = executorPrepare(ctx, executor, latin1Session, "select 'é' from dual")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Ã©"}, fieldNames(fields))
+}
+
 // TestColumnNamesInRoutedQueries checks that the SQL vtgate sends to the
 // shards names the columns the way MySQL names them in the query.
 func TestColumnNamesInRoutedQueries(t *testing.T) {
