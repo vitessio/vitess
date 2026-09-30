@@ -21,13 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-<<<<<<< HEAD
-||||||| parent of 6aef88b25e (test: deflake TestStartWrites in the semi-sync monitor (#21276))
-	"strconv"
-=======
-	"strconv"
 	"strings"
->>>>>>> 6aef88b25e (test: deflake TestStartWrites in the semi-sync monitor (#21276))
 	"sync"
 	"sync/atomic"
 	"testing"
