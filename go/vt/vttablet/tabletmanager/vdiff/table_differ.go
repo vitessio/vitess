@@ -1308,6 +1308,9 @@ func sourceOrderCoversComparisonKey(sourceSelect *sqlparser.Select, comparePKs [
 	}
 
 	extended = len(effectiveCompare) > len(effectivePK)
+	// The all-columns substitute key already holds every source column, so a
+	// comparison key only extends it with a computed column or a source column
+	// projected twice.
 	if extended && !sourceKeyUnique {
 		return false, unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained source key (%d), which is not unique as the source table has no primary key or primary key equivalent: %s",
 			len(effectiveCompare), len(effectivePK), sqlparser.String(sourceSelect))

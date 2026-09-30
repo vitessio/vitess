@@ -977,16 +977,18 @@ func TestGetSourcePKCols_ExtendedTargetPK(t *testing.T) {
 		defer tvde.close()
 		ct := tvde.createController(t, 1)
 		// With no PK and no primary key equivalent, the source key is every
-		// source column, here just (id), which need not be unique.
-		tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:    "ext_nokey",
-				Columns: []string{"id"},
-				Fields:  sqltypes.MakeTestFields("id", "int64"),
-			}},
-		}
+		// source column, (id, created_at, v), which need not be unique. A target
+		// PK over those columns and a computed ym extends it.
+		setSourceTable(tvde, "ext_nokey", nil)
 
 		td := newTableDiffer(ct, "ext_nokey")
+		td.tablePlan.sourceQuery = "select id, created_at, v, date_format(created_at, '%Y%m') as ym from ext_nokey order by id asc, created_at asc, v asc, ym asc"
+		td.tablePlan.comparePKs = []compareColInfo{
+			{colIndex: 0, colName: "id", isPK: true},
+			{colIndex: 1, colName: "created_at", isPK: true},
+			{colIndex: 2, colName: "v", isPK: true},
+			{colIndex: 3, colName: "ym", isPK: true},
+		}
 		err := td.getSourcePKCols()
 		require.ErrorContains(t, err, "not unique")
 		require.Empty(t, td.tablePlan.sourcePkCols)
