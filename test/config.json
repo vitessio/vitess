@@ -949,6 +949,18 @@
       ],
       "Needs": []
     },
+    "vtgate_queries_columnnames": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtgate/queries/columnnames"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_queries",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_queries_misc": {
       "File": "unused.go",
       "Packages": [
