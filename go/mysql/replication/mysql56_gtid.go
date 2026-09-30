@@ -83,7 +83,7 @@ func (sid SID) appendTo(dst []byte) []byte {
 
 // ParseSID parses an SID in the form used by MySQL 5.6.
 func ParseSID(s string) (sid SID, err error) {
-	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+	if len(s) != sidStringLen || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
 		return sid, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 SID %q", s)
 	}
 
