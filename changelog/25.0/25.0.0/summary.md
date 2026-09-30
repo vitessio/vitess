@@ -116,10 +116,10 @@ See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 #### <a id="glog-removed"/>`glog` logging removed</a>
 
-Vitess now uses structured logging exclusively. The deprecated `glog` backend, its command-line flags,
-`log.Flush`, and `log.V` have been removed.
+The `glog` backend and its command-line flags have been removed after their deprecation in
+[v24](../../24.0/24.0.0/summary.md#structured-logging). Vitess uses structured logging only.
 
-The following flags have been removed from all binaries.
+This release removes the following flags from each binary that registered them.
 
 - `--log-structured`
 - `--log-rotate-max-size`
@@ -128,24 +128,26 @@ The following flags have been removed from all binaries.
 - `--v`, `--vmodule`, `--logbuflevel`
 - `--keep-logs`, `--keep-logs-by-mtime`, `--purge-logs-interval`
 
-The [v24 release notes](../../24.0/24.0.0/summary.md#structured-logging) announced the removal of `glog` in v25.
-Some of the flags above did not show a deprecation warning in v24.
+Some of these flags did not show a deprecation warning in v24.
 
 - `--log-structured`, `--log-rotate-max-size`, `--keep-logs`, `--keep-logs-by-mtime`, and `--purge-logs-interval` on
   all binaries
 - All `glog` flags on `vtctldclient` and `vtctlclient`
 
-In `vtctldclient`, `-v` is now the shorthand for `--version`, matching the other binaries.
+`vtctldclient` uses `-v` as the shorthand for `--version`, the same as the other binaries. `-v` does not set a log level.
 
-The `/debug/flushlogs` HTTP endpoint is removed from all binaries.
+This release also removes the `/debug/flushlogs` HTTP endpoint.
 
-**Migration**: remove the flags above from startup arguments. Use `--log-level=debug` for debug logs and
-`--log-format=text` for human-readable output. Logs are written to stderr, so redirect or collect stderr to keep them
-in files.
+**Migration**: remove the flags above from startup arguments.
 
-**Impact**: binaries will fail to start when passed a removed logging flag. Go callers must replace `log.V` with
-`log.Debug`, replace `log.Init(fs)` with `log.Init()`, and remove calls to `log.Flush`, `logutil.Flush`, and
-`logutil.OnFlush`.
+**Impact**: a binary fails to start when it receives a removed flag. Go code that imports Vitess must make these changes.
+
+- Replace `log.V(n).Info` with `log.Debug`.
+- Replace `log.Init(fs)` with `log.Init()`.
+- Remove calls to `log.Flush`, `logutil.Flush`, `logutil.OnFlush`, `logutil.RegisterFlags`, and `logutil.PurgeLogs`.
+- Remove uses of `log.Level`, `log.Verbose`, `PrefixedLogger.V`, and `PrefixedLogger.Flush`.
+
+See [#21310](https://github.com/vitessio/vitess/issues/21310).
 
 #### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
 
