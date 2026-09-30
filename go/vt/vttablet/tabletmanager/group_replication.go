@@ -218,7 +218,8 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 		return mysql.GroupReplicationConfig{}, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot derive the group replication address: the tablet has no hostname")
 	}
 
-	tablets, err := tm.TopoServer.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+	// The seeds of the cells that answer in time are enough to join.
+	tablets, err := tm.TopoServer.GetTabletMapForShardWithCellTimeout(ctx, tablet.Keyspace, tablet.Shard, groupReplicationCellTimeout)
 	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 		return mysql.GroupReplicationConfig{}, vterrors.Wrapf(err, "cannot read the tablets of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
@@ -799,7 +800,7 @@ func (tm *TabletManager) checkLegitimatePrimaryToServe(ctx context.Context, stat
 	if !policy.IsGroupReplication(durability) {
 		return nil
 	}
-	rec, err := tm.readShardGroupRecord(ctx)
+	rec, err := tm.readShardGroupRecord(ctx, nil)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -53,6 +54,30 @@ const (
 	// shard's group.
 	UpdateGroupReplicationVotersRecoveryName string = "UpdateGroupReplicationVoters"
 )
+
+// groupReplicationCellTimeout bounds the read of the shard's tablet records in each cell, in the
+// group replication recoveries that can do with the tablets of the cells that answer. The topology
+// server of a cell that is cut off does not answer until the caller gives up: read under one
+// deadline, it failed the recovery, and made the promotion of the group's new primary wait until
+// the partition of its old primary's cell healed (S9i chaos scenario).
+var groupReplicationCellTimeout = 2 * time.Second
+
+// getReachableShardTablets returns the tablets of the shard from the cells whose topology server
+// answers within groupReplicationCellTimeout.
+func getReachableShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	tabletMap, err := ts.GetTabletMapForShardWithCellTimeout(ctx, keyspace, shard, groupReplicationCellTimeout)
+	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+		return nil, err
+	}
+	aliases := slices.Sorted(maps.Keys(tabletMap))
+	tablets := make([]*topo.TabletInfo, 0, len(aliases))
+	for _, alias := range aliases {
+		tablets = append(tablets, tabletMap[alias])
+	}
+	return tablets, nil
+}
 
 // groupReplicationFailoverSkipCode decides whether a failover of the shard primary (an emergency
 // or planned reparent) must wait for the shard's replication group. When other tablets are
@@ -114,7 +139,9 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 	if err != nil {
 		return true, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
 	}
-	tabletInfos, err := getShardTablets(ctx, tablet.Keyspace, tablet.Shard)
+	// The voters of the cells that do not answer are counted as not ONLINE: the majority of the
+	// voters must be ONLINE among the others.
+	tabletInfos, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return true, topologyRecovery, err
 	}
@@ -212,7 +239,8 @@ func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) 
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
 	}
-	tabletInfos, err := getShardTablets(ctx, tablet.Keyspace, tablet.Shard)
+	// One active member of the legitimate group is enough, in any cell that answers.
+	tabletInfos, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return err
 	}
@@ -365,8 +393,8 @@ func joinVotersAfterBootstrap(voters []*topodatapb.TabletAlias, tabletInfos []*t
 }
 
 // legitimateGroupOf returns the shard's legitimate replication group from its shard record. The
-// voters are identified in the members' views by the server_uuids that the statuses report, and
-// by the MySQL addresses of their tablet records.
+// voters are identified in the members' views by the server_uuids that the statuses report, or
+// that VTOrc last discovered, and by the MySQL addresses of their tablet records.
 func legitimateGroupOf(shardInfo *topo.ShardInfo, statuses []*shardTabletStatus) *policy.LegitimateGroup {
 	tablets := make(map[string]*topodatapb.Tablet, len(statuses))
 	uuids := make(map[string]string, len(statuses))
@@ -376,6 +404,17 @@ func legitimateGroupOf(shardInfo *topo.ShardInfo, statuses []*shardTabletStatus)
 		if st.err == nil {
 			uuids[alias] = st.status.GetServerUuid()
 		} else if instance, _, err := inst.ReadInstance(st.tablet.Alias); err == nil && instance != nil {
+			uuids[alias] = instance.ServerUUID
+		}
+	}
+	// A voter whose tablet record could not be read, because its cell's topology server did not
+	// answer, is identified by the server_uuid VTOrc last discovered for it.
+	for _, voter := range shardInfo.GetGroupReplicationVoters() {
+		alias := topoproto.TabletAliasString(voter)
+		if _, ok := tablets[alias]; ok {
+			continue
+		}
+		if instance, _, err := inst.ReadInstance(voter); err == nil && instance != nil {
 			uuids[alias] = instance.ServerUUID
 		}
 	}

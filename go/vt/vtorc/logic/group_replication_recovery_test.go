@@ -218,6 +218,24 @@ func TestGroupReplicationFailoverGracePeriod(t *testing.T) {
 	assert.Equal(t, RecoverySkipGroupReplicationGracePeriod, groupReplicationFailoverSkipCode(&otherShard, start.Add(30*time.Second)))
 }
 
+// recoveryTopoFactory is the factory of the memory topology of the last
+// groupReplicationRecoveryTest.
+var recoveryTopoFactory *memorytopo.Factory
+
+// cutOffCell makes the topology server of the cell unreachable, like the one of a partitioned
+// cell: its reads do not answer until the caller gives up.
+func cutOffCell(t *testing.T, cell string) {
+	ctx := t.Context()
+	require.NoError(t, ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+		ci.ServerAddress = memorytopo.UnreachableServerAddr
+		return nil
+	}))
+	cutOff, err := topo.NewWithFactory(recoveryTopoFactory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(cutOff.Close)
+	ts = cutOff
+}
+
 // groupReplicationRecoveryTest sets up the VTOrc backend, a memory topology and a mock tablet
 // manager client for a group replication recovery on shard ks/0.
 func groupReplicationRecoveryTest(t *testing.T, tablets ...*topodatapb.Tablet) *tmcmock.MockTabletManagerClient {
@@ -242,7 +260,7 @@ func groupReplicationRecoveryTestWithPolicy(t *testing.T, durability string, tab
 	oldTS, oldTMC := ts, tmc
 	t.Cleanup(func() { ts, tmc = oldTS, oldTMC })
 	ctx := t.Context()
-	ts = memorytopo.NewServer(ctx, "zone1", "zone2")
+	ts, recoveryTopoFactory = memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: durability}))
 	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
 	for _, tablet := range tablets {
@@ -382,6 +400,59 @@ func TestPromoteGroupPrimary(t *testing.T) {
 			assert.True(t, topoproto.TabletAliasEqual(groupPrimary.Alias, topologyRecovery.SuccessorAlias))
 		})
 	}
+}
+
+// TestPromoteGroupPrimaryWithUnreachableCell reproduces the S9i chaos scenario: the old
+// primary's cell, including its topology server, is partitioned from the other cells, and the
+// group elected a member in another cell with a majority of the voters. Reading the shard's
+// tablets waited for the partitioned cell until the recovery's deadline and failed with a partial
+// result, so the elected member was not made the shard primary until the partition healed.
+func TestPromoteGroupPrimaryWithUnreachableCell(t *testing.T) {
+	oldCellTimeout := groupReplicationCellTimeout
+	t.Cleanup(func() { groupReplicationCellTimeout = oldCellTimeout })
+	groupReplicationCellTimeout = 100 * time.Millisecond
+
+	groupPrimary := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	secondary := recoveryTablet("zone1", 101, topodatapb.TabletType_REPLICA)
+	oldPrimary := recoveryTablet("zone2", 200, topodatapb.TabletType_PRIMARY)
+	mockTMC := groupReplicationRecoveryTest(t, groupPrimary, secondary, oldPrimary)
+	setVoters(t, groupPrimary, secondary, oldPrimary)
+	cutOffCell(t, "zone2")
+
+	view := []*replicationdatapb.GroupReplicationMember{
+		{MemberUuid: "uuid-100", State: mysql.GroupMemberStateOnline, Role: mysql.GroupMemberRolePrimary},
+		{MemberUuid: "uuid-101", State: mysql.GroupMemberStateOnline, Role: mysql.GroupMemberRoleSecondary},
+	}
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(groupPrimary)).Return(&replicationdatapb.FullStatus{
+		ServerUuid: "uuid-100",
+		GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+			PluginActive: true, MemberState: mysql.GroupMemberStateOnline, MemberRole: mysql.GroupMemberRolePrimary,
+			HasQuorum: true, Members: view,
+		},
+	}, nil)
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(secondary)).Return(&replicationdatapb.FullStatus{
+		ServerUuid: "uuid-101",
+		GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+			PluginActive: true, MemberState: mysql.GroupMemberStateOnline, MemberRole: mysql.GroupMemberRoleSecondary,
+			HasQuorum: true, Members: view,
+		},
+	}, nil)
+	mockTMC.EXPECT().ChangeType(gomock.Any(), sameTablet(groupPrimary), topodatapb.TabletType_PRIMARY, false).Return(nil)
+	mockTMC.EXPECT().PrimaryPosition(gomock.Any(), sameTablet(groupPrimary)).Return("MySQL56/6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41:1-10", nil)
+	mockTMC.EXPECT().PopulateReparentJournal(gomock.Any(), sameTablet(groupPrimary), gomock.Any(), gomock.Any(), groupPrimary.Alias, gomock.Any()).Return(nil)
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.GroupPrimaryNotInTopo,
+		AnalyzedInstanceAlias: groupPrimary.Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	start := time.Now()
+	attempted, topologyRecovery, err := promoteGroupPrimary(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+	require.True(t, attempted)
+	require.NoError(t, err)
+	assert.True(t, topologyRecovery.IsSuccessful)
+	assert.Less(t, time.Since(start), topo.RemoteOperationTimeout/2, "the partitioned cell must not take the recovery's whole deadline")
 }
 
 // TestStartGroupReplicationOnMember checks that VTOrc only makes a voter join its group while

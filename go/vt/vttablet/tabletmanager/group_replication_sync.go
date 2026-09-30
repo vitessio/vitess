@@ -579,12 +579,13 @@ func (s *groupReplicationSync) setTwoPCAllowed(allowed bool) {
 }
 
 // getRecord returns the shard record's view of the shard's legitimate group, cached for
-// groupReplicationVotersCacheTTL unless fresh is set.
+// groupReplicationVotersCacheTTL unless fresh is set. The tablet records are reused for longer
+// (readShardGroupRecord).
 func (s *groupReplicationSync) getRecord(ctx context.Context, fresh bool) (*shardGroupRecord, error) {
 	if !fresh && s.record != nil && time.Since(s.recordRead) < groupReplicationVotersCacheTTL {
 		return s.record, nil
 	}
-	rec, err := s.tm.readShardGroupRecord(ctx)
+	rec, err := s.tm.readShardGroupRecord(ctx, s.record)
 	if err != nil {
 		return nil, err
 	}

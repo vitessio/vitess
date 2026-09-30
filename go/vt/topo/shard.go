@@ -709,6 +709,59 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 	return result, gerr
 }
 
+// GetTabletMapForShardWithCellTimeout returns the tablets of a shard like GetTabletMapForShard,
+// but reads each cell with its own deadline of cellTimeout. The topology server of a cell that is
+// cut off does not answer until the caller gives up: GetTabletMapForShard then spends the caller's
+// whole deadline waiting for it, and the reads of the tablet records of the cells that did answer
+// fail with it. Here, an unreachable cell costs at most cellTimeout, and the tablets of the other
+// cells are returned with ErrPartialResult. The map is indexed by
+// topoproto.TabletAliasString(tablet alias).
+func (ts *Server) GetTabletMapForShardWithCellTimeout(ctx context.Context, keyspace, shard string, cellTimeout time.Duration) (map[string]*TabletInfo, error) {
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		result   = make(map[string]*TabletInfo)
+		failed   []string
+		firstErr error
+		answered int
+	)
+	for _, cell := range cells {
+		wg.Go(func() {
+			cellCtx, cancel := context.WithTimeout(ctx, cellTimeout)
+			defer cancel()
+			tablets, err := ts.GetTabletMapForShardByCell(cellCtx, keyspace, shard, []string{cell})
+			mu.Lock()
+			defer mu.Unlock()
+			for alias, ti := range tablets {
+				result[alias] = ti
+			}
+			if err == nil {
+				answered++
+				return
+			}
+			failed = append(failed, cell)
+			if firstErr == nil && !IsErrType(err, PartialResult) {
+				firstErr = err
+			}
+		})
+	}
+	wg.Wait()
+	if len(failed) == 0 {
+		return result, nil
+	}
+	if answered == 0 && len(result) == 0 && firstErr != nil {
+		// No cell answered: for example, the shard does not exist.
+		return nil, firstErr
+	}
+	sort.Strings(failed)
+	log.Warn(fmt.Sprintf("GetTabletMapForShardWithCellTimeout(%v,%v): got partial result, failed cells: %v", keyspace, shard, strings.Join(failed, ",")))
+	return result, NewError(PartialResult, strings.Join(failed, ","))
+}
+
 func shardFilePath(keyspace, shard string) string {
 	return path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
 }

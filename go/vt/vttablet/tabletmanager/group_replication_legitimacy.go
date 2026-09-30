@@ -43,6 +43,19 @@ var (
 	// bootstrapped itself as the shard's legitimate group, before the shard record lists it. The
 	// component that asked for the bootstrap records the incarnation right after the bootstrap.
 	groupReplicationBootstrapGrace = 1 * time.Minute
+	// groupReplicationCellTimeout bounds the read of the shard's tablet records in each cell. The
+	// topology server of a cell that is cut off does not answer until the caller gives up: read
+	// under the caller's deadline, it took the whole step of the sync loop, every step, and the
+	// reads of the other cells' tablet records failed with it. The elected member of a group
+	// whose old primary's cell was partitioned was not promoted until the partition healed (S9i
+	// chaos scenario).
+	groupReplicationCellTimeout = 2 * time.Second
+	// groupReplicationTabletsCacheTTL is how long the sync loop reuses the tablet records it read
+	// with the shard record, as long as it can identify every listed voter from them or from its
+	// server_uuid. The tablet records only give the voters' MySQL addresses, which do not change
+	// while a tablet runs, and reading them costs groupReplicationCellTimeout while a cell is cut
+	// off: a promotion does not wait for it.
+	groupReplicationTabletsCacheTTL = 30 * time.Second
 )
 
 // groupReplicationPeers is what a tablet knows about the MySQL of the other tablets of its shard.
@@ -125,13 +138,16 @@ type shardGroupRecord struct {
 	incarnation  string
 	voters       []*topodatapb.TabletAlias
 	primaryAlias *topodatapb.TabletAlias
-	// tablets are the tablet records of the shard, by alias.
-	tablets map[string]*topodatapb.Tablet
+	// tablets are the tablet records of the shard, by alias, read at tabletsRead.
+	tablets     map[string]*topodatapb.Tablet
+	tabletsRead time.Time
 }
 
 // readShardGroupRecord reads the shard's group incarnation and voters from the shard record, and
-// the tablet records of the shard.
-func (tm *TabletManager) readShardGroupRecord(ctx context.Context) (*shardGroupRecord, error) {
+// the tablet records of the shard. The tablet records of prev, if any, are reused when they were
+// read within groupReplicationTabletsCacheTTL and identify, with the known server_uuids, every
+// voter of the shard record.
+func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGroupRecord) (*shardGroupRecord, error) {
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
@@ -143,7 +159,15 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context) (*shardGroupR
 		primaryAlias: si.PrimaryAlias,
 		tablets:      make(map[string]*topodatapb.Tablet),
 	}
-	tabletMap, err := tm.TopoServer.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {
+		rec.tablets, rec.tabletsRead = prev.tablets, prev.tabletsRead
+		return rec, nil
+	}
+	rec.tabletsRead = time.Now()
+	// The tablet records only complete what the tablet knows about the voters (their MySQL
+	// address): the records of the cells that answer in time are enough, and a voter whose record
+	// is missing is still found by its server_uuid (buildLegitimateGroup).
+	tabletMap, err := tm.TopoServer.GetTabletMapForShardWithCellTimeout(ctx, tablet.Keyspace, tablet.Shard, groupReplicationCellTimeout)
 	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 		return nil, vterrors.Wrapf(err, "cannot read the tablets of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
@@ -153,6 +177,18 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context) (*shardGroupR
 		}
 	}
 	return rec, nil
+}
+
+// identifiesVoters returns whether every voter has a tablet record in tablets, or a known
+// server_uuid.
+func (tm *TabletManager) identifiesVoters(voters []*topodatapb.TabletAlias, tablets map[string]*topodatapb.Tablet) bool {
+	for _, voter := range voters {
+		alias := topoproto.TabletAliasString(voter)
+		if tablets[alias] == nil && tm.groupReplicationPeers.serverUUID(alias) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // legitimateGroup returns the shard's legitimate group as this tablet sees it. The incarnation of
@@ -224,8 +260,13 @@ func (tm *TabletManager) fetchPeerServerUUIDs(ctx context.Context, tablets []*to
 // buildLegitimateGroup returns the shard's legitimate group from the record and the server_uuids
 // the tablet knows.
 func (tm *TabletManager) buildLegitimateGroup(rec *shardGroupRecord, status *replicationdatapb.GroupReplicationStatus) *policy.LegitimateGroup {
-	uuids := make(map[string]string, len(rec.tablets))
+	uuids := make(map[string]string, len(rec.tablets)+len(rec.voters))
 	for alias := range rec.tablets {
+		uuids[alias] = tm.groupReplicationPeers.serverUUID(alias)
+	}
+	// A voter whose tablet record could not be read is still found by its server_uuid.
+	for _, voter := range rec.voters {
+		alias := topoproto.TabletAliasString(voter)
 		uuids[alias] = tm.groupReplicationPeers.serverUUID(alias)
 	}
 	incarnation := rec.incarnation
@@ -323,7 +364,7 @@ func (tm *TabletManager) legitimateGroupActiveElsewhere(ctx context.Context, rec
 // active member of the shard's legitimate group. Joins that the tablet starts on its own, at
 // startup and in the sync loop, call it first.
 func (tm *TabletManager) checkLegitimateGroupToJoin(ctx context.Context) error {
-	rec, err := tm.readShardGroupRecord(ctx)
+	rec, err := tm.readShardGroupRecord(ctx, nil)
 	if err != nil {
 		return err
 	}
