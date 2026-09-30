@@ -337,12 +337,14 @@ func (tm *TabletManager) checkLegitimateGroupToJoin(ctx context.Context) error {
 // member of the shard's legitimate group.
 var errNoLegitimateGroupToJoin = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no other tablet of the shard reports an active member of the shard's replication group with quorum; not joining, the group must be bootstrapped first")
 
-// leaveForeignGroupLocked makes MySQL leave a group that is not the shard's legitimate group, and
-// suspends the tablet's own rejoins: MySQL formed or joined a group of another incarnation than
-// the one the shard record lists, and that group does not hold the shard's acknowledged
-// transactions. MySQL stays super_read_only. An explicit StartGroupReplication, which VTOrc sends
-// once the legitimate group is active elsewhere, lifts the suspension. The caller holds the
-// action lock.
+// leaveForeignGroupLocked makes MySQL leave a group that is not the shard's legitimate group:
+// MySQL formed or joined a group of another incarnation than the one the shard record lists, and
+// that group does not hold the shard's acknowledged transactions. MySQL stays super_read_only.
+// The tablet's own rejoins are not suspended: like any rejoin, the next one only starts once
+// another tablet reports an active member of the legitimate group (checkLegitimateGroupToJoin).
+// Waiting for VTOrc instead kept such a member out of its group until the group had a primary
+// tablet again, which it could not get while the member was missing from its majority. The
+// caller holds the action lock.
 func (tm *TabletManager) leaveForeignGroupLocked(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, recorded string) {
 	log.Error("Group replication: MySQL is a member of a group that is not the shard's replication group, leaving it",
 		slog.String("group", status.GetGroupName()),
@@ -352,7 +354,6 @@ func (tm *TabletManager) leaveForeignGroupLocked(ctx context.Context, status *re
 		slog.String("state", status.GetMemberState()),
 		slog.String("role", status.GetMemberRole()),
 		slog.Int("online_members", mysql.OnlineGroupMembers(status)))
-	tm.groupReplicationRejoinSuspended.Store(true)
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
 		// Stop serving before MySQL leaves; the group this tablet followed is not the shard's.
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {

@@ -140,7 +140,7 @@ func newLegitimacyTestTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemo
 // audit: after the partitions healed, a member that was made to join again ended up alone in a
 // new group incarnation, ONLINE and PRIMARY with quorum in its view of one. The sync loop must not
 // promote its tablet: that group lacks the transactions the other members acknowledged. It makes
-// MySQL leave the group and suspends its own rejoins instead.
+// MySQL leave the group instead.
 func TestGroupReplicationSyncLeavesForeignGroup(t *testing.T) {
 	enableGroupReplication(t)
 	ctx := t.Context()
@@ -157,7 +157,41 @@ func TestGroupReplicationSyncLeavesForeignGroup(t *testing.T) {
 	assert.Equal(t, stopsBefore+1, stops, "MySQL must leave the foreign group")
 	assert.Equal(t, mysql.GroupMemberStateOffline, tmStatus(t, fmd).MemberState)
 	assert.True(t, fmd.SuperReadOnly.Load())
-	assert.True(t, tm.groupReplicationRejoinSuspended.Load(), "the tablet must not rejoin on its own")
+}
+
+// TestGroupReplicationSyncRejoinsAfterLeavingForeignGroup checks that a tablet whose MySQL left a
+// group of another incarnation rejoins the shard's legitimate group on its own, as soon as another
+// tablet reports it active. In the S7d chaos runs, such tablets suspended their rejoins until
+// VTOrc's GroupMemberNotOnline, which only ran once the group had a primary tablet again: the group
+// could not get one while these voters were missing from its majority, and writes stopped for up
+// to 15s longer.
+func TestGroupReplicationSyncRejoinsAfterLeavingForeignGroup(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, peers, _ := newLegitimacyTestTM(t)
+	fmd.StartGroupReplicationError = nil
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)), "17907858161940982:1"))
+	s := newGroupReplicationSync(tm)
+
+	s.reconcile(ctx)
+	require.Equal(t, mysql.GroupMemberStateOffline, tmStatus(t, fmd).MemberState, "MySQL must leave the foreign group")
+	startsBefore, _, _ := fmd.GroupReplicationCalls()
+
+	// No other tablet is an active member of the shard's group yet: the tablet does not join.
+	s.reconcile(ctx)
+	starts, _, _ := fmd.GroupReplicationCalls()
+	assert.Equal(t, startsBefore, starts)
+
+	// The shard's group was bootstrapped again on a peer: the tablet joins it without being told.
+	legitimate := activeGroupPeersIn("1780000001", 2)
+	peers.set(2, legitimate.statuses["cell1-0000000002"])
+	s.nextRejoin = time.Time{}
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+	s.reconcile(ctx)
+	starts, _, _ = fmd.GroupReplicationCalls()
+	assert.Equal(t, startsBefore+1, starts, "the tablet must rejoin the shard's group")
+	assert.False(t, fmd.GroupReplicationBootstrapped)
 }
 
 // TestGroupReplicationSyncPromotesOnlyWithVoterMajority checks that the sync loop only promotes the

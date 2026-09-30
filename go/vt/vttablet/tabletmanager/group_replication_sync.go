@@ -41,8 +41,9 @@ import (
 //     a group with quorum, in the group incarnation that the shard record lists, and a majority
 //     of the shard's listed voters are ONLINE in its view (see policy.LegitimateGroup).
 //   - If MySQL is an active member of a group of another incarnation than the one the shard
-//     record lists, it makes MySQL leave that group and suspends its own rejoins: such a group
-//     formed without Vitess and does not hold the shard's acknowledged transactions.
+//     record lists, it makes MySQL leave that group: such a group formed without Vitess and does
+//     not hold the shard's acknowledged transactions. MySQL then rejoins the legitimate group
+//     like any other voter that is not in its group (see below).
 //   - If the tablet is PRIMARY but MySQL is no longer the primary of a group with quorum, it
 //     demotes the tablet record to REPLICA. MySQL is left as it is: the group already made it
 //     read-only. Under a group replication policy, a PRIMARY tablet that is a listed voter and
