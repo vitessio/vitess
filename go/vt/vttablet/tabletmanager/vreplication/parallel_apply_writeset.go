@@ -17,9 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"maps"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,11 +29,9 @@ import (
 	"github.com/cespare/xxhash/v2"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -112,43 +112,106 @@ func writesetDigestAddValue(d *xxhash.Digest, v sqltypes.Value) {
 	d.Write(raw)
 }
 
-// writesetDigestAddFieldValue folds a column value into the digest using
-// collation-aware hashing for text columns. Two rows that MySQL considers
-// equal (trailing spaces under PAD SPACE, equivalent forms under *_ci
-// collations) must hash to the same writeset key or conflict detection
-// would let truly-conflicting txns run in parallel.
+// writesetDigestAddFieldValue folds a column value into the digest so that
+// values MySQL considers equal hash to the same writeset key, or conflict
+// detection would let truly-conflicting txns run in parallel:
+//   - text values hash their collation weight string, which folds case,
+//     accents and ignorable codepoints as the collation does. Under PAD SPACE
+//     collations, trailing weights equal to the weight of a space are
+//     dropped, since MySQL compares as if the shorter value were padded with
+//     spaces; that covers every codepoint that weighs like a space (e.g.
+//     U+00A0 under the legacy UCA collations), not only ' ' itself.
+//   - a negative zero FLOAT/DOUBLE hashes as zero, since -0 = 0 in MySQL.
 func writesetDigestAddFieldValue(d *xxhash.Digest, field *querypb.Field, v sqltypes.Value) error {
+	if field != nil && sqltypes.IsFloat(field.Type) {
+		writesetDigestAddValue(d, canonicalFloatZero(v))
+		return nil
+	}
 	if field == nil || !sqltypes.IsText(field.Type) || field.Charset == 0 {
 		writesetDigestAddValue(d, v)
 		return nil
 	}
 
-	collation := colldata.Lookup(collations.ID(field.Charset))
+	collationID := collations.ID(field.Charset)
+	collation := colldata.Lookup(collationID)
 	if collation == nil {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unknown collation %d for field %s", field.Charset, field.Name)
 	}
 
-	raw := v.Raw()
+	bufp := writesetWeightStringPool.Get().(*[]byte)
+	weights := collation.WeightString((*bufp)[:0], v.Raw(), 0)
 	if collationUsesPadSpace(collation) {
-		raw = trimTrailingPadSpaceCodepoints(collation.Charset(), raw)
+		spaceWeight := collationSpaceWeight(collationID, collation)
+		if len(spaceWeight) == 0 {
+			writesetWeightStringPool.Put(bufp)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "collation %d has no space weight for field %s", field.Charset, field.Name)
+		}
+		// Stripping a misaligned suffix can only make different values hash
+		// alike (a false conflict), never make equal values hash apart.
+		for bytes.HasSuffix(weights, spaceWeight) {
+			weights = weights[:len(weights)-len(spaceWeight)]
+		}
 	}
-
-	var semanticHash vthash.Hasher
-	semanticHash.Reset()
-	collation.Hash(&semanticHash, raw, 0)
+	semanticHash := xxhash.Sum64(weights)
+	if cap(weights) <= writesetWeightStringPoolMaxCap {
+		*bufp = weights[:0]
+		writesetWeightStringPool.Put(bufp)
+	}
 
 	// Fixed-size stack buffer: marker followed by the 8-byte collation hash.
 	var payload [len(writesetTextValueMarker) + 8]byte
 	copy(payload[:], writesetTextValueMarker[:])
-	binary.LittleEndian.PutUint64(payload[len(writesetTextValueMarker):], semanticHash.Sum64())
+	binary.LittleEndian.PutUint64(payload[len(writesetTextValueMarker):], semanticHash)
 	writesetDigestAddPayload(d, payload[:])
 	return nil
 }
 
+// writesetWeightStringPoolMaxCap bounds the buffers kept in
+// writesetWeightStringPool, so one large value does not pin a large buffer.
+const writesetWeightStringPoolMaxCap = 64 * 1024
+
+// writesetWeightStringPool reuses weight string buffers across text key values.
+var writesetWeightStringPool = sync.Pool{New: func() any {
+	b := make([]byte, 0, 256)
+	return &b
+}}
+
+// collationSpaceWeights caches, per collation ID, the weight string of a single
+// space.
+var collationSpaceWeights sync.Map
+
+// collationSpaceWeight returns the weight string of a single space under the
+// collation, or nil if its charset cannot encode one.
+func collationSpaceWeight(id collations.ID, collation colldata.Collation) []byte {
+	if weight, ok := collationSpaceWeights.Load(id); ok {
+		return weight.([]byte)
+	}
+	var encoded [8]byte
+	n := collation.Charset().EncodeRune(encoded[:], ' ')
+	var weight []byte
+	if n > 0 {
+		weight = collation.WeightString(nil, encoded[:n], 0)
+	}
+	collationSpaceWeights.Store(id, weight)
+	return weight
+}
+
+// canonicalFloatZero returns v with a negative zero FLOAT/DOUBLE rewritten as
+// zero, since MySQL treats -0 and 0 as equal (e.g. in a unique index).
+func canonicalFloatZero(v sqltypes.Value) sqltypes.Value {
+	raw := v.Raw()
+	if len(raw) < 2 || raw[0] != '-' {
+		return v
+	}
+	f, err := strconv.ParseFloat(string(raw), 64)
+	if err != nil || f != 0 {
+		return v
+	}
+	return sqltypes.MakeTrusted(v.Type(), raw[1:])
+}
+
 // collationUsesPadSpace reports whether the given collation compares strings
-// as if right-padded with spaces. Values under such collations have trailing
-// pad codepoints stripped before hashing so that e.g. 'abc' and 'abc   '
-// hash to the same writeset key.
+// as if right-padded with spaces.
 func collationUsesPadSpace(collation colldata.Collation) bool {
 	switch collation.(type) {
 	case *colldata.Collation_utf8mb4_uca_0900, *colldata.Collation_utf8mb4_0900_bin:
@@ -156,24 +219,6 @@ func collationUsesPadSpace(collation colldata.Collation) bool {
 	default:
 		return true
 	}
-}
-
-// trimTrailingPadSpaceCodepoints strips trailing space codepoints from raw
-// bytes using the column's charset decoder. Used by PAD SPACE collations so
-// values that compare equal in MySQL also hash equal in the writeset digest.
-func trimTrailingPadSpaceCodepoints(cs charset.Charset, raw []byte) []byte {
-	trimmedEnd := 0
-	for i := 0; i < len(raw); {
-		r, size, ok := cs.DecodeRune(raw[i:])
-		if size <= 0 {
-			return raw
-		}
-		i += size
-		if !ok || r != ' ' {
-			trimmedEnd = i
-		}
-	}
-	return raw[:trimmedEnd]
 }
 
 // fkConstraintRef represents one foreign key constraint on a table.

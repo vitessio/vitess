@@ -1289,38 +1289,69 @@ func TestBuildTxnWritesetTextPrimaryKeyUsesCollationEquality(t *testing.T) {
 	require.Equal(t, upperKeys, lowerKeys, "text primary keys that compare equal under MySQL collation rules must hash identically")
 }
 
+// TestBuildTxnWritesetPadSpaceTextPrimaryKeyUsesTrailingSpaceEquality pins
+// that key values MySQL considers equal hash identically, and that values it
+// considers different do not. Under PAD SPACE, MySQL compares as if the shorter
+// value were padded with spaces, so any trailing codepoint that weighs like a
+// space (e.g. U+00A0 under the legacy UCA collations, verified against MySQL
+// 8.4 with a unique index) or that is ignorable does not make a value
+// different. A missed equality lets conflicting transactions run concurrently.
 func TestBuildTxnWritesetPadSpaceTextPrimaryKeyUsesTrailingSpaceEquality(t *testing.T) {
-	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
-	require.NotZero(t, collationID)
-
-	plan := &TablePlan{
-		TargetName: "emails",
-		Fields: []*querypb.Field{{
-			Name:    "email",
-			Type:    querypb.Type_VARCHAR,
-			Charset: collationID,
-		}},
-		PKIndices: []bool{true},
+	keysFor := func(t *testing.T, fieldType querypb.Type, collationName, value string) []uint64 {
+		t.Helper()
+		var charset uint32
+		if collationName != "" {
+			charset = uint32(collations.MySQL8().LookupByName(collationName))
+			require.NotZero(t, charset, collationName)
+		}
+		plan := &TablePlan{
+			TargetName: "emails",
+			Fields:     []*querypb.Field{{Name: "email", Type: fieldType, Charset: charset}},
+			PKIndices:  []bool{true},
+		}
+		event := &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte(value), Lengths: []int64{int64(len(value))}},
+			}}},
+		}
+		keys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{event})
+		require.NoError(t, err)
+		return keys
 	}
 
-	trimmedEvent := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_ROW,
-		RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
-			After: &querypb.Row{Values: []byte("a"), Lengths: []int64{1}},
-		}}},
+	tests := []struct {
+		name      string
+		fieldType querypb.Type
+		collation string
+		a, b      string
+		equal     bool
+	}{
+		{name: "trailing space", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_general_ci", a: "a", b: "a ", equal: true},
+		{name: "trailing no-break space under unicode_ci", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a", b: "a\u00a0", equal: true},
+		{name: "trailing ideographic space under unicode_ci", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a", b: "a\u3000", equal: true},
+		{name: "trailing en quad under unicode_520_ci", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_520_ci", a: "a", b: "a\u2000", equal: true},
+		{name: "trailing no-break space under utf8mb3 unicode_ci", fieldType: querypb.Type_VARCHAR, collation: "utf8mb3_unicode_ci", a: "a", b: "a\u00a0", equal: true},
+		{name: "space followed by an ignorable", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a", b: "a \u200b", equal: true},
+		{name: "trailing 0xA0 under cp1250", fieldType: querypb.Type_VARCHAR, collation: "cp1250_general_ci", a: "a", b: "a\xa0", equal: true},
+		{name: "different values", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a", b: "ab"},
+		{name: "no-break space inside the value", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a b", b: "a\u00a0bb"},
+		{name: "NO PAD keeps a trailing space significant", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_0900_ai_ci", a: "a", b: "a "},
+		{name: "negative zero double", fieldType: querypb.Type_FLOAT64, a: "0E+00", b: "-0E+00", equal: true},
+		{name: "negative zero float", fieldType: querypb.Type_FLOAT32, a: "0", b: "-0", equal: true},
+		{name: "opposite nonzero doubles", fieldType: querypb.Type_FLOAT64, a: "1E+00", b: "-1E+00"},
 	}
-	spacedEvent := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_ROW,
-		RowEvent: &binlogdatapb.RowEvent{TableName: "emails", RowChanges: []*binlogdatapb.RowChange{{
-			After: &querypb.Row{Values: []byte("a "), Lengths: []int64{2}},
-		}}},
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a := keysFor(t, tc.fieldType, tc.collation, tc.a)
+			b := keysFor(t, tc.fieldType, tc.collation, tc.b)
+			if tc.equal {
+				require.Equal(t, a, b, "key values MySQL considers equal must hash identically")
+			} else {
+				require.NotEqual(t, a, b, "key values MySQL considers different must not hash identically")
+			}
+		})
 	}
-
-	trimmedKeys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{trimmedEvent})
-	require.NoError(t, err)
-	spacedKeys, err := buildTxnWriteset(map[string]*TablePlan{"emails": plan}, nil, nil, []*binlogdatapb.VEvent{spacedEvent})
-	require.NoError(t, err)
-	require.Equal(t, trimmedKeys, spacedKeys, "text primary keys that compare equal under PAD SPACE collation rules must hash identically")
 }
 
 func TestBuildTxnWritesetWithStringFKRefsUsesCollationEqualityAcrossCompatibleTypes(t *testing.T) {
