@@ -319,8 +319,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 
 // AddQueryHint adds the given string to list of comment.
 // If the list is empty, one will be created containing the query hint.
-// If the list already contains a query hint, the given string will be merged with the existing one.
-// This is done because only one query hint is allowed per query.
+// If the list already contains a query hint, the given string will be merged with
+// the first one: MySQL honors only the first optimizer hint comment of a statement
+// and reads any later one as an ordinary comment, so later ones are kept as they are.
 func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
 		if node == nil {
@@ -334,10 +335,7 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 
 	if node != nil {
 		for _, comment := range node.comments {
-			if strings.HasPrefix(comment, queryOptimizerPrefix) {
-				if hasQueryHint {
-					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
-				}
+			if strings.HasPrefix(comment, queryOptimizerPrefix) && !hasQueryHint {
 				hasQueryHint = true
 				before, _, ok := strings.Cut(comment, "*/")
 				if !ok {
@@ -1250,6 +1248,11 @@ func (node *Select) SetWith(with *With) {
 	node.With = with
 }
 
+// GetWith returns the with clause of a select statement
+func (node *Select) GetWith() *With {
+	return node.With
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
@@ -1396,6 +1399,11 @@ func (node *Union) SetInto(into *SelectInto) {
 // SetWith sets the with clause to a union statement
 func (node *Union) SetWith(with *With) {
 	node.With = with
+}
+
+// GetWith returns the with clause of a union statement
+func (node *Union) GetWith() *With {
+	return node.With
 }
 
 // MakeDistinct implements the SelectStatement interface
@@ -2105,6 +2113,20 @@ func (ty GTIDType) ToString() string {
 	}
 }
 
+// ExplainTypeFromName returns the EXPLAIN format named by an identifier or string
+// value, matched case-insensitively, and whether the name is one of the known formats.
+func ExplainTypeFromName(name string) (ExplainType, bool) {
+	switch strings.ToLower(name) {
+	case JSONStr:
+		return JSONType, true
+	case TreeStr:
+		return TreeType, true
+	case TraditionalStr:
+		return TraditionalType, true
+	}
+	return EmptyType, false
+}
+
 // ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
@@ -2136,6 +2158,8 @@ func (ty VExplainType) ToString() string {
 		return TraceStr
 	case KeysVExplainType:
 		return KeysStr
+	case MySQLVExplainType:
+		return MySQLStr
 	default:
 		return "Unknown VExplainType"
 	}
@@ -3164,6 +3188,10 @@ func (node *ValuesStatement) iTableStatement() {}
 
 func (node *ValuesStatement) SetWith(with *With) {
 	node.With = with
+}
+
+func (node *ValuesStatement) GetWith() *With {
+	return node.With
 }
 
 func (node *ValuesStatement) GetOrderBy() OrderBy {

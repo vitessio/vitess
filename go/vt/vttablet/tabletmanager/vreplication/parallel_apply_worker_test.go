@@ -88,6 +88,8 @@ func (f *failingDBClient) SupportsCapability(capability capabilities.FlavorCapab
 	return f.supportsCaps, nil
 }
 
+func (f *failingDBClient) SetMultiStatements(on bool) error { return nil }
+
 func (r *recordingDBClient) DBName() string  { return "db" }
 func (r *recordingDBClient) Connect() error  { return nil }
 func (r *recordingDBClient) Begin() error    { return nil }
@@ -598,3 +600,5 @@ func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	require.Contains(t, recording.queries, "set session transaction isolation level read committed",
 		"worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order")
 }
+
+func (r *recordingDBClient) SetMultiStatements(on bool) error { return nil }

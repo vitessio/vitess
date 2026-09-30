@@ -9,7 +9,7 @@ runs:
   steps:
     - name: Set up Go
       id: setup-go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         # Disable built-in caching: its key includes ImageOS, which duplicates
@@ -80,6 +80,9 @@ runs:
           go mod download || return 1
           local modfile
           for modfile in tools/*/go.mod; do
+            # Older release trees, which the upgrade/downgrade workflows also
+            # set up, have no tool modules; the unmatched glob stays literal.
+            [ -f "${modfile}" ] || continue
             go mod download -modfile="${modfile}" || return 1
           done
         }

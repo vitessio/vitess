@@ -386,6 +386,15 @@ message ExecuteOptions {
   // currently honored by StreamExecute. This is useful for warming reads
   // where the goal is to warm the buffer pool, not to retrieve data.
   bool no_result = 21;
+
+  // 22 and 23 briefly carried the reserved-connection keepalive during the
+  // development of v25 and were never released. The keepalive signal must not
+  // live in ExecuteOptions: options round-trip through client sessions, and a
+  // vtgate predating the feature preserves unknown fields when it relays a
+  // client session's options to the tablet, letting a client turn its queries
+  // into keepalive touches. The signal is a request-level field on
+  // ExecuteRequest instead, which only vtgate itself populates.
+  reserved 22, 23;
 }
 
 // Field describes a single column returned by a query
@@ -500,6 +509,42 @@ message ExecuteRequest {
   int64 transaction_id = 5;
   ExecuteOptions options = 6;
   int64 reserved_id = 7;
+
+  // reserved_conn_keep_alive turns the Execute into a keepalive touch for the
+  // reserved connections listed in reserved_conn_keep_alive_ids: the tablet
+  // refreshes their idle timers without executing the query or sending
+  // anything to MySQL, so mysqld's wait_timeout keeps counting only real user
+  // traffic. A connection that is busy executing counts as alive. Callers
+  // leave reserved_id zero and pass the ids in reserved_conn_keep_alive_ids,
+  // so that a tablet predating this field runs the query on a throwaway
+  // pooled connection rather than a reserved one and can never kill a
+  // reserved connection. This deliberately lives on the request, not in
+  // ExecuteOptions: options round-trip through client sessions, and a vtgate
+  // predating the feature would relay client-injected option fields to the
+  // tablet, while request fields are only ever populated by vtgate itself.
+  bool reserved_conn_keep_alive = 8;
+
+  // reserved_conn_keep_alive_ids lists the reserved connection ids to refresh
+  // in a single keepalive touch, so a client can keep alive all of a tablet's
+  // reserved connections with one RPC. Ignored unless reserved_conn_keep_alive
+  // is set. The touch reports back which of the ids no longer exist (as result
+  // rows) so the caller can stop refreshing them. A tablet that predates this
+  // field ignores it and runs the query; it keeps no reserved connection alive
+  // until it is upgraded.
+  repeated int64 reserved_conn_keep_alive_ids = 9;
+
+  // reserved_conn_activity_refresh marks this Execute as a background
+  // activity refresh of an idle temp-table reserved connection: vtgate fans
+  // real session activity out to reserved connections the session's queries
+  // did not reach. The query executes normally on the reserved connection
+  // (resetting mysqld's wait_timeout clock, unlike a keepalive touch), but
+  // the tablet locks the connection under a purpose that a concurrent client
+  // command briefly waits out instead of failing with an in-use error. Like
+  // reserved_conn_keep_alive, this is a request-level field populated only by
+  // vtgate itself, never relayed from client sessions. A tablet that predates
+  // this field runs the query without the special lock purpose, restoring the
+  // (benign) pre-field race.
+  bool reserved_conn_activity_refresh = 10;
 }
 
 // ExecuteResponse is the returned value from Execute

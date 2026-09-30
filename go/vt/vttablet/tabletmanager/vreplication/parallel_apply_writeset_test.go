@@ -2162,3 +2162,7 @@ func TestBuildTxnWritesetFKStreamedMetadataMismatchSerializes(t *testing.T) {
 	require.Nil(t, keys)
 	require.True(t, writesetErrorForcesSerialization(err), "metadata mismatch must serialize the txn, not fail the workflow")
 }
+
+func (s *stubDBClient) SetMultiStatements(on bool) error { return nil }
+
+func (m *maxRowsAssertingDBClient) SetMultiStatements(on bool) error { return nil }

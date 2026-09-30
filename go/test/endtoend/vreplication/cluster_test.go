@@ -402,8 +402,7 @@ func (vc *VitessCluster) setupVtctld() {
 	vc.Vtctld = cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
 		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
 	require.NotNil(vc.t, vc.Vtctld)
-	// use first cell as `-cell`
-	vc.Vtctld.Setup(vc.CellNames[0], extraVtctldArgs...)
+	vc.Vtctld.Setup(extraVtctldArgs...)
 }
 
 func (vc *VitessCluster) setupVtctldClient() {

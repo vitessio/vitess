@@ -19,11 +19,13 @@ package unsharded
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -155,6 +157,13 @@ END;
 `,
 		`CREATE PROCEDURE p1 (in x BIGINT) BEGIN declare y DECIMAL(14,2); set y = 4.2; END`,
 		`CREATE PROCEDURE p2 (in x BIGINT) BEGIN START TRANSACTION; SELECT 128 from dual; COMMIT; END`,
+		`CREATE PROCEDURE dirty_session()
+BEGIN
+	CREATE TEMPORARY TABLE leaked (id int);
+	SET SESSION transaction_isolation = 'READ-UNCOMMITTED';
+	SET SESSION time_zone = '+05:30';
+	SET NAMES latin1;
+END`,
 	}
 )
 
@@ -162,6 +171,18 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
+		// Run every mysqld with the short wait_timeout from extra_my.cnf so
+		// TestTempTable can prove that a ping-only client outlives it.
+		wd, err := os.Getwd()
+		if err != nil {
+			log.Error(err.Error())
+			return 1
+		}
+		if err := os.Setenv("EXTRA_MY_CNF", wd+"/extra_my.cnf"); err != nil {
+			log.Error(err.Error())
+			return 1
+		}
+
 		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
@@ -184,7 +205,10 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
+		// The temp-table heartbeat must be below the tablets'
+		// --queryserver-config-transaction-timeout (3s above) so that idle
+		// connections holding temporary tables are kept alive.
+		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true", "--temp-table-heartbeat-time", "1s"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Error(err.Error())
 			os.Exit(1)
@@ -195,6 +219,8 @@ func TestMain(m *testing.M) {
 		vtParams = mysql.ConnParams{
 			Host: "localhost",
 			Port: clusterInstance.VtgateMySQLPort,
+			// Tests use these connections to run batches of statements.
+			EnableMultiStatements: true,
 		}
 		conn, err := mysql.Connect(context.Background(), &vtParams)
 		if err != nil {
@@ -311,6 +337,101 @@ func TestDDLUnsharded(t *testing.T) {
 	utils.AssertMatchesAny(t, conn, "show tables", `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`, `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
 }
 
+// TestCallProcedureSessionResidue pins the fix for vitessio/vitess#21046: session
+// state a procedure body leaves behind — a temporary table, SET SESSION
+// variables, SET NAMES — must not survive on the pooled connection the CALL ran
+// on and be served to the next borrower. Reads are repeated so they land on
+// recycled pool connections; before the fix the very first read after the CALL
+// observed READ-UNCOMMITTED and the leaked table. Of the SET NAMES residue,
+// MySQL restores character_set_client and character_set_connection when a
+// stored program ends, so character_set_results is the part that leaks.
+func TestCallProcedureSessionResidue(t *testing.T) {
+	ctx := t.Context()
+	vtParams := mysql.ConnParams{
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		DbName: "@primary",
+	}
+	// Read through a routed query (the FROM keeps vtgate from answering out of
+	// its own session) so every probe lands on a pooled backend connection.
+	const probe = "select @@session.transaction_isolation, @@session.time_zone, @@session.character_set_results from dual"
+	const tempTables = "select count(*) from information_schema.innodb_temp_table_info"
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	// The backend's own defaults, read before anything dirties a session.
+	baseline := utils.Exec(t, conn, probe)
+	require.Len(t, baseline.Rows, 1)
+	require.NotEqual(t, "READ-UNCOMMITTED", baseline.Rows[0][0].ToString())
+	require.Equal(t, "utf8mb4", baseline.Rows[0][2].ToString(), "the pooled connections negotiate utf8mb4")
+	require.Equal(t, "0", utils.Exec(t, conn, tempTables).Rows[0][0].ToString(), "no temp tables before the test")
+
+	assertClean := func(t *testing.T, what string) {
+		t.Helper()
+		// The session settings die with the CALL's connection, so every read
+		// after it must already see the backend's defaults.
+		for i := range 20 {
+			qr := utils.Exec(t, conn, probe)
+			require.Equal(t, baseline.Rows, qr.Rows, "%s: read %d after the CALL must see the backend's defaults, not the procedure's session residue", what, i)
+		}
+		// The temporary table does not: innodb_temp_table_info is server-wide
+		// and mysqld tears the discarded session down asynchronously once its
+		// socket closes, so the table can briefly outlive the CALL's response.
+		require.Eventually(t, func() bool {
+			qr, err := conn.ExecuteFetch(tempTables, 1, false)
+			return err == nil && len(qr.Rows) == 1 && qr.Rows[0][0].ToString() == "0"
+		}, 30*time.Second, 100*time.Millisecond, "%s: the procedure's temporary table must not outlive the connection it was created on", what)
+	}
+
+	t.Run("buffered", func(t *testing.T) {
+		utils.Exec(t, conn, "CALL dirty_session()")
+		assertClean(t, "buffered CALL")
+	})
+	t.Run("streaming", func(t *testing.T) {
+		// The probes stay on the OLAP workload too, so they draw from the
+		// streaming pool the CALL ran on rather than the untouched OLTP pool.
+		utils.Exec(t, conn, "set workload = olap")
+		defer utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		assertClean(t, "streaming CALL")
+	})
+	t.Run("inside a transaction", func(t *testing.T) {
+		// A CALL inside a transaction runs on the transaction's connection, which
+		// the transaction pool takes back at commit (vitessio/vitess#21063). The
+		// probes run in transactions of their own, so they draw from that pool;
+		// it hands out the most recently returned connection first, so the first
+		// probe would land on the CALL's connection if it were recycled.
+		utils.Exec(t, conn, "begin")
+		utils.Exec(t, conn, "CALL dirty_session()")
+		utils.Exec(t, conn, "commit")
+		for i := range 20 {
+			utils.Exec(t, conn, "begin")
+			qr := utils.Exec(t, conn, probe)
+			utils.Exec(t, conn, "commit")
+			require.Equal(t, baseline.Rows, qr.Rows, "transaction %d after the CALL must see the backend's defaults, not the procedure's session residue", i)
+		}
+		assertClean(t, "CALL inside a transaction")
+	})
+	t.Run("a session setting is in effect on the settings pool after a CALL", func(t *testing.T) {
+		// A vtgate session SET is applied to every pooled connection the session
+		// borrows, so it must be in effect on the fresh connection the pool hands
+		// out after the CALL's connection is discarded. Probed through behavior
+		// MySQL decides under the setting (vtgate answers `select @@sql_mode`
+		// itself once the session holds the variable), and the setting has to
+		// be one that flips the probe away from the server default: MySQL 8.0
+		// enables NO_ZERO_DATE out of the box, so clearing sql_mode is what
+		// makes the zero date come back as a value rather than NULL. Last
+		// subtest on this connection: the setting dies with it.
+		utils.Exec(t, conn, "set @@sql_mode = ''")
+		const q = "select str_to_date('00/00/0000', '%m/%d/%Y') from dual"
+		utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
+		utils.Exec(t, conn, "CALL dirty_session()")
+		for range 5 {
+			utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
+		}
+	})
+}
+
 func TestCallProcedure(t *testing.T) {
 	ctx := t.Context()
 	vtParams := mysql.ConnParams{
@@ -359,6 +480,21 @@ func TestCallProcedure(t *testing.T) {
 
 func TestTempTable(t *testing.T) {
 	ctx := t.Context()
+
+	// Capture mysqld's general log for the duration of the test so we can
+	// assert below that the keepalives never reach mysqld.
+	tablet := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	for _, q := range []string{"set global log_output = 'TABLE'", "truncate mysql.general_log", "set global general_log = 'ON'"} {
+		_, err := tablet.VttabletProcess.QueryTablet(q, KeyspaceName, true)
+		require.NoError(t, err)
+	}
+	t.Cleanup(func() {
+		for _, q := range []string{"set global general_log = default", "set global log_output = default"} {
+			_, err := tablet.VttabletProcess.QueryTablet(q, KeyspaceName, true)
+			require.NoError(t, err)
+		}
+	})
+
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -375,6 +511,91 @@ func TestTempTable(t *testing.T) {
 
 	utils.AssertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 	utils.AssertContainsError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
+
+	// A session without a reserved connection drops a temporary table exactly
+	// as MySQL answers it for a session owning none: a no-op with IF EXISTS,
+	// an unknown-table error without. vtgate does not reserve for a drop, so
+	// the tablet must accept it unreserved — and, temporary tables being
+	// per-connection, the drop cannot touch conn1's table.
+	_ = utils.Exec(t, conn2, `drop temporary table if exists temp_t`)
+	utils.AssertContainsError(t, conn2, `drop temporary table temp_t`, `Unknown table 'vt_customer.temp_t' (errno 1051)`)
+	utils.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+
+	// The temp table must survive the connection sitting idle for longer than
+	// the tablets' --queryserver-config-transaction-timeout (3s): vtgate's
+	// temp-table heartbeat keeps the reserved connection alive.
+	time.Sleep(6 * time.Second)
+	utils.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+
+	// The keepalive must refresh only the tablet's own timers: nothing may
+	// reach mysqld, so mysqld's wait_timeout keeps counting real session
+	// traffic and an idle session eventually loses its connection — and its
+	// temporary tables — exactly as it would on a direct MySQL connection.
+	// The 6s of heartbeats above (interval 1s) make any leak visible in the
+	// general log captured since the test started.
+	qr := utils.Exec(t, conn1, `select count(*) from information_schema.processlist`) // any real query IS logged
+	require.NotNil(t, qr)
+	// The count query itself is captured by the general log as it runs, so
+	// exclude it from its own result.
+	gl, err := tablet.VttabletProcess.QueryTablet("select count(*) from mysql.general_log where argument like '%temp-table keepalive%' and argument not like '%general_log%'", KeyspaceName, true)
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(0)]]`, fmt.Sprintf("%v", gl.Rows), "keepalives must never reach mysqld")
+
+	// A session used via the vtgate gRPC API has no wire connection for the
+	// heartbeat to anchor to. The tablet-side temp-table idle timeout covers
+	// it instead: with the default (auto = mysqld's wait_timeout) the temp
+	// table survives the session idling past the tablet's 3s transaction
+	// timeout, exactly as it would on a direct MySQL connection.
+	vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
+	gconn, err := vtgateconn.Dial(ctx, vtgateAddr)
+	require.NoError(t, err)
+	defer gconn.Close()
+	gsession := gconn.Session(KeyspaceName+"@primary", nil)
+	_, err = gsession.Execute(ctx, `create temporary table grpc_temp_t(id bigint primary key)`, nil, false)
+	require.NoError(t, err)
+	_, err = gsession.Execute(ctx, `insert into grpc_temp_t(id) values (1),(2),(3)`, nil, false)
+	require.NoError(t, err)
+
+	time.Sleep(6 * time.Second)
+
+	qr, err = gsession.Execute(ctx, `select id from grpc_temp_t order by id`, nil, false)
+	require.NoError(t, err, "a gRPC session's temp table must survive idling past the tablet transaction timeout")
+	require.Len(t, qr.Rows, 3, "the temp table's rows must survive the idle window")
+
+	// Temporary-table DDL gets no implicit commit in MySQL: inside an open
+	// transaction it must neither commit the transaction nor be rejected, and
+	// the temporary table — unlike the transaction's row changes, which are
+	// transactional even for InnoDB temp tables — survives the ROLLBACK.
+	before := utils.Exec(t, conn1, `select count(*) from allDefaults`)
+	utils.Exec(t, conn1, `begin`)
+	utils.Exec(t, conn1, `insert into allDefaults () values ()`)
+	utils.Exec(t, conn1, `create temporary table temp_trx_t(id bigint primary key)`)
+	utils.Exec(t, conn1, `insert into temp_trx_t(id) values (1)`)
+	utils.Exec(t, conn1, `rollback`)
+	utils.AssertMatches(t, conn1, `select count(*) from allDefaults`, fmt.Sprintf("%v", before.Rows))
+	utils.AssertMatches(t, conn1, `select count(*) from temp_trx_t`, `[[INT64(0)]]`)
+	utils.Exec(t, conn1, `drop temporary table temp_trx_t`)
+
+	// COM_PING is session activity: on a direct MySQL connection a periodic
+	// ping resets wait_timeout, so through vtgate it must keep the session's
+	// temp-table reserved connection alive too. The cluster's mysqld runs
+	// with wait_timeout=30 (extra_my.cnf), and the background heartbeat never
+	// reaches mysqld (asserted above), so a ping-only client outlives the
+	// 30s deadline only because each ping fans an ordinary refresh query out
+	// to the reserved connection.
+	conn3, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn3.Close()
+	utils.Exec(t, conn3, `create temporary table ping_temp_t(id bigint primary key)`)
+	utils.Exec(t, conn3, `insert into ping_temp_t(id) values (1)`)
+	pingDeadline := time.Now().Add(40 * time.Second)
+	for time.Now().Before(pingDeadline) {
+		require.NoError(t, conn3.Ping())
+		time.Sleep(2 * time.Second)
+	}
+	// The temporary table must have survived: a ping-only client through
+	// vtgate keeps its reserved connection past mysqld's wait_timeout.
+	utils.AssertMatches(t, conn3, `select id from ping_temp_t`, `[[INT64(1)]]`)
 }
 
 func TestReservedConnDML(t *testing.T) {

@@ -1337,7 +1337,7 @@ var validSQL = []struct {
 	input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
 }, {
 	input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
-	output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
+	output: "insert into `user`(`format`, tree, `vitess`) values ('Chuck', 42, 'Barry')",
 }, {
 	input: "insert into customer() values ()",
 }, {
@@ -2790,6 +2790,21 @@ var validSQL = []struct {
 }, {
 	input: "explain format = traditional select * from t",
 }, {
+	// the EXPLAIN format names are matched by text, not as keywords: they stay plain
+	// identifiers everywhere else, as they are in MySQL
+	input:  "select tree, traditional from t",
+	output: "select tree, traditional from t",
+}, {
+	input:  "set sql_mode = TRADITIONAL",
+	output: "set sql_mode = TRADITIONAL",
+}, {
+	// MySQL also accepts the format name as a quoted string
+	input:  "explain format = 'json' select * from t",
+	output: "explain format = json select * from t",
+}, {
+	input:  "explain format = 'Tree' select * from t",
+	output: "explain format = tree select * from t",
+}, {
 	input: "vexplain queries select * from t",
 }, {
 	input: "vexplain all select * from t",
@@ -2802,6 +2817,8 @@ var validSQL = []struct {
 	input: "vexplain trace select * from t",
 }, {
 	input: "vexplain keys select * from t",
+}, {
+	input: "vexplain mysqlplan select * from t",
 }, {
 	input: "explain analyze select * from t",
 }, {
@@ -4171,6 +4188,52 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	input:  "with x as (select 1) (select * from x)",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) ((select * from x))",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with recursive x as (select 1) (select * from x)",
+	output: "with recursive x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) (select * from x union select 2)",
+	output: "with x as (select 1 from dual) select * from x union select 2 from dual",
+}, {
+	input:  "with x as (select 1) (values row(1))",
+	output: "with x as (select 1 from dual) values row(1)",
+}, {
+	input:  "with x as (select 1) ((select 2) union (select 3))",
+	output: "with x as (select 1 from dual) select 2 from dual union select 3 from dual",
+}, {
+	// A parenthesized query expression is its own scope: when it carries its
+	// own WITH clause, MySQL keeps the inner clause and ignores the outer one.
+	input:  "with x as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from y) limit 1",
+	output: "with y as (select 2 from dual) select * from y limit 1",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from y) order by 1 limit 1",
+	output: "with y as (select 2 from dual) select * from y order by 1 asc limit 1",
+}, {
+	input:  "with x as (select 1) ((with y as (select 2) select * from y))",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	// The outer CTE is not in scope inside the parentheses, so x resolves to a
+	// base table rather than to the outer definition.
+	input:  "with x as (select 1) (with y as (select 2) select * from x)",
+	output: "with y as (select 2 from dual) select * from x",
+}, {
+	input:  "with y as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1 as a) (with y as (select 2 as a) select * from y union select * from x)",
+	output: "with y as (select 2 as a from dual) select * from y union select * from x",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) values row(1))",
+	output: "with y as (select 2 from dual) values row(1)",
 }}
 
 func TestValid(t *testing.T) {
@@ -6518,6 +6581,13 @@ var invalidSQL = []struct {
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",
 }, {
+	// MySQL's own error text (1791)
+	input:  "explain format = bogus select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
+}, {
+	input:  "explain format = 'bogus' select * from t",
+	output: "Unknown EXPLAIN format name: 'bogus' at position 25 near 'bogus'",
+}, {
 	input:  "alter vitess_migration cleanup context ''",
 	output: "migration context cannot be empty at position 42",
 }, {
@@ -7195,4 +7265,30 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 
 func locateFile(name string) string {
 	return "testdata/" + name
+}
+
+// MySQL recognizes the national-character string introducer only as N'…'. In
+// N"…" the N is an identifier followed by "…" — a string, which MySQL reads as
+// an alias — so the lexer must not take the national-string path on a double
+// quote.
+func TestNationalStringRequiresSingleQuote(t *testing.T) {
+	parser := NewTestParser()
+	for _, in := range []string{`select N'foo' from t`, `select n'foo' from t`} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+		nstr, ok := expr.(*UnaryExpr)
+		require.True(t, ok, "%s: got %T", in, expr)
+		assert.Equal(t, NStringOp, nstr.Operator)
+		assert.Equal(t, "select N'foo' from t", String(stmt))
+	}
+	for _, in := range []string{`select N"foo" from t`, `select n"foo" from t`} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
+		col, ok := ae.Expr.(*ColName)
+		require.True(t, ok, "%s: got %T", in, ae.Expr)
+		assert.True(t, col.Name.EqualString("n"), in)
+		assert.Equal(t, "foo", ae.As.String(), in)
+	}
 }

@@ -54,8 +54,8 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	utils.SetFlagBoolVar(fs, &useEffective, "grpc-use-effective-callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
-	utils.SetFlagBoolVar(fs, &useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
+	utils.SetFlagBoolVar(fs, &useEffective, "grpc-use-effective-callerid", false, "If set, and no username is available from a verified client certificate, sets the immediate caller ID from the client-supplied effective caller ID's principal. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any principal.")
+	utils.SetFlagBoolVar(fs, &useEffectiveGroups, "grpc-use-effective-groups", false, "If set with --grpc-use-effective-callerid, and no username is available from a verified client certificate, copies non-empty client-supplied effective caller ID groups to the immediate caller's security groups. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any groups.")
 	utils.SetFlagBoolVar(fs, &useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
 }
 
