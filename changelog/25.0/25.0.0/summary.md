@@ -468,6 +468,8 @@ Use this when you know a position that the new primary must not lose, for exampl
 
 If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found. The check supports MySQL GTID shards only. Any other shard type or position flavor fails with `INVALID_ARGUMENT`.
 
+The check runs in vtctld. An older vtctld ignores `--required-position` and runs ERS without it. Upgrade vtctld before relying on the flag.
+
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
