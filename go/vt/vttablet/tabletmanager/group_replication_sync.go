@@ -52,6 +52,11 @@ import (
 //     removing a member that is no longer a voter is VTOrc's decision.
 //   - On a PRIMARY that is the group primary, it applies the effective semi-sync setting: a group
 //     with at least two ONLINE members supersedes semi-sync.
+//   - A PRIMARY whose group view holds fewer than a majority of the shard's listed voters stops
+//     serving, and serves again once the majority is back. It keeps its type, so vtgate buffers.
+//     MySQL still commits in such a group (MySQL's view quorum counts only the members that are
+//     still in the view, after the others left it), but a transaction would then only exist on a
+//     minority of the voters. This fails closed, like a semi-sync primary without an acker.
 //
 // Mutations take the action lock without waiting, so that the loop never queues behind a long
 // running RPC (a backup, a restore, a reparent); it retries on its next run instead.
@@ -70,6 +75,10 @@ type groupReplicationSync struct {
 	// lastIllegitimateLog is when the loop last logged that it does not promote a group primary
 	// that is not legitimate.
 	lastIllegitimateLog time.Time
+	// notServingReason is the reason for which the loop last made the PRIMARY stop serving, empty
+	// if it did not, and peersFetched is when it last asked the voters for their server_uuids.
+	notServingReason string
+	peersFetched     time.Time
 
 	lastState string
 	lastRole  string
@@ -171,6 +180,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
+	s.enforceVoterMajority(ctx, status, durability, tablet)
 	if s.shouldRejoin(ctx, status, durability, tablet) {
 		s.rejoin(ctx)
 	}
@@ -345,6 +355,76 @@ func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *repl
 		enabled = want
 	}
 	s.setTwoPCAllowed(twoPCDurable(status, enabled))
+}
+
+// groupReplicationVoterMajorityLost is the reason for which a PRIMARY tablet does not serve while
+// its group lacks the majority of its voters.
+const groupReplicationVoterMajorityLost = "replication group lost the majority of its voters"
+
+// enforceVoterMajority makes a PRIMARY tablet stop serving while its MySQL is the primary of a
+// group view that holds fewer than a majority of the shard's listed voters, and serve again once
+// the majority is back. MySQL is left alone. The check only applies under a group replication
+// policy with listed voters: during a migration, the group grows from a single member while the
+// primary keeps serving with semi-sync.
+func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
+	tm := s.tm
+	reason := ""
+	if tablet.Type == topodatapb.TabletType_PRIMARY && policy.IsGroupReplication(durability) && mysql.IsGroupPrimary(status) {
+		lost, err := s.voterMajorityLost(ctx, status)
+		if err != nil {
+			log.Warn("Group replication sync: cannot check the voter majority of the group", slog.Any("error", err))
+			return
+		}
+		if lost {
+			reason = groupReplicationVoterMajorityLost
+		}
+	}
+	if reason == "" && s.notServingReason == "" {
+		return
+	}
+	if reason != s.notServingReason {
+		if reason != "" {
+			log.Warn("Group replication sync: the group view holds fewer than a majority of the shard's voters, the primary stops serving",
+				slog.String("group", status.GetGroupName()),
+				slog.String("view_id", status.GetViewId()),
+				slog.Int("online_members", mysql.OnlineGroupMembers(status)))
+		} else {
+			log.Info("Group replication sync: the primary serves again",
+				slog.String("group", status.GetGroupName()),
+				slog.String("view_id", status.GetViewId()),
+				slog.Int("online_members", mysql.OnlineGroupMembers(status)))
+		}
+	}
+	if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+		log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
+		return
+	}
+	s.notServingReason = reason
+}
+
+// voterMajorityLost returns whether the member's view holds fewer than a majority of the shard's
+// listed voters. Before it reports a loss, it reads the shard record again and asks the voters
+// whose server_uuid it does not know, at most every groupReplicationVotersCacheTTL.
+func (s *groupReplicationSync) voterMajorityLost(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) (bool, error) {
+	rec, err := s.getRecord(ctx, false)
+	if err != nil {
+		return false, err
+	}
+	if len(rec.voters) == 0 {
+		return false, nil
+	}
+	if s.tm.legitimateGroup(ctx, rec, status, false).HasVoterMajority(status) {
+		return false, nil
+	}
+	if time.Since(s.peersFetched) < groupReplicationVotersCacheTTL {
+		// Checked recently: the majority is still missing.
+		return true, nil
+	}
+	s.peersFetched = time.Now()
+	if rec, err = s.getRecord(ctx, true); err != nil {
+		return false, err
+	}
+	return len(rec.voters) > 0 && !s.tm.legitimateGroup(ctx, rec, status, true).HasVoterMajority(status), nil
 }
 
 // hasSemiSyncReplicas returns whether at least one semi-sync replica is connected to the primary.

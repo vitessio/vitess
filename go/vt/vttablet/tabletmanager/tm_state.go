@@ -82,6 +82,9 @@ type tmState struct {
 	deniedTables    map[topodatapb.TabletType][]string
 	tablet          *topodatapb.Tablet
 	isPublishing    bool
+	// groupReplicationNotServing is the reason why a PRIMARY tablet must not serve while its
+	// replication group lacks a majority of its voters. Empty means that it may serve.
+	groupReplicationNotServing string
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -392,7 +395,25 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "primary tablet with filtered replication on"
 	}
+	if tabletType == topodatapb.TabletType_PRIMARY && ts.groupReplicationNotServing != "" {
+		return ts.groupReplicationNotServing
+	}
 	return ""
+}
+
+// SetGroupReplicationNotServing makes a PRIMARY tablet stop serving with the given reason, or
+// serve again when the reason is empty. The tablet keeps its type, so that vtgate buffers
+// writes instead of failing them. It only applies the change when the reason changed, or when
+// the query service serves although it must not.
+func (ts *tmState) SetGroupReplicationNotServing(ctx context.Context, reason string) error {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.groupReplicationNotServing == reason &&
+		(reason == "" || ts.tablet.Type != topodatapb.TabletType_PRIMARY || !ts.tm.QueryServiceControl.IsServing()) {
+		return nil
+	}
+	ts.groupReplicationNotServing = reason
+	return ts.updateLocked(ctx)
 }
 
 func (ts *tmState) applyDenyList(ctx context.Context) (err error) {

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -197,6 +199,70 @@ func TestGroupReplicationSyncTrustsOwnBootstrap(t *testing.T) {
 	assert.True(t, mysql.IsGroupMemberActive(tmStatus(t, fmd)), "the tablet must not leave the group it bootstrapped")
 	_, stops, _ := fmd.GroupReplicationCalls()
 	assert.Zero(t, stops)
+}
+
+// TestGroupReplicationSyncStopsServingWithoutVoterMajority checks the graceful-leave shrink of the
+// Group Replication failover audit: once the other voters left the group (an expulsion, a clean
+// shutdown, unreachable_majority_timeout), MySQL's view of one still has quorum and commits, but a
+// transaction would then exist on a single voter. The PRIMARY tablet stops serving, keeps its
+// type so that vtgate buffers, leaves MySQL alone, and serves again once a majority of the
+// voters is back in the view.
+func TestGroupReplicationSyncStopsServingWithoutVoterMajority(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	require.True(t, qsc.IsServing())
+	fmd.SetSuperReadOnlyError = errors.New("MySQL must be left alone")
+	s := newGroupReplicationSync(tm)
+
+	withVoters := func(uids ...int) *replicationdatapb.GroupReplicationStatus {
+		members := []*replicationdatapb.GroupReplicationMember{groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)}
+		for _, uid := range uids {
+			members = append(members, groupMember(testServerUUID(uid), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary))
+		}
+		return withViewID(groupStatus(testServerUUID(1), members...), "1780000001:20")
+	}
+
+	fmd.SetGroupReplicationStatus(withVoters())
+	s.reconcile(ctx)
+	assert.False(t, qsc.IsServing(), "a primary without the majority of its voters must not serve")
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type, "the tablet keeps its type so that vtgate buffers")
+	start, stop, _ := fmd.GroupReplicationCalls()
+	assert.Zero(t, stop)
+
+	// Something else made the query service serve again: the loop enforces its decision.
+	require.NoError(t, qsc.SetServingType(topodatapb.TabletType_PRIMARY, time.Now(), true, ""))
+	s.reconcile(ctx)
+	assert.False(t, qsc.IsServing())
+
+	fmd.SetGroupReplicationStatus(withVoters(3))
+	s.reconcile(ctx)
+	assert.True(t, qsc.IsServing(), "the primary serves again once the majority is back")
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	start2, stop2, _ := fmd.GroupReplicationCalls()
+	assert.Equal(t, start, start2)
+	assert.Equal(t, stop, stop2)
+}
+
+// TestGroupReplicationSyncServesDuringMigration checks that the voter majority does not apply
+// while the keyspace policy is not a group replication policy: during MigrateReplicationMode the
+// primary bootstraps a group of one and keeps serving with semi-sync while the voters join.
+func TestGroupReplicationSyncServesDuringMigration(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
+	setGroupReplicationVoters(t, ts, 1, 2, 3)
+	addPeerTablets(t, ts, 2, 3)
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	tm.tmc = newGRPeersTMC()
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)))
+
+	newGroupReplicationSync(tm).reconcile(ctx)
+	assert.True(t, qsc.IsServing())
 }
 
 // tmStatus returns the group replication status of the fake daemon.
