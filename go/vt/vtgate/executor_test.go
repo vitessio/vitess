@@ -1827,7 +1827,7 @@ func TestGetPlanCacheSetVarHintOrder(t *testing.T) {
 		SystemVariables: map[string]string{
 			"sql_safe_updates":        "1",
 			"unique_checks":           "0",
-			"sql_mode":                "'ANSI'",
+			"sql_mode":                "'STRICT_ALL_TABLES'",
 			"max_execution_time":      "100",
 			"big_tables":              "1",
 			"join_buffer_size":        "262144",
@@ -1847,7 +1847,7 @@ func TestGetPlanCacheSetVarHintOrder(t *testing.T) {
 	}
 	assert.Equal(t, "select /*+ SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) "+
 		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) "+
-		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0) */ id from `user` where id = :id /* INT64 */",
+		"SET_VAR(sql_mode = 'STRICT_ALL_TABLES') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0) */ id from `user` where id = :id /* INT64 */",
 		sbc1.Queries[0].Sql)
 }
 

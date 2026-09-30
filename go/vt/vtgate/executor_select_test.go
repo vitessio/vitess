@@ -300,6 +300,141 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+// defaultSQLModeList is the default sql_mode sessions start with in these tests.
+const defaultSQLModeList = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
+// A session can arrive with a sql_mode in another form than the canonical one VTGate
+// stores: an older VTGate stored the value as the SET spelled it, and a gRPC client can
+// send any form. The value is put into MySQL's canonical form before anything reads it,
+// so @@sql_mode and the hint sent to the backends read the way MySQL reports the mode.
+func TestSessionSQLModeCarriedPlainValue(t *testing.T) {
+	tests := []struct {
+		name, stored, want string
+	}{
+		{name: "a number", stored: "2097152", want: "'STRICT_TRANS_TABLES'"},
+		{name: "lowercase names", stored: "'no_zero_date,strict_trans_tables'", want: "'STRICT_TRANS_TABLES,NO_ZERO_DATE'"},
+		{name: "a bare list of names", stored: "allow_invalid_dates", want: "'ALLOW_INVALID_DATES'"},
+		{name: "a combination mode", stored: "'traditional'", want: "'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION'"},
+		{name: "the empty mode", stored: "''", want: "''"},
+		// not a valid sql_mode: left for the backends to judge, as before
+		{name: "an invalid value", stored: "'BOGUS'", want: "'BOGUS'"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{
+				EnableSystemSettings: true,
+				TargetString:         KsTestUnsharded,
+				SystemVariables:      map[string]string{"sql_mode": tt.stored},
+			})
+
+			_, err := executorExecSession(t.Context(), executor, session, "select 1 from information_schema.table", nil)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, session.SystemVariables["sql_mode"])
+			require.Len(t, lookup.Queries, 1)
+			hint := tt.want
+			if hint == "''" {
+				hint = "' '"
+			}
+			assert.Equal(t, "select /*+ SET_VAR(sql_mode = "+hint+") */ :vtg1 /* INT64 */ from information_schema.`table`", lookup.Queries[0].Sql)
+		})
+	}
+}
+
+// A session can arrive with a sql_mode stored as an expression: VTGates before v25 stored
+// the expression of a SET in a session targeting a shard as written. The expression is
+// evaluated at VTGate, the way the SET that stored it is, before anything reads the
+// session's modes. @@sql_mode inside the expression reads the default the session starts
+// with.
+func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
+	newSession := func(target, sqlMode string) *econtext.SafeSession {
+		return econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         target,
+			SystemVariables:      map[string]string{"sql_mode": sqlMode},
+		})
+	}
+	const query = "select 1 from information_schema.table"
+	routed := func(mode string) string {
+		return "select /*+ SET_VAR(sql_mode = '" + mode + "') */ :vtg1 /* INT64 */ from information_schema.`table`"
+	}
+	const withStrictAll = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
+	t.Run("an expression that reads @@sql_mode", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT(@@sql_mode, ',STRICT_ALL_TABLES')")
+
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "'"+withStrictAll+"'", session.SystemVariables["sql_mode"])
+		require.Len(t, lookup.Queries, 1)
+		assert.Equal(t, routed(withStrictAll), lookup.Queries[0].Sql)
+	})
+
+	t.Run("a session targeting a shard", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded+"/0", "CONCAT(@@sql_mode, ',STRICT_ALL_TABLES')")
+
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "'"+withStrictAll+"'", session.SystemVariables["sql_mode"])
+		require.Len(t, lookup.Queries, 1)
+		assert.Equal(t, routed(withStrictAll), lookup.Queries[0].Sql)
+	})
+
+	t.Run("a sub-expression VTGate cannot compute is fetched from a shard", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "IF(RAND() < 2, 'STRICT_ALL_TABLES', '')")
+		lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "varchar"), "STRICT_ALL_TABLES")})
+
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "'STRICT_ALL_TABLES'", session.SystemVariables["sql_mode"])
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select if(RAND() < 2, 'STRICT_ALL_TABLES', '') from dual", lookup.Queries[0].Sql)
+		assert.Equal(t, routed("STRICT_ALL_TABLES"), lookup.Queries[1].Sql)
+	})
+
+	t.Run("a failure that may pass keeps the expression for the next request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "IF(RAND() < 2, 'STRICT_ALL_TABLES', '')")
+		lookup.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 1
+
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+		assert.Equal(t, "IF(RAND() < 2, 'STRICT_ALL_TABLES', '')", session.SystemVariables["sql_mode"])
+
+		lookup.Queries = nil
+		lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "varchar"), "STRICT_ALL_TABLES")})
+		_, err = executorExecSession(t.Context(), executor, session, query, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "'STRICT_ALL_TABLES'", session.SystemVariables["sql_mode"])
+	})
+
+	t.Run("an expression that evaluates to an invalid value fails the request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT('BO', 'GUS')")
+
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
+		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
+		require.Empty(t, lookup.Queries)
+		// a value that can never be applied is not kept for the next request to fail
+		// on: the session keeps the default it starts with
+		assert.Equal(t, "'"+defaultSQLModeList+"'", session.SystemVariables["sql_mode"])
+	})
+
+	t.Run("an expression that evaluates to an unsupported mode fails the request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
+		require.EqualError(t, err, "setting the ANSI_QUOTES sql_mode is unsupported")
+		require.Empty(t, lookup.Queries)
+		assert.Equal(t, "'"+defaultSQLModeList+"'", session.SystemVariables["sql_mode"])
+	})
+}
+
 func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
@@ -411,7 +546,7 @@ func TestSetVarWithSeveralOptimizerHintComments(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'only_full_group_by') */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
@@ -466,7 +601,7 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 	assert.True(t, session.InReservedConn())
 
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "set sql_mode = ALLOW_INVALID_DATES", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set sql_mode = 'ALLOW_INVALID_DATES'", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "create table aa (\n\tt timestamp default 0\n)", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 
