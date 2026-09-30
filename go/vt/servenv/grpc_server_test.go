@@ -157,7 +157,9 @@ func TestReportedOrca(t *testing.T) {
 	t.Cleanup(GRPCServer.Stop)
 
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
-	// CPU is unset (-1) when this is the first cgroup CPU sample of the process.
+	// registerOrca publishes the first CPU sample. With cgroup v2 that sample is only a
+	// baseline, so CPU stays unset (-1) until the first ticker update; host CPU and later
+	// samples report a value. TestFirstCgroupCpuSampleIsNotPublished pins the -1 case.
 	cpuUsage := serverMetrics.CPUUtilization
 	assert.Truef(t, cpuUsage == -1 || (cpuUsage >= 0 && !math.IsInf(cpuUsage, 1)), "CPU Utilization is invalid %.2f", cpuUsage)
 	t.Logf("CPU Utilization is %.2f", cpuUsage)
