@@ -1,0 +1,532 @@
+diff --git a/go/mysql/streaming_fetchnext_capacity_test.go b/go/mysql/streaming_fetchnext_capacity_test.go
+new file mode 100644
+index 0000000000..5fb00fe587
+--- /dev/null
++++ b/go/mysql/streaming_fetchnext_capacity_test.go
+@@ -0,0 +1,82 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package mysql
++
++import (
++	"sync"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/sqltypes"
++	querypb "vitess.io/vitess/go/vt/proto/query"
++)
++
++// TestFetchNextValuesHaveCappedCapacity verifies that the values returned by the streaming FetchNext
++// own exactly their bytes: each value's capacity equals its length, so appending to one value
++// reallocates instead of overwriting the columns that follow it in the row packet.
++func TestFetchNextValuesHaveCappedCapacity(t *testing.T) {
++	listener, sConn, cConn := createSocketPair(t)
++	t.Cleanup(func() {
++		listener.Close()
++		sConn.Close()
++		cConn.Close()
++	})
++
++	result := &sqltypes.Result{
++		Fields: []*querypb.Field{
++			{Name: "a", Type: querypb.Type_VARCHAR},
++			{Name: "b", Type: querypb.Type_VARCHAR},
++			{Name: "c", Type: querypb.Type_VARCHAR},
++		},
++		Rows: [][]sqltypes.Value{{
++			sqltypes.NewVarChar("aaa"),
++			sqltypes.NewVarChar("bbb"),
++			sqltypes.NewVarChar("ccc"),
++		}},
++	}
++
++	var wg sync.WaitGroup
++	var (
++		row      []sqltypes.Value
++		fetchErr error
++	)
++	wg.Go(func() {
++		if fetchErr = cConn.ExecuteStreamFetch("select a, b, c from t"); fetchErr != nil {
++			return
++		}
++		row, fetchErr = cConn.FetchNext(nil)
++		cConn.CloseResult()
++	})
++	handler := testHandler{result: result}
++	require.True(t, sConn.handleNextCommand(&handler))
++	wg.Wait()
++	require.NoError(t, fetchErr)
++	require.Len(t, row, 3)
++
++	for i, v := range row {
++		assert.Equal(t, v.Len(), cap(v.Raw()), "column %d: capacity runs past the value into the rest of the packet", i)
++	}
++
++	// A caller that extends a value's bytes (e.g. to build a key or pad a string) must not clobber
++	// the next column.
++	extended := append(row[0].Raw(), "XYZ"...)
++	assert.Equal(t, "aaaXYZ", string(extended))
++	assert.Equal(t, "bbb", row[1].ToString(), "appending to column 0 overwrote column 1")
++	assert.Equal(t, "ccc", row[2].ToString())
++}
+diff --git a/go/vt/vttablet/tabletmanager/vreplication/relaylog_stall_race_test.go b/go/vt/vttablet/tabletmanager/vreplication/relaylog_stall_race_test.go
+new file mode 100644
+index 0000000000..1b41fad236
+--- /dev/null
++++ b/go/vt/vttablet/tabletmanager/vreplication/relaylog_stall_race_test.go
+@@ -0,0 +1,85 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package vreplication
++
++import (
++	"context"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
++)
++
++// TestRelayLogSendNoStallAfterFetchDrains verifies that a blocked Send does not report
++// "relay log I/O stalled" once a Fetch has drained the relay log, even when the Send's stall
++// timer expires at the same moment as the Fetch.
++//
++// To line the two events up, the test holds the relay log mutex while both the Fetch and the
++// expired stall timer queue up behind it, which is what happens when the timer fires while
++// Fetch is inside its critical section. Which of the two runs first after the release is up to
++// the scheduler, so the scenario is repeated.
++func TestRelayLogSendNoStallAfterFetchDrains(t *testing.T) {
++	oldProgressDeadline := vplayerProgressDeadline
++	t.Cleanup(func() { vplayerProgressDeadline = oldProgressDeadline })
++	const deadline = 20 * time.Millisecond
++	vplayerProgressDeadline = deadline
++
++	events := []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_GTID}}
++	const iterations = 50
++	spurious := 0
++	for range iterations {
++		ctx, cancel := context.WithCancel(t.Context())
++		rl := newRelayLog(ctx, 1, 10, nil)
++		// Fill the log: with maxItems=1 the next Send waits for a Fetch.
++		require.NoError(t, rl.Send(events))
++
++		sendResult := make(chan error, 1)
++		go func() {
++			sendResult <- rl.Send(events)
++		}()
++		// Let the Send reach its wait; it is well inside its stall deadline.
++		time.Sleep(deadline / 4)
++
++		rl.mu.Lock()
++		fetchResult := make(chan int, 1)
++		go func() {
++			items, err := rl.Fetch()
++			assert.NoError(t, err)
++			fetchResult <- len(items)
++		}()
++		// Keep the lock until the Send's stall timer has expired and is waiting for the lock too.
++		time.Sleep(3 * deadline)
++		rl.mu.Unlock()
++
++		require.Equal(t, 1, <-fetchResult, "the Fetch drains the item that blocked the Send")
++		var err error
++		select {
++		case err = <-sendResult:
++		case <-time.After(30 * time.Second):
++			require.FailNow(t, "Send did not return")
++		}
++		if err != nil {
++			require.ErrorContains(t, err, relayLogIOStalledMsg)
++			spurious++
++		}
++		cancel()
++	}
++	assert.Zero(t, spurious, "%d/%d Sends reported %q although a Fetch had drained the relay log", spurious, iterations, relayLogIOStalledMsg)
++}
+diff --git a/go/vt/vttablet/tabletserver/stream_consolidator_fetchnext_test.go b/go/vt/vttablet/tabletserver/stream_consolidator_fetchnext_test.go
+new file mode 100644
+index 0000000000..ee54479c36
+--- /dev/null
++++ b/go/vt/vttablet/tabletserver/stream_consolidator_fetchnext_test.go
+@@ -0,0 +1,126 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package tabletserver
++
++import (
++	"fmt"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/mysql/fakesqldb"
++	"vitess.io/vitess/go/sqltypes"
++	"vitess.io/vitess/go/vt/dbconfigs"
++	"vitess.io/vitess/go/vt/dbconnpool"
++	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
++)
++
++// exactCapacityCopy returns a deep copy of the result whose values own exactly their bytes.
++func exactCapacityCopy(result *sqltypes.Result) *sqltypes.Result {
++	out := &sqltypes.Result{Fields: result.Fields, Rows: make([][]sqltypes.Value, 0, cap(result.Rows))}
++	for _, row := range result.Rows {
++		newRow := make([]sqltypes.Value, len(row), cap(row))
++		for i, v := range row {
++			if v.IsNull() {
++				continue
++			}
++			b := make([]byte, v.Len())
++			copy(b, v.Raw())
++			newRow[i] = sqltypes.MakeTrusted(v.Type(), b)
++		}
++		out.Rows = append(out.Rows, newRow)
++	}
++	return out
++}
++
++// admittedToCatchup feeds the results through a streamInFlight with the given limits and returns how
++// many results were stored for late followers before catching up was disabled.
++func admittedToCatchup(results []*sqltypes.Result, maxMemoryQuery, maxMemoryTotal int64) (admitted int, memory int64) {
++	s := &streamInFlight{catchupAllowed: true}
++	for _, r := range results {
++		memory += s.update(r, false, maxMemoryQuery, maxMemoryTotal)
++	}
++	return len(s.catchup), memory
++}
++
++// TestStreamConsolidatorAccountsStreamedRowsExactly verifies that the stream consolidator's memory
++// accounting of rows read by the streaming FetchNext path matches the memory those rows use. When
++// FetchNext hands out values whose capacity runs to the end of the row packet, Result.CachedSize
++// counts every later column again for each value, the per-query catch-up budget
++// (--consolidator-stream-query-size) is exhausted several times sooner, and late followers can no
++// longer join the stream.
++func TestStreamConsolidatorAccountsStreamedRowsExactly(t *testing.T) {
++	db := fakesqldb.New(t)
++	t.Cleanup(db.Close)
++
++	const (
++		numCols = 20
++		colLen  = 32
++		numRows = 5000
++	)
++	names := make([]string, numCols)
++	types := make([]string, numCols)
++	for i := range numCols {
++		names[i] = fmt.Sprintf("c%d", i)
++		types[i] = "varchar"
++	}
++	fields := sqltypes.MakeTestFields(strings.Join(names, "|"), strings.Join(types, "|"))
++	rows := make([][]sqltypes.Value, numRows)
++	for r := range numRows {
++		row := make([]sqltypes.Value, numCols)
++		for c := range numCols {
++			row[c] = sqltypes.NewVarChar(fmt.Sprintf("%0*d", colLen, r*numCols+c))
++		}
++		rows[r] = row
++	}
++	const query = "select * from t"
++	db.AddQuery(query, &sqltypes.Result{Fields: fields, Rows: rows})
++
++	conn, err := dbconnpool.NewDBConnection(t.Context(), dbconfigs.New(db.ConnParams()))
++	require.NoError(t, err)
++	t.Cleanup(conn.Close)
++
++	defaults := tabletenv.NewDefaultConfig()
++	var streamed []*sqltypes.Result
++	err = conn.ExecuteStreamFetch(query, func(r *sqltypes.Result) error {
++		if len(r.Rows) > 0 {
++			streamed = append(streamed, r)
++		}
++		return nil
++	}, func() *sqltypes.Result { return &sqltypes.Result{} }, defaults.StreamBufferSize)
++	require.NoError(t, err)
++	require.NotEmpty(t, streamed)
++
++	exact := make([]*sqltypes.Result, len(streamed))
++	var accounted, actual int64
++	for i, r := range streamed {
++		exact[i] = exactCapacityCopy(r)
++		accounted += r.CachedSize(true)
++		actual += exact[i].CachedSize(true)
++	}
++
++	gotAdmitted, gotMemory := admittedToCatchup(streamed, defaults.ConsolidatorStreamQuerySize, defaults.ConsolidatorStreamTotalSize)
++	wantAdmitted, wantMemory := admittedToCatchup(exact, defaults.ConsolidatorStreamQuerySize, defaults.ConsolidatorStreamTotalSize)
++	t.Logf("%d results of %d rows x %d cols x %d bytes: CachedSize %d vs exact %d (%.1fx); catch-up admits %d results (%d bytes accounted) vs %d (%d bytes)",
++		len(streamed), numRows/len(streamed), numCols, colLen, accounted, actual, float64(accounted)/float64(actual),
++		gotAdmitted, gotMemory, wantAdmitted, wantMemory)
++
++	assert.Equal(t, actual, accounted, "the consolidator accounts streamed rows as larger than they are")
++	assert.Equal(t, wantAdmitted, gotAdmitted, "the catch-up buffer is abandoned early")
++}
+diff --git a/go/vt/vttablet/tabletserver/throttle/throttler_exempt_global_test.go b/go/vt/vttablet/tabletserver/throttle/throttler_exempt_global_test.go
+new file mode 100644
+index 0000000000..ba5ddb17c3
+--- /dev/null
++++ b/go/vt/vttablet/tabletserver/throttle/throttler_exempt_global_test.go
+@@ -0,0 +1,101 @@
++/*
++Copyright 2026 The Vitess Authors.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package throttle
++
++import (
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++
++	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
++)
++
++// TestCheckExemptedAppDoesNotMutateSharedResult verifies that a check by an exempted app returns a
++// result of its own, and does not write the app name into the package-level okMetricCheckResult that
++// every exempted check and every check against a stopped throttler returns.
++func TestCheckExemptedAppDoesNotMutateSharedResult(t *testing.T) {
++	origAppName := okMetricCheckResult.AppName
++	t.Cleanup(func() { okMetricCheckResult.AppName = origAppName })
++
++	throttler := newTestThrottler()
++	throttler.isOpen.Store(true)
++	throttler.isEnabled.Store(true)
++	require.True(t, throttler.IsRunning())
++
++	// A dynamically exempted app, as set by `UpdateThrottlerConfig --throttle-app-exempt`.
++	throttler.ThrottleApp("my-exempt-app", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
++
++	schemaTracker := throttler.Check(t.Context(), throttlerapp.SchemaTrackerName.String(), nil, &CheckFlags{})
++	require.True(t, schemaTracker.IsOK())
++	require.Equal(t, throttlerapp.SchemaTrackerName.String(), schemaTracker.AppName)
++
++	messager := throttler.Check(t.Context(), throttlerapp.MessagerName.String(), nil, &CheckFlags{})
++	require.True(t, messager.IsOK())
++	assert.Equal(t, throttlerapp.MessagerName.String(), messager.AppName)
++
++	// The earlier result must not change under its holder's feet.
++	assert.Equal(t, throttlerapp.SchemaTrackerName.String(), schemaTracker.AppName, "an earlier exempted check result was overwritten by a later check")
++	assert.NotSame(t, schemaTracker, messager)
++	// The shared global must stay pristine.
++	assert.Equal(t, origAppName, okMetricCheckResult.AppName, "okMetricCheckResult.AppName was mutated")
++
++	// Once the throttler stops, a non-exempt app receives the shared OK result. It must not carry the
++	// name of whichever exempted app checked last.
++	throttler.isEnabled.Store(false)
++	vreplication := throttler.Check(t.Context(), throttlerapp.VReplicationName.String(), nil, &CheckFlags{})
++	require.True(t, vreplication.IsOK())
++	assert.NotEqual(t, throttlerapp.MessagerName.String(), vreplication.AppName, "a check on a stopped throttler reports a previous exempted app's name")
++	assert.Equal(t, origAppName, vreplication.AppName)
++}
++
++// TestCheckExemptedAppConcurrentRace issues concurrent checks by different exempted apps. On a
++// build with -race this reports a data race on okMetricCheckResult.AppName when the exempted path
++// writes to the shared global. Without -race, it checks that each caller gets its own app name back.
++func TestCheckExemptedAppConcurrentRace(t *testing.T) {
++	origAppName := okMetricCheckResult.AppName
++	t.Cleanup(func() { okMetricCheckResult.AppName = origAppName })
++
++	throttler := newTestThrottler()
++	throttler.isOpen.Store(true)
++	throttler.isEnabled.Store(true)
++
++	apps := []string{
++		throttlerapp.SchemaTrackerName.String(),
++		throttlerapp.MessagerName.String(),
++		throttlerapp.BinlogWatcherName.String(),
++	}
++	var wg sync.WaitGroup
++	var mu sync.Mutex
++	mismatches := 0
++	for _, app := range apps {
++		wg.Go(func() {
++			for range 1000 {
++				res := throttler.Check(t.Context(), app, nil, &CheckFlags{})
++				if res.AppName != app {
++					mu.Lock()
++					mismatches++
++					mu.Unlock()
++				}
++			}
++		})
++	}
++	wg.Wait()
++	assert.Zero(t, mismatches, "exempted checks returned another app's name")
++}
+diff --git a/perf-findings/VAL-C-scripts/c.sh b/perf-findings/VAL-C-scripts/c.sh
+new file mode 100755
+index 0000000000..92b3073cbc
+--- /dev/null
++++ b/perf-findings/VAL-C-scripts/c.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++# VAL-C: run the P4 harness copy as the vt user on BASE 30000, four unsharded keyspaces.
++exec setpriv --reuid=vt --regid=vt --init-groups env HOME=/home/vt BASE=30000 BIN=${BIN:-/home/vt/bin} \
++  KEYSPACES="${KEYSPACES:-src:0 dstoff:0 dston:0 dstflag:0}" TABLES=${TABLES:-1} TABLE_SIZE=${TABLE_SIZE:-1000} \
++  VTGATE_EXTRA_FLAGS="${VTGATE_EXTRA_FLAGS:-}" VTTABLET_EXTRA_FLAGS="${VTTABLET_EXTRA_FLAGS:-}" \
++  PATH=/usr/local/bin:/usr/bin:/bin /home/vt/VAL-C/P4-scripts/cluster.sh "$@"
+diff --git a/perf-findings/VAL-C-scripts/patch_cluster.py b/perf-findings/VAL-C-scripts/patch_cluster.py
+new file mode 100644
+index 0000000000..9a93b4838c
+--- /dev/null
++++ b/perf-findings/VAL-C-scripts/patch_cluster.py
+@@ -0,0 +1,7 @@
++p = '/home/vt/VAL-C/P4-scripts/cluster.sh'
++s = open(p).read()
++s = s.replace('export VTDATAROOT=${VTDATAROOT:-/home/vt/perf/$NAME}', 'export VTDATAROOT=${VTDATAROOT:-/home/vt/VAL-C/$NAME}')
++old = '''      vtctldclient ApplyVSchema --vschema "{\\"sharded\\":true,\\"vindexes\\":{\\"hash\\":{\\"type\\":\\"hash\\"}},\\"tables\\":{$vs_tables}}" "$ks" >/dev/null'''
++assert old in s, "vschema line not found"
++s = s.replace(old, '''      vtctldclient ApplyVSchema --vschema '{"sharded":false}' "$ks" >/dev/null''')
++open(p, 'w').write(s)
+diff --git a/perf-findings/VAL-C-scripts/repro4.sh b/perf-findings/VAL-C-scripts/repro4.sh
+new file mode 100755
+index 0000000000..354ccc0fba
+--- /dev/null
++++ b/perf-findings/VAL-C-scripts/repro4.sh
+@@ -0,0 +1,70 @@
++#!/bin/bash
++# VAL-C BUGS #4 repro: MoveTables copy with --vreplication-parallel-insert-workers on a non-UTC target.
++# Cluster: /home/vt/VAL-C/c.sh up (BASE 30000, keyspaces src:0 dstoff:0 dston:0 dstflag:0).
++# Usage: repro4.sh setup | mt <workflow> <target-ks> [extra MoveTables flags...] | compare <target-ks> | post
++set -uo pipefail
++C=/home/vt/VAL-C/c30000
++VC="/home/vt/VAL-C/c.sh vtctldclient"
++sock() { case $1 in src) echo $C/vt_0000000100/mysql.sock ;; dstoff) echo $C/vt_0000000101/mysql.sock ;;
++  dston) echo $C/vt_0000000102/mysql.sock ;; dstflag) echo $C/vt_0000000103/mysql.sock ;; esac; }
++q() { local ks=$1; shift; mysql -N -S "$(sock "$ks")" -u vt_dba "vt_$ks" -e "$*"; }
++
++setup() {
++  q src "SET time_zone='+00:00';
++    CREATE TABLE tz_t (
++      id INT NOT NULL PRIMARY KEY,
++      ts TIMESTAMP(6) NULL,
++      dt DATETIME(6) NULL,
++      l1 VARCHAR(32) CHARACTER SET latin1 NULL,
++      u8 VARCHAR(32) CHARACTER SET utf8mb4 NULL,
++      vb VARBINARY(32) NULL
++    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
++    INSERT INTO tz_t VALUES
++      (1, '2024-01-01 00:00:00', '2024-01-01 00:00:00', X'E9', X'68C3A96C6C6F20F09F9880', X'FF00E9'),
++      (2, '2024-06-15 12:34:56.123456', '2024-06-15 12:34:56.123456', X'C3A9', X'C3A9', X'C3A9'),
++      (3, '1970-01-01 05:30:00', '1970-01-01 05:30:00', 'plain ascii', 'plain ascii', 'plain'),
++      (4, '2038-01-19 03:14:07', '2038-01-19 03:14:07', X'E4F6FC', X'C3A4C3B6C3BC', X'E4F6FC');
++    INSERT INTO tz_t SELECT 100 + seq, '2024-03-10 01:02:03' + INTERVAL seq MINUTE, '2024-03-10 01:02:03' + INTERVAL seq MINUTE,
++      CONCAT('r', seq, X'E9'), CONCAT('r', seq), UNHEX(HEX(seq)) FROM
++      (WITH RECURSIVE s(seq) AS (SELECT 1 UNION ALL SELECT seq + 1 FROM s WHERE seq < 900) SELECT seq FROM s) x;"
++  $VC ReloadSchemaKeyspace src >/dev/null
++  for ks in dstoff dston dstflag; do q "$ks" "SET GLOBAL time_zone='+05:00'"; done
++  for ks in src dstoff dston dstflag; do echo "$ks global time_zone: $(q "$ks" 'select @@global.time_zone')"; done
++}
++
++mt() {
++  local wf=$1 ks=$2; shift 2
++  $VC MoveTables --workflow "$wf" --target-keyspace "$ks" create --source-keyspace src --tables tz_t "$@" || exit 1
++  for _ in $(seq 1 240); do
++    local n s
++    n=$(q "$ks" "select count(*) from _vt.copy_state")
++    s=$(q "$ks" "select state from _vt.vreplication where workflow='$wf'")
++    [[ $s == Error ]] && { q "$ks" "select message from _vt.vreplication where workflow='$wf'"; exit 1; }
++    [[ $n == 0 && $s == Running ]] && { echo "$wf -> $ks: copy done"; return 0; }
++    sleep 0.5
++  done
++  echo "timeout"; exit 1
++}
++
++rows() { q "$1" "SET time_zone='+00:00'; SELECT id, UNIX_TIMESTAMP(ts), ts, dt, HEX(l1), HEX(u8), HEX(vb) FROM tz_t ORDER BY id"; }
++
++compare() {
++  local ks=$1
++  echo "== $ks vs src: CHECKSUM TABLE src=$(q src 'checksum table tz_t' | cut -f2) $ks=$(q "$ks" 'checksum table tz_t' | cut -f2)"
++  diff <(rows src) <(rows "$ks") >/tmp/val-c-diff-$ks.txt
++  echo "differing rows: $(grep -c '^>' /tmp/val-c-diff-$ks.txt) of $(q src 'select count(*) from tz_t')"
++  echo "-- src (first 4 rows, session tz UTC): id unix_ts ts dt hex(l1) hex(u8) hex(vb)"
++  rows src | head -4
++  echo "-- $ks"
++  rows "$ks" | head -4
++}
++
++post() {
++  q src "SET time_zone='+00:00'; INSERT INTO tz_t VALUES (9999, '2024-01-01 00:00:00', '2024-01-01 00:00:00', X'E9', X'C3A9', X'E9')"
++  sleep 3
++  for ks in "$@"; do echo "$ks post-copy row: $(q "$ks" "SET time_zone='+00:00'; SELECT id, UNIX_TIMESTAMP(ts), HEX(l1) FROM tz_t WHERE id = 9999")"; done
++  echo "src post-copy row: $(q src "SET time_zone='+00:00'; SELECT id, UNIX_TIMESTAMP(ts), HEX(l1) FROM tz_t WHERE id = 9999")"
++}
++
++cmd=$1; shift
++"$cmd" "$@"
+diff --git a/perf-findings/VAL-C-scripts/runrelay.sh b/perf-findings/VAL-C-scripts/runrelay.sh
+new file mode 100755
+index 0000000000..500fd0fbc5
+--- /dev/null
++++ b/perf-findings/VAL-C-scripts/runrelay.sh
+@@ -0,0 +1,7 @@
++#!/bin/bash
++# Run the relay-log validation test in the MySQL-backed vreplication package, as the vt user.
++mkdir -p /home/vt/VAL-C/data
++chown vt:vt /home/vt/VAL-C/data /home/vt/VAL-C/vrepl.test
++cd /home/user/vitess/.claude/worktrees/agent-aae6d7e3e044a6d81/go/vt/vttablet/tabletmanager/vreplication || exit 1
++exec runuser -u vt -- env HOME=/home/vt VTROOT=/home/vt VT_MYSQL_ROOT=/usr VTDATAROOT=/home/vt/VAL-C/data \
++  PATH=/home/vt/bin:/usr/sbin:/usr/bin:/bin /home/vt/VAL-C/vrepl.test -test.run "${1:-TestRelayLog}" -test.v
