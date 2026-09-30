@@ -670,14 +670,14 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update " + sqlModeHint + " twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update " + sqlModeHint + " twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
 		"ks.twopc_user:-40": {
 			`insert:[INT64(10) VARCHAR("apa")]`,
@@ -768,12 +768,12 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
 		},
 		"ks.consistent_lookup:-40": {
 			"insert:[INT64(22) INT64(4) VARBINARY(\" \\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
@@ -841,8 +841,8 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
 	}
 	assert.Equal(t, expectations, logTable,
@@ -911,12 +911,12 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
 		"ks.twopc_user:-40": {
 			`insert:[INT64(10) VARCHAR("apa")]`,
@@ -1190,8 +1190,8 @@ func TestDTSavepoint(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (7, 'foo')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
 		},
 		"ks.twopc_user:40-80": {"insert:[INT64(8) VARCHAR(\"bar\")]"},
 		"ks.twopc_user:80-":   {"insert:[INT64(7) VARCHAR(\"foo\")]"},
@@ -1287,8 +1287,8 @@ func TestDTSavepoint(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-4\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"temp1\")]"},
 	}
@@ -1397,12 +1397,12 @@ func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (7, 'foo')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
 		},
 		"ks.twopc_user:-40": {
 			"insert:[INT64(290001) VARCHAR(\"mysession\")]",
@@ -1557,10 +1557,10 @@ func TestVindexes(t *testing.T) {
 			},
 			logExpected: map[string][]string{
 				"ks.redo_statement:80-": {
-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
 				},
 				"ks.twopc_lookup:40-80": {
 					"update:[INT64(6) INT64(9) INT64(9)]",
@@ -1585,10 +1585,10 @@ func TestVindexes(t *testing.T) {
 			},
 			logExpected: map[string][]string{
 				"ks.redo_statement:80-": {
-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert " + sqlModeHint + " into lookup_unique(col_unique, keyspace_id) values (20, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert " + sqlModeHint + " into lookup_unique(col_unique, keyspace_id) values (20, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup_unique(col_unique, keyspace_id) values (20, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"insert into lookup_unique(col_unique, keyspace_id) values (20, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
 				},
 				"ks.twopc_lookup:40-80": {
 					"update:[INT64(6) INT64(4) INT64(20)]",
@@ -1613,10 +1613,10 @@ func TestVindexes(t *testing.T) {
 			},
 			logExpected: map[string][]string{
 				"ks.redo_statement:80-": {
-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete " + sqlModeHint + " from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete " + sqlModeHint + " from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup_unique where col_unique = 9 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
 				},
 				"ks.twopc_lookup:40-80": {
 					"delete:[INT64(6) INT64(4) INT64(9)]",
@@ -1643,8 +1643,8 @@ func TestVindexes(t *testing.T) {
 			},
 			logExpected: map[string][]string{
 				"ks.redo_statement:80-": {
-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
 				},
 				"ks.lookup:80-": {
 					"insert:[INT64(4) INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
@@ -1673,22 +1673,22 @@ func TestVindexes(t *testing.T) {
 			},
 			logExpected: map[string][]string{
 				"ks.redo_statement:80-": {
-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete " + sqlModeHint + " from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"insert:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete " + sqlModeHint + " from twopc_lookup where id = 9 limit 10001 /* INT64 */\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"insert " + sqlModeHint + " into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete " + sqlModeHint + " from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete " + sqlModeHint + " from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete " + sqlModeHint + " from twopc_lookup where id = 9 limit 10001 /* INT64 */\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete from twopc_lookup where id = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from lookup where col = 4 and id = 6 and keyspace_id = _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"insert into lookup(col, id, keyspace_id) values (9, 6, _binary'`\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"delete from lookup where col = 4 and id = 9 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(5) BLOB(\"delete from lookup_unique where col_unique = 4 and keyspace_id = _binary'\\x90\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0' limit 10001\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(6) BLOB(\"delete from twopc_lookup where id = 9 limit 10001 /* INT64 */\")]",
 				},
 				"ks.redo_statement:40-80": {
-					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
-					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+					"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"update twopc_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"update twopc_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
 				},
 				"ks.twopc_lookup:-40": {
 					"insert:[INT64(20) INT64(4) INT64(22)]",
@@ -1797,12 +1797,12 @@ func TestVindexes(t *testing.T) {
 			},
 			logExpected: map[string][]string{
 				"ks.redo_statement:80-": {
-					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete " + sqlModeHint + " from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
-					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete " + sqlModeHint + " from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
 				},
 				"ks.redo_statement:40-80": {
-					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
-					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
 				},
 				"ks.twopc_consistent_lookup:-40": {
 					"insert:[INT64(20) INT64(4) INT64(22)]",

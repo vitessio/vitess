@@ -140,8 +140,8 @@ func (e *Executor) canUseSetVar() bool {
 }
 
 // seedSQLMode gives the session its starting sql_mode, unless the deployment opted out of
-// vtgate-managed system settings via --enable-system-settings=false — those deployments
-// keep running queries under each backend's configured mode.
+// vtgate-managed system settings via --enable-system-settings=false, or the session has
+// them disabled — those keep running queries under each backend's configured mode.
 func (e *Executor) seedSQLMode(safeSession *econtext.SafeSession) {
 	if e.config.SystemSettingsDisabled {
 		return

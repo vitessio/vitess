@@ -54,7 +54,7 @@ import (
 func TestSelectNext(t *testing.T) {
 	executor, _, _, sbclookup, _ := createExecutorEnv(t)
 
-	query := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ next :n values from user_seq"
+	query := "select next :n values from user_seq"
 	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
@@ -108,7 +108,7 @@ func TestSelectNext(t *testing.T) {
 func TestSelectDBA(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
-	query := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from INFORMATION_SCHEMA.foo"
+	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
@@ -125,7 +125,7 @@ func TestSelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.`table_name` = :ist_table_name /* VARCHAR */",
+		Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.`table_name` = :ist_table_name /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
 			"ist_table_name": sqltypes.StringBindVariable("foo"),
@@ -141,7 +141,7 @@ func TestSelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
+		Sql: "select 1 from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
 			"table_name":     sqltypes.StringBindVariable("user"),
@@ -157,7 +157,7 @@ func TestSelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
+		Sql: "select 1 from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
 		},
@@ -617,7 +617,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 		false)
 	require.NoError(t, err)
-	expected := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_SCHEMA, `TABLE_NAME`, CONSTRAINT_TYPE, `ENFORCED` from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
+	expected := "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_SCHEMA, `TABLE_NAME`, CONSTRAINT_TYPE, `ENFORCED` from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
 	wantQueries := []*querypb.BoundQuery{{Sql: expected, BindVariables: map[string]*querypb.BindVariable{}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
@@ -629,7 +629,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.`table_name` = :ist_table_name1 /* VARCHAR */",
+		Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.`table_name` = :ist_table_name1 /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"ist_table_schema": sqltypes.StringBindVariable("performance_schema"),
 			"__vtschemaname":   sqltypes.StringBindVariable("performance_schema"),
@@ -647,7 +647,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */",
+		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":              sqltypes.Int64BindVariable(1),
 			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
@@ -663,7 +663,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA", econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
+		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":              sqltypes.Int64BindVariable(1),
 			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
@@ -679,7 +679,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t.table_schema, t.`table_name`, c.`column_name`, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.`table_name` = t.`table_name` order by t.table_schema asc, t.`table_name` asc, c.`column_name` asc",
+		Sql: "select t.table_schema, t.`table_name`, c.`column_name`, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.`table_name` = t.`table_name` order by t.table_schema asc, t.`table_name` asc, c.`column_name` asc",
 		BindVariables: map[string]*querypb.BindVariable{
 			"t_table_schema":        sqltypes.StringBindVariable("TestExecutor"),
 			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
@@ -697,7 +697,7 @@ func TestUnsharded(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select id from music_user_map where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from music_user_map where id = 1",
+		Sql:           "select id from music_user_map where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
@@ -712,7 +712,7 @@ func TestUnshardedComments(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "/* leading */ select id from music_user_map where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "/* leading */ select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from music_user_map where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
@@ -720,10 +720,10 @@ func TestUnshardedComments(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "update music_user_map set id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "/* leading */ select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from music_user_map where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_user_map set id = 1 /* trailing */",
+		Sql:           "update music_user_map set id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
@@ -732,7 +732,7 @@ func TestUnshardedComments(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "delete from music_user_map /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from music_user_map /* trailing */",
+		Sql:           "delete from music_user_map /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
@@ -741,7 +741,7 @@ func TestUnshardedComments(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "insert into music_user_map values (1) /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map values (1) /* trailing */",
+		Sql:           "insert into music_user_map values (1) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
@@ -752,7 +752,7 @@ func TestStreamUnsharded(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	sql := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from music_user_map where id = 1"
+	sql := "select id from music_user_map where id = 1"
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
@@ -792,7 +792,7 @@ func TestStreamBuffering(t *testing.T) {
 		nil,
 		"TestStreamBuffering",
 		econtext.NewSafeSession(session),
-		"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from music_user_map where id = 1",
+		"select id from music_user_map where id = 1",
 		nil,
 		false,
 		func(qr *sqltypes.Result) error {
@@ -1159,7 +1159,7 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from music_user_map where id = :__lastInsertId",
+		Sql:           "select id from music_user_map where id = :__lastInsertId",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -1186,7 +1186,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select * from (select last_insert_id()) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		Sql:           "select `last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -1258,13 +1258,13 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = :id",
+		Sql:           "select id from `user` where id = :id",
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
 	utils.MustMatch(t, sbc1.Queries, wantQueries)
 	assert.Empty(t, sbc2.Queries)
 	sbc1.Queries = nil
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = :id", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = :id", 1)
 
 	// Test with StringBindVariable
 	sql = "select id from `user` where `name` in (:name1, :name2)"
@@ -1274,7 +1274,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where `name` in ::__vals",
+		Sql: "select id from `user` where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.StringBindVariable("foo1"),
 			"name2":  sqltypes.StringBindVariable("foo2"),
@@ -1283,7 +1283,7 @@ func TestSelectBindvars(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	sbc1.Queries = nil
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where `name` in (:name1, :name2)", 3)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where `name` in (:name1, :name2)", 3)
 
 	// Test with BytesBindVariable
 	sql = "select id from `user` where `name` in (:name1, :name2)"
@@ -1293,7 +1293,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where 1 != 1",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{[]byte("foo1"), []byte("foo2")}),
 			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
@@ -1301,7 +1301,7 @@ func TestSelectBindvars(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where `name` in (:name1, :name2)", 3)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where `name` in (:name1, :name2)", 3)
 
 	// Test no match in the lookup vindex
 	sbc1.Queries = nil
@@ -1323,7 +1323,7 @@ func TestSelectBindvars(t *testing.T) {
 
 	// When there are no matching rows in the vindex, vtgate still needs the field info
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where 1 != 1",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": sqltypes.StringBindVariable("nonexistent"),
 		},
@@ -1340,7 +1340,7 @@ func TestSelectBindvars(t *testing.T) {
 	}}
 
 	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where `name` = :name", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where `name` = :name", 2)
 }
 
 func TestSelectEqual(t *testing.T) {
@@ -1352,7 +1352,7 @@ func TestSelectEqual(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1",
+		Sql:           "select id from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1364,7 +1364,7 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "select id from user where id = 3", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 3",
+		Sql:           "select id from `user` where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
@@ -1379,7 +1379,7 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "select id from user where id = '3'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = '3'",
+		Sql:           "select id from `user` where id = '3'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
@@ -1398,7 +1398,7 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where `name` = 'foo'",
+		Sql:           "select id from `user` where `name` = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1422,7 +1422,7 @@ func TestSelectINFromOR(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select 1 from user where id = 1 and name = 'apa' or id = 2 and name = 'toto'", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from `user` where id in ::__vals and (id = 1 or `name` = 'toto') and (`name` = 'apa' or id = 2) and `name` in ('apa', 'toto')",
+		Sql: "select 1 from `user` where id in ::__vals and (id = 1 or `name` = 'toto') and (`name` = 'apa' or id = 2) and `name` in ('apa', 'toto')",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 		},
@@ -1439,7 +1439,7 @@ func TestSelectDual(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select @@aa.bb from dual", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ @@`aa.bb` from dual",
+		Sql:           "select @@`aa.bb` from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1454,7 +1454,7 @@ func TestSelectComments(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "/* leading */ select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from `user` where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1473,7 +1473,7 @@ func TestSelectNormalize(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = :id /* INT64 */ /* trailing */",
+		Sql: "/* leading */ select id from `user` where id = :id /* INT64 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"id": sqltypes.TestBindVariable(int64(1)),
 		},
@@ -1489,7 +1489,7 @@ func TestSelectNormalize(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = :id /* INT64 */ /* trailing */",
+		Sql: "/* leading */ select id from `user` where id = :id /* INT64 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"id": sqltypes.TestBindVariable(int64(1)),
 		},
@@ -1508,7 +1508,7 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select Id from user where iD = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ Id from `user` where iD = 1",
+		Sql:           "select Id from `user` where iD = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1537,7 +1537,7 @@ func TestSelectKeyRange(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select krcol_unique, krcol from keyrange_table where krcol = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ krcol_unique, krcol from keyrange_table where krcol = 1",
+		Sql:           "select krcol_unique, krcol from keyrange_table where krcol = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1556,7 +1556,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select krcol_unique, krcol from keyrange_table where krcol_unique = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ krcol_unique, krcol from keyrange_table where krcol_unique = 1",
+		Sql:           "select krcol_unique, krcol from keyrange_table where krcol_unique = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1576,7 +1576,7 @@ func TestSelectIN(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select id from user where id in (1)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in (1)",
+		Sql:           "select id from `user` where id in (1)",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1591,14 +1591,14 @@ func TestSelectIN(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "select id from user where id in (1, 3)", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(1)}),
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(3)}),
 		},
@@ -1614,7 +1614,7 @@ func TestSelectIN(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(1)}),
 			"vals":   sqltypes.TestBindVariable([]any{int64(1), int64(3)}),
@@ -1622,7 +1622,7 @@ func TestSelectIN(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(3)}),
 			"vals":   sqltypes.TestBindVariable([]any{int64(1), int64(3)}),
@@ -1640,7 +1640,7 @@ func TestSelectIN(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where `name` = 'foo'",
+		Sql:           "select id from `user` where `name` = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1709,7 +1709,7 @@ func TestSelectListArg(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select id from user where (id, col) in ::vals", bvMap)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where (id, col) in ::vals",
+		Sql:           "select id from `user` where (id, col) in ::vals",
 		BindVariables: bvMap,
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -1729,7 +1729,7 @@ func TestSelectListArg(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from multicol_tbl where (cola, colb) in ::vals",
+		Sql:           "select id from multicol_tbl where (cola, colb) in ::vals",
 		BindVariables: bvMap,
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -1742,7 +1742,7 @@ func TestSelectListArg(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from multicol_tbl where (cola, colx, colb) in ::vals",
+		Sql:           "select id from multicol_tbl where (cola, colx, colb) in ::vals",
 		BindVariables: bvMap,
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -1755,7 +1755,7 @@ func TestSelectListArg(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from multicol_tbl where (colb, colx, cola) in ::vals",
+		Sql:           "select id from multicol_tbl where (colb, colx, cola) in ::vals",
 		BindVariables: bvMap,
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -1794,14 +1794,14 @@ func TestSelectScatter(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	sql := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`"
+	sql := "select id from `user`"
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
 	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`",
+		Sql:           "select id from `user`",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -1848,7 +1848,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	if results != nil {
 		assert.Failf(t, "results not nil", "want nil results, got %v", results)
 	}
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
@@ -1856,7 +1856,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	if results == nil || len(results.Rows) != 7 {
 		assert.Failf(t, "wrong number of results", "want 7 results, got %v", results)
 	}
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// When all shards fail, the execution should also fail
 	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
@@ -1869,7 +1869,7 @@ func TestSelectScatterPartial(t *testing.T) {
 
 	_, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.Error(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	_, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", nil)
 	require.Error(t, err)
@@ -1905,13 +1905,13 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	require.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
 	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	assert.Nil(t, results)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
 	assert.Len(t, results.Rows, 7)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// If all shards fail, the operation should also fail
 	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
@@ -1924,7 +1924,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 
 	_, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.Error(t, err)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	_, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.Error(t, err)
@@ -1974,25 +1974,25 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	assert.Contains(t, err.Error(), fmt.Sprintf(`no healthy tablet available for '%s'`, target.String()))
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Nil(t, results)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
 	assert.Len(t, results.Rows, 7)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// order by
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.NoError(t, err)
 	assert.Len(t, results.Rows, 7)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc", 8)
 
 	// order by and limit
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
 	require.NoError(t, err)
 	assert.Len(t, results.Rows, 5)
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc limit 5", 8)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc limit 5", 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {
@@ -2014,7 +2014,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
 
-	sql := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`"
+	sql := "select id from `user`"
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
@@ -2079,7 +2079,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col1, col2, weight_string(col2) from `user` order by `user`.col2 desc",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2152,7 +2152,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col1, textcol, weight_string(textcol) from `user` order by `user`.textcol desc",
+		Sql:           "select col1, textcol, weight_string(textcol) from `user` order by `user`.textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2218,7 +2218,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id, col, weight_string(col) from `user` order by `user`.col desc",
+		Sql:           "select id, col, weight_string(col) from `user` order by `user`.col desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2280,7 +2280,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id, textcol, weight_string(textcol) from `user` order by `user`.textcol desc",
+		Sql:           "select id, textcol, weight_string(textcol) from `user` order by `user`.textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2346,7 +2346,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, sum(foo), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2409,7 +2409,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, sum(foo), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2476,7 +2476,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit 3",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit 3",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
@@ -2548,7 +2548,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit 3",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit 3",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
@@ -2592,12 +2592,12 @@ func TestSimpleJoin(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where u2.id = 3",
+		Sql:           "select u2.id from `user` as u2 where u2.id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
@@ -2615,7 +2615,7 @@ func TestSimpleJoin(t *testing.T) {
 	}
 	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
 
 func TestJoinComments(t *testing.T) {
@@ -2630,17 +2630,17 @@ func TestJoinComments(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id from `user` as u1 where u1.id = 1 /* trailing */",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where u2.id = 3 /* trailing */",
+		Sql:           "select u2.id from `user` as u2 where u2.id = 3 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3 /* trailing */", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3 /* trailing */", 2)
 }
 
 func TestSimpleJoinStream(t *testing.T) {
@@ -2652,12 +2652,12 @@ func TestSimpleJoinStream(t *testing.T) {
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where u2.id = 3",
+		Sql:           "select u2.id from `user` as u2 where u2.id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
@@ -2676,7 +2676,7 @@ func TestSimpleJoinStream(t *testing.T) {
 	}
 	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
 
 func TestVarJoin(t *testing.T) {
@@ -2703,18 +2703,18 @@ func TestVarJoin(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u1.col from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	want := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where u2.id = :u1_col",
+		Sql:           "select u2.id from `user` as u2 where u2.id = :u1_col",
 		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
 	}}
 	utils.MustMatch(t, want, sbc2.Queries)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
 func TestVarJoinStream(t *testing.T) {
@@ -2738,18 +2738,18 @@ func TestVarJoinStream(t *testing.T) {
 	_, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u1.col from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	want := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where u2.id = :u1_col",
+		Sql:           "select u2.id from `user` as u2 where u2.id = :u1_col",
 		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
 	}}
 	utils.MustMatch(t, want, sbc2.Queries)
 
-	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
 func TestLeftJoin(t *testing.T) {
@@ -2793,7 +2793,7 @@ func TestLeftJoin(t *testing.T) {
 		},
 	}
 	assert.True(t, result.Equal(wantResult), "result: \n%+v, want \n%+v", result, wantResult)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u2.id from `user` as u1 left join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 left join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
 func TestLeftJoinStream(t *testing.T) {
@@ -2855,10 +2855,10 @@ func TestEmptyJoin(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u1.col from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where 1 != 1",
+		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.Int32BindVariable(0),
 		},
@@ -2891,10 +2891,10 @@ func TestEmptyJoinStream(t *testing.T) {
 	result, err := executorStream(ctx, executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id, u1.col from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id from `user` as u2 where 1 != 1",
+		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.Int32BindVariable(0),
 		},
@@ -2932,13 +2932,13 @@ func TestEmptyJoinRecursive(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id, u2.col from `user` as u2 where 1 != 1",
+		Sql:           "select u2.id, u2.col from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u3.id from `user` as u3 where 1 != 1",
+		Sql: "select u3.id from `user` as u3 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u2_col": sqltypes.NullBindVariable,
 		},
@@ -2974,13 +2974,13 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	result, err := executorStream(ctx, executor, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u1.id from `user` as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u2.id, u2.col from `user` as u2 where 1 != 1",
+		Sql:           "select u2.id, u2.col from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u3.id from `user` as u3 where 1 != 1",
+		Sql: "select u3.id from `user` as u3 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u2_col": sqltypes.NullBindVariable,
 		},
@@ -3016,13 +3016,13 @@ func TestCrossShardDerivedTable(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
+		Sql:           "select t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from (select u2.id from `user` as u2 where u2.id = :u1_col) as t",
+		Sql:           "select 1 from (select u2.id from `user` as u2 where u2.id = :u1_col) as t",
 		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
@@ -3117,7 +3117,7 @@ func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {
 	require.Len(t, sbc2.Queries, 1)
 
 	require.Equal(t, []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ nv_lu_col, other from t2_lookup where nv_lu_col = 1 and other = 'bar' or nv_lu_col = 2 and other = 'baz' or nv_lu_col = 3 and other = 'qux' or nv_lu_col = 4 and other = 'brz' or nv_lu_col = 5 and other = 'brz'",
+		Sql:           "select nv_lu_col, other from t2_lookup where nv_lu_col = 1 and other = 'bar' or nv_lu_col = 2 and other = 'baz' or nv_lu_col = 3 and other = 'qux' or nv_lu_col = 4 and other = 'brz' or nv_lu_col = 5 and other = 'brz'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}, sbc2.Queries)
 
@@ -3151,12 +3151,12 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	result, err := executorStream(ctx, executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
+		Sql:           "select t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where u1.id = 1) as t",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from (select u2.id from `user` as u2 where u2.id = :u1_col) as t",
+		Sql:           "select 1 from (select u2.id from `user` as u2 where u2.id = :u1_col) as t",
 		BindVariables: map[string]*querypb.BindVariable{"u1_col": sqltypes.Int32BindVariable(3)},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
@@ -3192,10 +3192,10 @@ func TestCrossShardDerivedTableGetFields(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where 1 != 1) as t where 1 != 1",
+		Sql:           "select t.id1, t.`u1.col` from (select u1.id as id1, u1.col as `u1.col` from `user` as u1 where 1 != 1) as t where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from (select u2.id from `user` as u2 where 1 != 1) as t where 1 != 1",
+		Sql: "select 1 from (select u2.id from `user` as u2 where 1 != 1) as t where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.NullBindVariable,
 		},
@@ -3224,7 +3224,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, paramsCount)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where 1 != 1",
+		Sql:           "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{"v1": sqltypes.NullBindVariable},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -3527,14 +3527,14 @@ func TestSelectWithUnionAll(t *testing.T) {
 	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	bv2, _ := sqltypes.BuildBindVariable([]int64{3})
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::__vals union all select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::vtg1",
+		Sql: "select id from `user` where id in ::__vals union all select id from `user` where id in ::vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv1,
 			"vtg1":   bv,
 		},
 	}}
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::__vals union all select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id in ::vtg1",
+		Sql: "select id from `user` where id in ::__vals union all select id from `user` where id in ::vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv2,
 			"vtg1":   bv,
@@ -3573,11 +3573,6 @@ func TestSelectLock(t *testing.T) {
 	}}
 
 	wantQueries := []*querypb.BoundQuery{{
-		// get_lock needs a real reserved connection, which gets the session's sql_mode
-		// applied through the connection settings
-		Sql:           "set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}, {
 		Sql:           "select get_lock('lock name', 10) from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
@@ -3605,7 +3600,6 @@ func TestSelectLock(t *testing.T) {
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
 	require.NoError(t, err)
 	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
-	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 
@@ -3620,7 +3614,6 @@ func TestSelectLock(t *testing.T) {
 	require.NoError(t, err)
 	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
-	assertSeededSQLMode(t, session)
 	utils.MustMatch(t, wantSession, session.Session, "")
 }
 
@@ -3664,7 +3657,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	session.TargetString = "TestExecutor"
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"},
+	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"},
 		sbc1.StringQueries())
 
 	// `USE TestXBadSharding` and then query info_schema about TestExecutor - should target TestExecutor and not use the default keyspace
@@ -3672,7 +3665,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	session.TargetString = "TestXBadSharding"
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'TestExecutor'")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"},
+	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"},
 		sbc1.StringQueries())
 }
 
@@ -3837,7 +3830,7 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ u.id from `user` as u straight_join user2 as u2 on u.id = u2.id",
+			Sql:           "select u.id from `user` as u straight_join user2 as u2 on u.id = u2.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -3854,7 +3847,7 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where cola = :cola /* INT64 */ and colb = :colb /* INT64 */",
+			Sql: "select * from user_region where cola = :cola /* INT64 */ and colb = :colb /* INT64 */",
 			BindVariables: map[string]*querypb.BindVariable{
 				"cola": sqltypes.Int64BindVariable(1),
 				"colb": sqltypes.Int64BindVariable(2),
@@ -3871,7 +3864,7 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where cola = :cola /* INT64 */ and colb = :colb /* INT64 */",
+			Sql: "select * from user_region where cola = :cola /* INT64 */ and colb = :colb /* INT64 */",
 			BindVariables: map[string]*querypb.BindVariable{
 				"cola": sqltypes.Int64BindVariable(17984),
 				"colb": sqltypes.Int64BindVariable(1),
@@ -3895,7 +3888,7 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 	bvtg2, _ := sqltypes.BuildBindVariable([]int64{2, 3, 4})
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where cola in ::__vals0 and colb in ::__vals1",
+			Sql: "select * from user_region where cola in ::__vals0 and colb in ::__vals1",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals0": bv1,
 				"__vals1": bvtg2,
@@ -3907,7 +3900,7 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where cola in ::__vals0 and colb in ::__vals1",
+			Sql: "select * from user_region where cola in ::__vals0 and colb in ::__vals1",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals0": bv2,
 				"__vals1": bvtg2,
@@ -3932,7 +3925,7 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 	vals0sbc2, _ := sqltypes.BuildBindVariable([]int64{17984})
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where colb = :colb /* INT64 */ and cola in ::__vals0",
+			Sql: "select * from user_region where colb = :colb /* INT64 */ and cola in ::__vals0",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals0": vals0sbc1,
 				"colb":    bvtg1,
@@ -3943,7 +3936,7 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where colb = :colb /* INT64 */ and cola in ::__vals0",
+			Sql: "select * from user_region where colb = :colb /* INT64 */ and cola in ::__vals0",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals0": vals0sbc2,
 				"colb":    bvtg1,
@@ -3964,7 +3957,7 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where colb = :colb /* INT64 */ and cola in ::vtg1 and cola = :cola /* INT64 */",
+			Sql: "select * from user_region where colb = :colb /* INT64 */ and cola in ::vtg1 and cola = :cola /* INT64 */",
 			BindVariables: map[string]*querypb.BindVariable{
 				"colb": sqltypes.Int64BindVariable(2),
 				"vtg1": bvtg2,
@@ -3985,7 +3978,7 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{10, 20})
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where colb in ::vtg1 and cola in ::vtg2 and cola = :cola /* INT64 */ and colb = :colb /* INT64 */",
+			Sql: "select * from user_region where colb in ::vtg1 and cola in ::vtg2 and cola = :cola /* INT64 */ and colb = :colb /* INT64 */",
 			BindVariables: map[string]*querypb.BindVariable{
 				"vtg1": bvtg1,
 				"vtg2": bvtg2,
@@ -4007,7 +4000,7 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from user_region where (cola, colb) in ((:vtg1 /* INT64 */, :vtg2 /* INT64 */), (:vtg1 /* INT64 */, :vtg3 /* INT64 */))",
+			Sql: "select * from user_region where (cola, colb) in ((:vtg1 /* INT64 */, :vtg2 /* INT64 */), (:vtg1 /* INT64 */, :vtg3 /* INT64 */))",
 			BindVariables: map[string]*querypb.BindVariable{
 				"vtg1": sqltypes.Int64BindVariable(17984),
 				"vtg2": sqltypes.Int64BindVariable(2),
@@ -4022,7 +4015,7 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
-	query := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from zip_detail"
+	query := "select * from zip_detail"
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -4050,7 +4043,7 @@ func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from zip_detail",
+			Sql:           "select * from zip_detail",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -4070,7 +4063,7 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user`, zip_detail where `user`.zip_detail_id = zip_detail.id",
+			Sql:           "select * from `user`, zip_detail where `user`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -4086,7 +4079,7 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
+			Sql:           "select * from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -4107,7 +4100,7 @@ func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 
 	shardedWantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user`.id from `user`, zip_detail where `user`.zip_detail_id = zip_detail.id",
+			Sql:           "select `user`.id from `user`, zip_detail where `user`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -4124,7 +4117,7 @@ func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	require.NoError(t, err)
 	unshardedWantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `simple`.id from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
+			Sql:           "select `simple`.id from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -4356,42 +4349,42 @@ func TestSelectAggregationNoData(t *testing.T) {
 		{
 			sql:         `select count(distinct col) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64")),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    []*querypb.Field{{Name: "count(distinct col)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select count(*) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*) from `user`",
+			expSandboxQ: "select count(*) from `user`",
 			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[]`,
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64")),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from (select col1, col2 from `user`) as x limit 2",
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
 			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary")),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
 			expField:    []*querypb.Field{{Name: "col2", Type: querypb.Type_INT64, Charset: 63, Flags: 32768}, {Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[]`,
 		},
@@ -4447,98 +4440,98 @@ func TestSelectAggregationData(t *testing.T) {
 		{
 			sql:         `select count(distinct col) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|weight_string(col)", "int64|varbinary"), "1|NULL", "2|NULL", "2|NULL", "3|NULL"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    []*querypb.Field{{Name: "count(distinct col)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(3)]]`,
 		},
 		{
 			sql:         `select count(*) from user`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "3"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*) from `user`",
+			expSandboxQ: "select count(*) from `user`",
 			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(24)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|3|NULL"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(1) INT64(24)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|2|NULL", "2|1|NULL", "3|4|NULL"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    []*querypb.Field{{Name: "col", Type: querypb.Type_INT64}, {Name: "count(*)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,
 		},
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64"), "100|200|1", "200|300|1"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from (select col1, col2 from `user`) as x limit 2",
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
 			expField:    []*querypb.Field{{Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary"), "100|3|1|NULL", "200|2|1|NULL"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
 			expField:    []*querypb.Field{{Name: "col2", Type: querypb.Type_INT64, Charset: 63, Flags: 32768}, {Name: "count(*)", Type: querypb.Type_INT64, Charset: 63, Flags: 32769}},
 			expRow:      `[[INT64(2) INT64(4)] [INT64(3) INT64(5)]]`,
 		},
 		{
 			sql:         `select count(col1) from (select id, col1 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1", "int64|varchar"), "1|a", "2|b"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.id, x.col1 from (select id, col1 from `user`) as x limit 2",
+			expSandboxQ: "select x.id, x.col1 from (select id, col1 from `user`) as x limit 2",
 			expField:    []*querypb.Field{{Name: "count(col1)", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select count(col1), col2 from (select col2, col1 from user limit 9) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|col1|weight_string(col2)", "int64|varchar|varbinary"), "3|a|NULL", "2|b|NULL"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col2, x.col1, weight_string(x.col2) from (select col2, col1 from `user`) as x limit 9",
+			expSandboxQ: "select x.col2, x.col1, weight_string(x.col2) from (select col2, col1 from `user`) as x limit 9",
 			expField:    []*querypb.Field{{Name: "count(col1)", Type: querypb.Type_INT64}, {Name: "col2", Type: querypb.Type_INT64}},
 			expRow:      `[[INT64(4) INT64(2)] [INT64(5) INT64(3)]]`,
 		},
 		{
 			sql:         `select col1, count(col2) from (select col1, col2 from user limit 9) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|1|a", "b|null|b"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 9",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 9",
 			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "count(col2)", Type: querypb.Type_INT64}},
 			expRow:      `[[VARCHAR("a") INT64(5)] [VARCHAR("b") INT64(0)]]`,
 		},
 		{
 			sql:         `select col1, count(col2) from (select col1, col2 from user limit 32) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "null|1|null", "null|null|null", "a|1|a", "b|null|b"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 32",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 32",
 			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "count(col2)", Type: querypb.Type_INT64}},
 			expRow:      `[[NULL INT64(8)] [VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|3|a"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
 			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_DECIMAL}},
 			expRow:      `[[VARCHAR("a") DECIMAL(12)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|2|a"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
 			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_FLOAT64}},
 			expRow:      `[[VARCHAR("a") FLOAT64(8)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|x|a"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
 			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_FLOAT64}},
 			expRow:      `[[VARCHAR("a") FLOAT64(0)]]`,
 		},
 		{
 			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|null|a"),
-			expSandboxQ: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col1) from (select col1, col2 from `user`) as x limit 4",
 			expField:    []*querypb.Field{{Name: "col1", Type: querypb.Type_VARCHAR}, {Name: "sum(col2)", Type: querypb.Type_FLOAT64}},
 			expRow:      `[[VARCHAR("a") NULL]]`,
 		},
@@ -4660,7 +4653,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(t.Context(), nil, "TestSelectView", session, "select * from user_details_view", nil, false)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
+		Sql:           "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -4669,7 +4662,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(t.Context(), nil, "TestSelectView", session, "select * from user_details_view where id = 2", nil, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
+		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"id": sqltypes.Int64BindVariable(2),
 		},
@@ -4682,7 +4675,7 @@ func TestSelectView(t *testing.T) {
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3, 4, 5})
 	bvals, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
+		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":   bvtg1,
 			"__vals": bvals,
@@ -4747,14 +4740,14 @@ func TestWarmingReads(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ age, city from `user`"},
+		{Sql: "select age, city from `user`"},
 	}
 	utils.MustMatch(t, wantQueries, primary.GetQueries())
 	primary.ClearQueries()
 
 	waitUntilQueryCount(t, replica, 1)
 	wantQueriesReplica := []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ age, city from `user`/* warming read */"},
+		{Sql: "select age, city from `user`/* warming read */"},
 	}
 	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
 	replicaOptions := replica.GetOptions()
@@ -4766,14 +4759,14 @@ func TestWarmingReads(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ age, city from `user` /* already has a comment */"},
+		{Sql: "select age, city from `user` /* already has a comment */"},
 	}
 	utils.MustMatch(t, wantQueries, primary.GetQueries())
 	primary.ClearQueries()
 
 	waitUntilQueryCount(t, replica, 1)
 	wantQueriesReplica = []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ age, city from `user` /* already has a comment *//* warming read */"},
+		{Sql: "select age, city from `user` /* already has a comment *//* warming read */"},
 	}
 	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
 	replica.ClearQueries()
@@ -4799,7 +4792,7 @@ func TestWarmingReads(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ age, city from `user`"},
+		{Sql: "select age, city from `user`"},
 	}
 	utils.MustMatch(t, wantQueries, primary.GetQueries())
 	waitUntilQueryCount(t, replica, 0)

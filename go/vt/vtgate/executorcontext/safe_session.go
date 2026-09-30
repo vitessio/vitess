@@ -726,9 +726,17 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 // runs under the sql_mode VTGate reports to the client: through a SET_VAR query hint,
 // or through the connection settings when the backends cannot take SET_VAR hints
 // (canUseSetVar false), in which case the session needs a reserved connection.
+//
+// A session with system settings disabled is not seeded: it leaves the sql_mode to the
+// backends, as a deployment running --enable-system-settings=false does. A session that
+// disables them after it was seeded keeps its sql_mode, like any other system variable
+// it carries.
 func (session *SafeSession) SeedSQLMode(defaultSQLMode string, canUseSetVar bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if !session.EnableSystemSettings {
+		return
+	}
 	if session.SystemVariables == nil {
 		session.SystemVariables = make(map[string]string)
 	}

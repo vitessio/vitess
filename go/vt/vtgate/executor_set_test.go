@@ -284,7 +284,6 @@ func TestExecutorSet(t *testing.T) {
 			_, err := executorExecSession(ctx, executorEnv, session, tcase.in, nil)
 			if tcase.err == "" {
 				require.NoError(t, err)
-				assertSeededSQLMode(t, session)
 				utils.MustMatch(t, tcase.out, session.Session, "new executor")
 			} else {
 				require.EqualError(t, err, tcase.err)
@@ -444,10 +443,13 @@ func TestExecutorSetOp(t *testing.T) {
 			_, err := executorExecSession(ctx, executor, session, tcase.in, nil)
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.warning, session.Warnings, "")
-			// every session is seeded with the default sql_mode; an explicit expectation
-			// for sql_mode in the test case wins
-			wantSysVars := map[string]string{sysvars.SQLMode.Name: sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode)}
-			maps.Copy(wantSysVars, tcase.sysVars)
+			// a session with system settings enabled is seeded with the default sql_mode;
+			// an explicit expectation for sql_mode in the test case wins
+			wantSysVars := tcase.sysVars
+			if session.EnableSystemSettings {
+				wantSysVars = map[string]string{sysvars.SQLMode.Name: sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode)}
+				maps.Copy(wantSysVars, tcase.sysVars)
+			}
 			utils.MustMatch(t, wantSysVars, session.SystemVariables, "")
 		})
 	}
@@ -590,7 +592,6 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 			if err != nil {
 				require.EqualError(t, err, tcase.err)
 			} else {
-				assertSeededSQLMode(t, session)
 				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
 			}
 		})
@@ -1097,4 +1098,28 @@ func TestExecutorTimeZone(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
+}
+
+// A session that has system settings disabled when it would be seeded leaves the
+// sql_mode to the backends, as a deployment running --enable-system-settings=false
+// does: it is not seeded, its queries carry no sql_mode, and @@sql_mode is read from a
+// backend. (A session that disables them later keeps the sql_mode it has, like any
+// other system variable; the reservedconn end-to-end test TestEnableSystemSettings
+// pins that.)
+func TestSQLModeLeftToBackendsWithoutSystemSettings(t *testing.T) {
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
+	require.NoError(t, err)
+	assert.NotContains(t, session.SystemVariables, sysvars.SQLMode.Name)
+	assert.False(t, session.InReservedConn())
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select id from main1", lookup.Queries[0].Sql)
+
+	lookup.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "select @@sql_mode", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1, "@@sql_mode is read from a backend")
+	assert.Contains(t, lookup.Queries[0].Sql, "@@sql_mode")
 }

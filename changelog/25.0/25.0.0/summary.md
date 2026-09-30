@@ -445,7 +445,7 @@ VTGate now keeps each session's `sql_mode`, the way a MySQL server does. Previou
 
 The modes that change how SQL text is read are still rejected (see [the validation section](#vtgate-sql-mode-rejection)).
 
-**Impact**: Queries now run under the `sql_mode` VTGate reports to the client. Deployments whose backends run a global `sql_mode` other than MySQL's default should set `--sql-mode` to that value. Deployments that run with `--enable-system-settings=false` are not affected: there, VTGate leaves the `sql_mode` to the backends, as before. Clients that read `@@sql_mode` back see MySQL's form of the value instead of their own spelling. A mode that has `NO_ZERO_DATE`, `NO_ZERO_IN_DATE` or `ERROR_FOR_DIVISION_BY_ZERO` without a strict mode makes MySQL add warning 3135 to every query that carries it in a `SET_VAR` hint; with such a `--sql-mode`, this applies to every session.
+**Impact**: Queries now run under the `sql_mode` VTGate reports to the client. Deployments whose backends run a global `sql_mode` other than MySQL's default should set `--sql-mode` to that value. Deployments that run with `--enable-system-settings=false` are not affected: there, VTGate leaves the `sql_mode` to the backends, as before. The same holds for a session that has system settings disabled when it starts, such as a gRPC client that does not enable them. Clients that read `@@sql_mode` back see MySQL's form of the value instead of their own spelling. A mode that has `NO_ZERO_DATE`, `NO_ZERO_IN_DATE` or `ERROR_FOR_DIVISION_BY_ZERO` without a strict mode makes MySQL add warning 3135 to every query that carries it in a `SET_VAR` hint; with such a `--sql-mode`, this applies to every session.
 
 #### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
 
