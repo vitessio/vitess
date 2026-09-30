@@ -254,7 +254,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.Debug(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
+	log.Debug(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
