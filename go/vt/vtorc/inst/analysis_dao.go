@@ -126,6 +126,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		vitess_shard.primary_alias AS shard_primary_alias,
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
+		vitess_shard.group_replication_voters AS shard_group_replication_voters,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
@@ -304,7 +305,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		MIN(primary_instance.gr_member_role) AS gr_member_role,
 		MIN(primary_instance.gr_primary_uuid) AS gr_primary_uuid,
 		MIN(primary_instance.gr_has_quorum) AS gr_has_quorum,
-		MIN(primary_instance.gr_online_members) AS gr_online_members
+		MIN(primary_instance.gr_online_members) AS gr_online_members,
+		MIN(primary_instance.gr_active_member_uuids) AS gr_active_member_uuids
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -371,6 +373,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 
 	clusters := make(map[string]*clusterAnalysis)
 	grRows := make(map[string][]*groupReplicationRow)
+	grVoters := make(map[string][]*topodatapb.TabletAlias)
 	var rows []*analysisRow
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := &DetectionAnalysis{
@@ -388,14 +391,23 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		// the tablets that are not analyzed below: a tablet taking a backup can still be a member.
 		grKeyspaceShard := getKeyspaceShardName(m.GetString("keyspace"), m.GetString("shard"))
 		grRows[grKeyspaceShard] = append(grRows[grKeyspaceShard], &groupReplicationRow{
-			tablet:       tablet,
-			valid:        m.GetBool("is_last_check_valid") && !m.GetBool("is_invalid"),
-			active:       isGroupMemberActive(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state")),
-			online:       m.GetBool("gr_plugin_active") && m.GetString("gr_member_state") == mysql.GroupMemberStateOnline,
-			groupPrimary: isGroupPrimary(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state"), m.GetString("gr_member_role"), m.GetBool("gr_has_quorum")),
-			hasQuorum:    m.GetBool("gr_has_quorum"),
-			primaryUUID:  m.GetString("gr_primary_uuid"),
+			tablet:            tablet,
+			valid:             m.GetBool("is_last_check_valid") && !m.GetBool("is_invalid"),
+			serverUUID:        m.GetString("analyzed_server_uuid"),
+			active:            isGroupMemberActive(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state")),
+			online:            m.GetBool("gr_plugin_active") && m.GetString("gr_member_state") == mysql.GroupMemberStateOnline,
+			groupPrimary:      isGroupPrimary(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state"), m.GetString("gr_member_role"), m.GetBool("gr_has_quorum")),
+			hasQuorum:         m.GetBool("gr_has_quorum"),
+			primaryUUID:       m.GetString("gr_primary_uuid"),
+			activeMemberUUIDs: splitGroupMemberUUIDs(m.GetString("gr_active_member_uuids")),
 		})
+		if _, ok := grVoters[grKeyspaceShard]; !ok {
+			voters, err := parseGroupReplicationVoters(m.GetString("shard_group_replication_voters"))
+			if err != nil {
+				log.Warn(fmt.Sprintf("failed to parse the group replication voters of %s: %v", grKeyspaceShard, err))
+			}
+			grVoters[grKeyspaceShard] = voters
+		}
 
 		// We don't want to run any fixes on any non-replica type tablet.
 		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
@@ -559,9 +571,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		return nil
 	})
 
+	now := time.Now()
 	for keyspaceShard, shardRows := range grRows {
 		if ca := clusters[keyspaceShard]; ca != nil && ca.durability != nil {
-			ca.groupReplication = computeGroupReplicationShardState(ca.durability, shardRows)
+			ca.groupReplication = computeGroupReplicationShardState(ca.durability, grVoters[keyspaceShard], shardRows, now)
 		}
 	}
 	analyzeRow := func(row *analysisRow) {

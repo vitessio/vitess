@@ -228,7 +228,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return matchGroupNotBootstrapped(a, ca, tablet)
+			return matchGroupNotBootstrapped(a, ca)
 		},
 	},
 	{
@@ -259,8 +259,17 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority: detectionAnalysisPriorityHigh,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return policy.IsGroupReplication(ca.durability) && policy.IsGroupMember(ca.durability, tablet) &&
-				a.LastCheckValid && !a.IsGroupMemberActive && otherActiveGroupMembers(a) > 0
+			return matchGroupMemberNotOnline(a, ca)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVotersOutOfDate,
+			Description: "The voters of the shard's replication group differ from the voters that its durability policy selects",
+			Priority:    detectionAnalysisPriorityHigh,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVotersOutOfDate(a, ca)
 		},
 	},
 

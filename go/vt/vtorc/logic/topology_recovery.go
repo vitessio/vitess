@@ -189,6 +189,8 @@ const (
 	startGroupReplicationFunc
 	// bootstrapGroupReplicationFunc bootstraps a shard's replication group.
 	bootstrapGroupReplicationFunc
+	// updateGroupReplicationVotersFunc updates the voters of a shard's replication group.
+	updateGroupReplicationVotersFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -758,6 +760,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = startGroupReplicationFunc
 	case inst.GroupNotBootstrapped:
 		recoveryFunc = bootstrapGroupReplicationFunc
+	case inst.GroupVotersOutOfDate:
+		recoveryFunc = updateGroupReplicationVotersFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Info(fmt.Sprintf("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode))
@@ -830,7 +834,7 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case reconcileStaleTopoPrimaryFunc:
 		return true
-	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc:
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc, updateGroupReplicationVotersFunc:
 		return true
 	default:
 		return false
@@ -874,6 +878,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return startGroupReplicationOnMember
 	case bootstrapGroupReplicationFunc:
 		return bootstrapGroupReplication
+	case updateGroupReplicationVotersFunc:
+		return updateGroupReplicationVoters
 	default:
 		return nil
 	}
@@ -915,6 +921,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return StartGroupReplicationRecoveryName
 	case bootstrapGroupReplicationFunc:
 		return BootstrapGroupReplicationRecoveryName
+	case updateGroupReplicationVotersFunc:
+		return UpdateGroupReplicationVotersRecoveryName
 	default:
 		return ""
 	}
@@ -1179,6 +1187,10 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			case errors.Is(err, ErrNoPrimaryTablet) && checkAndRecoverFunctionCode == promoteGroupPrimaryFunc:
 				// The group primary's tablet is about to become the shard's only primary. The old
 				// primary's tablet may already have demoted itself.
+				logger.Info("Shard has no primary tablet")
+			case errors.Is(err, ErrNoPrimaryTablet) && checkAndRecoverFunctionCode == updateGroupReplicationVotersFunc:
+				// The voters of a group that is not bootstrapped yet are selected before the shard
+				// has a primary.
 				logger.Info("Shard has no primary tablet")
 			case err != nil:
 				logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while finding the shard primary: %v",

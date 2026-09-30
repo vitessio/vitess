@@ -19,6 +19,8 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -217,15 +219,21 @@ func TestGroupReplicationFailoverGracePeriod(t *testing.T) {
 // groupReplicationRecoveryTest sets up the VTOrc backend, a memory topology and a mock tablet
 // manager client for a group replication recovery on shard ks/0.
 func groupReplicationRecoveryTest(t *testing.T, tablets ...*topodatapb.Tablet) *tmcmock.MockTabletManagerClient {
+	return groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplication, tablets...)
+}
+
+// groupReplicationRecoveryTestWithPolicy is groupReplicationRecoveryTest with the given
+// durability policy.
+func groupReplicationRecoveryTestWithPolicy(t *testing.T, durability string, tablets ...*topodatapb.Tablet) *tmcmock.MockTabletManagerClient {
 	// The backend is shared by the tests of the package; only its tables are cleared.
 	orcDB, _, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
-	for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+	for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance"} {
 		_, err = orcDB.Exec("delete from " + table)
 		require.NoError(t, err)
 	}
 
-	keyspaceInfo := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}}
+	keyspaceInfo := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: durability}}
 	keyspaceInfo.SetKeyspaceName("ks")
 	require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
 
@@ -233,7 +241,7 @@ func groupReplicationRecoveryTest(t *testing.T, tablets ...*topodatapb.Tablet) *
 	t.Cleanup(func() { ts, tmc = oldTS, oldTMC })
 	ctx := t.Context()
 	ts = memorytopo.NewServer(ctx, "zone1", "zone2")
-	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}))
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: durability}))
 	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
 	for _, tablet := range tablets {
 		require.NoError(t, inst.SaveTablet(tablet))
@@ -256,6 +264,29 @@ func recoveryTablet(cell string, uid uint32, tabletType topodatapb.TabletType) *
 		Type:          tabletType,
 		PortMap:       map[string]int32{"grpc": int32(15000 + uid)},
 	}
+}
+
+// setVoters records the voters of shard ks/0.
+func setVoters(t *testing.T, tablets ...*topodatapb.Tablet) {
+	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationVoters = nil
+		for _, tablet := range tablets {
+			si.GroupReplicationVoters = append(si.GroupReplicationVoters, tablet.Alias)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+// readVoters returns the voters recorded for shard ks/0.
+func readVoters(t *testing.T) []string {
+	si, err := ts.GetShard(t.Context(), "ks", "0")
+	require.NoError(t, err)
+	var voters []string
+	for _, alias := range si.GroupReplicationVoters {
+		voters = append(voters, topoproto.TabletAliasString(alias))
+	}
+	return voters
 }
 
 // sameTablet matches a tablet argument by alias.
@@ -419,7 +450,7 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
-			name: "a voting member is unreachable: nothing is bootstrapped",
+			name: "a voter is unreachable: nothing is bootstrapped",
 			statuses: [4]*replicationdatapb.FullStatus{
 				offline(groupName+":1-10", ""),
 				nil,
@@ -439,6 +470,8 @@ func TestBootstrapGroupReplication(t *testing.T) {
 				recoveryTablet("zone2", 103, topodatapb.TabletType_RDONLY),
 			}
 			mockTMC := groupReplicationRecoveryTest(t, tablets...)
+			// The RDONLY tablet is not a voter.
+			setVoters(t, tablets[:3]...)
 			for i, tablet := range tablets {
 				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(tt.statuses[i], tt.errs[i])
 			}
@@ -471,6 +504,293 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, topologyRecovery.IsSuccessful)
 			assert.Equal(t, tt.want, topologyRecovery.SuccessorAlias.Uid)
+		})
+	}
+}
+
+// TestBootstrapGroupReplicationVoters verifies that only the voters recorded in the shard record
+// take part in the bootstrap: the most advanced voter bootstraps the group even when a tablet
+// that is not a voter has more transactions, and nothing is bootstrapped before voters exist.
+func TestBootstrapGroupReplicationVoters(t *testing.T) {
+	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
+	offline := func(position string) *replicationdatapb.FullStatus {
+		return &replicationdatapb.FullStatus{
+			PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + position},
+			GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+				PluginActive: true,
+				MemberState:  mysql.GroupMemberStateOffline,
+			},
+		}
+	}
+	tests := []struct {
+		name string
+		// voters are the uids of the voters.
+		voters []uint32
+		// want is the uid of the tablet that bootstraps the group, 0 for none.
+		want uint32
+	}{
+		{
+			name:   "the most advanced voter bootstraps, not the most advanced replica",
+			voters: []uint32{100, 200},
+			want:   200,
+		},
+		{
+			name: "no voter is selected yet: nothing is bootstrapped",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tablets := []*topodatapb.Tablet{
+				recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA),
+				// An asynchronous replica of the previous group, with the most transactions.
+				recoveryTablet("zone1", 101, topodatapb.TabletType_REPLICA),
+				recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA),
+			}
+			statuses := []*replicationdatapb.FullStatus{
+				offline(groupName + ":1-10"),
+				offline(groupName + ":1-30"),
+				offline(groupName + ":1-20"),
+			}
+			mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, tablets...)
+			var voters []*topodatapb.Tablet
+			for _, tablet := range tablets {
+				if slices.Contains(tt.voters, tablet.Alias.Uid) {
+					voters = append(voters, tablet)
+				}
+			}
+			setVoters(t, voters...)
+			for i, tablet := range tablets {
+				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(statuses[i], nil).MaxTimes(1)
+				times := 0
+				if tablet.Alias.Uid == tt.want {
+					times = 1
+				}
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).Return(&replicationdatapb.GroupReplicationStatus{}, nil).Times(times)
+			}
+
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              inst.GroupNotBootstrapped,
+				AnalyzedInstanceAlias: tablets[0].Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}
+			attempted, topologyRecovery, err := bootstrapGroupReplication(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			require.True(t, attempted)
+			require.NotNil(t, topologyRecovery)
+			if tt.want == 0 {
+				require.Error(t, err)
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, topologyRecovery.SuccessorAlias.Uid)
+		})
+	}
+}
+
+func TestGetCheckAndRecoverFunctionCodeGroupVotersOutOfDate(t *testing.T) {
+	gotFunc, gotSkipCode := getCheckAndRecoverFunctionCode(&inst.DetectionAnalysis{Analysis: inst.GroupVotersOutOfDate})
+	assert.Equal(t, updateGroupReplicationVotersFunc, gotFunc)
+	assert.Equal(t, RecoverySkipNone, gotSkipCode)
+	assert.True(t, hasActionableRecovery(gotFunc))
+	assert.False(t, isShardWideRecovery(gotFunc))
+	assert.Equal(t, UpdateGroupReplicationVotersRecoveryName, getRecoverFunctionName(gotFunc))
+}
+
+// voterTestUUID is the server_uuid of a tablet's MySQL in the voter tests.
+func voterTestUUID(tablet *topodatapb.Tablet) string {
+	return fmt.Sprintf("00000000-0000-0000-0000-%012d", tablet.Alias.Uid)
+}
+
+// groupMemberStatus returns the FullStatus of a tablet whose MySQL is an active member of a group
+// with quorum, whose primary is groupPrimary and whose ONLINE members are the given tablets.
+func groupMemberStatus(tablet, groupPrimary *topodatapb.Tablet, online ...*topodatapb.Tablet) *replicationdatapb.FullStatus {
+	role := mysql.GroupMemberRoleSecondary
+	if topoproto.TabletAliasEqual(tablet.Alias, groupPrimary.Alias) {
+		role = mysql.GroupMemberRolePrimary
+	}
+	var members []*replicationdatapb.GroupReplicationMember
+	for _, m := range online {
+		memberRole := mysql.GroupMemberRoleSecondary
+		if topoproto.TabletAliasEqual(m.Alias, groupPrimary.Alias) {
+			memberRole = mysql.GroupMemberRolePrimary
+		}
+		members = append(members, &replicationdatapb.GroupReplicationMember{MemberUuid: voterTestUUID(m), State: mysql.GroupMemberStateOnline, Role: memberRole})
+	}
+	return &replicationdatapb.FullStatus{
+		ServerUuid:               voterTestUUID(tablet),
+		ReplicationConfiguration: &replicationdatapb.Configuration{ReplicaNetTimeout: 8},
+		GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+			PluginActive: true,
+			MemberState:  mysql.GroupMemberStateOnline,
+			MemberRole:   role,
+			PrimaryUuid:  voterTestUUID(groupPrimary),
+			HasQuorum:    true,
+			Members:      members,
+		},
+	}
+}
+
+// notMemberStatus returns the FullStatus of a tablet whose MySQL is not a group member.
+func notMemberStatus(tablet *topodatapb.Tablet) *replicationdatapb.FullStatus {
+	return &replicationdatapb.FullStatus{
+		ServerUuid: voterTestUUID(tablet),
+		GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+			PluginActive: true,
+			MemberState:  mysql.GroupMemberStateOffline,
+		},
+	}
+}
+
+func TestUpdateGroupReplicationVoters(t *testing.T) {
+	prevGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(prevGrace)
+		inst.UnreachableGroupTablets.Reset()
+	})
+	errUnreachable := errors.New("unreachable")
+
+	// The group_replication_cross_cell policy allows one voter per cell.
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	replica := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	crossCellVoter := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	crossCellReplica := recoveryTablet("zone2", 201, topodatapb.TabletType_REPLICA)
+
+	type expectations struct {
+		mockTMC *tmcmock.MockTabletManagerClient
+	}
+	tests := []struct {
+		name        string
+		tablets     []*topodatapb.Tablet
+		voters      []*topodatapb.Tablet
+		gracePeriod time.Duration
+		// setup sets the FullStatus results and the expected membership changes.
+		setup       func(t *testing.T, e expectations)
+		wantVoters  []string
+		wantErrCode vtrpcpb.Code
+	}{
+		{
+			name:        "a voter failed for longer than the grace period: a tablet of its cell replaces it and joins",
+			tablets:     []*topodatapb.Tablet{primary, crossCellVoter, crossCellReplica},
+			voters:      []*topodatapb.Tablet{primary, crossCellVoter},
+			gracePeriod: 0,
+			setup: func(t *testing.T, e expectations) {
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil)
+				e.mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(crossCellReplica), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+			},
+			wantVoters: []string{"zone1-0000000101", "zone2-0000000201"},
+		},
+		{
+			name:        "a voter unreachable within the grace period keeps its seat",
+			tablets:     []*topodatapb.Tablet{primary, crossCellVoter, crossCellReplica},
+			voters:      []*topodatapb.Tablet{primary, crossCellVoter},
+			gracePeriod: time.Hour,
+			setup: func(t *testing.T, e expectations) {
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil)
+			},
+			wantVoters: []string{"zone1-0000000101", "zone2-0000000200"},
+		},
+		{
+			name:        "an unreachable voter whose MySQL is still an active member keeps its seat",
+			tablets:     []*topodatapb.Tablet{primary, crossCellVoter, crossCellReplica},
+			voters:      []*topodatapb.Tablet{primary, crossCellVoter},
+			gracePeriod: 0,
+			setup: func(t *testing.T, e expectations) {
+				// VTOrc last saw the server_uuid of the voter's MySQL, which the primary still
+				// sees ONLINE.
+				require.NoError(t, inst.WriteInstance(&inst.Instance{
+					InstanceAlias: crossCellVoter.Alias,
+					Hostname:      crossCellVoter.MysqlHostname,
+					Port:          int(crossCellVoter.MysqlPort),
+					ServerUUID:    voterTestUUID(crossCellVoter),
+				}, true, nil))
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary, crossCellVoter), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil)
+			},
+			wantVoters: []string{"zone1-0000000101", "zone2-0000000200"},
+		},
+		{
+			name:    "an active member that is not a voter leaves the group and replicates from the group primary",
+			tablets: []*topodatapb.Tablet{primary, replica, crossCellVoter},
+			voters:  []*topodatapb.Tablet{primary, crossCellVoter},
+			setup: func(t *testing.T, e expectations) {
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary, replica, crossCellVoter), nil).Times(2)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(replica)).Return(groupMemberStatus(replica, primary, primary, replica, crossCellVoter), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(groupMemberStatus(crossCellVoter, primary, primary, replica, crossCellVoter), nil)
+				gomock.InOrder(
+					e.mockTMC.EXPECT().StopGroupReplication(gomock.Any(), sameTablet(replica)).Return(&replicationdatapb.GroupReplicationStatus{}, nil),
+					e.mockTMC.EXPECT().SetReplicationSource(gomock.Any(), sameTablet(replica), primary.Alias, int64(0), "", true, false, 4.0).Return(nil),
+				)
+			},
+			wantVoters: []string{"zone1-0000000101", "zone2-0000000200"},
+		},
+		{
+			name:    "the group primary keeps its seat; the voter of its cell leaves the group",
+			tablets: []*topodatapb.Tablet{primary, replica, crossCellVoter},
+			voters:  []*topodatapb.Tablet{primary, crossCellVoter},
+			setup: func(t *testing.T, e expectations) {
+				// The group elected the replica, which is not a voter.
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(replica)).Return(groupMemberStatus(replica, replica, primary, replica, crossCellVoter), nil).Times(2)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, replica, primary, replica, crossCellVoter), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(groupMemberStatus(crossCellVoter, replica, primary, replica, crossCellVoter), nil)
+				e.mockTMC.EXPECT().StopGroupReplication(gomock.Any(), sameTablet(replica)).Times(0)
+				e.mockTMC.EXPECT().StopGroupReplication(gomock.Any(), sameTablet(primary)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+				e.mockTMC.EXPECT().SetReplicationSource(gomock.Any(), sameTablet(primary), replica.Alias, int64(0), "", true, false, 4.0).Return(nil)
+			},
+			wantVoters: []string{"zone1-0000000100", "zone2-0000000200"},
+		},
+		{
+			name:    "a member that is not a voter stays while the group would lose its majority without it",
+			tablets: []*topodatapb.Tablet{primary, replica},
+			voters:  []*topodatapb.Tablet{primary},
+			setup: func(t *testing.T, e expectations) {
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary, replica), nil).Times(2)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(replica)).Return(groupMemberStatus(replica, primary, primary, replica), nil)
+				e.mockTMC.EXPECT().StopGroupReplication(gomock.Any(), gomock.Any()).Times(0)
+			},
+			wantVoters:  []string{"zone1-0000000101"},
+			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			name:    "no voter is selected and no group exists: the voters are selected",
+			tablets: []*topodatapb.Tablet{replica, primary, crossCellVoter},
+			setup: func(t *testing.T, e expectations) {
+				for _, tablet := range []*topodatapb.Tablet{replica, primary, crossCellVoter} {
+					e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(notMemberStatus(tablet), nil)
+				}
+			},
+			wantVoters: []string{"zone1-0000000100", "zone2-0000000200"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inst.UnreachableGroupTablets.Reset()
+			config.SetGroupReplicationVoterReplacementGracePeriod(tt.gracePeriod)
+			mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, tt.tablets...)
+			setVoters(t, tt.voters...)
+			tt.setup(t, expectations{mockTMC: mockTMC})
+
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              inst.GroupVotersOutOfDate,
+				AnalyzedInstanceAlias: tt.tablets[0].Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}
+			attempted, topologyRecovery, err := updateGroupReplicationVoters(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			require.True(t, attempted)
+			require.NotNil(t, topologyRecovery)
+			if tt.wantErrCode != vtrpcpb.Code_OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantErrCode, vterrors.Code(err))
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantVoters, readVoters(t))
 		})
 	}
 }

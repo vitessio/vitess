@@ -276,6 +276,15 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	groupReplicationVoterReplacementGracePeriod = viperutil.Configure(
+		"group-replication-voter-replacement-grace-period",
+		viperutil.Options[time.Duration]{
+			FlagName: "group-replication-voter-replacement-grace-period",
+			Default:  time.Minute,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -310,6 +319,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Float64("shard-tablet-health-quorum-fraction", shardQuorumFraction.Default(), "Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous). Values below 1.0 make detection more tolerant of partial agreement, but give up the guarantee that a single fresh 'up' report vetoes the failover")
 	fs.Int("shard-tablet-health-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check")
 	fs.Duration("group-replication-failover-grace-period", groupReplicationFailoverGracePeriod.Default(), "How long VTOrc waits for a shard's MySQL replication group to elect a new primary on its own, when the primary fails and other tablets are active group members, before it runs an emergency reparent")
+	fs.Duration("group-replication-voter-replacement-grace-period", groupReplicationVoterReplacementGracePeriod.Default(), "How long a voting member of a shard's MySQL replication group must be unreachable, and no longer be an active member of the group, before VTOrc gives its seat to another tablet")
 
 	viperutil.BindFlags(
 		fs,
@@ -339,6 +349,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		shardQuorumFraction,
 		shardQuorumMinObservers,
 		groupReplicationFailoverGracePeriod,
+		groupReplicationVoterReplacementGracePeriod,
 	)
 }
 
@@ -523,6 +534,17 @@ func GetGroupReplicationFailoverGracePeriod() time.Duration {
 // SetGroupReplicationFailoverGracePeriod sets the value for the groupReplicationFailoverGracePeriod variable. This should only be used from tests.
 func SetGroupReplicationFailoverGracePeriod(v time.Duration) {
 	groupReplicationFailoverGracePeriod.Set(v)
+}
+
+// GetGroupReplicationVoterReplacementGracePeriod returns how long a voting member of a replication
+// group must have failed before VTOrc gives its seat to another tablet.
+func GetGroupReplicationVoterReplacementGracePeriod() time.Duration {
+	return groupReplicationVoterReplacementGracePeriod.Get()
+}
+
+// SetGroupReplicationVoterReplacementGracePeriod sets the value for the groupReplicationVoterReplacementGracePeriod variable. This should only be used from tests.
+func SetGroupReplicationVoterReplacementGracePeriod(v time.Duration) {
+	groupReplicationVoterReplacementGracePeriod.Set(v)
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.
