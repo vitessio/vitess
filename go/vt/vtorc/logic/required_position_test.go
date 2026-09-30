@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -111,14 +112,18 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 		tabletType topodatapb.TabletType
 		storedSet  string
 		position   string
+
+		// warn is true when the flag is on and VTOrc has no stored set to require.
+		// The flag help promises a warning in the audit for that case.
+		warn bool
 	}{
 		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
 		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid},
 		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
-		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid},
-		{name: "no stored set", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: ""},
-		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100"},
-		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567"},
+		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, warn: true},
+		{name: "no stored set", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "", warn: true},
+		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", warn: true},
+		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", warn: true},
 	}
 
 	for _, tt := range tests {
@@ -126,10 +131,25 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 			config.SetEmergencyReparentRequirePrimaryPosition(tt.flag)
 			t.Cleanup(func() { config.SetEmergencyReparentRequirePrimaryPosition(false) })
 			tablet := saveRequiredPositionFixture(t, tt.durability, tt.tabletType, tt.storedSet)
+			logger := logutil.NewMemoryLogger()
 
-			position, err := requiredPositionForRecovery(tablet, logutil.NewMemoryLogger())
+			position, err := requiredPositionForRecovery(tablet, logger)
 			require.NoError(t, err)
 			assert.Equal(t, tt.position, replication.EncodePosition(position))
+
+			var warnings []string
+			for _, event := range logger.Events {
+				if event.Level == logutilpb.Level_WARNING {
+					warnings = append(warnings, event.Value)
+				}
+			}
+			if !tt.warn {
+				assert.Empty(t, warnings)
+				return
+			}
+			require.Len(t, warnings, 1)
+			assert.Contains(t, warnings[0], "required position: none")
+			assert.Contains(t, warnings[0], "ERS runs without the requirement")
 		})
 	}
 }
