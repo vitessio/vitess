@@ -104,7 +104,7 @@ func registerGroupReplicationFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &groupReplicationConsistency, "group-replication-consistency", groupReplicationConsistency,
 		"group_replication_consistency that the tablet applies before its MySQL starts Group Replication. Empty keeps the server's setting.")
 	utils.SetFlagStringVar(fs, &groupReplicationExitStateAction, "group-replication-exit-state-action", groupReplicationExitStateAction,
-		"group_replication_exit_state_action that the tablet applies before its MySQL starts Group Replication. Empty keeps the server's setting.")
+		"group_replication_exit_state_action that the tablet applies before its MySQL starts Group Replication. READ_ONLY keeps a member that left its group readable; OFFLINE_MODE also refuses the tablet's app connections, which fences reads on it, and the tablet clears offline_mode once the member is back in the shard's group. Empty keeps the server's setting.")
 	utils.SetFlagIntVar(fs, &groupReplicationAutorejoinTries, "group-replication-autorejoin-tries", groupReplicationAutorejoinTries,
 		"group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. The default 0 leaves rejoins to the tablet, which only rejoins while the shard's group is active on another tablet. A negative value keeps the server's setting.")
 }
