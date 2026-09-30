@@ -417,7 +417,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero() && !groupNeedsBootstrap(a, ca)
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero() && !groupNeedsBootstrap(a, ca) &&
+				!matchGroupMemberNotOnline(a, ca)
 		},
 	},
 	{
@@ -427,7 +428,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero() && !groupNeedsBootstrap(a, ca)
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero() && !groupNeedsBootstrap(a, ca) &&
+				!matchGroupMemberNotOnline(a, ca)
 		},
 	},
 

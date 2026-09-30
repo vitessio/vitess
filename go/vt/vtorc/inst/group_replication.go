@@ -538,7 +538,12 @@ func matchGroupNotBootstrapped(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 
 // matchGroupMemberNotOnline returns whether the analyzed tablet is a voter of its shard's group
 // but its MySQL is not an active member, while other tablets are active members of the shard's
-// legitimate group with quorum in their view. Starting a join while no such group exists cannot
+// legitimate group with quorum in their view.
+//
+// Such a voter is not analyzed for the shard-wide failovers of a shard without a primary tablet
+// (ClusterHasNoPrimary, PrimaryTabletDeleted), which outrank it: a group that lost the majority of
+// its voters has no primary that a reparent could follow, and it only gets one back once the
+// missing voters rejoin it. The failovers are still analyzed on the members of the group. Starting a join while no such group exists cannot
 // join anything: the join blocks until MySQL's join timeout, during which a bootstrap on the
 // member fails, and a member has been seen to form a group of its own. Tablets that are not
 // voters replicate asynchronously and keep the asynchronous replication analyses.

@@ -621,6 +621,31 @@ func TestGetDetectionAnalysisGroupReplicationLegitimateGroup(t *testing.T) {
 			"zone2-0000000200": GroupPrimaryNotInTopo,
 			"zone1-0000000101": GroupMemberNotOnline,
 		},
+	}, {
+		// S7d after the fixes: VTOrc bootstrapped the group again on zone2, whose view holds one
+		// of the three voters, and no tablet is PRIMARY. A reparent cannot follow a primary that
+		// lacks the majority of the voters; the missing voters must rejoin first, and the shard-wide
+		// failover analyses must not starve their GroupMemberNotOnline.
+		name: "no primary tablet and a group without the majority of its voters: the voters rejoin",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			formerPrimary := grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr)
+			formerPrimary.GroupPluginActive = 1
+			formerPrimary.GroupMemberState = mysql.GroupMemberStateOffline
+			offline := member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil)
+			alone := sees(member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, crossCellReplica), crossCellReplica)
+			alone.GroupViewID = recorded + ":1"
+			alone.ReadOnly = 0
+			rows := []*test.InfoForRecoveryAnalysis{formerPrimary, offline, alone}
+			for _, row := range rows {
+				row.ShardPrimaryTermTimestamp = "2026-09-30 18:10:00.000000 +0000 UTC"
+			}
+			return rows
+		},
+		want: map[string]AnalysisCode{
+			"zone1-0000000100": GroupMemberNotOnline,
+			"zone1-0000000101": GroupMemberNotOnline,
+			"zone2-0000000200": PrimaryTabletDeleted,
+		},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
