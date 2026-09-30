@@ -65,6 +65,8 @@ const (
 	MigrationActionWaitWritable           = "wait_writable"
 	MigrationActionSetDurabilityPolicy    = "set_durability_policy"
 	MigrationActionKeepDurabilityPolicy   = "keep_durability_policy"
+	MigrationActionSetVoters              = "set_voters"
+	MigrationActionClearVoters            = "clear_voters"
 	minimumGroupReplicationMembers        = 3
 	groupReplicationPortName              = "gr"
 	defaultReplicationModeMigrationWait   = 5 * time.Minute
@@ -136,6 +138,11 @@ type migrationShard struct {
 	tablets  []*topodatapb.Tablet
 	statuses map[string]*fullStatusResult
 	result   *vtctldatapb.ReplicationModeMigrationShardResult
+	// recordedVoters are the voters stored in the shard record when the shard was read.
+	recordedVoters []*topodatapb.TabletAlias
+	// voters are the voting members of the group: the recorded voters, or, when converting
+	// to Group Replication, the voters the preflight selected.
+	voters []*topodatapb.TabletAlias
 }
 
 // Migrate converts the requested shards of the keyspace to the replication mode of the
@@ -327,7 +334,7 @@ func (r *migrationRun) readShard(ctx context.Context, shard string) (*migrationS
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get tablet map for %s/%s", r.keyspace, shard)
 	}
-	s := &migrationShard{run: r, shard: shard}
+	s := &migrationShard{run: r, shard: shard, recordedVoters: si.GroupReplicationVoters, voters: si.GroupReplicationVoters}
 	for _, alias := range slices.Sorted(maps.Keys(tabletMap)) {
 		tablet := tabletMap[alias].Tablet
 		switch tablet.Type {
@@ -351,14 +358,14 @@ func (r *migrationRun) readShard(ctx context.Context, shard string) (*migrationS
 	return s, nil
 }
 
-// shardRunsGroupReplication returns whether the shard's primary is the primary of its group
-// and every tablet the target policy makes a voting member is ONLINE in it.
+// shardRunsGroupReplication returns whether the shard's voters were selected, its primary
+// is the primary of its group and every voter is ONLINE in it.
 func (r *migrationRun) shardRunsGroupReplication(ctx context.Context, shard string) (bool, error) {
 	s, err := r.readShard(ctx, shard)
 	if err != nil {
 		return false, err
 	}
-	if !s.status(s.primary).isGroupPrimary() {
+	if len(s.voters) == 0 || !s.status(s.primary).isGroupPrimary() {
 		return false, nil
 	}
 	for _, tablet := range s.voting() {
@@ -377,25 +384,34 @@ func (s *migrationShard) isPrimary(tablet *topodatapb.Tablet) bool {
 	return topoproto.TabletAliasEqual(tablet.Alias, s.primary.Alias)
 }
 
-// voting returns the tablets that the target policy makes voting members of the group,
-// including the primary.
+// voting returns the tablets that are voters of the group, including the primary.
 func (s *migrationShard) voting() []*topodatapb.Tablet {
 	var voting []*topodatapb.Tablet
 	for _, tablet := range s.tablets {
-		if policy.IsGroupMember(s.groupPolicy(), tablet) {
+		if policy.IsVoter(s.voters, tablet.Alias) {
 			voting = append(voting, tablet)
 		}
 	}
 	return voting
 }
 
-// groupPolicy returns the group replication policy of the migration: the target when
-// converting to Group Replication, the current policy when converting back.
-func (s *migrationShard) groupPolicy() policy.Durabler {
-	if policy.IsGroupReplication(s.run.target) {
-		return s.run.target
+// selectVoters selects the voters of the group for the target policy. Recorded voters are
+// kept where possible, so that a re-run continues with the same group, and the primary is
+// always a voter.
+func (s *migrationShard) selectVoters(grd policy.GroupReplicationDurabler) []*topodatapb.TabletAlias {
+	return policy.SelectVoters(grd, s.recordedVoters, s.primary.Alias, voterCandidates(s.tablets, s.statuses))
+}
+
+// votingCells returns the sorted cells of the voters.
+func votingCells(voting []*topodatapb.Tablet) []string {
+	var cells []string
+	for _, tablet := range voting {
+		if !slices.Contains(cells, tablet.Alias.Cell) {
+			cells = append(cells, tablet.Alias.Cell)
+		}
 	}
-	return s.run.current
+	slices.Sort(cells)
+	return cells
 }
 
 func (s *migrationShard) logf(format string, args ...any) {
@@ -491,13 +507,31 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 		}
 	}
 
+	grd, ok := policy.AsGroupReplication(s.run.target)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy %s does not use group replication", s.run.opts.DurabilityPolicy)
+	}
+	s.voters = s.selectVoters(grd)
 	voting := s.voting()
-	if !slices.ContainsFunc(voting, s.isPrimary) {
+	if !policy.IsGroupMember(grd, s.primary) {
 		problems = append(problems, fmt.Sprintf("the primary %v would not be a voting member of the group", topoproto.TabletAliasString(s.primary.Alias)))
 	}
-	if len(voting) < minimumGroupReplicationMembers || len(voting) > policy.MaxGroupReplicationMembers {
-		problems = append(problems, fmt.Sprintf("the group would have %d voting members; between %d and %d are required",
-			len(voting), minimumGroupReplicationMembers, policy.MaxGroupReplicationMembers))
+	if len(voting) < minimumGroupReplicationMembers {
+		problem := fmt.Sprintf("the group would have %d voting members (%s) in cells %s; at least %d are required",
+			len(voting), votersString(s.voters), strings.Join(votingCells(voting), ", "), minimumGroupReplicationMembers)
+		if perCell := grd.MaxVotersPerCell(); perCell > 0 {
+			allowed := fmt.Sprintf("%d voters", perCell)
+			if perCell == 1 {
+				allowed = "one voter"
+			}
+			problem += fmt.Sprintf("; %s allows %s per cell, so the shard needs eligible PRIMARY or REPLICA tablets in at least %d cells",
+				s.run.opts.DurabilityPolicy, allowed, (minimumGroupReplicationMembers+perCell-1)/perCell)
+		}
+		problems = append(problems, problem)
+	}
+	if len(voting) > policy.MaxGroupReplicationMembers {
+		problems = append(problems, fmt.Sprintf("the group would have %d voting members; at most %d are allowed",
+			len(voting), policy.MaxGroupReplicationMembers))
 	}
 	for _, tablet := range voting {
 		if tablet.PortMap[groupReplicationPortName] == 0 {
@@ -505,7 +539,7 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 				topoproto.TabletAliasString(tablet.Alias), groupReplicationPortName))
 		}
 	}
-	if grd, ok := policy.AsGroupReplication(s.run.target); ok && grd.RequiresCrossCellMajority() {
+	if grd.RequiresCrossCellMajority() {
 		if cell, holds := policy.CellHoldsMajority(voting); holds {
 			problems = append(problems, fmt.Sprintf("cell %s would hold a majority of the voting members, which %s does not allow", cell, s.run.opts.DurabilityPolicy))
 		}
@@ -579,20 +613,37 @@ func (s *migrationShard) checkSchema(ctx context.Context) ([]string, error) {
 
 // toGroupReplication converts the shard from asynchronous replication to Group Replication:
 //
-//  1. Preflight.
-//  2. Bootstrap the group on the primary. Writes continue, and semi-sync keeps working.
-//  3. Join the voting replicas one at a time, cross-cell ones first. A joining replica
+//  1. Preflight, which selects the voters: the voting members of the group, with the
+//     primary among them.
+//  2. Store the voters in the shard record. Only the listed tablets join the group, and
+//     only they rejoin it on their own.
+//  3. Bootstrap the group on the primary. Writes continue, and semi-sync keeps working.
+//  4. Join the other voters one at a time, cross-cell ones first. A joining replica
 //     leaves its asynchronous channel, so before the last semi-sync acker joins, wait
 //     until the primary has disabled semi-sync, which its tablet does once the group has
 //     two ONLINE members. An acker that would be the last one is not joined while the
 //     group has fewer than two ONLINE members.
-//  4. Point the non-voting tablets at the primary, without semi-sync.
+//  5. Point the tablets that are not voters at the primary, without semi-sync.
 func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 	if err := s.preflightToGroupReplication(ctx); err != nil {
 		return err
 	}
 	primary := s.primary
 	primaryAlias := topoproto.TabletAliasString(primary.Alias)
+
+	// The voters are stored before the group exists, so that every tablet and VTOrc agree
+	// on them from the first join.
+	if votersEqual(s.recordedVoters, s.voters) {
+		s.record(MigrationActionSetVoters, nil, MigrationStepSkipped, fmt.Sprintf("the shard record already lists the voters %s", votersString(s.voters)))
+	} else {
+		err := s.do(ctx, MigrationActionSetVoters, nil, fmt.Sprintf("store the voters %s in the shard record", votersString(s.voters)), func(ctx context.Context) error {
+			return writeGroupReplicationVoters(ctx, s.run.m.ts, s.run.keyspace, s.shard, s.voters)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	online := 0
 	for _, tablet := range s.tablets {
 		if s.status(tablet).isOnlineMember() {
@@ -619,17 +670,23 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 		online++
 	}
 
-	// The semi-sync ackers are the tablets replicating asynchronously with semi-sync. The
-	// primary needs semiSyncAcks of them while its semi-sync is enabled.
+	// The semi-sync ackers are the tablets replicating asynchronously from the primary with
+	// semi-sync. The primary needs semiSyncAcks of them while its semi-sync is enabled. A
+	// voter stops acking when it joins the group. An acker that is not a voter keeps acking
+	// until the last step, which only turns its semi-sync off after the primary disabled
+	// semi-sync, so it counts as an acker for the whole join phase.
 	primarySemiSync := s.status(primary).status.SemiSyncPrimaryEnabled
 	semiSyncAcks := max(int(s.status(primary).status.SemiSyncWaitForReplicaCount), 1)
 	ackers := make(map[string]bool)
 	for _, tablet := range s.tablets {
 		res := s.status(tablet)
-		if !s.isPrimary(tablet) && !res.isActiveMember() && res.status.SemiSyncReplicaEnabled {
+		if !s.isPrimary(tablet) && !res.isActiveMember() && res.status.SemiSyncReplicaEnabled && replicatesFrom(res, primary) {
 			ackers[topoproto.TabletAliasString(tablet.Alias)] = true
 		}
 	}
+	// lastAcker returns whether the voter is an acker without which the primary would not
+	// have enough ackers left while its semi-sync is enabled. Once the group has two ONLINE
+	// members, the primary disables semi-sync, and no join can block its commits.
 	lastAcker := func(alias string) bool {
 		return primarySemiSync && ackers[alias] && len(ackers)-1 < semiSyncAcks
 	}
@@ -705,9 +762,10 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 		}
 	}
 
-	// The non-voting tablets replicate asynchronously from the primary, without semi-sync.
+	// The tablets that are not voters replicate asynchronously from the primary, without
+	// semi-sync. A tablet that is an active member but not a voter leaves the group first.
 	for _, tablet := range s.tablets {
-		if s.isPrimary(tablet) || policy.IsGroupMember(s.run.target, tablet) {
+		if s.isPrimary(tablet) || policy.IsVoter(s.voters, tablet.Alias) {
 			continue
 		}
 		if err := s.ensureAsyncReplica(ctx, tablet, false); err != nil {
@@ -863,7 +921,7 @@ func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 	primaryRes := s.status(primary)
 	if !primaryRes.isActiveMember() {
 		s.record(MigrationActionLeaveGroup, primary, MigrationStepSkipped, fmt.Sprintf("primary %v is not a group member", primaryAlias))
-		return nil
+		return s.clearVoters(ctx)
 	}
 	if acks > 0 {
 		err := s.wait(ctx, MigrationActionWaitSemiSyncEnabled, primary, fmt.Sprintf("primary %v has enabled semi-sync", primaryAlias),
@@ -875,8 +933,23 @@ func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 	if err := s.leaveGroup(ctx, primary); err != nil {
 		return err
 	}
+	if err := s.clearVoters(ctx); err != nil {
+		return err
+	}
 	return s.wait(ctx, MigrationActionWaitWritable, primary, fmt.Sprintf("primary %v is writable", primaryAlias),
 		func(res *fullStatusResult) bool { return !res.status.SuperReadOnly && !res.status.ReadOnly })
+}
+
+// clearVoters removes the voters from the shard record once the last member left the group.
+// A shard converted to Group Replication again then selects its voters afresh.
+func (s *migrationShard) clearVoters(ctx context.Context) error {
+	if len(s.recordedVoters) == 0 {
+		s.record(MigrationActionClearVoters, nil, MigrationStepSkipped, "the shard record lists no voters")
+		return nil
+	}
+	return s.do(ctx, MigrationActionClearVoters, nil, fmt.Sprintf("remove the voters %s from the shard record", votersString(s.recordedVoters)), func(ctx context.Context) error {
+		return writeGroupReplicationVoters(ctx, s.run.m.ts, s.run.keyspace, s.shard, nil)
+	})
 }
 
 // waitForAckers waits until enough tablets outside the group replicate from the primary

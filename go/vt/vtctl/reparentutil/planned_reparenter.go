@@ -185,7 +185,19 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
+	// Under a group replication policy only a voter can be promoted, so the election only
+	// considers the voters when the shard record lists them. A requested primary is not
+	// filtered here: the group replication check below explains why it is refused.
+	electionTablets := tabletMap
+	if voters := ev.ShardInfo.GroupReplicationVoters; opts.NewPrimaryAlias == nil && policy.IsGroupReplication(opts.durability) && len(voters) > 0 {
+		electionTablets = make(map[string]*topo.TabletInfo, len(voters))
+		for alias, info := range tabletMap {
+			if policy.IsVoter(voters, info.Alias) {
+				electionTablets[alias] = info
+			}
+		}
+	}
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, electionTablets, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
@@ -224,7 +236,7 @@ func (pr *PlannedReparenter) preflightChecks(
 			currentPrimaryTablet = currentPrimary.Tablet
 		}
 		shardInitialized := ev.ShardInfo.PrimaryTermStartTime != nil
-		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
+		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, ev.ShardInfo.GroupReplicationVoters, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
 			return true, err
 		}
 	}
@@ -359,6 +371,15 @@ func (pr *PlannedReparenter) performInitialPromotion(
 		return "", vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
+	// Under a group replication policy, InitPrimary bootstraps the shard's group. Its voters
+	// are selected and stored first, with the primary-elect among them, so that the right
+	// tablets join the group once it exists.
+	if grd, ok := policy.AsGroupReplication(opts.durability); ok {
+		if err := pr.selectInitialVoters(ctx, keyspace, shard, grd, primaryElect, tabletMap); err != nil {
+			return "", err
+		}
+	}
+
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
@@ -382,6 +403,42 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	}
 
 	return rp, nil
+}
+
+// selectInitialVoters selects the voters of a group replication shard that never had a
+// primary and stores them in the shard record, under the shard lock. The primary-elect keeps
+// its seat; recorded voters are kept where possible. No tablet is an active member yet.
+func (pr *PlannedReparenter) selectInitialVoters(
+	ctx context.Context,
+	keyspace string,
+	shard string,
+	durability policy.GroupReplicationDurabler,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+	if !durability.IsGroupMember(primaryElect) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v cannot be a voting member of the replication group according to the durability policy", primaryElectAliasStr)
+	}
+	si, err := pr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read shard %s/%s", keyspace, shard)
+	}
+	recordedVoters := si.GroupReplicationVoters
+	candidates := make([]policy.VoterCandidate, 0, len(tabletMap))
+	for _, info := range tabletMap {
+		candidates = append(candidates, policy.VoterCandidate{Tablet: info.Tablet})
+	}
+	voters := policy.SelectVoters(durability, recordedVoters, primaryElect.Alias, candidates)
+	if !policy.IsVoter(voters, primaryElect.Alias) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not among the selected voters %s", primaryElectAliasStr, votersString(voters))
+	}
+	if len(voters) < minimumGroupReplicationMembers {
+		pr.logger.Warningf("shard %s/%s has only %d eligible voters (%s); a group needs at least %d members to survive the failure of one",
+			keyspace, shard, len(voters), votersString(voters), minimumGroupReplicationMembers)
+	}
+	pr.logger.Infof("storing the group replication voters %s of shard %s/%s", votersString(voters), keyspace, shard)
+	return writeGroupReplicationVoters(ctx, pr.ts, keyspace, shard, voters)
 }
 
 // checkPrimaryElectContainsAllPositions verifies that the primary-elect's

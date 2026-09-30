@@ -198,8 +198,9 @@ func replicationWasRunning(status *replicationdatapb.FullStatus) bool {
 //  4. PromoteReplica on it: a type change on the group's primary, or
 //     group_replication_set_as_primary on another member. Then write the reparent journal.
 //  5. Point every other reachable tablet at it: SetReplicationSource is a type fix on active
-//     members and repoints the asynchronous replicas of the group. Voting members that are
-//     not active are left to rejoin the group on their own.
+//     members and repoints the asynchronous replicas of the group, which include the
+//     tablets that are not listed voters. Listed voters that are not active are left to
+//     rejoin the group on their own.
 //
 // The shard lock is re-checked before each step that changes anything.
 func (erp *EmergencyReparenter) reparentShardLockedGroupReplication(ctx context.Context, ev *events.Reparent, keyspace, shard string, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
@@ -280,14 +281,14 @@ func (erp *EmergencyReparenter) reparentShardLockedGroupReplication(ctx context.
 	}
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
-	erp.reparentGroupReplicationTablets(ctx, newPrimary.tablet, statuses, opts)
+	erp.reparentGroupReplicationTablets(ctx, newPrimary.tablet, statuses, ev.ShardInfo.GroupReplicationVoters, opts)
 	return nil
 }
 
 // reparentGroupReplicationTablets points the reachable tablets at the new primary. The new
 // primary is already serving and the group provides durability, so a tablet that fails is
 // logged and left to VTOrc rather than failing the reparent.
-func (erp *EmergencyReparenter) reparentGroupReplicationTablets(ctx context.Context, newPrimary *topodatapb.Tablet, statuses map[string]*fullStatusResult, opts EmergencyReparentOptions) {
+func (erp *EmergencyReparenter) reparentGroupReplicationTablets(ctx context.Context, newPrimary *topodatapb.Tablet, statuses map[string]*fullStatusResult, voters []*topodatapb.TabletAlias, opts EmergencyReparentOptions) {
 	replCtx, replCancel := context.WithTimeout(ctx, groupReplicationReplicaTimeout(opts))
 	defer replCancel()
 
@@ -298,10 +299,11 @@ func (erp *EmergencyReparenter) reparentGroupReplicationTablets(ctx context.Cont
 			continue
 		case res.err != nil:
 			continue
-		case !res.isActiveMember() && policy.IsGroupMember(opts.durability, res.tablet):
-			// A voting member that is not in the group (for example the failed former
-			// primary) must rejoin the group, not replicate asynchronously. Its tablet
-			// rejoins on its own, or VTOrc makes it.
+		case !res.isActiveMember() && isListedVoter(opts.durability, voters, res.tablet):
+			// A voter that is not in the group (for example the failed former primary)
+			// must rejoin the group, not replicate asynchronously. Its tablet rejoins on
+			// its own, or VTOrc makes it. A tablet that is not a listed voter is an
+			// asynchronous replica of the group and is repointed below.
 			erp.logger.Infof("tablet %v should be a member of the replication group but is not active; it is left to rejoin the group", alias)
 			continue
 		}

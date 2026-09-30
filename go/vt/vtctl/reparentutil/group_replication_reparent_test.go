@@ -260,3 +260,66 @@ func TestPlannedReparentGroupReplicationPreflight(t *testing.T) {
 		})
 	}
 }
+
+// TestPlannedReparentGroupReplicationRequiresVoter checks that PRS refuses to promote a
+// tablet that is not a listed voter, and names the voters, before it changes anything.
+func TestPlannedReparentGroupReplicationRequiresVoter(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
+	require.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+
+	_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+		NewPrimaryAlias:     mustAlias(t, alias101),
+		WaitReplicasTimeout: 30 * time.Second,
+	})
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "only voters can be promoted (voters: zone1-0000000100, zone2-0000000200, zone3-0000000300)")
+	assert.Empty(t, c.mutatingCalls())
+}
+
+// TestPlannedReparentGroupReplicationInitialPromotionStoresVoters checks that the initial
+// promotion of a group replication shard stores the voters, with the primary-elect among
+// them, before InitPrimary bootstraps the group.
+func TestPlannedReparentGroupReplicationInitialPromotionStoresVoters(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell",
+		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+	)
+	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+
+	_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+		NewPrimaryAlias:     mustAlias(t, alias101),
+		WaitReplicasTimeout: 30 * time.Second,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"InitPrimary(" + alias101 + ")"}, callsWithPrefix(c.mutatingCalls(), "InitPrimary"))
+	assert.Equal(t, "zone1-0000000101, zone2-0000000200, zone3-0000000300", c.votersAtInitPrimary)
+	assert.Equal(t, []string{alias101, alias200, alias300}, c.voters(t))
+}
+
+// TestEmergencyReparentGroupReplicationRepointsNonVoters checks that ERS repoints a REPLICA
+// tablet that is not a listed voter as an asynchronous replica of the new primary, while the
+// failed voter is left to rejoin the group.
+func TestEmergencyReparentGroupReplicationRepointsNonVoters(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
+	require.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+	c.tablets[aliasP].unreachable = true
+	c.groupPrimary = alias200
+	erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+
+	ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+	require.NoError(t, err)
+	assert.Equal(t, alias200, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+	assert.ElementsMatch(t, []string{
+		"SetReplicationSource(" + alias101 + ", " + alias200 + ", semiSync=false)",
+		"SetReplicationSource(" + alias102 + ", " + alias200 + ", semiSync=false)",
+		"SetReplicationSource(" + alias300 + ", " + alias200 + ", semiSync=false)",
+	}, callsWithPrefix(c.mutatingCalls(), "SetReplicationSource"))
+	assert.Equal(t, alias200, c.tablet(alias101).source)
+	assert.False(t, c.tablet(alias101).member)
+}

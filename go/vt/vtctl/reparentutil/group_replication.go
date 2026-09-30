@@ -18,12 +18,15 @@ package reparentutil
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -118,17 +121,27 @@ func memberIsOnlineInView(view *replicationdatapb.GroupReplicationStatus, server
 // group_replication_set_as_primary; a tablet outside the group cannot be promoted while the
 // group is active, because the group's members would keep following the old primary.
 //
+// Only a voter, a tablet listed in the shard record's voters, can be promoted: the other
+// tablets replicate asynchronously and are not members of the group. Swapping a non-voter in
+// for a voter is not supported yet. An empty list (voters not selected yet) skips this check.
+//
 // A shard that never had a primary is initialized with InitPrimary, which bootstraps the
 // group, so there is nothing to check. A shard whose primary is unknown can only promote an
 // ONLINE member of a group that has quorum.
-func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletManagerClient, shardInitialized bool, currentPrimary, primaryElect *topodatapb.Tablet) error {
+func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletManagerClient, shardInitialized bool, voters []*topodatapb.TabletAlias, currentPrimary, primaryElect *topodatapb.Tablet) error {
 	if primaryElect == nil || (currentPrimary != nil && topoproto.TabletAliasEqual(currentPrimary.Alias, primaryElect.Alias)) {
 		return nil
 	}
+	if currentPrimary == nil && !shardInitialized {
+		return nil
+	}
+	if len(voters) > 0 && !policy.IsVoter(voters, primaryElect.Alias) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"primary-elect %v is not a voting member of the shard's replication group; only voters can be promoted (voters: %s). "+
+				"Promoting a tablet that is not a voter is not supported yet",
+			topoproto.TabletAliasString(primaryElect.Alias), votersString(voters))
+	}
 	if currentPrimary == nil {
-		if !shardInitialized {
-			return nil
-		}
 		electAlias := topoproto.TabletAliasString(primaryElect.Alias)
 		res := fetchFullStatus(ctx, tmc, primaryElect, topo.RemoteOperationTimeout)
 		if res.err != nil {
@@ -175,4 +188,61 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 			"primary-elect %v is not an ONLINE member in the group view of current primary %v", electAlias, primaryAlias)
 	}
 	return nil
+}
+
+// votersString returns the aliases of the voters, sorted and separated by commas.
+func votersString(voters []*topodatapb.TabletAlias) string {
+	aliases := make([]string, 0, len(voters))
+	for _, v := range voters {
+		aliases = append(aliases, topoproto.TabletAliasString(v))
+	}
+	slices.Sort(aliases)
+	return strings.Join(aliases, ", ")
+}
+
+// votersEqual returns whether both lists hold the same voters, in any order.
+func votersEqual(a, b []*topodatapb.TabletAlias) bool {
+	return len(a) == len(b) && votersString(a) == votersString(b)
+}
+
+// writeGroupReplicationVoters stores the voting members of the shard's group in the shard
+// record. The caller must hold the shard lock, which is re-checked first.
+func writeGroupReplicationVoters(ctx context.Context, ts *topo.Server, keyspace, shard string, voters []*topodatapb.TabletAlias) error {
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		if votersEqual(si.GroupReplicationVoters, voters) {
+			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+		}
+		si.GroupReplicationVoters = voters
+		return nil
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to store the group replication voters of shard %s/%s", keyspace, shard)
+	}
+	return nil
+}
+
+// isListedVoter returns whether the tablet is a voting member of the shard's group according
+// to the shard record. Under a group replication policy an empty list means that no voters
+// were selected yet; every tablet the policy allows in the group then counts as a voter, as
+// before voter lists existed.
+func isListedVoter(durability policy.Durabler, voters []*topodatapb.TabletAlias, tablet *topodatapb.Tablet) bool {
+	if !policy.IsGroupMember(durability, tablet) {
+		return false
+	}
+	return len(voters) == 0 || policy.IsVoter(voters, tablet.Alias)
+}
+
+// voterCandidates returns the tablets as candidates for policy.SelectVoters. A tablet is
+// active when its status says it is an active member of a group; no tablet is failed, since
+// the callers only select voters when every tablet is reachable.
+func voterCandidates(tablets []*topodatapb.Tablet, statuses map[string]*fullStatusResult) []policy.VoterCandidate {
+	candidates := make([]policy.VoterCandidate, 0, len(tablets))
+	for _, tablet := range tablets {
+		res := statuses[topoproto.TabletAliasString(tablet.Alias)]
+		candidates = append(candidates, policy.VoterCandidate{Tablet: tablet, Active: res != nil && res.err == nil && res.isActiveMember()})
+	}
+	return candidates
 }
