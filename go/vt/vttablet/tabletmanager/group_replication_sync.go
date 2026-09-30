@@ -48,7 +48,8 @@ import (
 //     read-only.
 //   - If the durability policy uses Group Replication, the shard record lists the tablet as a
 //     voter of the group, and MySQL is not in the group, it rejoins the group with exponential
-//     backoff. It never bootstraps a group. It never makes a member leave its group either:
+//     backoff, but only while another tablet of the shard reports an active member of the shard's
+//     legitimate group with quorum. It never bootstraps a group. It never makes a member leave its group either:
 //     removing a member that is no longer a voter is VTOrc's decision.
 //   - On a PRIMARY that is the group primary, it applies the effective semi-sync setting: a group
 //     with at least two ONLINE members supersedes semi-sync.
@@ -544,9 +545,20 @@ func (s *groupReplicationSync) shouldRejoin(ctx context.Context, status *replica
 	return policy.IsVoter(voters, tablet.Alias)
 }
 
-// rejoin makes MySQL join its group, and backs off exponentially if it fails.
+// rejoin makes MySQL join its group, and backs off exponentially if it fails. It does not start
+// a join while no other tablet reports an active member of the shard's legitimate group: such a
+// START cannot join anything and blocks until MySQL's join timeout, during which a bootstrap on
+// this member fails with "START or STOP GROUP_REPLICATION is ongoing".
 func (s *groupReplicationSync) rejoin(ctx context.Context) {
 	tm := s.tm
+	if err := tm.checkLegitimateGroupToJoin(ctx); err != nil {
+		s.nextRejoin = time.Now().Add(max(groupReplicationSyncInterval, groupReplicationRejoinGateInterval))
+		if time.Since(s.lastIllegitimateLog) >= groupReplicationIllegitimateLogInterval {
+			s.lastIllegitimateLog = time.Now()
+			log.Info("Group replication sync: MySQL is not in its group, but not joining it", slog.Any("reason", err))
+		}
+		return
+	}
 	if !tm.actionSema.TryAcquire(1) {
 		return
 	}

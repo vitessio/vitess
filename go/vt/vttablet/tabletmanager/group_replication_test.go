@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -82,6 +83,13 @@ func newGroupReplicationTopo(t *testing.T, durability string) *topo.Server {
 // FakeMysqlDaemon that configure can prepare before the tablet starts.
 func newGroupReplicationTestTM(t *testing.T, ts *topo.Server, uid int, configure func(fmd *mysqlctl.FakeMysqlDaemon)) (*TabletManager, *mysqlctl.FakeMysqlDaemon) {
 	t.Helper()
+	return newGroupReplicationTestTMWithPeers(t, ts, uid, nil, configure)
+}
+
+// newGroupReplicationTestTMWithPeers is newGroupReplicationTestTM with a client through which the
+// tablet reaches the other tablets of its shard from the start.
+func newGroupReplicationTestTMWithPeers(t *testing.T, ts *topo.Server, uid int, peers tmclient.TabletManagerClient, configure func(fmd *mysqlctl.FakeMysqlDaemon)) (*TabletManager, *mysqlctl.FakeMysqlDaemon) {
+	t.Helper()
 	fmd := newTestMysqlDaemon(t, 3306)
 	fmd.ServerUUID = testServerUUID(uid)
 	if configure != nil {
@@ -94,6 +102,7 @@ func newGroupReplicationTestTM(t *testing.T, ts *topo.Server, uid int, configure
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fmd.DB(), exporter),
 		QueryServiceControl: tabletservermock.NewController(),
+		tmc:                 peers,
 	}
 	require.NoError(t, tm.Start(newTestTablet(t, uid, "ks", "0", nil), nil))
 	t.Cleanup(tm.Stop)
@@ -595,8 +604,9 @@ func TestSetReplicationSourceRefusedOnGroupPrimary(t *testing.T) {
 func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
 	enableGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
-	setGroupReplicationVoters(t, ts, 1)
-	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
+	setGroupReplicationVoters(t, ts, 1, 2)
+	addPeerTablets(t, ts, 2)
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		// The tablet joins its group at startup.
 		fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel, resetDefaultChannel}
 	})
@@ -707,7 +717,7 @@ func TestStartJoinsGroup(t *testing.T) {
 	require.NoError(t, err)
 	setGroupReplicationVoters(t, ts, 1, 2)
 
-	_, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
+	_, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 		fmd.SetReplicationSourceFunc = func(context.Context, string, int32, float64, bool, bool) error {
 			return errors.New("the default channel must not be configured on a group member")
@@ -724,8 +734,9 @@ func TestStartJoinsGroup(t *testing.T) {
 func TestStartSucceedsWhenGroupJoinFails(t *testing.T) {
 	enableGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
-	setGroupReplicationVoters(t, ts, 1)
-	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
+	setGroupReplicationVoters(t, ts, 1, 2)
+	addPeerTablets(t, ts, 2)
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
 	start, _, _ := fmd.GroupReplicationCalls()
@@ -856,7 +867,8 @@ func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 2)
-	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	addPeerTablets(t, ts, 2)
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), nil)
 	s := newGroupReplicationSync(tm)
 
 	s.reconcile(ctx)
@@ -1014,8 +1026,9 @@ func TestGroupReplicationSyncRejoinsWithBackoff(t *testing.T) {
 	enableGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
-	setGroupReplicationVoters(t, ts, 1)
-	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
+	setGroupReplicationVoters(t, ts, 1, 2)
+	addPeerTablets(t, ts, 2)
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
 	s := newGroupReplicationSync(tm)

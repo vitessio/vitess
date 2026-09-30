@@ -31,6 +31,7 @@ import (
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -187,6 +188,70 @@ func (tm *TabletManager) peerFullStatuses(ctx context.Context, tablets []*topoda
 	wg.Wait()
 	return result
 }
+
+// isActiveLegitimatePeer returns whether a peer's MySQL is an active member of the shard's
+// legitimate group whose view has quorum: a group that a joining member can join.
+func isActiveLegitimatePeer(legitimate *policy.LegitimateGroup, groupName string, status *replicationdatapb.FullStatus) bool {
+	gs := status.GetGroupReplicationStatus()
+	return gs.GetGroupName() == groupName && legitimate.IsLegitimateMember(gs) && gs.GetHasQuorum()
+}
+
+// legitimateGroupActiveElsewhere returns whether another tablet of the shard reports that its
+// MySQL is an active member of the shard's legitimate group, with quorum in its view. A member
+// that starts Group Replication while no such group exists cannot join anything: its START blocks
+// until MySQL's join timeout, during which a bootstrap on it fails, and it has been seen to form a
+// group of its own. The shard primary is asked first; the other tablets only if it does not
+// qualify. Every RPC is bounded by groupReplicationPeerTimeout.
+func (tm *TabletManager) legitimateGroupActiveElsewhere(ctx context.Context, rec *shardGroupRecord) bool {
+	tablet := tm.Tablet()
+	self := topoproto.TabletAliasString(tm.tabletAlias)
+	groupName := policy.GroupName(tablet.Keyspace, tablet.Shard)
+	// The peers' own view ids are compared with the recorded incarnation only.
+	legitimate := policy.NewLegitimateGroup(rec.incarnation, nil, nil, nil)
+
+	var primary *topodatapb.Tablet
+	var others []*topodatapb.Tablet
+	for alias, peer := range rec.tablets {
+		switch {
+		case alias == self:
+		case rec.primaryAlias != nil && topoproto.TabletAliasEqual(peer.Alias, rec.primaryAlias):
+			primary = peer
+		case groupReplicationAddress(peer) != "":
+			others = append(others, peer)
+		}
+	}
+	if primary != nil {
+		for _, status := range tm.peerFullStatuses(ctx, []*topodatapb.Tablet{primary}) {
+			if isActiveLegitimatePeer(legitimate, groupName, status) {
+				return true
+			}
+		}
+	}
+	for _, status := range tm.peerFullStatuses(ctx, others) {
+		if isActiveLegitimatePeer(legitimate, groupName, status) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkLegitimateGroupToJoin returns an error unless another tablet of the shard reports an
+// active member of the shard's legitimate group. Joins that the tablet starts on its own, at
+// startup and in the sync loop, call it first.
+func (tm *TabletManager) checkLegitimateGroupToJoin(ctx context.Context) error {
+	rec, err := tm.readShardGroupRecord(ctx)
+	if err != nil {
+		return err
+	}
+	if !tm.legitimateGroupActiveElsewhere(ctx, rec) {
+		return errNoLegitimateGroupToJoin
+	}
+	return nil
+}
+
+// errNoLegitimateGroupToJoin is returned when no other tablet of the shard reports an active
+// member of the shard's legitimate group.
+var errNoLegitimateGroupToJoin = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no other tablet of the shard reports an active member of the shard's replication group with quorum; not joining, the group must be bootstrapped first")
 
 // leaveForeignGroupLocked makes MySQL leave a group that is not the shard's legitimate group, and
 // suspends the tablet's own rejoins: MySQL formed or joined a group of another incarnation than

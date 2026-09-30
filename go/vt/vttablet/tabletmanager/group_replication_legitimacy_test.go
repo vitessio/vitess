@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -37,6 +38,7 @@ import (
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // grPeersTMC answers FullStatus for the other tablets of the shard.
@@ -263,6 +265,123 @@ func TestGroupReplicationSyncServesDuringMigration(t *testing.T) {
 
 	newGroupReplicationSync(tm).reconcile(ctx)
 	assert.True(t, qsc.IsServing())
+}
+
+// activeGroupPeers returns a client through which the tablets cell1-<uid> report that their MySQL
+// is an ONLINE member of the group of ks/0, with quorum, in a view of the given incarnation.
+func activeGroupPeersIn(incarnation string, uids ...uint32) *grPeersTMC {
+	peers := newGRPeersTMC()
+	for _, uid := range uids {
+		uuid := testServerUUID(int(uid))
+		gs := groupStatus(uuid, groupMember(uuid, mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary))
+		if incarnation != "" {
+			gs.ViewId = incarnation + ":3"
+		}
+		peers.set(uid, &replicationdatapb.FullStatus{ServerUuid: uuid, GroupReplicationStatus: gs})
+	}
+	return peers
+}
+
+// activeGroupPeers is activeGroupPeersIn without a view id.
+func activeGroupPeers(uids ...uint32) *grPeersTMC {
+	return activeGroupPeersIn("", uids...)
+}
+
+// TestGroupReplicationSyncRejoinsOnlyAnActiveGroup reproduces the bootstrap starvation of the Group
+// Replication failover audit (S7d, G11): when no member of the group is active, a START
+// GROUP_REPLICATION cannot join anything and blocks until MySQL's join timeout, during which
+// VTOrc's bootstrap on the same member fails. The sync loop only starts a join while another
+// tablet reports an active member of the shard's legitimate group with quorum.
+func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
+	enableGroupReplication(t)
+	ctx := t.Context()
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	setGroupReplicationVoters(t, ts, 1, 2, 3)
+	setGroupReplicationIncarnation(t, ts, "1780000001")
+	addPeerTablets(t, ts, 2, 3)
+	peers := newGRPeersTMC()
+	// Both peers are reachable, but their MySQL is not in any group.
+	for _, uid := range []uint32{2, 3} {
+		peers.set(uid, &replicationdatapb.FullStatus{ServerUuid: testServerUUID(int(uid)), GroupReplicationStatus: groupStatus(testServerUUID(int(uid)))})
+	}
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, peers, nil)
+	start, _, _ := fmd.GroupReplicationCalls()
+	assert.Zero(t, start, "the tablet must not start a join at startup while no group is active")
+	s := newGroupReplicationSync(tm)
+
+	s.reconcile(ctx)
+	start, _, _ = fmd.GroupReplicationCalls()
+	assert.Zero(t, start, "the sync loop must not start a join while no group is active")
+
+	// A peer is ONLINE, but in a group of another incarnation.
+	foreign := activeGroupPeersIn("1799999999", 2)
+	peers.set(2, foreign.statuses["cell1-0000000002"])
+	s.nextRejoin = time.Time{}
+	s.reconcile(ctx)
+	start, _, _ = fmd.GroupReplicationCalls()
+	assert.Zero(t, start, "the sync loop must not join a group of another incarnation")
+
+	// The shard's group is active on a peer.
+	legitimate := activeGroupPeersIn("1780000001", 3)
+	peers.set(3, legitimate.statuses["cell1-0000000003"])
+	s.nextRejoin = time.Time{}
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+	s.reconcile(ctx)
+	start, _, _ = fmd.GroupReplicationCalls()
+	assert.Equal(t, 1, start)
+	assert.False(t, fmd.GroupReplicationBootstrapped)
+}
+
+// TestStartGroupReplicationBootstrapStopsOngoingStart checks that a bootstrap succeeds on a member
+// on which a START GROUP_REPLICATION is still in progress, for example one whose RPC timed out:
+// MySQL refuses to change the configuration with errno 3724 until that START ends, which can take
+// minutes when no group exists. The tablet stops it and bootstraps.
+func TestStartGroupReplicationBootstrapStopsOngoingStart(t *testing.T) {
+	enableGroupReplication(t)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	setGroupReplicationVoters(t, ts, 1)
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	fmd.ConfigureGroupReplicationErrors = []error{
+		sqlerror.NewSQLError(mysqlErrGroupReplicationCommandOngoing, sqlerror.SSUnknownSQLState, "This option cannot be set while START or STOP GROUP_REPLICATION is ongoing."),
+	}
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+	_, stopsBefore, _ := fmd.GroupReplicationCalls()
+
+	status, err := tm.StartGroupReplication(t.Context(), true)
+	require.NoError(t, err)
+	assert.True(t, mysql.IsGroupPrimary(status))
+	assert.True(t, fmd.GroupReplicationBootstrapped)
+	_, stops, _ := fmd.GroupReplicationCalls()
+	assert.Equal(t, stopsBefore+1, stops, "the ongoing START must be stopped first")
+	assert.False(t, tm.groupReplicationRejoinSuspended.Load(), "the rejoin loop is only suspended during the bootstrap")
+}
+
+// TestStartGroupReplicationBootstrapStopsJoinWithoutGroup checks that a bootstrap stops a member
+// that is RECOVERING without a group, a join that found no member, instead of refusing it.
+func TestStartGroupReplicationBootstrapStopsJoinWithoutGroup(t *testing.T) {
+	enableGroupReplication(t)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	setGroupReplicationVoters(t, ts, 1)
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	recovering := groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateRecovering, ""))
+	fmd.SetGroupReplicationStatus(recovering)
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+
+	status, err := tm.StartGroupReplication(t.Context(), true)
+	require.NoError(t, err)
+	assert.True(t, mysql.IsGroupPrimary(status))
+	_, stops, _ := fmd.GroupReplicationCalls()
+	assert.Equal(t, 1, stops)
+
+	// A member that is RECOVERING in a group with an ONLINE member is not stopped.
+	tm2, fmd2 := newGroupReplicationTestTM(t, ts, 2, nil)
+	fmd2.SetGroupReplicationStatus(groupStatus(testServerUUID(2),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateRecovering, ""),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)))
+	_, err = tm2.StartGroupReplication(t.Context(), true)
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	_, stops, _ = fmd2.GroupReplicationCalls()
+	assert.Zero(t, stops)
 }
 
 // tmStatus returns the group replication status of the fake daemon.

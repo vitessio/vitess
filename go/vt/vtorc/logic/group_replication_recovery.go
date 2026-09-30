@@ -158,6 +158,11 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 }
 
 // startGroupReplicationOnMember makes a voting member that is not active join the shard's group.
+// VTOrc's view is up to --instance-poll-time old, so it first confirms that another tablet of the
+// shard is an active member of the shard's legitimate group with quorum in its view. Starting a
+// join while no such group exists cannot join anything: the START blocks until MySQL's join
+// timeout, during which a bootstrap on the member fails, and a member has been seen to form a group
+// of its own.
 func startGroupReplicationOnMember(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
@@ -177,12 +182,55 @@ func startGroupReplicationOnMember(ctx context.Context, analysisEntry *inst.Dete
 		return false, topologyRecovery, err
 	}
 	aliasString := topoproto.TabletAliasString(tablet.Alias)
+	if err := checkLegitimateGroupActive(ctx, tablet); err != nil {
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not starting group replication on %s: %v", aliasString, err))
+		return true, topologyRecovery, err
+	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on %s", aliasString))
 	if _, err := startGroupReplication(ctx, tablet, false); err != nil {
 		return true, topologyRecovery, vterrors.Wrapf(err, "failed to start group replication on %s", aliasString)
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s joined its group", StartGroupReplicationRecoveryName, aliasString))
 	return true, topologyRecovery, nil
+}
+
+// checkLegitimateGroupActive returns an error unless a tablet of the shard other than the given
+// one reports that its MySQL is an active member of the shard's legitimate group, with quorum in
+// its view, and the given tablet's MySQL is not active in a group of another incarnation.
+func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) error {
+	shardInfo, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
+	}
+	tabletInfos, err := getShardTablets(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
+	statuses := readShardTabletStatuses(ctx, tabletInfos)
+	legitimate := legitimateGroupOf(shardInfo, statuses)
+	groupName := policy.GroupName(tablet.Keyspace, tablet.Shard)
+	active := false
+	for _, st := range statuses {
+		if st.err != nil {
+			continue
+		}
+		gs := st.status.GetGroupReplicationStatus()
+		if topoproto.TabletAliasEqual(st.tablet.Alias, tablet.Alias) {
+			if legitimate.IsForeignIncarnation(gs) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is active in group incarnation %s, not in the shard's incarnation %s",
+					topoproto.TabletAliasString(tablet.Alias), policy.GroupIncarnation(gs.GetViewId()), legitimate.Incarnation)
+			}
+			continue
+		}
+		if gs.GetGroupName() == groupName && legitimate.IsLegitimateMember(gs) && gs.GetHasQuorum() {
+			active = true
+		}
+	}
+	if !active {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no other tablet of %s is an active member of the shard's replication group with quorum; the group must be bootstrapped first",
+			topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
+	}
+	return nil
 }
 
 // groupBootstrapCandidate is a voting member that could bootstrap the shard's group.

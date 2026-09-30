@@ -242,6 +242,10 @@ type FakeMysqlDaemon struct {
 	// StartGroupReplicationError is returned by StartGroupReplication, if set.
 	StartGroupReplicationError error
 
+	// ConfigureGroupReplicationErrors are returned by the next calls of
+	// ConfigureGroupReplication, one per call.
+	ConfigureGroupReplicationErrors []error
+
 	// GroupReplicationStartCalls, GroupReplicationStopCalls and SetGroupReplicationPrimaryCalls
 	// count the calls to the respective methods. Use GroupReplicationCalls to read them while
 	// the daemon is in use.
@@ -949,6 +953,11 @@ func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg m
 	defer fmd.mu.Unlock()
 	if fmd.GroupReplicationError != nil {
 		return fmd.GroupReplicationError
+	}
+	if len(fmd.ConfigureGroupReplicationErrors) > 0 {
+		err := fmd.ConfigureGroupReplicationErrors[0]
+		fmd.ConfigureGroupReplicationErrors = fmd.ConfigureGroupReplicationErrors[1:]
+		return err
 	}
 	fmd.GroupReplicationConfig = cfg
 	if fmd.GroupReplication == nil {

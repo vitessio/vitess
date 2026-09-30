@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
@@ -74,8 +76,11 @@ var (
 	// group, read from the shard record. It is only read when the loop considers a rejoin.
 	groupReplicationVotersCacheTTL = 5 * time.Second
 	// groupReplicationIllegitimateLogInterval limits how often the sync loop logs that it does not
-	// follow a group primary that is not legitimate.
+	// follow a group primary that is not legitimate, or does not join a group.
 	groupReplicationIllegitimateLogInterval = 10 * time.Second
+	// groupReplicationRejoinGateInterval is how long the sync loop waits before it checks again
+	// whether the shard's group is active on another tablet, when it was not.
+	groupReplicationRejoinGateInterval = 2 * time.Second
 )
 
 func registerGroupReplicationFlags(fs *pflag.FlagSet) {
@@ -258,6 +263,14 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 	if err != nil {
 		return nil, err
 	}
+	if bootstrap && isJoinWithoutGroup(status) {
+		// A join that found no member to recover from. The caller verified that no member of the
+		// shard's group is active, so there is nothing to join: stop it and bootstrap.
+		log.Warn("MySQL is RECOVERING without an ONLINE member, stopping the join before the bootstrap", slog.String("group", status.GroupName))
+		if status, err = tm.stopOngoingGroupStartLocked(ctx); err != nil {
+			return nil, err
+		}
+	}
 	if mysql.IsGroupMemberActive(status) {
 		if bootstrap {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot bootstrap a group: MySQL is already %s in group %s", status.MemberState, status.GroupName)
@@ -266,7 +279,19 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL is %s in group %s, but the group of shard %s/%s is %s", status.MemberState, status.GroupName, tablet.Keyspace, tablet.Shard, groupName)
 		}
 	} else if err := tm.joinGroupLocked(ctx, status, bootstrap); err != nil {
-		return nil, err
+		if !bootstrap || !isGroupReplicationCommandOngoing(err) {
+			return nil, err
+		}
+		// A START GROUP_REPLICATION is still in progress, for example the join of an RPC whose
+		// context expired: MySQL refuses any change until it ends, which can take minutes when no
+		// group exists. Stop it, then bootstrap.
+		log.Warn("A START GROUP_REPLICATION is in progress, stopping it before the bootstrap", slog.Any("error", err))
+		if status, err = tm.stopOngoingGroupStartLocked(ctx); err != nil {
+			return nil, err
+		}
+		if err := tm.joinGroupLocked(ctx, status, bootstrap); err != nil {
+			return nil, err
+		}
 	}
 	status, err = tm.finishGroupJoinLocked(ctx)
 	if err != nil {
@@ -278,6 +303,34 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		tm.groupReplicationPeers.noteBootstrap(policy.GroupIncarnation(status.GetViewId()))
 	}
 	return status, nil
+}
+
+// mysqlErrGroupReplicationCommandOngoing is the MySQL error that refuses a change of the Group
+// Replication configuration while START or STOP GROUP_REPLICATION is in progress.
+const mysqlErrGroupReplicationCommandOngoing = 3724
+
+// isGroupReplicationCommandOngoing returns whether MySQL refused a statement because START or STOP
+// GROUP_REPLICATION is in progress.
+func isGroupReplicationCommandOngoing(err error) bool {
+	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == mysqlErrGroupReplicationCommandOngoing {
+		return true
+	}
+	return err != nil && strings.Contains(err.Error(), "START or STOP GROUP_REPLICATION is ongoing")
+}
+
+// isJoinWithoutGroup returns whether MySQL is RECOVERING while it sees no ONLINE member: a join
+// that has found no group to recover from.
+func isJoinWithoutGroup(status *replicationdatapb.GroupReplicationStatus) bool {
+	return status.GetPluginActive() && status.GetMemberState() == mysql.GroupMemberStateRecovering && mysql.OnlineGroupMembers(status) == 0
+}
+
+// stopOngoingGroupStartLocked stops Group Replication on a member whose join is in progress, and
+// returns its status afterwards.
+func (tm *TabletManager) stopOngoingGroupStartLocked(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	if err := tm.MysqlDaemon.StopGroupReplication(ctx); err != nil {
+		return nil, vterrors.Wrapf(err, "failed to stop the group replication start in progress before the bootstrap")
+	}
+	return tm.groupReplicationStatus(ctx)
 }
 
 // joinGroupLocked configures Group Replication and starts it on a MySQL that is not an active

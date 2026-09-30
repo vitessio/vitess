@@ -50,8 +50,12 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, bootstrap bo
 	}
 	defer tm.unlock()
 
-	// An explicit start lifts a previous explicit stop.
-	tm.groupReplicationRejoinSuspended.Store(false)
+	// An explicit start lifts a previous explicit stop. A bootstrap also keeps the sync loop from
+	// starting a join while it runs: a join in progress makes MySQL refuse the bootstrap.
+	tm.groupReplicationRejoinSuspended.Store(bootstrap)
+	if bootstrap {
+		defer tm.groupReplicationRejoinSuspended.Store(false)
+	}
 	if _, err := tm.startGroupReplicationLocked(ctx, bootstrap); err != nil {
 		return nil, err
 	}

@@ -420,7 +420,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	log.Info("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
-	tm.tmc = tmclient.NewTabletManagerClient()
+	if tm.tmc == nil {
+		tm.tmc = tmclient.NewTabletManagerClient()
+	}
 
 	// Check if there's an existing tablet record in topology and use it if flag is enabled
 	if initTabletTypeLookup {
@@ -1318,9 +1320,17 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 // initializeGroupReplication makes the tablet's MySQL join its shard's group when the tablet
 // starts. It never bootstraps a group: two tablets that start at the same time could each create
-// one. If the join fails, for example because no other member is reachable yet, the group
-// replication sync loop retries it.
+// one. It only starts a join when another tablet of the shard reports an active member of the
+// shard's group. If it does not join, for example because no other member is reachable yet, the
+// group replication sync loop retries it.
 func (tm *TabletManager) initializeGroupReplication(ctx context.Context) {
+	status, err := tm.groupReplicationStatus(ctx)
+	if err == nil && !mysql.IsGroupMemberActive(status) {
+		if err := tm.checkLegitimateGroupToJoin(ctx); err != nil {
+			log.Warn(fmt.Sprintf("Not joining the group replication group during initialization, the group replication sync loop will retry: %v", err))
+			return
+		}
+	}
 	if _, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */); err != nil {
 		log.Warn(fmt.Sprintf("Cannot join the group replication group during initialization, the group replication sync loop will retry: %v", err))
 	}

@@ -382,21 +382,72 @@ func TestPromoteGroupPrimary(t *testing.T) {
 	}
 }
 
+// TestStartGroupReplicationOnMember checks that VTOrc only makes a voter join its group while
+// another tablet is an active member of the shard's legitimate group with quorum. A join into no
+// group blocks until MySQL's join timeout, during which a bootstrap on the member fails (the
+// bootstrap starvation of the Group Replication failover audit).
 func TestStartGroupReplicationOnMember(t *testing.T) {
-	member := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
-	mockTMC := groupReplicationRecoveryTest(t, recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY), member)
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
-
-	analysisEntry := &inst.DetectionAnalysis{
-		Analysis:              inst.GroupMemberNotOnline,
-		AnalyzedInstanceAlias: member.Alias,
-		AnalyzedKeyspace:      "ks",
-		AnalyzedShard:         "0",
+	online := func(viewID string) *replicationdatapb.FullStatus {
+		return &replicationdatapb.FullStatus{
+			ServerUuid: "uuid-101",
+			GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+				PluginActive: true,
+				GroupName:    policy.GroupName("ks", "0"),
+				MemberState:  mysql.GroupMemberStateOnline,
+				MemberRole:   mysql.GroupMemberRolePrimary,
+				HasQuorum:    true,
+				ViewId:       viewID,
+			},
+		}
 	}
-	attempted, topologyRecovery, err := startGroupReplicationOnMember(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
-	require.NoError(t, err)
-	require.True(t, attempted)
-	require.NotNil(t, topologyRecovery)
+	offline := &replicationdatapb.FullStatus{
+		ServerUuid:             "uuid-101",
+		GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{PluginActive: true, MemberState: mysql.GroupMemberStateError},
+	}
+	tests := []struct {
+		name      string
+		other     *replicationdatapb.FullStatus
+		wantStart bool
+	}{
+		{name: "the group is active on another tablet", other: online("1790000001:5"), wantStart: true},
+		{name: "no other member is active", other: offline},
+		{name: "the other member is in a group of another incarnation", other: online("1799999999:1")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			member := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+			other := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+			mockTMC := groupReplicationRecoveryTest(t, other, member)
+			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+				si.GroupReplicationIncarnation = "1790000001"
+				return nil
+			})
+			require.NoError(t, err)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(other)).Return(tt.other, nil)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(member)).Return(offline, nil)
+			starts := 0
+			if tt.wantStart {
+				starts = 1
+			}
+			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil).Times(starts)
+
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              inst.GroupMemberNotOnline,
+				AnalyzedInstanceAlias: member.Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}
+			attempted, topologyRecovery, err := startGroupReplicationOnMember(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			require.True(t, attempted)
+			require.NotNil(t, topologyRecovery)
+			if tt.wantStart {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		})
+	}
 }
 
 func TestBootstrapGroupReplication(t *testing.T) {
