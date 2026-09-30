@@ -71,7 +71,11 @@ func startAckingWriter(t *testing.T, tc *testCluster) *ackingWriter {
 				}
 			}
 			start := time.Now()
+			// Like a real client, give up on a write after a timeout: a write to a frozen
+			// primary never returns.
+			timeout := time.AfterFunc(2*time.Second, conn.Close)
 			qr, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
+			timeout.Stop()
 			if err != nil {
 				conn.Close()
 				conn = nil
