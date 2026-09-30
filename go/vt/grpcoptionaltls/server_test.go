@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
@@ -113,14 +114,8 @@ func TestOptionalTLS(t *testing.T) {
 	}
 
 	t.Run("Plain2TLS", func(t *testing.T) {
-<<<<<<< HEAD
-		for i := 0; i < 5; i++ {
-||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
-		for range 5 {
-=======
 		before := ConnectionCounts.Counts()
-		for range 5 {
->>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
+		for i := 0; i < 5; i++ {
 			testFunc(t, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 		after := ConnectionCounts.Counts()
@@ -128,14 +123,8 @@ func TestOptionalTLS(t *testing.T) {
 		require.Equal(t, before[transportTLS], after[transportTLS], "no TLS connection counted")
 	})
 	t.Run("TLS2TLS", func(t *testing.T) {
-<<<<<<< HEAD
-		for i := 0; i < 5; i++ {
-||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
-		for range 5 {
-=======
 		before := ConnectionCounts.Counts()
-		for range 5 {
->>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
+		for i := 0; i < 5; i++ {
 			testFunc(t, grpc.WithTransportCredentials(tc.client))
 		}
 		after := ConnectionCounts.Counts()

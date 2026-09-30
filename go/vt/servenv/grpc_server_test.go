@@ -17,31 +17,19 @@ limitations under the License.
 package servenv
 
 import (
-<<<<<<< HEAD
-||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
-	"context"
-=======
 	"bytes"
 	"context"
->>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
 	"fmt"
-	"log/slog"
 	"net"
 	"testing"
 
-	"context"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/orca"
-<<<<<<< HEAD
-||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
-	"google.golang.org/protobuf/types/known/emptypb"
-=======
-	"google.golang.org/protobuf/types/known/emptypb"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/tlstest"
->>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
 )
 
 // TestGRPCServerOptionalTLSWarning checks what a server with optional TLS
@@ -82,8 +70,9 @@ func TestGRPCServerOptionalTLSWarning(t *testing.T) {
 			t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
 			t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 			var logBuf bytes.Buffer
-			oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
-			t.Cleanup(func() { log.SwapLogger(oldLogger) })
+			oldWarning := log.Warning
+			log.Warning = func(args ...any) { fmt.Fprint(&logBuf, args...) }
+			t.Cleanup(func() { log.Warning = oldWarning })
 
 			createGRPCServer()
 			require.NotNil(t, GRPCServer)

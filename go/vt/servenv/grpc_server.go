@@ -226,11 +226,6 @@ func createGRPCServer() {
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-<<<<<<< HEAD
-			log.Warning("Optional TLS is active. Plain-text connections will be accepted")
-||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
-			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
-=======
 			// Optional TLS is for moving clients to TLS one at a time: the
 			// plain-text connections are served, unauthenticated, until the
 			// last client has moved and the flag is dropped. Say so plainly
@@ -240,11 +235,10 @@ func createGRPCServer() {
 			// client has moved: one that is offline or connects only now and
 			// then does not show in them.
 			if gRPCCA != "" {
-				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
+				log.Warning("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
 			} else {
-				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+				log.Warning("Optional TLS is active. Plain-text connections will be accepted")
 			}
->>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
 			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}

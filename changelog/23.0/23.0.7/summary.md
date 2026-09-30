@@ -81,3 +81,9 @@ The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keysp
 **Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
 
 See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
+
+### Optional gRPC TLS: connections are counted by transport
+
+A gRPC server started with `--grpc-enable-optional-tls` now reports its connections by transport, `tls` or `plaintext`, in two new stats: `GrpcOptionalTlsOpenConnections`, the connections currently open, and `GrpcOptionalTlsConnections`, the connections handshaken so far. Optional TLS serves plain-text connections unauthenticated so that clients can be moved to TLS one at a time, including when `--grpc-ca` is set, whose client certificate check only applies to the TLS connections. The stats are the evidence to check before dropping `--grpc-enable-optional-tls`: the first shows whether a plain-text client is connected right now, which matters because gRPC connections are long-lived and a client that connected long ago does not handshake again, and the second whether any has connected lately. Neither shows a client that is offline or connects only now and then, so they support the decision rather than prove it. A server that has both flags also says so in its startup warning now.
+
+See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
