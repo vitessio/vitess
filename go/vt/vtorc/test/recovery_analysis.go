@@ -83,6 +83,13 @@ type InfoForRecoveryAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	ReadOnly                                  uint
 	IsStalledDisk                             uint
+	ServerUUID                                string
+	GroupPluginActive                         int
+	GroupMemberState                          string
+	GroupMemberRole                           string
+	GroupPrimaryUUID                          string
+	GroupHasQuorum                            int
+	GroupOnlineMembers                        uint
 }
 
 func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
@@ -151,6 +158,13 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["current_tablet_type"] = sqlutils.CellData{String: strconv.Itoa(currentType), Valid: true}
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	rowMap["is_disk_stalled"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.IsStalledDisk), 10), Valid: true}
+	rowMap["analyzed_server_uuid"] = sqlutils.CellData{String: info.ServerUUID, Valid: true}
+	rowMap["gr_plugin_active"] = sqlutils.CellData{String: strconv.Itoa(info.GroupPluginActive), Valid: true}
+	rowMap["gr_member_state"] = sqlutils.CellData{String: info.GroupMemberState, Valid: true}
+	rowMap["gr_member_role"] = sqlutils.CellData{String: info.GroupMemberRole, Valid: true}
+	rowMap["gr_primary_uuid"] = sqlutils.CellData{String: info.GroupPrimaryUUID, Valid: true}
+	rowMap["gr_has_quorum"] = sqlutils.CellData{String: strconv.Itoa(info.GroupHasQuorum), Valid: true}
+	rowMap["gr_online_members"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.GroupOnlineMembers), 10), Valid: true}
 	return rowMap
 }
 

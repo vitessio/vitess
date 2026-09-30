@@ -348,6 +348,17 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		instance.HeartbeatInterval = fs.ReplicationConfiguration.HeartbeatInterval
 	}
 
+	if gr := fs.GroupReplicationStatus; gr != nil {
+		instance.GroupReplicationPluginActive = gr.PluginActive
+		instance.GroupName = gr.GroupName
+		instance.GroupMemberState = gr.MemberState
+		instance.GroupMemberRole = gr.MemberRole
+		instance.GroupPrimaryUUID = gr.PrimaryUuid
+		instance.GroupHasQuorum = gr.HasQuorum
+		instance.GroupOnlineMembers = countOnlineGroupMembers(gr)
+		instance.GroupViewMembers = uint(len(gr.Members))
+	}
+
 	instanceFound = true
 
 	// -------------------------------------------------------------------------
@@ -479,6 +490,14 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 				redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(uuidSID)
 			}
 		}
+		// Transactions of a replication group carry the group name as their UUID, on every
+		// member. As with the source UUID above, a member (or an asynchronous replica of the
+		// group's primary) can have applied more of them than the shard primary's stale set
+		// shows. They cannot be errant: the group certifies every transaction on a majority
+		// and refuses a member that has transactions the group does not have.
+		for _, groupSID := range groupGTIDSourceIDs(instance, primaryInstance) {
+			redactedExecutedGtidSet = redactedExecutedGtidSet.RemoveUUID(groupSID)
+		}
 		if !redactedExecutedGtidSet.Empty() {
 			redactedPrimaryExecutedGtidSet, _ := replication.ParseMysql56GTIDSet(instance.primaryExecutedGtidSet)
 			if sourceSID, err := replication.ParseSID(instance.SourceUUID); err == nil {
@@ -501,6 +520,23 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	}
 	currentErrantGTIDCount.Set(tabletAliasString, errantGtidCount)
 	return err
+}
+
+// groupGTIDSourceIDs returns the GTID source IDs of the replication groups that the instance or the
+// shard primary is an active member of.
+func groupGTIDSourceIDs(instance *Instance, primaryInstance *Instance) []replication.SID {
+	var sids []replication.SID
+	for _, i := range []*Instance{instance, primaryInstance} {
+		if i == nil || i.GroupName == "" || !i.IsGroupMemberActive() {
+			continue
+		}
+		sid, err := replication.ParseSID(i.GroupName)
+		if err != nil {
+			continue
+		}
+		sids = append(sids, sid)
+	}
+	return sids
 }
 
 // sourceIsPrimary returns true if the instance's replication source is the given primary.
@@ -651,6 +687,14 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
 	instance.AllowTLS = m.GetBool("allow_tls")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
+	instance.GroupReplicationPluginActive = m.GetBool("gr_plugin_active")
+	instance.GroupName = m.GetString("gr_group_name")
+	instance.GroupMemberState = m.GetString("gr_member_state")
+	instance.GroupMemberRole = m.GetString("gr_member_role")
+	instance.GroupPrimaryUUID = m.GetString("gr_primary_uuid")
+	instance.GroupHasQuorum = m.GetBool("gr_has_quorum")
+	instance.GroupOnlineMembers = m.GetUint("gr_online_members")
+	instance.GroupViewMembers = m.GetUint("gr_view_members")
 
 	var err error
 	instance.InstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
@@ -962,6 +1006,14 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_blocked",
 		"last_discovery_latency",
 		"is_disk_stalled",
+		"gr_plugin_active",
+		"gr_group_name",
+		"gr_member_state",
+		"gr_member_role",
+		"gr_primary_uuid",
+		"gr_has_quorum",
+		"gr_online_members",
+		"gr_view_members",
 	}
 
 	values := make([]string, len(columns))
@@ -1042,6 +1094,14 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncBlocked)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 		args = append(args, instance.StalledDisk)
+		args = append(args, instance.GroupReplicationPluginActive)
+		args = append(args, instance.GroupName)
+		args = append(args, instance.GroupMemberState)
+		args = append(args, instance.GroupMemberRole)
+		args = append(args, instance.GroupPrimaryUUID)
+		args = append(args, instance.GroupHasQuorum)
+		args = append(args, instance.GroupOnlineMembers)
+		args = append(args, instance.GroupViewMembers)
 	}
 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)

@@ -106,6 +106,14 @@ CREATE TABLE database_instance (
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
 	semi_sync_blocked tinyint NOT NULL DEFAULT 0,
 	is_disk_stalled TINYint NOT NULL DEFAULT 0,
+	gr_plugin_active TINYint NOT NULL DEFAULT 0,
+	gr_group_name varchar(64) NOT NULL DEFAULT '',
+	gr_member_state varchar(32) NOT NULL DEFAULT '',
+	gr_member_role varchar(32) NOT NULL DEFAULT '',
+	gr_primary_uuid varchar(64) NOT NULL DEFAULT '',
+	gr_has_quorum TINYint NOT NULL DEFAULT 0,
+	gr_online_members int NOT NULL DEFAULT 0,
+	gr_view_members int NOT NULL DEFAULT 0,
 	PRIMARY KEY (alias)
 )`,
 	`
