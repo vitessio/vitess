@@ -127,6 +127,16 @@ func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) 
 	}
 
 	if batchMode {
+		// Connections do not negotiate multi statement support by default, so
+		// turn it on before the client is allowed to build a batch.
+		for _, c := range conns {
+			if err := c.SetMultiStatements(true); err != nil {
+				for _, c := range conns {
+					c.Close()
+				}
+				return nil, multiStatementsConfigError(err, c)
+			}
+		}
 		maxBatchSize := vr.maxQuerySize(conns[0])
 		for _, c := range conns {
 			c.maxBatchSize = maxBatchSize

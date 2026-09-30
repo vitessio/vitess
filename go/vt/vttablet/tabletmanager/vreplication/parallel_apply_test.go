@@ -706,6 +706,9 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 	ctx := testCtx(t)
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	// The default config batches, and batching workers turn on multi
+	// statement support for their connections.
+	mockDB.AllowMultiStatements = true
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
@@ -752,6 +755,9 @@ func TestApplyEventsParallelCommitsScheduledPrefixBeforeScheduleError(t *testing
 	ctx := testCtx(t)
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	// The default config batches, and batching workers turn on multi
+	// statement support for their connections.
+	mockDB.AllowMultiStatements = true
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
@@ -804,6 +810,9 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopPosEvenIfLaterScheduleFa
 	ctx := testCtx(t)
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	// The default config batches, and batching workers turn on multi
+	// statement support for their connections.
+	mockDB.AllowMultiStatements = true
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
@@ -863,6 +872,9 @@ func TestApplyEventsParallelReturnsNilAfterEmptyTxnStopPosEvenIfLaterScheduleFai
 	ctx := testCtx(t)
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	// The default config batches, and batching workers turn on multi
+	// statement support for their connections.
+	mockDB.AllowMultiStatements = true
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
@@ -922,6 +934,9 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopDDLEvenIfLaterScheduleFa
 	ctx := testCtx(t)
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	// The default config batches, and batching workers turn on multi
+	// statement support for their connections.
+	mockDB.AllowMultiStatements = true
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_STOP
 
@@ -980,6 +995,9 @@ func TestApplyEventsParallelReturnsNilAfterScheduledRelevantJournalEvenIfLaterSc
 	ctx := testCtx(t)
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+	// The default config batches, and batching workers turn on multi
+	// statement support for their connections.
+	mockDB.AllowMultiStatements = true
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
 		"t1": {TargetName: "t1"},

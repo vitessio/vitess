@@ -39,6 +39,10 @@ type failingDBClient struct {
 	connectErr   error
 	failOnQuery  map[string]error
 	supportsCaps bool
+	// multiStatements records every SetMultiStatements call, in order.
+	multiStatements []bool
+	// multiStatementsErr, when set, is returned by SetMultiStatements.
+	multiStatementsErr error
 }
 
 type recordingDBClient struct {
@@ -88,7 +92,10 @@ func (f *failingDBClient) SupportsCapability(capability capabilities.FlavorCapab
 	return f.supportsCaps, nil
 }
 
-func (f *failingDBClient) SetMultiStatements(on bool) error { return nil }
+func (f *failingDBClient) SetMultiStatements(on bool) error {
+	f.multiStatements = append(f.multiStatements, on)
+	return f.multiStatementsErr
+}
 
 func (r *recordingDBClient) DBName() string  { return "db" }
 func (r *recordingDBClient) Connect() error  { return nil }
@@ -214,6 +221,9 @@ func TestNewApplyWorker(t *testing.T) {
 	config := vttablet.InitVReplicationConfigDefaults()
 
 	mockDB := binlogplayer.NewMockDBClient(t)
+	// The default config batches, and a batching worker turns on multi
+	// statement support for its connections.
+	mockDB.AllowMultiStatements = true
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
@@ -278,6 +288,24 @@ func TestNewApplyWorkerSmallMaxBatchSizeFallback(t *testing.T) {
 	for _, c := range worker.conns {
 		assert.Equal(t, int64(10), c.maxBatchSize)
 	}
+	// Connections no longer negotiate multi statement support by default, so
+	// a batching worker has to turn it on for each of its connections before
+	// it sends a batch.
+	assert.Equal(t, []bool{true, true}, client.multiStatements)
+
+	t.Run("failing to enable multi statements fails the worker", func(t *testing.T) {
+		client := &failingDBClient{multiStatementsErr: errors.New("server refused")}
+		vr := &vreplicator{
+			id:             1,
+			stats:          stats,
+			dbClient:       newVDBClient(client, stats, cfg.RelayLogMaxItems),
+			workflowConfig: cfg,
+			vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
+		}
+		worker, err := newApplyWorker(t.Context(), vr)
+		require.ErrorContains(t, err, "failed to configure multi statement support")
+		require.Nil(t, worker)
+	})
 }
 
 func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {

@@ -282,21 +282,27 @@ func (vp *vplayer) setConnectionBatchMode() error {
 	vp.vr.dbClient.maxBatchSize = 0
 
 	if err := vp.vr.dbClient.SetMultiStatements(vp.batchMode); err != nil {
-		if sqlerror.IsConnErr(err) || vp.vr.dbClient.IsClosed() {
-			// Losing the connection says nothing about whether it could have
-			// batched. The client already dropped it, so the workflow gets a new
-			// one on the next run: keep the error as it came so that it is
-			// retried rather than ending the workflow. The connection is also
-			// dropped when the server's answer leaves its state unknown, which
-			// is not reported as a connection error, so ask the client too.
-			return vterrors.Wrapf(err, "failed to configure multi statement support for the vplayer")
-		}
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to configure multi statement support for the vplayer (%v); clear the vplayer batching bit (%d) of --vreplication-experimental-flags to replay without batching",
-			err, vttablet.VReplicationExperimentalFlagVPlayerBatching)
+		return multiStatementsConfigError(err, vp.vr.dbClient)
 	}
 
 	vp.vr.dbClient.maxBatchSize = vp.maxBatchSize
 	return nil
+}
+
+// multiStatementsConfigError classifies a failure to change a connection's
+// multi statement support.
+func multiStatementsConfigError(err error, client *vdbClient) error {
+	if sqlerror.IsConnErr(err) || client.IsClosed() {
+		// Losing the connection says nothing about whether it could have
+		// batched. The client already dropped it, so the workflow gets a new
+		// one on the next run: keep the error as it came so that it is
+		// retried rather than ending the workflow. The connection is also
+		// dropped when the server's answer leaves its state unknown, which
+		// is not reported as a connection error, so ask the client too.
+		return vterrors.Wrapf(err, "failed to configure multi statement support for the vplayer")
+	}
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to configure multi statement support for the vplayer (%v); clear the vplayer batching bit (%d) of --vreplication-experimental-flags to replay without batching",
+		err, vttablet.VReplicationExperimentalFlagVPlayerBatching)
 }
 
 // clearConnectionBatchMode takes the ability to send several statements in a
