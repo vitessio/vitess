@@ -190,6 +190,29 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 			wantSerializeTableWrites: true,
 		},
 		{
+			// A prefix primary key enforces uniqueness on the prefix while
+			// the writeset hashes the full value, even when the table has no
+			// secondary index at all.
+			name:              "prefix primary key without secondary indexes serializes",
+			ddl:               "create table t1 (name varchar(64) not null, primary key(name(10)))",
+			identityCols:      []string{"name"},
+			wantMustSerialize: true,
+		},
+		{
+			// Same for an expression primary key.
+			name:              "expression primary key without secondary indexes serializes",
+			ddl:               "create table t1 (name varchar(64) not null, primary key((lower(name))))",
+			identityCols:      []string{"name"},
+			wantMustSerialize: true,
+		},
+		{
+			// A plain primary key matching the identity with no secondary
+			// indexes needs nothing extra.
+			name:         "plain primary key without secondary indexes",
+			ddl:          "create table t1 (id int not null, primary key(id))",
+			identityCols: []string{"id"},
+		},
+		{
 			// Non-unique secondary indexes take no gap locks for row image
 			// application under READ COMMITTED.
 			name:         "non-unique secondary index keeps table writes parallel",

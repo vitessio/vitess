@@ -1082,10 +1082,9 @@ func writesetUniqueKeyColumnsFromSpec(plan *TablePlan, tableSpec *sqlparser.Tabl
 	if plan == nil || tableSpec == nil {
 		return nil, false
 	}
+	// No early return when the table has no secondary indexes: the primary
+	// key itself still has to match the identity (no prefix or expression).
 	secondaryKeys := extractSecondaryKeys(tableSpec)
-	if len(secondaryKeys) == 0 {
-		return nil, false
-	}
 
 	identityCols := plan.IdentityColumns
 	if len(identityCols) == 0 {
