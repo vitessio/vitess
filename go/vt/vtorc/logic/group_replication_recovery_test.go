@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -451,6 +452,47 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 	}
 }
 
+// TestStartGroupReplicationOnMemberDoesNotWaitForUnreachableTablet reproduces S7d run 3 of the
+// Group Replication failover audit: VTOrc checked that the group was active, then waited 9s for
+// the FullStatus of an isolated tablet before it started the join, by which time the group had
+// lost its majority. The join ended with the member alone in a group of its own, which kept the
+// shard's group from being bootstrapped for 20s. The check must not wait for a tablet that does
+// not answer once the answers it has show an active member of the legitimate group.
+func TestStartGroupReplicationOnMemberDoesNotWaitForUnreachableTablet(t *testing.T) {
+	member := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	isolated := recoveryTablet("zone2", 102, topodatapb.TabletType_REPLICA)
+	mockTMC := groupReplicationRecoveryTest(t, primary, member, isolated)
+	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationIncarnation = "1790000001"
+		return nil
+	})
+	require.NoError(t, err)
+	active := groupMemberStatus(primary, primary, primary, isolated)
+	active.GroupReplicationStatus.GroupName = policy.GroupName("ks", "0")
+	active.GroupReplicationStatus.ViewId = "1790000001:7"
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(active, nil)
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(member)).Return(notMemberStatus(member), nil)
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(isolated)).DoAndReturn(
+		func(ctx context.Context, _ *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		})
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.GroupMemberNotOnline,
+		AnalyzedInstanceAlias: member.Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	start := time.Now()
+	attempted, _, err := startGroupReplicationOnMember(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+	require.True(t, attempted)
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), groupJoinCheckTimeout, "the join must not wait for the isolated tablet")
+}
+
 // TestGroupReplicationRecoveriesRunWithoutShardPrimary checks which recoveries that are not
 // shard-wide run while the shard has no primary tablet. GroupMemberNotOnline must: a group that
 // was just bootstrapped, or that lost the majority of its voters, only gets a primary tablet once
@@ -567,15 +609,24 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			for i, tablet := range tablets {
 				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(tt.statuses[i], tt.errs[i])
 			}
+			var joins atomic.Int32
 			for _, tablet := range tablets {
-				times := 0
+				times, joinTimes := 0, 0
 				if tablet.Alias.Uid == tt.want {
 					times = 1
+				} else if tt.want != 0 && tablet.Type != topodatapb.TabletType_RDONLY {
+					// The other voters are made to join the new group right away.
+					joinTimes = 1
 				}
 				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).
 					DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
 						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil
 					}).Times(times)
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), false).
+					DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+						joins.Add(1)
+						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
+					}).Times(joinTimes)
 			}
 
 			analysisEntry := &inst.DetectionAnalysis{
@@ -608,6 +659,8 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			incarnation, err := inst.ReadShardGroupReplicationIncarnation("ks", "0")
 			require.NoError(t, err)
 			assert.Equal(t, "1790000123", incarnation)
+			// The two other voters join the group without waiting for another recovery.
+			assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
 		})
 	}
 }
@@ -663,13 +716,21 @@ func TestBootstrapGroupReplicationVoters(t *testing.T) {
 				}
 			}
 			setVoters(t, voters...)
+			joined := make(chan uint32, len(tablets))
 			for i, tablet := range tablets {
 				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(statuses[i], nil).MaxTimes(1)
-				times := 0
+				times, joinTimes := 0, 0
 				if tablet.Alias.Uid == tt.want {
 					times = 1
+				} else if tt.want != 0 && slices.Contains(tt.voters, tablet.Alias.Uid) {
+					joinTimes = 1
 				}
 				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil).Times(times)
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), false).
+					DoAndReturn(func(_ context.Context, tablet *topodatapb.Tablet, _ bool) (*replicationdatapb.GroupReplicationStatus, error) {
+						joined <- tablet.Alias.Uid
+						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
+					}).Times(joinTimes)
 			}
 
 			analysisEntry := &inst.DetectionAnalysis{
@@ -692,6 +753,13 @@ func TestBootstrapGroupReplicationVoters(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, topologyRecovery.SuccessorAlias.Uid)
+			// The other voter joins the new group; the replica that is not a voter does not.
+			select {
+			case uid := <-joined:
+				assert.EqualValues(t, 100, uid)
+			case <-time.After(30 * time.Second):
+				require.Fail(t, "the other voter was not made to join the group")
+			}
 		})
 	}
 }

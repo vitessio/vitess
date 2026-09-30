@@ -194,9 +194,19 @@ func startGroupReplicationOnMember(ctx context.Context, analysisEntry *inst.Dete
 	return true, topologyRecovery, nil
 }
 
+// groupJoinCheckTimeout bounds the FullStatus RPCs with which VTOrc checks, right before it makes a
+// voter join its group, that the shard's legitimate group is active on another tablet.
+var groupJoinCheckTimeout = 2 * time.Second
+
 // checkLegitimateGroupActive returns an error unless a tablet of the shard other than the given
 // one reports that its MySQL is an active member of the shard's legitimate group, with quorum in
 // its view, and the given tablet's MySQL is not active in a group of another incarnation.
+//
+// It returns as soon as the answers it has settle the question, and waits at most
+// groupJoinCheckTimeout for the others: the join starts right after the check, and a check that
+// waited for an unreachable tablet (up to the RPC timeout) made VTOrc start a join into a group
+// that had lost its majority in the meantime. Such a join ends with the member alone in a group
+// of its own, which then keeps the shard's group from being bootstrapped until it has left it.
 func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) error {
 	shardInfo, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
@@ -206,24 +216,36 @@ func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) 
 	if err != nil {
 		return err
 	}
-	statuses := readShardTabletStatuses(ctx, tabletInfos)
-	legitimate := legitimateGroupOf(shardInfo, statuses)
+	// Whether a member belongs to the legitimate group only depends on the recorded incarnation.
+	legitimate := policy.NewLegitimateGroup(shardInfo.GetGroupReplicationIncarnation(), nil, nil, nil)
 	groupName := policy.GroupName(tablet.Keyspace, tablet.Shard)
-	active := false
-	for _, st := range statuses {
-		if st.err != nil {
-			continue
-		}
+
+	checkCtx, cancel := context.WithTimeout(ctx, groupJoinCheckTimeout)
+	defer cancel()
+	results := make(chan *shardTabletStatus, len(tabletInfos))
+	for _, ti := range tabletInfos {
+		go func() {
+			st := &shardTabletStatus{tablet: ti.Tablet}
+			st.status, st.err = tabletFullStatus(checkCtx, ti.Tablet)
+			results <- st
+		}()
+	}
+	active, selfChecked := false, false
+	for range tabletInfos {
+		st := <-results
 		gs := st.status.GetGroupReplicationStatus()
-		if topoproto.TabletAliasEqual(st.tablet.Alias, tablet.Alias) {
-			if legitimate.IsForeignIncarnation(gs) {
+		switch {
+		case topoproto.TabletAliasEqual(st.tablet.Alias, tablet.Alias):
+			selfChecked = true
+			if st.err == nil && legitimate.IsForeignIncarnation(gs) {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is active in group incarnation %s, not in the shard's incarnation %s",
 					topoproto.TabletAliasString(tablet.Alias), policy.GroupIncarnation(gs.GetViewId()), legitimate.Incarnation)
 			}
-			continue
-		}
-		if gs.GetGroupName() == groupName && legitimate.IsLegitimateMember(gs) && gs.GetHasQuorum() {
+		case st.err == nil && gs.GetGroupName() == groupName && legitimate.IsLegitimateMember(gs) && gs.GetHasQuorum():
 			active = true
+		}
+		if active && selfChecked {
+			return nil
 		}
 	}
 	if !active {
@@ -310,9 +332,36 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 		}
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("recorded the group incarnation %s", incarnation))
+	joinVotersAfterBootstrap(shardInfo.GroupReplicationVoters, tabletInfos, candidate.tablet, logger)
 	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, candidate.tablet.Alias, "bootstrapped the replication group")
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, aliasString))
 	return true, topologyRecovery, nil
+}
+
+// joinVotersAfterBootstrap makes the voters other than the one that bootstrapped the shard's group
+// join it, concurrently and in the background. A group that was just bootstrapped has one member,
+// and Vitess only follows its primary once a majority of the voters are ONLINE in its view: until
+// then the shard takes no writes. Every voter was reachable and not an active member when the
+// group was bootstrapped, so they are made to join right away, instead of when their tablets' sync
+// loops or VTOrc's next GroupMemberNotOnline get to it (seconds later, which the S7d chaos
+// scenario showed to be long enough for the group to be cut off again first). A join does not need
+// the shard lock, and can take as long as the member's distributed recovery. A join that fails is
+// retried by the tablet's sync loop or by GroupMemberNotOnline.
+func joinVotersAfterBootstrap(voters []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo, bootstrapped *topodatapb.Tablet, logger *log.PrefixedLogger) {
+	for _, ti := range tabletInfos {
+		tablet := ti.Tablet
+		if !policy.IsVoter(voters, tablet.Alias) || topoproto.TabletAliasEqual(tablet.Alias, bootstrapped.Alias) {
+			continue
+		}
+		go func() {
+			aliasString := topoproto.TabletAliasString(tablet.Alias)
+			if _, err := startGroupReplication(context.Background(), tablet, false); err != nil {
+				logger.Warn("failed to make a voter join the group that was just bootstrapped", slog.String("tablet", aliasString), slog.Any("error", err))
+				return
+			}
+			logger.Info("a voter joined the group that was just bootstrapped", slog.String("tablet", aliasString))
+		}()
+	}
 }
 
 // legitimateGroupOf returns the shard's legitimate replication group from its shard record. The
