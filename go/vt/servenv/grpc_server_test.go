@@ -24,17 +24,13 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/orca"
-<<<<<<< HEAD
-||||||| parent of 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
-	"google.golang.org/protobuf/types/known/emptypb"
-=======
-	"google.golang.org/protobuf/types/known/emptypb"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/tlstest"
->>>>>>> 4c99898f38 (grpcoptionaltls: Say that plain-text connections are unauthenticated, and count connections by transport (#21162))
 )
 
 // TestGRPCServerOptionalTLSWarning checks what a server with optional TLS
