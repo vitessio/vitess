@@ -253,6 +253,18 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
 | `PlannedReparentShard` (group_replication_set_as_primary) | 0.6s, 0 failed writes |
 | `kill -9` of the primary's mysqld | New primary in topo 6.6s after the kill (21.6s with MySQL's default `member_expel_timeout` of 5s). The new primary's tablet promoted itself within 5ms of the election, writes resumed, and the old primary rejoined as a secondary. |
 | `MigrateReplicationMode` back to cross_cell | No data loss; vtgate buffered while the primary left its group |
+| One voter per cell (`TestGroupReplicationOneVoterPerCell`, two REPLICA tablets in one cell) | Only one of them votes; the other replicates asynchronously. When the voter's host dies, VTOrc makes the other tablet the cell's voter after the grace period, with 0 failed writes |
+
+**Unplanned failover, semi-sync vs Group Replication** (`TestUnplannedFailoverTimes`, opt-in with `VT_UNPLANNED_FAILOVER_TRIALS`; 3 trials each, one host, so no network latency between cells):
+
+| Failure | Mode | New primary in topo | First write after the failure acknowledged | Acknowledged writes lost |
+|---|---|---|---|---|
+| Host crash (mysqld_safe, mysqld and vttablet killed) | semi-sync `cross_cell`, VTOrc poll 5s or 1s | 3.3s | 3.2–3.3s | 0 |
+| Host crash | `group_replication_cross_cell` | 6.4–6.6s | 7.0–7.3s | 0 |
+| mysqld frozen (SIGSTOP), vttablet alive | semi-sync `cross_cell`, VTOrc poll 5s or 1s | 11.3s | 11.3–12.3s | 0 |
+| mysqld frozen | `group_replication_cross_cell` | 6.2–6.7s | 7.2–8.1s | 0 |
+
+A dead host refuses connections, so VTOrc detects it on its next check and ERS takes about a second. Group Replication cannot beat its fixed 5s failure detection. A frozen MySQL is detected by timeouts on the Vitess side; the group's detection does not depend on how the member fails.
 
 ## Prototype scope
 
