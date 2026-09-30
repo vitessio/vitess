@@ -197,7 +197,7 @@ var (
 	)
 
 	// emergencyReparentRequirePrimaryPosition makes ERS require the last stored primary position.
-	// It applies only to semi-sync durability policies.
+	// It applies only to MySQL GTID shards with a semi-sync durability policy.
 	emergencyReparentRequirePrimaryPosition = viperutil.Configure(
 		"emergency-reparent-require-primary-position",
 		viperutil.Options[bool]{
