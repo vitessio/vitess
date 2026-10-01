@@ -173,55 +173,6 @@ func TestParsed(t *testing.T) {
 	assert.True(t, b, "command-line flags should be parsed")
 }
 
-func TestLookup(t *testing.T) {
-	oldPflagCommandLine := pflag.CommandLine
-	oldCommandLine := goflag.CommandLine
-
-	defer func() {
-		pflag.CommandLine = oldPflagCommandLine
-		goflag.CommandLine = oldCommandLine
-	}()
-
-	pflag.CommandLine = pflag.NewFlagSet("testPflagSet", pflag.ExitOnError)
-	goflag.CommandLine = goflag.NewFlagSet("testGoflagSet", goflag.ExitOnError)
-
-	var testGoFlag, testPflag, testFlag bool
-
-	goflag.BoolVar(&testGoFlag, "testGoFlag", true, "")
-	goflag.BoolVar(&testFlag, "t", true, "")
-	pflag.BoolVar(&testPflag, "testPflag", true, "")
-
-	testCases := []struct {
-		shorthand string
-		name      string
-	}{
-		{
-			// If single character flag is passed, the shorthand should be the same
-			shorthand: "t",
-			name:      "t",
-		},
-		{
-			shorthand: "",
-			name:      "testGoFlag",
-		},
-		{
-			shorthand: "",
-			name:      "testPflag",
-		},
-	}
-
-	for _, tt := range testCases {
-		f := Lookup(tt.name)
-
-		assert.NotNil(t, f)
-		assert.Equal(t, tt.shorthand, f.Shorthand)
-		assert.Equal(t, tt.name, f.Name)
-	}
-
-	f := Lookup("non-existent-flag")
-	assert.Nil(t, f)
-}
-
 func TestArgs(t *testing.T) {
 	oldPflagCommandLine := pflag.CommandLine
 	oldOsArgs := os.Args

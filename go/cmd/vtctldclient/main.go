@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"vitess.io/vitess/go/acl"
@@ -38,9 +37,6 @@ import (
 func main() {
 	defer exit.Recover()
 
-	// Grab all those global flags across the codebase and shove 'em on in.
-	// (TODO|andrew) remove this line after the migration to pflag is complete.
-	command.Root.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	log.RegisterFlags(command.Root.PersistentFlags())
 	log.RegisterRemovedClientFlags(command.Root.PersistentFlags())
 	grpcclient.RegisterFlags(command.Root.PersistentFlags())
