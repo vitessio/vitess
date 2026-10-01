@@ -67,10 +67,12 @@ func TestPlanKeyHashFieldBoundaries(t *testing.T) {
 }
 
 func TestPlanKeyHashAllocationFree(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name string
 		key  PlanKey
-	}{
+	}
+
+	tests := []testCase{
 		{name: "empty"},
 		{
 			name: "populated",
@@ -86,10 +88,7 @@ func TestPlanKeyHashAllocationFree(t *testing.T) {
 	}
 	const headerSize = 2*2 + 4*8
 	for _, size := range []int{63, 64, 65, 95, 96, 97} {
-		tests = append(tests, struct {
-			name string
-			key  PlanKey
-		}{
+		tests = append(tests, testCase{
 			name: fmt.Sprintf("bytes_%d", size),
 			key: PlanKey{
 				TabletType: topodatapb.TabletType_REPLICA,
