@@ -45,6 +45,9 @@
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
+        - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [VTOrc can require the last known primary position in an emergency reparent](#vtorc-emergency-reparent-require-primary-position)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -522,6 +525,40 @@ GTID containment is pairwise, so a candidate set can mix comparable and divergen
 Candidates are now ordered by GTID dominance before the existing promotion-rule, buffer-pool, and tablet-alias tiebreakers, so a dominated candidate can never rank ahead of its dominator regardless of input order. `EmergencyReparentShard` still rejects incomparable candidates as split brain, and `PlannedReparentShard` still chooses among incomparable maximal candidates. Positions that contain each other without being equal (possible with MariaDB GTIDs, where containment ignores the origin server) are now also rejected by `EmergencyReparentShard` as split brain, wherever the pair sits among the candidates; previously a leading pair failed with an internal sorting error, while a pair behind a more advanced candidate was not detected at all.
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
+
+#### <a id="ers-required-position"/>`EmergencyReparentShard` can require a position on the new primary</a>
+
+`EmergencyReparentShard` (ERS) can now require that the new primary has a given position. A new `--required-position` flag and a new `required_position` field on the `EmergencyReparentShard` RPC name that position. At least one candidate must have received it, either applied or still in its relay log.
+
+Use this when you know a position that the new primary must not lose, for example the last `gtid_executed` of the failed primary. ERS compares the candidates only to each other. When every candidate lost the same received transactions, for example after a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1`, the candidates look fully applied, and ERS alone cannot see that they are behind.
+
+If no candidate has received the position, ERS fails with `FAILED_PRECONDITION` before it waits on any relay log, and reports the most advanced received positions it found. ERS does the check again after errant GTID detection. It fails in the same way if detection removes every candidate that has the position.
+
+The check supports MySQL GTID sets on MySQL GTID shards only. A position of another flavor fails with `INVALID_ARGUMENT` before ERS locks the shard. On a shard that does not use MySQL GTIDs, ERS fails with `INVALID_ARGUMENT` only after it stops replication and demotes a reachable primary. Do not use the flag on such a shard.
+
+The check runs in vtctld. An older vtctld ignores `--required-position` and runs ERS without it. Upgrade vtctld before relying on the flag.
+
+See [#21109](https://github.com/vitessio/vitess/issues/21109).
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-emergency-reparent-require-primary-position"/>VTOrc can require the last known primary position in an emergency reparent</a>
+
+VTOrc can now require that the new primary of an emergency reparent has received the last `gtid_executed` that VTOrc saw on the failed primary. VTOrc stores that GTID set on every successful poll of the primary, and passes it to `EmergencyReparentShard` (ERS) as the required minimum position (see [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)).
+
+Use this to prevent the promotion of a stale replica when every replica lost the same received transactions. For example, a `CHANGE REPLICATION SOURCE TO` or a restart with `relay_log_recovery=1` can discard the relay logs on every replica. The replicas then look fully applied, and ERS alone cannot see that they are behind the primary.
+
+The feature is opt-in and disabled by default. Set `--emergency-reparent-require-primary-position` on VTOrc. VTOrc then passes the stored set to ERS when all of these are true:
+
+- The shard uses MySQL GTIDs. VTOrc passes no position for a MariaDB or file position shard.
+- The keyspace durability policy uses semi-sync. Without semi-sync, the primary can have transactions that no replica received, and the policy accepts their loss.
+- VTOrc has a stored set for the primary. See the limitation below.
+
+If no replica received the stored set, the failover fails with `FAILED_PRECONDITION`. VTOrc does not promote a replica, and the shard has no serving primary until an operator runs `EmergencyReparentShard` manually. The most common case is losing the primary together with its only semi-sync acker, for example in a zone outage under `semi_sync` with one required ack. The remaining replicas may miss the last acknowledged transactions, and the shard then waits for a manual ERS. VTOrc keeps retrying the failover and takes the shard lock on each attempt, so first disable VTOrc's ERS for the shard with `vtctldclient SetVtorcEmergencyReparent --disable <keyspace> <shard>`, and enable it again after the manual ERS. The recovery audit records the required position, or the reason VTOrc did not pass one, and the ERS error with the most advanced positions the replicas received.
+
+VTOrc can only require a position that it had observed on the primary before the primary failed. VTOrc does not keep its stored instance data across a restart, and it cannot poll a dead primary. For these reasons, VTOrc has no stored set if it restarted after the primary failed or if the primary failed before the first poll. In these cases VTOrc runs the failover without the requirement and records a warning in the recovery audit. It does not block the failover until an operator acts. More than one VTOrc per shard makes this less likely, but does not prevent it as VTOrcs do not have shared state and a restarted VTOrc can be the first one to take the shard lock and execute a recovery.
+
+See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
