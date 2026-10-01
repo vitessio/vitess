@@ -90,6 +90,16 @@ var (
 	// groupReplicationRejoinGateInterval is how long the sync loop waits before it checks again
 	// whether the shard's group is active on another tablet, when it was not.
 	groupReplicationRejoinGateInterval = 2 * time.Second
+	// groupReplicationDemotionPublishTimeout bounds how long a tablet that demotes itself, because
+	// its MySQL lost the primary role in its group, waits under the action lock for the topology
+	// server to store its tablet record. The record is published in the background afterwards.
+	groupReplicationDemotionPublishTimeout = 1 * time.Second
+	// groupReplicationTopoReadTimeout bounds the topology reads with which a tablet prepares a
+	// join or a bootstrap (StartGroupReplication), when it has read the same data before: it then
+	// uses what it read last. These RPCs recover the shard's group, and VTOrc may reach a tablet
+	// whose own topology server does not answer, for example one whose cell's topology server is
+	// down or cut off.
+	groupReplicationTopoReadTimeout = 1 * time.Second
 )
 
 func registerGroupReplicationFlags(fs *pflag.FlagSet) {
@@ -194,6 +204,7 @@ func (tm *TabletManager) keyspaceDurability(ctx context.Context) (policy.Durable
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
+	tm.groupReplicationTopo.setDurability(durabilityName)
 	return durability, nil
 }
 
@@ -201,6 +212,13 @@ func (tm *TabletManager) keyspaceDurability(ctx context.Context) (policy.Durable
 // the topology: the group name from the keyspace and shard, the seeds from the other tablets of
 // the shard, and the member weight from the durability policy.
 func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability policy.Durabler) (mysql.GroupReplicationConfig, error) {
+	return tm.groupReplicationConfigUntil(ctx, durability, time.Time{})
+}
+
+// groupReplicationConfigUntil is groupReplicationConfig, but if the tablet read the shard's tablet
+// records before, it waits for the topology until deadline only and otherwise derives the seeds
+// from the records it read last (tabletsForGroupChange). A zero deadline does not bound the read.
+func (tm *TabletManager) groupReplicationConfigUntil(ctx context.Context, durability policy.Durabler, deadline time.Time) (mysql.GroupReplicationConfig, error) {
 	tablet := tm.Tablet()
 	if tablet.MysqlPort <= 0 {
 		// The tablet record gets the port once MySQL answered; the join cannot wait for that.
@@ -216,9 +234,9 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 	}
 
 	// The seeds of the cells that answer in time are enough to join.
-	tablets, err := tm.TopoServer.GetTabletMapForShardWithCellTimeout(ctx, tablet.Keyspace, tablet.Shard, groupReplicationCellTimeout)
-	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
-		return mysql.GroupReplicationConfig{}, vterrors.Wrapf(err, "cannot read the tablets of shard %v/%v", tablet.Keyspace, tablet.Shard)
+	tablets, err := tm.tabletsForGroupChange(ctx, tablet.Keyspace, tablet.Shard, deadline)
+	if err != nil {
+		return mysql.GroupReplicationConfig{}, err
 	}
 
 	weight := defaultGroupMemberWeight
@@ -398,12 +416,18 @@ func (tm *TabletManager) stopOngoingGroupStartLocked(ctx context.Context) (*repl
 
 // joinGroupLocked configures Group Replication and starts it on a MySQL that is not an active
 // member.
+//
+// The durability policy and the tablet records only give the member weight and the seeds. A tablet
+// that read them before waits at most groupReplicationTopoReadTimeout for the topology, and
+// otherwise uses what it read last: a bootstrap or a join that VTOrc asks for to recover the
+// shard's group must not wait for a topology server that does not answer the tablet.
 func (tm *TabletManager) joinGroupLocked(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, bootstrap bool) error {
-	durability, err := tm.keyspaceDurability(ctx)
+	deadline := time.Now().Add(groupReplicationTopoReadTimeout)
+	durability, err := tm.durabilityForGroupChange(ctx, deadline)
 	if err != nil {
 		return err
 	}
-	cfg, err := tm.groupReplicationConfig(ctx, durability)
+	cfg, err := tm.groupReplicationConfigUntil(ctx, durability, deadline)
 	if err != nil {
 		return err
 	}
@@ -760,14 +784,17 @@ func (tm *TabletManager) stopServingBeforeBootstrap(ctx context.Context) error {
 	if tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
 		return nil
 	}
-	durability, err := tm.keyspaceDurability(ctx)
+	// Like the reads of a join, these wait at most groupReplicationTopoReadTimeout for the topology
+	// when the tablet read the same data before.
+	deadline := time.Now().Add(groupReplicationTopoReadTimeout)
+	durability, err := tm.durabilityForGroupChange(ctx, deadline)
 	if err != nil {
 		return err
 	}
 	if !policy.IsGroupReplication(durability) {
 		return nil
 	}
-	voters, err := tm.groupReplicationVoters(ctx)
+	voters, err := tm.votersForGroupChange(ctx, deadline)
 	if err != nil {
 		return err
 	}
@@ -818,6 +845,7 @@ func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodat
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
+	tm.groupReplicationTopo.setVoters(si.GetGroupReplicationVoters())
 	return si.GetGroupReplicationVoters(), nil
 }
 

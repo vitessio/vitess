@@ -242,6 +242,10 @@ type TabletManager struct {
 	// tablets of its shard, to identify the shard's voters in its group's view, and the
 	// incarnation of the last group this tablet bootstrapped.
 	groupReplicationPeers groupReplicationPeers
+	// groupReplicationTopo remembers what the tablet last read from the topology about its
+	// keyspace's durability policy and its shard's voters and tablets, for the group replication
+	// RPCs that must not wait for a topology server that does not answer.
+	groupReplicationTopo groupReplicationTopoCache
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection

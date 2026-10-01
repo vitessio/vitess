@@ -159,6 +159,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 		primaryAlias: si.PrimaryAlias,
 		tablets:      make(map[string]*topodatapb.Tablet),
 	}
+	tm.groupReplicationTopo.setVoters(rec.voters)
 	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {
 		rec.tablets, rec.tabletsRead = prev.tablets, prev.tabletsRead
 		return rec, nil
@@ -171,6 +172,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 		return nil, vterrors.Wrapf(err, "cannot read the tablets of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
+	tm.groupReplicationTopo.setTablets(tabletMap, err != nil)
 	for alias, ti := range tabletMap {
 		if ti != nil && ti.Tablet != nil {
 			rec.tablets[alias] = ti.Tablet
@@ -396,8 +398,9 @@ func (tm *TabletManager) leaveForeignGroupLocked(ctx context.Context, status *re
 		slog.String("role", status.GetMemberRole()),
 		slog.Int("online_members", mysql.OnlineGroupMembers(status)))
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
-		// Stop serving before MySQL leaves; the group this tablet followed is not the shard's.
-		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+		// Stop serving before MySQL leaves; the group this tablet followed is not the shard's. The
+		// record is published in the background if the topology server does not answer in time.
+		if err := tm.tmState.ChangeTabletTypeWithPublishTimeout(ctx, topodatapb.TabletType_REPLICA, DBActionNone, groupReplicationDemotionPublishTimeout); err != nil {
 			log.Error("Group replication: failed to demote the tablet to REPLICA", slog.Any("error", err))
 		}
 	}

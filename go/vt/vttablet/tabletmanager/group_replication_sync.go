@@ -419,7 +419,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 }
 
 // demote changes the tablet type from PRIMARY to REPLICA after MySQL lost the primary role in
-// its group.
+// its group. It waits at most groupReplicationDemotionPublishTimeout for the topology server to
+// store the tablet record, and leaves the rest to the background publisher: it holds the action
+// lock, which the RPCs that recover the group need, and a member that lost its group is often one
+// whose cell is cut off, topology server included.
 func (s *groupReplicationSync) demote(ctx context.Context) {
 	tm := s.tm
 	if !tm.actionSema.TryAcquire(1) {
@@ -437,7 +440,7 @@ func (s *groupReplicationSync) demote(ctx context.Context) {
 		slog.String("role", status.MemberRole),
 		slog.Bool("has_quorum", status.HasQuorum))
 	s.twoPCAllowed = nil
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+	if err := tm.tmState.ChangeTabletTypeWithPublishTimeout(ctx, topodatapb.TabletType_REPLICA, DBActionNone, groupReplicationDemotionPublishTimeout); err != nil {
 		log.Error("Group replication sync: failed to demote the tablet to REPLICA", slog.Any("error", err))
 	}
 }
@@ -463,7 +466,8 @@ func (s *groupReplicationSync) isStalePrimary(ctx context.Context, status *repli
 }
 
 // demoteStalePrimary changes the type of a stale PRIMARY tablet to REPLICA, after checking again
-// under the action lock. MySQL is left as it is.
+// under the action lock. MySQL is left as it is. Like demote, it does not wait for an unresponsive
+// topology server under the action lock.
 func (s *groupReplicationSync) demoteStalePrimary(ctx context.Context, durability policy.Durabler) {
 	tm := s.tm
 	if !tm.actionSema.TryAcquire(1) {
@@ -478,7 +482,7 @@ func (s *groupReplicationSync) demoteStalePrimary(ctx context.Context, durabilit
 		slog.Bool("plugin_active", status.PluginActive),
 		slog.String("state", status.MemberState))
 	s.twoPCAllowed = nil
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+	if err := tm.tmState.ChangeTabletTypeWithPublishTimeout(ctx, topodatapb.TabletType_REPLICA, DBActionNone, groupReplicationDemotionPublishTimeout); err != nil {
 		log.Error("Group replication sync: failed to demote the tablet to REPLICA", slog.Any("error", err))
 	}
 }

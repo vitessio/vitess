@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var publishRetryInterval = 30 * time.Second
@@ -82,6 +83,9 @@ type tmState struct {
 	deniedTables    map[topodatapb.TabletType][]string
 	tablet          *topodatapb.Tablet
 	isPublishing    bool
+	// publishKick wakes up a retryPublish that waits for its next attempt, when the state changed
+	// while it waited: the change is published right away rather than after publishRetryInterval.
+	publishKick chan struct{}
 	// groupReplicationNotServing is the reason why a PRIMARY tablet must not serve while its
 	// replication group lacks a majority of its voters. Empty means that it may serve.
 	groupReplicationNotServing string
@@ -102,9 +106,10 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 		displayState: displayState{
 			tablet: tablet.CloneVT(),
 		},
-		tablet: tablet,
-		ctx:    ctx,
-		cancel: cancel,
+		tablet:      tablet,
+		ctx:         ctx,
+		cancel:      cancel,
+		publishKick: make(chan struct{}, 1),
 	}
 }
 
@@ -243,12 +248,37 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 	}
 
-	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action)
+	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action, 0)
 	return err
 }
 
+// ChangeTabletTypeWithPublishTimeout changes the tablet type to a type other than PRIMARY, like
+// ChangeTabletType, but waits at most publishTimeout for the topology server to store the tablet
+// record. If it does not answer in time, the record is published in the background
+// (retryPublish), like after any other failed publish, and the change is complete otherwise: the
+// tablet runs with the new type, and the query service follows it.
+//
+// A tablet that changes its type on its own, because its MySQL is no longer the primary of its
+// replication group, uses it under the action lock. The topology server of a cell that is cut off
+// does not answer until the caller gives up, and the wait held the action lock: in the G12 chaos
+// scenario, the write issued while the cell was cut off only returned 7-11s after the partition
+// healed, and the RPC with which VTOrc bootstrapped the shard's group on that tablet waited for it.
+//
+// PRIMARY is refused: a tablet writes its record before it becomes PRIMARY (ChangeTabletType).
+func (ts *tmState) ChangeTabletTypeWithPublishTimeout(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, publishTimeout time.Duration) error {
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "the tablet record of %s must be written before the tablet becomes PRIMARY", topoproto.TabletAliasString(ts.tm.tabletAlias))
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s, waiting at most %v for the topology", tabletType, ts.tablet.Alias.String(), publishTimeout))
+	return ts.updateTypeAndPublish(ctx, tabletType, nil, action, publishTimeout)
+}
+
 // updateTypeAndPublish updates the tablet type in the internal state, and publishes the changes.
-func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
+// A positive publishTimeout bounds the wait for the topology server; the record is then published
+// in the background if it did not answer in time.
+func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction, publishTimeout time.Duration) error {
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
@@ -272,7 +302,13 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 
 	err := ts.updateLocked(ctx)
 	// No need to short circuit. Apply all steps and return error in the end.
-	ts.publishStateLocked(ctx)
+	publishCtx := ctx
+	if publishTimeout > 0 {
+		var cancel context.CancelFunc
+		publishCtx, cancel = context.WithTimeout(ctx, publishTimeout)
+		defer cancel()
+	}
+	ts.publishStateLocked(publishCtx)
 	ts.tm.notifyShardSync()
 	return err
 }
@@ -466,8 +502,12 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 
 func (ts *tmState) publishStateLocked(ctx context.Context) {
 	log.Info(fmt.Sprintf("Publishing state: %v", ts.tablet))
-	// If retry is in progress, there's nothing to do.
+	// If retry is in progress, it publishes the current state: make it try now.
 	if ts.isPublishing {
+		select {
+		case ts.publishKick <- struct{}{}:
+		default:
+		}
 		return
 	}
 	// Fast path: publish immediately.
@@ -523,8 +563,18 @@ func (ts *tmState) retryPublish() {
 			}
 			log.Error(fmt.Sprintf("Unable to publish state to topo, will keep retrying: %v", err))
 			ts.mu.Unlock()
-			time.Sleep(publishRetryInterval)
+			select {
+			case <-time.After(publishRetryInterval):
+			case <-ts.publishKick:
+				// The state changed meanwhile, for example a promotion wrote the record: the
+				// topology may answer again.
+			case <-ts.ctx.Done():
+			}
 			ts.mu.Lock()
+			if ts.ctx.Err() != nil {
+				// The tablet manager is shutting down: no attempt can succeed anymore.
+				return
+			}
 			continue
 		}
 		log.Info(fmt.Sprintf("Published state: %v", ts.tablet))
