@@ -39,7 +39,8 @@ import (
 // The network is healed and the cluster converges before the next cycle.
 //
 // CHAOS_RACE_CYCLES (default 6) is the number of cycles, CHAOS_RACE_OFFSETS (default
-// "0.5s,1.5s,2.5s") the offsets after the joiner's START, used in turn.
+// "0.5s,1.5s,2.5s") the offsets after the joiner's START, used in turn, and CHAOS_RACE_ISOLATION
+// (default 20s) how long the primary's cell stays isolated.
 func TestG12VoterRejoinsWhilePrimaryCellIsolated(t *testing.T) {
 	requireGR(t)
 	cycles := 6
@@ -61,9 +62,17 @@ func TestG12VoterRejoinsWhilePrimaryCellIsolated(t *testing.T) {
 			offsets = append(offsets, d)
 		}
 	}
+	isolation := 20 * time.Second
+	if v := os.Getenv("CHAOS_RACE_ISOLATION"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			t.Fatalf("CHAOS_RACE_ISOLATION=%q: want a positive duration", v)
+		}
+		isolation = d
+	}
 	runScenario(t, "G12-voter-rejoin-primary-cell-isolated", Options{}, func(s *Scenario) {
 		for i := range cycles {
-			if !s.rejoinRaceCycle(i+1, offsets[i%len(offsets)]) {
+			if !s.rejoinRaceCycle(i+1, offsets[i%len(offsets)], isolation) {
 				break
 			}
 		}
@@ -205,9 +214,9 @@ func windowOutage(recs []WriteRecord, from, to time.Time) (time.Duration, time.D
 	return longest, total
 }
 
-// rejoinRaceCycle runs one cycle of G12 with the given offset. It returns false when the cluster
-// did not converge, and the scenario should stop.
-func (s *Scenario) rejoinRaceCycle(k int, offset time.Duration) bool {
+// rejoinRaceCycle runs one cycle of G12 with the given offset and isolation. It returns false when
+// the cluster did not converge, and the scenario should stop.
+func (s *Scenario) rejoinRaceCycle(k int, offset, isolation time.Duration) bool {
 	_, probs, _ := s.WaitConverged(240 * time.Second)
 	if len(probs) > 0 {
 		s.R.violation("cycle %d: cluster not converged before the cycle: %s", k, strings.Join(probs, "; "))
@@ -273,7 +282,7 @@ func (s *Scenario) rejoinRaceCycle(k int, offset time.Duration) bool {
 	s.Log.Add("race", fmt.Sprintf("%s: cell %s isolated at START+%.3fs (tablets cut at START+%.3fs, cell at START+%.3fs)", tag, p.Cell,
 		iso.Sub(start.T).Seconds(), cut.Sub(start.T).Seconds(), time.Since(start.T).Seconds()))
 
-	s.Sleep(20*time.Second, tag+": primary's cell isolated")
+	s.Sleep(isolation, tag+": primary's cell isolated")
 	heal := time.Now()
 	s.Heal()
 	_, probs, took := s.WaitConverged(240 * time.Second)
