@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -179,6 +180,27 @@ func IsGroupPrimary(status *replicationdatapb.GroupReplicationStatus) bool {
 		status.MemberRole == GroupMemberRolePrimary && status.HasQuorum
 }
 
+// GroupReplicationUnreachableMajorityTimeout is group_replication_unreachable_majority_timeout:
+// how long a member that cannot reach the majority of its group waits before it rolls back its
+// pending transactions and leaves the group. A member in a minority cannot commit meanwhile:
+// MySQL blocks its transactions until they are certified by a majority.
+//
+// It must outlast the expulsion that a member being admitted to the group makes possible. When a
+// group of two loses one member while a third one is joining, the remaining member suspects the
+// lost one 5 seconds later and, since the joiner is not in its view yet, finds itself without a
+// majority. The group survives only if it expels the lost member, with the joiner's vote, before
+// this timeout; otherwise the remaining member leaves and the joiner ends up alone in the group's
+// configuration. The joiner's group communication engine runs on a single thread, which blocks for
+// up to 1 second each time it tries to connect to the lost member, and MySQL reports a majority
+// that is back on its next one-second check. On MySQL 8.4.11, in chaos tests where the primary's
+// cell was cut off while another member rejoined, the group kept its majority in 10 of 18 such
+// joins with 1 second, 19 of 22 with 2 seconds and 17 of 18 with 3 seconds; 2 and 3 seconds
+// cannot be told apart (doc/failover-audit/GroupReplication.md, "Unreachable majority timeout
+// sweep"). Each extra second delays the fencing of a partitioned primary by a second: its clients
+// wait that much longer for their commits to fail, and it becomes super_read_only (and, under
+// OFFLINE_MODE, offline_mode) that much later. The election of a new primary does not depend on it.
+const GroupReplicationUnreachableMajorityTimeout = 2 * time.Second
+
 // GroupReplicationConfig is the configuration Vitess applies to a member before it starts
 // Group Replication.
 type GroupReplicationConfig struct {
@@ -237,11 +259,10 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		// be the same everywhere.
 		"SET GLOBAL group_replication_paxos_single_leader = ON",
 		// A member that lost contact with the majority of its group rolls back its pending
-		// transactions and leaves the group 1 second after the others became unreachable, so
-		// that a partitioned primary stops accepting writes. With 0 it would stay writable,
-		// its commits blocked forever; a longer timeout only delays that fencing, since the
-		// majority elects a new primary as soon as the member is expelled.
-		"SET GLOBAL group_replication_unreachable_majority_timeout = 1",
+		// transactions and leaves the group GroupReplicationUnreachableMajorityTimeout after the
+		// others became unreachable, so that a partitioned primary stops blocking its clients
+		// and becomes super_read_only. With 0 it would stay in its minority forever.
+		fmt.Sprintf("SET GLOBAL group_replication_unreachable_majority_timeout = %d", int(GroupReplicationUnreachableMajorityTimeout/time.Second)),
 	}
 	if cfg.Consistency != "" {
 		cmds = append(cmds, "SET GLOBAL group_replication_consistency = "+sqltypes.EncodeStringSQL(cfg.Consistency))

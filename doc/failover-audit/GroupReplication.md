@@ -321,7 +321,90 @@ Every run: 0 violations, and all three members ONLINE at the end.
 
 On XCom, OFFLINE_MODE lost S7d because MySQL finished the healed member's leave later (3.59–3.85s after the heal, against 3.07–3.67s), so its join started too close to the next isolation to land. On the MySQL stack the leave ends 3.12–3.79s after the heal under OFFLINE_MODE and 3.30–3.74s under READ_ONLY, and the tablet starts its join 0.02–0.04s later, 1.24–1.91s and 1.30–1.73s before the next isolation: OFFLINE_MODE no longer delays the leave. But fewer joins land: 5 of 12 up to each run's first loss of majority (OFFLINE_MODE 5 of 8, READ_ONLY 0 of 4), against 12 of 17 on XCom with similar leads, and the lead no longer decides it: joins started 1.90s and 1.91s before the isolation failed, one started 1.37s before landed. Every failed join logged `Failed to establish MySQL client connection` 4.3s, 5.4s, 7.5s and 10.6s after its START; 3 of the 5 that landed logged none. Joins that no isolation interrupted were admitted in 1.0–3.8s on both stacks. A failed join ended either alone in a new incarnation 13–17s after its START (4 runs), or, in READ_ONLY runs 1–3 only, in a view of the members that had already left: `No donor available`, ERROR, and a `STOP` that waited 60s for a view change (`timeout receiving a view change`); writes did not resume before the writers stopped.
 
-**Open: the default stays READ_ONLY for now.** S7d, the only reason to keep it, no longer favours it (the group lost its majority in 3 of 4 OFFLINE_MODE runs and 4 of 4 READ_ONLY runs, both decided by MySQL's joins; 4 runs per mode do not separate them), and OFFLINE_MODE still fences reads on a member that left its group at no cost in G3E, S3 and S1. But S7d regressed under both actions against XCom (READ_ONLY lost its majority in 4 of 4 runs here, 3 of 8 on XCom), and the failed joins and the 60s `STOP` are not understood yet; the default is decided once they are.
+**Decision: the default stays READ_ONLY.** S7d no longer separates the two actions: the failed joins were a race in MySQL that the exit state action does not take part in (see "Joins that a partition interrupts" below). With the 2s unreachable majority timeout chosen below, OFFLINE_MODE no longer avoids the stale primary reads either (G3E: 0, 3 and 4 per failover, against 6, 3 and 3 under READ_ONLY); only a 1s timeout made it do so, and 1s loses about half of the interrupted joins. OFFLINE_MODE's costs remain: it refuses vttablet's app, allprivs and filtered users on any member that leaves its group, even briefly, which stops replica reads and VReplication streams on it until it rejoins, and Vitess must clear the flag, which MySQL never does. Under READ_ONLY, replica reads from a member that left its group are bounded by the tablet's replication lag tracking, as for any replica; primary reads during the 0.6–2s before vtgate follows the new primary are not. OFFLINE_MODE stays supported.
+
+### Joins that a partition interrupts
+
+The S7d regression above is not caused by the communication stack. Rebuilt from 464e6a0 (XCom, `--group-replication-port`, with its own chaos test binary) and run in the same environment as HEAD, XCom loses S7d the same way: the group lost its majority at the second isolation in 4 of 4 XCom runs and 5 of 5 MySQL-stack READ_ONLY runs, with the same timings to 0.1s. Both symptoms are one MySQL race, decided by a fixed 1s timeout that Vitess sets. It is fixed by setting `group_replication_unreachable_majority_timeout` to 3s.
+
+**How it was traced.** Every member ran with `loose-group_replication_communication_debug_options=GCS_DEBUG_ALL` and `log_error_verbosity=3` from an `EXTRA_MY_CNF` file: mysqlctl includes it in the generated my.cnf, and MySQL applies a `loose-` plugin option when vttablet installs the plugin at runtime. No harness or product change was needed. The `[GCS]` notes of the error log (`Connecting to`, `Connection to … failed`, `Node has not booted`, `Adding new node`, `installed new site definition`, `xcom_client_remove_node`) give XCom's steps with timestamps. `GCS_DEBUG_TRACE` has no timestamps except on state machine changes. A poll of `/proc/net/tcp` every 20ms showed the SYNs to the partitioned member (`ss`, `conntrack` and `tcpdump` are not installed).
+
+**One heal cycle** (`/home/ubuntu/chaos-results-diag-ro3`, MySQL stack, READ_ONLY; zone2 joins, zone1 is isolated next, zone3 survives; times after the heal at 08:54:40.81):
+
+| Time | Event | Log |
+|---|---|---|
+| +3.20 | MySQL finishes zone2's leave (started by `unreachable_majority_timeout` during the isolation). | mysql-zone2 `MY-011504` |
+| +3.26 | The tablet starts the join; `add_node` is sent 0.23s later and decided in 0.1s. | mysql-zone2 `MY-013587` 08:54:44.07, `Sending add_node` 08:54:44.30 |
+| +5.09 | zone1, the primary, isolated: 1.83s after the START. | events.txt |
+| +6.58 | zone2 boots: a member's ping makes it request XCom's snapshot, 3.32s after its START. | `Node has not booted` 08:54:47.38 |
+| +6.58 to +7.58 | zone2's XCom thread connects to zone1. The SYN is dropped, and the connection times out after 1s. | `Connecting to localhost:12115` 08:54:47.38, `Connection to localhost:12115 failed` 08:54:48.39 |
+| +7.58 | zone2 connects to zone3 in 6ms. | `Connected to localhost:12121` 08:54:48.39 |
+| +7.68 to +8.68, +9.78 to +10.78 | Next attempts to zone1, 0.1s and 1.1s after the previous failure, 1s each. | `Connection to localhost:12115 failed` 08:54:49.49, 08:54:51.59 |
+| +9.68 | zone3 suspects zone1. zone2 is not in zone3's installed view yet, so zone3 has no majority; it asks XCom to expel zone1. | mysql-zone3 `MY-011496` 08:54:50.49, `xcom_client_remove_node` |
+| +10.68 | `unreachable_majority_timeout` (1s): zone3 leaves the group. | mysql-zone3 `MY-011711` 08:54:51.49 |
+| +10.78 | zone2's connection attempt returns, and XCom decides the expulsion of zone1 right after, 0.1s too late. | mysql-zone3 `installed new site definition` 08:54:51.59 |
+
+The expulsion of the lost member needs the joiner's vote, and the joiner's XCom thread cannot vote while it waits in a connection attempt. XCom runs all its tasks on one thread, and `dial()` (`xcom_transport.cc`) connects with a 1000ms timeout through the network provider. The MySQL provider calls `mysql_real_connect` with that timeout (`gcs_mysql_network_provider.cc`), the XCom provider a `poll()` (`timed_connect_msec`): both block the thread for 1s when the SYN is dropped. `sender_task` retries after 0.1s, then 1.1s, 2.1s, 3.1s (`INITIAL_CONNECT_WAIT` 0.1s plus `CONNECT_WAIT_INCREASE` 1s per attempt). The survivor suspects the lost member 5s after the partition and leaves 1s later; with the joiner booted about 1.5s after the partition, that is 3.1s after the boot, just as the third attempt blocks the joiner for 1s. Of the 10 cycles lost with 1s in the runs below, 6 decided the expulsion 1.10s after the survivor's loss of majority, every time right when the joiner's attempt returned; 2 decided it in time (0.04s and 0.37s) but MySQL had not reported the restored majority when the timeout fired; in 2 the survivor did not even push it in time. In the cycles that were kept, MySQL reported the restored majority (`MY-011498`, or the new view) on the survivor's next one-second check, often exactly 1.00s after its loss of majority, in the same instant as the timeout. The older XCom runs won that coin flip in 11 of 12 READ_ONLY cycles, the earlier runs of 2b00fc5 in 5 of 12. The phase that decides it is set by XCom's one-second timers, so a small shift of timing between environments or builds flips the outcome. The connection attempts to the partitioned member happen on both stacks. Only the MySQL provider logs them (`MY-013780` at ERROR); XCom logs `Connection to … failed` at INFORMATION level.
+
+**Symptom 1, the failed joins.** In 26 of the 33 traced cycles, on both stacks, the joiner booted 2.6–3.4s (mostly 3.3s) after its START, after the next isolation, whose lead is 1.2–1.9s; in the other 7, all second heal cycles, 1.1–1.6s after it. In a 3-member lab without Vitess or partitions, under write load, a member that stops and restarts Group Replication boots 0.5–1.9s after its `add_node`, also when it restarts right after its leave. What adds the 1–1.5s in S7d was not established; it is XCom's, on both stacks. The `Failed to establish MySQL client connection` errors 4.3, 5.4, 7.5 and 10.6s after the START are this boot (3.3s), plus the 1s connection timeout, and then the retries with their 0.1, 1.1 and 2.1s waits, each plus 1s. They are a symptom, not the cause: the joins that logged none booted before the next isolation. Seed order does not matter: the first seed accepted the `add_node` and the group decided it within 0.1s in every cycle, and the joiner then connects to every member of the configuration, in configuration order.
+
+**Symptom 2, the dead view and the 60s `STOP`.** When the survivor leaves first, its leave (a removal of itself) is decided by the survivor and the joiner, which still form a majority of the 3-member XCom configuration. The joiner is then the only member left in the old group's configuration. Once the partition heals, GCS delivers the view of the old incarnation with the members that already left, removes them, and the joiner has no donor: `diag-ro1` zone1, 08:25:37.21, `Group membership changed to vm:11118, vm:11121, vm:11115 on view 17908430985243540:5`, `Members removed`, `No donor available to provide the certification information` (`MY-015084`), ERROR. MySQL's own leave after the error then waits for a view change that cannot come, for `VIEW_MODIFICATION_TIMEOUT`, hard-coded at 60s (`plugin_constants.h`, `leave_group_on_failure.cc`): `While leaving the group … timeout receiving a view change` at 08:26:37.21, 60.0s later. The tablet's `STOP GROUP_REPLICATION` at 08:25:38.24 waits for it and returns at 08:26:48.25. Meanwhile, the member's status queries do not return: the tablet kills them after 10s (`zone1-0000000100-vttablet-stderr.txt` from 08:25:41.96 on), and VTOrc cannot read this voter. It only detects `GroupNotBootstrapped` at 08:26:48.30, 0.05s after the leave and 37s after the last heal, which is why writes never resumed before the writers stopped. The same happens on XCom (`diag-xcom-ro4` zone1: ERROR at 09:02:03.31, timeout at 09:03:03.31), and in the older XCom OFFLINE_MODE runs 2 and 4, whose 49s and 69s gaps it explains. Vitess cannot shorten MySQL's wait; it can only avoid the race that leads to it.
+
+**Fix.** Vitess raises `group_replication_unreachable_majority_timeout` from 1s (`mysql.GroupReplicationUnreachableMajorityTimeout`). This investigation used 3s; the sweep in "Unreachable majority timeout sweep" below found 2s as good and chose it. A longer timeout covers the joiner's 1s connection attempt, the 0.1s decision, and MySQL's next one-second check of the restored majority (1.65s after the loss of majority in every such cycle that the 3s timeout kept). It is a member setting, applied before each join, and it may differ between members, so mixed versions are compatible. `TestGroupReplicationUnreachableMajorityTimeoutOutlastsJoinerExpulsion` and `TestGroupReplicationCommands` fail with 1s. The runs in this subsection used 3s.
+
+Cost: a partitioned member leaves 2s later. A partitioned primary cannot commit meanwhile, as before (MySQL blocks its transactions until a majority certifies them), but its clients wait 2s longer for the rollback, and it stays `super_read_only=OFF` 2s longer. In S3 (exploratory build), the old primary was `read_only=OFF` until +8.8s, its tablet still PRIMARY, while the new primary was writable from +7.1s, which the harness rightly does not count as two writable primaries, since the old one cannot commit. Under OFFLINE_MODE, MySQL sets `offline_mode` 2s later: G3E had 2 stale reads within 0.1s of the election (none with 1s), under READ_ONLY 8 (2–7). With 5s, G3E had 5 stale reads under OFFLINE_MODE, and S7d still lost its majority in 2 of 4 runs, so 3s it is.
+
+What is left: in all 5 cycles that the 3s timeout lost, XCom expelled the lost member 1.10s after the survivor's loss of majority, but the survivor did not report a majority in the configuration of two that followed. It left 3s after the loss. In `diag-fix-om1` the joiner, alone, then formed a new incarnation after the heal (`Only one server alive`, view `17908465825544637:1`), which its tablet left 0.8s later (NEW-1). In all 5 the joiner had first connected to the survivor and then to the partitioned member; in the 4 kept cycles whose expulsion also came 1.10s late, it was the other way round. The XCom-level cause was not established. No dead view and no 60s `STOP` happened in any run with 3s.
+
+Results (S7d, this environment; "lost" is the isolation at which the group lost its majority; 0 violations and 0 acknowledged writes lost in every run):
+
+| S7d | Runs | Majority lost at | Longest gap | Total without an acked write | Dead view + 60s STOP |
+|---|---|---|---|---|---|
+| XCom (464e6a0), 1s, READ_ONLY | 4 | 2nd, 2nd and 4th, 2nd, 2nd | 36.9s, 36.0s, 32.6s, 69.2s* | 45.9s, 77.3s, 53.3s, 78.2s | 2 of 4 |
+| MySQL stack (HEAD), 1s, READ_ONLY | 5 | 2nd in all 5 | 69.0s*, 54.5s, 68.8s*, 69.1s*, 69.0s* | 78.0s, 63.6s, 78.8s, 78.1s, 78.0s | 4 of 5 |
+| MySQL stack (HEAD), 1s, OFFLINE_MODE | 1 | 3rd | 34.7s | 58.5s | 0 |
+| 3s, READ_ONLY | 4 | 2nd, never, never, 2nd | 36.2s, 12.9s, 9.5s, 33.4s | 45.2s, 44.1s, 40.3s, 44.1s | 0 |
+| 3s, OFFLINE_MODE | 4 | 2nd, never, 2nd, 2nd | 37.9s, 15.0s, 49.7s, 52.3s | 49.2s, 44.8s, 58.8s, 62.4s | 0 |
+| 3s, exploratory build, READ_ONLY ×2, OFFLINE_MODE ×1 | 3 | never | 9.8s, 15.1s, 14.5s | 40.8s, 47.6s, 44.7s | 0 |
+
+\* until the writers stopped. The 1s runs and the exploratory runs had GCS tracing on, the HEAD runs with 3s only the verbose error log. The exploratory build set the timeout from an environment variable; the code path is the same.
+
+Across these runs, the 3s timeout kept 18 of the 23 heal cycles that a join followed, up to each run's first loss of majority (11 runs), against 1 of 11 with 1s (10 runs). On HEAD with 3s, the gaps were at most 52s and writes always resumed before the writers stopped: the losses no longer leave a member in a dead view, and VTOrc bootstraps the group after the heal.
+
+Regression checks (3s, READ_ONLY): S1 gap 7.25s, 0/2237 lost, 0 violations; S3 gap 9.05s, 0/3678 lost, 0 violations; G3E (exploratory build) above, gaps 8.4s (READ_ONLY) and 8.5s (OFFLINE_MODE), 0 violations. `TestGroupReplicationLifecycle` and `TestGroupReplicationOneVoterPerCell` pass (one first attempt failed after 1.5s in `AddCellInfo`, before any Group Replication step, and passed when rerun).
+
+## Unreachable majority timeout sweep
+
+`group_replication_unreachable_majority_timeout` (umt) decides two things: how long a partitioned primary blocks its clients and stays writable, and whether a group survives the loss of a member while another one is joining (see "Joins that a partition interrupts"). Vitess sets it to 2s, after this sweep. Same binaries for every value (HEAD plus a test-only flag), 144 runs, all on MySQL 8.4.11; the harness's write probe (c861dbd) sends a transaction through vtgate every 500ms and waits up to 60s for it, and G12 (21628fe) restarts a secondary's mysqld, as in a rolling restart, then cuts off the primary's whole cell a set time after the joiner's `START GROUP_REPLICATION`, six cycles per run. 0 acked writes lost and 0 violations in every GR run.
+
+**Cost, single faults** (3 runs per value; seconds after the fault):
+
+| | G3E: probes on the old primary blocked until | G3E: old primary `super_read_only` OFF until | G3E: reads answered after the election, READ_ONLY / OFFLINE_MODE | S3: client-visible |
+|---|---|---|---|---|
+| semi-sync (2 runs) | 30.0 (vttablet timeout) | 46.2, after the heal | – | 18 probes failed after ≤10.0s |
+| umt 1s | 5.8–6.3 | 6.4–6.8 | 13, 3, 9 / 0, 0, 0 | none failed: vtgate buffered them, committed on the new primary after 9.9–10.1s, at every umt |
+| umt 2s | 6.9–7.3 | 7.4–7.8 | 6, 3, 3 / 4, 0, 3 | |
+| umt 3s | 7.8–8.2 | 8.4–8.8 | 3, 1, 3 / 3, 3, 4 | |
+
+Failover (6.4–7.2s to the group's election), the longest write gap (G3E 7.0–8.2s, S3 9.0–9.1s) and durability do not depend on umt. Probes routed to a partitioned GR primary all fail together, at the fault + 5s + umt + about 0.3s (errno 3100, or 1203 once blocked commits filled vttablet's transaction pool).
+
+**Interrupted joins, G12** (READ_ONLY; majority kept / cycles; "in race" excludes cycles where the joiner was already in the view at the cut; a restarted joiner entered the view 1.3–1.45s after START):
+
+| cut after START | umt 1s | umt 2s | umt 3s |
+|---|---|---|---|
+| 0.5s | 0/6 | 0/6 | 0/6 |
+| 0.75s | 3/4 | 3/4 | 4/4 |
+| 1.0s | 2/4 | 4/4 | 3/4 |
+| 1.25s | 3/4 | 2/4 | 4/4 |
+| 1.5s | 2/6 (0/4 in race) | 6/6 | 6/6 |
+| 2.5s | 6/6 | 6/6 | 6/6 |
+| in race, without 0.5s | 10/18 | 19/22 | 17/18 |
+
+1s against 2s: p=0.04; 1s against 3s: p=0.018; 2s against 3s: p=0.61 (Fisher). A kept cycle cost 9.0–16.7s without writes, a lost one 27.9–47.8s; every lost cycle left the joiner in a one-member incarnation of its own, which Vitess did not follow. A cut 0.5s after START was lost at every umt: the joiner never entered a view before the heal.
+
+**S7d** (READ_ONLY ×6 and OFFLINE_MODE ×4 per value): runs that lost the majority, 1s 9/10, 2s 2/10, 3s 2/10; interrupted joins kept, 1s 7/16, 2s 24/26, 3s 24/26 (1s against 2s p<0.01, 2s against 3s p=1). Longest gap of the runs that kept the majority 9.5–15.9s at 2s and 3s; of those that lost it 28.1–69.2s. "No donor available" dead views: 1s 4 runs, 2s 1, 3s 0.
+
+**Decision: 2s.** It keeps as many interrupted joins as 3s, measurably more than 1s, and fences a partitioned primary 1s later than 1s rather than 2s. It costs the OFFLINE_MODE read fencing that only 1s gave, which the READ_ONLY default does not rely on. Evidence: `/home/ubuntu/chaos-umt/` (`summaries/` has the per-run tables).
 
 ## Not tested
 

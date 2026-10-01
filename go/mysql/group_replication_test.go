@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,6 +104,19 @@ func TestIsGroupPrimary(t *testing.T) {
 		"the member state is meaningless without the plugin")
 }
 
+// TestGroupReplicationUnreachableMajorityTimeoutOutlastsJoinerExpulsion checks that a member that
+// lost the majority of its view waits long enough for the group to expel the lost member with the
+// vote of a member being admitted: up to 1 second while the joiner's group communication thread is
+// blocked connecting to the lost member, plus MySQL's one-second check of the restored majority.
+// With 1 second the group lost about half of those races in the chaos tests.
+func TestGroupReplicationUnreachableMajorityTimeoutOutlastsJoinerExpulsion(t *testing.T) {
+	const joinerConnectTimeout = time.Second
+	const majorityCheckInterval = time.Second
+	assert.GreaterOrEqual(t, GroupReplicationUnreachableMajorityTimeout, joinerConnectTimeout+majorityCheckInterval)
+	cmds := ConfigureGroupReplicationCommands(GroupReplicationConfig{GroupName: "g", LocalAddress: "h1:3306", AutorejoinTries: -1})
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_unreachable_majority_timeout = 2")
+}
+
 func TestGroupReplicationCommands(t *testing.T) {
 	assert.Equal(t, []string{"START GROUP_REPLICATION"}, StartGroupReplicationCommands(false))
 	assert.Equal(t, []string{
@@ -133,7 +147,7 @@ func TestGroupReplicationCommands(t *testing.T) {
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_group_seeds = 'h2:3306,h3:3306'")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_weight = 75")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_consistency = 'BEFORE_ON_PRIMARY_FAILOVER'")
-	assert.Contains(t, cmds, "SET GLOBAL group_replication_unreachable_majority_timeout = 1")
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_unreachable_majority_timeout = 2")
 
 	assert.Equal(t, "CHANGE REPLICATION SOURCE TO\n"+
 		"  SOURCE_PASSWORD = 'p\\'w',\n"+
