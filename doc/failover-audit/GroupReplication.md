@@ -269,7 +269,26 @@ The chaos harness's partitions already cut the MySQL port, so they now cut the g
 | S9i (primary's cell partitioned) | 6.9s | 9.05s | 0/3731 | 0 |
 | G3E (primary isolated, still reachable by vtgate) | 6.9s | 7.10s | 0/4878 | 0; 69 reads answered by the old primary, 2 of them stale (XCom: 75 and 5) |
 
-`TestGroupReplicationLifecycle` (migration from semi-sync and back, planned reparent, and a killed primary, which the group replaced in 7.1s) and `TestGroupReplicationOneVoterPerCell` pass. Failover and gaps match the XCom runs: the election is bounded by the same 5s failure detection, whichever stack carries the messages. The S7d and OFFLINE_MODE comparisons above were not repeated on the MySQL stack; with OFFLINE_MODE, the group's connections are no longer refused, which may change S7d.
+`TestGroupReplicationLifecycle` (migration from semi-sync and back, planned reparent, and a killed primary, which the group replaced in 7.1s) and `TestGroupReplicationOneVoterPerCell` pass. Failover and gaps match the XCom runs: the election is bounded by the same 5s failure detection, whichever stack carries the messages.
+
+The exit state action comparison, repeated on the MySQL stack (binaries of 2b00fc5, runs interleaved; READ_ONLY's G3E, S3 and S1 are the runs above):
+
+| Scenario | Metric | READ_ONLY | OFFLINE_MODE |
+|---|---|---|---|
+| S7d (flapping, 11s isolated / 5s healed) ×4 | longest gap | 68.58s, 68.91s, 68.88s (all three until the writers stopped), 46.92s | 31.18s, 46.18s, 9.54s, 38.76s |
+| | total without an acked write | 77.6s, 78.0s, 77.9s, 56.0s | 60.5s, 55.2s, 39.0s, 47.8s |
+| | group lost its majority at isolation | 2nd, 2nd and 4th, 2nd, 2nd | 4th, 2nd, never, 2nd |
+| | acked writes lost | 0/1128, 0/1092, 0/1076, 0/3296 | 0/2601, 0/3408, 0/4665, 0/4060 |
+| | stale reads | 0, 0, 0, 0 | 0, 0, 0, 0 |
+| G3E (primary isolated, still reachable by vtgate) | reads answered by the old primary / stale; gap | 69 / 2; 7.10s | 68 / 0; 7.64s |
+| S3 (primary isolated) | stale reads; gap | 0; 9.05s | 0; 9.06s |
+| S1 (primary mysqld killed) | gap | 6.95s | 7.33s |
+
+Every run: 0 violations, and all three members ONLINE at the end.
+
+On XCom, OFFLINE_MODE lost S7d because MySQL finished the healed member's leave later (3.59–3.85s after the heal, against 3.07–3.67s), so its join started too close to the next isolation to land. On the MySQL stack the leave ends 3.12–3.79s after the heal under OFFLINE_MODE and 3.30–3.74s under READ_ONLY, and the tablet starts its join 0.02–0.04s later, 1.24–1.91s and 1.30–1.73s before the next isolation: OFFLINE_MODE no longer delays the leave. But fewer joins land: 5 of 12 up to each run's first loss of majority (OFFLINE_MODE 5 of 8, READ_ONLY 0 of 4), against 12 of 17 on XCom with similar leads, and the lead no longer decides it: joins started 1.90s and 1.91s before the isolation failed, one started 1.37s before landed. Every failed join logged `Failed to establish MySQL client connection` 4.3s, 5.4s, 7.5s and 10.6s after its START; 3 of the 5 that landed logged none. Joins that no isolation interrupted were admitted in 1.0–3.8s on both stacks. A failed join ended either alone in a new incarnation 13–17s after its START (4 runs), or, in READ_ONLY runs 1–3 only, in a view of the members that had already left: `No donor available`, ERROR, and a `STOP` that waited 60s for a view change (`timeout receiving a view change`); writes did not resume before the writers stopped.
+
+**Open: the default stays READ_ONLY for now.** S7d, the only reason to keep it, no longer favours it (the group lost its majority in 3 of 4 OFFLINE_MODE runs and 4 of 4 READ_ONLY runs, both decided by MySQL's joins; 4 runs per mode do not separate them), and OFFLINE_MODE still fences reads on a member that left its group at no cost in G3E, S3 and S1. But S7d regressed under both actions against XCom (READ_ONLY lost its majority in 4 of 4 runs here, 3 of 8 on XCom), and the failed joins and the 60s `STOP` are not understood yet; the default is decided once they are.
 
 ## Not tested
 
