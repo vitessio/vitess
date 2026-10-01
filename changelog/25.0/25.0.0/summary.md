@@ -144,12 +144,7 @@ warning. v26 removes it.
 
 **Migration**: remove the flags above from startup arguments.
 
-**Impact**: a binary fails to start when it receives a removed flag or `--log-structured=false`. Go code that imports Vitess must make these changes.
-
-- Replace `log.V(n).Info` with `log.Debug`.
-- Replace `log.Init(fs)` with `log.Init()`.
-- Remove calls to `log.Flush`, `logutil.Flush`, `logutil.OnFlush`, `logutil.RegisterFlags`, and `logutil.PurgeLogs`.
-- Remove uses of `log.Level`, `log.Verbose`, `PrefixedLogger.V`, and `PrefixedLogger.Flush`.
+**Impact**: a binary fails to start when it receives a removed flag or `--log-structured=false`.
 
 See [#21310](https://github.com/vitessio/vitess/issues/21310).
 
