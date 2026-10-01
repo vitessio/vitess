@@ -4067,9 +4067,11 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	}
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
-	// Before the DDL: only a non-unique secondary, so no unique keys.
+	// Before the DDL: only a non-unique secondary, so no unique keys and the
+	// table's writes can run concurrently.
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
+	require.False(t, vp.tablePlans[tableName].SerializeTableWrites)
 
 	ddlEvent := &binlogdatapb.VEvent{
 		Type:      binlogdatapb.VEventType_DDL,
@@ -4080,11 +4082,13 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	publishExecutedDDLBarrier(t, vp, ddlEvent.Statement)
 
 	// After the DDL barrier the FIELD handler re-runs the unique-key analysis:
-	// the new plain unique secondary emits a writeset unique key.
+	// the new plain unique secondary emits a writeset unique key, and the
+	// table's writes now serialize.
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
+	require.True(t, vp.tablePlans[tableName].SerializeTableWrites)
 
 	savedMysqld := vp.vr.mysqld
 	vp.vr.mysqld = nil
@@ -4094,6 +4098,7 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
+	require.True(t, vp.tablePlans[tableName].SerializeTableWrites)
 
 	// A FIELD whose fields changed, as after a source DDL under
 	// on-ddl=IGNORE, must not reuse the cached analysis: the unique key
@@ -4115,6 +4120,26 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 		},
 	}
 	require.NoError(t, vp.applyEvent(ctx, changedFieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+
+	// Same for a changed column type with the same querypb type (e.g. after a
+	// source ALTER of varchar(128) to varchar(64)): the target can normalize
+	// streamed-distinct values to the same stored value, so the table must
+	// serialize.
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	resizedEmail := targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR)
+	resizedEmail.ColumnType = "varchar(64)"
+	resizedFieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}, resizedEmail},
+		},
+	}
+	require.NoError(t, vp.applyEvent(ctx, resizedFieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
 	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 }

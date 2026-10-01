@@ -338,13 +338,15 @@ func (vp *vplayer) clearConnectionBatchMode() {
 }
 
 // writesetFieldsMatch reports whether two streamed field lists have the same
-// names, types and collations, in the same order.
+// names, types, column types and collations, in the same order: the inputs of
+// the unique key analysis's collation and type mismatch checks.
 func writesetFieldsMatch(a, b []*querypb.Field) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := range a {
-		if a[i].GetName() != b[i].GetName() || a[i].GetType() != b[i].GetType() || a[i].GetCharset() != b[i].GetCharset() {
+		if a[i].GetName() != b[i].GetName() || a[i].GetType() != b[i].GetType() ||
+			a[i].GetColumnType() != b[i].GetColumnType() || a[i].GetCharset() != b[i].GetCharset() {
 			return false
 		}
 	}
@@ -1034,9 +1036,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			vp.serialMu.Unlock()
 			cacheInvalidatedByDDL := (hasStaleEntry && staleEntry.stalePlan == cachedPlan) || cacheInvalidatedByRefreshTarget
 			// Reuse the cached analysis only while the streamed fields are
-			// unchanged: a changed field type or collation (e.g. after a
-			// source DDL under on-ddl=IGNORE) changes how the unique key
-			// columns hash.
+			// unchanged: a changed field type, column type or collation (e.g.
+			// after a source DDL under on-ddl=IGNORE) changes how the unique
+			// key columns hash.
 			if cachedPlan != nil && cachedPlan.TargetName == tplan.TargetName && !cacheInvalidatedByDDL && writesetFieldsMatch(cachedPlan.Fields, tplan.Fields) {
 				tplan.HasExtraUniqueSecondary = cachedPlan.HasExtraUniqueSecondary
 				tplan.UniqueKeyColumns = cachedPlan.UniqueKeyColumns
