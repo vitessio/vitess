@@ -94,6 +94,9 @@ const (
 	// the primary of a replication group away from a member whose cell's topology server does not
 	// answer, after it could not.
 	RecoverySkipGroupPrimaryMoveBackoff
+	// RecoverySkipGroupJoinInFlight is used while a join that VTOrc started on a voter of a
+	// replication group still runs in the background.
+	RecoverySkipGroupJoinInFlight
 )
 
 // String represents a RecoverySkip as a string.
@@ -119,6 +122,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "GroupPrimaryAlive"
 	case RecoverySkipGroupPrimaryMoveBackoff:
 		return "GroupPrimaryMoveBackoff"
+	case RecoverySkipGroupJoinInFlight:
+		return "GroupJoinInFlight"
 	default:
 		return "None"
 	}
@@ -764,6 +769,10 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoverySkipCode = groupPrimaryMoveSkipCode(analysisEntry, time.Now())
 		recoveryFunc = promoteGroupPrimaryFunc
 	case inst.GroupMemberNotOnline:
+		if groupJoinsInFlight.running(topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)) {
+			// The join that VTOrc started on the tablet still runs, without the shard lock.
+			recoverySkipCode = RecoverySkipGroupJoinInFlight
+		}
 		recoveryFunc = startGroupReplicationFunc
 	case inst.GroupNotBootstrapped:
 		recoveryFunc = bootstrapGroupReplicationFunc

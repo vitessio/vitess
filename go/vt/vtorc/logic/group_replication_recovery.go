@@ -200,7 +200,17 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 // join while no such group exists cannot join anything: the START blocks until MySQL's join
 // timeout, during which a bootstrap on the member fails, and a member has been seen to form a group
 // of its own.
+//
+// The check runs under the shard lock, which the recovery holds; the join itself does not. A join
+// does not need the shard lock (the tablets' own rejoins and the joins after a bootstrap run without
+// it), and it can block for as long as the member's START, up to the RPC's timeout: in the G12
+// chaos scenario, a join that VTOrc started right before the group lost its majority held the shard
+// lock for 29.5s, and the bootstrap of the group, which needs that lock, waited for it. The join
+// therefore runs in the background, after the recovery released the lock. One join per tablet runs
+// at a time: while it runs, the member stays OFFLINE until MySQL starts the join, and the next
+// polls would otherwise pile up joins behind the tablet's action lock.
 func startGroupReplicationOnMember(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	aliasString := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %s.", analysisEntry.AnalyzedInstanceAlias, StartGroupReplicationRecoveryName)
@@ -218,17 +228,59 @@ func startGroupReplicationOnMember(ctx context.Context, analysisEntry *inst.Dete
 	if err != nil {
 		return false, topologyRecovery, err
 	}
-	aliasString := topoproto.TabletAliasString(tablet.Alias)
 	if err := checkLegitimateGroupActive(ctx, tablet); err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not starting group replication on %s: %v", aliasString, err))
 		return true, topologyRecovery, err
 	}
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on %s", aliasString))
-	if _, err := startGroupReplication(ctx, tablet, false); err != nil {
-		return true, topologyRecovery, vterrors.Wrapf(err, "failed to start group replication on %s", aliasString)
+	if !groupJoinsInFlight.start(aliasString) {
+		_ = AuditTopologyRecovery(topologyRecovery, "a join already runs on "+aliasString)
+		return true, topologyRecovery, nil
 	}
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s joined its group", StartGroupReplicationRecoveryName, aliasString))
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on %s, without holding the shard lock", aliasString))
+	go func() {
+		defer groupJoinsInFlight.done(aliasString)
+		// The recovery's context belongs to the shard lock, which is released by now.
+		if _, err := startGroupReplication(context.Background(), tablet, false); err != nil {
+			logger.Warn("failed to make a voter join its group", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+		_ = inst.AuditOperation(StartGroupReplicationRecoveryName, tablet.Alias, "joined its group")
+		logger.Info("a voter joined its group", slog.String("tablet", aliasString))
+	}()
 	return true, topologyRecovery, nil
+}
+
+// groupJoinsInFlight are the tablets on which a join that startGroupReplicationOnMember started in
+// the background still runs.
+var groupJoinsInFlight = &groupJoins{tablets: make(map[string]bool)}
+
+// groupJoins is a set of tablets on which a join runs.
+type groupJoins struct {
+	mu      sync.Mutex
+	tablets map[string]bool
+}
+
+// start marks a join as running on the tablet, unless one already runs, and returns whether it did.
+func (j *groupJoins) start(alias string) bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.tablets[alias] {
+		return false
+	}
+	j.tablets[alias] = true
+	return true
+}
+
+func (j *groupJoins) done(alias string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	delete(j.tablets, alias)
+}
+
+func (j *groupJoins) running(alias string) bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.tablets[alias]
 }
 
 // groupJoinCheckTimeout bounds the FullStatus RPCs with which VTOrc checks, right before it makes a

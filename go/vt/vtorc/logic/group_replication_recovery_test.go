@@ -502,7 +502,12 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 			if tt.wantStart {
 				starts = 1
 			}
-			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil).Times(starts)
+			joined := make(chan struct{})
+			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).DoAndReturn(
+				func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+					close(joined)
+					return &replicationdatapb.GroupReplicationStatus{}, nil
+				}).Times(starts)
 
 			analysisEntry := &inst.DetectionAnalysis{
 				Analysis:              inst.GroupMemberNotOnline,
@@ -515,10 +520,18 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 			require.NotNil(t, topologyRecovery)
 			if tt.wantStart {
 				require.NoError(t, err)
+				// The join runs in the background, without the shard lock.
+				select {
+				case <-joined:
+				case <-time.After(30 * time.Second):
+					require.FailNow(t, "the join was not started")
+				}
+				waitForGroupJoinsDone(t, member)
 				return
 			}
 			require.Error(t, err)
 			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.False(t, groupJoinsInFlight.running(topoproto.TabletAliasString(member.Alias)))
 		})
 	}
 }
@@ -562,6 +575,101 @@ func TestStartGroupReplicationOnMemberDoesNotWaitForUnreachableTablet(t *testing
 	require.True(t, attempted)
 	require.NoError(t, err)
 	assert.Less(t, time.Since(start), groupJoinCheckTimeout, "the join must not wait for the isolated tablet")
+	waitForGroupJoinsDone(t, member)
+}
+
+// waitForGroupJoinsDone waits until the join that VTOrc started on the tablet in the background
+// returned.
+func waitForGroupJoinsDone(t *testing.T, tablet *topodatapb.Tablet) {
+	t.Helper()
+	alias := topoproto.TabletAliasString(tablet.Alias)
+	assert.Eventually(t, func() bool { return !groupJoinsInFlight.running(alias) }, 30*time.Second, 10*time.Millisecond)
+}
+
+// TestStartGroupReplicationOnMemberDoesNotHoldShardLock reproduces cycle 4 of run 3 of the G12
+// chaos scenario: VTOrc's GroupMemberNotOnline recovery started a join on a voter right before the
+// group lost its majority. The join blocked behind the voter's own START, which could not join
+// anything, and the recovery held the shard lock for 29.5s, which delayed the bootstrap of the
+// group, a recovery that needs the shard lock, by 7.7s. The legitimacy check still runs under the
+// shard lock, but the join runs after the recovery released it; the polls that see the voter
+// OFFLINE while its join runs do not start another one.
+func TestStartGroupReplicationOnMemberDoesNotHoldShardLock(t *testing.T) {
+	member := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	primary := recoveryTablet("zone2", 101, topodatapb.TabletType_PRIMARY)
+	mockTMC := groupReplicationRecoveryTest(t, primary, member)
+	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationIncarnation = "1790000001"
+		return nil
+	})
+	require.NoError(t, err)
+	active := groupMemberStatus(primary, primary, primary, member)
+	active.GroupReplicationStatus.GroupName = policy.GroupName("ks", "0")
+	active.GroupReplicationStatus.ViewId = "1790000001:7"
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(active, nil)
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(member)).Return(notMemberStatus(member), nil)
+	// The voter's join blocks, like a START GROUP_REPLICATION into a group that lost its majority.
+	joinStarted, releaseJoin := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseJoin:
+		default:
+			close(releaseJoin)
+		}
+	})
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).DoAndReturn(
+		func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.GroupReplicationStatus, error) {
+			close(joinStarted)
+			select {
+			case <-releaseJoin:
+				return &replicationdatapb.GroupReplicationStatus{}, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}).Times(1)
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.GroupMemberNotOnline,
+		AnalyzedInstanceAlias: member.Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	// The recovery runs under the shard lock, as executeCheckAndRecoverFunction runs it.
+	recovered := make(chan error, 1)
+	go func() {
+		lockCtx, unlock, err := LockShard(t.Context(), "ks", "0", "GroupMemberNotOnline")
+		if err != nil {
+			recovered <- err
+			return
+		}
+		_, _, err = startGroupReplicationOnMember(lockCtx, analysisEntry, log.NewPrefixedLogger("test"))
+		unlock(&err)
+		recovered <- err
+	}()
+	select {
+	case <-joinStarted:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the join was not started")
+	}
+	select {
+	case err := <-recovered:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the recovery must not wait for the join")
+	}
+
+	// While the join still blocks, the shard lock is free, for example for a bootstrap.
+	_, unlock, err := LockShard(t.Context(), "ks", "0", "GroupNotBootstrapped")
+	require.NoError(t, err, "the shard lock must be free while the join runs")
+	unlock(&err)
+	// The polls that still see the voter OFFLINE do not start another join on it.
+	code, skip := getCheckAndRecoverFunctionCode(analysisEntry)
+	assert.Equal(t, startGroupReplicationFunc, code)
+	assert.Equal(t, RecoverySkipGroupJoinInFlight, skip)
+
+	close(releaseJoin)
+	waitForGroupJoinsDone(t, member)
+	_, skip = getCheckAndRecoverFunctionCode(analysisEntry)
+	assert.Equal(t, RecoverySkipNone, skip, "a new join may start once the previous one returned")
 }
 
 // TestGroupReplicationRecoveriesRunWithoutShardPrimary checks which recoveries that are not
