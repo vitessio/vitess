@@ -1335,7 +1335,7 @@ func TestBuildTxnWritesetPadSpaceTextPrimaryKeyUsesTrailingSpaceEquality(t *test
 		{name: "space followed by an ignorable", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a", b: "a \u200b", equal: true},
 		{name: "trailing 0xA0 under cp1250", fieldType: querypb.Type_VARCHAR, collation: "cp1250_general_ci", a: "a", b: "a\xa0", equal: true},
 		{name: "different values", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a", b: "ab"},
-		{name: "no-break space inside the value", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a b", b: "a\u00a0bb"},
+		{name: "no-break space inside the value", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_unicode_ci", a: "a\u00a0b", b: "ab"},
 		{name: "NO PAD keeps a trailing space significant", fieldType: querypb.Type_VARCHAR, collation: "utf8mb4_0900_ai_ci", a: "a", b: "a "},
 		{name: "negative zero double", fieldType: querypb.Type_FLOAT64, a: "0E+00", b: "-0E+00", equal: true},
 		{name: "negative zero float", fieldType: querypb.Type_FLOAT32, a: "0", b: "-0", equal: true},
