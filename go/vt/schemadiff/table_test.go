@@ -58,6 +58,17 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key)",
 		},
 		{
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+			name: "serial is identical to its expansion",
+			from: "create table t (id serial)",
+			to:   "create table t (id bigint unsigned not null auto_increment unique)",
+		},
+		{
+			name: "serial primary key is identical to its expansion",
+			from: "create table t (id serial primary key)",
+			to:   "create table t (id bigint unsigned not null auto_increment, primary key (id), unique key id (id))",
+		},
+		{
 			name: "identical 2",
 			from: "create table t (id int, primary key(id))",
 			to:   "create table t (id int, primary key(id))",
@@ -3398,6 +3409,18 @@ func TestNormalize(t *testing.T) {
 			name: "normalize primary key and column with no default, with type boolean",
 			from: "create table t (id boolean primary key, b boolean)",
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+			name: "normalize serial",
+			from: "create table t (id serial)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT UNIQUE\n)",
+		},
+		{
+			// A column holds a single inline key, so SERIAL's unique key is a key of its own
+			name: "normalize serial primary key",
+			from: "create table t (id serial primary key)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tPRIMARY KEY (`id`),\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
 			name: "normalize text types with length information: implicit utf8mb4",

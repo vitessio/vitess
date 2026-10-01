@@ -533,6 +533,7 @@ func (c *CreateTableEntity) IndexDefinitionEntitiesMap() map[string]*IndexDefini
 // - table option case (upper/lower/special)
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
+	c.normalizeSerialColumns() // expand SERIAL before its implicit key is normalized
 	c.normalizePrimaryKeyColumns()
 	c.normalizeForeignKeyIndexes() // implicitly add missing indexes for foreign keys
 	c.normalizeKeys()              // assign names to keys
@@ -846,6 +847,38 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 		Columns: []*sqlparser.IndexColumn{{Column: name}},
 	}
 	return index
+}
+
+// normalizeSerialColumns expands a SERIAL column into what MySQL stores for it.
+// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, so
+// `create table t (id serial)` turns into
+// `create table t (id bigint unsigned not null auto_increment unique)`.
+// A column holds a single inline key, so when it already has one other than a
+// unique key, such as `id serial primary key`, the unique key is added as a key
+// of its own, and named like any other unnamed key.
+func (c *CreateTableEntity) normalizeSerialColumns() {
+	for _, col := range c.TableSpec.Columns {
+		if !strings.EqualFold(col.Type.Type, "serial") {
+			continue
+		}
+		col.Type.Type = "bigint"
+		col.Type.Unsigned = true
+		if col.Type.Options == nil {
+			col.Type.Options = &sqlparser.ColumnTypeOptions{}
+		}
+		col.Type.Options.Null = new(false)
+		col.Type.Options.Autoincrement = true
+		switch col.Type.Options.KeyOpt {
+		case sqlparser.ColKeyNone:
+			col.Type.Options.KeyOpt = sqlparser.ColKeyUnique
+		case sqlparser.ColKeyUnique, sqlparser.ColKeyUniqueKey:
+		default:
+			c.TableSpec.Indexes = append(c.TableSpec.Indexes, &sqlparser.IndexDefinition{
+				Info:    &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+				Columns: []*sqlparser.IndexColumn{{Column: col.Name}},
+			})
+		}
+	}
 }
 
 func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
