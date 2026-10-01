@@ -180,3 +180,29 @@ func TestOldPrimaryProbes(t *testing.T) {
 	assert.Equal(t, map[string]int{"errno 3101": 1, "context deadline exceeded": 1}, st.Kinds)
 	assert.Equal(t, "errno 1203", probeErrorKind(probes[4].Err))
 }
+
+// TestWindowOutage checks the outage of a window: gaps that overlap it count, an interval without
+// acked writes still open at its end ends there, and gaps outside it do not count.
+func TestWindowOutage(t *testing.T) {
+	t0 := time.Now()
+	at := func(s float64) time.Time { return t0.Add(time.Duration(s * float64(time.Second))) }
+	recs := ackedAt(t0, 0, 5, 5.5, 6, 9, 9.2)
+	longest, total := windowOutage(recs, at(5.2), at(8))
+	assert.Equal(t, 3*time.Second, longest)
+	assert.Equal(t, 3*time.Second, total)
+	longest, total = windowOutage(recs, at(9.5), at(12))
+	assert.Equal(t, 2800*time.Millisecond, longest)
+	assert.Equal(t, 2800*time.Millisecond, total)
+}
+
+// TestParseErrLogLine checks that a MySQL error log line yields its time, code and message, and
+// that the size of a view is read from a membership change.
+func TestParseErrLogLine(t *testing.T) {
+	l, ok := parseErrLogLine("2026-10-01T09:20:24.248675Z 0 [System] [MY-011503] [Repl] Plugin group_replication reported: 'Group membership changed to vm:14315, vm:14318 on view 17908464207666081:2.'")
+	require.True(t, ok)
+	assert.Equal(t, time.Date(2026, 10, 1, 9, 20, 24, 248675000, time.UTC), l.T)
+	assert.Equal(t, myGRViewChanged, l.Code)
+	assert.Equal(t, 2, viewSize(l.Msg))
+	_, ok = parseErrLogLine("not a log line")
+	assert.False(t, ok)
+}
