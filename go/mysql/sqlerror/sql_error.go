@@ -101,7 +101,7 @@ func (se *SQLError) VtRpcErrorCode() vtrpcpb.Code {
 	case ERDiskFull, EROutOfMemory, EROutOfSortMemory, ERConCount, EROutOfResources, ERRecordFileFull, ERHostIsBlocked,
 		ERCantCreateThread, ERTooManyDelayedThreads, ERNetPacketTooLarge, ERTooManyUserConnections, ERLockTableFull, ERUserLimitReached:
 		return vtrpcpb.Code_RESOURCE_EXHAUSTED
-	case ERLockWaitTimeout:
+	case ERLockWaitTimeout, ERLockNowait:
 		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	case CRServerGone, ERServerShutdown, ERServerIsntAvailable, CRConnectionError, CRConnHostError:
 		return vtrpcpb.Code_UNAVAILABLE
