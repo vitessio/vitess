@@ -116,7 +116,7 @@ func init() {
 	Main.Flags().StringVar(&vschemaPersistenceDir, "vschema-persistence-dir", vschemaPersistenceDir, "If set, per-keyspace vschema will be persisted in this directory "+
 		"and reloaded into the in-memory topology server across restarts. Bookkeeping is performed using a simple watcher goroutine. "+
 		"This is useful when running vtcombo as an application development container (e.g. vttestserver) where you want to keep the same "+
-		"vschema even if developer's machine reboots. This works in tandem with vttestserver's --persistent_mode flag. Needless to say, "+
+		"vschema even if developer's machine reboots. This works in tandem with vttestserver's --persistent-mode flag. Needless to say, "+
 		"this is neither a perfect nor a production solution for vschema persistence. Consider using the --external-topo-server flag if "+
 		"you require a more complete solution. This flag is ignored if --external-topo-server is set.")
 
