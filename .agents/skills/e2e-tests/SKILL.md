@@ -89,5 +89,4 @@ Each end-to-end test package starts a `cluster.LocalProcessCluster` (topo, vtctl
 2. Rebuild binaries: `make build`
 3. Run the failing test with `-v`
 4. On failure, read logs from `$VTDATAROOT/vtroot_*/tmp_*/`
-5. Check `*-stderr.txt` files first for startup errors
-6. Check `*-stderr.txt` files for runtime errors. Search for the `ERR` and `WRN` levels.
+5. Check the `*-stderr.txt` files for startup and runtime errors. Search for the `ERR` and `WRN` levels.
