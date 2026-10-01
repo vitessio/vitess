@@ -44,19 +44,7 @@ var (
 	// the digest. A package-level array (Go has no []byte constants) so
 	// writesetDigestInit never allocates for it.
 	writesetKeySeparator = [1]byte{':'}
-	// writesetTableWritesMarker distinguishes a table-level key from the
-	// keys built from row values of the same table.
-	writesetTableWritesMarker = [2]byte{0xFF, 0x01}
 )
-
-// writesetTableWritesKey returns the key every write to tableName carries when
-// the table's writes have to serialize (see TablePlan.SerializeTableWrites).
-func writesetTableWritesKey(tableName string) uint64 {
-	var d xxhash.Digest
-	writesetDigestInit(&d, tableName)
-	writesetDigestAddPayload(&d, writesetTableWritesMarker[:])
-	return d.Sum64()
-}
 
 // fieldIndexForName resolves a column-name lookup in a field-index map by
 // trying the exact spelling first and falling back to lowercase. The maps are
@@ -739,9 +727,6 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing table plan for %s", rowEvent.TableName)
 		}
 		targetTableName := plan.TargetName
-		if plan.SerializeTableWrites {
-			keySet[writesetTableWritesKey(targetTableName)] = struct{}{}
-		}
 		var refs []fkConstraintRef
 		var pRefs []parentFKRef
 		if needResolvedFKRefs {

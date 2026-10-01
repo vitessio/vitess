@@ -1026,17 +1026,17 @@ func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string)
 }
 
 // writesetUniqueKeys analyzes the target table's unique secondary indexes
-// for parallel-apply writeset hashing. nil plan -> (nil, false, false, nil).
-func (vr *vreplicator) writesetUniqueKeys(ctx context.Context, tableName string, plan *TablePlan) (uniqueKeys [][]string, mustSerialize bool, serializeTableWrites bool, err error) {
+// for parallel-apply writeset hashing. nil plan -> (nil, false, nil).
+func (vr *vreplicator) writesetUniqueKeys(ctx context.Context, tableName string, plan *TablePlan) (uniqueKeys [][]string, mustSerialize bool, err error) {
 	if plan == nil {
-		return nil, false, false, nil
+		return nil, false, nil
 	}
 	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
-	uniqueKeys, mustSerialize, serializeTableWrites = writesetUniqueKeysFromSpec(plan, tableSpec)
-	return uniqueKeys, mustSerialize, serializeTableWrites, nil
+	uniqueKeys, mustSerialize = writesetUniqueKeysFromSpec(plan, tableSpec)
+	return uniqueKeys, mustSerialize, nil
 }
 
 // writesetUniqueKeysFromSpec analyzes the target table's unique secondary
@@ -1052,39 +1052,22 @@ func (vr *vreplicator) writesetUniqueKeys(ctx context.Context, tableName string,
 //     reason about — prefix or expression index columns, a PK that does not
 //     match the replication identity, or unique secondaries with no usable
 //     identity — in which case the table's transactions force-serialize.
-//   - serializeTableWrites: true when the table has any UNIQUE secondary
-//     index (see TablePlan.SerializeTableWrites).
-func writesetUniqueKeysFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) (uniqueKeys [][]string, mustSerialize bool, serializeTableWrites bool) {
-	uniqueKeys, mustSerialize = writesetUniqueKeyColumnsFromSpec(plan, tableSpec)
-	return uniqueKeys, mustSerialize, plan != nil && hasUniqueSecondaryIndex(tableSpec)
-}
-
-// hasUniqueSecondaryIndex reports whether the table has any UNIQUE index other
-// than its primary key, including one that backs a foreign key.
-func hasUniqueSecondaryIndex(tableSpec *sqlparser.TableSpec) bool {
-	if tableSpec == nil {
-		return false
-	}
-	for _, index := range tableSpec.Indexes {
-		if index == nil || index.Info == nil || index.Info.Type == sqlparser.IndexTypePrimary {
-			continue
-		}
-		if index.Info.IsUnique() {
-			return true
-		}
-	}
-	return false
-}
-
-// writesetUniqueKeyColumnsFromSpec returns the uniqueKeys and mustSerialize
-// results of writesetUniqueKeysFromSpec.
-func writesetUniqueKeyColumnsFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) (uniqueKeys [][]string, mustSerialize bool) {
+func writesetUniqueKeysFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) (uniqueKeys [][]string, mustSerialize bool) {
 	if plan == nil || tableSpec == nil {
 		return nil, false
 	}
 	// No early return when the table has no secondary indexes: the primary
 	// key itself still has to match the identity (no prefix or expression).
-	secondaryKeys := extractSecondaryKeys(tableSpec)
+	// Unlike extractSecondaryKeys, keep the indexes that back a foreign key:
+	// the FK keys do not cover a unique one when its FK is not in fkRefs (a
+	// parent in another schema), or when it is a prefix index, which cannot
+	// back the FK at all.
+	var secondaryKeys []*sqlparser.IndexDefinition
+	for _, index := range tableSpec.Indexes {
+		if index != nil && index.Info != nil && index.Info.Type != sqlparser.IndexTypePrimary {
+			secondaryKeys = append(secondaryKeys, index)
+		}
+	}
 
 	identityCols := plan.IdentityColumns
 	if len(identityCols) == 0 {

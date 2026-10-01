@@ -4067,11 +4067,9 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	}
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
-	// Before the DDL: only a non-unique secondary, so no unique keys and the
-	// table's writes can run concurrently.
+	// Before the DDL: only a non-unique secondary, so no unique keys.
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
-	require.False(t, vp.tablePlans[tableName].SerializeTableWrites)
 
 	ddlEvent := &binlogdatapb.VEvent{
 		Type:      binlogdatapb.VEventType_DDL,
@@ -4082,13 +4080,11 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	publishExecutedDDLBarrier(t, vp, ddlEvent.Statement)
 
 	// After the DDL barrier the FIELD handler re-runs the unique-key analysis:
-	// the new plain unique secondary emits a writeset unique key, and the
-	// table's writes now serialize.
+	// the new plain unique secondary emits a writeset unique key.
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
-	require.True(t, vp.tablePlans[tableName].SerializeTableWrites)
 
 	savedMysqld := vp.vr.mysqld
 	vp.vr.mysqld = nil
@@ -4098,7 +4094,6 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
-	require.True(t, vp.tablePlans[tableName].SerializeTableWrites)
 
 	// A FIELD whose fields changed, as after a source DDL under
 	// on-ddl=IGNORE, must not reuse the cached analysis: the unique key

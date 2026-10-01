@@ -1042,15 +1042,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if cachedPlan != nil && cachedPlan.TargetName == tplan.TargetName && !cacheInvalidatedByDDL && writesetFieldsMatch(cachedPlan.Fields, tplan.Fields) {
 				tplan.HasExtraUniqueSecondary = cachedPlan.HasExtraUniqueSecondary
 				tplan.UniqueKeyColumns = cachedPlan.UniqueKeyColumns
-				tplan.SerializeTableWrites = cachedPlan.SerializeTableWrites
 			} else {
-				uniqueKeys, mustSerialize, serializeTableWrites, err := vp.vr.writesetUniqueKeys(ctx, tplan.TargetName, tplan)
+				uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, tplan.TargetName, tplan)
 				if err != nil {
 					return err
 				}
 				tplan.UniqueKeyColumns = uniqueKeys
 				tplan.HasExtraUniqueSecondary = mustSerialize
-				tplan.SerializeTableWrites = serializeTableWrites
 			}
 		}
 		fieldTableName := event.FieldEvent.TableName
