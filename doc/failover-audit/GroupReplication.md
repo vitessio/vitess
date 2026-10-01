@@ -436,6 +436,88 @@ The first polling run of G13 found that MySQL blocks the read of the group state
 
 Regressions in polling mode (the harness default), same binaries: S1 failover 7.1s, gap 7.25s, 0/2240 lost, 0 violations; S3 failover 7.1s, gap 9.05s, 0/3728 lost, 0 violations. Evidence: `/home/ubuntu/chaos-results-lag-*`.
 
+## Majority bootstrap analysis
+
+When a group loses its majority, its members leave it, and VTOrc bootstraps it again only once **every** voter is reachable, on the voter whose executed and received GTID set contains every other voter's (`GroupNotBootstrapped`). In the G12 chaos scenario (below) that wait is most of the outage: the old primary's cell is cut off for 20s, and the shard has no primary until it is back. Bootstrapping from a reachable majority of the voters instead was analyzed and **rejected as unsafe**.
+
+**What a commit acknowledgement means.** Raw MySQL 8.4.11, a group of two with Vitess's fixed settings (`paxos_single_leader=ON`, `member_expel_timeout=0`, `unreachable_majority_timeout=2`), `relay_log_recovery=ON`; the primary A's XCom traffic to B goes through a proxy that adds 20ms, then the proxy is killed and A→B is dropped, under write load on A (`/home/ubuntu/chaos-tl/analysis/lab4/`, `lab.sh`, `lab-results.txt`):
+
+| Run | Result |
+|---|---|
+| L1, L1b, L4 | A had committed and acknowledged transactions that B, whose acceptance A needed, had neither received nor executed: 7 in each run (`:1433-1439`, `:1427-1433`, `:1427-1433`). |
+| L1b, L4 | What B had received but not applied stays in its relay log after `STOP GROUP_REPLICATION` (`RECEIVED_TRANSACTION_SET` still readable), and a bootstrap of B applies it before B becomes writable (L4: 8s `super_read_only` while the backlog applied). |
+| L2, L3 | A restart of B (`kill -9`, or a clean shutdown) with `relay_log_recovery=ON` discards the received backlog: `Received=""`, and a bootstrap of B never applies it. |
+| L5 | Without the added delay, no transaction committed on A was missing from B (2 of 2 runs). |
+
+A group acknowledges a commit once a majority has *accepted* it in XCom. An acceptor holds it in memory, and only receives it into its relay log once it learns the decision. While the group keeps its majority, XCom delivers it to every member. Once the group has lost its majority, and its members left, such a transaction exists only in the old primary's binlog. The remaining voters cannot tell: their received sets do not contain it.
+
+**Verdict.** A bootstrap from a majority of the voters, without the old primary, can discard acknowledged transactions, and would leave them as errant transactions on the old primary; a restart of a voter can also discard what it had received. VTOrc keeps waiting for every voter (design: "What an acknowledged commit guarantees"). The availability cost is that of the slowest voter to come back; the fixes below only remove the time that Vitess added on top of it.
+
+## Waits that Vitess added after a loss of majority (G12)
+
+G12 (`TestG12VoterRejoinsWhilePrimaryCellIsolated`, `CHAOS_RACE_OFFSETS=500ms`, 6 cycles per run): a voter's mysqld is restarted and rejoins, and 0.5s into its join the primary's cell, its topology server included, is isolated for 20s. The group then always loses its majority, and the first write after the cut needs the heal, the members' MySQL leaves, VTOrc's bootstrap, a join and the sync loop's promotion. Per-cycle timelines come from the run logs (`/home/ubuntu/chaos-tl/analysis/cycles.py`, aggregated by `agg.py`; times from the cut).
+
+**Before** (runs `/home/ubuntu/chaos-tl/G12-r1..r3`, 16 cycles that lost the majority and were bootstrapped), median first acknowledged write +40.6s, of which 3.6s (0–9.1s) was Vitess waiting for its own locks:
+
+- **The tablet's action lock held across a topology write (9 of 16 cycles).** The old primary's sync loop demoted the tablet when MySQL lost its group, under the action lock, and waited, still under the lock, for the topology server to store the tablet record. The write, issued while the cell was cut off, returned when the step of the loop timed out (15s) or 7–11s after the heal (median 10.0s). VTOrc's `StartGroupReplication(bootstrap)` RPC on that tablet waited for the lock: its `STOP GROUP_REPLICATION` started the moment the record was published.
+- **The shard lock held across a blocking join (r3, cycle 4).** VTOrc's `GroupMemberNotOnline` recovery started a join on the restarted voter right before the cut. The join RPC blocked behind the voter's own `START`, which had no group to join, and the recovery held the shard lock for 29.5s; the bootstrap, which needs it, started 7.7s late.
+
+### Fixes
+
+| Commit | Change |
+|---|---|
+| 7ecd4f4 | The sync loop's demotions (lost primary role, stale primary, foreign group) wait at most 1s for the topology under the action lock; the tablet runs with its new type right away, and its record is published in the background (`retryPublish`). A publish request wakes up the background publication (a promotion, VTOrc's `StaleTopoPrimary`), which otherwise waited `--publish-retry-interval` (30s). A promotion still writes the record first, with its term, under the state lock that the background publication takes to merge the running tablet: it cannot be undone. `StartGroupReplication` and its stop-serving check before a bootstrap wait at most 1s for the durability policy, the voters and the tablet records when the tablet read them before, and use what it read last. |
+| f4f86ab | VTOrc's `GroupMemberNotOnline` still checks the legitimate group under the shard lock, then runs the join in the background, after the lock is released. One join per tablet and VTOrc at a time (`GroupJoinInFlight` skips the analysis meanwhile). A bootstrap in the meantime re-reads every voter under the lock and gives up while a member is active; a member whose join started is RECOVERING, which counts. |
+| a760da7 | A PRIMARY tablet that does not serve for its replication group (fewer than a majority of the voters in its view, or a bootstrap of its MySQL) suppresses its heartbeat writes (below). |
+| 5300a1b | Found while validating: a promotion could wait for a failed voter's status (2s) when the sync loop's background fetch had established the voter majority a moment earlier; it now checks first. |
+
+Each change has a unit test that fails without it; the topology tests cut a memory topology off (its requests wait until the caller gives up or the partition heals).
+
+### Results
+
+Same harness and setup, binaries of these commits, 3 G12 runs (`/home/ubuntu/chaos-fix/lockwait/`; 17 cycles lost the majority and were bootstrapped; one more, r2 cycle 5, was not bootstrapped by VTOrc and is not counted, as before). Medians, ranges in parentheses, seconds:
+
+| G12 segment (from the cut) | Before (16 cycles) | After (17 cycles) |
+|---|---|---|
+| A. heal | 20.1 | 20.2 |
+| B. the bootstrapped member's MySQL leave, after the heal | 5.8 (5.3–17.4) | 5.6 (5.2–15.5) |
+| C. **Vitess waiting** (bootstrap `START` minus max(heal, B)) | **3.6 (0.0–9.1)** | **0.0 (0.0–1.7)** |
+| D. bootstrap to incarnation recorded | 1.7 (1.2–2.6) | 1.2 (1.1–1.3) |
+| E. recorded to promotion (joins) | 4.7 (2.9–16.0) | 7.1 (2.6–42.5) |
+| F. promotion to first write | 0.1 | 0.1 |
+| **First acknowledged write** | **40.6 (31.3–48.4)** | **35.6 (29.6–69.5)** |
+| Old primary's record published, after the heal | 10.0 (0.1–11.1) | 1.5 (0.3–3.9) |
+
+The 1.7s left in C (r1 cycle 2) is the joiner's stray group, which blocked the bootstrap until it left at +27.4. Counting every voter's MySQL leave, not only the bootstrapped member's, C was 1.4s (−0.2–5.8) before and 0.0s (0.0–0.1) after. The bootstrap now starts as soon as MySQL lets it, so the joins (E) more often wait for the other voters' own leaves: 3.3s of E's median (0.3s before), against 3.2s (3.5s before) for the joins themselves. The outlier (r2 cycle 4, 42.5s) is MySQL: the remaining voter's join failed after 30s with `Timeout while waiting for the group communication engine to be ready`, and the restarted voter's `START` stayed blocked for a minute (errno 3663). 0 acknowledged writes lost and 0 violations in every run (10763, 26970 and 10681 acknowledged writes).
+
+`StartGroupReplication` did not need its fallback in these runs: once the old primary's lock was free, its topology reads after the heal answered within 1s. A topology write retried after the heal also completed 0.3–3.9s after it, unlike the write issued during the cut (7–11s).
+
+| Scenario | Before | After | Acked writes lost | Violations |
+|---|---|---|---|---|
+| S7d ×3: without an acknowledged write in total (longest gap) | 60.8s (31.7s), 57.4s (38.9s), 64.7s (22.5s, ongoing at stop) | 41.0s (11.6s), 68.3s (31.1s), 78.0s (68.9s, ongoing at stop) | 0/4474, 0/2040, 0/1061 | 0 |
+| G9b (NEW-4: elected member's cell topo down) | gap 22.2s, 20.4s | gap 20.2s, shard primary moved at +20.2s | 0/3788 | 0 |
+| S1 | gap 7.64s, 7.48s | gap 7.29s, new primary +7.0s | 0/2232 | 0 |
+| S3 | gap 9.05s | gap 9.05s, new primary +7.25s | 0/3724 | 0 |
+
+S7d stays dominated by MySQL (leaves and stray groups after each of the four isolations), and its runs vary as before. Two of its outages show issues that predate these commits:
+
+- **r3: a bootstrap whose reply was lost.** VTOrc bootstrapped the group on the isolated primary 2s after a heal; the RPC returned after MySQL's leave (4.4s) and the bootstrap, by which time the next isolation had cut VTOrc off from the tablet. VTOrc never recorded the new incarnation, and the tablet trusted the group it had bootstrapped for `groupReplicationBootstrapGrace` (1 minute): no other bootstrap could start while it was active, and the tablet left it 60s later.
+- **r2: the sync loop acted on a stale MySQL status.** A step of the old primary's sync loop read MySQL's status while it was still the ONLINE primary of two members, before its group lost the majority, then waited on the topology of its isolated cell, and, after the heal, cleared the not-serving reason that a bootstrap RPC had set 16ms earlier. The bootstrap then made MySQL the writable primary of a group of one while the tablet served. The next isolation kept vtgate away until 1.3s before the next step of the loop stopped serving again: writes were acknowledged on that single voter for 1.3s, and existed only there until a second voter joined 4.7s later (none lost). The loop should read MySQL's status again before it makes a primary serve again.
+
+### Heartbeats of a primary that does not serve
+
+The query service of a PRIMARY tablet that does not serve still runs its replication tracker as a primary (`unservePrimary` calls `MakePrimary`), and with `--heartbeat-enable` it keeps writing a heartbeat every interval through the app user. In the fail-closed states of a Group Replication primary, MySQL is writable, so the heartbeats commit on a single voter. Checked in G11 with `CHAOS_VTTABLET_HEARTBEAT=1` (`--heartbeat-interval 1s`), keeping the data and reading P's binlog between its last application write (when it stopped serving, alone in its view after R1's graceful leave) and its death:
+
+| G11 with heartbeats | Before (342bd0b) | After (a760da7) |
+|---|---|---|
+| P's transactions after it stopped serving | 12 heartbeats in 12s (`_vt.heartbeat`, one per second), on P only | none in 13s |
+| Writes acknowledged again after P restarted | 9.4s | 10.5s |
+| Acked writes lost, violations | 0/3528, 0 | 0/3600, 0 |
+
+None was lost, since VTOrc waits for every voter and bootstraps the most advanced one, but they extended P's GTID set beyond the other voters', and would be errant if the group were ever bootstrapped elsewhere. A semi-sync primary that does not serve keeps writing heartbeats.
+
+End-to-end, binaries of these commits: `TestGroupReplicationLifecycle` (new primary in topo 7.4s after the primary's mysqld was killed), `TestGroupReplicationOneVoterPerCell` and `TestGroupReplicationReplicaReadsWithPollingLag` pass.
+
 ## Not tested
 
 - S11/S11b/S11c and S12/S13 as written: they use `SOURCE_DELAY`, `fixReplica` and the default channel, which GR members do not have. G11/G11k/G11s replace them.
@@ -447,6 +529,7 @@ Regressions in polling mode (the harness default), same binaries: S1 failover 7.
 ```
 go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestS7dFlappingPrimaryLong$' -test.v -test.timeout 30m   # semi-sync
 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG11GracefulLeaveThenPrimaryDies$' -test.v -test.timeout 30m
+CHAOS_RACE_OFFSETS=500ms CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG12VoterRejoinsWhilePrimaryCellIsolated$' -test.v -test.timeout 60m
 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG13SecondaryCutOffFromGroupReplicaReads$' -test.v -test.timeout 30m   # polling
 CHAOS_VTTABLET_HEARTBEAT=1 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG13SecondaryCutOffFromGroupReplicaReads$' -test.v -test.timeout 30m
 ```
