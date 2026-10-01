@@ -139,7 +139,8 @@ The other `glog` flags on `vtctldclient` and `vtctlclient` did not show a deprec
 removes them. `vtctldclient` uses `-v` as the shorthand for `--version`, the same as the other binaries. `-v` does not
 set a log level.
 
-This release also removes the `/debug/flushlogs` HTTP endpoint.
+The `/debug/flushlogs` HTTP endpoint is deprecated and is a no-op. It responds with success and logs a deprecation
+warning. v26 removes it.
 
 **Migration**: remove the flags above from startup arguments.
 
@@ -235,6 +236,10 @@ The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, an
 The logging flags `--log-structured`, `--log-rotate-max-size`, `--keep-logs`, `--keep-logs-by-mtime`, and `--purge-logs-interval`, and the `vtctldclient` and `vtctlclient` flags `--logtostderr` and `--alsologtostderr`, are now deprecated and are no-ops, as the [`glog` backend has been removed](#glog-removed). The flags will be removed entirely in v26.
 
 **Impact**: Remove any usage of these flags from startup scripts or configuration.
+
+The `/debug/flushlogs` HTTP endpoint is now deprecated and is a no-op, as the [`glog` backend has been removed](#glog-removed). The endpoint will be removed entirely in v26.
+
+**Impact**: Remove any calls to `/debug/flushlogs`.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
