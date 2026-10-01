@@ -680,3 +680,48 @@ func TestGroupReplicationSyncPublishesVerdict(t *testing.T) {
 	s.reconcile(ctx)
 	assert.Equal(t, tabletservermock.GroupReplicationVerdict{}, *qsc.LastGroupReplicationVerdict(), "a status that cannot be read")
 }
+
+// TestGroupReplicationPrimaryWithoutVoterMajorityWritesNoHeartbeats checks that a PRIMARY tablet
+// that stops serving for its replication group also stops writing heartbeats. The query service
+// of a PRIMARY tablet that does not serve still runs as a primary, and with --heartbeat-enable it
+// kept writing a heartbeat every interval through MySQL, which is writable in both cases: a primary
+// alone in its view after the other voters left, and a primary that bootstrapped a group of one.
+// Those heartbeats were committed on a single voter. A primary that does not serve for another
+// reason keeps writing them, as before.
+func TestGroupReplicationPrimaryWithoutVoterMajorityWritesNoHeartbeats(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	require.False(t, qsc.HeartbeatWritesSuppressed())
+	s := newGroupReplicationSync(tm)
+
+	// The other voters left the group: the primary is alone in its view.
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)), "1780000001:20"))
+	s.reconcile(ctx)
+	require.False(t, qsc.IsServing())
+	assert.True(t, qsc.HeartbeatWritesSuppressed(), "a primary without the majority of its voters must not write heartbeats")
+
+	// The majority is back.
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:21"))
+	s.reconcile(ctx)
+	require.True(t, qsc.IsServing())
+	assert.False(t, qsc.HeartbeatWritesSuppressed(), "the primary writes heartbeats again once it serves")
+
+	// A bootstrap on the PRIMARY tablet: MySQL becomes the writable primary of a group of one.
+	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOffline, "")))
+	fmd.StartGroupReplicationError = nil
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+	_, err := tm.StartGroupReplication(ctx, true)
+	require.NoError(t, err)
+	require.False(t, qsc.IsServing())
+	assert.True(t, qsc.HeartbeatWritesSuppressed(), "the only voter of a new group must not write heartbeats")
+
+	// The tablet is demoted: a REPLICA does not write heartbeats anyway.
+	setTabletType(t, tm, topodatapb.TabletType_REPLICA)
+	assert.False(t, qsc.HeartbeatWritesSuppressed())
+}

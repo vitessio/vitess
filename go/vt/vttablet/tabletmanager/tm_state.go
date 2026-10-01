@@ -351,6 +351,12 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 
 	ptsTime := protoutil.TimeFromProto(ts.tablet.PrimaryTermStartTime).UTC()
 
+	// A PRIMARY tablet that does not serve because its replication group lacks a majority of its
+	// voters, or because its MySQL is about to bootstrap a group, must not write heartbeats
+	// either: MySQL is writable then, and a heartbeat would be committed on a single voter. The
+	// query service keeps writing them on a primary that does not serve for another reason.
+	ts.tm.QueryServiceControl.SetHeartbeatWritesSuppressed(ts.tablet.Type == topodatapb.TabletType_PRIMARY && ts.groupReplicationNotServing != "")
+
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)

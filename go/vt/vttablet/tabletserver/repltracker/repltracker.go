@@ -17,6 +17,7 @@ limitations under the License.
 package repltracker
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -56,6 +57,9 @@ type ReplTracker struct {
 
 	mu        sync.Mutex
 	isPrimary bool
+	// writesSuppressed keeps the heartbeat writer closed while the tablet is PRIMARY (see
+	// SetHeartbeatWritesSuppressed).
+	writesSuppressed bool
 
 	hw     *heartbeatWriter
 	hr     *heartbeatReader
@@ -93,10 +97,39 @@ func (rt *ReplTracker) MakePrimary() {
 	rt.isPrimary = true
 	if rt.mode == tabletenv.Heartbeat {
 		rt.hr.Close()
+	}
+	if rt.writesSuppressed {
+		log.Info("Replication Tracker: heartbeat writes are suppressed")
+		rt.hw.Close()
+	} else {
 		rt.hw.Open()
 	}
-	rt.hw.Open()
 	replicationLagSeconds.Reset() // we are the primary, we have no lag
+}
+
+// SetHeartbeatWritesSuppressed keeps the heartbeat writer of a primary closed while suppressed is
+// set, whatever its serving state: neither the periodic heartbeats (--heartbeat-enable) nor the
+// on-demand ones are written. The tablet manager sets it while a Group Replication primary must
+// not commit anything (its group lacks a majority of the shard's voters, or it is about to
+// bootstrap a new group), because MySQL is still writable then: a heartbeat would be committed
+// on a single voter. A primary that does not serve for another reason, a semi-sync primary for
+// example, keeps writing heartbeats.
+func (rt *ReplTracker) SetHeartbeatWritesSuppressed(suppressed bool) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if rt.writesSuppressed == suppressed {
+		return
+	}
+	rt.writesSuppressed = suppressed
+	log.Info(fmt.Sprintf("Replication Tracker: heartbeat writes suppressed: %v", suppressed))
+	if !rt.isPrimary {
+		return
+	}
+	if suppressed {
+		rt.hw.Close()
+	} else {
+		rt.hw.Open()
+	}
 }
 
 // MakeNonPrimary must be called if the tablet type becomes non-PRIMARY.

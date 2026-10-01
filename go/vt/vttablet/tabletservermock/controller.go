@@ -96,6 +96,9 @@ type Controller struct {
 	// groupReplicationVerdict is the last verdict passed to SetGroupReplicationVerdict.
 	groupReplicationVerdict *GroupReplicationVerdict
 
+	// heartbeatWritesSuppressed is the last value passed to SetHeartbeatWritesSuppressed.
+	heartbeatWritesSuppressed bool
+
 	MethodCalled map[string]bool
 }
 
@@ -227,6 +230,20 @@ func (tqsc *Controller) LastGroupReplicationVerdict() *GroupReplicationVerdict {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 	return tqsc.groupReplicationVerdict
+}
+
+// SetHeartbeatWritesSuppressed is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetHeartbeatWritesSuppressed(suppressed bool) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.heartbeatWritesSuppressed = suppressed
+}
+
+// HeartbeatWritesSuppressed returns the last value passed to SetHeartbeatWritesSuppressed.
+func (tqsc *Controller) HeartbeatWritesSuppressed() bool {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.heartbeatWritesSuppressed
 }
 
 // BroadcastHealth is part of the tabletserver.Controller interface

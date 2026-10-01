@@ -93,6 +93,11 @@ type Controller interface {
 	// viewID. Replication lag polling needs it on a Group Replication member.
 	SetGroupReplicationVerdict(healthy bool, viewID string)
 
+	// SetHeartbeatWritesSuppressed keeps a PRIMARY tablet from writing heartbeats while suppressed
+	// is set, whatever its serving state. The tablet manager sets it while a Group Replication
+	// primary does not serve because its MySQL must not commit anything.
+	SetHeartbeatWritesSuppressed(suppressed bool)
+
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server
 

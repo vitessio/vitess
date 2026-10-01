@@ -2080,6 +2080,11 @@ func (tsv *TabletServer) BroadcastHealth() {
 	tsv.sm.Broadcast()
 }
 
+// SetHeartbeatWritesSuppressed is part of the tabletserver.Controller interface.
+func (tsv *TabletServer) SetHeartbeatWritesSuppressed(suppressed bool) {
+	tsv.rt.SetHeartbeatWritesSuppressed(suppressed)
+}
+
 // SetGroupReplicationVerdict is part of the tabletserver.Controller interface.
 func (tsv *TabletServer) SetGroupReplicationVerdict(healthy bool, viewID string) {
 	tsv.rt.SetGroupReplicationVerdict(healthy, viewID)
