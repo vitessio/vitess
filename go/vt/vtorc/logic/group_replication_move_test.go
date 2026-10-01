@@ -382,7 +382,10 @@ func TestRefreshReachableTabletInfoOfShard(t *testing.T) {
 	groupReplicationCellTimeout = 100 * time.Millisecond
 
 	replica := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
-	deleted := recoveryTablet("zone1", 101, topodatapb.TabletType_REPLICA)
+	// VTOrc remembers a forgotten alias for the whole process (inst.ForgetInstance), and would then
+	// ignore a tablet of another test of the package with the same alias: this one is used nowhere
+	// else.
+	deleted := recoveryTablet("zone1", 199, topodatapb.TabletType_REPLICA)
 	cutOff := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
 	groupReplicationRecoveryTest(t, replica, deleted, cutOff)
 	ctx := t.Context()
