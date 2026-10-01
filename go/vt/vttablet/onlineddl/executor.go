@@ -1322,9 +1322,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			// With the parallel applier, wait for the stream to catch up before
 			// queuing the RENAME rather than after, as the serial path does. Waiting
 			// with the RENAME queued stalled in stress tests with the parallel
-			// applier; the mechanism is not pinned down (the queued RENAME only
-			// waits on the locked sentry table, since it takes its metadata locks
-			// in name order). Either order is correct: LOCK TABLES ... WRITE waits
+			// applier; the mechanism is not pinned down (the queued RENAME takes
+			// its metadata locks in name order and waits on the first table held
+			// by LOCK TABLES, the sentry or the original table, so it never gets
+			// to the shadow table's). Either order is correct: LOCK TABLES ... WRITE waits
 			// for the writes to the original table to commit, so this position
 			// covers all of them.
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "post-lock: waiting for vreplication to catch up")
