@@ -42,6 +42,7 @@ func main() {
 	// (TODO|andrew) remove this line after the migration to pflag is complete.
 	command.Root.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	log.RegisterFlags(command.Root.PersistentFlags())
+	log.RegisterRemovedClientFlags(command.Root.PersistentFlags())
 	grpcclient.RegisterFlags(command.Root.PersistentFlags())
 	grpccommon.RegisterFlags(command.Root.PersistentFlags())
 	grpcclientcommon.RegisterFlags(command.Root.PersistentFlags())
