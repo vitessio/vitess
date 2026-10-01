@@ -881,3 +881,117 @@ func TestApplySchedulerEmptyWritesetDoesNotWaitForInflightNoConflict(t *testing.
 
 	requireReadyTxn(t, s, child)
 }
+
+// TestApplySchedulerWaitForTurn pins the wait a transaction does when it has
+// to apply alone, after every earlier transaction has committed: it returns
+// once the order right before it commits, and on cancellation.
+func TestApplySchedulerWaitForTurn(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := newApplyScheduler(ctx)
+
+	txns := []*applyTxn{
+		{order: 1, writeset: []uint64{1}},
+		{order: 2, writeset: []uint64{2}},
+		{order: 3, writeset: []uint64{3}},
+	}
+	for _, txn := range txns {
+		require.NoError(t, s.enqueue(txn))
+	}
+	for range txns {
+		_, err := s.nextReady(ctx)
+		require.NoError(t, err)
+	}
+	require.True(t, s.isNext(1))
+	require.False(t, s.isNext(3))
+
+	turn := make(chan error, 1)
+	go func() { turn <- s.waitForTurn(ctx, 3) }()
+	require.NoError(t, s.markCommitted(txns[0]))
+	assert.Never(t, func() bool { return len(turn) > 0 }, 200*time.Millisecond, 10*time.Millisecond)
+	require.NoError(t, s.markCommitted(txns[1]))
+	select {
+	case err := <-turn:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "waitForTurn did not return once the previous order committed")
+	}
+	require.True(t, s.isNext(3))
+
+	waiting := make(chan error, 1)
+	go func() { waiting <- s.waitForTurn(ctx, 10) }()
+	cancel()
+	select {
+	case err := <-waiting:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "waitForTurn did not return on cancellation")
+	}
+}
+
+// TestApplySchedulerPauseDispatchAfterAbort pins the pause that follows a
+// commit-order deadlock abort: until the transaction that requested it
+// commits, no later ordered transaction is dispatched, so none can take the
+// locks it is about to retry; noConflict transactions, which take none, still
+// go through.
+func TestApplySchedulerPauseDispatchAfterAbort(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	head := &applyTxn{order: 1, writeset: []uint64{1}}
+	later := &applyTxn{order: 2, writeset: []uint64{2}}
+	save := &applyTxn{order: 3, noConflict: true}
+	require.NoError(t, s.enqueue(head))
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, head, got)
+
+	s.requestAbortAfter(1)
+	require.NoError(t, s.enqueue(later))
+	require.NoError(t, s.enqueue(save))
+	requireReadyTxn(t, s, save)
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(head))
+	requireReadyTxn(t, s, later)
+}
+
+// TestApplySchedulerCommitOrderAborts pins the bookkeeping behind
+// commit-order deadlock aborts: an abort requested by the transaction with
+// order h covers every transaction ordered after h that began applying before
+// it, closes the notification channel handed out before it, and pauses
+// dispatch after h.
+func TestApplySchedulerCommitOrderAborts(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	gen, notify := s.abortState()
+	aborted, _ := s.abortedSince(gen, 5)
+	require.False(t, aborted)
+
+	s.requestAbortAfter(3)
+	select {
+	case <-notify:
+	default:
+		require.FailNow(t, "requestAbortAfter must close the notification channel handed out before it")
+	}
+	aborted, notifyAfter := s.abortedSince(gen, 5)
+	require.True(t, aborted, "a transaction after the requester that began applying before the abort is covered")
+	aborted, _ = s.abortedSince(gen, 3)
+	require.False(t, aborted, "the requester is not covered by its own abort")
+	aborted, _ = s.abortedSince(gen, 2)
+	require.False(t, aborted, "a transaction before the requester is not covered")
+
+	newGen, _ := s.abortState()
+	aborted, _ = s.abortedSince(newGen, 5)
+	require.False(t, aborted, "a transaction that began applying after the abort is not covered")
+	select {
+	case <-notifyAfter:
+		require.FailNow(t, "the notification channel handed out after the abort must stay open until the next one")
+	default:
+	}
+
+	s.mu.Lock()
+	require.Equal(t, int64(3), s.dispatchPausedAfter)
+	s.mu.Unlock()
+}

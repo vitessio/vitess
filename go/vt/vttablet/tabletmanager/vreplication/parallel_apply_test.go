@@ -24,6 +24,8 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"math/rand/v2"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -630,6 +632,7 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -680,6 +683,7 @@ func TestApplyEventsParallelCommitsScheduledPrefixBeforeScheduleError(t *testing
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -735,6 +739,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopPosEvenIfLaterScheduleFa
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -797,6 +802,7 @@ func TestApplyEventsParallelReturnsNilAfterEmptyTxnStopPosEvenIfLaterScheduleFai
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -860,6 +866,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopDDLEvenIfLaterScheduleFa
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -923,6 +930,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledRelevantJournalEvenIfLaterSc
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -7731,4 +7739,471 @@ func TestRecoverParallelApplyCatchesPanic(t *testing.T) {
 		require.Error(t, got)
 		require.ErrorContains(t, got, "oob")
 	})
+}
+
+// newCommitOrderDeadlockVPlayer sets up a parallel vplayer applying to a real
+// table, (id int primary key, uk int unique) with rows (1, 10) and (3, 15),
+// for the commit-order deadlock tests.
+func newCommitOrderDeadlockVPlayer(t *testing.T, ctx context.Context, tableName string) (vp *vplayer, qualifiedTableName string) {
+	t.Helper()
+	vp, _ = testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	qualifiedTableName = vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, uk int not null, primary key(id), unique key uk_uk(uk))",
+		"insert into " + qualifiedTableName + " values (1, 10), (3, 15)",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	mainDB := &realDBClient{nolog: true}
+	require.NoError(t, mainDB.Connect())
+	t.Cleanup(mainDB.Close)
+	// Worker connections read the workflow's settings from its stream row.
+	// Insert one directly rather than through the engine, so nothing streams it.
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName, Shard: env.ShardName,
+		Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}},
+	}
+	qr, err := mainDB.ExecuteFetch(binlogplayer.CreateVReplication(tableName, bls, "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-4",
+		9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false), 1)
+	require.NoError(t, err)
+	vp.vr.id = int32(qr.InsertID)
+	t.Cleanup(func() {
+		_ = env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+	})
+	vp.vr.dbClient = newVDBClient(mainDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{
+		env:             vtenv.NewTestEnv(),
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
+		dbClientFactoryFiltered: func() binlogplayer.DBClient {
+			return &realDBClient{nolog: true}
+		},
+	}
+	vp.vr.source.Filter = bls.Filter
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, nil, vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
+	require.NoError(t, err)
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "uk", Type: querypb.Type_INT32},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+	return vp, qualifiedTableName
+}
+
+// TestCommitOrderDeadlockAbortsLaterTransaction reproduces, on a real InnoDB,
+// the commit-order deadlock that a unique secondary index can cause, and pins
+// that the parallel applier resolves it as MySQL's replica does: by rolling
+// back the later transaction and applying it again once the earlier one has
+// committed.
+//
+// Transaction 2 deletes the row with uk=10 and inserts another with uk=10 (as
+// the applier does for a primary key change). Finding the delete-marked uk=10
+// entry, InnoDB takes next-key locks on the unique index, even under READ
+// COMMITTED, that block inserting uk=12. Transaction 2 has applied and waits
+// in the commitLoop for transaction 1 to commit, but transaction 1 inserts
+// uk=12 and waits on that lock: a cycle InnoDB cannot see. Their writesets
+// are disjoint, so nothing keeps them from running concurrently.
+func TestCommitOrderDeadlockAbortsLaterTransaction(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	tableName := "parallel_apply_commit_order_deadlock"
+	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
+	var err error
+
+	// Transaction 2, applied on a READ COMMITTED connection of its own and
+	// waiting in the commitLoop for its turn.
+	laterDB := &realDBClient{nolog: true}
+	require.NoError(t, laterDB.Connect())
+	t.Cleanup(laterDB.Close)
+	_, err = laterDB.ExecuteFetch("set session transaction isolation level read committed", 1)
+	require.NoError(t, err)
+	laterClient := newVDBClient(laterDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	require.NoError(t, laterClient.Begin())
+	_, err = laterClient.ExecuteFetch("delete from "+qualifiedTableName+" where id = 1", 1)
+	require.NoError(t, err)
+	_, err = laterClient.ExecuteFetch("insert into "+qualifiedTableName+" values (2, 10)", 1)
+	require.NoError(t, err)
+
+	pos1, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	pos2, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	require.NoError(t, err)
+	later := &applyTxn{
+		order: 2,
+		payload: &applyTxnPayload{
+			pos:    pos2,
+			client: laterClient,
+			query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return laterClient.Execute(sql)
+			},
+			commit: laterClient.Commit,
+		},
+		done: make(chan struct{}, 1),
+	}
+	// Transaction 1, applied by a worker.
+	earlier := &applyTxn{
+		order:    1,
+		writeset: []uint64{1},
+		payload: &applyTxnPayload{
+			pos: pos1,
+			events: []*binlogdatapb.VEvent{{
+				Type: binlogdatapb.VEventType_ROW,
+				RowEvent: &binlogdatapb.RowEvent{
+					TableName: tableName,
+					RowChanges: []*binlogdatapb.RowChange{{
+						After: &querypb.Row{Values: []byte("412"), Lengths: []int64{1, 2}},
+					}},
+				},
+			}},
+		},
+		done: make(chan struct{}, 1),
+	}
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 2)
+	commitCh <- later
+	worker, err := newApplyWorker(ctx, vp.vr)
+	require.NoError(t, err)
+	t.Cleanup(worker.close)
+	// Registered after the connections' cleanups so it runs before them:
+	// stop the loops before their connections are closed, even on failure.
+	var loops sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		loops.Wait()
+	})
+	commitErr := make(chan error, 1)
+	loops.Go(func() { commitErr <- vp.commitLoop(ctx, scheduler, commitCh) })
+	require.NoError(t, scheduler.enqueue(earlier))
+	workerErr := make(chan error, 1)
+	loops.Go(func() { workerErr <- vp.workerLoop(ctx, scheduler, commitCh, worker) })
+
+	require.Eventually(t, func() bool {
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return scheduler.lastCommittedOrder == 2
+	}, 30*time.Second, 50*time.Millisecond, "both transactions must commit")
+	select {
+	case err := <-workerErr:
+		require.FailNow(t, "the worker must resolve the lock wait, not fail", "%v", err)
+	case err := <-commitErr:
+		require.FailNow(t, "the commitLoop must not fail", "%v", err)
+	default:
+	}
+	cancel()
+
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, uk from "+qualifiedTableName+" order by id")
+	require.NoError(t, err)
+	require.Equal(t, "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)]]", fmt.Sprintf("%v", qr.Rows))
+	require.Positive(t, vp.vr.stats.ErrorCounts.Counts()["CommitOrderDeadlock"])
+}
+
+// rowEventTxn builds a worker transaction of ROW events on tableName, each
+// row change given as before and after (id, uk) values, or nil.
+func rowEventTxn(order int64, writeset []uint64, pos replication.Position, tableName string, changes ...[2][]int) *applyTxn {
+	row := func(values []int) *querypb.Row {
+		if values == nil {
+			return nil
+		}
+		id, uk := strconv.Itoa(values[0]), strconv.Itoa(values[1])
+		return &querypb.Row{Values: []byte(id + uk), Lengths: []int64{int64(len(id)), int64(len(uk))}}
+	}
+	rowChanges := make([]*binlogdatapb.RowChange, 0, len(changes))
+	for _, change := range changes {
+		rowChanges = append(rowChanges, &binlogdatapb.RowChange{Before: row(change[0]), After: row(change[1])})
+	}
+	return &applyTxn{
+		order:    order,
+		writeset: writeset,
+		payload: &applyTxnPayload{
+			pos: pos,
+			events: []*binlogdatapb.VEvent{{
+				Type:     binlogdatapb.VEventType_ROW,
+				RowEvent: &binlogdatapb.RowEvent{TableName: tableName, RowChanges: rowChanges},
+			}},
+		},
+		done: make(chan struct{}, 1),
+	}
+}
+
+// TestCommitOrderDeadlockAbortsTransactionHeldByWorker covers the other place
+// a later transaction can hold its locks: applied by a worker that waits for
+// its own previous transaction to commit before handing it over. The abort
+// has to reach it there, as well as the previous transaction, buffered in the
+// commitLoop.
+//
+// Worker 2 applies transaction 2 (an unrelated insert) and hands it to the
+// commitLoop, then applies transaction 3, a primary key change from (1, 10)
+// to (2, 10) that takes the gap locks on the unique index, and waits for
+// transaction 2 to commit. Worker 1 then applies transaction 1, inserting
+// uk=12, and waits on those locks.
+func TestCommitOrderDeadlockAbortsTransactionHeldByWorker(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	tableName := "parallel_apply_commit_order_deadlock_held"
+	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
+
+	pos := func(gno int) replication.Position {
+		p, err := binlogplayer.DecodePosition(fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", gno))
+		require.NoError(t, err)
+		return p
+	}
+	txn1 := rowEventTxn(1, []uint64{1}, pos(5), tableName, [2][]int{nil, {4, 12}})
+	txn2 := rowEventTxn(2, []uint64{2}, pos(6), tableName, [2][]int{nil, {5, 50}})
+	txn3 := rowEventTxn(3, []uint64{3}, pos(7), tableName, [2][]int{{1, 10}, {2, 10}})
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 4)
+	worker1, err := newApplyWorker(ctx, vp.vr)
+	require.NoError(t, err)
+	t.Cleanup(worker1.close)
+	worker2, err := newApplyWorker(ctx, vp.vr)
+	require.NoError(t, err)
+	t.Cleanup(worker2.close)
+	// Registered after the connections' cleanups so it runs before them:
+	// stop the loops before their connections are closed, even on failure.
+	var loops sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		loops.Wait()
+	})
+	commitErr := make(chan error, 1)
+	loops.Go(func() { commitErr <- vp.commitLoop(ctx, scheduler, commitCh) })
+	require.NoError(t, scheduler.enqueue(txn2))
+	require.NoError(t, scheduler.enqueue(txn3))
+	worker2Err := make(chan error, 1)
+	loops.Go(func() { worker2Err <- vp.workerLoop(ctx, scheduler, commitCh, worker2) })
+	// Wait for worker 2 to have taken both: it then holds transaction 3,
+	// applied, while it waits for transaction 2 to commit.
+	require.Eventually(t, func() bool {
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return scheduler.pendingCount == 0
+	}, 30*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, scheduler.enqueue(txn1))
+	worker1Err := make(chan error, 1)
+	loops.Go(func() { worker1Err <- vp.workerLoop(ctx, scheduler, commitCh, worker1) })
+
+	require.Eventually(t, func() bool {
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return scheduler.lastCommittedOrder == 3
+	}, 30*time.Second, 50*time.Millisecond, "all three transactions must commit")
+	for _, errCh := range []chan error{worker1Err, worker2Err, commitErr} {
+		select {
+		case err := <-errCh:
+			require.FailNow(t, "the workers and the commitLoop must resolve the lock wait, not fail", "%v", err)
+		default:
+		}
+	}
+	cancel()
+
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, uk from "+qualifiedTableName+" order by id")
+	require.NoError(t, err)
+	require.Equal(t, "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)] [INT32(5) INT32(50)]]", fmt.Sprintf("%v", qr.Rows))
+	require.Positive(t, vp.vr.stats.ErrorCounts.Counts()["CommitOrderDeadlock"])
+}
+
+// TestCommitOrderDeadlockReapplyAbortsTxnInCommitCh covers the commitLoop's
+// own reapply hitting a lock wait. Transaction 1, aborted while buffered, is
+// replayed by the commitLoop at its turn. Transaction 2 began applying after
+// that abort (dispatch resumes once the abort's requester commits), took the
+// gap locks transaction 1 needs, and was handed to the commitLoop, where it
+// still sits in commitCh. The commitLoop is not reading commitCh while it
+// replays, so its own abort has to reach the transactions waiting there.
+func TestCommitOrderDeadlockReapplyAbortsTxnInCommitCh(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+	tableName := "parallel_apply_commit_order_deadlock_reapply"
+	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
+
+	// Transaction 1: applied, then rolled back by an earlier abort.
+	firstClient, err := createWorkerConn(ctx, vp.vr)
+	require.NoError(t, err)
+	t.Cleanup(firstClient.Close)
+	require.NoError(t, firstClient.Begin())
+	_, err = firstClient.ExecuteFetch("insert into "+qualifiedTableName+" values (4, 12)", 1)
+	require.NoError(t, err)
+	require.NoError(t, firstClient.Rollback())
+
+	// Transaction 2: applied after that abort, holding the gap locks.
+	secondClient, err := createWorkerConn(ctx, vp.vr)
+	require.NoError(t, err)
+	t.Cleanup(secondClient.Close)
+	require.NoError(t, secondClient.Begin())
+	_, err = secondClient.ExecuteFetch("delete from "+qualifiedTableName+" where id = 1", 1)
+	require.NoError(t, err)
+	_, err = secondClient.ExecuteFetch("insert into "+qualifiedTableName+" values (2, 10)", 1)
+	require.NoError(t, err)
+
+	pos1, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	pos2, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	require.NoError(t, err)
+	first := &applyTxn{order: 1, done: make(chan struct{}, 1), payload: &applyTxnPayload{
+		pos: pos1, client: firstClient, aborted: true,
+		query:  func(ctx context.Context, sql string) (*sqltypes.Result, error) { return firstClient.Execute(sql) },
+		commit: firstClient.Commit,
+	}}
+	second := &applyTxn{order: 2, done: make(chan struct{}, 1), payload: &applyTxnPayload{
+		pos: pos2, client: secondClient,
+		query:  func(ctx context.Context, sql string) (*sqltypes.Result, error) { return secondClient.Execute(sql) },
+		commit: secondClient.Commit,
+	}}
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 8)
+	commitCh <- first
+	commitCh <- second
+	// Registered after the connections' cleanups so it runs before them.
+	var loops sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		loops.Wait()
+	})
+	commitErr := make(chan error, 1)
+	loops.Go(func() { commitErr <- vp.commitLoop(ctx, scheduler, commitCh) })
+
+	require.Eventually(t, func() bool {
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return scheduler.lastCommittedOrder == 2
+	}, 30*time.Second, 50*time.Millisecond, "both transactions must commit")
+	select {
+	case err := <-commitErr:
+		require.FailNow(t, "the commitLoop must resolve the lock wait, not fail", "%v", err)
+	default:
+	}
+	cancel()
+
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, uk from "+qualifiedTableName+" order by id")
+	require.NoError(t, err)
+	require.Equal(t, "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)]]", fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestCommitOrderDeadlockStress runs transactions that change primary keys
+// (deleting and reinserting a unique key value) and insert into the
+// neighbouring unique key gaps, with disjoint writesets, through eight
+// workers and the commitLoop on a real InnoDB, in random order, batching and
+// not. Commit-order deadlocks happen along the way; every transaction must
+// still commit, once, with the same result as applying them serially.
+func TestCommitOrderDeadlockStress(t *testing.T) {
+	for _, batching := range []bool{false, true} {
+		for seed := int64(1); seed <= 3; seed++ {
+			t.Run(fmt.Sprintf("batching=%v/seed=%d", batching, seed), func(t *testing.T) {
+				testCommitOrderDeadlockStress(t, batching, seed)
+			})
+		}
+	}
+}
+
+func testCommitOrderDeadlockStress(t *testing.T, batching bool, seed int64) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+	tableName := fmt.Sprintf("parallel_apply_commit_order_deadlock_stress_%v_%d", batching, seed)
+	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 8
+	if batching {
+		vp.vr.workflowConfig.ExperimentalFlags |= vttablet.VReplicationExperimentalFlagVPlayerBatching
+		vp.batchMode = true
+	} else {
+		vp.vr.workflowConfig.ExperimentalFlags &^= vttablet.VReplicationExperimentalFlagVPlayerBatching
+		vp.batchMode = false
+	}
+
+	const keys = 15
+	rows := make([]string, 0, keys)
+	for i := 1; i <= keys; i++ {
+		rows = append(rows, fmt.Sprintf("(%d, %d)", i*100, i*100))
+	}
+	execStatements(t, []string{
+		"delete from " + qualifiedTableName,
+		"insert into " + qualifiedTableName + " values " + strings.Join(rows, ", "),
+	})
+
+	// For each key: move its row to a new primary key, keeping the unique
+	// value, and insert rows with unique values on either side of it.
+	var changes [][][2][]int
+	for i := 1; i <= keys; i++ {
+		changes = append(changes,
+			[][2][]int{{{i * 100, i * 100}, {i*100 + 1, i * 100}}},
+			[][2][]int{{nil, {1000000 + i, i*100 + 30}}},
+			[][2][]int{{nil, {2000000 + i, i*100 - 30}}},
+		)
+	}
+	rand.New(rand.NewPCG(uint64(seed), uint64(seed))).Shuffle(len(changes), func(a, b int) {
+		changes[a], changes[b] = changes[b], changes[a]
+	})
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 16)
+	workers := make([]*applyWorker, 0, 8)
+	for range 8 {
+		worker, err := newApplyWorker(ctx, vp.vr)
+		require.NoError(t, err)
+		t.Cleanup(worker.close)
+		workers = append(workers, worker)
+	}
+	// Registered after the connections' cleanups so it runs before them.
+	var loops sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		loops.Wait()
+	})
+	loopErr := make(chan error, len(workers)+1)
+	loops.Go(func() { loopErr <- vp.commitLoop(ctx, scheduler, commitCh) })
+	for i, change := range changes {
+		order := int64(i + 1)
+		pos, err := binlogplayer.DecodePosition(fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", 4+order))
+		require.NoError(t, err)
+		require.NoError(t, scheduler.enqueue(rowEventTxn(order, []uint64{uint64(order)}, pos, tableName, change...)))
+	}
+	for _, worker := range workers {
+		loops.Go(func() { loopErr <- vp.workerLoop(ctx, scheduler, commitCh, worker) })
+	}
+
+	last := int64(len(changes))
+	require.Eventually(t, func() bool {
+		select {
+		case err := <-loopErr:
+			require.FailNow(t, "a worker or the commitLoop failed", "%v", err)
+		default:
+		}
+		scheduler.mu.Lock()
+		defer scheduler.mu.Unlock()
+		return scheduler.lastCommittedOrder == last
+	}, 120*time.Second, 50*time.Millisecond, "every transaction must commit")
+	cancel()
+
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, uk from "+qualifiedTableName+" order by id")
+	require.NoError(t, err)
+	got := make([]string, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
+		got = append(got, row[0].ToString()+":"+row[1].ToString())
+	}
+	want := make([]string, 0, len(changes))
+	for i := 1; i <= keys; i++ {
+		want = append(want, fmt.Sprintf("%d:%d", i*100+1, i*100), fmt.Sprintf("%d:%d", 1000000+i, i*100+30), fmt.Sprintf("%d:%d", 2000000+i, i*100-30))
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	require.Equal(t, want, got)
 }

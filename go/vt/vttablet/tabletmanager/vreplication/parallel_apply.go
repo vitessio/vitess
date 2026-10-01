@@ -91,6 +91,14 @@ type applyTxnPayload struct {
 	// position-only saves). Workers forward these directly to commitCh
 	// without applying events or waiting on txn.done.
 	commitOnly bool
+	// applyGen is the abort generation (see applyScheduler.abortGen) at which
+	// the worker began applying this transaction, so the commitLoop can tell
+	// whether an abort covers it.
+	applyGen int64
+	// aborted is set by the commitLoop when it rolled this worker
+	// transaction back for a commit-order deadlock abort; it is applied again
+	// when its turn to commit comes.
+	aborted bool
 	// updatePosOnly is true for position-only saves (idle timeout flush).
 	// The commitLoop calls updatePos without applying any events.
 	updatePosOnly bool
@@ -2035,6 +2043,96 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 	ddlExecEnabled := vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC ||
 		vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE
 
+	// applyOnce applies the transaction's events on the worker's active
+	// connection, flushing them in batch mode, and rolls back on error.
+	applyOnce := func(payload *applyTxnPayload) error {
+		// Publish the current worker client so the worker-scoped
+		// context.AfterFunc can close it if ctx is cancelled.
+		activeApplyClient.Store(worker.client)
+		defer activeApplyClient.Store(nil)
+		// Recheck after publishing: this hook has the same missed-cancellation
+		// window as the commitLoop's (see commitWorkerTxn) — the one-shot
+		// AfterFunc may have fired between nextReady's ctx check and the
+		// Store above with a nil client, leaving the apply's blocking calls
+		// with no closer.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// DDL bookkeeping (postDDLStalePlans, postDDLDroppedTables) is only
+		// populated when OnDdl is EXEC or EXEC_IGNORE. In the default IGNORE
+		// mode, these maps stay empty for the workflow's lifetime, so we can
+		// skip the serialMu acquisition and per-txn clone entirely. Taking
+		// serialMu here on every worker txn was the dominant contention point
+		// under parallel apply on OnDdl=IGNORE workflows.
+		if ddlExecEnabled {
+			vp.serialMu.Lock()
+			workerVP.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
+			workerVP.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+			vp.serialMu.Unlock()
+		}
+		for _, event := range payload.events {
+			if err := worker.applyEvent(ctx, event, payload.mustSave, &workerVP); err != nil {
+				worker.rollback()
+				return err
+			}
+		}
+		// In batch mode, flush all buffered SQL statements to MySQL in
+		// one multi-statement call. This is the key parallelism point:
+		// all workers execute their batches concurrently here, while the
+		// commitLoop only needs to do a cheap COMMIT + position update.
+		if err := worker.flushWorkerBatch(); err != nil {
+			worker.rollback()
+			return err
+		}
+		return nil
+	}
+
+	// applyWithRetry applies the transaction, and applies it again after a
+	// lock wait timeout or deadlock, which a commit-order deadlock surfaces
+	// as (see resolveCommitOrderLockWait). It returns the abort generation
+	// the successful attempt began at.
+	applyWithRetry := func(txn *applyTxn) (int64, error) {
+		for attempt := 0; ; attempt++ {
+			applyGen, _ := scheduler.abortState()
+			err := applyOnce(txn.payload)
+			if err == nil {
+				return applyGen, nil
+			}
+			if ctx.Err() != nil {
+				return 0, ctx.Err()
+			}
+			if !isLockWaitError(err) {
+				return 0, err
+			}
+			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn.order, attempt, err); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	// waitPendingOrAbort waits for the previous transaction's commit, like
+	// waitPending, unless an abort covers the transaction with the given
+	// order, which began applying at abort generation applyGen; it reports
+	// whether one did.
+	waitPendingOrAbort := func(applyGen, order int64) (bool, error) {
+		for {
+			aborted, notify := scheduler.abortedSince(applyGen, order)
+			if aborted {
+				return true, nil
+			}
+			if pendingDone == nil {
+				return false, nil
+			}
+			select {
+			case <-pendingDone:
+				pendingDone = nil
+			case <-notify:
+			case <-ctx.Done():
+				return false, ctx.Err()
+			}
+		}
+	}
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -2062,52 +2160,10 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Apply events on the current active connection. This runs
 		// concurrently with the commitLoop committing the previous
 		// transaction on the other connection (double-buffering).
-		// Publish the current worker client so the worker-scoped
-		// context.AfterFunc can close it if ctx is cancelled.
-		activeApplyClient.Store(worker.client)
-		// Recheck after publishing: this hook has the same missed-cancellation
-		// window as the commitLoop's (see commitWorkerTxn) — the one-shot
-		// AfterFunc may have fired between nextReady's ctx check and the
-		// Store above with a nil client, leaving the apply's blocking calls
-		// with no closer.
-		if err := ctx.Err(); err != nil {
+		applyGen, err := applyWithRetry(txn)
+		if err != nil {
 			return err
 		}
-		// DDL bookkeeping (postDDLStalePlans, postDDLDroppedTables) is only
-		// populated when OnDdl is EXEC or EXEC_IGNORE. In the default IGNORE
-		// mode, these maps stay empty for the workflow's lifetime, so we can
-		// skip the serialMu acquisition and per-txn clone entirely. Taking
-		// serialMu here on every worker txn was the dominant contention point
-		// under parallel apply on OnDdl=IGNORE workflows.
-		if ddlExecEnabled {
-			vp.serialMu.Lock()
-			workerVP.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
-			workerVP.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
-			vp.serialMu.Unlock()
-		}
-		for _, event := range payload.events {
-			if err := worker.applyEvent(ctx, event, payload.mustSave, &workerVP); err != nil {
-				activeApplyClient.Store(nil)
-				worker.rollback()
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				return err
-			}
-		}
-		// In batch mode, flush all buffered SQL statements to MySQL in
-		// one multi-statement call. This is the key parallelism point:
-		// all workers execute their batches concurrently here, while the
-		// commitLoop only needs to do a cheap COMMIT + position update.
-		if err := worker.flushWorkerBatch(); err != nil {
-			activeApplyClient.Store(nil)
-			worker.rollback()
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return err
-		}
-		activeApplyClient.Store(nil)
 
 		// Wait for the previous transaction's commit to complete. Because
 		// we waited AFTER applying the current transaction, the apply and
@@ -2115,13 +2171,34 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// If the commit finished during our apply phase, this returns
 		// immediately. We must wait here because rotate() switches to the
 		// connection that the commitLoop was using for the previous txn.
-		if err := waitPending(); err != nil {
-			worker.rollback()
-			if ctx.Err() != nil {
-				return ctx.Err()
+		//
+		// Meanwhile this transaction holds its locks, so a commit-order
+		// deadlock abort can cover it: then roll it back, wait for its turn
+		// to commit and apply it again, alone.
+		for {
+			aborted, err := waitPendingOrAbort(applyGen, txn.order)
+			if err != nil {
+				worker.rollback()
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				return err
 			}
-			return err
+			if !aborted {
+				break
+			}
+			worker.rollback()
+			if err := waitPending(); err != nil {
+				return err
+			}
+			if err := scheduler.waitForTurn(ctx, txn.order); err != nil {
+				return err
+			}
+			if applyGen, err = applyWithRetry(txn); err != nil {
+				return err
+			}
 		}
+		payload.applyGen = applyGen
 
 		// Capture the current connection for the payload before rotating.
 		// The commitLoop will use these to commit this transaction while
@@ -2529,6 +2606,98 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 	}()
 
+	// abortCovered rolls back each buffered worker transaction that a
+	// commit-order deadlock abort covers (see applyScheduler.abortGen): it
+	// holds its locks while it waits for its turn to commit, and the
+	// transaction that requested the abort may be waiting on them.
+	abortCovered := func(txns ...*applyTxn) error {
+		for _, txn := range txns {
+			payload := txn.payload
+			if payload.commitOnly || payload.aborted || payload.client == nil {
+				continue
+			}
+			if aborted, _ := scheduler.abortedSince(payload.applyGen, txn.order); !aborted {
+				continue
+			}
+			if err := payload.client.Rollback(); err != nil {
+				return vterrors.Wrapf(err, "failed to roll back transaction %d for a commit-order deadlock abort", txn.order)
+			}
+			payload.aborted = true
+		}
+		return nil
+	}
+	abortCoveredPending := func() error {
+		for _, txn := range pending {
+			if err := abortCovered(txn); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// receiveQueued moves the transactions already waiting in commitCh into
+	// pending, without blocking. While the commitLoop replays a transaction it
+	// does not read commitCh, and a later transaction waiting there, or in a
+	// worker blocked on sending to it, may hold the lock the replay waits on.
+	commitChClosed := false
+	receiveQueued := func() error {
+		for !commitChClosed {
+			select {
+			case txn, ok := <-commitCh:
+				if !ok {
+					commitChClosed = true
+					return nil
+				}
+				if txn.order == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "parallel apply commit txn missing order: payload=%+v", txn.payload)
+				}
+				pending[txn.order] = txn
+			default:
+				return nil
+			}
+		}
+		return nil
+	}
+
+	// reapply applies an aborted transaction again, now that it is its turn
+	// to commit, by replaying its recorded statements on its connection. It
+	// is the earliest uncommitted transaction, so a lock wait means a later
+	// one holds the lock: abort those, including the buffered ones and the
+	// ones waiting in commitCh, and replay again.
+	reapply := func(txn *applyTxn) error {
+		payload := txn.payload
+		for attempt := 0; ; attempt++ {
+			applyGen, _ := scheduler.abortState()
+			activeCommitClient.Store(payload.client)
+			err := ctx.Err()
+			if err == nil {
+				err = payload.client.replayTrx()
+			}
+			activeCommitClient.Store(nil)
+			if err == nil {
+				payload.aborted = false
+				payload.applyGen = applyGen
+				return nil
+			}
+			_ = payload.client.Rollback()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if !isLockWaitError(err) {
+				return vterrors.Wrapf(err, "failed to apply transaction %d again after a commit-order deadlock abort", txn.order)
+			}
+			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn.order, attempt, err); err != nil {
+				return err
+			}
+			if err := receiveQueued(); err != nil {
+				return err
+			}
+			if err := abortCoveredPending(); err != nil {
+				return err
+			}
+		}
+	}
+
 	drainPending := func() error {
 		for {
 			next := pending[nextOrder]
@@ -2536,6 +2705,12 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 				break
 			}
 			delete(pending, nextOrder)
+			if next.payload.aborted {
+				if err := reapply(next); err != nil {
+					pending[nextOrder] = next
+					return err
+				}
+			}
 			if err := commitTxn(next); err != nil {
 				// Re-add the failed txn so the defer cleanup can
 				// signal its done channel and release it to the pool.
@@ -2548,8 +2723,20 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		return nil
 	}
 
+	var scannedAbortGen int64
 	for {
+		// Scan whenever an abort happened since the last scan, not only when
+		// one is noticed while waiting here: one can happen while draining.
+		abortGen, abortNotify := scheduler.abortState()
+		if abortGen != scannedAbortGen {
+			if err := abortCoveredPending(); err != nil {
+				return err
+			}
+			scannedAbortGen = abortGen
+		}
 		select {
+		case <-abortNotify:
+			// Scanned at the top of the loop.
 		case txn, ok := <-commitCh:
 			if !ok {
 				// The commit channel has been closed so we cannot add anything else.
@@ -2577,6 +2764,11 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			}
 			// Add the new transaction to be committed and then drain all pending ones.
 			pending[txn.order] = txn
+			// An abort may have covered it on its way here, after its worker
+			// last checked.
+			if err := abortCovered(txn); err != nil {
+				return err
+			}
 			if err := drainPending(); err != nil {
 				return err
 			}

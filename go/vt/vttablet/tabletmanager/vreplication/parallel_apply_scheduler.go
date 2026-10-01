@@ -91,8 +91,34 @@ type applyScheduler struct {
 	pendingOff   int // offset into pending slice; entries before this index are consumed
 	pendingCount int // number of live (non-nil) entries in pending
 	// lastCommittedOrder is the highest transaction order number that
-	// has been committed, used for diagnostics.
+	// has been committed.
 	lastCommittedOrder int64
+	// dispatchPausedAfter, when non-zero, holds back every ordered
+	// transaction with a greater order until that order has committed. It is
+	// set when the transaction with that order aborts the later ones to
+	// resolve a commit-order deadlock (see abortGen), so none of them can
+	// take the locks it is about to retry.
+	dispatchPausedAfter int64
+
+	// Commit-order deadlock aborts. Transactions commit in source order, so a
+	// later-ordered transaction that has applied, and waits for its turn to
+	// commit, keeps its locks; an earlier one that needs one of them (e.g. a
+	// gap lock InnoDB takes on a unique index even under READ COMMITTED)
+	// waits for it, in a cycle InnoDB cannot see. Like MySQL's replica, which
+	// rolls back the later transaction when the earlier one waits for it, the
+	// earliest uncommitted transaction aborts every later uncommitted one when
+	// its lock wait times out: each holder of such a transaction rolls it back
+	// and applies it again once it is its turn to commit.
+	//
+	// abortGen counts the aborts, abortAfterOrder is the order of the
+	// transaction that requested the latest one, and abortNotify is closed
+	// (and replaced) by each abort. Only the earliest uncommitted transaction
+	// requests aborts, so abortAfterOrder only grows, and an uncommitted
+	// transaction other than the requester is covered by every abort since it
+	// began applying iff it is by the latest.
+	abortGen        int64
+	abortAfterOrder int64
+	abortNotify     chan struct{}
 	// maxOutstandingOrders caps how many ordered transactions may exist ahead
 	// of durable commit progress. Zero disables the cap.
 	maxOutstandingOrders int64
@@ -132,6 +158,7 @@ func newApplyScheduler(ctx context.Context) *applyScheduler {
 	s := &applyScheduler{
 		ctx:              ctx,
 		inflightWriteset: make(map[uint64]int),
+		abortNotify:      make(chan struct{}),
 	}
 	s.cond = sync.NewCond(&s.mu)
 	s.orderCond = sync.NewCond(&s.mu)
@@ -237,9 +264,15 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	}
 	if txn.order > 0 && txn.order > s.lastCommittedOrder {
 		s.lastCommittedOrder = txn.order
-		// Wake the scheduleLoop if it is blocked on the order window; only
-		// commits advance lastCommittedOrder, so this is the only wake site.
-		s.orderCond.Signal()
+		// Wake the scheduleLoop if it is blocked on the order window, and
+		// the transactions waiting for their turn; only commits advance
+		// lastCommittedOrder, so this is the only wake site.
+		s.orderCond.Broadcast()
+		if s.dispatchPausedAfter > 0 && s.lastCommittedOrder >= s.dispatchPausedAfter {
+			s.dispatchPausedAfter = 0
+			// Every transaction held back by the pause may be ready now.
+			defer s.cond.Broadcast()
+		}
 	}
 	// Track pre-release state to decide between Signal and Broadcast.
 	wasForceGlobal := txn.forceGlobal
@@ -261,6 +294,71 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 		s.cond.Signal()
 	}
 	return nil
+}
+
+// isNext reports whether every transaction ordered before order has
+// committed.
+func (s *applyScheduler) isNext(order int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastCommittedOrder >= order-1
+}
+
+// waitForTurn blocks until every transaction ordered before order has
+// committed, or ctx or the scheduler's context is done.
+func (s *applyScheduler) waitForTurn(ctx context.Context, order int64) error {
+	// orderCond is only woken by commits and the scheduler's own context, so
+	// make the caller's context wake it too.
+	stop := context.AfterFunc(ctx, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.orderCond.Broadcast()
+	})
+	defer stop()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for s.lastCommittedOrder < order-1 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := s.ctx.Err(); err != nil {
+			return err
+		}
+		s.orderCond.Wait()
+	}
+	return nil
+}
+
+// requestAbortAfter aborts every uncommitted transaction ordered after order
+// (see abortGen) and pauses dispatch after order until it commits.
+func (s *applyScheduler) requestAbortAfter(order int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.abortGen++
+	s.abortAfterOrder = order
+	if s.lastCommittedOrder < order {
+		s.dispatchPausedAfter = order
+	}
+	close(s.abortNotify)
+	s.abortNotify = make(chan struct{})
+}
+
+// abortState returns the current abort generation, to record when a
+// transaction begins applying, and the channel the next abort closes.
+func (s *applyScheduler) abortState() (gen int64, notify <-chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.abortGen, s.abortNotify
+}
+
+// abortedSince reports whether an abort since generation gen covers the
+// transaction with the given order, which must still be uncommitted, along
+// with the channel the next abort closes; reading both under one lock means
+// an abort cannot fall between the check and the wait.
+func (s *applyScheduler) abortedSince(gen, order int64) (bool, <-chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.abortGen > gen && s.abortAfterOrder < order, s.abortNotify
 }
 
 // popReadyLocked scans the pending queue for the first dispatchable transaction.
@@ -286,6 +384,12 @@ func (s *applyScheduler) popReadyLocked() *applyTxn {
 			continue
 		}
 		if blockedOrdered {
+			continue
+		}
+		if s.dispatchPausedAfter > 0 && txn.order > s.dispatchPausedAfter {
+			// Held back until the transaction that paused dispatch commits;
+			// nothing ordered after it may go first.
+			blockedOrdered = true
 			continue
 		}
 		if s.isReadyLocked(txn) {

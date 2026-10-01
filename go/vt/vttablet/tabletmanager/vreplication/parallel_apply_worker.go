@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -86,6 +87,16 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 	// MySQL only added transaction_isolation in 5.7.20). Keep it lowercase
 	// to match the other session-setup statements (set names, set @@session.*).
 	if _, err := dbClient.ExecuteFetch("set session transaction isolation level read committed", 1); err != nil {
+		dbClient.Close()
+		return nil, err
+	}
+	// Even under READ COMMITTED, InnoDB takes gap locks on a unique index
+	// when an INSERT finds a delete-marked entry with the same value, so a
+	// later-ordered transaction waiting for its turn to commit can hold a
+	// lock an earlier one needs. That wait ends with a lock wait timeout,
+	// which aborts the later transactions (see applyScheduler.abortGen), so
+	// keep it short. Lowercase, like the other session-setup statements.
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.innodb_lock_wait_timeout = %d", workerLockWaitTimeout), 1); err != nil {
 		dbClient.Close()
 		return nil, err
 	}
@@ -178,8 +189,9 @@ func (w *applyWorker) bindFunctions() {
 			// order, so a later-ordered worker can hold a lock this worker
 			// waits on while itself waiting for this worker to commit. InnoDB
 			// cannot see that cycle, so an in-place retry would wait on it
-			// forever. Returning the error ends the run and the workflow
-			// restarts from the last committed position.
+			// forever. The error reaches the worker loop, which rolls the
+			// transaction back and resolves the cycle (see
+			// resolveCommitOrderLockWait).
 			return vdbc.Execute(sql)
 		}
 		w.commit = func() error {
@@ -231,6 +243,15 @@ func (w *applyWorker) close() {
 func (w *applyWorker) rollback() {
 	if w.client != nil {
 		_ = w.client.Rollback()
+		// The worker applies a rolled-back transaction again from its events,
+		// not from the statements the connection recorded, so drop them
+		// rather than let each retry add another copy. In batch mode a failed
+		// flush may not have run a queued foreign_key_checks SET, so forget
+		// the value tracked for the session: the next event sets it again.
+		w.client.queries = nil
+		w.client.queriesPos = 0
+		w.client.batchSize = 0
+		w.client.foreignKeyChecksStateInitialized = false
 	}
 }
 

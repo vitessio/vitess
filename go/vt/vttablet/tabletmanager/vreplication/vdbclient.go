@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -247,6 +248,46 @@ func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqlty
 		return qr, err
 	}
 	return qr, nil
+}
+
+// replayTrx applies the last transaction again after it was rolled back: it
+// begins a new transaction and executes the statements recorded since the
+// last BEGIN, in one batch when batching, leaving the transaction open. The
+// parallel applier uses it to apply a transaction again after rolling it
+// back to resolve a commit-order deadlock.
+func (vc *vdbClient) replayTrx() error {
+	begin := -1
+	for i, query := range slices.Backward(vc.queries) {
+		if query == "begin" {
+			begin = i
+			break
+		}
+	}
+	if begin < 0 {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "no transaction to replay")
+	}
+	statements := append([]string(nil), vc.queries[begin+1:]...)
+	vc.queries = nil
+	vc.queriesPos = 0
+	vc.batchSize = 0
+	if err := vc.Begin(); err != nil {
+		return err
+	}
+	if vc.maxBatchSize > 0 {
+		for _, statement := range statements {
+			if err := vc.AddQueryToTrxBatch(statement); err != nil {
+				return err
+			}
+		}
+		_, err := vc.ExecuteTrxQueryBatch()
+		return err
+	}
+	for _, statement := range statements {
+		if _, err := vc.ExecuteFetch(statement, vc.relayLogMaxItems); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (vc *vdbClient) Retry() (*sqltypes.Result, error) {

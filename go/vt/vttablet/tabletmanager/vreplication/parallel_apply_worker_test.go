@@ -136,6 +136,27 @@ func TestApplyWorkerRollbackNoError(t *testing.T) {
 	assert.NotPanics(t, func() {
 		worker.rollback()
 	})
+
+	// The worker applies a rolled-back transaction again from its events, so
+	// its connection forgets the recorded statements, which would otherwise
+	// pile up with each retry, and the foreign_key_checks value it tracks: in
+	// batch mode a failed flush may not have run a queued SET, so the next
+	// event has to set it again.
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+	client := newVDBClient(&recordingDBClient{}, stats, 100)
+	client.maxBatchSize = 1024
+	require.NoError(t, client.Begin())
+	require.NoError(t, client.AddQueryToTrxBatch("set @@session.foreign_key_checks=false"))
+	require.NoError(t, client.AddQueryToTrxBatch("insert into t values (1)"))
+	client.foreignKeyChecksEnabled = false
+	client.foreignKeyChecksStateInitialized = true
+	worker = &applyWorker{client: client}
+	worker.rollback()
+	require.False(t, client.InTransaction)
+	require.Empty(t, client.queries)
+	require.False(t, client.foreignKeyChecksStateInitialized)
 }
 
 func TestApplyWorkerApplyEventRestoresVPlayer(t *testing.T) {
@@ -232,6 +253,7 @@ func TestNewApplyWorker(t *testing.T) {
 	mockDB.AllowMultiStatements = true
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -266,7 +288,8 @@ func TestNewApplyWorker(t *testing.T) {
 	// a lock (e.g. a unique index gap lock) that an earlier-ordered worker
 	// waits on while itself waiting for that earlier worker to commit. InnoDB
 	// cannot see that cycle, and retrying in place would wait on it forever.
-	// The error has to end the run so the workflow restarts.
+	// The statement's error has to reach the worker loop, which rolls the
+	// transaction back and resolves the cycle (see resolveCommitOrderLockWait).
 	for _, errNum := range []sqlerror.ErrorCode{sqlerror.ERLockWaitTimeout, sqlerror.ERLockDeadlock} {
 		t.Run(fmt.Sprintf("non-batching worker returns error %d without retrying", errNum), func(t *testing.T) {
 			// A copy: InitVReplicationConfigDefaults returns the shared defaults.
@@ -386,6 +409,7 @@ func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 			workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
 			workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 			workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -430,6 +454,7 @@ func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
 	workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
 	workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -675,6 +700,67 @@ func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	// globalDBQueries filter (which skips lowercase "set ..." setup queries).
 	require.Contains(t, recording.queries, "set session transaction isolation level read committed",
 		"worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order")
+	// A commit-order deadlock (see applyScheduler.abortGen) ends with a lock
+	// wait timeout, so it must be short.
+	require.Contains(t, recording.queries, "set @@session.innodb_lock_wait_timeout = 1")
 }
 
 func (r *recordingDBClient) SetMultiStatements(on bool) error { return nil }
+
+// TestVDBClientReplayTrx pins how a rolled-back transaction is applied again
+// to resolve a commit-order deadlock: its recorded statements since BEGIN are
+// executed again in a new transaction, in one batch on a batching connection,
+// leaving the transaction open for the commitLoop's position update and
+// commit; statements run before BEGIN are not part of it.
+func TestVDBClientReplayTrx(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	t.Run("non-batching", func(t *testing.T) {
+		recording := &recordingDBClient{}
+		vc := newVDBClient(recording, stats, 100)
+		_, err := vc.ExecuteFetch("set @@session.foreign_key_checks=0", 1)
+		require.NoError(t, err)
+		require.NoError(t, vc.Begin())
+		_, err = vc.ExecuteFetch("insert into t values (1)", 1)
+		require.NoError(t, err)
+		_, err = vc.ExecuteFetch("update t set c=2 where id=1", 1)
+		require.NoError(t, err)
+		require.NoError(t, vc.Rollback())
+
+		recording.queries = nil
+		require.NoError(t, vc.replayTrx())
+		require.Equal(t, []string{"insert into t values (1)", "update t set c=2 where id=1"}, recording.queries)
+		require.True(t, vc.InTransaction)
+	})
+
+	t.Run("batching", func(t *testing.T) {
+		recording := &recordingDBClient{}
+		vc := newVDBClient(recording, stats, 100)
+		vc.maxBatchSize = 1024
+		require.NoError(t, vc.Begin())
+		require.NoError(t, vc.AddQueryToTrxBatch("insert into t values (1)"))
+		_, err := vc.ExecuteTrxQueryBatch()
+		require.NoError(t, err)
+		require.NoError(t, vc.AddQueryToTrxBatch("insert into t values (2)"))
+		_, err = vc.ExecuteTrxQueryBatch()
+		require.NoError(t, err)
+		require.NoError(t, vc.Rollback())
+
+		recording.queries = nil
+		require.NoError(t, vc.replayTrx())
+		require.Equal(t, []string{"begin;insert into t values (1);insert into t values (2)"}, recording.queries)
+		require.True(t, vc.InTransaction)
+
+		// The commitLoop then sends only the commit.
+		recording.queries = nil
+		require.NoError(t, vc.CommitTrxQueryBatch())
+		require.Equal(t, []string{"commit"}, recording.queries)
+	})
+
+	t.Run("no recorded transaction", func(t *testing.T) {
+		vc := newVDBClient(&recordingDBClient{}, stats, 100)
+		require.ErrorContains(t, vc.replayTrx(), "no transaction to replay")
+	})
+}
