@@ -131,10 +131,13 @@ func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) 
 		// turn it on before the client is allowed to build a batch.
 		for _, c := range conns {
 			if err := c.SetMultiStatements(true); err != nil {
+				// Classify before closing: a closed connection reads as a
+				// lost one, which would make a refusal look retryable.
+				err = multiStatementsConfigError(err, c)
 				for _, c := range conns {
 					c.Close()
 				}
-				return nil, multiStatementsConfigError(err, c)
+				return nil, err
 			}
 		}
 		maxBatchSize := vr.maxQuerySize(conns[0])

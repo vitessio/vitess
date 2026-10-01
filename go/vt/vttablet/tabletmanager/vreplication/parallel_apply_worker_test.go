@@ -31,10 +31,12 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type failingDBClient struct {
@@ -45,6 +47,8 @@ type failingDBClient struct {
 	multiStatements []bool
 	// multiStatementsErr, when set, is returned by SetMultiStatements.
 	multiStatementsErr error
+	// closed is set by Close, so IsClosed reports it as the real client does.
+	closed bool
 }
 
 type recordingDBClient struct {
@@ -56,8 +60,8 @@ func (f *failingDBClient) Connect() error  { return f.connectErr }
 func (f *failingDBClient) Begin() error    { return nil }
 func (f *failingDBClient) Commit() error   { return nil }
 func (f *failingDBClient) Rollback() error { return nil }
-func (f *failingDBClient) Close()          {}
-func (f *failingDBClient) IsClosed() bool  { return false }
+func (f *failingDBClient) Close()          { f.closed = true }
+func (f *failingDBClient) IsClosed() bool  { return f.closed }
 func (f *failingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	for key, err := range f.failOnQuery {
 		if strings.Contains(query, key) {
@@ -344,6 +348,10 @@ func TestNewApplyWorkerSmallMaxBatchSizeFallback(t *testing.T) {
 		}
 		worker, err := newApplyWorker(t.Context(), vr)
 		require.ErrorContains(t, err, "failed to configure multi statement support")
+		// The server refused, so retrying cannot help: the error is
+		// terminal, as it is for the vplayer, even though the worker
+		// closes its connections before returning it.
+		require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		require.Nil(t, worker)
 	})
 }
