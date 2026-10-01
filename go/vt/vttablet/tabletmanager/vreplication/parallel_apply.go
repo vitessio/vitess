@@ -2613,7 +2613,11 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	abortCovered := func(txns ...*applyTxn) error {
 		for _, txn := range txns {
 			payload := txn.payload
-			if payload.commitOnly || payload.aborted || payload.client == nil {
+			// A transaction that never began a MySQL transaction (its events
+			// were all skipped statement DML) holds no locks, so it cannot be
+			// what the requester waits on, and has nothing to replay: the
+			// commit saves its position in a transaction of its own.
+			if payload.commitOnly || payload.aborted || payload.client == nil || !payload.client.InTransaction {
 				continue
 			}
 			if aborted, _ := scheduler.abortedSince(payload.applyGen, txn.order); !aborted {

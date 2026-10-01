@@ -8207,3 +8207,53 @@ func testCommitOrderDeadlockStress(t *testing.T, batching bool, seed int64) {
 	slices.Sort(want)
 	require.Equal(t, want, got)
 }
+
+// TestCommitLoopAbortSkipsTransactionThatNeverBegan pins that a commit-order
+// deadlock abort leaves alone a buffered worker transaction that never began
+// a MySQL transaction (e.g. one whose events were all skipped statement DML):
+// it holds no locks, so it cannot block the transaction that requested the
+// abort, and it has no recorded statements to replay. The commitLoop saves
+// its position in a transaction of its own, as it does without an abort.
+func TestCommitLoopAbortSkipsTransactionThatNeverBegan(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+
+	pos1, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	pos2, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	require.NoError(t, err)
+
+	newTxn := func(order int64, pos replication.Position, begin bool) (*applyTxn, *recordingDBClient) {
+		recording := &recordingDBClient{}
+		client := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+		client.maxBatchSize = 1024
+		if begin {
+			require.NoError(t, client.Begin())
+			require.NoError(t, client.AddQueryToTrxBatch("insert into t values (1)"))
+		}
+		return &applyTxn{
+			order:   order,
+			payload: &applyTxnPayload{pos: pos, timestamp: 100, client: client},
+			done:    make(chan struct{}, 1),
+		}, recording
+	}
+	first, _ := newTxn(1, pos1, true)
+	unstarted, unstartedRecording := newTxn(2, pos2, false)
+
+	// The transaction ordered first requests an abort, which covers the
+	// unstarted one.
+	scheduler.requestAbortAfter(1)
+
+	commitCh := make(chan *applyTxn, 2)
+	commitCh <- unstarted
+	commitCh <- first
+	close(commitCh)
+	require.NoError(t, vp.commitLoop(ctx, scheduler, commitCh))
+
+	scheduler.mu.Lock()
+	require.Equal(t, int64(2), scheduler.lastCommittedOrder)
+	scheduler.mu.Unlock()
+	require.Len(t, unstartedRecording.queries, 1)
+	assert.Contains(t, unstartedRecording.queries[0], "update _vt.vreplication set pos=")
+}
