@@ -31,8 +31,8 @@ import (
 )
 
 // maxParallelReplicationWorkers bounds --vreplication-parallel-replication-workers
-// and its per-workflow override. Each worker holds two MySQL connections per
-// workflow (double-buffered apply), plus the main connection, so an unbounded
+// and its per-workflow override. Each worker adds three MySQL connections per
+// workflow to the shared worker session pool, plus the main connection, so an unbounded
 // value would let a single workflow exhaust the target's max_connections.
 const maxParallelReplicationWorkers = 64
 

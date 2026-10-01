@@ -67,14 +67,30 @@ type applyTxn struct {
 	// later empty-writeset transactions whose commitParent references one of
 	// these sequences don't become runnable before the batch commits.
 	mergedSequences []int64
+	// seq is the scheduler's enqueue sequence number, assigned by enqueue
+	// starting at 1. Dependencies are expressed in seq rather than order so
+	// the dependency clock does not rely on how callers number orders; in
+	// production every order is enqueued exactly once and in sequence, so
+	// seq == order.
+	seq int64
+	// dependsOn is the highest seq this transaction depends on, computed
+	// once at enqueue time from the writesets and classification of the
+	// transactions enqueued before it. The transaction is ready once every
+	// seq up to and including dependsOn has committed (committedLWM >=
+	// dependsOn). Because dependencies only ever point to earlier
+	// transactions, a later transaction can never delay an earlier one.
+	dependsOn int64
+	// holdsSession is true while a dispatched worker transaction holds one of
+	// the scheduler's accounted worker sessions (see sessionLimit). Released
+	// by markCommitted.
+	holdsSession bool
 	// payload carries the transaction's events and DB connection info.
 	// Pooled via applyTxnPayloadPool to reduce allocations.
 	payload *applyTxnPayload
-	// done is a buffered channel (cap 1) used to synchronize the commitLoop
-	// with the worker that applied this transaction. The commitLoop sends on
-	// done after committing, unblocking the worker to reuse its DB connection.
-	// Always freshly allocated by acquireApplyTxn; commitOnly transactions
-	// carry one too but never use it (workers don't wait on them).
+	// done is a buffered channel (cap 1) the commitLoop sends on after
+	// committing a worker transaction, for observers of that commit. Workers
+	// do not wait on it: they hand their session to the commitLoop and move
+	// on. Always freshly allocated by acquireApplyTxn.
 	done chan struct{}
 }
 
@@ -112,21 +128,56 @@ type applyScheduler struct {
 	// of durable commit progress. Zero disables the cap.
 	maxOutstandingOrders int64
 
-	// inflightWriteset maps writeset key hashes to reference counts.
-	// A transaction is blocked if any of its writeset keys are present
-	// in this map with count > 0.
-	inflightWriteset map[uint64]int
+	// enqueueSeq is the seq assigned to the most recently enqueued txn.
+	enqueueSeq int64
+	// committedLWM is the commit low-water mark: every seq <= committedLWM
+	// has committed. Since commitLoop commits in strict order this normally
+	// advances one by one; committedAhead holds seqs committed beyond a gap
+	// so the mark stays exact even if they are not. This is the logical
+	// clock that dependsOn is compared against, mirroring the LWM clock of
+	// MySQL's Change Stream Applier.
+	committedLWM   int64
+	committedAhead map[int64]struct{}
+	// lastWriter maps a writeset key hash to the seq of the most recently
+	// enqueued transaction whose writeset contains it. A new transaction
+	// sharing a key depends on that seq. Depending on the last writer is
+	// sufficient: it depended on any earlier writer of the key, and commits
+	// happen in order. Entries are removed when that writer commits.
+	lastWriter map[uint64]int64
+	// lastBarrierSeq is the seq of the most recent transaction that must
+	// serialize with everything (forceGlobal, or no commit metadata and no
+	// writeset). Every later transaction depends on it.
+	lastBarrierSeq int64
+	// lastCommitMetaSeq and lastMissingMetaSeq are the seqs of the most
+	// recently enqueued non-barrier transactions with and without commit
+	// metadata. Transactions of the two classes never run concurrently, so
+	// each depends on the latest transaction of the other class.
+	lastCommitMetaSeq  int64
+	lastMissingMetaSeq int64
+	// sessionLimit is the number of worker sessions (MySQL connections)
+	// shared by the workers; zero disables session accounting. A dispatched
+	// worker transaction holds a session until it commits, so the scheduler
+	// only dispatches worker transactions while a session is free, and keeps
+	// the last free session for the transaction that is next to commit.
+	// Without that reservation, out-of-order dispatch could park every
+	// session on a later transaction waiting for its commit turn, leaving
+	// no session for the earlier transaction they are all waiting on.
+	sessionLimit  int
+	sessionsInUse int
+	// sessionHolders is the set of seqs that currently hold a session.
+	sessionHolders map[int64]struct{}
+	// The inflight counters below track dispatched-but-uncommitted
+	// transactions by class. Readiness is decided by dependsOn against
+	// committedLWM; these counters feed the idle/abandoned-work predicates.
+	//
 	// inflightGlobal counts inflight forceGlobal transactions and
-	// no-metadata-no-writeset transactions. When > 0, all non-noConflict
-	// transactions are blocked.
+	// no-metadata-no-writeset transactions.
 	inflightGlobal int
 	// inflightMissingMeta counts inflight transactions that lack commit
-	// metadata. When > 0, hasCommitMeta transactions are blocked to
-	// maintain the safety boundary between metadata modes.
+	// metadata.
 	inflightMissingMeta int
 	// inflightCommitMeta counts inflight transactions that have commit
-	// metadata. When > 0, no-metadata transactions with writesets must
-	// wait to prevent mixing metadata modes.
+	// metadata.
 	inflightCommitMeta int
 	// inflightNoConflict counts dispatched-but-uncommitted noConflict
 	// transactions. They do not participate in conflict checking, but the
@@ -146,8 +197,10 @@ type applyScheduler struct {
 // waiting in nextReady.
 func newApplyScheduler(ctx context.Context) *applyScheduler {
 	s := &applyScheduler{
-		ctx:              ctx,
-		inflightWriteset: make(map[uint64]int),
+		ctx:            ctx,
+		lastWriter:     make(map[uint64]int64),
+		committedAhead: make(map[int64]struct{}),
+		sessionHolders: make(map[int64]struct{}),
 	}
 	s.cond = sync.NewCond(&s.mu)
 	s.orderCond = sync.NewCond(&s.mu)
@@ -185,6 +238,7 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	if txn.hasCommitMeta && s.lastCommittedSequence == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && s.pendingCount == 0 && txn.commitParent > 0 {
 		s.lastCommittedSequence = txn.commitParent
 	}
+	s.computeDependsOnLocked(txn)
 	s.pending = append(s.pending, txn)
 	s.pendingCount++
 	// Signal wakes one worker. enqueue adds at most one transaction, so at
@@ -211,6 +265,11 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 		}
 		txn := s.popReadyLocked()
 		if txn != nil {
+			if s.needsSessionLocked(txn) {
+				txn.holdsSession = true
+				s.sessionsInUse++
+				s.sessionHolders[txn.seq] = struct{}{}
+			}
 			s.markInflightLocked(txn)
 			// Pass the baton: one wakeup (e.g. a markCommitted that released
 			// a multi-key writeset) can make several pending transactions
@@ -238,7 +297,7 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 			// Return a non-EOF error so the controller retries the stream
 			// from the last saved position instead of silently abandoning
 			// the pending work.
-			if s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 && s.inflightNoConflict == 0 {
+			if s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && s.inflightNoConflict == 0 {
 				return nil, errSchedulerAbandonedPendingWork
 			}
 		}
@@ -276,6 +335,20 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 		// commits advance lastCommittedOrder, so this is the only wake site.
 		s.orderCond.Signal()
 	}
+	s.advanceLWMLocked(txn.seq)
+	// Forget this transaction as the last writer of its keys so lastWriter
+	// only holds keys of uncommitted transactions. A key whose last writer
+	// is a later transaction keeps that entry.
+	for _, key := range txn.writeset {
+		if s.lastWriter[key] == txn.seq {
+			delete(s.lastWriter, key)
+		}
+	}
+	if txn.holdsSession {
+		txn.holdsSession = false
+		s.sessionsInUse--
+		delete(s.sessionHolders, txn.seq)
+	}
 	// Track pre-release state to decide between Signal and Broadcast.
 	wasForceGlobal := txn.forceGlobal
 	hadInflightGlobal := s.inflightGlobal > 0
@@ -286,7 +359,7 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	// drained (so waitForIdle waiters are woken). Otherwise use Signal
 	// to avoid thundering-herd wakeup of N workers when only one txn
 	// can proceed.
-	allDrained := s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0
+	allDrained := s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0
 	if wasForceGlobal ||
 		(hadInflightGlobal && s.inflightGlobal == 0) ||
 		(hadInflightMissingMeta && s.inflightMissingMeta == 0) ||
@@ -298,45 +371,63 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	return nil
 }
 
-// popReadyLocked scans the pending queue for the first dispatchable transaction.
-// Once it encounters a blocked ordered transaction, it continues scanning only
-// for later noConflict transactions. This preserves the deadlock protection for
-// normal ordered work while still allowing position-only and OTHER/IGNORE stop
-// transactions to bypass the blocked head and reach the commitLoop.
+// popReadyLocked returns the lowest-ordered dispatchable transaction in the
+// pending queue, or nil if none is ready.
+//
+// Unlike a strict in-order dispatcher, it does not stop at a blocked
+// transaction: a later transaction whose dependencies have committed is
+// dispatched even when an earlier one is still waiting for its own. That is
+// safe because readiness only depends on earlier transactions (dependsOn <
+// txn.seq), so a dispatched later transaction can never be what an earlier
+// one is waiting for, and the commitLoop's strict ordering cannot deadlock
+// against it. Picking the lowest ready order first keeps the transaction
+// that is next to commit at the front of the line.
 func (s *applyScheduler) popReadyLocked() *applyTxn {
-	blockedOrdered := false
 	for i := s.pendingOff; i < len(s.pending); i++ {
 		txn := s.pending[i]
 		if txn == nil {
 			continue
 		}
-		if txn.noConflict {
-			// noConflict transactions are always ready and don't affect
-			// inflight counters, so we can safely skip past them when
-			// looking for the next ready transaction.
-			if s.isReadyLocked(txn) {
-				s.removePendingLocked(i)
-				return txn
-			}
+		if !s.isReadyLocked(txn) {
 			continue
 		}
-		if blockedOrdered {
+		if s.needsSessionLocked(txn) && !s.sessionAvailableLocked(txn) {
 			continue
 		}
-		if s.isReadyLocked(txn) {
-			s.removePendingLocked(i)
-			return txn
-		}
-		// A non-noConflict transaction is not ready. We must NOT skip past it to
-		// dispatch a later ordered transaction, because doing so could create a
-		// deadlock: the later transaction's inflight state may prevent this
-		// earlier transaction from ever becoming ready, while the commitLoop
-		// (which requires strict ordering) waits for this earlier transaction to
-		// be committed before it can commit the later one. Keep scanning only so
-		// later noConflict transactions can bypass this blocked ordered head.
-		blockedOrdered = true
+		s.removePendingLocked(i)
+		return txn
 	}
 	return nil
+}
+
+// needsSessionLocked reports whether dispatching txn takes a worker session:
+// worker transactions do when session accounting is enabled; commitOnly
+// transactions run on the main connection and do not.
+func (s *applyScheduler) needsSessionLocked(txn *applyTxn) bool {
+	return s.sessionLimit > 0 && txn.payload != nil && !txn.payload.commitOnly
+}
+
+// sessionAvailableLocked reports whether a worker session may be handed to
+// txn. The last free session is reserved for the transaction that is next to
+// commit (committedLWM+1) unless that transaction already holds a session:
+// every other in-use session may be parked on a later transaction waiting for
+// exactly that commit, so it must always be able to run. Once it holds a
+// session, its commit returns one to the pool, which the next transaction to
+// commit can then use, so the last session need not be held back.
+func (s *applyScheduler) sessionAvailableLocked(txn *applyTxn) bool {
+	free := s.sessionLimit - s.sessionsInUse
+	if free > 1 {
+		return true
+	}
+	if free < 1 {
+		return false
+	}
+	head := s.committedLWM + 1
+	if txn.seq == head {
+		return true
+	}
+	_, headHoldsSession := s.sessionHolders[head]
+	return headHoldsSession
 }
 
 // removePendingLocked removes the element at index i by setting it to nil and
@@ -371,81 +462,108 @@ func (s *applyScheduler) removePendingLocked(i int) {
 	}
 }
 
-// isReadyLocked checks whether a transaction can be dispatched to a worker
-// based on its classification (noConflict, forceGlobal, hasCommitMeta) and
-// the current inflight state. See the ready-check hierarchy in the PR docs.
+// computeDependsOnLocked assigns txn its seq, sets txn.dependsOn from the
+// transactions enqueued before it, and records txn in the per-key and
+// per-class trackers. Must be called under s.mu by enqueue.
+//
+// The rules reproduce the PR's original conflict classes as ordered
+// dependencies:
+//   - noConflict transactions depend on nothing.
+//   - Barriers (forceGlobal, or no commit metadata and no writeset) depend on
+//     every earlier transaction, and every later transaction depends on them.
+//   - Transactions with and without commit metadata depend on the latest
+//     transaction of the other class.
+//   - A transaction with a writeset depends on the last writer of each of its
+//     keys. With commit metadata, that is all: like MySQL's WRITESET
+//     tracking, the source's commit parent is ignored when a writeset exists.
+//   - A commit-metadata transaction with an empty writeset depends on the
+//     latest commit-metadata transaction and, at readiness, on its commit
+//     parent (see isReadyLocked).
+func (s *applyScheduler) computeDependsOnLocked(txn *applyTxn) {
+	s.enqueueSeq++
+	txn.seq = s.enqueueSeq
+	if txn.noConflict {
+		txn.dependsOn = 0
+		return
+	}
+	if txn.forceGlobal || (!txn.hasCommitMeta && len(txn.writeset) == 0) {
+		txn.dependsOn = txn.seq - 1
+		s.lastBarrierSeq = txn.seq
+		return
+	}
+	dependsOn := s.lastBarrierSeq
+	if txn.hasCommitMeta {
+		dependsOn = max(dependsOn, s.lastMissingMetaSeq)
+		if len(txn.writeset) == 0 {
+			dependsOn = max(dependsOn, s.lastCommitMetaSeq)
+		}
+		s.lastCommitMetaSeq = txn.seq
+	} else {
+		dependsOn = max(dependsOn, s.lastCommitMetaSeq)
+		s.lastMissingMetaSeq = txn.seq
+	}
+	for _, key := range txn.writeset {
+		// A key repeated within the writeset must not make the transaction
+		// depend on itself.
+		if writer, ok := s.lastWriter[key]; ok && writer != txn.seq {
+			dependsOn = max(dependsOn, writer)
+		}
+		s.lastWriter[key] = txn.seq
+	}
+	txn.dependsOn = dependsOn
+}
+
+// advanceLWMLocked records that seq committed and advances committedLWM over
+// every consecutively committed seq. Must be called under s.mu.
+func (s *applyScheduler) advanceLWMLocked(seq int64) {
+	if seq <= s.committedLWM {
+		return
+	}
+	if seq != s.committedLWM+1 {
+		s.committedAhead[seq] = struct{}{}
+		return
+	}
+	s.committedLWM = seq
+	for {
+		if _, ok := s.committedAhead[s.committedLWM+1]; !ok {
+			return
+		}
+		delete(s.committedAhead, s.committedLWM+1)
+		s.committedLWM++
+	}
+}
+
+// isReadyLocked reports whether every dependency of txn has committed.
 func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 	// noConflict transactions (e.g., position-only saves) are always ready.
 	// They have no data conflicts and must not block or be blocked by other
-	// transactions. This prevents deadlocks where forceGlobal position saves
-	// (with earlier orders) are blocked by inflight data transactions (with
-	// later orders), while the commitLoop waits for those earlier orders.
+	// transactions.
 	if txn.noConflict {
 		return true
 	}
-	if s.inflightGlobal > 0 {
+	if txn.dependsOn > s.committedLWM {
 		return false
 	}
-	if txn.forceGlobal {
-		ready := s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0
-		return ready
-	}
-	if txn.hasCommitMeta {
-		if s.inflightMissingMeta > 0 {
-			return false
-		}
-		for _, key := range txn.writeset {
-			if s.inflightWriteset[key] > 0 {
-				return false
-			}
-		}
-		// When the transaction has a non-empty writeset, we use writeset-only
-		// conflict detection and skip the commit-parent dependency check. This
-		// is critical because the source MySQL may use COMMIT_ORDER dependency
-		// tracking, which produces a strict serial chain where every
-		// transaction's commitParent equals the immediately prior sequence
-		// number. Under COMMIT_ORDER, the commit-parent check alone would
-		// serialize ALL transactions regardless of whether their writesets
-		// actually conflict. With a valid writeset, the writeset conflict
-		// checks above are sufficient for correctness — the same approach
-		// MySQL uses internally with WRITESET dependency tracking.
-		//
-		// When the writeset is empty, we fall back to commit-parent ordering
-		// as the safety net.
-		if len(txn.writeset) > 0 {
-			return true
-		}
-		if s.inflightCommitMeta > 0 {
-			return false
-		}
-		// NOTE: sequence_number/last_committed reset per binlog FILE on the
-		// source, while lastCommittedSequence only advances (max). After a
-		// binlog rotation the new file's small commitParent values compare
-		// against the old file's high watermark, making this check vacuously
-		// true. That is safe ONLY because of the inflightCommitMeta == 0
-		// gate above: with nothing inflight, every earlier-ordered txn has
-		// already committed, so the parent is durably applied regardless of
-		// what this comparison says. Do not remove that gate without
-		// rethinking rotation.
-		ready := txn.commitParent <= s.lastCommittedSequence
-		return ready
-	}
-	if s.inflightCommitMeta > 0 {
-		return false
-	}
-	if len(txn.writeset) == 0 {
-		return s.inflightMissingMeta == 0 && len(s.inflightWriteset) == 0
-	}
-	for _, key := range txn.writeset {
-		if s.inflightWriteset[key] > 0 {
-			return false
-		}
+	// A commit-metadata transaction without a writeset falls back to the
+	// source's commit-parent ordering as an additional safety net.
+	//
+	// NOTE: sequence_number/last_committed reset per binlog FILE on the
+	// source, while lastCommittedSequence only advances (max). After a
+	// binlog rotation the new file's small commitParent values compare
+	// against the old file's high watermark, making this check vacuously
+	// true. That is safe ONLY because such a transaction also depends on
+	// the latest earlier commit-metadata transaction (see
+	// computeDependsOnLocked): every earlier-ordered transaction of its
+	// class has already committed, so the parent is durably applied
+	// regardless of what this comparison says.
+	if !txn.forceGlobal && txn.hasCommitMeta && len(txn.writeset) == 0 {
+		return txn.commitParent <= s.lastCommittedSequence
 	}
 	return true
 }
 
-// markInflightLocked increments the appropriate inflight counters and adds
-// writeset keys to inflightWriteset. Must be called under s.mu.
+// markInflightLocked increments the appropriate inflight counters. Must be
+// called under s.mu.
 func (s *applyScheduler) markInflightLocked(txn *applyTxn) {
 	if txn.noConflict {
 		s.inflightNoConflict++
@@ -457,24 +575,15 @@ func (s *applyScheduler) markInflightLocked(txn *applyTxn) {
 	}
 	if txn.hasCommitMeta {
 		s.inflightCommitMeta++
-		for _, key := range txn.writeset {
-			s.inflightWriteset[key]++
-		}
 		return
 	}
 	if len(txn.writeset) == 0 {
 		s.inflightGlobal++
-		s.inflightMissingMeta++
-		return
 	}
 	s.inflightMissingMeta++
-	for _, key := range txn.writeset {
-		s.inflightWriteset[key]++
-	}
 }
 
-// releaseInflightLocked decrements the inflight counters and removes
-// writeset keys. The inverse of markInflightLocked. Must be called under s.mu.
+// releaseInflightLocked decrements the inflight counters. The inverse of markInflightLocked. Must be called under s.mu.
 func (s *applyScheduler) releaseInflightLocked(txn *applyTxn) {
 	if txn.noConflict {
 		if s.inflightNoConflict > 0 {
@@ -492,35 +601,13 @@ func (s *applyScheduler) releaseInflightLocked(txn *applyTxn) {
 		if s.inflightCommitMeta > 0 {
 			s.inflightCommitMeta--
 		}
-		for _, key := range txn.writeset {
-			count := s.inflightWriteset[key]
-			if count <= 1 {
-				delete(s.inflightWriteset, key)
-			} else {
-				s.inflightWriteset[key] = count - 1
-			}
-		}
 		return
 	}
-	if len(txn.writeset) == 0 {
-		if s.inflightGlobal > 0 {
-			s.inflightGlobal--
-		}
-		if s.inflightMissingMeta > 0 {
-			s.inflightMissingMeta--
-		}
-		return
+	if len(txn.writeset) == 0 && s.inflightGlobal > 0 {
+		s.inflightGlobal--
 	}
 	if s.inflightMissingMeta > 0 {
 		s.inflightMissingMeta--
-	}
-	for _, key := range txn.writeset {
-		count := s.inflightWriteset[key]
-		if count <= 1 {
-			delete(s.inflightWriteset, key)
-		} else {
-			s.inflightWriteset[key] = count - 1
-		}
 	}
 }
 
@@ -558,7 +645,7 @@ func (s *applyScheduler) idle() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.pendingCount == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 &&
-		s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 && s.inflightNoConflict == 0
+		s.inflightCommitMeta == 0 && s.inflightNoConflict == 0
 }
 
 // waitForIdle blocks until there are no pending or inflight transactions of
@@ -566,8 +653,7 @@ func (s *applyScheduler) idle() bool {
 // DDL, its FK-metadata refresh, and any FIELD events for DDL-affected tables
 // are fully applied before the next fetch snapshots plans/FK refs. The idle
 // predicate must therefore cover every inflight counter — including
-// inflightNoConflict (position-only saves, OTHER/IGNORE stops) and the
-// inflightWriteset map — so the barrier cannot return while any dispatched
+// inflightNoConflict (position-only saves, OTHER/IGNORE stops) — so the barrier cannot return while any dispatched
 // transaction is still uncommitted. This mirrors the fully-drained predicate
 // in nextReady's abandoned-work check.
 func (s *applyScheduler) waitForIdle(ctx context.Context) error {
@@ -581,7 +667,7 @@ func (s *applyScheduler) waitForIdle(ctx context.Context) error {
 			return err
 		}
 		if s.pendingCount == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 &&
-			s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 && s.inflightNoConflict == 0 {
+			s.inflightCommitMeta == 0 && s.inflightNoConflict == 0 {
 			return nil
 		}
 		s.cond.Wait()

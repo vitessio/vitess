@@ -741,7 +741,8 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 	require.Zero(t, s.inflightMissingMeta, "inflightMissingMeta leaked")
 	require.Zero(t, s.inflightCommitMeta, "inflightCommitMeta leaked")
 	require.Zero(t, s.inflightNoConflict, "inflightNoConflict leaked")
-	require.Empty(t, s.inflightWriteset, "inflightWriteset leaked")
+	require.Empty(t, s.lastWriter, "lastWriter leaked")
+	require.Empty(t, s.committedAhead, "committedAhead leaked")
 	require.Zero(t, s.pendingCount, "pendingCount not drained")
 	require.Len(t, observed, totalTxns)
 
@@ -1002,4 +1003,186 @@ func TestApplySchedulerClosedWaitsForInflightNoConflict(t *testing.T) {
 	require.NoError(t, s.markCommitted(stuck))
 	_, err = s.nextReady(ctx)
 	require.ErrorIs(t, err, io.EOF)
+}
+
+// TestApplySchedulerDispatchesIndependentTxnPastBlockedEarlierTxn pins the
+// absence of head-of-line blocking: a later transaction whose dependencies
+// have all committed is dispatched even while an earlier transaction is still
+// waiting for its own dependency.
+func TestApplySchedulerDispatchesIndependentTxnPastBlockedEarlierTxn(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	txn1 := &applyTxn{order: 1, writeset: []uint64{100}}
+	txn2 := &applyTxn{order: 2, writeset: []uint64{100}}
+	txn3 := &applyTxn{order: 3, writeset: []uint64{200}}
+	require.NoError(t, s.enqueue(txn1))
+	require.NoError(t, s.enqueue(txn2))
+	require.NoError(t, s.enqueue(txn3))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn1, got)
+
+	// txn2 conflicts with the uncommitted txn1, but txn3 does not.
+	got, err = s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn3, got)
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(txn1))
+	requireReadyTxn(t, s, txn2)
+}
+
+// TestApplySchedulerLaterTxnDoesNotDelayEarlierTxn pins that dependencies only
+// point backwards: once a later transaction is dispatched past a blocked
+// earlier one, sharing a key with that later transaction does not make the
+// earlier one wait for it.
+func TestApplySchedulerLaterTxnDoesNotDelayEarlierTxn(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	txn1 := &applyTxn{order: 1, writeset: []uint64{100}}
+	txn2 := &applyTxn{order: 2, writeset: []uint64{100, 300}}
+	txn3 := &applyTxn{order: 3, writeset: []uint64{200}}
+	txn4 := &applyTxn{order: 4, writeset: []uint64{200, 300}}
+	for _, txn := range []*applyTxn{txn1, txn2, txn3, txn4} {
+		require.NoError(t, s.enqueue(txn))
+	}
+
+	requireReadyTxn(t, s, txn1)
+	requireReadyTxn(t, s, txn3)
+	requireNoReadyTxn(t, s)
+
+	// txn2 only depends on txn1. txn4 depends on txn3 and, through key 300,
+	// on txn2 — never the other way around.
+	require.NoError(t, s.markCommitted(txn1))
+	requireReadyTxn(t, s, txn2)
+	require.NoError(t, s.markCommitted(txn2))
+	requireNoReadyTxn(t, s)
+	require.NoError(t, s.markCommitted(txn3))
+	requireReadyTxn(t, s, txn4)
+	require.NoError(t, s.markCommitted(txn4))
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	assert.Empty(t, s.lastWriter)
+	assert.Equal(t, int64(4), s.committedLWM)
+}
+
+// TestApplySchedulerForceGlobalIsBarrierForLaterTxns pins that dispatching
+// past a blocked transaction never crosses a barrier: transactions after a
+// forceGlobal transaction wait for it even when they are otherwise
+// independent.
+func TestApplySchedulerForceGlobalIsBarrierForLaterTxns(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	txn1 := &applyTxn{order: 1, writeset: []uint64{100}}
+	global := &applyTxn{order: 2, forceGlobal: true}
+	txn3 := &applyTxn{order: 3, writeset: []uint64{200}}
+	for _, txn := range []*applyTxn{txn1, global, txn3} {
+		require.NoError(t, s.enqueue(txn))
+	}
+
+	requireReadyTxn(t, s, txn1)
+	requireNoReadyTxn(t, s)
+	require.NoError(t, s.markCommitted(txn1))
+	requireReadyTxn(t, s, global)
+	requireNoReadyTxn(t, s)
+	require.NoError(t, s.markCommitted(global))
+	requireReadyTxn(t, s, txn3)
+}
+
+// TestApplySchedulerReservesLastSessionForNextCommit pins the session
+// reservation that keeps out-of-order dispatch deadlock-free: later
+// transactions may take sessions only while more than one is free, so the
+// transaction that is next to commit can always get the last one even when
+// every other session is parked on a later transaction waiting for it.
+func TestApplySchedulerReservesLastSessionForNextCommit(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+	s.sessionLimit = 3
+	// Hold back txn1 on its commit parent so later transactions are
+	// dispatched first.
+	s.lastCommittedSequence = 1
+
+	worker := func(order, seq, parent int64, writeset []uint64) *applyTxn {
+		return &applyTxn{order: order, sequenceNumber: seq, commitParent: parent, hasCommitMeta: true, writeset: writeset, payload: &applyTxnPayload{}}
+	}
+	txn1 := worker(1, 5, 4, nil)
+	txn2 := worker(2, 6, 4, []uint64{200})
+	txn3 := worker(3, 7, 4, []uint64{300})
+	txn4 := worker(4, 8, 4, []uint64{400})
+	for _, txn := range []*applyTxn{txn1, txn2, txn3, txn4} {
+		require.NoError(t, s.enqueue(txn))
+	}
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn2, got)
+	got, err = s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn3, got)
+	// One session is left, and it is reserved for txn1.
+	requireNoReadyTxn(t, s)
+
+	s.advanceCommittedSequence(4)
+	got, err = s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn1, got)
+	requireNoReadyTxn(t, s)
+
+	// Committing txn1 returns its session. The next transaction to commit
+	// (txn2) already holds a session, whose commit will return one, so the
+	// last free session no longer needs to be held back and txn4 can run.
+	require.NoError(t, s.markCommitted(txn1))
+	got, err = s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn4, got)
+	for _, txn := range []*applyTxn{txn2, txn3, txn4} {
+		require.NoError(t, s.markCommitted(txn))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	assert.Zero(t, s.sessionsInUse)
+	assert.Empty(t, s.sessionHolders)
+}
+
+// TestApplySchedulerCommitOnlyTxnsNeedNoSession pins that commitOnly
+// transactions, which run on the main connection, are dispatched even when
+// every worker session is in use.
+func TestApplySchedulerCommitOnlyTxnsNeedNoSession(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+	s.sessionLimit = 2
+
+	rowTxn := &applyTxn{order: 1, writeset: []uint64{100}, payload: &applyTxnPayload{}}
+	posSave := &applyTxn{order: 2, noConflict: true, forceGlobal: true, payload: &applyTxnPayload{commitOnly: true, updatePosOnly: true}}
+	require.NoError(t, s.enqueue(rowTxn))
+	require.NoError(t, s.enqueue(posSave))
+	s.mu.Lock()
+	s.sessionsInUse = 2
+	s.mu.Unlock()
+
+	requireReadyTxn(t, s, posSave)
+	requireNoReadyTxn(t, s)
+}
+
+// TestApplySchedulerRepeatedWritesetKeyDoesNotSelfDepend pins that a key
+// appearing more than once in a writeset does not make the transaction wait
+// for itself.
+func TestApplySchedulerRepeatedWritesetKeyDoesNotSelfDepend(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	txn1 := &applyTxn{order: 1, writeset: []uint64{100}}
+	txn2 := &applyTxn{order: 2, writeset: []uint64{200, 100, 200}}
+	require.NoError(t, s.enqueue(txn1))
+	require.NoError(t, s.enqueue(txn2))
+
+	requireReadyTxn(t, s, txn1)
+	requireNoReadyTxn(t, s)
+	require.NoError(t, s.markCommitted(txn1))
+	requireReadyTxn(t, s, txn2)
 }

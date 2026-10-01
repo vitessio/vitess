@@ -68,6 +68,13 @@ func recoverParallelApply(name string, cb func(err error)) {
 	}
 }
 
+// parallelApplySessionsPerWorker is how many worker sessions (MySQL
+// connections) the parallel applier opens per worker. Sessions beyond one per
+// worker let applied transactions wait for their commit turn without holding
+// a worker, so workers keep applying dependency-ready transactions while an
+// earlier transaction is still being applied.
+const parallelApplySessionsPerWorker = 3
+
 type applyTxnPayload struct {
 	// pos is the GTID position to record when committing this transaction.
 	pos replication.Position
@@ -100,6 +107,10 @@ type applyTxnPayload struct {
 	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	commit func() error
 	client *vdbClient
+	// session is the worker session the transaction was applied on. The
+	// commitLoop returns it to the session pool after the commit. Nil for
+	// commitOnly transactions, which run on the main connection.
+	session *workerSession
 	// Pre-computed during scheduling so commitLoop doesn't need to scan
 	// all events to find the last qualifying timestamp for lag calculation.
 	// Zero means no qualifying event was found.
@@ -117,11 +128,9 @@ var (
 )
 
 // acquireApplyTxn gets an applyTxn from the pool with a fresh done channel.
-// A fresh channel is allocated each time (not reused from the pool) because
-// the worker captures a reference to the done channel via pendingDone before
-// the txn is returned to the pool. If the channel were reused, the worker's
-// pendingDone and the new txn's done would alias the same channel, and the
-// drain here would steal the signal intended for the worker.
+// A fresh channel is allocated each time (not reused from the pool) so that an
+// observer still holding a previous txn's done channel can never receive a
+// signal meant for the txn that reuses the pooled struct.
 func acquireApplyTxn() *applyTxn {
 	txn := applyTxnPool.Get().(*applyTxn)
 	txn.done = make(chan struct{}, 1)
@@ -879,21 +888,24 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	commitLoopErr := make(chan error, 1)
 	workerErr := make(chan error, workerCount)
 
+	// Workers share a pool of sessions rather than each owning fixed
+	// connections, so a worker never waits for one of its own transactions
+	// to commit before applying the next one: it parks the applied
+	// transaction on its session for the commitLoop and borrows another.
+	// The scheduler accounts for sessions in use and keeps the last free one
+	// for the transaction that is next to commit.
+	sessions, err := newWorkerSessions(ctx, vp.vr, workerCount*parallelApplySessionsPerWorker)
+	if err != nil {
+		return err
+	}
+	// Every return path below that follows starting the goroutines first
+	// waits for all workers and the commitLoop, so no session is in use
+	// when this runs.
+	defer sessions.close()
+	scheduler.sessionLimit = sessions.size()
 	workers := make([]*applyWorker, 0, workerCount)
-	// Register the defer BEFORE the creation loop so that if creating
-	// worker N fails, workers 0..N-1 are still closed. Without this,
-	// a partial creation failure would leak DB connections.
-	defer func() {
-		for _, worker := range workers {
-			worker.close()
-		}
-	}()
 	for range workerCount {
-		worker, err := newApplyWorker(ctx, vp.vr)
-		if err != nil {
-			return err
-		}
-		workers = append(workers, worker)
+		workers = append(workers, newApplyWorker(ctx, vp.vr, sessions))
 	}
 
 	// Query FK constraints from the target database so that we can
@@ -2021,36 +2033,15 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 
 // workerLoop runs on each of the N worker goroutines. It blocks on
 // scheduler.nextReady() until a transaction is dispatched, applies the row
-// events using the worker's private MySQL connection, then sends the txn
-// to commitCh. Each worker has double-buffered connections: after sending
-// a transaction, the worker rotates to its spare connection and immediately
-// starts the next transaction, overlapping apply with the commitLoop's commit.
+// events on a session borrowed from the shared session pool, then sends the
+// txn (with its MySQL transaction still open on that session) to commitCh and
+// immediately moves on to the next ready transaction. The commitLoop commits
+// it in order and returns the session to the pool.
 func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, commitCh chan<- *applyTxn, worker *applyWorker) error {
 	// Workers only apply ROW/FIELD/ROWS_QUERY events. Build a narrow local
 	// vplayer view once and refresh the DDL barrier snapshots per transaction
 	// under serialMu, instead of racing on a whole-struct shallow copy.
 	workerVP := workerLocalVPlayer(vp)
-
-	// pendingDone holds the done channel of the most recently sent worker
-	// transaction that the commitLoop may still be committing. We capture
-	// only the channel (not the *applyTxn) because the commitLoop returns
-	// the applyTxn to the pool after signaling done — if the scheduleLoop
-	// reacquires it, it drains the channel, which would cause waitPending
-	// to block forever if we were still dereferencing through the txn.
-	var pendingDone chan struct{}
-
-	waitPending := func() error {
-		if pendingDone == nil {
-			return nil
-		}
-		select {
-		case <-pendingDone:
-			pendingDone = nil
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 
 	// Register a single ctx.AfterFunc for the lifetime of this worker.
 	// On ctx cancellation, close whichever client is currently executing
@@ -2084,11 +2075,10 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		payload := txn.payload
 		if payload.commitOnly {
 			// Forward commitOnly txns (DDL, OTHER, JOURNAL, position saves)
-			// to the commitLoop immediately without waiting for any pending
-			// worker commit. commitOnly work runs on the main connection, not
-			// the worker's connection, so it has no dependency on the prior
-			// row txn's commit. The commitLoop enforces strict ordering via
-			// nextOrder regardless of when the txn arrives in commitCh.
+			// to the commitLoop immediately. commitOnly work runs on the main
+			// connection, not a worker session. The commitLoop enforces
+			// strict ordering via nextOrder regardless of when the txn
+			// arrives in commitCh.
 			select {
 			case commitCh <- txn:
 			case <-ctx.Done():
@@ -2097,9 +2087,12 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 			continue
 		}
 
-		// Apply events on the current active connection. This runs
-		// concurrently with the commitLoop committing the previous
-		// transaction on the other connection (double-buffering).
+		// Borrow a session for this transaction. The scheduler only
+		// dispatches a worker transaction while a session is free, so this
+		// does not wait in practice.
+		if err := worker.acquireSession(ctx); err != nil {
+			return err
+		}
 		// Publish the current worker client so the worker-scoped
 		// context.AfterFunc can close it if ctx is cancelled.
 		activeApplyClient.Store(worker.client)
@@ -2147,54 +2140,32 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		activeApplyClient.Store(nil)
 
-		// Wait for the previous transaction's commit to complete. Because
-		// we waited AFTER applying the current transaction, the apply and
-		// commit phases overlapped — this is the key pipelining benefit.
-		// If the commit finished during our apply phase, this returns
-		// immediately. We must wait here because rotate() switches to the
-		// connection that the commitLoop was using for the previous txn.
-		if err := waitPending(); err != nil {
-			worker.rollback()
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return err
-		}
-
-		// Capture the current connection for the payload before rotating.
-		// The commitLoop will use these to commit this transaction while
-		// the worker moves on to the next transaction on the spare connection.
+		// Hand the transaction, with its MySQL transaction still open on
+		// the worker's session, to the commitLoop. The worker does not wait
+		// for the commit: it borrows another session for its next
+		// transaction, and the commitLoop returns this one to the pool after
+		// committing. This is the apply/commit separation of MySQL's Change
+		// Stream Applier: a transaction that cannot commit yet because an
+		// earlier one is still being applied does not keep its worker idle.
 		//
 		// In batch mode we leave payload.query/commit nil and let commitLoop
 		// dispatch directly off payload.client via AddQueryToTrxBatch +
 		// CommitTrxQueryBatch. The commit still sends "UPDATE …;commit" in
 		// one multi-statement round-trip (the combine-commit win), but we
-		// avoid allocating two closures per mega-txn just to hold a reference
-		// to the worker's active connection.
+		// avoid binding closures to the payload for every mega-txn.
 		payload.client = worker.client
 		if !worker.batchMode {
 			payload.query = worker.query
 			payload.commit = worker.commit
 		}
+		payload.session = worker.detachSession()
 
-		done := txn.done
 		select {
 		case commitCh <- txn:
 		case <-ctx.Done():
-			worker.rollback()
+			_ = payload.client.Rollback()
 			return ctx.Err()
 		}
-
-		// Capture the done channel BEFORE rotating. The commitLoop may
-		// return the txn to the pool after signaling done, and
-		// acquireApplyTxn drains the channel on reuse. By holding our
-		// own reference, we are immune to that race.
-		pendingDone = done
-
-		// Rotate to the spare connection for the next transaction.
-		// The commitLoop will commit the current txn on the old connection
-		// and signal txn.done when it's safe to reuse.
-		worker.rotate()
 	}
 }
 
@@ -2343,16 +2314,18 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 
 		updateLag(payload)
 
-		// Release scheduler inflight state BEFORE signaling the worker. If
-		// markCommitted errors (scheduler closed during teardown), we want
-		// the commitLoop to observe the error and unwind rather than letting
-		// the worker race ahead to its next txn.
+		// Return the session to the pool BEFORE markCommitted releases the
+		// scheduler's session accounting, so a worker dispatched because of
+		// that release always finds the session free.
+		if payload.session != nil {
+			payload.session.pool.put(payload.session)
+			payload.session = nil
+		}
 		if err := scheduler.markCommitted(txn); err != nil {
 			return err
 		}
 
-		// Signal the worker that commit is done so it can reuse its
-		// DB connection for the next transaction.
+		// Signal done for observers of this transaction's commit.
 		txn.done <- struct{}{}
 
 		if posReached {

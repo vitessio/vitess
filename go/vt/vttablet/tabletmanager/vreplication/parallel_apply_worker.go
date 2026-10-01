@@ -27,17 +27,110 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+// workerSession is one MySQL connection that apply workers use to apply a
+// transaction. Sessions are not owned by a worker: a worker borrows a free
+// session from the shared workerSessionPool for each transaction it applies,
+// hands the session (with its still-open MySQL transaction) to the commitLoop,
+// and immediately borrows another session for its next transaction. The
+// commitLoop returns the session to the pool once the transaction commits.
+//
+// This mirrors the "Session Service" of MySQL's Change Stream Applier (CSA,
+// WL#10500): the apply phase and the commit phase are decoupled, so a worker
+// whose transaction cannot commit yet (because an earlier-ordered transaction
+// is still being applied elsewhere) parks the transaction on its session and
+// picks up another dependency-ready transaction instead of sitting idle.
+type workerSession struct {
+	pool   *workerSessionPool
+	client *vdbClient
+	// query and commit are bound once per session (rather than per
+	// transaction) so that handing a session from one worker to another
+	// does not allocate.
+	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	commit func() error
+}
+
+// workerSessionPool holds the sessions shared by all apply workers of one
+// parallel applier. The scheduler accounts for how many sessions are in use
+// (see applyScheduler.sessionLimit) and only dispatches a worker transaction
+// when a session is free, so get never has to wait for a session in practice.
+type workerSessionPool struct {
+	sessions []*workerSession
+	free     chan *workerSession
+}
+
+// newWorkerSessionPool wraps the given clients into sessions. In batch mode a
+// session's query buffers statements in the open transaction so the worker can
+// flush them as a single multi-statement request.
+func newWorkerSessionPool(clients []*vdbClient, batchMode bool) *workerSessionPool {
+	pool := &workerSessionPool{
+		sessions: make([]*workerSession, 0, len(clients)),
+		free:     make(chan *workerSession, len(clients)),
+	}
+	for _, vdbc := range clients {
+		sess := &workerSession{pool: pool, client: vdbc}
+		if batchMode {
+			sess.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				if !vdbc.InTransaction {
+					return vdbc.Execute(sql)
+				}
+				return nil, vdbc.AddQueryToTrxBatch(sql)
+			}
+		} else {
+			sess.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return vdbc.ExecuteWithRetry(ctx, sql)
+			}
+		}
+		sess.commit = vdbc.Commit
+		pool.sessions = append(pool.sessions, sess)
+		pool.free <- sess
+	}
+	return pool
+}
+
+// size returns the total number of sessions in the pool.
+func (p *workerSessionPool) size() int {
+	return len(p.sessions)
+}
+
+// get borrows a free session, blocking until one is returned or ctx is done.
+func (p *workerSessionPool) get(ctx context.Context) (*workerSession, error) {
+	select {
+	case sess := <-p.free:
+		return sess, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// put returns a session to the pool. The session must not have an open
+// transaction.
+func (p *workerSessionPool) put(sess *workerSession) {
+	p.free <- sess
+}
+
+// close releases every session's MySQL connection, rolling back first if a
+// session is mid-transaction (e.g. a transaction that was parked waiting for
+// its commit turn when the applier stopped) so no half-applied state leaks.
+// It must only be called once no worker or commitLoop is using a session.
+func (p *workerSessionPool) close() {
+	for _, sess := range p.sessions {
+		if sess.client.InTransaction {
+			_ = sess.client.Rollback()
+		}
+		sess.client.Close()
+	}
+}
+
 type applyWorker struct {
 	ctx context.Context
 	vr  *vreplicator
-	// conns holds a pair of MySQL connections for double-buffering. While
-	// one connection is being committed by the commitLoop, the worker can
-	// immediately start applying the next transaction on the other. This
-	// decouples the worker's apply phase from the serial commitLoop,
-	// allowing true pipeline parallelism.
-	conns  [2]*vdbClient
-	active int
-	// client points to conns[active] for convenience. Updated by rotate().
+	// sessions is the pool shared by all workers. Each transaction is
+	// applied on a session borrowed from it; see workerSession.
+	sessions *workerSessionPool
+	// session is the session the worker is currently applying on, or nil
+	// between transactions.
+	session *workerSession
+	// client points to session.client for convenience.
 	client *vdbClient
 	// batchMode indicates whether this worker buffers SQL statements and
 	// flushes them as a single multi-statement request. When true, the
@@ -47,11 +140,9 @@ type applyWorker struct {
 	// execute their multi-statement batches concurrently. The commitLoop
 	// then just does a quick COMMIT + position update.
 	batchMode bool
-	// query executes a SQL statement on this worker's active connection.
-	// Rebound by rotate() to use the new active connection.
+	// query executes a SQL statement on this worker's current session.
 	query func(ctx context.Context, sql string) (*sqltypes.Result, error)
-	// commit commits the current transaction on this worker's active connection.
-	// Rebound by rotate() alongside query.
+	// commit commits the current transaction on this worker's current session.
 	commit func() error
 }
 
@@ -105,77 +196,73 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 	return vdbc, nil
 }
 
-// newApplyWorker constructs a worker with two DB connections so its apply
-// phase can overlap with the commitLoop's commit phase: one connection
-// handles the current txn while the other is ready for the next. In batch
-// mode it also reads MySQL's max_allowed_packet to size the multi-statement
-// flush so a worker's batched INSERTs cannot exceed the wire limit.
-func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) {
+// newWorkerSessions creates count configured worker sessions. In batch mode it
+// also reads MySQL's max_allowed_packet to size the multi-statement flush so a
+// worker's batched INSERTs cannot exceed the wire limit.
+func newWorkerSessions(ctx context.Context, vr *vreplicator, count int) (*workerSessionPool, error) {
 	batchMode := vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
 
-	var conns [2]*vdbClient
-	for i := range 2 {
+	clients := make([]*vdbClient, 0, count)
+	for range count {
 		vdbc, err := createWorkerConn(ctx, vr)
 		if err != nil {
 			// Close any previously created connections.
-			for j := range i {
-				conns[j].Close()
+			for _, c := range clients {
+				c.Close()
 			}
 			return nil, err
 		}
-		conns[i] = vdbc
+		clients = append(clients, vdbc)
 	}
 
 	if batchMode {
-		maxBatchSize := vr.maxQuerySize(conns[0])
-		for _, c := range conns {
+		maxBatchSize := vr.maxQuerySize(clients[0])
+		for _, c := range clients {
 			c.maxBatchSize = maxBatchSize
 		}
 	}
+	return newWorkerSessionPool(clients, batchMode), nil
+}
 
-	worker := &applyWorker{
+// newApplyWorker constructs a worker that applies transactions on sessions
+// borrowed from the shared pool.
+func newApplyWorker(ctx context.Context, vr *vreplicator, sessions *workerSessionPool) *applyWorker {
+	return &applyWorker{
 		ctx:       ctx,
 		vr:        vr,
-		conns:     conns,
-		active:    0,
-		client:    conns[0],
-		batchMode: batchMode,
-	}
-	worker.bindFunctions()
-	return worker, nil
-}
-
-// bindFunctions sets the query and commit closures to use the active connection.
-func (w *applyWorker) bindFunctions() {
-	vdbc := w.client
-	if w.batchMode {
-		w.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			if !vdbc.InTransaction {
-				return vdbc.Execute(sql)
-			}
-			return nil, vdbc.AddQueryToTrxBatch(sql)
-		}
-		w.commit = func() error {
-			return vdbc.Commit()
-		}
-	} else {
-		w.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			return vdbc.ExecuteWithRetry(ctx, sql)
-		}
-		w.commit = func() error {
-			return vdbc.Commit()
-		}
+		sessions:  sessions,
+		batchMode: vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0,
 	}
 }
 
-// rotate switches the worker to its spare connection for the next transaction.
-// The commitLoop will continue committing the previous transaction on the old
-// connection. This double-buffering allows the worker's apply phase to overlap
-// with the commitLoop's commit phase, enabling true pipeline parallelism.
-func (w *applyWorker) rotate() {
-	w.active = 1 - w.active
-	w.client = w.conns[w.active]
-	w.bindFunctions()
+// acquireSession borrows a session from the pool for the next transaction.
+func (w *applyWorker) acquireSession(ctx context.Context) error {
+	sess, err := w.sessions.get(ctx)
+	if err != nil {
+		return err
+	}
+	w.useSession(sess)
+	return nil
+}
+
+// useSession binds the worker's client/query/commit to sess.
+func (w *applyWorker) useSession(sess *workerSession) {
+	w.session = sess
+	w.client = sess.client
+	w.query = sess.query
+	w.commit = sess.commit
+}
+
+// detachSession unbinds and returns the worker's current session. The caller
+// takes ownership of it: either the commitLoop (which returns it to the pool
+// after commit) or the error path.
+func (w *applyWorker) detachSession() *workerSession {
+	sess := w.session
+	w.session = nil
+	w.client = nil
+	w.query = nil
+	w.commit = nil
+	return sess
 }
 
 // flushWorkerBatch sends all buffered SQL statements to MySQL in one
@@ -191,23 +278,9 @@ func (w *applyWorker) flushWorkerBatch() error {
 	return err
 }
 
-// close releases both of the worker's DB connections, rolling back first if
-// either is mid-transaction so no half-applied worker state leaks back into
-// the pool.
-func (w *applyWorker) close() {
-	for _, c := range w.conns {
-		if c != nil {
-			if c.InTransaction {
-				_ = c.Rollback()
-			}
-			c.Close()
-		}
-	}
-}
-
-// rollback discards in-progress work on the worker's active connection after
-// an apply error, so the next rotate() does not leave a stale partial txn
-// hanging on the connection we are about to park.
+// rollback discards in-progress work on the worker's current session after an
+// apply error. The session is not returned to the pool: the applier is being
+// torn down and workerSessionPool.close releases every connection.
 func (w *applyWorker) rollback() {
 	if w.client != nil {
 		_ = w.client.Rollback()
@@ -215,8 +288,8 @@ func (w *applyWorker) rollback() {
 }
 
 // applyEvent dispatches through the shared vplayer.applyEvent code path while
-// temporarily rebinding vp.dbClient/query/commit to this worker's active
-// connection. Bindings are restored on return so the orchestrator's vplayer
+// temporarily rebinding vp.dbClient/query/commit to this worker's current
+// session. Bindings are restored on return so the orchestrator's vplayer
 // (shared by the scheduler and commitLoop) never ends up pointing at
 // worker-owned state.
 func (w *applyWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool, vp *vplayer) error {

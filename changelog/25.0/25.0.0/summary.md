@@ -66,7 +66,7 @@
 
 VReplication can now apply binlog events using multiple concurrent MySQL connections instead of a single serial connection. Set `--vreplication-parallel-replication-workers=N` (default `1` = serial, maximum `64`) on `vttablet`, or the `vreplication-parallel-replication-workers` per-workflow config override, to dispatch non-conflicting transactions to `N` worker goroutines during the replication (running) phase. Conflicts are detected with target-side writeset hashing (primary key, unique key, and foreign key values — similar to MySQL's own `WRITESET` dependency tracking), so it works regardless of the source's `binlog_transaction_dependency_tracking` setting. Commits remain strictly ordered, so the workflow position, lag metrics, and `WaitForPos` semantics are unchanged. Transactions the conflict detector cannot reason about (DDL, statement-based events, partial row images, prefix/expression unique indexes, and similar) fall back to serial application.
 
-Note that each worker holds two MySQL connections, so a workflow with `N` workers uses `2N+2` target-side connections.
+Note that the workers share a pool of three MySQL connections per worker, so a workflow with `N` workers uses `3N+2` target-side connections.
 
 #### <a id="vtorc-quorum-unreachable-primary"/>VTOrc failover of an unreachable primary `vttablet` via replica quorum</a>
 

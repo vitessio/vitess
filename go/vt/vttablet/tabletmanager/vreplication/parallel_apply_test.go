@@ -1162,11 +1162,9 @@ func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
 	workerClient.maxBatchSize = 1024
 	worker := &applyWorker{
 		ctx:       ctx,
-		conns:     [2]*vdbClient{workerClient, workerClient},
-		client:    workerClient,
+		sessions:  newWorkerSessionPool([]*vdbClient{workerClient}, true),
 		batchMode: true,
 	}
-	worker.bindFunctions()
 
 	txn := acquireApplyTxn()
 	t.Cleanup(func() {
@@ -4124,15 +4122,8 @@ func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
 	workerDB := &recordingDBClient{}
 	workerClient := newVDBClient(workerDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 	worker := &applyWorker{
-		ctx:    ctx,
-		conns:  [2]*vdbClient{workerClient, workerClient},
-		client: workerClient,
-		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			return &sqltypes.Result{}, nil
-		},
-		commit: func() error {
-			return nil
-		},
+		ctx:      ctx,
+		sessions: newWorkerSessionPool([]*vdbClient{workerClient}, false),
 	}
 
 	scheduler := newApplyScheduler(ctx)
@@ -5112,7 +5103,7 @@ func TestScheduleItems_PartialRowImageFallsBackToSerializedApply(t *testing.T) {
 	assert.Zero(t, scheduler.inflightMissingMeta)
 	assert.Zero(t, scheduler.inflightCommitMeta)
 	assert.Empty(t, scheduler.pending)
-	assert.Empty(t, scheduler.inflightWriteset)
+	assert.Empty(t, scheduler.lastWriter)
 }
 
 func TestScheduleItems_MissingFKColumnFallsBackToSerializedApply(t *testing.T) {
@@ -5155,7 +5146,7 @@ func TestScheduleItems_MissingFKColumnFallsBackToSerializedApply(t *testing.T) {
 	assert.Zero(t, scheduler.inflightMissingMeta)
 	assert.Zero(t, scheduler.inflightCommitMeta)
 	assert.Empty(t, scheduler.pending)
-	assert.Empty(t, scheduler.inflightWriteset)
+	assert.Empty(t, scheduler.lastWriter)
 }
 
 func TestScheduleItems_CommitMeta(t *testing.T) {
@@ -7248,17 +7239,11 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 	scheduler := newApplyScheduler(ctx)
 	commitCh := make(chan *applyTxn, 1)
 
-	worker := &applyWorker{
-		ctx: ctx,
-		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			return &sqltypes.Result{}, nil
-		},
-		commit: func() error {
-			return nil
-		},
-	}
 	activeClient := newVDBClient(&recordingDBClient{}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
-	worker.client = activeClient
+	worker := &applyWorker{
+		ctx:      ctx,
+		sessions: newWorkerSessionPool([]*vdbClient{activeClient}, false),
+	}
 
 	event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
 	payload := &applyTxnPayload{events: []*binlogdatapb.VEvent{event}}
@@ -7291,6 +7276,59 @@ func TestWorkerLoop_AppliesAndDispatches(t *testing.T) {
 	}
 }
 
+// TestWorkerLoop_DoesNotWaitForCommit pins the apply/commit separation: a
+// worker hands each applied transaction, with its MySQL transaction still
+// open, to the commitLoop on its own session and immediately applies the next
+// ready transaction on another session, without waiting for any commit.
+func TestWorkerLoop_DoesNotWaitForCommit(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	const sessionCount = 3
+	clients := make([]*vdbClient, 0, sessionCount)
+	for range sessionCount {
+		clients = append(clients, newVDBClient(&recordingDBClient{}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems))
+	}
+	pool := newWorkerSessionPool(clients, false)
+	scheduler := newApplyScheduler(ctx)
+	scheduler.sessionLimit = pool.size()
+	commitCh := make(chan *applyTxn, sessionCount)
+	worker := &applyWorker{ctx: ctx, sessions: pool}
+
+	for i := range sessionCount {
+		event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", i+1)}
+		txn := &applyTxn{order: int64(i + 1), writeset: []uint64{uint64(100 + i)}, payload: &applyTxnPayload{events: []*binlogdatapb.VEvent{event}}}
+		require.NoError(t, scheduler.enqueue(txn))
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vp.workerLoop(ctx, scheduler, commitCh, worker)
+	}()
+
+	seen := make(map[*vdbClient]struct{}, sessionCount)
+	for range sessionCount {
+		select {
+		case txn := <-commitCh:
+			require.NotNil(t, txn.payload.session)
+			assert.Same(t, txn.payload.session.client, txn.payload.client)
+			seen[txn.payload.client] = struct{}{}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("worker stopped after %d transactions without any commit", len(seen))
+		}
+	}
+	assert.Len(t, seen, sessionCount, "each uncommitted transaction must be parked on its own session")
+
+	cancel()
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for workerLoop exit")
+	}
+}
+
 func TestWorkerLoop_ErrorRollsBack(t *testing.T) {
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
@@ -7303,8 +7341,8 @@ func TestWorkerLoop_ErrorRollsBack(t *testing.T) {
 	mockDB.AddInvariant("rollback", &sqltypes.Result{})
 
 	worker := &applyWorker{
-		ctx:    ctx,
-		client: newVDBClient(mockDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
+		ctx:      ctx,
+		sessions: newWorkerSessionPool([]*vdbClient{newVDBClient(mockDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)}, false),
 	}
 
 	badEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}

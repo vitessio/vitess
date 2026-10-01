@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,11 +110,51 @@ func (r *recordingDBClient) SupportsCapability(capability capabilities.FlavorCap
 	return false, nil
 }
 
-func TestApplyWorkerCloseRollsBack(t *testing.T) {
-	worker := &applyWorker{}
-	assert.NotPanics(t, func() {
-		worker.close()
-	})
+func TestWorkerSessionPoolCloseRollsBackOpenTransaction(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	db := &recordingDBClient{}
+	vdbc := newVDBClient(db, stats, 0)
+	pool := newWorkerSessionPool([]*vdbClient{vdbc}, false)
+	require.NoError(t, vdbc.Begin())
+
+	pool.close()
+	assert.False(t, vdbc.InTransaction, "close must roll back a parked open transaction")
+}
+
+// TestWorkerSessionPoolHandsOffSessions pins the apply/commit separation: a
+// worker that hands its session (with an open transaction) to the commitLoop
+// can immediately borrow another free session, and gets the first one back
+// only after it has been returned.
+func TestWorkerSessionPoolHandsOffSessions(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	c0 := newVDBClient(&recordingDBClient{}, stats, 0)
+	c1 := newVDBClient(&recordingDBClient{}, stats, 0)
+	pool := newWorkerSessionPool([]*vdbClient{c0, c1}, false)
+	require.Equal(t, 2, pool.size())
+	worker := &applyWorker{sessions: pool}
+
+	require.NoError(t, worker.acquireSession(t.Context()))
+	first := worker.detachSession()
+	require.NotNil(t, first)
+	assert.Nil(t, worker.client)
+
+	require.NoError(t, worker.acquireSession(t.Context()))
+	second := worker.detachSession()
+	assert.NotSame(t, first.client, second.client)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	require.ErrorIs(t, worker.acquireSession(ctx), context.DeadlineExceeded)
+
+	pool.put(first)
+	require.NoError(t, worker.acquireSession(t.Context()))
+	assert.Same(t, first.client, worker.client)
 }
 
 func TestApplyWorkerRollbackNoError(t *testing.T) {
@@ -180,11 +221,8 @@ func TestApplyWorkerApplyEventInsertStatementAcceptsMatchAllFilter(t *testing.T)
 	vp.canAcceptStmtEvents = true
 
 	db := &recordingDBClient{}
-	worker := &applyWorker{
-		ctx:    ctx,
-		client: newVDBClient(db, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
-	}
-	worker.bindFunctions()
+	worker := &applyWorker{ctx: ctx}
+	worker.useSession(newWorkerSessionPool([]*vdbClient{newVDBClient(db, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)}, false).sessions[0])
 
 	event := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_INSERT,
@@ -237,11 +275,13 @@ func TestNewApplyWorker(t *testing.T) {
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return mockDB }},
 	}
 
-	worker, err := newApplyWorker(t.Context(), vr)
+	sessions, err := newWorkerSessions(t.Context(), vr, 3)
 	require.NoError(t, err)
+	require.Equal(t, 3, sessions.size())
+	worker := newApplyWorker(t.Context(), vr, sessions)
 	require.NotNil(t, worker)
 
-	worker.close()
+	sessions.close()
 }
 
 // TestNewApplyWorkerSmallMaxBatchSizeFallback tests the batch size fallback
@@ -268,13 +308,13 @@ func TestNewApplyWorkerSmallMaxBatchSizeFallback(t *testing.T) {
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
 	}
 
-	worker, err := newApplyWorker(t.Context(), vr)
+	sessions, err := newWorkerSessions(t.Context(), vr, 2)
 	require.NoError(t, err)
-	t.Cleanup(worker.close)
+	t.Cleanup(sessions.close)
 
-	require.True(t, worker.batchMode)
-	for _, c := range worker.conns {
-		assert.Equal(t, int64(10), c.maxBatchSize)
+	require.True(t, newApplyWorker(t.Context(), vr, sessions).batchMode)
+	for _, sess := range sessions.sessions {
+		assert.Equal(t, int64(10), sess.client.maxBatchSize)
 	}
 }
 
@@ -401,9 +441,9 @@ func TestNewApplyWorkerConnectError(t *testing.T) {
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return badClient }},
 	}
 
-	worker, err := newApplyWorker(t.Context(), vr)
+	sessions, err := newWorkerSessions(t.Context(), vr, 2)
 	require.ErrorIs(t, err, connectErr)
-	require.Nil(t, worker)
+	require.Nil(t, sessions)
 }
 
 func TestNewApplyWorkerSettingsError(t *testing.T) {
@@ -422,9 +462,9 @@ func TestNewApplyWorkerSettingsError(t *testing.T) {
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return badClient }},
 	}
 
-	worker, err := newApplyWorker(t.Context(), vr)
+	sessions, err := newWorkerSessions(t.Context(), vr, 2)
 	require.ErrorIs(t, err, settingsErr)
-	require.Nil(t, worker)
+	require.Nil(t, sessions)
 }
 
 func TestNewApplyWorkerClearFKCheckError(t *testing.T) {
@@ -444,9 +484,9 @@ func TestNewApplyWorkerClearFKCheckError(t *testing.T) {
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return badClient }},
 	}
 
-	worker, err := newApplyWorker(t.Context(), vr)
+	sessions, err := newWorkerSessions(t.Context(), vr, 2)
 	require.ErrorIs(t, err, fkErr)
-	require.Nil(t, worker)
+	require.Nil(t, sessions)
 }
 
 func TestNewApplyWorkerClearFKRestrictError(t *testing.T) {
@@ -468,12 +508,12 @@ func TestNewApplyWorkerClearFKRestrictError(t *testing.T) {
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return workerClient }},
 	}
 
-	worker, err := newApplyWorker(t.Context(), vr)
+	sessions, err := newWorkerSessions(t.Context(), vr, 2)
 	require.ErrorIs(t, err, restrictErr)
-	require.Nil(t, worker)
+	require.Nil(t, sessions)
 }
 
-func TestApplyWorkerApplyEventSetsFKChecksAfterRotate(t *testing.T) {
+func TestApplyWorkerApplyEventSetsFKChecksPerSession(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := t.Context()
 	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1"}
@@ -481,17 +521,11 @@ func TestApplyWorkerApplyEventSetsFKChecksAfterRotate(t *testing.T) {
 
 	db0 := &recordingDBClient{}
 	db1 := &recordingDBClient{}
-	worker := &applyWorker{
-		ctx:    ctx,
-		conns:  [2]*vdbClient{newVDBClient(db0, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems), newVDBClient(db1, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)},
-		active: 0,
-	}
-	worker.client = worker.conns[0]
-	worker.bindFunctions()
-
-	vp.query = worker.query
-	vp.commit = worker.commit
-	vp.dbClient = worker.client
+	pool := newWorkerSessionPool([]*vdbClient{
+		newVDBClient(db0, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
+		newVDBClient(db1, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
+	}, false)
+	worker := &applyWorker{ctx: ctx, sessions: pool}
 	rowEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_ROW,
 		RowEvent: &binlogdatapb.RowEvent{
@@ -500,14 +534,14 @@ func TestApplyWorkerApplyEventSetsFKChecksAfterRotate(t *testing.T) {
 		},
 	}
 
+	// foreign_key_checks is session state tracked per connection, so the
+	// first apply on each session must set it on that session.
+	require.NoError(t, worker.acquireSession(ctx))
 	require.NoError(t, worker.applyEvent(ctx, rowEvent, false, vp))
 	assert.Contains(t, db0.queries, "set @@session.foreign_key_checks=true")
+	worker.detachSession()
 
-	worker.rotate()
-	vp.query = worker.query
-	vp.commit = worker.commit
-	vp.dbClient = worker.client
-
+	require.NoError(t, worker.acquireSession(ctx))
 	require.NoError(t, worker.applyEvent(ctx, rowEvent, false, vp))
 	assert.Contains(t, db1.queries, "set @@session.foreign_key_checks=true")
 }
