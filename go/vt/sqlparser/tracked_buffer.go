@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // NodeFormatter defines the signature of a custom node formatter
@@ -42,6 +43,7 @@ type TrackedBuffer struct {
 	nodeFormatter NodeFormatter
 	literal       func(string) (int, error)
 	fast          bool
+	singleToken   bool
 
 	escape escapeType
 }
@@ -119,8 +121,8 @@ func (buf *TrackedBuffer) WriteNode(node SQLNode) *TrackedBuffer {
 }
 
 // Myprintf mimics fmt.Fprintf(buf, ...), but limited to Node(%v),
-// Node.Value(%s) and string(%s). It also allows a %a for a value argument, in
-// which case it adds tracking info for future substitutions.
+// Node.Value(%s) and string(%s). It also tracks bind arguments: %a keeps string
+// literals single-token, while %e allows expression-aware text encoding.
 // It adds parens as needed to follow precedence rules when printing expressions.
 // To handle parens correctly for left associative binary operators,
 // use %l and %r to tell the TrackedBuffer which value is on the LHS and RHS
@@ -234,6 +236,8 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			}
 		case 'a':
 			buf.WriteArg("", values[fieldnum].(string))
+		case 'e':
+			buf.writeExprArg("", values[fieldnum].(string))
 		case 'n':
 			// used for printing slices of SQLNodes
 			value := values[fieldnum]
@@ -309,6 +313,28 @@ func (buf *TrackedBuffer) formatter(node SQLNode) {
 	}
 }
 
+func nationalStringNeedsIntroducer(expr Expr) bool {
+	literal, ok := expr.(*Literal)
+	if !ok {
+		return true
+	}
+	for i := 1; i < len(literal.Val); i++ {
+		if literal.Val[i-1] >= 0x80 && literal.Val[i] != '\'' && sqltypes.SQLEncodeMap[literal.Val[i]] != sqltypes.DontEscape {
+			return true
+		}
+	}
+	return false
+}
+
+// formatSingleToken keeps literal-only grammar positions and introducer
+// operands out of expression encoding, in both formatting paths.
+func (buf *TrackedBuffer) formatSingleToken(node SQLNode) {
+	previous := buf.singleToken
+	buf.singleToken = true
+	buf.formatter(node)
+	buf.singleToken = previous
+}
+
 // needParens says if we need a parenthesis
 // op is the operator we are printing
 // val is the value we are checking if we need parens around or not
@@ -364,6 +390,11 @@ func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
 	buf.WriteString(arg)
 }
 
+func (buf *TrackedBuffer) writeExprArg(prefix, arg string) {
+	buf.WriteArg(prefix, arg)
+	buf.bindLocations[len(buf.bindLocations)-1].isExpression = !buf.singleToken
+}
+
 // WriteInt writes a signed integer into the buffer.
 func (buf *TrackedBuffer) WriteInt(v int64) {
 	buf.WriteString(strconv.FormatInt(v, 10))
@@ -386,6 +417,7 @@ func (buf *TrackedBuffer) HasBindVars() bool {
 }
 
 // BuildParsedQuery builds a ParsedQuery from the input.
+// Use %e for expression binds and %a for single-token string literals.
 func BuildParsedQuery(in string, vars ...any) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf(in, vars...)

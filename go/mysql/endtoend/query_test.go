@@ -19,6 +19,7 @@ package endtoend
 import (
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -129,6 +131,210 @@ func TestQueries(t *testing.T) {
 	result, err = conn.ExecuteFetch("drop table a", 0, false)
 	require.NoError(t, err, "drop table failed: %v", err)
 	assert.Equal(t, uint64(0), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
+}
+
+func TestBinaryBindConnectionCharset(t *testing.T) {
+	stmt, err := sqlparser.NewTestParser().Parse("select :v, charset(:v), collation(:v), coercibility(:v), :v + 0")
+	require.NoError(t, err)
+	query := sqlparser.NewParsedQuery(stmt)
+
+	for name, charset := range map[string]collations.ID{"utf8mb4": 45, "sjis": 13, "cp932": 95, "gbk": 28, "big5": 1, "gb18030": 248} {
+		t.Run(name, func(t *testing.T) {
+			params := connParams
+			params.Charset = charset
+			conn, err := mysql.Connect(t.Context(), &params)
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
+
+			for _, tc := range []struct {
+				name   string
+				value  string
+				number string
+			}{
+				{name: "empty", number: "0"},
+				{name: "sjis quote", value: "\x81'", number: "0"},
+				{name: "sjis backslash", value: "\x81\\", number: "0"},
+				{name: "controls and wildcards", value: "\xff\x00'\\%\\_", number: "0"},
+				{name: "ASCII numeric string", value: "123", number: "123"},
+				{name: "non-ASCII numeric string", value: "123\x81\x40", number: "123"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					sql, err := query.GenerateQuery(map[string]*querypb.BindVariable{
+						"v": sqltypes.BytesBindVariable([]byte(tc.value)),
+					}, nil)
+					require.NoError(t, err)
+					result, err := conn.ExecuteFetch(sql, 1, true)
+					require.NoError(t, err)
+					require.Len(t, result.Rows, 1)
+					require.Len(t, result.Rows[0], 5)
+					assert.Equal(t, tc.value, result.Rows[0][0].ToString())
+					assert.Equal(t, "binary", result.Rows[0][1].ToString())
+					assert.Equal(t, "binary", result.Rows[0][2].ToString())
+					assert.Equal(t, "4", result.Rows[0][3].ToString())
+					assert.Equal(t, tc.number, result.Rows[0][4].ToString())
+				})
+			}
+		})
+	}
+}
+
+// TestTextBindConnectionCharset checks text semantics as well as escape safety.
+// The injection payloads are well-formed in their connection charset, so an
+// invalid-character error cannot mask a misplaced closing quote. CAST catches
+// lost repertoire metadata even when the decoded bytes still match.
+func TestTextBindConnectionCharset(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	stmt, err := parser.Parse("select :v, charset(:v), coercibility(:v), collation(:v) = @@collation_connection")
+	require.NoError(t, err)
+	query := sqlparser.NewParsedQuery(stmt)
+	stmt, err = parser.Parse("select hex(cast(:v as char character set latin1)), hex(cast(_latin1 :v as char character set latin1))")
+	require.NoError(t, err)
+	conversionQuery := sqlparser.NewParsedQuery(stmt)
+
+	t.Run("formatted literals", func(t *testing.T) {
+		params := connParams
+		params.Charset = 45
+		conn, err := mysql.Connect(t.Context(), &params)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		for _, query := range []string{
+			"create temporary table literal_encoding (v enum('é\\n'), n varchar(10) character set latin1 default 'é\\n' comment 'é\\n', key k(n) comment 'é\\n') comment='é\\n'",
+			"insert into literal_encoding () values ()",
+			"select hex(cast(n as char character set latin1)) from literal_encoding",
+			"show tables like 'é\\n'",
+			"prepare encoding_stmt from 'select 1 -- é\\n'",
+			"deallocate prepare encoding_stmt",
+			"select hex(cast(N'é\\n' as char character set latin1))",
+		} {
+			stmt, err := parser.ParseStrictDDL(query)
+			require.NoError(t, err)
+			result, err := conn.ExecuteFetch(sqlparser.String(stmt), 10, true)
+			require.NoError(t, err, query)
+			if strings.HasPrefix(query, "select") {
+				require.Len(t, result.Rows, 1)
+				require.Len(t, result.Rows[0], 1)
+				assert.Equal(t, "E90A", result.Rows[0][0].ToString())
+			}
+		}
+	})
+
+	t.Run("different client and connection charsets", func(t *testing.T) {
+		params := connParams
+		params.Charset = 45
+		conn, err := mysql.Connect(t.Context(), &params)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		_, err = conn.ExecuteFetch("set character_set_connection = latin1", 0, false)
+		require.NoError(t, err)
+		sql, err := conversionQuery.GenerateQuery(map[string]*querypb.BindVariable{
+			"v": sqltypes.StringBindVariable("p'é\n"),
+		}, nil)
+		require.NoError(t, err)
+		result, err := conn.ExecuteFetch(sql, 1, true)
+		require.NoError(t, err)
+		require.Len(t, result.Rows, 1)
+		require.Len(t, result.Rows[0], 2)
+		assert.Equal(t, "7027E90A", result.Rows[0][0].ToString())
+		assert.Equal(t, "7027C3A90A", result.Rows[0][1].ToString())
+
+		stmt, err := parser.Parse("select hex(cast(N'é\\n' as char character set latin1))")
+		require.NoError(t, err)
+		result, err = conn.ExecuteFetch(sqlparser.String(stmt), 1, true)
+		require.NoError(t, err)
+		require.Len(t, result.Rows, 1)
+		require.Len(t, result.Rows[0], 1)
+		assert.Equal(t, "E90A", result.Rows[0][0].ToString())
+	})
+
+	type hazard struct {
+		name  string
+		value string
+	}
+	for _, cs := range []struct {
+		name    string
+		charset collations.ID
+		cases   []hazard
+	}{
+		{name: "utf8mb4", charset: 45, cases: []hazard{
+			// `é` is c3 a9, so the quote and the backslash each land right
+			// after a high byte.
+			{name: "high run then quote", value: "é', 'injected"},
+			{name: "high run then backslash", value: "é\\', 'injected"},
+			{name: "high run then NUL", value: "é\x00"},
+			{name: "high run then backspace", value: "é\b"},
+			{name: "high run then newline", value: "é\n"},
+			{name: "high run then carriage return", value: "é\r"},
+			{name: "high run then tab", value: "é\t"},
+			{name: "high run then ctrl-Z", value: "é\x1a"},
+			{name: "high run then wildcard", value: "é\\%"},
+			{name: "later high run", value: "x' é\n"},
+			{name: "multiple high runs", value: "é\né\\"},
+			{name: "ASCII quote", value: "it's fine"},
+		}},
+		{name: "sjis", charset: 13, cases: []hazard{
+			// 81 40 and 81 5c are both real sjis characters -- 0x5c is a
+			// valid trail byte, which is the whole problem.
+			{name: "lead byte then quote", value: "\x81\x40', 'injected"},
+			{name: "lead byte then backslash", value: "\x81\x5c', 'injected"},
+			{name: "ASCII quote", value: "it's fine"},
+		}},
+		{name: "cp932", charset: 95, cases: []hazard{
+			{name: "lead byte then quote", value: "\x81\x40', 'injected"},
+			{name: "lead byte then backslash", value: "\x81\x5c', 'injected"},
+		}},
+		{name: "gbk", charset: 28, cases: []hazard{
+			{name: "lead byte then quote", value: "\x81\x40', 'injected"},
+			{name: "lead byte then backslash", value: "\x81\x5c', 'injected"},
+		}},
+		{name: "big5", charset: 1, cases: []hazard{
+			{name: "lead byte then quote", value: "\xa1\x40', 'injected"},
+			{name: "lead byte then backslash", value: "\xa1\x5c', 'injected"},
+		}},
+		{name: "gb18030", charset: 248, cases: []hazard{
+			{name: "lead byte then quote", value: "\x81\x40', 'injected"},
+			{name: "lead byte then backslash", value: "\x81\x5c', 'injected"},
+			{name: "four-byte character", value: "\x81\x30\x81\x30\\', 'injected"},
+		}},
+	} {
+		t.Run(cs.name, func(t *testing.T) {
+			params := connParams
+			params.Charset = cs.charset
+			conn, err := mysql.Connect(t.Context(), &params)
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
+
+			for _, tc := range cs.cases {
+				t.Run(tc.name, func(t *testing.T) {
+					sql, err := query.GenerateQuery(map[string]*querypb.BindVariable{
+						"v": sqltypes.StringBindVariable(tc.value),
+					}, nil)
+					require.NoError(t, err)
+					result, err := conn.ExecuteFetch(sql, 1, true)
+					require.NoError(t, err)
+					require.Len(t, result.Rows, 1)
+					require.Len(t, result.Rows[0], 4, "literal did not hold the whole value")
+					assert.Equal(t, tc.value, result.Rows[0][0].ToString())
+					assert.Equal(t, cs.name, result.Rows[0][1].ToString())
+					assert.Equal(t, "4", result.Rows[0][2].ToString())
+					assert.Equal(t, "1", result.Rows[0][3].ToString())
+
+					if cs.name == "utf8mb4" {
+						sql, err = conversionQuery.GenerateQuery(map[string]*querypb.BindVariable{
+							"v": sqltypes.StringBindVariable(tc.value),
+						}, nil)
+						require.NoError(t, err)
+						result, err = conn.ExecuteFetch(sql, 1, true)
+						require.NoError(t, err)
+						require.Len(t, result.Rows, 1)
+						require.Len(t, result.Rows[0], 2)
+						want := fmt.Sprintf("%X", strings.ReplaceAll(tc.value, "é", "\xe9"))
+						assert.Equal(t, want, result.Rows[0][0].ToString())
+						assert.Equal(t, fmt.Sprintf("%X", tc.value), result.Rows[0][1].ToString())
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestLargeQueries(t *testing.T) {

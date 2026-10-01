@@ -964,7 +964,11 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		buf.WriteString(separator)
 		buf.WriteString(charSetCollations[i].charSet)
 		separator = ","
-		val.EncodeSQL(buf)
+		if charSetCollations[i].charSet == "" {
+			val.EncodeSQLExprStringBuilder(buf.Builder)
+		} else {
+			val.EncodeSQLStringBuilder(buf.Builder)
+		}
 		buf.WriteString(charSetCollations[i].collation)
 	}
 	buf.WriteString(")")
@@ -992,10 +996,10 @@ func (bvf *bindvarFormatter) formatter(buf *sqlparser.TrackedBuffer, node sqlpar
 	if node, ok := node.(*sqlparser.ColName); ok {
 		switch bvf.mode {
 		case bvBefore:
-			buf.WriteArg(":", "b_"+node.Name.String())
+			sqlparser.NewArgument("b_" + node.Name.String()).Format(buf)
 			return
 		case bvAfter:
-			buf.WriteArg(":", "a_"+node.Name.String())
+			sqlparser.NewArgument("a_" + node.Name.String()).Format(buf)
 			return
 		}
 	}

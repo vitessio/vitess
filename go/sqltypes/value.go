@@ -534,6 +534,8 @@ func dateToTime(v Value, loc *time.Location) (time.Time, error) {
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.
+// For text expressions, use EncodeSQLExprStringBuilder or EncodeSQLExprBytes2
+// to preserve MySQL's repertoire detection as well as the decoded bytes.
 func (v Value) EncodeSQL(b BinWriter) {
 	switch {
 	case v.Type() == Null:
@@ -552,13 +554,24 @@ func (v Value) EncodeSQL(b BinWriter) {
 // EncodeSQLStringBuilder is identical to EncodeSQL but it takes a strings.Builder
 // as its writer, so it can be inlined for performance.
 func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
+	v.encodeSQLStringBuilder(b, false)
+}
+
+// EncodeSQLExprStringBuilder preserves text repertoire in expression positions.
+// Unlike EncodeSQLStringBuilder, it may emit adjacent literals, so it must not
+// be used after a `_charset` introducer or where MySQL requires a single token.
+func (v Value) EncodeSQLExprStringBuilder(b *strings.Builder) {
+	v.encodeSQLStringBuilder(b, true)
+}
+
+func (v Value) encodeSQLStringBuilder(b *strings.Builder, expression bool) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
 	case v.IsBinary():
 		encodeBinarySQLStringBuilder(v.val, b)
 	case v.IsQuoted():
-		encodeBytesSQLStringBuilder(v.val, b)
+		encodeBytesSQLStringBuilderExpr(v.val, b, expression)
 	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
 	case v.Type() == Tuple:
@@ -568,7 +581,7 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 			if i > 0 {
 				b.WriteString(", ")
 			}
-			bv.EncodeSQLStringBuilder(b)
+			bv.encodeSQLStringBuilder(b, expression)
 			i++
 		})
 		b.WriteByte(')')
@@ -580,13 +593,24 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 // EncodeSQLBytes2 is identical to EncodeSQL but it takes a bytes2.Buffer
 // as its writer, so it can be inlined for performance.
 func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
+	v.encodeSQLBytes2(b, false)
+}
+
+// EncodeSQLExprBytes2 preserves text repertoire in expression positions.
+// It may emit adjacent literals, so it must not be used after a `_charset`
+// introducer or where MySQL requires a single token.
+func (v Value) EncodeSQLExprBytes2(b *bytes2.Buffer) {
+	v.encodeSQLBytes2(b, true)
+}
+
+func (v Value) encodeSQLBytes2(b *bytes2.Buffer, expression bool) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
 	case v.IsBinary():
 		encodeBinarySQLBytes2(v.val, b)
 	case v.IsQuoted():
-		encodeBytesSQLBytes2(v.val, b)
+		encodeBytesSQLBytes2Expr(v.val, b, expression)
 	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
 	default:
@@ -856,7 +880,7 @@ func encodeBinarySQL(val []byte, b BinWriter) {
 }
 
 func encodeBinarySQLBytes2(val []byte, buf *bytes2.Buffer) {
-	buf.Write([]byte("_binary"))
+	buf.WriteString("_binary")
 	encodeBytesSQLBytes2(val, buf)
 }
 
@@ -871,63 +895,149 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 	b.Write(buf.Bytes())
 }
 
+// encodeBytesSQLBytes2 writes val as a single-quoted SQL literal.
+//
+// Whenever we emit a `\`, any immediately preceding run of bytes above ASCII
+// has to be escaped byte by byte as well. In a multi-byte connection charset
+// such as `sjis`, `cp932`, `gbk`, `big5` or `gb18030`, `0x5c` is a valid trail
+// byte, so MySQL's lexer otherwise reads `<lead byte>\` as one character and
+// swallows the escape _(`get_text()` in `sql/sql_lex.cc` tests `my_ismbchar()`
+// before it tests for `\`)_. Escaping the run keeps the lexer landing on our
+// `\`, since `\` is never itself a lead byte.
+//
+// A quote ahead of such a run is doubled instead, which emits no `\` at all
+// and so leaves the run raw. Doubling is safe in every charset because `0x27`
+// is never a valid trail byte. Where no high-byte run precedes it a quote
+// keeps the `\'` form, which is already safe: a byte below ASCII cannot be a
+// lead byte, so there is nothing for it to hide behind.
+//
+// MySQL's lexer omits escaped bytes from its 7-bit test. This single-token
+// form preserves the bytes, but can give an ordinary text literal an ASCII
+// repertoire even when it contains non-ASCII text. Expression callers use
+// EncodeSQLExprBytes2 or EncodeSQLExprStringBuilder to preserve charset
+// conversion as well; token-only positions such as ENUM members and SHOW LIKE
+// cannot use that form.
+//
+// The run's start is found by walking backward from the escape rather than
+// tracked forward, which keeps the common byte at one table load and one
+// branch: every key of encodeRef is ASCII, so a byte above it is already
+// DontEscape and needs no test of its own. The walk is bounded by the run --
+// zero steps for ASCII, one or two for UTF-8 text.
 func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
+	encodeBytesSQLBytes2Expr(val, buf, false)
+}
+
+func encodeBytesSQLBytes2Expr(val []byte, buf *bytes2.Buffer, expression bool) {
 	buf.WriteByte('\'')
+	start := 0
 	for idx, ch := range val {
-		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
-		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
-			buf.WriteByte(ch)
+		encodedChar := SQLEncodeMap[ch]
+		if encodedChar == DontEscape {
 			continue
 		}
-		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteByte(ch)
-		} else {
-			buf.WriteByte('\\')
-			buf.WriteByte(encodedChar)
+		runStart := idx
+		for runStart > start && val[runStart-1] >= 0x80 {
+			runStart--
 		}
+		if ch == '\'' && runStart < idx {
+			buf.Write(val[start:idx])
+			buf.WriteString("''")
+			start = idx + 1
+			continue
+		}
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		passthrough := ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_')
+		if passthrough && runStart == idx {
+			continue
+		}
+		// Copy clean runs in bulk, without empty writes between consecutive escapes.
+		if start < runStart {
+			buf.Write(val[start:runStart])
+		}
+		if expression && runStart < idx {
+			// Appended literals make MySQL recompute the decoded text's repertoire.
+			buf.WriteString("' '")
+			expression = false
+		}
+		for _, hb := range val[runStart:idx] {
+			buf.Write([]byte{'\\', hb})
+		}
+		if passthrough {
+			buf.WriteByte('\\')
+		} else {
+			buf.Write([]byte{'\\', encodedChar})
+		}
+		start = idx + 1
+	}
+	if start < len(val) {
+		buf.Write(val[start:])
 	}
 	buf.WriteByte('\'')
 }
 
+// encodeBytesSQLStringBuilder is encodeBytesSQLBytes2 for a strings.Builder;
+// see there for why a high-byte run is escaped ahead of a `\` and doubled
+// ahead of a quote. The two are kept separate rather than shared behind an
+// interface, so neither pays an indirect call per write on the query path.
 func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
+	encodeBytesSQLStringBuilderExpr(val, buf, false)
+}
+
+func encodeBytesSQLStringBuilderExpr(val []byte, buf *strings.Builder, expression bool) {
 	buf.WriteByte('\'')
+	start := 0
 	for idx, ch := range val {
-		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
-		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
-			buf.WriteByte(ch)
+		encodedChar := SQLEncodeMap[ch]
+		if encodedChar == DontEscape {
 			continue
 		}
-		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteByte(ch)
-		} else {
-			buf.WriteByte('\\')
-			buf.WriteByte(encodedChar)
+		runStart := idx
+		for runStart > start && val[runStart-1] >= 0x80 {
+			runStart--
 		}
+		if ch == '\'' && runStart < idx {
+			buf.Write(val[start:idx])
+			buf.WriteString("''")
+			start = idx + 1
+			continue
+		}
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		passthrough := ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_')
+		if passthrough && runStart == idx {
+			continue
+		}
+		// Copy clean runs in bulk, without empty writes between consecutive escapes.
+		if start < runStart {
+			buf.Write(val[start:runStart])
+		}
+		if expression && runStart < idx {
+			// MySQL skips escaped bytes in its ASCII test, but recomputes
+			// the repertoire of an appended literal from its decoded bytes.
+			// Split before the run, never between a lead byte and its trail.
+			buf.WriteString("' '")
+			expression = false
+		}
+		for _, hb := range val[runStart:idx] {
+			buf.Write([]byte{'\\', hb})
+		}
+		if passthrough {
+			buf.WriteByte('\\')
+		} else {
+			buf.Write([]byte{'\\', encodedChar})
+		}
+		start = idx + 1
+	}
+	if start < len(val) {
+		buf.Write(val[start:])
 	}
 	buf.WriteByte('\'')
 }
 
 // BufEncodeStringSQL encodes the string into a strings.Builder
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
-	buf.WriteByte('\'')
-	for idx, ch := range val {
-		if ch > 255 {
-			buf.WriteRune(ch)
-			continue
-		}
-		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
-		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
-			buf.WriteRune(ch)
-			continue
-		}
-		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteRune(ch)
-		} else {
-			buf.WriteByte('\\')
-			buf.WriteByte(encodedChar)
-		}
-	}
-	buf.WriteByte('\'')
+	// Escape bytes rather than runes, so that a string which is not valid UTF-8
+	// survives instead of being replaced rune-by-rune with U+FFFD.
+	encodeBytesSQLStringBuilder(hack.StringBytes(val), buf)
 }
 
 // EncodeStringSQL encodes the string as a SQL string.
@@ -961,6 +1071,7 @@ var SQLDecodeMap [256]byte
 // encodeRef is a map of characters we use for escaping.
 // This doesn't include double quotes since we don't need
 // to escape that, as we always generate single quoted strings.
+// The encoders double a quote after a high-byte run; other quotes use this map.
 var encodeRef = map[byte]byte{
 	'\x00': '0',
 	'\'':   '\'',
@@ -1017,9 +1128,12 @@ func BufDecodeStringSQL(buf *strings.Builder, val string) error {
 			if idx >= len(in) {
 				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
 			}
-			decoded := SQLDecodeMap[in[idx]]
-			if decoded == DontEscape {
-				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			decoded := in[idx]
+			if decoded < 0x80 {
+				decoded = SQLDecodeMap[decoded]
+				if decoded == DontEscape {
+					return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+				}
 			}
 			buf.WriteByte(decoded)
 			idx++

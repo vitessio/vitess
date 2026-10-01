@@ -693,7 +693,7 @@ func (s *SignalSet) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (hcss *HandlerConditionSQLState) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("sqlstate ")
-	hcss.SQLStateValue.FormatFast(buf)
+	buf.formatSingleToken(hcss.SQLStateValue)
 }
 
 // FormatFast formats the node.
@@ -934,15 +934,15 @@ func (node *PartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
 	}
 	if node.Comment != nil {
 		buf.WriteString(" comment ")
-		node.Comment.FormatFast(buf)
+		buf.formatSingleToken(node.Comment)
 	}
 	if node.DataDirectory != nil {
 		buf.WriteString(" data directory ")
-		node.DataDirectory.FormatFast(buf)
+		buf.formatSingleToken(node.DataDirectory)
 	}
 	if node.IndexDirectory != nil {
 		buf.WriteString(" index directory ")
-		node.IndexDirectory.FormatFast(buf)
+		buf.formatSingleToken(node.IndexDirectory)
 	}
 	if node.MaxRows != nil {
 		buf.WriteString(" max_rows ")
@@ -988,15 +988,15 @@ func (node *SubPartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
 	}
 	if node.Comment != nil {
 		buf.WriteString(" comment ")
-		node.Comment.FormatFast(buf)
+		buf.formatSingleToken(node.Comment)
 	}
 	if node.DataDirectory != nil {
 		buf.WriteString(" data directory ")
-		node.DataDirectory.FormatFast(buf)
+		buf.formatSingleToken(node.DataDirectory)
 	}
 	if node.IndexDirectory != nil {
 		buf.WriteString(" index directory ")
-		node.IndexDirectory.FormatFast(buf)
+		buf.formatSingleToken(node.IndexDirectory)
 	}
 	if node.MaxRows != nil {
 		buf.WriteString(" max_rows ")
@@ -1160,7 +1160,7 @@ func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
 			}
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
-			opt.Value.FormatFast(buf)
+			buf.formatSingleToken(opt.Value)
 		} else {
 			buf.WriteString(" (")
 			opt.Tables.FormatFast(buf)
@@ -1299,7 +1299,7 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[COMMENT_KEYWORD])
 			buf.WriteByte(' ')
-			ct.Options.Comment.FormatFast(buf)
+			buf.formatSingleToken(ct.Options.Comment)
 		}
 		if ct.Options.Invisible != nil {
 			if *ct.Options.Invisible {
@@ -1320,13 +1320,13 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[ENGINE_ATTRIBUTE])
 			buf.WriteByte(' ')
-			ct.Options.EngineAttribute.FormatFast(buf)
+			buf.formatSingleToken(ct.Options.EngineAttribute)
 		}
 		if ct.Options.SecondaryEngineAttribute != nil {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
 			buf.WriteByte(' ')
-			ct.Options.SecondaryEngineAttribute.FormatFast(buf)
+			buf.formatSingleToken(ct.Options.SecondaryEngineAttribute)
 		}
 		if ct.Options.KeyOpt == ColKeyPrimary {
 			buf.WriteByte(' ')
@@ -1409,7 +1409,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 			buf.WriteString(opt.String)
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
-			opt.Value.FormatFast(buf)
+			buf.formatSingleToken(opt.Value)
 		}
 	}
 }
@@ -1676,7 +1676,7 @@ func (node *PrepareStmt) FormatFast(buf *TrackedBuffer) {
 	node.Name.FormatFast(buf)
 	buf.WriteString(" from ")
 	if node.Statement != nil {
-		node.Statement.FormatFast(buf)
+		buf.formatSingleToken(node.Statement)
 	}
 }
 
@@ -2022,7 +2022,7 @@ func (node *AssignmentExpr) FormatFast(buf *TrackedBuffer) {
 func (node *Literal) FormatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
+		encodeSQLValue(buf.Builder, sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()), !buf.singleToken)
 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.WriteString(node.Val)
 	case HexVal:
@@ -2060,7 +2060,7 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		// do nothing, the default literal will be correct.
 	case sqltypes.IsDecimal(node.Type) && node.Scale == 0:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DECIMAL(")
 		buf.WriteString(fmt.Sprintf("%d", node.Size))
 		buf.WriteString(", ")
@@ -2069,22 +2069,22 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		return
 	case sqltypes.IsUnsigned(node.Type):
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS UNSIGNED)")
 		return
 	case node.Type == sqltypes.Float64:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DOUBLE)")
 		return
 	case node.Type == sqltypes.Float32:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS FLOAT)")
 		return
 	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DATETIME")
 		if node.Size == 0 {
 			buf.WriteString(")")
@@ -2096,13 +2096,13 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		return
 	case sqltypes.IsDate(node.Type):
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DATE")
 		buf.WriteString(")")
 		return
 	case node.Type == sqltypes.Time:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS TIME")
 		if node.Size == 0 {
 			buf.WriteString(")")
@@ -2114,7 +2114,7 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		return
 	}
 	// Nothing special to do, the default literal will be correct.
-	buf.WriteArg(":", node.Name)
+	buf.writeExprArg(":", node.Name)
 	if node.Type >= 0 {
 		// For bind variables that are statically typed, emit their type as an adjacent comment.
 		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
@@ -2188,7 +2188,7 @@ func (node *DerivedTable) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node ListArg) FormatFast(buf *TrackedBuffer) {
-	buf.WriteArg("::", string(node))
+	buf.writeExprArg("::", string(node))
 }
 
 // FormatFast formats the node.
@@ -2202,6 +2202,18 @@ func (node *BinaryExpr) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *UnaryExpr) FormatFast(buf *TrackedBuffer) {
+	if node.Operator == NStringOp {
+		if nationalStringNeedsIntroducer(node.Expr) {
+			// Unlike N, an explicit introducer recomputes the repertoire
+			// after unescaping. Its operand must stay a single literal.
+			buf.WriteString(Utf8mb3Str)
+			buf.WriteByte(' ')
+		} else {
+			buf.WriteString("N")
+		}
+		buf.formatSingleToken(node.Expr)
+		return
+	}
 	if _, unary := node.Expr.(*UnaryExpr); unary {
 		// They have same precedence so parenthesis is not required.
 		buf.WriteString(node.Operator.ToString())
@@ -2217,7 +2229,7 @@ func (node *UnaryExpr) FormatFast(buf *TrackedBuffer) {
 func (node *IntroducerExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.CharacterSet)
 	buf.WriteByte(' ')
-	buf.printExpr(node, node.Expr, true)
+	buf.formatSingleToken(node.Expr)
 }
 
 // FormatFast formats the node.
@@ -3041,7 +3053,7 @@ func (node *SetExpr) FormatFast(buf *TrackedBuffer) {
 	case node.Var.Name.EqualString("charset") || node.Var.Name.EqualString("names"):
 		buf.WriteString(node.Var.Name.String())
 		buf.WriteByte(' ')
-		node.Expr.FormatFast(buf)
+		buf.formatSingleToken(node.Expr)
 	default:
 		node.Var.FormatFast(buf)
 		buf.WriteString(" = ")
@@ -3755,7 +3767,7 @@ func (node TableOptions) FormatFast(buf *TrackedBuffer) {
 			}
 		case option.Value != nil:
 			buf.WriteByte(' ')
-			option.Value.FormatFast(buf)
+			buf.formatSingleToken(option.Value)
 		default:
 			buf.WriteString(" (")
 			option.Tables.FormatFast(buf)

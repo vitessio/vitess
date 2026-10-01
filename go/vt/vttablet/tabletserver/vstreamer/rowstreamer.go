@@ -306,11 +306,11 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				prefix = " or "
 				for i, pk := range rs.pkColumns[:lastcol] {
 					buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
-					rs.lastpk[i].EncodeSQL(buf)
+					rs.lastpk[i].EncodeSQLExprStringBuilder(buf.Builder)
 					buf.Myprintf(" and ")
 				}
 				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
-				rs.lastpk[lastcol].EncodeSQL(buf)
+				rs.lastpk[lastcol].EncodeSQLExprStringBuilder(buf.Builder)
 				buf.Myprintf(")")
 			}
 		}

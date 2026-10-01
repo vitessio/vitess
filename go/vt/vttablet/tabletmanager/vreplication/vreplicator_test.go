@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -688,6 +689,68 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, res.Rows, expectedPostCopyActionRecs,
 				"Expected %d post copy action records, got %d", expectedPostCopyActionRecs, len(res.Rows))
+		})
+	}
+}
+
+// TestDeferSecondaryKeysCharset checks that raw-template conversion preserves
+// index names when deferred keys are restored over a non-UTF-8 connection.
+func TestDeferSecondaryKeysCharset(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		charset collations.ID
+	}{
+		{name: "utf8mb4", charset: 45},
+		{name: "latin1", charset: 8},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params, err := env.Dbcfgs.DbaWithDB().MysqlParams()
+			require.NoError(t, err)
+			params.Charset = tc.charset
+			params.DbName = vrepldb
+			cfg := dbconfigs.NewTestDBConfigs(*params, *params, vrepldb)
+			mysqld := mysqlctl.NewMysqld(cfg)
+			t.Cleanup(mysqld.Close)
+			factory := func() binlogplayer.DBClient {
+				return binlogplayer.NewDBClient(cfg.FilteredWithDB(), env.TabletEnv.Environment().Parser())
+			}
+			previousFactory := playerEngine.dbClientFactoryFiltered
+			playerEngine.dbClientFactoryFiltered = factory
+			t.Cleanup(func() { playerEngine.dbClientFactoryFiltered = previousFactory })
+			db := factory()
+			require.NoError(t, db.Connect())
+			t.Cleanup(db.Close)
+			stats := binlogplayer.NewStats()
+			t.Cleanup(stats.Stop)
+
+			// These bytes form valid identifiers in both connection charsets.
+			// The newline becomes a JSON escape directly after the high bytes.
+			_, err = db.ExecuteFetch("create table deferred_charset (id int primary key, v int, key `\xc3\xa9\nk` (v))", 1)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_, err := db.ExecuteFetch("drop table deferred_charset", 1)
+				require.NoError(t, err)
+				_, err = db.ExecuteFetch("delete from _vt.post_copy_action where vrepl_id=1", 1)
+				require.NoError(t, err)
+				_, err = db.ExecuteFetch("delete from _vt.vreplication where id=1", 1)
+				require.NoError(t, err)
+			})
+			_, err = db.ExecuteFetch("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (1, 'test', '', '', 99999, 99999, 0, 0, 'Running', '"+vrepldb+"', '{}')", 1)
+			require.NoError(t, err)
+			getSchema := func() string {
+				t.Helper()
+				sd, err := mysqld.GetSchema(t.Context(), vrepldb, &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"deferred_charset"}})
+				require.NoError(t, err)
+				require.Len(t, sd.TableDefinitions, 1)
+				return sd.TableDefinitions[0].Schema
+			}
+			before := getSchema()
+			vr := newVReplicator(1, &binlogdatapb.BinlogSource{}, nil, stats, db, mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
+			vr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_MoveTables)
+			require.NoError(t, vr.stashSecondaryKeys(t.Context(), "deferred_charset"))
+			assert.NotEqual(t, before, getSchema(), "secondary key was not dropped")
+			require.NoError(t, vr.execPostCopyActions(t.Context(), t.Context(), "deferred_charset"))
+			assert.Equal(t, before, getSchema())
 		})
 	}
 }

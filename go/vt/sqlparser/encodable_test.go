@@ -73,6 +73,21 @@ func TestEncodable(t *testing.T) {
 			},
 		},
 		out: "(pk1 = 1 and pk2 = 'aa') or (pk1 = 2 and pk2 = 'bb')",
+	}, {
+		in:  InsertValues{{sqltypes.NewVarChar("é\n")}},
+		out: "('' '\\\xc3\\\xa9\\n')",
+	}, {
+		in: &TupleEqualityList{
+			Columns: []IdentifierCI{NewIdentifierCI("pk")},
+			Rows:    [][]sqltypes.Value{{sqltypes.NewVarChar("é\n")}},
+		},
+		out: "pk in ('' '\\\xc3\\\xa9\\n')",
+	}, {
+		in: &TupleEqualityList{
+			Columns: []IdentifierCI{NewIdentifierCI("pk1"), NewIdentifierCI("pk2")},
+			Rows:    [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewVarChar("é\n")}},
+		},
+		out: "(pk1 = 1 and pk2 = '' '\\\xc3\\\xa9\\n')",
 	}}
 	for _, tcase := range tcases {
 		buf := new(strings.Builder)

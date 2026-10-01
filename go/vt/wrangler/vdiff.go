@@ -1380,7 +1380,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	for i, pkI := range td.selectPks {
 		sel.SelectExprs.Exprs[pkI].Format(buf)
 		buf.Myprintf("=")
-		row[pkI].EncodeSQL(buf)
+		row[pkI].EncodeSQLExprStringBuilder(buf.Builder)
 		if i != len(td.selectPks)-1 {
 			buf.Myprintf(" AND ")
 		}

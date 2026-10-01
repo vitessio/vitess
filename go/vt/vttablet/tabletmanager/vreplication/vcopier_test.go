@@ -212,6 +212,58 @@ func testPlayerCopyTablesJSONStreamSQL(t *testing.T) {
 	})
 }
 
+func TestPlayerCopyParallelCharsetConversion(t *testing.T) {
+	testVcopierTestCases(t, func(t *testing.T) {
+		tablet := addTablet(100)
+		t.Cleanup(func() { deleteTablet(tablet) })
+		execStatements(t, []string{
+			"create table src(id int primary key, val varchar(64) character set utf8mb4)",
+			fmt.Sprintf("create table %s.dst(id int primary key, val varchar(64) character set utf8mb4)", vrepldb),
+			"insert into src values(1, _utf8mb4 0xc3a9), (2, _utf8mb4 0xc3a90a)",
+		})
+		t.Cleanup(func() {
+			queries := []string{"drop table src", fmt.Sprintf("drop table %s.dst", vrepldb)}
+			require.NoError(t, env.Mysqld.ExecuteSuperQueryList(context.WithoutCancel(t.Context()), queries))
+			for _, query := range queries {
+				updateMockSchemaForQuery(query)
+			}
+		})
+		bls := &binlogdatapb.BinlogSource{
+			Keyspace: env.KeyspaceName,
+			Shard:    env.ShardName,
+			Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+				Match:  "dst",
+				Filter: "select id, cast(val as char character set latin1) as val from src",
+			}}},
+			OnDdl: binlogdatapb.OnDDLAction_IGNORE,
+		}
+		query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+		qr, err := playerEngine.Exec(query)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+			require.NoError(t, err)
+			expectDeleteQueries(t)
+			playerEngine.Close()
+			playerEngine.Open(context.WithoutCancel(t.Context()))
+		})
+		expectNontxQueries(t, qh.Expect(
+			"/insert into _vt.vreplication",
+			"/update _vt.vreplication set message='Picked source tablet.*",
+			"/insert into _vt.copy_state",
+			"/update _vt.vreplication set state='Copying'",
+			"/insert into dst",
+			"/insert into _vt.copy_state",
+			"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
+			"/update _vt.vreplication set state='Running",
+		), 30*time.Second)
+		expectData(t, "dst", [][]string{{"1", "é"}, {"2", "é\n"}})
+	}, []vcopierTestCase{{
+		vreplicationExperimentalFlags:     vttablet.DefaultVReplicationConfig.ExperimentalFlags,
+		vreplicationParallelInsertWorkers: 4,
+	}})
+}
+
 type vcopierTestCase struct {
 	vreplicationExperimentalFlags     int64
 	vreplicationParallelInsertWorkers int
