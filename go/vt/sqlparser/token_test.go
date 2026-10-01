@@ -17,7 +17,9 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -293,6 +295,123 @@ func TestIntegerAndID(t *testing.T) {
 				expectedOut = tcase.in
 			}
 			require.Equal(t, expectedOut, out)
+		})
+	}
+}
+
+// scanStringBenchCase holds a literal input; benchmarks start at `Pos=1`,
+// after its opening quote.
+type scanStringBenchCase struct {
+	name  string
+	delim byte
+	sql   string
+	token int
+}
+
+// scanStringBenchCases covers clean, escaped and unterminated literals around
+// the scalar and window handoffs.
+func scanStringBenchCases() []scanStringBenchCase {
+	const text = "The quick brown fox jumps over the lazy dog, then it does so again. "
+	var cases []scanStringBenchCase
+	for _, delim := range []struct {
+		name string
+		ch   byte
+	}{{"squote", '\''}, {"dquote", '"'}} {
+		addCase := func(name, sql string, token int) {
+			cases = append(cases, scanStringBenchCase{
+				name:  fmt.Sprintf("%s/%s", delim.name, name),
+				delim: delim.ch,
+				sql:   sql,
+				token: token,
+			})
+		}
+		addTerminated := func(name, literal string) {
+			addCase(name, string(delim.ch)+literal+string(delim.ch), STRING)
+		}
+		addUnterminated := func(name, literal string) {
+			addCase(name, string(delim.ch)+literal, LEX_ERROR)
+		}
+
+		for _, size := range []int{16, 64, 256, 512, 4096, 65536} {
+			body := strings.Repeat(text, size/len(text)+1)[:size]
+			shapes := []struct {
+				name    string
+				literal string
+			}{
+				{"clean", body},
+				{"escape", body[:size/2] + `\n` + body[size/2+2:]},
+				{"single-escape-long-tail", body[:2] + `\n` + body[4:]},
+				{"two-escape-long-tail", body[:2] + `\n` + body[4:6] + `\n` + body[8:]},
+				{"three-escape-long-tail", body[:2] + `\n` + body[4:6] + `\n` + body[8:10] + `\n` + body[12:]},
+			}
+			denseHead := strings.Repeat(`aaaa\n`, 10)
+			if size >= len(denseHead) {
+				shapes = append(shapes, struct {
+					name    string
+					literal string
+				}{"escape-dense-head", denseHead + body[len(denseHead):]})
+			}
+			for _, shape := range shapes {
+				addTerminated(fmt.Sprintf("%d/%s", size, shape.name), shape.literal)
+			}
+			runs := []int{2, 4, 6, 16, 31, 32, 48, 64}
+			if size == 65536 {
+				runs = []int{2, 16, 31, 32, 48, 64}
+			}
+			for _, run := range runs {
+				unit := strings.Repeat("a", run) + `\n`
+				if len(unit) > size {
+					continue
+				}
+				literal := strings.Repeat(unit, size/len(unit))
+				literal += strings.Repeat("a", size-len(literal))
+				addTerminated(fmt.Sprintf("%d/escape-run-%d", size, run), literal)
+			}
+		}
+
+		const unterminatedSize = 4096
+		unterminated := strings.Repeat(text, unterminatedSize/len(text)+1)[:unterminatedSize]
+		addUnterminated("4096/unterminated-clean", unterminated)
+		addUnterminated("4096/unterminated-escape", unterminated[:2]+`\n`+unterminated[4:])
+
+		for _, n := range []int{scanStringScalarPrefix - 1, scanStringScalarPrefix, scanStringScalarPrefix + 1} {
+			addTerminated(fmt.Sprintf("handoff/scalar-prefix-%d", n), strings.Repeat("a", n))
+		}
+		for _, n := range []int{scanStringSlowScalarPrefix - 1, scanStringSlowScalarPrefix, scanStringSlowScalarPrefix + 1} {
+			addTerminated(fmt.Sprintf("handoff/slow-prefix-%d", n), `\n`+strings.Repeat("a", n))
+		}
+	}
+	return cases
+}
+
+// BenchmarkTokenizerScanString compares the byte loops from `main` with the
+// scanner `vtgate` runs before normalization.
+func BenchmarkTokenizerScanString(b *testing.B) {
+	for _, tc := range scanStringBenchCases() {
+		b.Run(tc.name, func(b *testing.B) {
+			b.Run("impl=reference", func(b *testing.B) {
+				tkn := NewTestParser().NewStringTokenizer(tc.sql)
+				b.ReportAllocs()
+				b.SetBytes(int64(len(tc.sql) - 1))
+				for b.Loop() {
+					tkn.Pos = 1
+					if id, _ := scanStringReference(tkn, uint16(tc.delim), STRING); id != tc.token {
+						b.Fatalf("scanStringReference returned token %d, want %d", id, tc.token)
+					}
+				}
+			})
+			b.Run("impl=branch", func(b *testing.B) {
+				tkn := NewTestParser().NewStringTokenizer(tc.sql)
+				b.ReportAllocs()
+				b.SetBytes(int64(len(tc.sql) - 1))
+				for b.Loop() {
+					// `Scan` enters `scanString` just past the opening quote.
+					tkn.Pos = 1
+					if id, _ := tkn.scanString(uint16(tc.delim), STRING); id != tc.token {
+						b.Fatalf("scanString returned token %d, want %d", id, tc.token)
+					}
+				}
+			})
 		})
 	}
 }

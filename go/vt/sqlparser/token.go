@@ -601,38 +601,90 @@ exit:
 	return token, tkn.buf[start:tkn.Pos]
 }
 
-// scanString scans a string surrounded by the given `delim`, which can be
-// either single or double quotes. Assumes that the given delimiter has just
-// been scanned. If the skin contains any escape sequences, this function
-// will fall back to scanStringSlow
+const (
+	// indexAny2Window bounds the first scan before the window grows.
+	indexAny2Window = 256
+
+	// scanStringScalarPrefix favours very short literals over `indexAny2`.
+	scanStringScalarPrefix = 8
+
+	// scanStringSlowScalarPrefix keeps dense escapes on the byte loop.
+	scanStringSlowScalarPrefix = 32
+)
+
+// indexAny2 returns the first index of `first` or `second` in `s`, or -1 if
+// neither occurs. It searches for `first`, then truncates the window before
+// searching for `second`; `strings.IndexByte` keeps both searches fast.
+//
+// Growing windows avoid scanning the rest of a long query after an early hit
+// while keeping no-hit work linear. A 64 KB miss needs 5 windows rather than
+// 256 fixed 256 B windows. `strings.IndexAny` uses a scalar loop for
+// multiple-byte sets and is slower for this case.
+func indexAny2(s string, first, second byte) int {
+	window := indexAny2Window
+	for off := 0; off < len(s); {
+		end := off + min(window, len(s)-off)
+		w := s[off:end]
+		i := strings.IndexByte(w, first)
+		if i >= 0 {
+			w = w[:i]
+		}
+		if j := strings.IndexByte(w, second); j >= 0 {
+			return off + j
+		}
+		if i >= 0 {
+			return off + i
+		}
+		off = end
+		remaining := len(s) - off
+		if window > remaining/4 {
+			window = remaining
+		} else {
+			window *= 4
+		}
+	}
+	return -1
+}
+
+// scanString scans a single- or double-quoted string after its opening
+// delimiter. Escapes and doubled delimiters fall back to `scanStringSlow`.
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
 
-	for {
-		switch tkn.cur() {
-		case delim:
-			if tkn.peek(1) != delim {
-				tkn.skip(1)
-				return typ, tkn.buf[start : tkn.Pos-1]
-			}
-			fallthrough
-
-		case '\\':
-			var buffer strings.Builder
-			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			return tkn.scanStringSlow(&buffer, delim, typ)
-
-		case eofChar:
+	// Most literals have no escapes; search both sentinels after the scalar
+	// prefix instead of peeking once per byte.
+	end := min(start+scanStringScalarPrefix, len(tkn.buf))
+	var ch uint16
+	for tkn.Pos < end {
+		ch = uint16(tkn.buf[tkn.Pos])
+		if ch == delim || ch == '\\' {
+			break
+		}
+		tkn.Pos++
+	}
+	if tkn.Pos == end {
+		i := indexAny2(tkn.buf[end:], byte(delim), '\\')
+		if i < 0 {
+			tkn.Pos = len(tkn.buf)
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
-
-		tkn.skip(1)
+		tkn.Pos = end + i
+		ch = uint16(tkn.buf[tkn.Pos])
 	}
+
+	if ch == delim && tkn.peek(1) != delim {
+		tkn.skip(1)
+		return typ, tkn.buf[start : tkn.Pos-1]
+	}
+
+	// Escapes and doubled delimiters need the slow path.
+	var buffer strings.Builder
+	buffer.WriteString(tkn.buf[start:tkn.Pos])
+	return tkn.scanStringSlow(&buffer, delim, typ)
 }
 
-// scanString scans a string surrounded by the given `delim` and containing escape
-// sequencse. The given `buffer` contains the contents of the string that have
-// been scanned so far.
+// scanStringSlow finishes a string containing escapes; `buffer` holds the
+// prefix already scanned.
 func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
 	for {
 		ch := tkn.cur()
@@ -642,22 +694,27 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 		}
 
 		if ch != delim && ch != '\\' {
-			// Scan ahead to the next interesting character.
 			start := tkn.Pos
-			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
+			end := min(start+scanStringSlowScalarPrefix, len(tkn.buf))
+			for ; tkn.Pos < end; tkn.Pos++ {
 				ch = uint16(tkn.buf[tkn.Pos])
 				if ch == delim || ch == '\\' {
 					break
 				}
 			}
+			if tkn.Pos == end {
+				i := indexAny2(tkn.buf[end:], byte(delim), '\\')
+				if i < 0 {
+					tkn.Pos = len(tkn.buf)
+					buffer.WriteString(tkn.buf[start:tkn.Pos])
+					tkn.skip(1)
+					return LEX_ERROR, buffer.String()
+				}
+				tkn.Pos = end + i
+				ch = uint16(tkn.buf[tkn.Pos])
+			}
 
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			if tkn.Pos >= len(tkn.buf) {
-				// Reached the end of the buffer without finding a delim or
-				// escape character.
-				tkn.skip(1)
-				continue
-			}
 		}
 		tkn.skip(1) // Read one past the delim or escape character.
 
