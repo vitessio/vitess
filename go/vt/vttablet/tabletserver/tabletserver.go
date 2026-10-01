@@ -2080,6 +2080,11 @@ func (tsv *TabletServer) BroadcastHealth() {
 	tsv.sm.Broadcast()
 }
 
+// SetGroupReplicationVerdict is part of the tabletserver.Controller interface.
+func (tsv *TabletServer) SetGroupReplicationVerdict(healthy bool, viewID string) {
+	tsv.rt.SetGroupReplicationVerdict(healthy, viewID)
+}
+
 // EnterLameduck causes tabletserver to enter the lameduck state. This
 // state causes health checks to fail, but the behavior of tabletserver
 // otherwise remains the same. Any subsequent calls to SetServingType will

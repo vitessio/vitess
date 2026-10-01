@@ -63,6 +63,10 @@ import (
 //     MySQL still commits in such a group (MySQL's view quorum counts only the members that are
 //     still in the view, after the others left it), but a transaction would then only exist on a
 //     minority of the voters. This fails closed, like a semi-sync primary without an acker.
+//   - On every run, it tells the query service whether MySQL is ONLINE in the shard's legitimate
+//     group, with quorum and a majority of the voters in its view. The replication lag poller
+//     (--enable-replication-reporter) reports a member that is not with the lag accumulated since
+//     it last was, so that a member cut off from the shard's group leaves replica reads.
 //
 // Mutations take the action lock without waiting, so that the loop never queues behind a long
 // running RPC (a backup, a restore, a reparent); it retries on its next run instead.
@@ -92,6 +96,8 @@ type groupReplicationSync struct {
 
 	// twoPCAllowed is the last value the loop passed to SetTwoPCAllowed, if any.
 	twoPCAllowed *bool
+	// lastVerdict is the last value the loop passed to publishVerdict, if any.
+	lastVerdict *bool
 
 	// loopCtx is the context of the loop, which ends when the loop stops.
 	loopCtx context.Context
@@ -165,9 +171,11 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	status, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		log.Warn("Group replication sync: cannot read the group replication status", slog.Any("error", err))
+		s.publishVerdict(false, "")
 		return
 	}
 	s.logTransition(status)
+	s.publishVerdict(s.inLegitimateGroup(ctx, status), status.GetViewId())
 
 	if mysql.IsGroupMemberActive(status) && s.isForeignGroup(ctx, status) {
 		s.leaveForeignGroup(ctx)
@@ -202,6 +210,46 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	}
 	if s.shouldRejoin(ctx, status, durability, tablet) {
 		s.rejoin(ctx)
+	}
+}
+
+// inLegitimateGroup returns whether MySQL is ONLINE in the shard's legitimate group: in the
+// recorded incarnation, with quorum in its view, and with a majority of the listed voters ONLINE
+// in its view (MySQL's view quorum alone when no voter is listed). Only such a member receives the
+// shard's transactions, and so can measure its replication lag (see publishVerdict).
+//
+// It does not ask the voters whose server_uuid the tablet does not know: the loop asks them in the
+// background (warmVoterServerUUIDs), and voters are also found by the MySQL address of their
+// tablet record.
+func (s *groupReplicationSync) inLegitimateGroup(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) bool {
+	if status.GetMemberState() != mysql.GroupMemberStateOnline || !status.GetHasQuorum() {
+		return false
+	}
+	rec, err := s.getRecord(ctx, false)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the shard's group record", slog.Any("error", err))
+		return false
+	}
+	legitimate := s.tm.legitimateGroup(ctx, rec, status, false)
+	return legitimate.IsLegitimateMember(status) && legitimate.HasVoterMajority(status)
+}
+
+// publishVerdict tells the query service whether MySQL is ONLINE in the shard's legitimate group,
+// in the given view, on every run of the loop. The replication lag poller
+// (--enable-replication-reporter) needs it on a member of a group: an applier that receives
+// nothing reports no lag, whether the member is up to date or cut off from the shard's group. A
+// member that is not in the legitimate group is reported with the lag accumulated since it last
+// was, and the poller distrusts a verdict that the loop did not renew for a while.
+func (s *groupReplicationSync) publishVerdict(healthy bool, viewID string) {
+	if s.tm.QueryServiceControl == nil {
+		return
+	}
+	s.tm.QueryServiceControl.SetGroupReplicationVerdict(healthy, viewID)
+	if s.lastVerdict == nil || *s.lastVerdict != healthy {
+		log.Info("Group replication sync: MySQL's membership of the shard's legitimate group changed",
+			slog.Bool("in_legitimate_group", healthy),
+			slog.String("view_id", viewID))
+		s.lastVerdict = &healthy
 	}
 }
 

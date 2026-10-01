@@ -93,6 +93,9 @@ type Controller struct {
 	// queryRulesMap has the latest query rules.
 	queryRulesMap map[string]*rules.Rules
 
+	// groupReplicationVerdict is the last verdict passed to SetGroupReplicationVerdict.
+	groupReplicationVerdict *GroupReplicationVerdict
+
 	MethodCalled map[string]bool
 }
 
@@ -203,6 +206,27 @@ func (tqsc *Controller) QueryService() queryservice.QueryService {
 // SchemaEngine is part of the tabletserver.Controller interface
 func (tqsc *Controller) SchemaEngine() *schema.Engine {
 	return nil
+}
+
+// GroupReplicationVerdict is a verdict passed to SetGroupReplicationVerdict.
+type GroupReplicationVerdict struct {
+	Healthy bool
+	ViewID  string
+}
+
+// SetGroupReplicationVerdict is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetGroupReplicationVerdict(healthy bool, viewID string) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.groupReplicationVerdict = &GroupReplicationVerdict{Healthy: healthy, ViewID: viewID}
+}
+
+// LastGroupReplicationVerdict returns the last verdict passed to SetGroupReplicationVerdict, or
+// nil if there was none.
+func (tqsc *Controller) LastGroupReplicationVerdict() *GroupReplicationVerdict {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.groupReplicationVerdict
 }
 
 // BroadcastHealth is part of the tabletserver.Controller interface

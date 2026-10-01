@@ -74,6 +74,9 @@ type MysqlDaemon interface {
 
 	// Group Replication related methods
 	GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error)
+	// GroupReplicationApplierStatus returns the member's own state and how far its applier is
+	// behind its group, with a single query, for replication lag tracking.
+	GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error)
 	ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error
 	StartGroupReplication(ctx context.Context, bootstrap bool) error
 	StopGroupReplication(ctx context.Context) error

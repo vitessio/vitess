@@ -140,6 +140,15 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	return rt.poller.Status()
 }
 
+// SetGroupReplicationVerdict records the tablet manager's verdict about the group membership of
+// the tablet's MySQL, which the replication lag poller needs on a Group Replication member:
+// healthy is set when MySQL is ONLINE in the shard's legitimate replication group, with a
+// majority of the shard's voters ONLINE in its view, and viewID is the view the verdict is about.
+// The tablet manager renews it on every run of its group replication sync loop.
+func (rt *ReplTracker) SetGroupReplicationVerdict(healthy bool, viewID string) {
+	rt.poller.SetGroupReplicationVerdict(healthy, viewID)
+}
+
 // EnableHeartbeat enables or disables writes of heartbeat. This functionality
 // is only used by tests.
 func (rt *ReplTracker) EnableHeartbeat(enable bool) {

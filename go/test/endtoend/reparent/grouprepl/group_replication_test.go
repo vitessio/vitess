@@ -72,6 +72,14 @@ type clusterOptions struct {
 	replicaCells []string
 	// rdonly adds an RDONLY tablet in the first cell.
 	rdonly bool
+	// pollingLag makes the tablets track replication lag by polling MySQL
+	// (--enable-replication-reporter, which the cluster framework passes to every tablet)
+	// instead of with heartbeats.
+	pollingLag bool
+	// cellsAlias puts all cells in one cell alias, so that vtgate, in the first cell, routes
+	// replica reads to the REPLICA tablets of the other cells too: it only routes them to
+	// tablets of its own cell or cell alias.
+	cellsAlias bool
 }
 
 // defaultClusterOptions is the recommended layout: one REPLICA tablet in each of three cells,
@@ -114,11 +122,16 @@ func setupCluster(t *testing.T, opts clusterOptions) *testCluster {
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock-tables-timeout", "5s",
-		"--heartbeat-enable",
-		"--heartbeat-interval", "250ms",
 		"--queryserver-enable-online-ddl=false",
 		"--group-replication-sync-interval", "500ms",
 	)
+	if !opts.pollingLag {
+		// Heartbeats take precedence over the replication reporter.
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--heartbeat-enable",
+			"--heartbeat-interval", "250ms",
+		)
+	}
 	keyspace := &cluster.Keyspace{Name: keyspaceName, SchemaSQL: schemaSQL}
 	require.NoError(t, clusterInstance.SetupCluster(keyspace, []cluster.Shard{{Name: shardName, Vttablets: tablets}}))
 
@@ -155,6 +168,10 @@ func setupCluster(t *testing.T, opts clusterOptions) *testCluster {
 		"--buffer-max-failover-duration", "30s",
 		"--buffer-min-time-between-failovers", "1s",
 	)
+	if opts.cellsAlias {
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("AddCellsAlias", "--cells", strings.Join(cells, ","), "all")
+		require.NoError(t, err, out)
+	}
 	// vtgate must watch every cell: the group can elect a primary in any of them.
 	vtgate := clusterInstance.NewVtgateInstance()
 	vtgate.CellsToWatch = strings.Join(cells, ",")

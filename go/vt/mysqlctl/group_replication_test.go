@@ -76,6 +76,59 @@ func TestGroupReplicationStatusReadsSingleLeaderFromVariables(t *testing.T) {
 	assert.True(t, status.PaxosSingleLeader)
 }
 
+const groupReplicationApplierStatusPattern = `SELECT \(SELECT PLUGIN_STATUS FROM information_schema\.PLUGINS WHERE PLUGIN_NAME = 'group_replication'\) AS plugin_status, .*performance_schema\.replication_applier_status_by_worker .*performance_schema\.replication_applier_status_by_coordinator .*`
+
+var groupReplicationApplierStatusFields = sqltypes.MakeTestFields(
+	"plugin_status|member_state|members|reachable_members|view_id|queued_transactions|applier_lag_seconds",
+	"varchar|varchar|int64|int64|varchar|uint64|decimal")
+
+// TestGroupReplicationApplierStatus checks that the member's state, quorum and applier lag are
+// read with one query, which the fake server answers. It fails every other query.
+func TestGroupReplicationApplierStatus(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	db.AddQueryPattern(groupReplicationApplierStatusPattern, sqltypes.MakeTestResult(groupReplicationApplierStatusFields,
+		"ACTIVE|ONLINE|3|1|17907857441607796:3|5|1.250000"))
+	status, err := mysqld.GroupReplicationApplierStatus(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, &mysql.GroupReplicationApplierStatus{
+		PluginActive: true, MemberState: "ONLINE", Members: 3, ReachableMembers: 1, ViewID: "17907857441607796:3",
+		QueuedTransactions: 5, Applying: true, OldestApplying: 1250 * time.Millisecond,
+	}, status)
+	assert.False(t, status.HasQuorum())
+
+	// Nothing being applied: the age is NULL.
+	db.AddQueryPattern(groupReplicationApplierStatusPattern, sqltypes.MakeTestResult(groupReplicationApplierStatusFields,
+		"ACTIVE|ONLINE|3|3|17907857441607796:3|0|NULL"))
+	status, err = mysqld.GroupReplicationApplierStatus(t.Context())
+	require.NoError(t, err)
+	assert.False(t, status.Applying)
+	lag, known := status.ApplierLag()
+	assert.True(t, known)
+	assert.Zero(t, lag)
+
+	// Not in a group: MySQL lists no member with its server_uuid.
+	db.AddQueryPattern(groupReplicationApplierStatusPattern, sqltypes.MakeTestResult(groupReplicationApplierStatusFields,
+		"ACTIVE|NULL|0|0|NULL|NULL|NULL"))
+	status, err = mysqld.GroupReplicationApplierStatus(t.Context())
+	require.NoError(t, err)
+	assert.True(t, status.PluginActive)
+	assert.Equal(t, mysql.GroupMemberStateOffline, status.MemberState)
+
+	// The plugin is not loaded.
+	db.AddQueryPattern(groupReplicationApplierStatusPattern, sqltypes.MakeTestResult(groupReplicationApplierStatusFields,
+		"NULL|NULL|0|0|NULL|NULL|NULL"))
+	status, err = mysqld.GroupReplicationApplierStatus(t.Context())
+	require.NoError(t, err)
+	assert.False(t, status.PluginActive)
+}
+
 // TestGroupReplicationStatusIsBoundedByContext checks that a status query that the server does
 // not answer does not hold the caller beyond its context.
 func TestGroupReplicationStatusIsBoundedByContext(t *testing.T) {

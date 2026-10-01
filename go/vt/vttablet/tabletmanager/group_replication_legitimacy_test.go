@@ -621,3 +621,62 @@ func tmStatus(t *testing.T, fmd *mysqlctl.FakeMysqlDaemon) *replicationdatapb.Gr
 	require.NoError(t, err)
 	return status
 }
+
+// TestGroupReplicationSyncPublishesVerdict checks that every run of the sync loop tells the query
+// service whether MySQL is ONLINE in the shard's legitimate group, in which view. The replication
+// lag poller needs it on a secondary: an idle applier reports no lag whether the member receives
+// the shard's transactions or is cut off from them.
+func TestGroupReplicationSyncPublishesVerdict(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	for _, uid := range []uint32{2, 3} {
+		tm.groupReplicationPeers.setServerUUID(topoproto.TabletAliasString(&topodatapb.TabletAlias{Cell: "cell1", Uid: uid}), testServerUUID(int(uid)))
+	}
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	s := newGroupReplicationSync(tm)
+	reconcile := func(status *replicationdatapb.GroupReplicationStatus) *tabletservermock.GroupReplicationVerdict {
+		t.Helper()
+		fmd.SetGroupReplicationStatus(status)
+		s.reconcile(ctx)
+		verdict := qsc.LastGroupReplicationVerdict()
+		require.NotNil(t, verdict)
+		return verdict
+	}
+	secondary := func(peerState string) []*replicationdatapb.GroupReplicationMember {
+		return []*replicationdatapb.GroupReplicationMember{
+			groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary),
+			groupMember(testServerUUID(2), peerState, mysql.GroupMemberRolePrimary),
+			groupMember(testServerUUID(3), peerState, mysql.GroupMemberRoleSecondary),
+		}
+	}
+
+	verdict := reconcile(withViewID(groupStatus(testServerUUID(1), secondary(mysql.GroupMemberStateOnline)...), "1780000001:5"))
+	assert.Equal(t, tabletservermock.GroupReplicationVerdict{Healthy: true, ViewID: "1780000001:5"}, *verdict)
+
+	// Cut off from the other two voters: still ONLINE in the same view, without quorum.
+	verdict = reconcile(withViewID(groupStatus(testServerUUID(1), secondary(mysql.GroupMemberStateUnreachable)...), "1780000001:5"))
+	assert.False(t, verdict.Healthy, "a member without quorum")
+
+	// The others left the group, which shrank to this member: MySQL's view quorum holds, but not
+	// the majority of the voters.
+	verdict = reconcile(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:6"))
+	assert.False(t, verdict.Healthy, "a group without a majority of the voters")
+
+	verdict = reconcile(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateRecovering, mysql.GroupMemberRoleSecondary),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(3), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:7"))
+	assert.False(t, verdict.Healthy, "a member that is still catching up")
+
+	// A group of another incarnation, with every voter in it: not the shard's group.
+	verdict = reconcile(withViewID(groupStatus(testServerUUID(1), secondary(mysql.GroupMemberStateOnline)...), "17907858161940982:3"))
+	assert.Equal(t, tabletservermock.GroupReplicationVerdict{Healthy: false, ViewID: "17907858161940982:3"}, *verdict)
+
+	verdict = reconcile(withViewID(groupStatus(testServerUUID(1), secondary(mysql.GroupMemberStateOnline)...), "1780000001:8"))
+	require.True(t, verdict.Healthy)
+	fmd.GroupReplicationError = errors.New("lost connection to MySQL")
+	s.reconcile(ctx)
+	assert.Equal(t, tabletservermock.GroupReplicationVerdict{}, *qsc.LastGroupReplicationVerdict(), "a status that cannot be read")
+}

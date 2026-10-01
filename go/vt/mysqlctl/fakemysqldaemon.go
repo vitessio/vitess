@@ -239,6 +239,12 @@ type FakeMysqlDaemon struct {
 	// StopGroupReplication and SetGroupReplicationPrimary update it.
 	GroupReplication *replicationdatapb.GroupReplicationStatus
 
+	// GroupReplicationApplier is returned by GroupReplicationApplierStatus; nil reports a server
+	// without the Group Replication plugin. GroupReplicationApplierError is returned instead, if
+	// set.
+	GroupReplicationApplier      *mysql.GroupReplicationApplierStatus
+	GroupReplicationApplierError error
+
 	// GroupReplicationConfig is the last configuration passed to ConfigureGroupReplication.
 	GroupReplicationConfig mysql.GroupReplicationConfig
 
@@ -956,6 +962,20 @@ func (fmd *FakeMysqlDaemon) GroupReplicationStatus(ctx context.Context) (*replic
 	return fmd.GroupReplication.CloneVT(), nil
 }
 
+// GroupReplicationApplierStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationApplierError != nil {
+		return nil, fmd.GroupReplicationApplierError
+	}
+	if fmd.GroupReplicationApplier == nil {
+		return &mysql.GroupReplicationApplierStatus{MemberState: mysql.GroupMemberStateOffline}, nil
+	}
+	status := *fmd.GroupReplicationApplier
+	return &status, nil
+}
+
 // ConfigureGroupReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error {
 	fmd.mu.Lock()
@@ -1093,6 +1113,14 @@ func (fmd *FakeMysqlDaemon) SetGroupReplicationPrimary(ctx context.Context, memb
 		}
 	}
 	return nil
+}
+
+// SetGroupReplicationApplierStatus sets the status that GroupReplicationApplierStatus returns,
+// safely while the daemon is in use.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationApplierStatus(status *mysql.GroupReplicationApplierStatus) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplicationApplier = status
 }
 
 // SetGroupReplicationStatus replaces the group replication status, for tests that need a

@@ -58,6 +58,26 @@ func (mysqld *Mysqld) GroupReplicationStatus(ctx context.Context) (*replicationd
 	return status, nil
 }
 
+// GroupReplicationApplierStatus returns the member's own state and how far its applier is behind
+// its group, read with a single query. Like GroupReplicationStatus, it is bounded by ctx.
+func (mysqld *Mysqld) GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	var status *mysql.GroupReplicationApplierStatus
+	err = mysqld.executeWithContext(ctx, conn, "group replication applier status", func() error {
+		var queryErr error
+		status, queryErr = conn.Conn.GroupReplicationApplierStatus()
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return status, nil
+}
+
 // ConfigureGroupReplication installs the Group Replication plugin if it is not loaded yet
 // and applies cfg. The member must not be part of a group: MySQL rejects changes to most of
 // these variables while Group Replication runs.
